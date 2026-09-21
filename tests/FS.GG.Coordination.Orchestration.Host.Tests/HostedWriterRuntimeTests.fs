@@ -1718,6 +1718,537 @@ let ``GitHub claim covers the immutable delivery window and expired ownership re
     }
 
 [<Fact>]
+let ``failed candidate recovery requires exact external absence`` () =
+    task {
+        let operation = Guid.Parse "80000000-0000-0000-0000-000000000001"
+        let absent =
+            QueuedGitHub[response "[]"; responseStatus 404 "{}"; response "[]"]
+
+        let client =
+            GitHubRouteClient(absent, FixedPublisher(Ok(String.replicate 40 "a")), githubTarget, FixedClock Fixture.now)
+
+        let! claim = client.ReadClaimAbsent("claim-1", operation, CancellationToken.None)
+        let! branch = client.ReadBranchAbsent("refs/heads/pilot", CancellationToken.None)
+        let! pull = client.ReadPullRequestAbsent("refs/heads/pilot", CancellationToken.None)
+        Assert.Equal(Ok(), claim)
+        Assert.Equal(Ok(), branch)
+        Assert.Equal(Ok(), pull)
+
+        let present =
+            QueuedGitHub[response "[]"; response "{}"; response "[]"]
+
+        let presentClient =
+            GitHubRouteClient(present, FixedPublisher(Ok(String.replicate 40 "a")), githubTarget, FixedClock Fixture.now)
+
+        let! _ = presentClient.ReadClaimAbsent("claim-1", operation, CancellationToken.None)
+        let! refused = presentClient.ReadBranchAbsent("refs/heads/pilot", CancellationToken.None)
+        Assert.Equal(Error "github-branch-still-present", refused)
+
+        let crossBase = QueuedGitHub[response "[{\"base\":{\"ref\":\"other\"}}]"]
+        let crossBaseClient =
+            GitHubRouteClient(crossBase, FixedPublisher(Ok(String.replicate 40 "a")), githubTarget, FixedClock Fixture.now)
+
+        let! crossBaseRefusal = crossBaseClient.ReadPullRequestAbsent("refs/heads/pilot", CancellationToken.None)
+        Assert.Equal(Error "github-pull-request-still-present", crossBaseRefusal)
+
+        match crossBase.Requests with
+        | [ Rest request ] -> Assert.DoesNotContain("base=", request.Uri.Query)
+        | _ -> failwith "expected one all-base PR census"
+    }
+
+[<Fact>]
+let ``terminal snapshot binds old attempt and refuses altered or nonterminal bytes`` () =
+    let directory = Directory.CreateTempSubdirectory("terminal-evidence-").FullName
+
+    try
+        let assignment = Guid.NewGuid()
+        let attempt = Guid.NewGuid()
+        let intent: FS.GG.Coordination.Orchestration.Execution.LaunchIntent =
+            {
+                Schema = "fsgg.orchestration.execution-launch/2"
+                Key = { AssignmentId = assignment; AttemptId = attempt; Generation = 1L }
+                InputDigest = String.replicate 64 "a"
+                Workspace = "pilot"
+                Requested = { Model = None; Effort = None }
+                Limits = { Deadline = Fixture.now; MaximumRuntime = TimeSpan.FromMinutes 30.; MaximumAttempts = 1 }
+                RecordedAt = Fixture.now.AddMinutes -30.
+            }
+
+        let final = Encoding.UTF8.GetBytes "{\"status\":\"completed\",\"summary\":\"done\"}"
+        let stdout = Encoding.UTF8.GetBytes "{\"type\":\"turn.started\"}\n{\"type\":\"turn.completed\"}\n"
+        let sha (bytes: byte array) =
+            System.Security.Cryptography.SHA256.HashData bytes
+            |> Convert.ToHexString
+            |> fun value -> value.ToLowerInvariant()
+
+        let manifest terminal (stdoutBytes: byte array) =
+            JsonSerializer.Serialize
+                {|
+                    schema = "fsgg.orchestration.terminal-evidence/1"
+                    assignmentId = string assignment
+                    attemptId = string attempt
+                    generation = 1L
+                    finalSha256 = sha final
+                    stdoutSha256 = sha stdoutBytes
+                    finalBytes = final.LongLength
+                    stdoutBytes = stdoutBytes.LongLength
+                    capturedAt = Fixture.now
+                    processTerminationObserved = terminal
+                |}
+
+        File.WriteAllBytes(Path.Combine(directory, "final.json"), final)
+        File.WriteAllBytes(Path.Combine(directory, "stdout.jsonl"), stdout)
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest true stdout)
+
+        Assert.True(MainTerminalEvidence.verify directory intent Fixture.now |> Result.isOk)
+
+        let wrongIntent =
+            { intent with
+                Key = { intent.Key with AttemptId = Guid.NewGuid() }
+            }
+
+        Assert.Equal(
+            Error "terminal-evidence-manifest-refused",
+            MainTerminalEvidence.verify directory wrongIntent Fixture.now
+        )
+
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest false stdout)
+        Assert.Equal(
+            Error "terminal-evidence-manifest-refused",
+            MainTerminalEvidence.verify directory intent Fixture.now
+        )
+
+        let ambiguous = Encoding.UTF8.GetBytes "{\"type\":\"turn.started\"}\n{\"type\":\"turn.failed\"}\n"
+        File.WriteAllBytes(Path.Combine(directory, "stdout.jsonl"), ambiguous)
+        File.WriteAllText(Path.Combine(directory, "manifest.json"), manifest true ambiguous)
+        Assert.Equal(
+            Error "terminal-evidence-turn-ambiguous",
+            MainTerminalEvidence.verify directory intent Fixture.now
+        )
+    finally
+        Directory.Delete(directory, true)
+
+[<Fact>]
+let ``absent candidate control allows only same-command partial retry`` () =
+    let route = Fixture.route
+    let intent = Fixture.intent StoreCandidate route.CandidateOperationId
+    let control: MainRouteControl =
+        {
+            CommandId = Guid.NewGuid()
+            ExpectedSequence = 23L
+            ExpectedGeneration = Id.generationValue route.Generation
+            PrincipalId = "pilot-worker"
+            IssuedAt = Fixture.now.AddMinutes -1.
+            ExpiresAt = Fixture.now.AddMinutes 1.
+            Reason = "candidate-touch-set-refused"
+            Action = "settle-absent-candidate"
+        }
+
+    let pending =
+        { initial with
+            Revision = Id.revision 23L
+            Generation = route.Generation
+            Operations = Map.ofList [ route.CandidateOperationId, NeedsObservation(intent, "candidate-unknown") ]
+        }
+
+    let marker = MainAbsentCandidateControl.digest control
+    Assert.Equal(Ok marker, MainAbsentCandidateControl.authorize control route pending Fixture.now)
+
+    let expired = { control with ExpiresAt = Fixture.now }
+    Assert.Equal(
+        Error "absent-candidate-control-stale",
+        MainAbsentCandidateControl.authorize expired route pending Fixture.now
+    )
+
+    let readback =
+        { Fixture.hosted intent with
+            ProviderRevision = marker
+            ObservedAt = Fixture.now
+            Exists = false
+        }
+
+    let afterFirstStage =
+        { pending with
+            Revision = Id.revision 24L
+            Generation = Id.generation 2L
+            Operations = Map.ofList [ route.CandidateOperationId, OperationState.Settled(intent, ProvenAbsent) ]
+            HostedEffectReadbacks = Map.ofList [ route.CandidateOperationId, readback ]
+        }
+
+    Assert.Equal(
+        Ok marker,
+        MainAbsentCandidateControl.authorize control route afterFirstStage (Fixture.now.AddMinutes 5.)
+    )
+
+    let different = { control with CommandId = Guid.NewGuid() }
+    Assert.Equal(
+        Error "absent-candidate-retry-identity-refused",
+        MainAbsentCandidateControl.authorize different route afterFirstStage (Fixture.now.AddMinutes 5.)
+    )
+
+let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event list -> Task<IJournalStore>) =
+    task {
+        let now = Fixture.now
+        let route = { Fixture.route with RepositoryNodeId = "R_writer" }
+        let assignment = Id.operationValue route.ProcessOperationId
+        let attemptId = Id.attemptValue route.AttemptId
+        let launch: FS.GG.Coordination.Orchestration.Execution.LaunchIntent =
+            {
+                Schema = "fsgg.orchestration.execution-launch/2"
+                Key = { AssignmentId = assignment; AttemptId = attemptId; Generation = 1L }
+                InputDigest = String.replicate 64 "a"
+                Workspace = "pilot"
+                Requested = { Model = None; Effort = None }
+                Limits = { Deadline = now.AddMinutes -1.; MaximumRuntime = TimeSpan.FromMinutes 30.; MaximumAttempts = 1 }
+                RecordedAt = now.AddMinutes -30.
+            }
+
+        let budget =
+            {
+                Schema = "fsgg.coordination.subscription-execution-budget/2"
+                AttemptLimit = 1
+                MaximumRuntime = TimeSpan.FromMinutes 30.
+                ExecutionDeadline = now.AddMinutes -2.
+                DeliveryDeadline = now.AddMinutes -1.
+                Usage = TokensUnknown "provider-unknown"
+                Cost =
+                    {
+                        InvocationState = "not-applicable"
+                        InvocationProvenance = "subscription-session"
+                        BroaderAttributionState = "unknown"
+                        BroaderAttributionProvenance = "not-attributed"
+                    }
+            }
+
+        let reservation: FS.GG.Coordination.Orchestration.Pilot.SubscriptionReservation =
+            {
+                Schema = "fsgg.subscription.reservation/1"
+                ReservationId = Guid.NewGuid()
+                AssignmentId = assignment
+                AttemptId = attemptId
+                Generation = 1L
+                ExpectedRevision = 0L
+                ReservedAt = now.AddMinutes -30.
+                Deadline = now.AddMinutes -1.
+                MaximumRuntimeSeconds = 1800L
+                AttemptLimit = 1
+            }
+
+        let preparation: MainRoutePreparation =
+            {
+                Snapshot = Unchecked.defaultof<_>
+                Budget = budget
+                Reservation = Unchecked.defaultof<_>
+                Route = route
+                Readback = Unchecked.defaultof<_>
+                Runner = Unchecked.defaultof<_>
+                SessionId = Unchecked.defaultof<_>
+                LaunchIntent = launch
+                Binding = Unchecked.defaultof<_>
+                InputManifest = Unchecked.defaultof<_>
+                InputBytes = [||]
+                WorkspaceManifest = Unchecked.defaultof<_>
+                ExecutionReservation = reservation
+            }
+
+        let claimIntent = Fixture.intent AcquireExternalClaim route.ClaimOperationId
+        let processIntent = Fixture.intent DispatchRunner route.ProcessOperationId
+        let candidateIntent = Fixture.intent StoreCandidate route.CandidateOperationId
+        let readback intent resource =
+            { Fixture.hosted intent with
+                RepositoryNodeId = route.RepositoryNodeId
+                ProviderResourceId = resource
+                ObservedAt = now
+            }
+
+        let runner =
+            {
+                RunnerId = Id.runner (Guid.NewGuid())
+                PrincipalId = "pilot-worker"
+                FingerprintSha256 = String.replicate 64 "a"
+                Generation = route.Generation
+                ExpiresAt = now.AddMinutes 1.
+            }
+
+        let attempt =
+            {
+                AttemptId = route.AttemptId
+                SessionId = Id.session (Guid.NewGuid())
+                Runner = runner
+                Generation = route.Generation
+                StartedAt = now.AddMinutes -20.
+                Status = AttemptStatus.Active
+            }
+
+        let events =
+            [
+                SubscriptionWorkAdmitted(
+                    {
+                        ProjectId = Id.project (Guid.NewGuid())
+                        WorkItemId = route.WorkItemId
+                        WorkflowRevision = route.WorkflowRevision
+                        CanonicalSha256 = String.replicate 64 "b"
+                        BoardMembershipIds = []
+                        CapturedAt = now.AddMinutes -30.
+                    },
+                    budget
+                )
+                GenerationAdvanced route.Generation
+                ReservationCreated
+                    {
+                        ReservationId = Id.reservation (Guid.NewGuid())
+                        Generation = route.Generation
+                        ExpiresAt = now.AddMinutes -1.
+                        RequiredClaimIds = set [ route.ClaimResourceId ]
+                    }
+                HostedRouteSelected route
+                EffectIntentRecorded claimIntent
+                EffectDispatchStarted claimIntent.OperationId
+                HostedEffectReadbackAccepted(readback claimIntent route.ClaimResourceId)
+                EffectSettled(claimIntent.OperationId, Applied "provider-revision")
+                ClaimObserved
+                    {
+                        ClaimId = route.ClaimResourceId
+                        Generation = route.Generation
+                        WorkflowRevision = route.WorkflowRevision
+                        ObservedAt = now.AddMinutes -20.
+                    }
+                AttemptStarted attempt
+                EffectIntentRecorded processIntent
+                EffectDispatchStarted processIntent.OperationId
+                HostedEffectReadbackAccepted(readback processIntent (string attemptId))
+                EffectSettled(processIntent.OperationId, Applied "provider-revision")
+                EffectIntentRecorded candidateIntent
+                EffectDispatchStarted candidateIntent.OperationId
+                EffectObservationRequired(candidateIntent.OperationId, "candidate-unknown")
+                PausedEvent "old-route-recovery"
+            ]
+
+        let control: MainRouteControl =
+            {
+                CommandId = Guid.NewGuid()
+                ExpectedSequence = Id.revisionValue (replay events).Revision
+                ExpectedGeneration = 1L
+                PrincipalId = "pilot-worker"
+                IssuedAt = now.AddMinutes -1.
+                ExpiresAt = now.AddMinutes 1.
+                Reason = "candidate-touch-set-refused"
+                Action = "settle-absent-candidate"
+            }
+
+        let seededEvents =
+            if partialFirstStage then
+                let firstReadback =
+                    { readback candidateIntent candidateIntent.ResourceId with
+                        ProviderRevision = MainAbsentCandidateControl.digest control
+                        Exists = false
+                    }
+
+                events
+                @ [ HostedEffectReadbackAccepted firstReadback
+                    EffectSettled(candidateIntent.OperationId, ProvenAbsent) ]
+            else
+                events
+
+        let! store = storeFactory seededEvents
+        let candidateStore =
+            { new ICandidateStore with
+                member _.Put(_, _) = failwith "unexpected candidate mutation"
+                member _.Read(_, _) = Task.FromResult(Error "candidate-not-found")
+                member _.Quarantine(_, _, _) = failwith "unexpected quarantine"
+                member _.CleanupUnreferenced(_, _, _) = failwith "unexpected cleanup"
+            }
+
+        let mutable releases = 0
+        let commands =
+            { new IExecutorCommandStore with
+                member _.BindRoute(_, _) = failwith "unexpected route bind"
+                member _.ReadRoute(_, _, _) = failwith "unexpected route read"
+                member _.FindAttemptBySession(_, _) = failwith "unexpected session read"
+                member _.StageInput(_, _, _) = failwith "unexpected input stage"
+                member _.ReadInput(_, _) = failwith "unexpected input read"
+                member _.StageWorkspaceManifest(_, _) = failwith "unexpected workspace stage"
+                member _.ReadWorkspaceManifest(_, _) = failwith "unexpected workspace read"
+                member _.PersistCommand(_, _) = failwith "unexpected executor command"
+                member _.ReadPending(_, _) = failwith "unexpected pending read"
+                member _.SettleCommand(_, _, _) = failwith "unexpected executor settlement"
+                member _.ReserveSubscription(_, _, _, _) = failwith "unexpected reservation"
+                member _.SettleSubscription(_, _, _) = failwith "unexpected subscription settlement"
+                member _.ReleaseSubscription(_, _, _, _) =
+                    releases <- releases + 1
+                    Task.FromResult(if releases = 1 then SubscriptionReleased else SubscriptionReleaseDuplicate)
+                member _.ReadSubscription(_, _) = failwith "unexpected subscription read"
+            }
+
+        let observation: FS.GG.Coordination.Orchestration.Execution.SessionObservation =
+            {
+                Provider = { Provider = "Codex"; AdapterVersion = "fixture" }
+                Session =
+                    FS.GG.Coordination.Orchestration.Execution.ProviderSessionReference.create "codex-thread:fixture"
+                    |> Result.defaultWith failwith
+                Resolved = { Model = None; Effort = None }
+                Lifecycle = FS.GG.Coordination.Orchestration.Execution.SessionLifecycle.OutcomeUnknown
+                Output = []
+                LifecycleReferences = []
+                Usage =
+                    {
+                        Values = Map.empty
+                        Cost = FS.GG.Coordination.Orchestration.Execution.CostUnknown "fixture"
+                    }
+                Candidate = None
+                ObservedAt = now.AddMinutes -2.
+            }
+
+        let journal =
+            { new FS.GG.Coordination.Orchestration.Execution.IExecutionSessionJournal with
+                member _.ReadAttempt(_, _, _) =
+                    Task.FromResult(
+                        Some
+                            {
+                                Revision = 3L
+                                Events =
+                                    [
+                                        FS.GG.Coordination.Orchestration.Execution.LaunchIntentRecorded launch
+                                        FS.GG.Coordination.Orchestration.Execution.ObservationRecorded observation
+                                        FS.GG.Coordination.Orchestration.Execution.CancelRequested(now.AddMinutes -1.)
+                                    ]
+                            }
+                    )
+                member _.AppendAttempt(_, _, _, _, _) = failwith "unexpected execution append"
+            }
+
+        let response status body =
+            Response
+                {
+                    StatusCode = status
+                    Headers = Map.empty
+                    Body = body
+                    ETag = Some "fixture"
+                    RateBudget = { Limit = None; Remaining = None; ResetAt = None; Cost = None }
+                }
+
+        let githubExecutor =
+            QueuedGitHub
+                [
+                    response 200 "{\"id\":7,\"node_id\":\"R_writer\"}"
+                    response 200 "{\"number\":11,\"node_id\":\"I_writer\"}"
+                    response 404 "{}"
+                    response 200 "[]"
+                    response 200 "[]"
+                    response 200 "{\"id\":7,\"node_id\":\"R_writer\"}"
+                    response 200 "{\"number\":11,\"node_id\":\"I_writer\"}"
+                    response 404 "{}"
+                    response 200 "[]"
+                    response 200 "[]"
+                ]
+
+        let github =
+            GitHubRouteClient(
+                githubExecutor,
+                FixedPublisher(Ok(String.replicate 40 "a")),
+                { githubTarget with IssueNumber = 11 },
+                FixedClock now
+            )
+
+        let directory = Directory.CreateTempSubdirectory("full-recovery-").FullName
+
+        try
+            let final = Encoding.UTF8.GetBytes "{\"status\":\"completed\"}"
+            let stdout = Encoding.UTF8.GetBytes "{\"type\":\"turn.started\"}\n{\"type\":\"turn.completed\"}\n"
+            let sha (bytes: byte array) =
+                System.Security.Cryptography.SHA256.HashData bytes
+                |> Convert.ToHexString
+                |> fun value -> value.ToLowerInvariant()
+
+            File.WriteAllBytes(Path.Combine(directory, "final.json"), final)
+            File.WriteAllBytes(Path.Combine(directory, "stdout.jsonl"), stdout)
+            File.WriteAllText(
+                Path.Combine(directory, "manifest.json"),
+                JsonSerializer.Serialize
+                    {|
+                        schema = "fsgg.orchestration.terminal-evidence/1"
+                        assignmentId = string assignment
+                        attemptId = string attemptId
+                        generation = 1L
+                        finalSha256 = sha final
+                        stdoutSha256 = sha stdout
+                        finalBytes = final.LongLength
+                        stdoutBytes = stdout.LongLength
+                        capturedAt = now
+                        processTerminationObserved = true
+                    |}
+            )
+
+            let! result =
+                MainProductionAdmission.SettleAbsentCandidateCore(
+                    FixedClock now,
+                    store,
+                    candidateStore,
+                    commands,
+                    journal,
+                    route.WorkItemId,
+                    "pilot-worker",
+                    github,
+                    directory,
+                    preparation,
+                    control,
+                    CancellationToken.None
+                )
+
+            Assert.True(Result.isOk result, sprintf "%A" result)
+            let! after = HostedWriterJournal.recover store route.WorkItemId CancellationToken.None
+            let settled = after |> Result.defaultWith (fun failures -> failwithf "%A" failures)
+            Assert.True(settled.State.Reservation.IsNone)
+            Assert.Empty settled.State.ExternalClaims
+            Assert.Empty settled.State.RecoveryObligations
+            Assert.Equal(1, releases)
+            Assert.Equal(
+                Some(OperationState.Settled(candidateIntent, ProvenAbsent)),
+                Map.tryFind candidateIntent.OperationId settled.State.Operations
+            )
+            Assert.Equal(
+                AttemptStatus.ReconciledAbsent "candidate-deliverable-absent:candidate-touch-set-refused",
+                settled.State.Attempts[route.AttemptId].Status
+            )
+
+            let! repeated =
+                MainProductionAdmission.SettleAbsentCandidateCore(
+                    FixedClock(now.AddMinutes 5.),
+                    store,
+                    candidateStore,
+                    commands,
+                    journal,
+                    route.WorkItemId,
+                    "pilot-worker",
+                    github,
+                    directory,
+                    preparation,
+                    control,
+                    CancellationToken.None
+                )
+
+            Assert.True(Result.isOk repeated, sprintf "%A" repeated)
+            let! afterRepeat = HostedWriterJournal.recover store route.WorkItemId CancellationToken.None
+            let repeatedState = afterRepeat |> Result.defaultWith (fun failures -> failwithf "%A" failures)
+            Assert.Equal(settled.Sequence, repeatedState.Sequence)
+            Assert.Equal(2, releases)
+            Assert.All(githubExecutor.Requests, fun request ->
+                match request with
+                | Rest value -> Assert.Equal(RestMethod.Get, value.Method)
+                | GraphQL _ -> failwith "unexpected GraphQL")
+        finally
+            Directory.Delete(directory, true)
+    }
+
+[<Fact>]
+let ``failed candidate recovery settles exact journal state without provider mutation`` () =
+    runFailedCandidateRecoveryFixture false (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+
+[<Fact>]
+let ``failed candidate recovery resumes after durable stage-one lost response`` () =
+    runFailedCandidateRecoveryFixture true (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+
+[<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () =
     task {
         let operation = Guid.Parse "80000000-0000-0000-0000-000000000001"

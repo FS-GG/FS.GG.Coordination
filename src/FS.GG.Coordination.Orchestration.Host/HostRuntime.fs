@@ -773,7 +773,8 @@ module HostRuntime =
                 && (request.Url.AbsolutePath = "/v1/pause"
                     || request.Url.AbsolutePath = "/v1/resume"
                     || request.Url.AbsolutePath = "/v1/revoke"
-                    || request.Url.AbsolutePath = "/v1/cancel")
+                    || request.Url.AbsolutePath = "/v1/cancel"
+                    || request.Url.AbsolutePath = "/v1/settle-absent-candidate")
             then
                 let! decoded = readControl request cancellationToken
 
@@ -785,6 +786,7 @@ module HostRuntime =
                         if
                             request.Url.AbsolutePath = "/v1/resume"
                             || request.Url.AbsolutePath = "/v1/cancel"
+                            || request.Url.AbsolutePath = "/v1/settle-absent-candidate"
                         then
                             do!
                                 writeJson

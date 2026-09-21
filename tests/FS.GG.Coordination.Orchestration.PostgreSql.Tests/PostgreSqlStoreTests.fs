@@ -4052,3 +4052,58 @@ finally:
 
             Assert.True(Result.isOk recovered)
         }
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``failed candidate recovery converges through disposable PostgreSQL journal``(partialFirstStage: bool) =
+        task {
+            let! dataSource, identity = Fixture.reset ()
+            use dataSource = dataSource
+            do! PostgreSqlExecutionSchema.migrate dataSource CancellationToken.None
+            let options =
+                { Fixture.options dataSource identity 0L with RuntimeSchemaVersion = 2 }
+
+            let factory (events: Event list) =
+                task {
+                    let work = WorkItemIdentity.create "R_writer" 7L "I_writer" 11L
+                    let persistenceId = WorkItemIdentity.persistenceId work
+                    let store = PostgreSqlStore(options) :> IJournalStore
+                    let serialized =
+                        events
+                        |> List.mapi (fun index eventValue ->
+                            let payload = EventEnvelope.encode eventValue
+                            {
+                                PersistenceId = persistenceId
+                                Sequence = int64 (index + 1)
+                                EventId = Guid.NewGuid()
+                                SchemaVersion = 1
+                                SerializerVersion = EventEnvelope.serializerVersion
+                                Payload = payload
+                                PayloadSha256 = Fixture.sha payload
+                                EffectChange =
+                                    match eventValue with
+                                    | EffectIntentRecorded intent -> IntentAdded intent
+                                    | EffectSettled(id, _) -> EffectChange.Settled id
+                                    | _ -> NoEffect
+                                RecordedAt = DateTimeOffset.UtcNow
+                            })
+
+                    let request =
+                        Fixture.append
+                            persistenceId
+                            0L
+                            (Id.command (Guid.NewGuid()))
+                            (Fixture.sha (Encoding.UTF8.GetBytes "failed-candidate-fixture"))
+                            serialized
+
+                    let! appended = store.Append(request, CancellationToken.None)
+                    Assert.Equal(AppendOutcome.Appended(int64 serialized.Length), appended)
+                    return store
+                }
+
+            do!
+                FS.GG.Coordination.Orchestration.Host.Tests.HostedWriterRuntimeTests.runFailedCandidateRecoveryFixture
+                    partialFirstStage
+                    factory
+        }

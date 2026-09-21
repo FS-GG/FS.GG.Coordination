@@ -1120,6 +1120,17 @@ module Cases =
                 (ObserveEffect(storeIntent.OperationId, Unknown "response-lost"))
             |> fun d -> apply d dispatch
 
+        Assert.Equal(
+            "attempt-absence-evidence-required",
+            (decide
+                now
+                unknown
+                (command "27400000-0000-0000-0000-000000000008")
+                ""
+                (ObserveAttempt(attemptId, ReconciledAbsent "candidate-deliverable-absent")))
+                .Receipt.Detail
+        )
+
         let replacement =
             effect
                 "72000000-0000-0000-0000-000000000003"
@@ -1158,6 +1169,80 @@ module Cases =
                 ""
                 (RecordHostedEffectReadback(storeIntent.OperationId, absence))
             |> fun d -> apply d unknown
+
+        Assert.Equal(
+            Accepted,
+            (decide
+                now
+                absent
+                (command "27400000-0000-0000-0000-000000000009")
+                ""
+                (ObserveAttempt(attemptId, ReconciledAbsent "candidate-deliverable-absent")))
+                .Receipt.Disposition
+        )
+
+        let terminal =
+            decide
+                now
+                absent
+                (command "27400000-0000-0000-0000-000000000009")
+                ""
+                (ObserveAttempt(attemptId, ReconciledAbsent "candidate-deliverable-absent"))
+            |> fun d -> apply d absent
+
+        let revoked =
+            decide now terminal (command "27400000-0000-0000-0000-00000000000a") "" (Revoke "failed-candidate")
+            |> fun d -> apply d terminal
+
+        let released =
+            decide
+                now
+                revoked
+                (command "27400000-0000-0000-0000-00000000000b")
+                ""
+                (ObserveClaimReleased route.ClaimResourceId)
+            |> fun d -> apply d revoked
+
+        let nextBudget =
+            {
+                Schema = "fsgg.coordination.subscription-execution-budget/2"
+                AttemptLimit = 1
+                MaximumRuntime = TimeSpan.FromMinutes 30.
+                ExecutionDeadline = now.AddMinutes 30.
+                DeliveryDeadline = now.AddHours 2.
+                Usage = TokensUnknown "provider-not-reported"
+                Cost =
+                    {
+                        InvocationState = "not-applicable"
+                        InvocationProvenance = "subscription-session"
+                        BroaderAttributionState = "unknown"
+                        BroaderAttributionProvenance = "not-attributed"
+                    }
+            }
+
+        Assert.True(released.Reservation.IsNone)
+        Assert.Empty released.ExternalClaims
+        Assert.Empty released.RecoveryObligations
+        let readmission =
+            FS.GG.Coordination.Core.Orchestration.decide
+                now
+                released
+                {
+                    CommandId = command "27400000-0000-0000-0000-00000000000c"
+                    ProtocolVersion = Id.protocolVersion 2 0
+                    ExpectedRevision = released.Revision
+                    ExpectedGeneration = released.Generation
+                    PrincipalId = "test-principal"
+                    SessionId = None
+                    IssuedAt = now
+                    ExpiresAt = now.AddMinutes 1.
+                    Command = AdmitSubscription(snapshot [], nextBudget)
+                }
+
+        Assert.Equal(
+            Accepted,
+            readmission.Receipt.Disposition
+        )
 
         let retried =
             decide
