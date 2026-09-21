@@ -188,6 +188,17 @@ are never acceptance evidence.
   observation/decision/journal recovery behavior, native acceptance, and known limitations. Supply those exact
   identities to GS2-09 discovery/migration work while preserving separate manifest, transform, archive, rollback,
   omission and representative-rehearsal acceptance.
+  - [ ] **V2-CALL-01.5a — Seal the callable-readiness evidence packet.** Record and validate the exact protected
+    source/release revisions, package and feed hashes, adopting receiver revision, installed command and schema
+    identities, interpreter and permission ceiling, preconditions, observation/decision/journal recovery,
+    `.4b`/`.4c` native acceptance, and known limitations under `evidence/github-substrate-v2/gs2-09-9/`.
+    Complete this item through a protected Coordination delivery with an independently checkable packet; do not
+    broaden the installed permission ceiling or relabel the completed `.4b`/`.4c` work.
+  - [ ] **V2-CALL-01.5b — Hand the packet to GS2-09 discovery.** In a separate protected Coordination delivery,
+    record the exact `.5a` packet identity, the callable runtime interface and recovery preconditions that
+    discovery can consume, and the independently pending discovery, manifest, transform, archive, rollback,
+    omission and representative-rehearsal gates. Completion proves receipt of the callable handoff only; it
+    does not accept migration, `OpenV2`, Q4, or a production default.
 
 Workspace and telemetry disposition: `.4a` added qualification source and an installed harness but changed no
 provider or lifecycle default. Its original 0.1.0 freeze ended when the observed App-token defect required
