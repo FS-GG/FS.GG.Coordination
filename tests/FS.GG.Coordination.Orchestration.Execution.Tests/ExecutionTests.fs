@@ -252,6 +252,42 @@ type ExecutionTests() =
             Assert.Equal(count, journal.Events(intent.Key).Length)
         }
 
+    [<Fact>]
+    member _.``running polls advance durable revision before terminal candidate``() =
+        task {
+            let journal = MemoryJournal()
+            let provider = FakeProvider("stream", true, true)
+            let coordinator = ExecutionSessionCoordinator(provider, journal, MutableClock(Fixture.now))
+            let intent = Fixture.intent 1L
+            let! launched = coordinator.Launch(intent, CancellationToken.None)
+            let running = (Fixture.state launched).Observation.Value
+            let revision = (Fixture.state launched).Revision
+
+            provider.Seed(intent, { running with ObservedAt = running.ObservedAt.AddSeconds 1. })
+            let! next = coordinator.Observe(intent.Key, CancellationToken.None)
+            match next with
+            | SessionAdvanced state -> Assert.Equal(revision + 1L, state.Revision)
+            | other -> failwithf "running poll did not advance revision: %A" other
+
+            let candidate = Guid.NewGuid()
+            provider.Seed(
+                intent,
+                { running with
+                    Lifecycle = Succeeded
+                    Candidate = Some { CandidateId = candidate; HeadSha = String.replicate 40 "b"; TreeSha = String.replicate 40 "c" }
+                    ObservedAt = running.ObservedAt.AddSeconds 2.
+                }
+            )
+            let! terminal = coordinator.Observe(intent.Key, CancellationToken.None)
+            match terminal with
+            | SessionAdvanced state ->
+                Assert.Equal(revision + 2L, state.Revision)
+                Assert.Equal(Succeeded, state.Observation.Value.Lifecycle)
+                Assert.Equal(Some candidate, state.Observation.Value.Candidate |> Option.map _.CandidateId)
+            | other -> failwithf "terminal candidate was not recorded: %A" other
+            Assert.Equal(1, provider.Launches)
+        }
+
     [<Theory>]
     [<InlineData("Codex", true, "subscription-session")>]
     [<InlineData("Claude", true, "session-capability-observed")>]
