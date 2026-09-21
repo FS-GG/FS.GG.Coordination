@@ -48,9 +48,9 @@ requireContains
     "eng/callable-cli-isolated-operation-proposal.json"
     [
         "prepared-not-authorized"
-        "971ed9a9db9ff01b0abb982163ed311fabebc827fabc79472602f3c08b7d3854"
-        "c82cf8e0e1f0d794a1d13a4b9ed6612c76cc86c0c230d81fac5248ec2bbbe5c5"
-        "9c7e4765c6654589f579859ebf8915bfc4212c2fbecb8dc114b5b774a470a369"
+        "ac44c8b20dec09975f5cd17f134c4b17115ba3051ceb95e13e2a3ccdd0a050ff"
+        "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046"
+        "6f2e160482f1fa24e80e6a8a36a426122a4fcd5a5e09dc74af7d2f14d69f0d4d"
         "canonical-json-without-artifact-coordinates"
         "--grant-artifact-envelope"
         "identity-bound-operation"
@@ -124,7 +124,7 @@ if inspection.GetProperty("disposition").GetString() <> "refused-no-compatible-a
 
 let testOutput, testError = run "python3" [ "eng/test-callable-cli-isolated-operation.py" ]
 let combined = testOutput + testError
-if not (combined.Contains("Ran 26 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
+if not (combined.Contains("Ran 28 tests", StringComparison.Ordinal) && combined.Contains("OK", StringComparison.Ordinal)) then
     failwith $"isolated operation controls did not report the expected bounded suite: {combined}"
 
 printfn "callable isolated operation source qualification passed; prepared-not-authorized; zero provider effects"
