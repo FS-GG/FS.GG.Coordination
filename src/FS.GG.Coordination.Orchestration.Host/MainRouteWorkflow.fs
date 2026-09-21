@@ -222,15 +222,15 @@ type MainRouteWorkflow
             | Ok recovery ->
                 let current = recovery.State
 
-                let originalReadback =
+                let originalReadbackPresent =
                     durableJournal
                     |> Result.toOption
-                    |> Option.bind (fun (journal: RecoveryResult) ->
+                    |> Option.exists (fun (journal: RecoveryResult) ->
                         journal.Events
                         |> List.choose (fun stored -> EventEnvelope.tryDecode stored.Payload |> Result.toOption)
-                        |> List.tryPick (function
-                            | HostedRouteReadbackAccepted readback -> Some readback
-                            | _ -> None))
+                        |> List.exists (function
+                            | HostedRouteReadbackAccepted readback -> readback = value.Readback
+                            | _ -> false))
 
                 let attemptBound =
                     current.Attempts
@@ -268,7 +268,10 @@ type MainRouteWorkflow
                         "hosted-route", current.HostedRoute = Some value.Route
                         "budget", current.SubscriptionBudget = Some value.Budget
                         "reservation", current.Reservation = Some value.Reservation || (revokedUndelivered && current.Reservation.IsNone)
-                        "original-readback", originalReadback = Some value.Readback
+                        // A work item can be readmitted across generations. Match the
+                        // exact route readback instead of selecting the first historical
+                        // one from the append-only journal.
+                        "original-readback", originalReadbackPresent
                         "budget-schema", value.Budget.Schema = SubscriptionPilot.budgetSchema
                     ]
                     |> List.choose (fun (name, valid) -> if valid then None else Some name)
