@@ -6,6 +6,7 @@
     <Compile Include="ChoreoTraceTests.fs" />
     <Compile Include="HostedWriterQuintReplayTests.fs" />
     <Compile Include="HostedWriterRuntimeTests.fs" />
+    <Compile Include="RemoteExecutorObservationTests.fs" />
     <Compile Include="RunnerWireTests.fs" />
     <Compile Include="RunnerWireRuntimeTests.fs" />
     <Compile Include="InstalledAdoptionVerificationTests.fs" />

@@ -340,9 +340,22 @@ type RemoteExecutorProvider
         offset
         length
         =
+        // Observations are read-only polls. A running observation can leave the
+        // execution revision unchanged, while its command receipt is already
+        // settled. Give each poll a fresh durable identity so the next readback
+        // can observe a terminal candidate without replaying launch authority.
+        let pollIdentity =
+            if kind = "observe" || kind = "reconcile" then
+                Guid.NewGuid().ToString("N")
+            else
+                ""
+
+        let stableIdentity =
+            $"{intent.Key.AssignmentId:D}:{intent.Key.AttemptId:D}:{intent.Key.Generation}:{binding.ExpectedRevision}:{kind}:{session}:{artifactDigest}:{offset}:{length}"
+
         let identity =
             System.Text.Encoding.UTF8.GetBytes(
-                $"{intent.Key.AssignmentId:D}:{intent.Key.AttemptId:D}:{intent.Key.Generation}:{binding.ExpectedRevision}:{kind}:{session}:{artifactDigest}:{offset}:{length}"
+                stableIdentity + (if pollIdentity = "" then "" else ":" + pollIdentity)
             )
             |> System.Security.Cryptography.SHA256.HashData
 
