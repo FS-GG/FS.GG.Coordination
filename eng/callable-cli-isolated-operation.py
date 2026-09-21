@@ -64,6 +64,11 @@ LEGACY_OPERATION_PLAN_SEAL = "364b59f95a8ae0ac7958d580d3d1c63d13fbdcae3783103931
 RETAINED_011_CONTRACT_SHA256 = "ccd57e74293b2fb1443614fea6add54525f9f11c8d1126908180479ab5bc18a6"
 RETAINED_011_OPERATION_PLAN_SEAL = "3d26c9ba1bf45f5996493710b1874846c62eadd2c3b59859d089398208b1eb97"
 RETAINED_011_SETUP_PROGRESS_SEAL = "4c8017f0f73506d3965a63426c7b8a608ae88078a375ec59168312dedb1eb5cc"
+RETAINED_011_CLI_INTENT_PROGRESS_SEAL = "b147b38e73a3e218f3c5ea939f676ff6b0cd342ec22f3660ef4223d2195c0f78"
+RETAINED_011_POST_EFFECT_CONTRACT_SHA256 = "971ed9a9db9ff01b0abb982163ed311fabebc827fabc79472602f3c08b7d3854"
+RETAINED_011_POST_EFFECT_PLAN_SEAL = "2627c75d928ad6da0ee119e49411ee4e5d00d3dae2c6192ede2a52351df81721"
+RETAINED_011_MERGE_COMMIT = "00869036c9bf96f5cb4c783cfa91ac15504b673b"
+RETAINED_011_JOURNAL_HEAD = "5a5de33d00094709ae9db9ac7609b012d13552a8"
 
 
 class Refused(RuntimeError):
@@ -1004,6 +1009,7 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     if plan["stages"] != ["setup", "installed-execution", "independent-readback", "cleanup"]:
         raise Refused("operation-stage-order")
     retained = read_json(receipt_path) if pathlib.Path(receipt_path).is_file() else None
+    migrated_post_effect = retained is not None and retained.get("postEffectSourceSeal") == RETAINED_011_CLI_INTENT_PROGRESS_SEAL
     if retained is not None:
         verify_digest(retained, "receiptSha256" if retained.get("schema", "").endswith("receipt/1") else "seal", "operation-progress")
         retained_011_progress = (
@@ -1026,6 +1032,19 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
             migrated = without(retained, "seal")
             migrated.update({"contractSha256": contract["contractSha256"], "planSeal": plan["seal"]})
             retained = sealed(migrated)
+            write_private(receipt_path, retained)
+        elif (retained.get("schema") == "fsgg.coordination.callable-isolated-operation-progress/1"
+              and retained.get("stage") == "cli-intent"
+              and retained.get("seal") == RETAINED_011_CLI_INTENT_PROGRESS_SEAL
+              and retained.get("contractSha256") == RETAINED_011_POST_EFFECT_CONTRACT_SHA256
+              and retained.get("planSeal") == RETAINED_011_POST_EFFECT_PLAN_SEAL
+              and retained.get("operationIdentity") == contract["identity"]
+              and retained.get("target") == {"repositoryId": target["repositoryId"], "fullName": target["fullName"]}):
+            migrated = without(retained, "seal")
+            migrated.update({"contractSha256": contract["contractSha256"], "planSeal": plan["seal"],
+                             "postEffectSourceSeal": RETAINED_011_CLI_INTENT_PROGRESS_SEAL})
+            retained = sealed(migrated)
+            migrated_post_effect = True
             write_private(receipt_path, retained)
         elif (retained.get("contractSha256") != contract["contractSha256"] or retained.get("planSeal") != plan["seal"]
               or retained.get("operationIdentity") != contract["identity"]):
@@ -1060,8 +1079,19 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     base_sha = observe_ref(client, target["fullName"], f"refs/heads/{base}")
     if base_sha is None:
         raise Refused("operation-base-missing")
+    if migrated_post_effect:
+        prior_pull = retained.get("pullRequest")
+        if (base_sha != RETAINED_011_MERGE_COMMIT or not isinstance(prior_pull, dict)
+                or prior_pull.get("baseSha") != retained.get("baseSha")
+                or prior_pull.get("headSha") != retained.get("sourceSha")):
+            raise Refused("retained-post-effect-identity")
+        merged_pull = ensure_pull_request(client, target["fullName"], target["owner"], base, prior_pull)
+        if merged_pull.get("merged") is not True or merged_pull.get("merge_commit_sha") != RETAINED_011_MERGE_COMMIT:
+            raise Refused("retained-post-effect-not-merged")
     source_ref = f"refs/heads/{SOURCE_BRANCH}"
-    if observe_ref(client, target["fullName"], source_ref) is None:
+    if migrated_post_effect and observe_ref(client, target["fullName"], source_ref) != retained.get("sourceSha"):
+        raise Refused("retained-post-effect-source")
+    if not migrated_post_effect and observe_ref(client, target["fullName"], source_ref) is None:
         ensure_ref(client, target["fullName"], source_ref, base_sha)
     ensure_content(client, target["fullName"], ".github/workflows/callable-synthetic.yml", SOURCE_BRANCH, WORKFLOW_BYTES)
     ensure_content(client, target["fullName"], "synthetic.txt", SOURCE_BRANCH, SOURCE_BYTES)
@@ -1079,15 +1109,20 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
     retained_pull = retained.get("pullRequest") if isinstance(retained.get("pullRequest"), dict) else None
     pull = ensure_pull_request(client, target["fullName"], target["owner"], base, retained_pull)
     number, node_id, head, pull_base = pull.get("number"), pull.get("node_id"), pull.get("head"), pull.get("base")
+    expected_base_sha = retained.get("baseSha") if migrated_post_effect else base_sha
     if (not isinstance(number, int) or not isinstance(node_id, str) or not isinstance(head, dict)
-            or head.get("sha") != source_sha or not isinstance(pull_base, dict) or pull_base.get("sha") != base_sha):
+            or head.get("sha") != source_sha or not isinstance(pull_base, dict) or pull_base.get("sha") != expected_base_sha):
         raise Refused("pull-request-identity")
     app_id, check_name = observe_check(client, target["fullName"], source_sha)
     ensure_protection(client, target["fullName"], base, app_id)
     ensure_ref(client, target["fullName"], POLICY_REF, source_sha)
     ensure_ref(client, target["fullName"], EPOCH_REF, source_sha)
     journal_ref, journal_digest = journal_address(target["repositoryId"], node_id)
-    ensure_ref(client, target["fullName"], journal_ref, source_sha)
+    if migrated_post_effect:
+        if observe_ref(client, target["fullName"], journal_ref) != RETAINED_011_JOURNAL_HEAD:
+            raise Refused("retained-post-effect-journal")
+    else:
+        ensure_ref(client, target["fullName"], journal_ref, source_sha)
     ensure_journal_protection(client, target["fullName"], journal_ref)
     executable = installed_command(command, contract["package"])
     def common(environment: str) -> list[str]:
@@ -1128,13 +1163,25 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
         if digest(installed_plan) != retained.get("installedPlanSha256") or not SHA256.fullmatch(str(retained.get("installedPlanSeal", ""))):
             raise Refused("retained-plan-digest")
         expected_pull = retained.get("pullRequest")
-        if not isinstance(expected_pull, dict) or expected_pull != {"number": number, "nodeId": node_id, "headSha": source_sha, "baseSha": base_sha}:
+        if not isinstance(expected_pull, dict) or expected_pull != {"number": number, "nodeId": node_id, "headSha": source_sha, "baseSha": expected_base_sha}:
             raise Refused("retained-pull-request-identity")
+    try:
+        native_plan = json.loads(installed_plan)
+    except (ValueError, UnicodeDecodeError) as error:
+        raise Refused("installed-plan-json") from error
+    native_operation_id = native_plan.get("operationId") if isinstance(native_plan, dict) else None
+    if (not isinstance(native_operation_id, str)
+            or not re.fullmatch(r"ordinary-delivery:[0-9a-f]{64}", native_operation_id)
+            or native_plan.get("schema") != "fsgg.coordination.ordinary-delivery-plan/2"
+            or native_plan.get("seal") != retained.get("installedPlanSeal")):
+        raise Refused("installed-plan-identity")
     plan_file = pathlib.Path(str(receipt_path) + ".installed-plan.json")
     write_private_bytes(plan_file, installed_plan)
     pull_status, pull_readback = client.request("GET", f"repos/{target['fullName']}/pulls/{number}")
     pull_value = expect_json(pull_status, pull_readback, 200, "pull-readback-before-dispatch")
     already_merged = pull_value.get("merged") is True
+    if migrated_post_effect and not already_merged:
+        raise Refused("retained-post-effect-not-merged")
     if not already_merged:
         if grant is not None:
             require_unexpired(grant, now_provider())
@@ -1158,7 +1205,7 @@ def execute_identity_bound(client: GitHub, contract: dict[str, object], plan: di
         raise Refused("journal-readback-content") from error
     if (journal_state.get("schema") != "fsgg.coordination.ordinary-delivery-journal/1"
             or journal_state.get("stage") != "settled" or journal_state.get("mergeCommit") != merge_commit
-            or journal_state.get("operationId") != contract["identity"]
+            or journal_state.get("operationId") != native_operation_id
             or journal_state.get("planDigest") != retained.get("installedPlanSeal")
             or not isinstance(journal_state.get("generation"), int) or journal_state["generation"] < 1
             or not OID.fullmatch(str(journal_value.get("sha", "")))):

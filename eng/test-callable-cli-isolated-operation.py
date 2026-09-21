@@ -24,6 +24,12 @@ SPEC = importlib.util.spec_from_file_location("callable_isolated_operation", MOD
 operation = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(operation)
+NATIVE_OPERATION_ID = "ordinary-delivery:" + "d" * 64
+
+
+def native_plan() -> bytes:
+    return operation.canonical({"schema": "fsgg.coordination.ordinary-delivery-plan/2",
+                                "operationId": NATIVE_OPERATION_ID, "seal": "c" * 64})
 
 
 def reseal(value: dict[str, object], field: str) -> dict[str, object]:
@@ -75,6 +81,7 @@ class FullOperationGitHub:
         self.protection = None
         self.journal_protection = None
         self.installed_plan_seal = "c" * 64
+        self.journal_operation_id = NATIVE_OPERATION_ID
         self.pull_reads = 0
         self.calls: list[tuple[str, str, object | None]] = []
 
@@ -96,7 +103,7 @@ class FullOperationGitHub:
             if content_path.startswith("ordinary/"):
                 merge = "f" * 40
                 state = operation.canonical({"schema": "fsgg.coordination.ordinary-delivery-journal/1", "stage": "settled", "mergeCommit": merge,
-                                             "operationId": self.contract["identity"], "planDigest": self.installed_plan_seal, "generation": 3})
+                                             "operationId": self.journal_operation_id, "planDigest": self.installed_plan_seal, "generation": 3})
                 return 200, {"sha": "9" * 40, "content": base64.b64encode(state).decode()}
             if content_path not in self.contents:
                 return 404, {}
@@ -407,6 +414,44 @@ class IsolatedOperationTests(unittest.TestCase):
             self.assertEqual(plan["seal"], migrated["planSeal"])
             self.assertEqual([], migrated["checkpoints"])
 
+    def test_exact_post_effect_checkpoint_migrates_and_requires_known_merge(self):
+        creation = {
+            "authoritativeReadback": True, "contractSha256": operation.LEGACY_CREATION_CONTRACT_SHA256,
+            "creationPlanSeal": "0de72b8825a2f11e106e8767f20e3587f1c65e649efdbc9b57e9dea628c80fbf",
+            "receiptSha256": operation.LEGACY_CREATION_RECEIPT_SHA256,
+            "schema": "fsgg.coordination.callable-isolated-creation-receipt/1",
+            "target": {"defaultBranch": "main", "fullName": self.contract["target"]["fullName"],
+                       "nodeId": "R_kgDOUgzhnA", "owner": "FS-GG", "repositoryId": 1376575900,
+                       "syntheticOnly": True, "visibility": "public"},
+        }
+        plan = operation.prepare_operation(self.contract, creation)
+        original = operation.read_json(ROOT / "eng/fixtures/retained-v2-call-01-4b-cli-intent.json")
+        self.assertEqual(operation.RETAINED_011_CLI_INTENT_PROGRESS_SEAL, original["seal"])
+        self.assertEqual("cli-intent", original["stage"])
+        with tempfile.TemporaryDirectory() as scratch:
+            state = pathlib.Path(scratch) / "checkpoint.json"
+            operation.write_private(state, original)
+            absent = FakeGitHub([(404, {})])
+            with self.assertRaisesRegex(operation.Refused, "cleanup-readback-without-bound-intent"):
+                operation.execute_identity_bound(absent, self.contract, plan, "/unused", "TOKEN", state)
+            migrated = operation.read_json(state)
+            self.assertEqual(self.contract["contractSha256"], migrated["contractSha256"])
+            self.assertEqual(plan["seal"], migrated["planSeal"])
+            self.assertEqual(original["installedPlanBase64"], migrated["installedPlanBase64"])
+            self.assertEqual(original["pullRequest"], migrated["pullRequest"])
+            self.assertEqual(original["journalRef"], migrated["journalRef"])
+            self.assertEqual(operation.RETAINED_011_CLI_INTENT_PROGRESS_SEAL, migrated["postEffectSourceSeal"])
+            target = {"id": 1376575900, "visibility": "public", "default_branch": "main"}
+            wrong_main = FakeGitHub([(200, target), (200, {"object": {"sha": "a" * 40}})])
+            with self.assertRaisesRegex(operation.Refused, "retained-post-effect-identity"):
+                operation.execute_identity_bound(wrong_main, self.contract, plan, "/unused", "TOKEN", state)
+            self.assertTrue(all(method == "GET" for method, _, _ in wrong_main.calls))
+            changed = copy.deepcopy(original)
+            changed["sourceSha"] = "a" * 40
+            operation.write_private(state, reseal(changed, "seal"))
+            with self.assertRaisesRegex(operation.Refused, "progress-binding"):
+                operation.execute_identity_bound(FakeGitHub([]), self.contract, plan, "/unused", "TOKEN", state)
+
     def test_identity_bound_interpreter_persists_before_cleanup_and_replay_is_noop(self):
         plan = operation.prepare_operation(self.contract, self.creation_receipt())
         client = FullOperationGitHub(self.contract, plan)
@@ -425,7 +470,7 @@ class IsolatedOperationTests(unittest.TestCase):
             calls.append(arguments[1])
             environments.append(token_environment)
             if arguments[1] == "plan":
-                return Result(0, operation.canonical({"seal": "c" * 64}))
+                return Result(0, native_plan())
             if len([item for item in calls if item == "advance"]) == 1:
                 return Result(0, b'AdvanceSettled')
             return Result(0, b'AdvanceAlreadySettled')
@@ -525,7 +570,7 @@ class IsolatedOperationTests(unittest.TestCase):
         calls = []
         class Result:
             returncode = 0
-            stdout = operation.canonical({"seal": "c" * 64})
+            stdout = native_plan()
             stderr = b""
         operation.installed_command = lambda *_: pathlib.Path("/qualified/fsgg-coordination")
         operation.run_cli = lambda *_: (calls.append("plan") or Result())
@@ -549,7 +594,7 @@ class IsolatedOperationTests(unittest.TestCase):
             def __init__(self, stdout): self.returncode, self.stdout, self.stderr = 0, stdout, b""
         def run(_command, arguments, _environment):
             calls.append(arguments[1])
-            if arguments[1] == "plan": return Result(operation.canonical({"seal": "c" * 64}))
+            if arguments[1] == "plan": return Result(native_plan())
             if phase["value"] == "first": raise subprocess.TimeoutExpired("cli", 120)
             return Result(b"AdvanceAlreadySettled")
         operation.run_cli = run
@@ -775,7 +820,7 @@ class IsolatedOperationTests(unittest.TestCase):
         def request(method, path, body=None):
             if "/contents/ordinary/" in path and method == "GET":
                 state = operation.canonical({"schema": "fsgg.coordination.ordinary-delivery-journal/1", "stage": "effect-pending",
-                    "mergeCommit": None, "operationId": self.contract["identity"], "planDigest": "c" * 64, "generation": 2})
+                    "mergeCommit": None, "operationId": NATIVE_OPERATION_ID, "planDigest": "c" * 64, "generation": 2})
                 return 200, {"sha": "9" * 40, "content": base64.b64encode(state).decode()}
             return original_request(method, path, body)
         client.request = request
@@ -784,11 +829,29 @@ class IsolatedOperationTests(unittest.TestCase):
             def __init__(self, stdout): self.returncode, self.stdout, self.stderr = 0, stdout, b""
         operation.installed_command = lambda *_: pathlib.Path("/qualified/fsgg-coordination")
         operation.run_cli = lambda _command, arguments, _environment: Result(
-            operation.canonical({"seal": "c" * 64}) if arguments[1] == "plan" else b"AdvanceSettled")
+            native_plan() if arguments[1] == "plan" else b"AdvanceSettled")
         try:
             with tempfile.TemporaryDirectory() as scratch, self.assertRaisesRegex(operation.Refused, "journal-not-settled"):
                 operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN",
                                                   pathlib.Path(scratch) / "state.json")
+            self.assertFalse(any(method == "DELETE" for method, _, _ in client.calls))
+        finally:
+            operation.installed_command, operation.run_cli = original_installed, original_run
+
+    def test_settled_journal_with_other_native_operation_id_refuses_before_cleanup(self):
+        plan = operation.prepare_operation(self.contract, self.creation_receipt())
+        client = FullOperationGitHub(self.contract, plan)
+        client.journal_operation_id = "ordinary-delivery:" + "e" * 64
+        original_installed, original_run = operation.installed_command, operation.run_cli
+        class Result:
+            def __init__(self, stdout): self.returncode, self.stdout, self.stderr = 0, stdout, b""
+        operation.installed_command = lambda *_: pathlib.Path("/qualified/fsgg-coordination")
+        operation.run_cli = lambda _command, arguments, _environment: Result(
+            native_plan() if arguments[1] == "plan" else b"AdvanceSettled")
+        try:
+            with tempfile.TemporaryDirectory() as scratch, self.assertRaisesRegex(operation.Refused, "journal-not-settled"):
+                operation.execute_identity_bound(client, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN",
+                                                 pathlib.Path(scratch) / "state.json")
             self.assertFalse(any(method == "DELETE" for method, _, _ in client.calls))
         finally:
             operation.installed_command, operation.run_cli = original_installed, original_run
