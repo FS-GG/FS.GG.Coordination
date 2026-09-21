@@ -49,6 +49,23 @@ The first accepted absence readback records a digest of the original control
 identity and validity window. A byte-identical retry can finish later stages
 after a lost response; a different command or stale first use is refused.
 
+For an expired, paused route whose `StoreCandidate` effect is already applied
+but whose candidate was never accepted by Core, use the separate authenticated
+`/v1/settle-undelivered-candidate` action. Rebind the exact original admission
+with `/v1/main/recover`, then submit a fresh control with reason
+`candidate-applied-undelivered` and the current sequence and generation. The
+Host requires the original stored candidate bytes and receipt to match the
+applied effect readback, the bound execution journal to show a succeeded run
+with that candidate, the terminal snapshot, and fresh GitHub absence of the
+branch, every-base pull request, and active claim. It refuses a route with a
+Core-accepted candidate or any later delivery effect. The transition records
+`ReconciledUndelivered`, releases the execution subscription, revokes the old
+generation, and clears the claim obligation. It does not record native delivery
+or a completed item. The first terminal write binds the full control identity;
+only an exact retry can complete later stages after a lost response or restart.
+Rebinding after a partial revoke is allowed only for this terminal marker and
+the original immutable admission. Fresh work requires separate readmission.
+
 Main owns the PostgreSQL journals, effect intents, candidate object, GitHub delivery
 identity, and native delivery readback. A launcher authenticates to the Host-owned
 `/v1/executor/poll` and `/v1/executor/complete` routes and relays bounded frames to

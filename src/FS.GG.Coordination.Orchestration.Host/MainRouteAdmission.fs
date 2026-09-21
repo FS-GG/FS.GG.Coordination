@@ -99,6 +99,30 @@ module MainAbsentCandidateControl =
             | _ -> Error "absent-candidate-retry-identity-refused"
         | _ -> Error "absent-candidate-operation-refused"
 
+[<RequireQualifiedAccess>]
+module MainUndeliveredCandidateControl =
+    let digest (control: MainRouteControl) =
+        SHA256.HashData(
+            Encoding.UTF8.GetBytes(
+                $"{control.Action}\n{control.CommandId:D}\n{control.ExpectedSequence}\n{control.ExpectedGeneration}\n{control.PrincipalId}\n{control.IssuedAt.UtcTicks}\n{control.ExpiresAt.UtcTicks}\n{control.Reason}"
+            )
+        )
+        |> Convert.ToHexString
+        |> fun value -> "candidate-undelivered:" + value.ToLowerInvariant()
+
+    let authorize (control: MainRouteControl) (route: HostedRoutePlan) (state: State) (now: DateTimeOffset) =
+        let marker = digest control
+
+        match Map.tryFind route.AttemptId state.Attempts with
+        | Some attempt when attempt.Status = ReconciledUndelivered marker -> Ok marker
+        | Some attempt when attempt.Status = AttemptStatus.Active || (match attempt.Status with AttemptStatus.OutcomeUnknown _ -> true | _ -> false) ->
+            if Id.revisionValue state.Revision = control.ExpectedSequence
+               && Id.generationValue state.Generation = control.ExpectedGeneration
+               && control.IssuedAt <= now
+               && now < control.ExpiresAt then Ok marker
+            else Error "undelivered-candidate-control-stale"
+        | _ -> Error "undelivered-candidate-attempt-refused"
+
 type IMainRouteAdmissionHandler =
     abstract Admit: byte array * CancellationToken -> Task<Result<unit, string>>
     abstract RecoverPaused: byte array * CancellationToken -> Task<Result<unit, string>>

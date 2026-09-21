@@ -2063,7 +2063,49 @@ let ``absent candidate control allows only same-command partial retry`` () =
         MainAbsentCandidateControl.authorize different route afterFirstStage (Fixture.now.AddMinutes 5.)
     )
 
-let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event list -> Task<IJournalStore>) =
+[<Fact>]
+let ``undelivered candidate control binds first write and exact retry identity`` () =
+    let route = Fixture.route
+    let attempt =
+        {
+            AttemptId = route.AttemptId
+            SessionId = Id.session (Guid.NewGuid())
+            Runner = {
+                RunnerId = Id.runner (Guid.NewGuid())
+                PrincipalId = "pilot-worker"
+                FingerprintSha256 = String.replicate 64 "a"
+                Generation = route.Generation
+                ExpiresAt = Fixture.now.AddMinutes 1.
+            }
+            Generation = route.Generation
+            StartedAt = Fixture.now.AddMinutes -10.
+            Status = AttemptStatus.Active
+        }
+
+    let state = { initial with Revision = Id.revision 23L; Generation = route.Generation; Attempts = Map.ofList [ route.AttemptId, attempt ] }
+    let control: MainRouteControl = {
+        CommandId = Guid.NewGuid()
+        ExpectedSequence = 23L
+        ExpectedGeneration = Id.generationValue route.Generation
+        PrincipalId = "pilot-worker"
+        IssuedAt = Fixture.now.AddMinutes -1.
+        ExpiresAt = Fixture.now.AddMinutes 1.
+        Reason = "candidate-applied-undelivered"
+        Action = "settle-undelivered-candidate"
+    }
+
+    let marker = MainUndeliveredCandidateControl.digest control
+    Assert.Equal(Ok marker, MainUndeliveredCandidateControl.authorize control route state Fixture.now)
+    let stale = { state with Revision = Id.revision 24L }
+    Assert.Equal(Error "undelivered-candidate-control-stale", MainUndeliveredCandidateControl.authorize control route stale Fixture.now)
+    let partial = { stale with Attempts = Map.ofList [ route.AttemptId, { attempt with Status = ReconciledUndelivered marker } ] }
+    Assert.Equal(Ok marker, MainUndeliveredCandidateControl.authorize control route partial (Fixture.now.AddMinutes 10.))
+    let revoked = { partial with Control = Revoked "candidate-applied-undelivered"; Generation = Id.generation (Id.generationValue route.Generation + 1L) }
+    Assert.Equal(Ok marker, MainUndeliveredCandidateControl.authorize control route revoked (Fixture.now.AddMinutes 10.))
+    let different = { control with CommandId = Guid.NewGuid() }
+    Assert.Equal(Error "undelivered-candidate-attempt-refused", MainUndeliveredCandidateControl.authorize different route partial (Fixture.now.AddMinutes 10.))
+
+let runFailedCandidateRecoveryFixture applied partialFirstStage (storeFactory: Event list -> Task<IJournalStore>) =
     task {
         let now = Fixture.now
         let route = { Fixture.route with RepositoryNodeId = "R_writer" }
@@ -2157,6 +2199,27 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                 Status = AttemptStatus.Active
             }
 
+        let candidateBytes = Encoding.UTF8.GetBytes "exact candidate fixture"
+        let candidateContentSha =
+            System.Security.Cryptography.SHA256.HashData candidateBytes
+            |> Convert.ToHexString
+            |> fun value -> value.ToLowerInvariant()
+
+        let candidateEvents =
+            if applied then
+                [
+                    HostedEffectReadbackAccepted(
+                        { readback candidateIntent candidateIntent.ResourceId with
+                            CandidateHeadSha = Some(String.replicate 40 "c")
+                            ResultSha = Some candidateContentSha
+                            ProviderRevision = String.replicate 64 "e"
+                            Exists = true
+                        }
+                    )
+                    EffectSettled(candidateIntent.OperationId, Applied(String.replicate 64 "e"))
+                ]
+            else [ EffectObservationRequired(candidateIntent.OperationId, "candidate-unknown") ]
+
         let events =
             [
                 SubscriptionWorkAdmitted(
@@ -2197,7 +2260,7 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                 EffectSettled(processIntent.OperationId, Applied "provider-revision")
                 EffectIntentRecorded candidateIntent
                 EffectDispatchStarted candidateIntent.OperationId
-                EffectObservationRequired(candidateIntent.OperationId, "candidate-unknown")
+                yield! candidateEvents
                 PausedEvent "old-route-recovery"
             ]
 
@@ -2209,12 +2272,14 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                 PrincipalId = "pilot-worker"
                 IssuedAt = now.AddMinutes -1.
                 ExpiresAt = now.AddMinutes 1.
-                Reason = "candidate-touch-set-refused"
-                Action = "settle-absent-candidate"
+                Reason = if applied then "candidate-applied-undelivered" else "candidate-touch-set-refused"
+                Action = if applied then "settle-undelivered-candidate" else "settle-absent-candidate"
             }
 
         let seededEvents =
-            if partialFirstStage then
+            if applied && partialFirstStage then
+                events @ [ AttemptObserved(route.AttemptId, ReconciledUndelivered(MainUndeliveredCandidateControl.digest control)) ]
+            elif partialFirstStage then
                 let firstReadback =
                     { readback candidateIntent candidateIntent.ResourceId with
                         ProviderRevision = MainAbsentCandidateControl.digest control
@@ -2228,10 +2293,37 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                 events
 
         let! store = storeFactory seededEvents
+        let candidateArtifact = {
+            CandidateId = route.CandidateId
+            BaselineSha = String.replicate 40 "a"
+            HeadSha = String.replicate 40 "c"
+            TreeSha = String.replicate 40 "f"
+            ManifestSha256 = String.replicate 64 "b"
+            ContentSha256 = candidateContentSha
+            MediaType = "application/vnd.fsgg.runner-candidate+zip"
+            SizeBytes = int64 candidateBytes.LongLength
+            RetainUntil = now.AddMinutes -2.
+            Location = ContentAddressedObject("sha256/" + candidateContentSha)
+        }
+        let candidateReceipt = {
+            CandidateId = route.CandidateId
+            ContentSha256 = candidateArtifact.ContentSha256
+            ManifestSha256 = candidateArtifact.ManifestSha256
+            SizeBytes = candidateArtifact.SizeBytes
+            Location = candidateArtifact.Location
+            StoreId = "fixture"
+            StoreSchemaVersion = 1
+            StorageReceiptSha256 = String.replicate 64 "e"
+            VerifiedAt = now.AddMinutes -2.
+        }
         let candidateStore =
             { new ICandidateStore with
-                member _.Put(_, _) = failwith "unexpected candidate mutation"
-                member _.Read(_, _) = Task.FromResult(Error "candidate-not-found")
+                member _.Put(_, _) =
+                    if applied then Task.FromResult(Error(Existing candidateReceipt))
+                    else failwith "unexpected candidate mutation"
+                member _.Read(_, _) =
+                    if applied then Task.FromResult(Ok { Candidate = candidateArtifact; Bytes = candidateBytes })
+                    else Task.FromResult(Error "candidate-not-found")
                 member _.Quarantine(_, _, _) = failwith "unexpected quarantine"
                 member _.CleanupUnreferenced(_, _, _) = failwith "unexpected cleanup"
             }
@@ -2264,7 +2356,7 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                     FS.GG.Coordination.Orchestration.Execution.ProviderSessionReference.create "codex-thread:fixture"
                     |> Result.defaultWith failwith
                 Resolved = { Model = None; Effort = None }
-                Lifecycle = FS.GG.Coordination.Orchestration.Execution.SessionLifecycle.OutcomeUnknown
+                Lifecycle = if applied then FS.GG.Coordination.Orchestration.Execution.SessionLifecycle.Succeeded else FS.GG.Coordination.Orchestration.Execution.SessionLifecycle.OutcomeUnknown
                 Output = []
                 LifecycleReferences = []
                 Usage =
@@ -2272,7 +2364,7 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                         Values = Map.empty
                         Cost = FS.GG.Coordination.Orchestration.Execution.CostUnknown "fixture"
                     }
-                Candidate = None
+                Candidate = if applied then Some { CandidateId = Id.candidateValue route.CandidateId; HeadSha = candidateArtifact.HeadSha; TreeSha = candidateArtifact.TreeSha } else None
                 ObservedAt = now.AddMinutes -2.
             }
 
@@ -2287,7 +2379,7 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                                     [
                                         FS.GG.Coordination.Orchestration.Execution.LaunchIntentRecorded launch
                                         FS.GG.Coordination.Orchestration.Execution.ObservationRecorded observation
-                                        FS.GG.Coordination.Orchestration.Execution.CancelRequested(now.AddMinutes -1.)
+                                        if not applied then FS.GG.Coordination.Orchestration.Execution.CancelRequested(now.AddMinutes -1.)
                                     ]
                             }
                     )
@@ -2356,8 +2448,9 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
                     |}
             )
 
+            let settle = if applied then MainProductionAdmission.SettleUndeliveredCandidateCore else MainProductionAdmission.SettleAbsentCandidateCore
             let! result =
-                MainProductionAdmission.SettleAbsentCandidateCore(
+                settle(
                     FixedClock now,
                     store,
                     candidateStore,
@@ -2380,16 +2473,17 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
             Assert.Empty settled.State.RecoveryObligations
             Assert.Equal(1, releases)
             Assert.Equal(
-                Some(OperationState.Settled(candidateIntent, ProvenAbsent)),
+                Some(OperationState.Settled(candidateIntent, if applied then Applied(String.replicate 64 "e") else ProvenAbsent)),
                 Map.tryFind candidateIntent.OperationId settled.State.Operations
             )
             Assert.Equal(
-                AttemptStatus.ReconciledAbsent "candidate-deliverable-absent:candidate-touch-set-refused",
+                (if applied then AttemptStatus.ReconciledUndelivered(MainUndeliveredCandidateControl.digest control)
+                 else AttemptStatus.ReconciledAbsent "candidate-deliverable-absent:candidate-touch-set-refused"),
                 settled.State.Attempts[route.AttemptId].Status
             )
 
             let! repeated =
-                MainProductionAdmission.SettleAbsentCandidateCore(
+                settle(
                     FixedClock(now.AddMinutes 5.),
                     store,
                     candidateStore,
@@ -2419,11 +2513,19 @@ let runFailedCandidateRecoveryFixture partialFirstStage (storeFactory: Event lis
 
 [<Fact>]
 let ``failed candidate recovery settles exact journal state without provider mutation`` () =
-    runFailedCandidateRecoveryFixture false (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+    runFailedCandidateRecoveryFixture false false (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
 
 [<Fact>]
 let ``failed candidate recovery resumes after durable stage-one lost response`` () =
-    runFailedCandidateRecoveryFixture true (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+    runFailedCandidateRecoveryFixture false true (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+
+[<Fact>]
+let ``applied but undelivered candidate settles without publishing a branch`` () =
+    runFailedCandidateRecoveryFixture true false (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
+
+[<Fact>]
+let ``applied candidate settlement resumes only the original request`` () =
+    runFailedCandidateRecoveryFixture true true (fun events -> Task.FromResult(MemoryStore events :> IJournalStore))
 
 [<Fact>]
 let ``GitHub route refuses competing canonical claim marker`` () =

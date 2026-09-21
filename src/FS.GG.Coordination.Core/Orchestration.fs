@@ -357,6 +357,7 @@ module Orchestration =
         | Completed
         | CancelledByRunner
         | ReconciledAbsent of string
+        | ReconciledUndelivered of string
 
     type Attempt =
         {
@@ -1279,7 +1280,8 @@ module Orchestration =
                     match attempt.Status with
                     | Completed
                     | CancelledByRunner
-                    | ReconciledAbsent _ -> true
+                    | ReconciledAbsent _
+                    | ReconciledUndelivered _ -> true
                     | _ -> false))
             && (state.Operations
                 |> Map.forall (fun _ operation ->
@@ -1434,7 +1436,8 @@ module Orchestration =
                             match attempt.Status with
                             | Completed
                             | CancelledByRunner
-                            | ReconciledAbsent _ -> true
+                            | ReconciledAbsent _
+                            | ReconciledUndelivered _ -> true
                             | _ -> false))
                     && hasCurrentClaims state reservation
                     && (state.HostedRoute
@@ -1515,6 +1518,40 @@ module Orchestration =
                         )))
                 ->
                 reject "attempt-absence-evidence-required"
+            | Some attempt, ReconciledUndelivered reason when
+                String.IsNullOrWhiteSpace reason
+                || reason <> reason.Trim()
+                || reason.Length > 256
+                || not (reason.StartsWith("candidate-undelivered:", StringComparison.Ordinal))
+                || not (match state.Control with Paused _ | Revoked _ -> true | _ -> false)
+                || not (match attempt.Status with
+                        | Active | OutcomeUnknown _ -> true
+                        | ReconciledUndelivered existing -> existing = reason
+                        | _ -> false)
+                || not (state.SubscriptionBudget
+                        |> Option.exists (fun budget -> now >= budget.DeliveryDeadline))
+                || not (state.HostedRoute
+                        |> Option.exists (fun route ->
+                            route.AttemptId = attemptId
+                            && not (state.Candidates.ContainsKey route.CandidateId)
+                            && (state.Operations
+                                |> Map.tryFind route.CandidateOperationId
+                                |> Option.exists (function
+                                    | Settled(intent, Applied revision) when intent.Kind = StoreCandidate ->
+                                        state.HostedEffectReadbacks
+                                        |> Map.tryFind route.CandidateOperationId
+                                        |> Option.exists (fun readback ->
+                                            readback.Exists
+                                            && readback.ProviderRevision = revision
+                                            && readback.CandidateHeadSha.IsSome
+                                            && readback.ResultSha.IsSome)
+                                    | _ -> false))
+                            && not (state.Operations.ContainsKey route.BranchOperationId)
+                            && not (state.Operations.ContainsKey route.PullRequestOperationId)
+                            && not (state.Operations.ContainsKey route.MergeOperationId)
+                            && not (state.Operations.ContainsKey route.ReadbackOperationId)))
+                ->
+                reject "attempt-undelivered-evidence-required"
             | Some _, Completed when
                 state.HostedRoute
                 |> Option.exists (fun route ->
@@ -2380,7 +2417,8 @@ module Orchestration =
             match attempt.Status with
             | Completed
             | CancelledByRunner
-            | ReconciledAbsent _ -> true
+            | ReconciledAbsent _
+            | ReconciledUndelivered _ -> true
             | _ -> false
 
         let replacementAllowed attempts =

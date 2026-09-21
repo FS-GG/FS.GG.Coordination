@@ -587,11 +587,246 @@ type MainProductionAdmission
                     | _ -> return Error "absent-candidate-readback-refused"
         }
 
+    static member SettleUndeliveredCandidateCore
+        (
+            clock: TimeProvider,
+            workItems: IJournalStore,
+            candidates: ICandidateStore,
+            executionCommands: IExecutorCommandStore,
+            executionJournal: IExecutionSessionJournal,
+            workItemId: WorkItemId,
+            principal: string,
+            github: GitHubRouteClient,
+            terminalEvidenceDirectory: string,
+            preparation: MainRoutePreparation,
+            control: MainRouteControl,
+            token: CancellationToken
+        ) =
+        task {
+            let! initial = HostedWriterJournal.recover workItems workItemId token
+
+            match initial with
+            | Error failures -> return Error(sprintf "%A" failures)
+            | Ok current ->
+                let route = preparation.Route
+                let now = clock.GetUtcNow()
+                let marker = MainUndeliveredCandidateControl.authorize control route current.State now
+                let candidateOperation = Map.tryFind route.CandidateOperationId current.State.Operations
+                let candidateReadback = Map.tryFind route.CandidateOperationId current.State.HostedEffectReadbacks
+                let noLaterEffects =
+                    [ route.BranchOperationId; route.PullRequestOperationId; route.MergeOperationId; route.ReadbackOperationId ]
+                    |> List.forall (fun id -> not (current.State.Operations.ContainsKey id))
+
+                let generationCurrent =
+                    current.State.Generation = route.Generation
+                    || (match current.State.Control with
+                        | Revoked _ -> Id.generationValue current.State.Generation = Id.generationValue route.Generation + 1L
+                        | _ -> false)
+
+                if Result.isError marker
+                   || not generationCurrent
+                   || current.State.HostedRoute <> Some route
+                   || now < preparation.Budget.DeliveryDeadline
+                   || control.Reason <> "candidate-applied-undelivered"
+                   || current.State.Candidates.ContainsKey route.CandidateId
+                   || not noLaterEffects
+                   || (match current.State.Control with Paused _ | Revoked _ -> false | _ -> true)
+                then
+                    return Error "undelivered-candidate-state-or-authority-refused"
+                else
+                    let! candidate = candidates.Read(route.CandidateId, token)
+                    let! liveRoute = github.ReadHostedRoute(route, token)
+                    let! branch = github.ReadBranchAbsent(route.BranchRef, token)
+                    let! pull = github.ReadPullRequestAbsent(route.BranchRef, token)
+                    let! claim = github.ReadClaimAbsent(route.ClaimResourceId, Id.operationValue route.ClaimOperationId, token)
+                    let terminalEvidence =
+                        MainTerminalEvidence.verify terminalEvidenceDirectory preparation.LaunchIntent (clock.GetUtcNow())
+                    let! execution =
+                        executionJournal.ReadAttempt(
+                            preparation.LaunchIntent.Key.AssignmentId,
+                            preparation.LaunchIntent.Key.AttemptId,
+                            token
+                        )
+
+                    match candidate, liveRoute, branch, pull, claim, terminalEvidence with
+                    | Ok stored, Ok _, Ok(), Ok(), Ok(), Ok _ ->
+                        let! storedReceipt = candidates.Put(stored, token)
+                        let receipt =
+                            match storedReceipt with
+                            | Error(Existing value) -> Some value
+                            | _ -> None
+
+                        let executionMatches =
+                            execution
+                            |> Option.bind (fun value -> SessionState.replay value.Events)
+                            |> Option.exists (fun state ->
+                                state.Intent = preparation.LaunchIntent
+                                && (state.Observation
+                                    |> Option.exists (fun value ->
+                                        value.Lifecycle = SessionLifecycle.Succeeded
+                                        && (value.Candidate
+                                            |> Option.exists (fun candidate ->
+                                                candidate.CandidateId = Id.candidateValue route.CandidateId
+                                                && candidate.HeadSha = stored.Candidate.HeadSha
+                                                && candidate.TreeSha = stored.Candidate.TreeSha)))))
+
+                        let candidateMatches =
+                            stored.Candidate.CandidateId = route.CandidateId
+                            && stored.Candidate.SizeBytes = int64 stored.Bytes.LongLength
+                            && (candidateOperation
+                                |> Option.exists (function
+                                    | OperationState.Settled(intent, Applied revision) when intent.Kind = StoreCandidate ->
+                                        candidateReadback
+                                        |> Option.exists (fun readback ->
+                                            readback.Exists
+                                            && readback.ProviderRevision = revision
+                                            && readback.CandidateHeadSha = Some stored.Candidate.HeadSha
+                                            && readback.ResultSha = Some stored.Candidate.ContentSha256
+                                            && (receipt
+                                                |> Option.exists (fun value ->
+                                                    value.CandidateId = route.CandidateId
+                                                    && value.ContentSha256 = stored.Candidate.ContentSha256
+                                                    && value.ManifestSha256 = stored.Candidate.ManifestSha256
+                                                    && value.StorageReceiptSha256 = revision)))
+                                    | _ -> false))
+
+                        if not executionMatches || not candidateMatches then
+                            return Error "undelivered-candidate-proof-refused"
+                        else
+                            let stageId stage =
+                                let bytes = SHA256.HashData(Text.Encoding.UTF8.GetBytes($"{control.CommandId:D}:undelivered-candidate:{stage}"))
+                                Id.command (Guid(ReadOnlySpan(bytes, 0, 16)))
+
+                            let append stage command =
+                                task {
+                                    let! latest = HostedWriterJournal.recover workItems workItemId token
+
+                                    match latest with
+                                    | Error failures -> return Error(sprintf "%A" failures)
+                                    | Ok value ->
+                                        let issued = clock.GetUtcNow()
+                                        let envelope =
+                                            {
+                                                CommandId = stageId stage
+                                                ProtocolVersion = Id.protocolVersion 1 0
+                                                ExpectedRevision = value.State.Revision
+                                                ExpectedGeneration = value.State.Generation
+                                                PrincipalId = principal
+                                                SessionId = None
+                                                IssuedAt = issued
+                                                ExpiresAt = issued.AddMinutes 1.
+                                                Command = command
+                                            }
+
+                                        let! result = HostedWriterJournal.decideAndAppend clock workItems workItemId envelope token
+                                        return result |> Result.bind (fun (decision, _) ->
+                                            match decision.Receipt.Disposition with
+                                            | ReceiptDisposition.Accepted
+                                            | ReceiptDisposition.Duplicate -> Ok()
+                                            | _ -> Error decision.Receipt.Detail)
+                                }
+
+                            let! terminal =
+                                match Map.tryFind route.AttemptId current.State.Attempts with
+                                | Some value when value.Status = ReconciledUndelivered (Result.defaultValue "" marker) ->
+                                    Task.FromResult(Ok())
+                                | Some _ ->
+                                    append "attempt-undelivered" (ObserveAttempt(route.AttemptId, ReconciledUndelivered (Result.defaultValue "" marker)))
+                                | None -> Task.FromResult(Error "undelivered-candidate-attempt-missing")
+
+                            match terminal with
+                            | Error reason -> return Error reason
+                            | Ok() ->
+                                let! released =
+                                    executionCommands.ReleaseSubscription(
+                                        preparation.ExecutionReservation.ReservationId,
+                                        preparation.ExecutionReservation.AttemptId,
+                                        preparation.ExecutionReservation.Generation,
+                                        token
+                                    )
+
+                                match released with
+                                | SubscriptionReleased
+                                | SubscriptionReleaseDuplicate ->
+                                    let! beforeRevoke = HostedWriterJournal.recover workItems workItemId token
+
+                                    match beforeRevoke with
+                                    | Error failures -> return Error(sprintf "%A" failures)
+                                    | Ok state ->
+                                        let! revoked =
+                                            match state.State.Control with
+                                            | Revoked _ -> Task.FromResult(Ok())
+                                            | Paused _ -> append "revoke" (Revoke "candidate-applied-undelivered")
+                                            | _ -> Task.FromResult(Error "undelivered-candidate-control-changed")
+
+                                        match revoked with
+                                        | Error reason -> return Error reason
+                                        | Ok() ->
+                                            let! beforeClaim = HostedWriterJournal.recover workItems workItemId token
+
+                                            match beforeClaim with
+                                            | Error failures -> return Error(sprintf "%A" failures)
+                                            | Ok state ->
+                                                let! cleared =
+                                                    if state.State.ExternalClaims.ContainsKey route.ClaimResourceId then
+                                                        append "claim-released" (ObserveClaimReleased route.ClaimResourceId)
+                                                    else Task.FromResult(Ok())
+
+                                                match cleared with
+                                                | Error reason -> return Error reason
+                                                | Ok() ->
+                                                    let! finalState = HostedWriterJournal.recover workItems workItemId token
+
+                                                    match finalState with
+                                                    | Error failures -> return Error(sprintf "%A" failures)
+                                                    | Ok value when
+                                                        value.State.Reservation.IsNone
+                                                        && value.State.ExternalClaims.IsEmpty
+                                                        && value.State.RecoveryObligations.IsEmpty
+                                                        && value.State.CompensationFailures.IsEmpty
+                                                        && (value.State.Operations |> Map.forall (fun _ operation -> match operation with OperationState.Settled _ -> true | _ -> false))
+                                                        ->
+                                                        return Ok {
+                                                            Sequence = Id.revisionValue value.State.Revision
+                                                            Action = control.Action
+                                                            RequestPersisted = true
+                                                            ProcessTerminationObserved = None
+                                                            Detail = "candidate-applied-undelivered-settled"
+                                                        }
+                                                    | Ok _ -> return Error "undelivered-candidate-compensation-incomplete"
+                                | _ -> return Error "undelivered-candidate-execution-reservation-release-refused"
+                    | Error reason, _, _, _, _, _ -> return Error reason
+                    | _, Error reason, _, _, _, _
+                    | _, _, Error reason, _, _, _
+                    | _, _, _, Error reason, _, _
+                    | _, _, _, _, Error reason, _
+                    | _, _, _, _, _, Error reason -> return Error reason
+        }
+
     member private _.SettleAbsentCandidate (control: MainRouteControl) (token: CancellationToken) =
         match lock gate (fun () -> boundPreparation) with
         | None -> Task.FromResult(Error "absent-candidate-route-not-bound")
         | Some preparation ->
             MainProductionAdmission.SettleAbsentCandidateCore(
+                clock,
+                workItems,
+                candidates,
+                executions :> IExecutorCommandStore,
+                executions :> IExecutionSessionJournal,
+                workItemId,
+                principal,
+                github,
+                terminalEvidenceDirectory,
+                preparation,
+                control,
+                token
+            )
+
+    member private _.SettleUndeliveredCandidate (control: MainRouteControl) (token: CancellationToken) =
+        match lock gate (fun () -> boundPreparation) with
+        | None -> Task.FromResult(Error "undelivered-candidate-route-not-bound")
+        | Some preparation ->
+            MainProductionAdmission.SettleUndeliveredCandidateCore(
                 clock,
                 workItems,
                 candidates,
@@ -721,7 +956,7 @@ type MainProductionAdmission
                     | Some route ->
                         match Map.tryFind route.AttemptId value.State.Attempts with
                         | Some {
-                                   Status = AttemptStatus.Completed | AttemptStatus.CancelledByRunner | AttemptStatus.ReconciledAbsent _
+                                   Status = AttemptStatus.Completed | AttemptStatus.CancelledByRunner | AttemptStatus.ReconciledAbsent _ | AttemptStatus.ReconciledUndelivered _
                                } -> findings.Add "main-route-attempt-terminal"
                         | Some {
                                    Status = AttemptStatus.OutcomeUnknown _
@@ -791,12 +1026,15 @@ type MainProductionAdmission
                     || control.Reason <> control.Reason.Trim()
                     || control.IssuedAt = DateTimeOffset.MinValue
                     || control.ExpiresAt <= control.IssuedAt
-                    || (control.Action = "settle-absent-candidate"
+                    || ((control.Action = "settle-absent-candidate"
+                         || control.Action = "settle-undelivered-candidate")
                         && control.ExpiresAt - control.IssuedAt > TimeSpan.FromMinutes 5.)
                 then
                     return Error "invalid-main-control-request"
                 elif control.Action = "settle-absent-candidate" then
                     return! this.SettleAbsentCandidate control token
+                elif control.Action = "settle-undelivered-candidate" then
+                    return! this.SettleUndeliveredCandidate control token
                 else
                     let command =
                         match control.Action with

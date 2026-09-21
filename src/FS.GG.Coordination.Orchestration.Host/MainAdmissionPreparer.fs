@@ -88,7 +88,8 @@ module MainAdmissionPreparer =
                             match status with
                             | Completed -> Some "follow-up"
                             | CancelledByRunner
-                            | ReconciledAbsent _ -> Some "child"
+                            | ReconciledAbsent _
+                            | ReconciledUndelivered _ -> Some "child"
                             | _ -> None
 
                         match relation with

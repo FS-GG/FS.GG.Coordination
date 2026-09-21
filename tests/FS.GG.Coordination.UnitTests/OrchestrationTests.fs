@@ -203,6 +203,55 @@ let hostedReady () =
 
 module Cases =
     [<Fact>]
+    let ``expired applied candidate can be marked undelivered only before publication`` () =
+        let active, attemptId, candidateId, route = hostedReady ()
+        let intent = routeEffect route.CandidateOperationId StoreCandidate (Id.candidateValue candidateId |> string) route
+        let receiptSha = digest "e"
+        let readback = {
+            OperationId = intent.OperationId
+            RouteId = route.RouteId
+            AttemptId = attemptId
+            CandidateId = candidateId
+            RepositoryNodeId = route.RepositoryNodeId
+            ProviderResourceId = intent.ResourceId
+            CandidateHeadSha = Some(String.replicate 40 "c")
+            ResultSha = Some(digest "d")
+            ProviderRevision = receiptSha
+            Generation = route.Generation
+            WorkflowRevision = route.WorkflowRevision
+            ObservedAt = now
+            Exists = true
+        }
+        let subscription = {
+            Schema = "fsgg.coordination.subscription-execution-budget/2"
+            AttemptLimit = 1
+            MaximumRuntime = TimeSpan.FromMinutes 30.
+            ExecutionDeadline = now.AddMinutes -2.
+            DeliveryDeadline = now.AddMinutes -1.
+            Usage = TokensUnknown "provider-unknown"
+            Cost = {
+                InvocationState = "not-applicable"
+                InvocationProvenance = "subscription-session"
+                BroaderAttributionState = "unknown"
+                BroaderAttributionProvenance = "not-attributed"
+            }
+        }
+        let state = {
+            active with
+                Control = Paused "operator-recovery"
+                SubscriptionBudget = Some subscription
+                Operations = active.Operations.Add(intent.OperationId, Settled(intent, Applied receiptSha))
+                HostedEffectReadbacks = active.HostedEffectReadbacks.Add(intent.OperationId, readback)
+        }
+        let reason = "candidate-undelivered:" + digest "f"
+        let observe value = decide now value (command "28000000-0000-0000-0000-000000000001") "" (ObserveAttempt(attemptId, ReconciledUndelivered reason))
+        Assert.Equal(Accepted, (observe state).Receipt.Disposition)
+        let published = { state with Operations = state.Operations.Add(route.BranchOperationId, Settled(routeEffect route.BranchOperationId PublishCandidateBranch route.BranchRef route, Applied "branch")) }
+        Assert.Equal("attempt-undelivered-evidence-required", (observe published).Receipt.Detail)
+        let running = { state with Control = Running }
+        Assert.Equal("attempt-undelivered-evidence-required", (observe running).Receipt.Detail)
+
+    [<Fact>]
     let ``revoked subscription generation admits one fresh scoped budget without rewriting receipts`` () =
         let subscription deadline =
             {

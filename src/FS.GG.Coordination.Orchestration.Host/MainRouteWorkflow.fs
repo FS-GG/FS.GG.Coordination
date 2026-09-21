@@ -238,6 +238,17 @@ type MainRouteWorkflow
                     |> Option.exists (fun attempt ->
                         attempt.SessionId = value.SessionId && attempt.Runner = value.Runner)
 
+                let revokedUndelivered =
+                    match current.Control, Map.tryFind value.Route.AttemptId current.Attempts with
+                    | Revoked "candidate-applied-undelivered", Some attempt when
+                        (match attempt.Status with
+                         | ReconciledUndelivered reason -> reason.StartsWith("candidate-undelivered:", StringComparison.Ordinal)
+                         | _ -> false)
+                        && Id.generationValue current.Generation = Id.generationValue value.Route.Generation + 1L
+                        && not (current.Candidates.ContainsKey value.Route.CandidateId)
+                        -> true
+                    | _ -> false
+
                 let failures =
                     [
                         "execution-route", routeBound
@@ -250,13 +261,13 @@ type MainRouteWorkflow
                         (current.Control
                          |> function
                              | Paused _ -> true
-                             | _ -> false)
+                             | _ -> revokedUndelivered)
                         "readback-stale", not current.ReadbackCurrent
                         "work-item", current.WorkItemId = Some workItemId
                         "snapshot", current.Snapshot = Some value.Snapshot
                         "hosted-route", current.HostedRoute = Some value.Route
                         "budget", current.SubscriptionBudget = Some value.Budget
-                        "reservation", current.Reservation = Some value.Reservation
+                        "reservation", current.Reservation = Some value.Reservation || (revokedUndelivered && current.Reservation.IsNone)
                         "original-readback", originalReadback = Some value.Readback
                         "budget-schema", value.Budget.Schema = SubscriptionPilot.budgetSchema
                     ]
@@ -638,6 +649,14 @@ type MainRouteWorkflow
 
             match current with
             | Error reason -> return Error reason
+            | Ok state when
+                state.Attempts
+                |> Map.tryFind value.Route.AttemptId
+                |> Option.exists (fun attempt ->
+                    match attempt.Status with
+                    | ReconciledUndelivered _ -> true
+                    | _ -> false)
+                -> return Ok()
             | Ok state ->
                 let ordered =
                     [
