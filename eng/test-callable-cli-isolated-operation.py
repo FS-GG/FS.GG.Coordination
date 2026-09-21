@@ -446,6 +446,57 @@ class IsolatedOperationTests(unittest.TestCase):
             with self.assertRaisesRegex(operation.Refused, "retained-post-effect-identity"):
                 operation.execute_identity_bound(wrong_main, self.contract, plan, "/unused", "TOKEN", state)
             self.assertTrue(all(method == "GET" for method, _, _ in wrong_main.calls))
+            resumed = FullOperationGitHub(self.contract, plan)
+            resumed.refs = {
+                "refs/heads/main": operation.RETAINED_011_MERGE_COMMIT,
+                f"refs/heads/{operation.SOURCE_BRANCH}": original["sourceSha"],
+                operation.POLICY_REF: original["sourceSha"],
+                operation.EPOCH_REF: original["sourceSha"],
+                original["journalRef"]: operation.RETAINED_011_JOURNAL_HEAD,
+            }
+            resumed.contents = {
+                ".github/workflows/callable-synthetic.yml": operation.WORKFLOW_BYTES,
+                "synthetic.txt": operation.SOURCE_BYTES,
+                "epoch.json": operation.EPOCH_BYTES,
+            }
+            resumed.protection = operation.protection_body(15368)
+            resumed.journal_protection = operation.journal_protection_body()
+            native = json.loads(base64.b64decode(original["installedPlanBase64"]))
+            journal = operation.canonical({"schema": "fsgg.coordination.ordinary-delivery-journal/1",
+                "stage": "settled", "mergeCommit": operation.RETAINED_011_MERGE_COMMIT,
+                "operationId": native["operationId"], "planDigest": native["seal"], "generation": 3})
+            original_request = resumed.request
+            def request(method, path, body=None):
+                if method == "GET" and path.endswith("/pulls/1"):
+                    resumed.calls.append((method, path, body))
+                    return 200, {"number": 1, "node_id": original["pullRequest"]["nodeId"],
+                        "head": {"sha": original["sourceSha"]}, "base": {"sha": original["baseSha"]},
+                        "merged": True, "merge_commit_sha": operation.RETAINED_011_MERGE_COMMIT}
+                if method == "GET" and "/contents/ordinary/" in path:
+                    resumed.calls.append((method, path, body))
+                    return 200, {"sha": "9" * 40, "content": base64.b64encode(journal).decode()}
+                if method == "DELETE":
+                    raise operation.Refused("test-stop-before-delete")
+                return original_request(method, path, body)
+            resumed.request = request
+            original_installed, original_run = operation.installed_command, operation.run_cli
+            calls = []
+            class Result:
+                returncode, stdout, stderr = 0, b"AdvanceAlreadySettled", b""
+            operation.installed_command = lambda *_: pathlib.Path("/qualified/fsgg-coordination")
+            operation.run_cli = lambda _command, arguments, _environment: (calls.append(arguments[1]) or Result())
+            try:
+                with self.assertRaisesRegex(operation.Refused, "test-stop-before-delete"):
+                    operation.execute_identity_bound(resumed, self.contract, plan, "/qualified/fsgg-coordination", "TOKEN", state)
+                self.assertEqual(["advance"], calls)
+                receipt = operation.read_json(state)
+                self.assertEqual(original["baseSha"], receipt["source"]["baseSha"])
+                self.assertEqual("native-readback", receipt["installed"]["firstOutcome"])
+                self.assertEqual("AdvanceAlreadySettled", receipt["installed"]["freshProcessOutcome"])
+                self.assertEqual("settled", receipt["nativeReadback"]["journalStage"])
+                self.assertEqual("intent-persisted", receipt["cleanup"]["state"])
+            finally:
+                operation.installed_command, operation.run_cli = original_installed, original_run
             changed = copy.deepcopy(original)
             changed["sourceSha"] = "a" * 40
             operation.write_private(state, reseal(changed, "seal"))
