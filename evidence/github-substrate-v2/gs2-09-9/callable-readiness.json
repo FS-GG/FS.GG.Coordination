@@ -1,0 +1,145 @@
+{
+  "schema": "fsgg.coordination.callable-readiness/1",
+  "item": "V2-CALL-01.5a",
+  "source": {
+    "repository": "FS-GG/FS.GG.Coordination",
+    "releaseSourceCommit": "f4837f054a4222a2195c7edcb4f59058459807f4",
+    "releaseSourceTree": "e43f8469c82d60db43f9238b21d62421b4e6dede",
+    "protectedMerge": "414c338f8ba506b6dc9ee35fcd67153e2a3d3a37",
+    "protectedMergeTree": "e43f8469c82d60db43f9238b21d62421b4e6dede",
+    "tag": "v0.1.1",
+    "runtimeFiles": {
+      "src/FS.GG.Coordination.Cli/DeliveryCommand.fs": "f50ad66b3d3f74fcce5aa758eb3fa0a19cc59d6ef99bf447d812953f4dcb14f4",
+      "src/FS.GG.Coordination.Cli/Program.fs": "45b5274d848e66882e7c89df4ad5f242fb2b850aa8c9b826d2303c876967a43c",
+      "src/FS.GG.Coordination.GitHub/OrdinaryDelivery.fs": "2942eb55683301a7295726e460b7af06e2aa37eec4a393001860f6577745759a"
+    }
+  },
+  "release": {
+    "packageId": "FS.GG.Coordination.Cli",
+    "version": "0.1.1",
+    "candidateSha256": "3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d",
+    "githubReleaseAssetSha256": "3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d",
+    "nugetOrgServedSha256": "af53e6868492e12e00522811ef42c4bedb087d190625230fe3fdeb53e515aaec"
+  },
+  "receiver": {
+    "repository": "FS-GG/.github",
+    "adoptingRevision": "2a61d2f2cad204bb77c5a490d840bbc3e5af2479",
+    "adoptingTree": "aa977e3282b8a32c22ada1782dc37d0ddbf83668",
+    "qualifiedExecutionRevision": "803556ff1e877d40af2dddbaff7e80f3241d8286",
+    "qualifiedExecutionTree": "7cd81c426fe678218f3d9e405ae924cf40c35adb",
+    "manifest": "dist/dotnet/.config/dotnet-tools.json",
+    "manifestBlob": "63a6cabbfc987a1e1115e84e199c76b5629b9d16",
+    "manifestSha256": "0eb4e44022533a476ea38ac9df46c08d7595b38b0c032abe058f0df7e92dbfa9",
+    "packageKey": "fs.gg.coordination.cli",
+    "command": "fsgg-coordination",
+    "rollForward": false
+  },
+  "installedRuntime": {
+    "managedCommandPath": "tools/net10.0/any/FS.GG.Coordination.Cli.dll",
+    "managedCommandSha256": "971dab56a82738e0b9a79114ae009a1ae0c18b8b26ad5906ec449f6aac00fef5",
+    "interpreter": "FS.GG.Coordination.Cli.DeliveryCommand",
+    "operatorInterpreter": "eng/callable-cli-isolated-operation.py",
+    "operatorInterpreterSha256": "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046",
+    "operations": [
+      "delivery inspect",
+      "delivery plan",
+      "delivery advance"
+    ],
+    "schemas": [
+      "fsgg.coordination.callable-isolated-admission-observation/1",
+      "fsgg.coordination.callable-isolated-creation-plan/1",
+      "fsgg.coordination.callable-isolated-creation-progress/1",
+      "fsgg.coordination.callable-isolated-creation-receipt/1",
+      "fsgg.coordination.callable-isolated-execution-plan/1",
+      "fsgg.coordination.callable-isolated-operation-contract/4",
+      "fsgg.coordination.callable-isolated-operation-grant-artifact-envelope/1",
+      "fsgg.coordination.callable-isolated-operation-grant/1",
+      "fsgg.coordination.callable-isolated-operation-inspection/1",
+      "fsgg.coordination.callable-isolated-operation-preflight/1",
+      "fsgg.coordination.callable-isolated-operation-progress/1",
+      "fsgg.coordination.callable-isolated-operation-proposal/4",
+      "fsgg.coordination.callable-isolated-operation-receipt/1",
+      "fsgg.coordination.ordinary-delivery-journal/1",
+      "fsgg.coordination.ordinary-delivery-plan/2"
+    ]
+  },
+  "permissionCeiling": {
+    "scope": "one admitted public synthetic disposable repository",
+    "effect": "ordinary-source-delivery",
+    "installedExecution": {
+      "administration": "read",
+      "checks": "read",
+      "contents": "write",
+      "metadata": "read",
+      "pull_requests": "write"
+    },
+    "operationRoles": {
+      "authorityObserver": ["actions:read", "contents:read", "metadata:read"],
+      "reviewerMembershipObserver": ["members:read", "metadata:read"],
+      "creation": ["administration:write", "metadata:read"],
+      "setup": ["actions:write", "administration:write", "checks:read", "contents:write", "metadata:read", "pull_requests:write", "workflows:write"],
+      "execution": ["administration:read", "checks:read", "contents:write", "metadata:read", "pull_requests:write"],
+      "cleanup": ["administration:write", "metadata:read"]
+    },
+    "forbidden": [
+      "billing-or-entitlement-change",
+      "credential-or-app-provisioning",
+      "effect-before-protected-grant-and-fresh-capability-readback",
+      "fleet-epoch-mutation",
+      "migration-or-cutover",
+      "private-target-visibility-change",
+      "production-target",
+      "production-writer-enable",
+      "release-or-publication"
+    ]
+  },
+  "preconditions": [
+    "exact package, receiver, contract, operation, target, source, base, checks, epoch, policy and journal identities",
+    "distinct protected and unexpired grant plus exact credential roles and permissions",
+    "complete authorized and supported observation with every required check passed",
+    "OpenV2 epoch for the admitted synthetic target and an unchanged decision observation before effect",
+    "durable intent before dispatch and authoritative effect and journal readback before retry or settlement",
+    "fresh capability readback, exact installed plan and immutable repository identity",
+    "persisted cleanup intent and same-repository-id readback before cleanup settlement"
+  ],
+  "recovery": {
+    "observation": "Incomplete pages, observer failure, unauthorized or unsupported state refuse; absence is accepted only when authoritatively proven.",
+    "decision": "Source, base, checks, epoch, policy or subject drift refuses before dispatch; the sealed plan and operation identity remain immutable.",
+    "journal": "Intent precedes effect; unknown dispatch and lost journal acknowledgements resume by exact sharded-journal and native-effect readback; settled replay returns AdvanceAlreadySettled without another dispatch.",
+    "cleanup": "Cleanup resumes only from persisted intent and settles only after authoritative 404 for the same repository id."
+  },
+  "nativeAcceptance": {
+    "historicalLabels": ["V2-CALL-01.4b", "V2-CALL-01.4c"],
+    "operationIdentity": "v2-call-01-4b-isolated-native-v1",
+    "contractSha256": "ac44c8b20dec09975f5cd17f134c4b17115ba3051ceb95e13e2a3ccdd0a050ff",
+    "protectedRun": {
+      "repository": "FS-GG/.github",
+      "runId": 35631364282,
+      "attempt": 1,
+      "headSha": "803556ff1e877d40af2dddbaff7e80f3241d8286",
+      "conclusion": "success"
+    },
+    "mergeCommit": "00869036c9bf96f5cb4c783cfa91ac15504b673b",
+    "installedPlanSha256": "122676ec7dc3522116b406c57ef05559f629922c83c10ae1bb18364c60a16a2e",
+    "journalGeneration": 3,
+    "journalSha256": "58e98c11f598310fe93de3ac0d3412b9b6f7d4b48105e45608301bb8e1f1a91d",
+    "freshProcessOutcome": "AdvanceAlreadySettled",
+    "cleanupReadbackHttpStatus": 404
+  },
+  "trackedEvidence": {
+    "eng/callable-cli-isolated-operation-contract.json": "072d724a366f288c4a50d67f237ba3e3bc42a593e0a9ccf557be5917365974d2",
+    "eng/callable-cli-isolated-operation.py": "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046",
+    "evidence/github-substrate-v2/gs2-09-9/installed-harness.json": "577d9a0cf2abfef18454a233655aef09041c341ae9aafe2c96d033af3ac0c08f",
+    "evidence/github-substrate-v2/gs2-09-9/isolated-operation-coverage.json": "0f7265cde629f363ae06f022ab402f0a87267a6e6ce81878466aefb997a7480d",
+    "evidence/github-substrate-v2/gs2-09-9/native-acceptance.json": "3cb0dbf912c406f6a3a20607f06c307da69e7e50e0551936f31ef0dd7832b67e",
+    "evidence/github-substrate-v2/gs2-09-9/recovery-coverage.json": "2217cb1b3f1034a722412e093657ddcb8799c08069f0e38bf22fc43fc588e226"
+  },
+  "knownLimitations": [
+    "Acceptance covers one public synthetic isolated operation only.",
+    "The retained installed harness is the earlier 0.1.0 loopback-only .4a snapshot; native acceptance uses installed 0.1.1.",
+    "The deleted synthetic target cannot be refetched; retained sealed artifacts and the independent pre-cleanup readback preserve its identity.",
+    "No continuous webhook runtime service or production default is established.",
+    "GS2-09 discovery, migration manifest, transform, archive, rollback, omission and representative rehearsal remain pending.",
+    "This packet does not accept migration, OpenV2, Q4 or a production default."
+  ]
+}
