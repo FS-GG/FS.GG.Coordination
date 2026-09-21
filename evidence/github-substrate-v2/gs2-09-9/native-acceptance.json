@@ -1,0 +1,62 @@
+{
+  "schema": "fsgg.coordination.callable-native-acceptance/1",
+  "scope": "V2-CALL-01.4c single synthetic isolated operation",
+  "protectedRun": {
+    "repository": "FS-GG/.github",
+    "runId": 35631364282,
+    "attempt": 1,
+    "headSha": "803556ff1e877d40af2dddbaff7e80f3241d8286",
+    "conclusion": "success"
+  },
+  "coordinateProvenance": "GitHub Actions API readback; archive coordinates and run conclusion are metadata checked separately from offline payload validation",
+  "readbackProvenance": {
+    "operatorSourceCommit": "bcb8453c3b92a9ea6097e66e326bd1ec3350b667",
+    "operatorSourceSha256": "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046",
+    "independentPreCleanupMailboxCommit": "e71fb799b4780e53fbedffaa6c5815a9d7fc92d0",
+    "independentPreCleanupMailboxLines": "5511-5513",
+    "independentPreCleanupReadback": "Public PR #1 merged; bound sharded journal settled at generation 3 with matching merge commit, installed plan digest and native operation ID"
+  },
+  "retainedInterruption": {
+    "runId": 35619835923,
+    "attempt": 1,
+    "checkpointArtifactId": 10647264981,
+    "checkpointArchiveSha256": "f98b32505b081a4c051d253f36e3a7d51e2fd1271a26596c18a7902b345a4318",
+    "stage": "cli-intent"
+  },
+  "settledArtifacts": {
+    "checkpointArtifactId": 10654184892,
+    "checkpointArchiveSha256": "0f42981167fcfaa775c6257dfe421181b367f35f942c3d1a7f6621cfbde87529",
+    "receiptArtifactId": 10653844968,
+    "receiptArchiveSha256": "acd68a59dc8e7c7d4451d749184d80358b15f4f59ede47546f9c43b0d90150db",
+    "receiptSeal": "542dd22b24fd86b2216bcde443ba318826a9a37a122c82ea5890b11bf9081a41"
+  },
+  "acceptedIdentity": {
+    "operationIdentity": "v2-call-01-4b-isolated-native-v1",
+    "contractSha256": "ac44c8b20dec09975f5cd17f134c4b17115ba3051ceb95e13e2a3ccdd0a050ff",
+    "target": "FS-GG/FS.GG.Coordination.CallableSandbox",
+    "repositoryId": 1376575900,
+    "sourceBaseSha": "dffd58342bcbe4e2dcbd55f30afe624b316a5f80",
+    "sourceHeadSha": "a116b92f4f9fe631fed3d90dd13690ecd1564922",
+    "pullRequestNumber": 1,
+    "pullRequestNodeId": "PR_kwDOUgzhnM8AAAABEK4hZw",
+    "mergeCommit": "00869036c9bf96f5cb4c783cfa91ac15504b673b",
+    "installedPackageVersion": "0.1.1",
+    "packageCandidateSha256": "3072f67fa7ad19cc93240eff7b1b3003c12d07882ea9aa85710167273852bf7d",
+    "nugetOrgServedSha256": "af53e6868492e12e00522811ef42c4bedb087d190625230fe3fdeb53e515aaec",
+    "installedManagedCommandSha256": "971dab56a82738e0b9a79114ae009a1ae0c18b8b26ad5906ec449f6aac00fef5",
+    "installedPlanSha256": "122676ec7dc3522116b406c57ef05559f629922c83c10ae1bb18364c60a16a2e",
+    "installedPlanSeal": "617a0a5f4cf90145be0012a786d5ec79727da6fe56d982c601096910f1162f4a",
+    "nativeOperationId": "ordinary-delivery:f214763e755c7cd22565b567170d64657fb97f6c62af7ecc7bc7cb5e78eb811c",
+    "journalRef": "refs/heads/fsgg/v2/journal/operation/cd",
+    "journalGeneration": 3,
+    "journalSha256": "58e98c11f598310fe93de3ac0d3412b9b6f7d4b48105e45608301bb8e1f1a91d",
+    "firstOutcome": "native-readback",
+    "freshProcessOutcome": "AdvanceAlreadySettled",
+    "cleanupState": "settled",
+    "cleanupReadbackHttpStatus": 404
+  },
+  "limits": [
+    "One admitted public synthetic operation only",
+    "Does not accept OpenV2, Q4, GS2-09 migration, or a production default"
+  ]
+}
