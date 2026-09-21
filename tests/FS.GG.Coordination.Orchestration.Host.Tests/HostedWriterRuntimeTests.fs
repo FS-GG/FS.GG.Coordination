@@ -1828,8 +1828,10 @@ let ``terminal snapshot binds old attempt and refuses altered or nonterminal byt
     finally
         Directory.Delete(directory, true)
 
-[<Fact>]
-let ``expired stored candidate resumes once after exact rejected continuation`` () =
+[<Theory>]
+[<InlineData(false)>]
+[<InlineData(true)>]
+let ``expired stored candidate resumes once after exact rejected continuation`` preExtended =
     task {
         let now = Fixture.now
         let route = Fixture.route
@@ -1903,8 +1905,17 @@ let ``expired stored candidate resumes once after exact rejected continuation`` 
               EffectSettled(intent.OperationId, Applied readback.ProviderRevision)
               CommandRecorded rejected ]
         let store = MemoryStore(events) :> IJournalStore
-        let mutable current = { Candidate = candidate; Bytes = bytes }
-        let mutable currentReceipt = oldReceipt
+        let mutable current =
+            { Candidate =
+                (if preExtended then { candidate with RetainUntil = retention } else candidate)
+              Bytes = bytes }
+        let mutable currentReceipt =
+            if preExtended then
+                { oldReceipt with
+                    StorageReceiptSha256 = String.replicate 64 "1"
+                    VerifiedAt = now }
+            else
+                oldReceipt
         let mutable extensions = 0
         let candidateStore =
             { new ICandidateStore with
@@ -1985,13 +1996,13 @@ let ``expired stored candidate resumes once after exact rejected continuation`` 
         let state = state |> Result.defaultWith (sprintf "%A" >> failwith) |> _.State
         Assert.Equal(Some current.Candidate, Map.tryFind route.CandidateId state.Candidates)
         Assert.True(state.Operations.ContainsKey route.BranchOperationId)
-        Assert.Equal(1, extensions)
+        Assert.Equal((if preExtended then 0 else 1), extensions)
         let beforeRetry = state.Revision
         let! retry = workflow.RecoverContinuation(preparation, CancellationToken.None)
         Assert.Equal(Ok(), retry)
         let! afterRetry = HostedWriterJournal.recover store work CancellationToken.None
         Assert.Equal(beforeRetry, (afterRetry |> Result.defaultWith (sprintf "%A" >> failwith) |> _.State).Revision)
-        Assert.Equal(1, extensions)
+        Assert.Equal((if preExtended then 0 else 1), extensions)
     }
 
 [<Fact>]
