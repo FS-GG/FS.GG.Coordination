@@ -188,12 +188,13 @@ are never acceptance evidence.
   observation/decision/journal recovery behavior, native acceptance, and known limitations. Supply those exact
   identities to GS2-09 discovery/migration work while preserving separate manifest, transform, archive, rollback,
   omission and representative-rehearsal acceptance.
-  - [ ] **V2-CALL-01.5a — Seal the callable-readiness evidence packet.** Record and validate the exact protected
+  - [x] **V2-CALL-01.5a — Seal the callable-readiness evidence packet.** Record and validate the exact protected
     source/release revisions, package and feed hashes, adopting receiver revision, installed command and schema
     identities, interpreter and permission ceiling, preconditions, observation/decision/journal recovery,
     `.4b`/`.4c` native acceptance, and known limitations under `evidence/github-substrate-v2/gs2-09-9/`.
-    Complete this item through a protected Coordination delivery with an independently checkable packet; do not
-    broaden the installed permission ceiling or relabel the completed `.4b`/`.4c` work.
+    This protected Coordination delivery adds the independently checkable
+    [`callable-readiness.json`](../../evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) packet and
+    public-identity validator without broadening the installed permission ceiling or relabeling `.4b`/`.4c`.
   - [ ] **V2-CALL-01.5b — Hand the packet to GS2-09 discovery.** In a separate protected Coordination delivery,
     record the exact `.5a` packet identity, the callable runtime interface and recovery preconditions that
     discovery can consume, and the independently pending discovery, manifest, transform, archive, rollback,
