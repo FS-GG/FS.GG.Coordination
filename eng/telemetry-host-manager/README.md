@@ -81,6 +81,10 @@ described below when recovering a partial preparation.
    installs exact reviewed SystemAdmin wrapper, verifier, updater, and unit
    bytes into the service account's private home with that account as owner.
    It does not enable or start the units.
+   For an existing installation, use `update-host-files` with the same exact
+   source and commit options. It refuses absent, linked or foreign-owned
+   targets and atomically replaces only this fixed file inventory. It also
+   leaves all units disabled and stopped.
 4. Run `stage-host-assets` as root with the exact package, manifest, journal,
    their three GitHub SHA-256 digests, version, and reviewed verifier path.
    It verifies the release and copies it into the account's private
@@ -121,6 +125,12 @@ not cross-host migration evidence.
 For existing installations, `update-host --updater PATH --config PATH` invokes
 the reviewed rootless Podman updater as the service account. Its own durable
 transaction and schema-range checks decide whether an update may activate.
+`migrate-host --updater PATH --config PATH --command-id ID
+--expected-current-image sha256:... --target-qualified-release telemetry-host/vX.Y.Z`
+passes an explicit schema 9→10 request to the rootless updater. The command
+is only for a release whose old-backup restore and isolated rollback have
+passed the disposable migration qualification; it does not relax the timer's
+same-schema guard.
 `backup-stopped-host --operator PATH --deployment PATH --backup-id ID
 --host-unit fsgg-telemetry-host-podman.service` invokes the reviewed wrapper
 only after the service account's user unit is inactive. Neither command

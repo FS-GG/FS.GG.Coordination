@@ -276,6 +276,25 @@ let private copyExact (source: string) (destination: string) (mode: UnixFileMode
     let owner = checkedCommand 10000 "/usr/bin/stat" [ "-c"; "%u"; destination ] |> int
     if owner <> expectedOwner then fail "installed file owner differs"
 
+let private updateExact (source: string) (destination: string) (mode: UnixFileMode) =
+    let sourceInfo = FileInfo source
+    let existing = FileInfo destination
+    let parent = Path.GetDirectoryName destination |> safeDirectory
+    let expectedOwner = checkedCommand 10000 "/usr/bin/id" [ "-u"; serviceAccount ] |> int
+    if not sourceInfo.Exists || not (isNull sourceInfo.LinkTarget) then fail "update source is unsafe"
+    if not existing.Exists || not (isNull existing.LinkTarget) then fail "installed update target is absent or unsafe"
+    if (checkedCommand 10000 "/usr/bin/stat" [ "-c"; "%u"; destination ] |> int) <> expectedOwner then fail "installed update target owner differs"
+    let temporary = Path.Combine(parent, ".update-" + Guid.NewGuid().ToString("N"))
+    try
+        File.WriteAllBytes(temporary, File.ReadAllBytes source)
+        File.SetUnixFileMode(temporary, mode)
+        checkedCommand 10000 "/usr/bin/chown" [ serviceAccount + ":" + serviceAccount; temporary ] |> ignore
+        File.Move(temporary, destination, true)
+    finally
+        if File.Exists temporary then File.Delete temporary
+    if File.GetUnixFileMode(destination) <> mode then fail "updated file mode differs"
+    if (checkedCommand 10000 "/usr/bin/stat" [ "-c"; "%u"; destination ] |> int) <> expectedOwner then fail "updated file owner differs"
+
 let private installHostFiles values =
     only (Set.ofList [ "--systemadmin-root"; "--commit" ]) values
     if Environment.UserName <> "root" then fail "root required to install Host files"
@@ -305,6 +324,31 @@ let private installHostFiles values =
     copyExact (Path.Combine(podman, "fsgg-telemetry-host-update.timer.example"))
         (Path.Combine(serviceHome, ".config/systemd/user/fsgg-telemetry-host-update.timer")) privateFile
     printfn "%s" (json {| status = "host-files-installed"; account = serviceAccount; unitsEnabled = false |})
+
+let private updateHostFiles values =
+    only (Set.ofList [ "--systemadmin-root"; "--commit" ]) values
+    if Environment.UserName <> "root" then fail "root required to update Host files"
+    let root = required "--systemadmin-root" values |> safeDirectory
+    let expectedCommit = required "--commit" values
+    if not (sha40 expectedCommit) then fail "SystemAdmin commit must be a full SHA"
+    let gitPrefix = [ "-c"; "safe.directory=" + root; "-C"; root ]
+    if checkedCommand 30000 "/usr/bin/git" (gitPrefix @ [ "rev-parse"; "HEAD" ]) <> expectedCommit then fail "SystemAdmin source commit differs"
+    let sourcePaths = [ "Services/telemetry-host-podman"; "Services/telemetry-host" ]
+    let clean, _, _ = command 30000 "/usr/bin/git" (gitPrefix @ [ "diff"; "--quiet"; "HEAD"; "--" ] @ sourcePaths)
+    if clean <> 0 then fail "reviewed SystemAdmin source paths are dirty"
+    let executable = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+    let privateFile = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+    let podman = Path.Combine(root, "Services/telemetry-host-podman")
+    let host = Path.Combine(root, "Services/telemetry-host")
+    let target = Path.Combine(serviceHome, ".local/libexec/fs-gg/telemetry-host-podman")
+    for name in [ "build-image.sh"; "telemetry-host-podman.sh"; "telemetry_host_podman_backup.py"; "telemetry_host_update.py"; "Containerfile" ] do
+        updateExact (Path.Combine(podman, name)) (Path.Combine(target, name)) (if name = "Containerfile" then privateFile else executable)
+    let hostTarget = Path.Combine(serviceHome, ".local/libexec/fs-gg/telemetry-host")
+    for name in [ "telemetry_host_release.py"; "telemetry_host_config_backup.py" ] do
+        updateExact (Path.Combine(host, name)) (Path.Combine(hostTarget, name)) executable
+    for sourceName, targetName in [ "fsgg-telemetry-host-podman.service.example", "fsgg-telemetry-host-podman.service"; "fsgg-telemetry-host-update.service.example", "fsgg-telemetry-host-update.service"; "fsgg-telemetry-host-update.timer.example", "fsgg-telemetry-host-update.timer" ] do
+        updateExact (Path.Combine(podman, sourceName)) (Path.Combine(serviceHome, ".config/systemd/user", targetName)) privateFile
+    printfn "%s" (json {| status = "host-files-updated"; account = serviceAccount; unitsEnabled = false; sourceCommit = expectedCommit |})
 
 let private buildHostImage values =
     only (Set.ofList [ "--package"; "--manifest"; "--sha256"; "--runtime-image"; "--image" ]) values
@@ -470,6 +514,23 @@ let private runHostUpdater values =
     let output = checkedCommand 900000 "/usr/bin/python3" [ updater; "--config"; config ]
     printfn "%s" output
 
+let private migrateHost values =
+    only (Set.ofList [ "--updater"; "--config"; "--command-id"; "--expected-current-image"; "--target-qualified-release" ]) values
+    requireServiceAccount ()
+    let updater = required "--updater" values |> Path.GetFullPath
+    let config = required "--config" values |> Path.GetFullPath
+    let commandId = required "--command-id" values
+    let expectedImage = required "--expected-current-image" values
+    let target = required "--target-qualified-release" values
+    if not (Regex.IsMatch(commandId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")) then fail "invalid migration command ID"
+    if not (Regex.IsMatch(expectedImage, "^sha256:[0-9a-f]{64}$")) then fail "invalid expected current image ID"
+    if not (Regex.IsMatch(target, "^telemetry-host/v[0-9]+[.][0-9]+[.][0-9]+$")) then fail "invalid qualified target release"
+    let output = checkedCommand 900000 "/usr/bin/python3"
+                    [ updater; "--config"; config; "--command-id"; commandId;
+                      "--expected-current-image"; expectedImage;
+                      "--target-qualified-release"; target; "--schema-migration" ]
+    printfn "%s" output
+
 let private backup values =
     only (Set.ofList [ "--operator"; "--deployment"; "--backup-id"; "--host-unit" ]) values
     let name = required "--backup-id" values
@@ -514,14 +575,16 @@ let main arguments =
         | "prepare-rootless-runtime" :: [] -> prepareRootlessRuntime (); 0
         | "stage-host-assets" :: rest -> stageHostAssets (options rest); 0
         | "install-host-files" :: rest -> installHostFiles (options rest); 0
+        | "update-host-files" :: rest -> updateHostFiles (options rest); 0
         | "build-host-image" :: rest -> buildHostImage (options rest); 0
         | "verify-host-release" :: rest -> verifyHostRelease (options rest); 0
         | "verify-engine-release" :: rest -> verifyEngineRelease (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
+        | "migrate-host" :: rest -> migrateHost (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|migrate-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message
