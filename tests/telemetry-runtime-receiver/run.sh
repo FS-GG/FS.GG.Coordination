@@ -7,7 +7,8 @@ CONFIG="$ROOT/.fsgg/telemetry-runtime.json"
 CI_CONFIG="$ROOT/.fsgg/telemetry-ci-attribution.json"
 LAUNCHER="$ROOT/eng/codex-exec.sh"
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/fsgg-telemetry-receiver.XXXXXX")"
-trap 'rm -rf -- "$SCRATCH"' EXIT
+STORE=""
+trap 'rm -rf -- "$SCRATCH"; if [[ -n "$STORE" ]]; then rm -rf -- "$STORE"; fi' EXIT
 
 python3 - "$MANIFEST" "$CONFIG" "$CI_CONFIG" <<'PY'
 import json
@@ -95,4 +96,38 @@ set -e
 }
 grep -Fq 'observation publication incomplete; native exit is unchanged' "$SCRATCH/native-failure.stderr"
 
-echo "telemetry runtime receiver: exact pin/config and native-result neutrality passed"
+# The adapter rejects temporary storage and Git worktrees. Allocate a fresh
+# private store under local state, never the host's FSGG_TELEMETRY_STORE.
+state_root="${XDG_STATE_HOME:-$HOME/.local/state}"
+mkdir -p -- "$state_root"
+STORE="$(mktemp -d "$state_root/fsgg-telemetry-receiver.XXXXXX")"
+dotnet tool run fsgg-coord-engine -- telemetry store init --store-root "$STORE" \
+  >"$SCRATCH/store-init.stdout"
+PATH="$SCRATCH/bin:$PATH" FSGG_TELEMETRY_STORE="$STORE" \
+  "$LAUNCHER" --assignment "$assignment" -- \
+    --json --ephemeral -m gpt-5.6-sol "receiver task" \
+    >"$SCRATCH/persisted.stdout" 2>"$SCRATCH/persisted.stderr"
+
+if grep -Eq 'observation publication incomplete|reconciliation pending' "$SCRATCH/persisted.stderr"; then
+  echo "receiver test: isolated store publication or reconciliation failed" >&2
+  exit 1
+fi
+
+python3 - "$STORE" <<'PY'
+import pathlib
+import sqlite3
+import sys
+
+database = pathlib.Path(sys.argv[1]) / "telemetry.sqlite3"
+assert database.is_file(), "receiver test: isolated telemetry database was not created"
+with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
+    rows = connection.execute("""
+        SELECT item_id, thread_id, requested_model,
+               input_count, cached_input, output_count, reasoning, total
+        FROM runtime_turn_usage
+    """).fetchall()
+assert rows == [("UTEL-06.6", "receiver-test-thread", "gpt-5.6-sol", 12, 4, 5, 2, 17)], \
+    "receiver test: expected exactly one attributed native token-usage observation"
+PY
+
+echo "telemetry runtime receiver: exact pin/config, native-result neutrality and persisted token usage passed"
