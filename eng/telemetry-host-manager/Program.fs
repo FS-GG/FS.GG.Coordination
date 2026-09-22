@@ -189,6 +189,7 @@ let private serviceHome = "/var/lib/fs-gg/telemetry-podman"
 let private requireServiceAccount () =
     if Environment.UserName <> serviceAccount then fail "run as the telemetry service account"
     if Environment.GetEnvironmentVariable("HOME") <> serviceHome then fail "telemetry service HOME differs"
+    Directory.SetCurrentDirectory serviceHome
 
 let private createAccount () =
     if Environment.UserName <> "root" then fail "root required to create service account"
