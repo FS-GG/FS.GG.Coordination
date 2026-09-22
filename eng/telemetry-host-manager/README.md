@@ -60,10 +60,13 @@ described below when recovering a partial preparation.
 4. Run `stage-host-assets` as root with the exact package, manifest, journal,
    their three GitHub SHA-256 digests, version, and reviewed verifier path.
    It verifies the release and copies it into the account's private
-   `releases/` directory without starting a service. Run `build-host-image`
+   `releases/` directory without starting a service. Run
+   `prepare-rootless-runtime` as root to enable the service account's user
+   manager while leaving all telemetry units disabled. Run `build-host-image`
    as that account with the package,
    manifest, package SHA-256, exact runtime image digest, and versioned local
-   image name. Retain its image-ID receipt. Provision private TLS, producer,
+   image name. It pulls the exact digest-pinned runtime base before the
+   reviewed offline build. Retain its image-ID receipt. Provision private TLS, producer,
    browser, deployment, and backup inputs through the operator's private
    channel. Restore a verified complete backup into a **new** state root;
    never initialize a blank store as a substitute for migration.

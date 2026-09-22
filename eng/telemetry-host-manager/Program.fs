@@ -176,6 +176,13 @@ let private createAccount () =
         checkedCommand 10000 "/usr/bin/install" [ "-d"; "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0700"; path ] |> ignore
     printfn "%s" (json {| status = "account-prepared"; account = serviceAccount; home = serviceHome; unitsEnabled = false |})
 
+let private prepareRootlessRuntime () =
+    if Environment.UserName <> "root" then fail "root required to prepare rootless runtime"
+    checkedCommand 30000 "/usr/bin/loginctl" [ "enable-linger"; serviceAccount ] |> ignore
+    let linger = checkedCommand 10000 "/usr/bin/loginctl" [ "show-user"; serviceAccount; "--property=Linger"; "--value" ]
+    if linger <> "yes" then fail "service account lingering was not enabled"
+    printfn "%s" (json {| status = "rootless-runtime-prepared"; account = serviceAccount; telemetryUnitsEnabled = false |})
+
 let private stageHostAssets values =
     only (Set.ofList [ "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version"; "--verifier" ]) values
     if Environment.UserName <> "root" then fail "root required to stage Host assets"
@@ -269,6 +276,7 @@ let private buildHostImage values =
     let image = required "--image" values
     if not (Regex.IsMatch(runtime, "^[^ @]+@sha256:[0-9a-f]{64}$")) || not (Regex.IsMatch(image, "^[a-z0-9./-]+:[0-9][a-z0-9.-]+$")) then fail "image identity is invalid"
     verifyHash package digest |> ignore
+    checkedCommand 900000 "/usr/bin/podman" [ "pull"; runtime ] |> ignore
     let builder = Path.Combine(serviceHome, ".local/libexec/fs-gg/telemetry-host-podman/build-image.sh")
     let output = checkedCommand 900000 builder [ "--package"; package; "--manifest"; manifest; "--archive-sha256"; digest; "--runtime-image"; runtime; "--image"; image ]
     use receipt = JsonDocument.Parse output
@@ -400,6 +408,7 @@ let main arguments =
         | "install-guard-dropins" :: rest -> installGuardDropins (options rest); 0
         | "install-engine" :: rest -> installEngine (options rest); 0
         | "create-host-account" :: [] -> createAccount (); 0
+        | "prepare-rootless-runtime" :: [] -> prepareRootlessRuntime (); 0
         | "stage-host-assets" :: rest -> stageHostAssets (options rest); 0
         | "install-host-files" :: rest -> installHostFiles (options rest); 0
         | "build-host-image" :: rest -> buildHostImage (options rest); 0
@@ -409,7 +418,7 @@ let main arguments =
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message
