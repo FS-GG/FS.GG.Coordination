@@ -1182,26 +1182,31 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                 telemetryClient
                 |> Option.map (fun publisher ->
                     let requeue () =
+                        let errors = ResizeArray<string>()
                         for session in sessions.Values do
                             let command = session.Command
                             let context = TelemetryFactBatches.rootInvocation command
                             let journal = TelemetryTurnJournal(options.StateRoot, command)
+                            let recordGap code =
+                                errors.Add code
+                                let gapId = journal.RecordGapOnce code
+                                match TelemetryFactBatches.gap context gapId code |> publisher.Queue with
+                                | Ok _ -> ()
+                                | Error queueCode -> errors.Add queueCode
 
                             match TelemetryRootGuard.replay options.StateRoot command with
                             | Ok(Some marker) ->
-                                TelemetryFactBatches.prospectiveRoot command marker.ActivatedAt marker.AttemptId marker.Generation
-                                |> publisher.Queue
-                                |> ignore
+                                match TelemetryFactBatches.prospectiveRoot command marker.ActivatedAt marker.AttemptId marker.Generation |> publisher.Queue with
+                                | Ok _ -> ()
+                                | Error code -> errors.Add code
                             | Ok None -> ()
-                            | Error code ->
-                                let gapId = journal.RecordGapOnce code
-                                TelemetryFactBatches.gap context gapId code |> publisher.Queue |> ignore
+                            | Error code -> recordGap code
 
                             TelemetryJournalRecovery.requeue options.StateRoot command publisher
                             |> List.distinct
-                            |> List.iter (fun code ->
-                                let gapId = journal.RecordGapOnce code
-                                TelemetryFactBatches.gap context gapId code |> publisher.Queue |> ignore)
+                            |> List.iter recordGap
+
+                        errors |> Seq.toList
 
                     new TelemetryPublisherPump(publisher, options.StateRoot, TimeSpan.FromSeconds 15., requeue))
                 |> Option.toObj

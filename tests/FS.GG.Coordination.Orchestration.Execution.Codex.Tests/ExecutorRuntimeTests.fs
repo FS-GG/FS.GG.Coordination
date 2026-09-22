@@ -2236,7 +2236,7 @@ type ExecutorRuntimeTests() =
 
             File.WriteAllText(executable + ".applied", "")
             let recovered = TelemetryCliPublisher options
-            use pump = new TelemetryPublisherPump(recovered, root, TimeSpan.FromMilliseconds 50., ignore)
+            use pump = new TelemetryPublisherPump(recovered, root, TimeSpan.FromMilliseconds 50., fun () -> [])
             let deadline = DateTimeOffset.UtcNow.AddSeconds 10.
 
             while recovered.PendingCount > 0 && DateTimeOffset.UtcNow < deadline do
@@ -2291,6 +2291,63 @@ type ExecutorRuntimeTests() =
         Assert.Equal(6, publisher.PendingCount)
         Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
         Assert.Equal(6, publisher.PendingCount)
+
+    [<Fact>]
+    member _.``publisher status retains journal replay overload``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-replay-status-").FullName
+            let command = RuntimeFixture.command "digest" "input" "baseline" "status" null
+            let journal = TelemetryTurnJournal(root, command) :> ICodexTurnObserver
+            journal.TurnCompleted
+                {
+                    ThreadId = "thread"
+                    TurnId = Some "turn"
+                    TurnSequence = 1L
+                    Provider = None
+                    ObservedModel = None
+                    ObservedEffort = None
+                    Backend = None
+                    Input = 10L
+                    CachedInput = 2L
+                    Output = 4L
+                    Reasoning = Some 1L
+                    Total = 14L
+                }
+
+            let publisher =
+                TelemetryCliPublisher
+                    {
+                        Executable = "/missing/client"
+                        Config = "/missing/config"
+                        CredentialFile = "/missing/credential"
+                        CertificateAuthorityFile = "/missing/ca"
+                        Outbox = Path.Combine(root, "outbox")
+                        Repository = "FS-GG/.github"
+                        BindingDigest = String.replicate 64 "a"
+                    }
+
+            let payload = Encoding.UTF8.GetBytes "{\"fixture\":true}"
+            for index in 1 .. 128 do
+                Assert.True(Result.isOk (publisher.Queue($"batch-seed-{index}", payload)))
+
+            use pump =
+                new TelemetryPublisherPump(
+                    publisher,
+                    root,
+                    TimeSpan.FromMilliseconds 50.,
+                    fun () -> TelemetryJournalRecovery.requeue root command publisher
+                )
+
+            let statusPath = Path.Combine(root, "telemetry-publisher-status.json")
+            let deadline = DateTimeOffset.UtcNow.AddSeconds 10.
+            let mutable status = ""
+            while not (status.Contains "telemetry-outbox-overload") && DateTimeOffset.UtcNow < deadline do
+                if File.Exists statusPath then status <- File.ReadAllText statusPath
+                do! Task.Delay 50
+
+            Assert.Contains("telemetry-outbox-overload", status)
+            Assert.Equal(128, publisher.PendingCount)
+        }
 
     [<Fact>]
     member _.``active pump replays a 129-turn journal backlog without double counting``() =
@@ -2351,7 +2408,7 @@ type ExecutorRuntimeTests() =
                     publisher,
                     root,
                     TimeSpan.FromMilliseconds 50.,
-                    fun () -> TelemetryJournalRecovery.requeue root command publisher |> ignore
+                    fun () -> TelemetryJournalRecovery.requeue root command publisher
                 )
 
             let appliedDirectory = Path.Combine(root, "outbox", "applied")
