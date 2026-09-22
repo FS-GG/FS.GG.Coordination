@@ -407,6 +407,18 @@ legacy review pass, protected-main verification, or Done receipt. The amendment
 is owner registration evidence rather than an acceptance receipt; `.github`
 projection remains asynchronous.
 
+That historical pin remains part of the callable amendment. The active index now binds
+`.github` revision `a1c233edc01b14a6108c1a0726fe0d085c57ac21` and roadmap SHA-256
+`078d89d7f56eaa3313bd11c613e8d199c2c67b0d81716286cebbcf115312764d` for GS2-09.1.
+The unit registers the Q5 `github-complete-discovery-contract` and Q6
+`github-complete-discovery-recovery-contract`, consumes the accepted GS2-08.9 receipt and protected
+callable discovery handoff, and closes the discovery population over issues, Project items and fields,
+hierarchy/dependencies, claim/event streams, review/delivery/release records, repository settings,
+workflow pins, and receiver identities. Every authority must retain terminal pagination and a
+high-water mark, and two complete non-overlapping reads must produce the same normalized digest. This
+source boundary performs no live provider mutation and does not create a migration manifest or
+acceptance receipt.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

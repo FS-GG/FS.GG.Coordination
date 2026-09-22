@@ -66,6 +66,7 @@
     <Compile Include="../FS.GG.Coordination.UnitTests/GitHubActionsReleaseFeedTests.fs" Link="GitHubActionsReleaseFeedUnitTests.fs" />
     <Compile Include="GitHubActionsReleaseFeedArchitectureTests.fs" />
     <Compile Include="GitHubSandboxClosureArchitectureTests.fs" />
+    <Compile Include="GitHubCompleteDiscoveryArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="OrchestrationObserverArchitectureTests.fs" />
     <Compile Include="OrchestrationHostArchitectureTests.fs" />
