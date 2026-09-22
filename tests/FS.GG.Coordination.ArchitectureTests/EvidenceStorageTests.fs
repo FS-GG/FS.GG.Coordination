@@ -41,7 +41,7 @@ let ``evidence storage contract and all independent negative cases pass`` () =
     Assert.Equal(0, child.ExitCode)
 
     Assert.Contains(
-        "EVIDENCE_STORAGE_OK categories=12 entries=109 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753",
+        "EVIDENCE_STORAGE_OK categories=12 entries=110 maxTrackedBytes=65536 frozenCorpusCases=21 observed=2 unobserved=19 aggregate=bf38fc3d426e74237561798d9f3b9fa5dd1b94b487e69f1565cc9cc6ab58c753",
         output
     )
 

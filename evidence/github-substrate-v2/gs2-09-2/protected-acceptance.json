@@ -1,0 +1,50 @@
+{
+  "schema": "fsgg.github-substrate-v2.immutable-manifest-protected-acceptance/1",
+  "unit": "GS2-09.2",
+  "state": "accepted",
+  "source": {
+    "candidate": "49e2056909d3a4dcd9dc3cbb0c86e1e78ea536d8",
+    "merge": "1ec51937bf898ec4ad6facb2aaf1528a98ca0432",
+    "tree": "ea7a587923a9a07834f1945d074fe5076a111285",
+    "pullRequest": 482
+  },
+  "qualification": {
+    "manifestSha256": "1c47198960bcd9adee6ba28443668b4c926863693a5bf35ad0f69caea7412861",
+    "normalizedManifestDigest": "d7b0bd8c67c26e924c985bc3eb821fa86af51c66861cc82f9e9dbbb876745db8",
+    "q5Command": {
+      "id": "github-immutable-manifest-contract",
+      "sha256": "0082c25149ec3c5b5bf8e26e34919962556d2c9da298c69461b5e2cafa421540",
+      "conclusion": "success"
+    },
+    "q6Command": {
+      "id": "github-immutable-manifest-recovery-contract",
+      "sha256": "312a7955bb3617e37bd5c7a2dc982d5d1415530b892759cb249f7ce57fe8e08c",
+      "conclusion": "success"
+    }
+  },
+  "hosted": {
+    "candidate": {
+      "bootstrapRun": 35791618184,
+      "codeqlRun": 35791615023,
+      "optimisticValidationRun": 35791618095,
+      "optimisticValidationAttempt": 1,
+      "conclusion": "success"
+    },
+    "protectedMerge": {
+      "bootstrapRun": 35792791468,
+      "optimisticValidationRun": 35792794541,
+      "conclusion": "success"
+    }
+  },
+  "claims": {
+    "acceptedDiscoveryBound": true,
+    "completeSubjectPopulation": true,
+    "allManifestFamiliesBound": true,
+    "deterministicFreshProcessReplay": true,
+    "tamperAndOmissionRefusal": true,
+    "liveManifestCreated": false,
+    "providerMutation": false,
+    "successorAuthority": false
+  },
+  "acceptedAt": "2026-09-22T23:02:04Z"
+}
