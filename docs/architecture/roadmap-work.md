@@ -408,16 +408,16 @@ is owner registration evidence rather than an acceptance receipt; `.github`
 projection remains asynchronous.
 
 That historical pin remains part of the callable amendment. The active index now binds
-`.github` revision `a1c233edc01b14a6108c1a0726fe0d085c57ac21` and roadmap SHA-256
-`078d89d7f56eaa3313bd11c613e8d199c2c67b0d81716286cebbcf115312764d` for GS2-09.1.
+`.github` revision `38c48ab82f71a7fc162c5bb7cc4d9a11213f6ed2` and roadmap SHA-256
+`0a3f16cbee0085cbf2f299eb19cfa5c9ca3f42f9a9fd4d5230dcaa008a96553e` after GS2-09.1 acceptance.
 The unit registers the Q5 `github-complete-discovery-contract` and Q6
 `github-complete-discovery-recovery-contract`, consumes the accepted GS2-08.9 receipt and protected
 callable discovery handoff, and closes the discovery population over issues, Project items and fields,
 hierarchy/dependencies, claim/event streams, review/delivery/release records, repository settings,
 workflow pins, and receiver identities. Every authority must retain terminal pagination and a
 high-water mark, and two complete non-overlapping reads must produce the same normalized digest. This
-source boundary performs no live provider mutation and does not create a migration manifest or
-acceptance receipt.
+source boundary performs no live provider mutation and does not create a migration manifest. The
+protected acceptance receipt preserves those limits while making the unit available to exact successor prerequisites.
 
 ## Command sequence
 
