@@ -171,10 +171,16 @@ let private stageHostAssets values =
     use verified = JsonDocument.Parse report
     if verified.RootElement.GetProperty("verified").GetBoolean() <> true || verified.RootElement.GetProperty("archiveSha256").GetString() <> digest || verified.RootElement.GetProperty("version").GetString() <> version then fail "verified Host release differs"
     let release = Path.Combine(serviceHome, "releases", version)
-    if Directory.Exists release && Directory.EnumerateFileSystemEntries(release) |> Seq.isEmpty |> not then fail "existing Host release directory is not empty"
-    checkedCommand 10000 "/usr/bin/install" [ "-d"; "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0700"; release ] |> ignore
-    for source, name in [ package, "FS.GG.Telemetry.Host." + version + ".nupkg"; manifest, "manifest.json"; journal, "publication-journal.json" ] do
-        checkedCommand 10000 "/usr/bin/install" [ "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0600"; source; Path.Combine(release, name) ] |> ignore
+    if Directory.Exists release || File.Exists release then fail "existing Host release directory requires inspection"
+    let staging = Path.Combine(serviceHome, "releases", ".host-" + Guid.NewGuid().ToString("N"))
+    checkedCommand 10000 "/usr/bin/install" [ "-d"; "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0700"; staging ] |> ignore
+    try
+        for source, name, expected in [ package, "FS.GG.Telemetry.Host." + version + ".nupkg", digest; manifest, "manifest.json", required "--manifest-sha256" values; journal, "publication-journal.json", required "--journal-sha256" values ] do
+            checkedCommand 10000 "/usr/bin/install" [ "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0600"; source; Path.Combine(staging, name) ] |> ignore
+            verifyHash (Path.Combine(staging, name)) expected |> ignore
+        Directory.Move(staging, release)
+    finally
+        if Directory.Exists staging then Directory.Delete(staging, true)
     printfn "%s" (json {| status = "host-assets-staged"; version = version; packageSha256 = digest; path = release; serviceStarted = false |})
 
 let private copyExact (source: string) (destination: string) (mode: UnixFileMode) =
@@ -340,6 +346,17 @@ let private backup values =
     let output = checkedCommand 300000 operatorPath [ deployment; "backup"; name ]
     printfn "%s" output
 
+let private prepareInert values =
+    let allowed = Set.ofList [ "--systemadmin-root"; "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version" ]
+    only allowed values
+    let root = required "--systemadmin-root" values |> safeDirectory
+    let verifier = Path.Combine(root, "Services/telemetry-host/telemetry_host_release.py")
+    let assetValues = values |> Map.remove "--systemadmin-root" |> Map.add "--verifier" verifier
+    createAccount ()
+    installHostFiles (Map.ofList [ "--systemadmin-root", root ])
+    stageHostAssets assetValues
+    printfn "%s" (json {| status = "inert-host-prepared"; account = serviceAccount; servicesStarted = false; unitsEnabled = false |})
+
 [<EntryPoint>]
 let main arguments =
     try
@@ -355,8 +372,9 @@ let main arguments =
         | "verify-host-release" :: rest -> verifyHostRelease (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
+        | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|stage-host-assets|install-host-files|build-host-image|verify-host-release|update-host|backup-stopped-host> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|stage-host-assets|install-host-files|build-host-image|verify-host-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message

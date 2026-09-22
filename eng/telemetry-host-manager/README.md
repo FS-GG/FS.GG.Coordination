@@ -30,6 +30,13 @@ private item identifiers, or telemetry payloads in the selector.
 
 ## Inert installation on a second machine
 
+`prepare-inert` combines account creation, reviewed file installation, and
+atomic Host release staging in one root invocation. Supply
+`--systemadmin-root`, `--package`, `--manifest`, `--journal`,
+`--package-sha256`, `--manifest-sha256`, `--journal-sha256`, and `--version`.
+It does not start or enable a unit. Each step can also be run separately as
+described below when recovering a partial preparation.
+
 1. Verify the exact public Host release with `verify-host-release`. Provide
    the release's GitHub SHA-256 and the reviewed SystemAdmin
    `telemetry_host_release.py` verifier. `install-engine` verifies the coherent
