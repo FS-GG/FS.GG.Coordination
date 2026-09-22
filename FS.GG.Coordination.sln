@@ -53,6 +53,12 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FS.GG.Coordination.Orchestr
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FS.GG.Coordination.Orchestration.Execution.Codex.Tests", "tests\FS.GG.Coordination.Orchestration.Execution.Codex.Tests\FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj", "{007E4289-C2A1-416B-B8BC-0F87E5D6B152}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "eng", "eng", "{7525B257-249C-EE79-B10A-65D0BC27ABA9}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "telemetry-host-manager", "telemetry-host-manager", "{69F8A679-BCF0-AEF8-563F-53060F630819}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "TelemetryHostManager", "eng\telemetry-host-manager\TelemetryHostManager.fsproj", "{A7A7C29B-E56B-4200-AF47-88C753526D29}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -339,6 +345,18 @@ Global
 		{007E4289-C2A1-416B-B8BC-0F87E5D6B152}.Release|x64.Build.0 = Release|Any CPU
 		{007E4289-C2A1-416B-B8BC-0F87E5D6B152}.Release|x86.ActiveCfg = Release|Any CPU
 		{007E4289-C2A1-416B-B8BC-0F87E5D6B152}.Release|x86.Build.0 = Release|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Debug|x64.Build.0 = Debug|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Debug|x86.Build.0 = Debug|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Release|x64.ActiveCfg = Release|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Release|x64.Build.0 = Release|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Release|x86.ActiveCfg = Release|Any CPU
+		{A7A7C29B-E56B-4200-AF47-88C753526D29}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -367,5 +385,7 @@ Global
 		{A98B4CF7-7FEA-492C-AC5D-C9F305C2A19B} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
 		{EEECFADB-2CD4-4966-9D80-B71A05AD96D8} = {827E0CD3-B72D-47B6-A68D-7590B98EB39B}
 		{007E4289-C2A1-416B-B8BC-0F87E5D6B152} = {0AB3BF05-4346-4AA6-1389-037BE0695223}
+		{69F8A679-BCF0-AEF8-563F-53060F630819} = {7525B257-249C-EE79-B10A-65D0BC27ABA9}
+		{A7A7C29B-E56B-4200-AF47-88C753526D29} = {69F8A679-BCF0-AEF8-563F-53060F630819}
 	EndGlobalSection
 EndGlobal
