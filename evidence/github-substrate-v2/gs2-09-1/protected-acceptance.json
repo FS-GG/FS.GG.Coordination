@@ -1,0 +1,49 @@
+{
+  "schema": "fsgg.github-substrate-v2.complete-discovery-protected-acceptance/1",
+  "unit": "GS2-09.1",
+  "state": "accepted",
+  "source": {
+    "candidate": "87be34092f684cb41a6e2ee3e244f001484c664f",
+    "merge": "49f4f7ad3a1f616a771645570e317f98bfd1a676",
+    "tree": "10d655b9d771aa689d2f305ab68439cd3d9ef592",
+    "pullRequest": 479
+  },
+  "qualification": {
+    "manifestSha256": "06526d13d5f15df2e9b9cd1b370df1106146a803f920f17c1b907729fd3834a3",
+    "q5Command": {
+      "id": "github-complete-discovery-contract",
+      "sha256": "05a7b9d3936222d1328313478e1e7580b547ea800f355dcfee638803139660e1",
+      "conclusion": "success"
+    },
+    "q6Command": {
+      "id": "github-complete-discovery-recovery-contract",
+      "sha256": "c7b4d930a4751020da2e65c0b135784144f774ce3052e05ba0ebc4f2f78bddf2",
+      "conclusion": "success"
+    }
+  },
+  "hosted": {
+    "candidate": {
+      "bootstrapRun": 35779479085,
+      "codeqlRun": 35779477188,
+      "optimisticValidationRun": 35779479090,
+      "optimisticValidationAttempt": 2,
+      "conclusion": "success"
+    },
+    "protectedMerge": {
+      "bootstrapRun": 35781025864,
+      "codeqlRun": 35781026005,
+      "optimisticValidationRun": 35781025813,
+      "conclusion": "success"
+    }
+  },
+  "claims": {
+    "closedAuthorityPopulation": true,
+    "terminalPaginationAndHighWaterMarks": true,
+    "twoPassQuiescence": true,
+    "deterministicFreshProcessReplay": true,
+    "liveCompleteReads": false,
+    "providerMutation": false,
+    "successorAuthority": false
+  },
+  "acceptedAt": "2026-09-22T21:06:16Z"
+}
