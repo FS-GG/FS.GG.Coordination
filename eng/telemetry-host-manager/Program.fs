@@ -235,10 +235,11 @@ let private installHostFiles values =
     let root = required "--systemadmin-root" values |> safeDirectory
     let expectedCommit = required "--commit" values
     if not (sha40 expectedCommit) then fail "SystemAdmin commit must be a full SHA"
-    let observedCommit = checkedCommand 30000 "/usr/bin/git" [ "-C"; root; "rev-parse"; "HEAD" ]
+    let gitPrefix = [ "-c"; "safe.directory=" + root; "-C"; root ]
+    let observedCommit = checkedCommand 30000 "/usr/bin/git" (gitPrefix @ [ "rev-parse"; "HEAD" ])
     if observedCommit <> expectedCommit then fail "SystemAdmin source commit differs"
     let sourcePaths = [ "Services/telemetry-host-podman"; "Services/telemetry-host" ]
-    let clean, _, _ = command 30000 "/usr/bin/git" ([ "-C"; root; "diff"; "--quiet"; "HEAD"; "--" ] @ sourcePaths)
+    let clean, _, _ = command 30000 "/usr/bin/git" (gitPrefix @ [ "diff"; "--quiet"; "HEAD"; "--" ] @ sourcePaths)
     if clean <> 0 then fail "reviewed SystemAdmin source paths are dirty"
     let executable = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
     let privateFile = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
