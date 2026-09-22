@@ -51,6 +51,7 @@ type TelemetryPublishOutcome =
 /// Replays immutable batches through the released workspace client. A non-applied batch remains in the outbox.
 type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
     let flushLock = new SemaphoreSlim(1, 1)
+    let admissionLock = obj ()
     let mutable flushCursor = 0
     let appliedDirectory = Path.Combine(options.Outbox, "applied")
 
@@ -111,7 +112,7 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
             && (not (OperatingSystem.IsLinux())
                 || File.GetUnixFileMode(path) = (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
 
-    let save (name: string) (payload: byte array) =
+    let saveUnlocked (name: string) (payload: byte array) =
         if
             String.IsNullOrWhiteSpace name
             || name.Length > 100
@@ -170,6 +171,9 @@ type TelemetryCliPublisher(options: TelemetryCliPublisherOptions) =
                         Ok(Some path)
                     else
                         Error "telemetry-batch-identity-conflict"
+
+    // The count and byte bound must be checked in the same critical section as admission.
+    let save name payload = lock admissionLock (fun () -> saveUnlocked name payload)
 
     let runCli path (cancellation: CancellationToken) =
         task {
