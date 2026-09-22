@@ -132,6 +132,26 @@ The public `telemetry-data/host.json` ref has one writer. GitHub compare and
 swap prevents stale commits but does not, by itself, establish a single
 publisher across two hosts. Switching requires these ordered observations:
 
+The manager's read-only `source-fence-status` command helps check the source
+after its writers have been stopped:
+
+```sh
+sudo /opt/fs-gg/telemetry-host-manager/VERSION/TelemetryHostManager source-fence-status
+```
+
+It reads the installed `fsgg-telemetry-*` system and telemetry-service-account
+unit inventories, requires the known publisher, registry updater, and Host
+units to be present, and checks that every listed unit is inactive. Services
+must be disabled, masked, or static; timers and paths must be disabled or
+masked. It also requires the public `telemetry-data` ref to remain unchanged
+across the readback. It prints the unit states and exact public commit, and
+exits nonzero if any listed writer can still run. Its `activationAuthorized`
+field is always `false`: this instantaneous observation is only one source
+fence check. The stopped-source backup, private state transfer, target restore,
+selector change, and cross-host activation proof below still need separate
+review and physical evidence. Do not run this command in place of the old
+Host's #3613 evening read-only item query.
+
 1. Qualify the original item and each member on the existing physical Host.
    For [`.github#3613`](https://github.com/FS-GG/.github/issues/3613), the
    two-member `item-detail/2` verdict is still the first gate. Preserve the

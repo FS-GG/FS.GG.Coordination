@@ -14,6 +14,8 @@ let private sha256 (bytes: byte array) = Convert.ToHexString(SHA256.HashData byt
 let private hex64 (value: string) = Regex.IsMatch(value, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
 let private sha40 (value: string) = Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
 
+type private UnitReadback = { unit: string; active: string; fileState: string }
+
 let private options (arguments: string list) =
     let rec collect (current: Map<string, string>) (rest: string list) =
         match rest with
@@ -340,6 +342,46 @@ let private status () =
     if fields.Length <> 2 || not (sha40 fields[0]) || fields[1] <> "refs/heads/telemetry-data" then fail "public ref readback malformed"
     printfn "%s" (json {| schema = "fsgg.telemetry.host-manager-status/1"; observedAt = DateTimeOffset.UtcNow.ToString("O"); publicCommit = fields[0]; publisherTimer = unitState (publisher + ".timer") "ActiveState"; publisherEnabled = enabled (publisher + ".timer"); publisherService = unitState (publisher + ".service") "ActiveState"; registryTimer = unitState (registry + ".timer") "ActiveState"; stageTimer = unitState (stage + ".timer") "ActiveState" |})
 
+let private telemetryUnitNames executable prefix =
+    let output = checkedCommand 10000 executable (prefix @ [ "list-unit-files"; "--no-legend"; "--plain"; "fsgg-telemetry-*.service"; "fsgg-telemetry-*.timer"; "fsgg-telemetry-*.path" ])
+    output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+    |> Array.map (fun line ->
+        let fields = line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+        if fields.Length < 2 || not (Regex.IsMatch(fields[0], "^fsgg-telemetry-[A-Za-z0-9@_.-]+[.](service|timer|path)$")) then fail "telemetry unit inventory malformed"
+        fields[0])
+    |> Array.distinct
+    |> Array.sort
+
+let private sourceFenceStatus () =
+    if Environment.UserName <> "root" then fail "root required to read source fence status"
+    let publicRef = checkedCommand 30000 "/usr/bin/git" [ "ls-remote"; "https://github.com/FS-GG/.github.git"; "refs/heads/telemetry-data" ]
+    let fields = publicRef.Split([| '\t'; ' ' |], StringSplitOptions.RemoveEmptyEntries)
+    if fields.Length <> 2 || not (sha40 fields[0]) || fields[1] <> "refs/heads/telemetry-data" then fail "public ref readback malformed"
+    let accountUid = checkedCommand 10000 "/usr/bin/id" [ "-u"; serviceAccount ]
+    if not (Regex.IsMatch(accountUid, "^[0-9]+$")) then fail "telemetry account UID is invalid"
+    let userPrefix = [ "-u"; serviceAccount; "--"; "/usr/bin/env"; "XDG_RUNTIME_DIR=/run/user/" + accountUid; "/usr/bin/systemctl"; "--user" ]
+    let systemUnits = telemetryUnitNames "/usr/bin/systemctl" []
+    let userUnits = telemetryUnitNames "/usr/bin/runuser" userPrefix
+    let systemRequired = [ "fsgg-telemetry-dashboard-publisher-member-v3.service"; "fsgg-telemetry-dashboard-publisher-member-v3.timer"; "fsgg-telemetry-member-registry-update.service"; "fsgg-telemetry-member-registry-update.timer" ]
+    let userRequired = [ "fsgg-telemetry-host-podman.service" ]
+    if systemUnits.Length = 0 || userUnits.Length = 0 || systemRequired |> List.exists (fun unit -> not (Array.contains unit systemUnits)) || userRequired |> List.exists (fun unit -> not (Array.contains unit userUnits)) then fail "source telemetry unit inventory is incomplete"
+    let readUnit executable prefix unit : UnitReadback =
+        let active = checkedCommand 10000 executable (prefix @ [ "show"; unit; "--property=ActiveState"; "--value" ])
+        let fileState = checkedCommand 10000 executable (prefix @ [ "show"; unit; "--property=UnitFileState"; "--value" ])
+        if active = "" || fileState = "" then fail "source telemetry unit state is incomplete"
+        { unit = unit; active = active; fileState = fileState }
+    let system = systemUnits |> Array.map (readUnit "/usr/bin/systemctl" [])
+    let user = userUnits |> Array.map (readUnit "/usr/bin/runuser" userPrefix)
+    let quiescent (item: UnitReadback) =
+        item.active = "inactive" &&
+        (item.fileState = "disabled" || item.fileState = "masked" ||
+         (item.unit.EndsWith(".service", StringComparison.Ordinal) && item.fileState = "static"))
+    let quiesced = Array.forall quiescent system && Array.forall quiescent user
+    let publicRefAfter = checkedCommand 30000 "/usr/bin/git" [ "ls-remote"; "https://github.com/FS-GG/.github.git"; "refs/heads/telemetry-data" ]
+    if publicRefAfter <> publicRef then fail "public ref moved during source fence readback"
+    printfn "%s" (json {| schema = "fsgg.telemetry.source-fence-status/1"; observedAt = DateTimeOffset.UtcNow.ToString("O"); publicCommit = fields[0]; sourceWritersQuiesced = quiesced; activationAuthorized = false; systemUnits = system; userUnits = user |})
+    if not quiesced then fail "source telemetry units remain active or recurrent"
+
 let private guard values =
     only (Set.ofList [ "--host-id" ]) values
     let hostId = required "--host-id" values
@@ -457,6 +499,7 @@ let main arguments =
     try
         match Array.toList arguments with
         | "status" :: [] -> status (); 0
+        | "source-fence-status" :: [] -> sourceFenceStatus (); 0
         | "guard" :: rest -> guard (options rest)
         | "install-guard-dropins" :: rest -> installGuardDropins (options rest); 0
         | "install-legacy-writer-guard" :: rest -> installLegacyWriterGuard (options rest); 0
@@ -473,7 +516,7 @@ let main arguments =
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message
