@@ -132,6 +132,27 @@ let private verifyHostRelease values =
         fail "Host verifier result differs"
     printfn "%s" result
 
+let private verifyEngineManifest manifest expected version packageDigest =
+    verifyHash manifest expected |> ignore
+    use document = JsonDocument.Parse(File.ReadAllBytes manifest)
+    let root = document.RootElement
+    let descriptor = root.GetProperty("descriptor")
+    if root.GetProperty("schema").GetString() <> "fsgg.release-saga/1"
+       || root.GetProperty("state").GetProperty("phase").GetString() <> "promoted"
+       || descriptor.GetProperty("channel").GetString() <> "stable"
+       || descriptor.GetProperty("version").GetString() <> version then fail "CLI release manifest differs"
+    let packages = descriptor.GetProperty("packages").EnumerateArray() |> Seq.toList
+    let matches = packages |> List.filter (fun package -> package.GetProperty("id").GetString() = "FS.GG.Coord.Cli")
+    if matches.Length <> 1 || matches[0].GetProperty("version").GetString() <> version
+       || matches[0].GetProperty("artifact").GetProperty("sha256").GetString() <> packageDigest then fail "CLI package manifest differs"
+
+let private verifyEngineRelease values =
+    only (Set.ofList [ "--package"; "--sha256"; "--manifest"; "--manifest-sha256"; "--version" ]) values
+    let version = required "--version" values
+    let digest = verifyHash (required "--package" values) (required "--sha256" values)
+    verifyEngineManifest (required "--manifest" values) (required "--manifest-sha256" values) version digest
+    printfn "%s" (json {| status = "verified"; version = version; packageSha256 = digest |})
+
 let private serviceAccount = "fsgg-telemetry-podman"
 let private serviceHome = "/var/lib/fs-gg/telemetry-podman"
 
@@ -347,11 +368,16 @@ let private backup values =
     printfn "%s" output
 
 let private prepareInert values =
-    let allowed = Set.ofList [ "--systemadmin-root"; "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version" ]
+    if Environment.UserName <> "root" then fail "root required to prepare inert Host"
+    let allowed = Set.ofList [ "--systemadmin-root"; "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version"; "--engine-package"; "--engine-sha256"; "--engine-manifest"; "--engine-manifest-sha256"; "--engine-version"; "--engine-root" ]
     only allowed values
     let root = required "--systemadmin-root" values |> safeDirectory
     let verifier = Path.Combine(root, "Services/telemetry-host/telemetry_host_release.py")
-    let assetValues = values |> Map.remove "--systemadmin-root" |> Map.add "--verifier" verifier
+    let assetKeys = Set.ofList [ "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version" ]
+    let assetValues = values |> Map.filter (fun key _ -> Set.contains key assetKeys) |> Map.add "--verifier" verifier
+    let engineValues = Map.ofList [ "--package", required "--engine-package" values; "--sha256", required "--engine-sha256" values; "--version", required "--engine-version" values; "--root", required "--engine-root" values ]
+    verifyEngineManifest (required "--engine-manifest" values) (required "--engine-manifest-sha256" values) (required "--engine-version" values) (required "--engine-sha256" values)
+    installEngine engineValues
     createAccount ()
     installHostFiles (Map.ofList [ "--systemadmin-root", root ])
     stageHostAssets assetValues
@@ -370,11 +396,12 @@ let main arguments =
         | "install-host-files" :: rest -> installHostFiles (options rest); 0
         | "build-host-image" :: rest -> buildHostImage (options rest); 0
         | "verify-host-release" :: rest -> verifyHostRelease (options rest); 0
+        | "verify-engine-release" :: rest -> verifyEngineRelease (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|stage-host-assets|install-host-files|build-host-image|verify-host-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message

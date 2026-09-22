@@ -30,10 +30,13 @@ private item identifiers, or telemetry payloads in the selector.
 
 ## Inert installation on a second machine
 
-`prepare-inert` combines account creation, reviewed file installation, and
-atomic Host release staging in one root invocation. Supply
+`prepare-inert` combines verified CLI engine installation, account creation,
+reviewed file installation, and atomic Host release staging in one root
+invocation. Supply
 `--systemadmin-root`, `--package`, `--manifest`, `--journal`,
-`--package-sha256`, `--manifest-sha256`, `--journal-sha256`, and `--version`.
+`--package-sha256`, `--manifest-sha256`, `--journal-sha256`, `--version`,
+`--engine-package`, `--engine-sha256`, `--engine-manifest`,
+`--engine-manifest-sha256`, `--engine-version`, and `--engine-root`.
 It does not start or enable a unit. Each step can also be run separately as
 described below when recovering a partial preparation.
 
