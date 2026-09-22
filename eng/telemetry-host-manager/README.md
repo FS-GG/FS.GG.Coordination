@@ -139,15 +139,18 @@ after its writers have been stopped:
 sudo /opt/fs-gg/telemetry-host-manager/VERSION/TelemetryHostManager source-fence-status
 ```
 
-It reads the installed `fsgg-telemetry-*` system and telemetry-service-account
-unit inventories, requires the known publisher, registry updater, and Host
-units to be present, and checks that every listed unit is inactive. Services
-must be disabled, masked, or static; timers and paths must be disabled or
-masked. It also requires the public `telemetry-data` ref to remain unchanged
-across the readback. It prints the unit states and exact public commit, and
-exits nonzero if any listed writer can still run. Its `activationAuthorized`
-field is always `false`: this instantaneous observation is only one source
-fence check. The stopped-source backup, private state transfer, target restore,
+It unions installed unit files and loaded units under the `fsgg-telemetry-*`
+prefix in both the system and telemetry-service-account managers. It requires
+the known publisher, registry updater, and Host units to be present, and checks
+that every discovered unit is inactive. Services must be disabled, masked, or
+static; timers, paths, and sockets must be disabled or masked. Any unreviewed
+unit type refuses the command. It also requires the public `telemetry-data` ref
+to remain unchanged across the readback. It prints the observed unit states
+and exact public commit and exits nonzero when this inventory is not quiescent.
+Its `activationAuthorized` field is always `false`: a zero exit only means this
+instantaneous inventory preflight passed. Disabled services can still be
+started manually, and this check cannot rule out an unrelated writer. The
+stopped-source backup and recheck, private state transfer, target restore,
 selector change, and cross-host activation proof below still need separate
 review and physical evidence. Do not run this command in place of the old
 Host's #3613 evening read-only item query.

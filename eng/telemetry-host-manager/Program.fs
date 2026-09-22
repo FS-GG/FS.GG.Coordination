@@ -343,12 +343,14 @@ let private status () =
     printfn "%s" (json {| schema = "fsgg.telemetry.host-manager-status/1"; observedAt = DateTimeOffset.UtcNow.ToString("O"); publicCommit = fields[0]; publisherTimer = unitState (publisher + ".timer") "ActiveState"; publisherEnabled = enabled (publisher + ".timer"); publisherService = unitState (publisher + ".service") "ActiveState"; registryTimer = unitState (registry + ".timer") "ActiveState"; stageTimer = unitState (stage + ".timer") "ActiveState" |})
 
 let private telemetryUnitNames executable prefix =
-    let output = checkedCommand 10000 executable (prefix @ [ "list-unit-files"; "--no-legend"; "--plain"; "fsgg-telemetry-*.service"; "fsgg-telemetry-*.timer"; "fsgg-telemetry-*.path" ])
-    output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
-    |> Array.map (fun line ->
-        let fields = line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
-        if fields.Length < 2 || not (Regex.IsMatch(fields[0], "^fsgg-telemetry-[A-Za-z0-9@_.-]+[.](service|timer|path)$")) then fail "telemetry unit inventory malformed"
-        fields[0])
+    let lines command =
+        let output = checkedCommand 10000 executable (prefix @ [ command; "--all"; "--no-legend"; "--plain"; "fsgg-telemetry-*" ])
+        output.Split('\n', StringSplitOptions.RemoveEmptyEntries)
+        |> Array.map (fun line ->
+            let fields = line.Split([| ' '; '\t' |], StringSplitOptions.RemoveEmptyEntries)
+            if fields.Length < 2 || not (Regex.IsMatch(fields[0], "^fsgg-telemetry-[A-Za-z0-9@_.-]+[.][a-z]+$")) then fail "telemetry unit inventory malformed"
+            fields[0])
+    Array.append (lines "list-unit-files") (lines "list-units")
     |> Array.distinct
     |> Array.sort
 
@@ -359,7 +361,7 @@ let private sourceFenceStatus () =
     if fields.Length <> 2 || not (sha40 fields[0]) || fields[1] <> "refs/heads/telemetry-data" then fail "public ref readback malformed"
     let accountUid = checkedCommand 10000 "/usr/bin/id" [ "-u"; serviceAccount ]
     if not (Regex.IsMatch(accountUid, "^[0-9]+$")) then fail "telemetry account UID is invalid"
-    let userPrefix = [ "-u"; serviceAccount; "--"; "/usr/bin/env"; "XDG_RUNTIME_DIR=/run/user/" + accountUid; "/usr/bin/systemctl"; "--user" ]
+    let userPrefix = [ "-u"; serviceAccount; "--"; "/usr/bin/env"; "-i"; "HOME=" + serviceHome; "USER=" + serviceAccount; "LOGNAME=" + serviceAccount; "XDG_RUNTIME_DIR=/run/user/" + accountUid; "DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/" + accountUid + "/bus"; "/usr/bin/systemctl"; "--user" ]
     let systemUnits = telemetryUnitNames "/usr/bin/systemctl" []
     let userUnits = telemetryUnitNames "/usr/bin/runuser" userPrefix
     let systemRequired = [ "fsgg-telemetry-dashboard-publisher-member-v3.service"; "fsgg-telemetry-dashboard-publisher-member-v3.timer"; "fsgg-telemetry-member-registry-update.service"; "fsgg-telemetry-member-registry-update.timer" ]
@@ -373,13 +375,16 @@ let private sourceFenceStatus () =
     let system = systemUnits |> Array.map (readUnit "/usr/bin/systemctl" [])
     let user = userUnits |> Array.map (readUnit "/usr/bin/runuser" userPrefix)
     let quiescent (item: UnitReadback) =
+        let service = item.unit.EndsWith(".service", StringComparison.Ordinal)
+        let trigger = [ ".timer"; ".path"; ".socket" ] |> List.exists (fun ending -> item.unit.EndsWith(ending, StringComparison.Ordinal))
+        if not (service || trigger) then fail "unreviewed telemetry unit type"
         item.active = "inactive" &&
         (item.fileState = "disabled" || item.fileState = "masked" ||
-         (item.unit.EndsWith(".service", StringComparison.Ordinal) && item.fileState = "static"))
+         (service && item.fileState = "static"))
     let quiesced = Array.forall quiescent system && Array.forall quiescent user
     let publicRefAfter = checkedCommand 30000 "/usr/bin/git" [ "ls-remote"; "https://github.com/FS-GG/.github.git"; "refs/heads/telemetry-data" ]
     if publicRefAfter <> publicRef then fail "public ref moved during source fence readback"
-    printfn "%s" (json {| schema = "fsgg.telemetry.source-fence-status/1"; observedAt = DateTimeOffset.UtcNow.ToString("O"); publicCommit = fields[0]; sourceWritersQuiesced = quiesced; activationAuthorized = false; systemUnits = system; userUnits = user |})
+    printfn "%s" (json {| schema = "fsgg.telemetry.source-fence-status/1"; observedAt = DateTimeOffset.UtcNow.ToString("O"); publicCommit = fields[0]; observedUnitsQuiesced = quiesced; activationAuthorized = false; systemUnits = system; userUnits = user |})
     if not quiesced then fail "source telemetry units remain active or recurrent"
 
 let private guard values =
