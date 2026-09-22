@@ -400,6 +400,21 @@ let private installGuardDropins values =
         if not (loaded.Contains(manager, StringComparison.Ordinal) && loaded.Contains(hostId, StringComparison.Ordinal)) then fail "installed publisher guard was not loaded"
     printfn "%s" (json {| status = "guards-installed"; host = hostId; units = units; servicesStarted = false |})
 
+let private installLegacyWriterGuard values =
+    only (Set.ofList [ "--host-id"; "--root"; "--version" ]) values
+    if Environment.UserName <> "root" then fail "root required to install legacy writer guard"
+    let hostId = required "--host-id" values
+    // The currently selected writer must remain selected throughout this
+    // initial installation. A missing or changed selector refuses the batch.
+    if guard (Map.ofList [ "--host-id", hostId ]) <> 0 then fail "legacy writer is not selected"
+    let root = required "--root" values |> safeDirectory
+    let version = required "--version" values
+    installManager (Map.ofList [ "--root", root; "--version", version ])
+    let manager = Path.Combine(root, version, "TelemetryHostManager")
+    installGuardDropins (Map.ofList [ "--host-id", hostId; "--manager", manager ])
+    if guard (Map.ofList [ "--host-id", hostId ]) <> 0 then fail "legacy writer selector changed during installation"
+    printfn "%s" (json {| status = "legacy-writer-guard-installed"; host = hostId; manager = manager; servicesStarted = false |})
+
 let private runHostUpdater values =
     only (Set.ofList [ "--updater"; "--config" ]) values
     requireServiceAccount ()
@@ -444,6 +459,7 @@ let main arguments =
         | "status" :: [] -> status (); 0
         | "guard" :: rest -> guard (options rest)
         | "install-guard-dropins" :: rest -> installGuardDropins (options rest); 0
+        | "install-legacy-writer-guard" :: rest -> installLegacyWriterGuard (options rest); 0
         | "install-engine" :: rest -> installEngine (options rest); 0
         | "install-manager" :: rest -> installManager (options rest); 0
         | "create-host-account" :: [] -> createAccount (); 0
@@ -457,7 +473,7 @@ let main arguments =
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message

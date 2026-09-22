@@ -32,6 +32,22 @@ member registry updater. This sequence keeps the current publisher active
 while the inert selector is introduced. A second Host may collect telemetry, build images, and stage
 projections while its publisher stays inactive.
 
+For the first legacy Host update, stage a published manager directory on that
+machine, then run one privileged invocation after the selector is merged:
+
+```sh
+sudo /ABSOLUTE/STAGED/TelemetryHostManager install-legacy-writer-guard \
+  --host-id main-legacy --root /opt/fs-gg/telemetry-host-manager --version VERSION
+```
+
+The command requires the protected selector to name `main-legacy`, installs
+the versioned manager, writes both systemd guards, reloads the units, and
+checks the selector again. It leaves existing timers running. It refuses to
+replace a version already installed; if a prior attempt installed only the
+manager, inspect that version and finish with `install-guard-dropins` using
+the installed executable. The staged directory and its hash receipt should
+be retained until installation completes.
+
 The supported host aliases are operator-assigned, public identifiers such as
 `main-legacy` and `main-successor`. Do not put machine addresses, credentials,
 private item identifiers, or telemetry payloads in the selector.
