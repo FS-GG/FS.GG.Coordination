@@ -103,6 +103,39 @@ mkdir -p -- "$state_root"
 STORE="$(mktemp -d "$state_root/fsgg-telemetry-receiver.XXXXXX")"
 dotnet tool run fsgg-coord-engine -- telemetry store init --store-root "$STORE" \
   >"$SCRATCH/store-init.stdout"
+population="$SCRATCH/member-population.json"
+python3 - "$population" <<'PY'
+import hashlib
+import json
+import pathlib
+import sys
+
+item = "UTEL-06.6"
+original = "UTEL-06"
+key = hashlib.sha256(f"{item}\x1f{original}".encode()).hexdigest()[:32]
+event = {
+    "kind": "budget-population",
+    "identity": f"budget-population-{key}",
+    "itemId": item,
+    "revision": 0,
+    "originalItemId": original,
+    "state": "open",
+    "sourceKind": "native-item",
+    "sourceRef": f"roadmap-dispatch:{key}",
+}
+batch = {
+    "schema": "fsgg.telemetry.ingest/1",
+    "ingestId": "receiver-canonical-member-population",
+    "sourceIdentity": "receiver-test",
+    "generation": "receiver-test",
+    "cursor": "population-1",
+    "eventCount": 1,
+    "events": [event],
+}
+pathlib.Path(sys.argv[1]).write_text(json.dumps(batch, separators=(",", ":")) + "\n", encoding="utf-8")
+PY
+dotnet tool run fsgg-coord-engine -- telemetry store ingest --store-root "$STORE" --input "$population" \
+  >"$SCRATCH/member-population.stdout"
 PATH="$SCRATCH/bin:$PATH" FSGG_TELEMETRY_STORE="$STORE" \
   "$LAUNCHER" --assignment "$assignment" -- \
     --json --ephemeral -m gpt-5.6-sol "receiver task" \
@@ -143,15 +176,22 @@ with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
         FROM runtime_terminals
     """).fetchall()
     item_outcomes = connection.execute("SELECT count(*) FROM native_item_outcomes").fetchone()[0]
-    populations = connection.execute("SELECT count(*) FROM budget_population_facts").fetchone()[0]
+    populations = connection.execute("""
+        SELECT item_id, original_item_id, state, source_kind, source_ref
+        FROM budget_population_facts
+    """).fetchall()
 assert rows == [("UTEL-06.6", "receiver-test-thread", "gpt-5.6-sol", 12, 4, 5, 2, 17)], \
     "receiver test: expected exactly one attributed native token-usage observation"
 assert terminals == [("UTEL-06.6", "completed", 0)], \
     "receiver test: expected exactly one successful process terminal"
 assert item_outcomes == 0, \
     "receiver test: a process terminal must not invent a machine delivery outcome"
-assert populations == 0, \
-    "receiver test: a process terminal must not invent whole-item population completion"
+assert len(populations) == 1, \
+    "receiver test: process observation must preserve one canonical member population"
+assert populations[0][:4] == ("UTEL-06.6", "UTEL-06", "open", "native-item"), \
+    "receiver test: process completion must leave the canonical member population open"
+assert populations[0][4].startswith("roadmap-dispatch:"), \
+    "receiver test: canonical member population source must remain authoritative"
 PY
 
 echo "telemetry runtime receiver: exact pin/config, native-result neutrality, byte-preserved JSONL, persisted usage and delivery boundary passed"

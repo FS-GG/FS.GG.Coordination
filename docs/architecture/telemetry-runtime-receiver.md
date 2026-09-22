@@ -34,6 +34,8 @@ A `runtime-terminal` with outcome `completed` describes the observed Codex proce
 the work item was delivered, close the whole-item population, or create a `native-item-outcome`. Those facts require
 the separately corroborated routine or orchestration delivery readback for the same item. Consequently, a private
 `item-detail/2` read can correctly show terminal native usage while its item outcome and population remain missing.
+When a protected roadmap mapping has already opened a canonical member population, the same process completion
+leaves that population open; it becomes completed only after the machine delivery outcome is joined.
 
 `tests/telemetry-runtime-receiver/run.sh` restores the exact public package, checks its installed version, executes
 the real packaged adapter around a controlled Codex process, proves exact argument forwarding, injects observer
