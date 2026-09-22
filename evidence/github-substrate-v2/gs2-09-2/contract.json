@@ -1,0 +1,20 @@
+{
+  "schema": "fsgg.coordination.github-immutable-manifest-evidence/1",
+  "unit": "GS2-09.2",
+  "roadmapRevision": "38c48ab82f71a7fc162c5bb7cc4d9a11213f6ed2",
+  "roadmapSha256": "0a3f16cbee0085cbf2f299eb19cfa5c9ca3f42f9a9fd4d5230dcaa008a96553e",
+  "unitContractSha256": "09ba8dd5283ee6012fafc00ab17b20c5aae52480f4bc60485605b0c9f84b5fd0",
+  "sourceRevision": "f237340a86d32dc6f72e5e7ae62001987115e793",
+  "predecessor": {
+    "unit": "GS2-09.1",
+    "path": "evidence/github-substrate-v2/accepted/GS2-09.1.json",
+    "fileSha256": "7e7a6b680e0133dd6ff4d0541e8c54cbd82c7b3c63bb56ad541d4bf12caeaf1c",
+    "receiptDigest": "9cb3eb947ea4637ddb8452c9fdecd781d46101187e35958620884f4348651613"
+  },
+  "discoverySourceRevision": "a2a1d44881d8f748947c81ab2d0b2db0a8420b66",
+  "discoveryNormalizedDigest": "1eea2d7929dc365db5af0f8ef345543b8c57412bf6f1d0500298706843bc5248",
+  "discoverySeal": "0d0e1a412a3f79ae10c9d96fabd1c00965a8d5cbbe4f625abde62fe1805e303f",
+  "providerState": "controlled-source-qualification",
+  "liveManifestCreated": false,
+  "acceptanceReceiptCreated": false
+}

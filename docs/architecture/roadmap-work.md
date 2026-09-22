@@ -419,6 +419,17 @@ high-water mark, and two complete non-overlapping reads must produce the same no
 source boundary performs no live provider mutation and does not create a migration manifest. The
 protected acceptance receipt preserves those limits while making the unit available to exact successor prerequisites.
 
+GS2-09.2 is registered against that same active roadmap pin. Its sole prerequisite is the accepted
+GS2-09.1 receipt with digest `9cb3eb947ea4637ddb8452c9fdecd781d46101187e35958620884f4348651613`.
+The Q5 `github-immutable-manifest-contract` and Q6
+`github-immutable-manifest-recovery-contract` bind the accepted discovery source, normalized digest and
+seal to one complete deterministic manifest. The schema covers every discovered subject and all roadmap
+families: old/new model and artifact fingerprints, global IDs, old bytes/values, v2 results, live
+operations, receiver heads, settings plans, archive digests, dispositions, phase plans, reviewers and
+rollback inputs. Omission, reordering, unknown rollback references, digest alteration and seal replay
+refuse. This source boundary performs no provider read or mutation and does not decide typed transforms,
+create archives, execute rollback, or create a live migration manifest.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

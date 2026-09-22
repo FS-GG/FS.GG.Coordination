@@ -105,6 +105,8 @@
     <Compile Include="GitHubSandboxClosureQualification.fs" />
     <Compile Include="GitHubCompleteDiscoveryQualification.fsi" />
     <Compile Include="GitHubCompleteDiscoveryQualification.fs" />
+    <Compile Include="GitHubImmutableManifestQualification.fsi" />
+    <Compile Include="GitHubImmutableManifestQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

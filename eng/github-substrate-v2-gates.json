@@ -384,6 +384,18 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-complete-discovery.fsx", "--", "--root", ".", "--phase", "recovery"]
+    },
+    {
+      "id": "github-immutable-manifest-contract",
+      "qGate": "Q5",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-immutable-manifest.fsx", "--", "--root", ".", "--phase", "manifest"]
+    },
+    {
+      "id": "github-immutable-manifest-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-immutable-manifest.fsx", "--", "--root", ".", "--phase", "recovery"]
     }
   ]
 }

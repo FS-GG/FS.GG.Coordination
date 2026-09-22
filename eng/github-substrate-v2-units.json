@@ -1146,6 +1146,40 @@
       "contractSha256": "7110789f6b224da1c707c8cb2277b9751037d724c79655fb1c4660fd8191972c"
     },
     {
+      "id": "GS2-09.2",
+      "title": "Implement the immutable manifest",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": [
+        "GS2-09.1"
+      ],
+      "permissionCeiling": [
+        "repository-local additive immutable-manifest types, deterministic length-framed normalization and sealing, exact accepted-discovery binding, complete population validation, controlled evidence, validation, documentation and tests",
+        "no typed transform decision, live-operation policy or execution, archive production, rollback execution, provider read or mutation, receiver or settings change, package publication, cutover transition, OpenV2, acceptance receipt, completion claim or successor-unit authority"
+      ],
+      "exitGate": "the Q5 github-immutable-manifest and Q6 github-immutable-manifest-recovery contracts bind the exact accepted GS2-09.1 receipt, discovery source/digest/seal and current governing roadmap; one sealed deterministic payload covers every discovered subject and binds old/new model and artifact fingerprints, stable global IDs, old bytes and values, v2 results, live operations, receiver heads, settings plans, the complete archive-authority digest set, dispositions, ordered phase plans, at least two distinct reviewers and all referenced rollback inputs; missing, duplicated or reordered populations, duplicate global IDs, incomplete archives, invalid phase order, unknown rollback references, changed bound values, digest alteration and seal replay refuse; both complete green control inventories and fresh-process deterministic replay pass without network or provider mutation; source qualification does not claim a live manifest, typed transforms, archive creation, migration execution, acceptance or successor authority",
+      "qGates": [
+        "Q5",
+        "Q6"
+      ],
+      "gateCommands": [
+        "github-immutable-manifest-contract",
+        "github-immutable-manifest-recovery-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-immutable-manifest-contract",
+          "qGate": "Q5",
+          "commandSha256": "0082c25149ec3c5b5bf8e26e34919962556d2c9da298c69461b5e2cafa421540"
+        },
+        {
+          "id": "github-immutable-manifest-recovery-contract",
+          "qGate": "Q6",
+          "commandSha256": "312a7955bb3617e37bd5c7a2dc982d5d1415530b892759cb249f7ce57fe8e08c"
+        }
+      ],
+      "contractSha256": "09ba8dd5283ee6012fafc00ab17b20c5aae52480f4bc60485605b0c9f84b5fd0"
+    },
+    {
       "id": "GS2-09.9",
       "title": "Qualify callable ordinary v2 execution",
       "owner": "FS.GG.Coordination",
