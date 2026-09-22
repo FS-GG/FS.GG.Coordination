@@ -372,6 +372,18 @@
       "qGate": "Q3",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-callable-isolated-operation.fsx", "--", "--root", "."]
+    },
+    {
+      "id": "github-complete-discovery-contract",
+      "qGate": "Q5",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-complete-discovery.fsx", "--", "--root", ".", "--phase", "discovery"]
+    },
+    {
+      "id": "github-complete-discovery-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-complete-discovery.fsx", "--", "--root", ".", "--phase", "recovery"]
     }
   ]
 }

@@ -103,6 +103,8 @@
     <Compile Include="GitHubActionsReleaseFeedQualification.fs" />
     <Compile Include="GitHubSandboxClosureQualification.fsi" />
     <Compile Include="GitHubSandboxClosureQualification.fs" />
+    <Compile Include="GitHubCompleteDiscoveryQualification.fsi" />
+    <Compile Include="GitHubCompleteDiscoveryQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

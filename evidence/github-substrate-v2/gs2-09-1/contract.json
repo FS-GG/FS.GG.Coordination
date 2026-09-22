@@ -1,0 +1,32 @@
+{
+  "schema": "fsgg.coordination.github-complete-discovery-evidence/1",
+  "unit": "GS2-09.1",
+  "roadmapRevision": "a1c233edc01b14a6108c1a0726fe0d085c57ac21",
+  "roadmapSha256": "078d89d7f56eaa3313bd11c613e8d199c2c67b0d81716286cebbcf115312764d",
+  "unitContractSha256": "7110789f6b224da1c707c8cb2277b9751037d724c79655fb1c4660fd8191972c",
+  "sourceRevision": "a2a1d44881d8f748947c81ab2d0b2db0a8420b66",
+  "predecessor": {
+    "unit": "GS2-08.9",
+    "path": "evidence/github-substrate-v2/accepted/GS2-08.9.json",
+    "fileSha256": "3c4663714ab1b11332b9c4277f66f6894b371c761ce3389a39ecc85c109a8b7f"
+  },
+  "callableHandoff": {
+    "item": "V2-CALL-01.5b",
+    "path": "evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json",
+    "fileSha256": "b71ab73cb6c9fa98a250c9b4a97b1c6df1c969cc1165699428f79041c1ea6235"
+  },
+  "authorityPopulation": [
+    "issues-open-and-relevant-closed",
+    "project-items",
+    "project-fields",
+    "hierarchy-and-dependencies",
+    "claim-and-event-streams",
+    "review-delivery-release-records",
+    "repository-settings",
+    "workflow-pins",
+    "receiver-identities"
+  ],
+  "providerState": "controlled-source-qualification",
+  "liveCompleteReads": false,
+  "acceptanceReceiptCreated": false
+}

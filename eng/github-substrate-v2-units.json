@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "3719b6cfc6f2d766ad56f930b56f025e20c4b2cc",
+    "revision": "a1c233edc01b14a6108c1a0726fe0d085c57ac21",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "9c49a0efd1440d8a71130758be39394ae4cdd67f3d10b9cb6cb71998154c1a17"
+    "sha256": "078d89d7f56eaa3313bd11c613e8d199c2c67b0d81716286cebbcf115312764d"
   },
   "units": [
     {
@@ -1110,6 +1110,40 @@
         }
       ],
       "contractSha256": "c6ca8e280ab1cac9fe19355073b5ab3e92a4d6ff78a83cf63c0689a0d7a52c8f"
+    },
+    {
+      "id": "GS2-09.1",
+      "title": "Implement complete discovery",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": [
+        "GS2-08.9"
+      ],
+      "permissionCeiling": [
+        "repository-local additive complete-discovery types, canonical normalization, terminal-pagination and high-water validation, two-pass quiescence, deterministic replay, controlled evidence, validation, documentation and tests; read-only provider capture may be prepared separately against exact authorities",
+        "read-only consumption of the accepted GS2-08.9 receipt and protected V2-CALL-01.5b callable-discovery handoff is required; no GitHub mutation, migration manifest, transform, live-operation disposition, archive, rollback, receiver change, package publication, production writer enablement, cutover transition, OpenV2, acceptance receipt, completion claim or successor-unit authority"
+      ],
+      "exitGate": "the Q5 github-complete-discovery and Q6 github-complete-discovery-recovery contracts bind the exact accepted GS2-08.9 receipt, protected V2-CALL-01.5b handoff and current governing roadmap; the closed authority population covers every open and relevant closed issue, Project item and field, hierarchy and dependency edge, claim and event stream, review, delivery and release record, repository setting, workflow pin and receiver identity; every authority retains ordered stable subject identities, revisions and payload SHA-256 values, terminal pagination proof and a nonempty high-water mark; two complete non-overlapping reads over the same source revision must have identical normalized digests including authority population, high-water marks, page/item counts and subject facts; unknown authorities, missing or duplicated subjects, lost terminal pages, altered high-water marks, source drift, reordered identity, changed population and seal tampering refuse; deterministic fresh-process replay converges without network or provider mutation; source qualification does not claim live complete reads, migration, acceptance or successor authority",
+      "qGates": [
+        "Q5",
+        "Q6"
+      ],
+      "gateCommands": [
+        "github-complete-discovery-contract",
+        "github-complete-discovery-recovery-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-complete-discovery-contract",
+          "qGate": "Q5",
+          "commandSha256": "05a7b9d3936222d1328313478e1e7580b547ea800f355dcfee638803139660e1"
+        },
+        {
+          "id": "github-complete-discovery-recovery-contract",
+          "qGate": "Q6",
+          "commandSha256": "c7b4d930a4751020da2e65c0b135784144f774ce3052e05ba0ebc4f2f78bddf2"
+        }
+      ],
+      "contractSha256": "7110789f6b224da1c707c8cb2277b9751037d724c79655fb1c4660fd8191972c"
     },
     {
       "id": "GS2-09.9",
