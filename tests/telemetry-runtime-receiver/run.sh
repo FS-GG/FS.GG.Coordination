@@ -138,8 +138,20 @@ with sqlite3.connect(database.as_uri() + "?mode=ro", uri=True) as connection:
                input_count, cached_input, output_count, reasoning, total
         FROM runtime_turn_usage
     """).fetchall()
+    terminals = connection.execute("""
+        SELECT item_id, outcome, exit_code
+        FROM runtime_terminals
+    """).fetchall()
+    item_outcomes = connection.execute("SELECT count(*) FROM native_item_outcomes").fetchone()[0]
+    populations = connection.execute("SELECT count(*) FROM budget_population_facts").fetchone()[0]
 assert rows == [("UTEL-06.6", "receiver-test-thread", "gpt-5.6-sol", 12, 4, 5, 2, 17)], \
     "receiver test: expected exactly one attributed native token-usage observation"
+assert terminals == [("UTEL-06.6", "completed", 0)], \
+    "receiver test: expected exactly one successful process terminal"
+assert item_outcomes == 0, \
+    "receiver test: a process terminal must not invent a machine delivery outcome"
+assert populations == 0, \
+    "receiver test: a process terminal must not invent whole-item population completion"
 PY
 
-echo "telemetry runtime receiver: exact pin/config, native-result neutrality, byte-preserved JSONL and persisted token usage passed"
+echo "telemetry runtime receiver: exact pin/config, native-result neutrality, byte-preserved JSONL, persisted usage and delivery boundary passed"

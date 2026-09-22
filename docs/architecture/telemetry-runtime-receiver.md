@@ -30,6 +30,12 @@ an unavailable store, a full inbox, writer contention or reconciliation failure 
 turn native success into failure or hide native failure. Invalid private assignment or missing exact tool bytes is
 a pre-launch refusal, so no native delivery has occurred in that case.
 
+A `runtime-terminal` with outcome `completed` describes the observed Codex process only. It does not assert that
+the work item was delivered, close the whole-item population, or create a `native-item-outcome`. Those facts require
+the separately corroborated routine or orchestration delivery readback for the same item. Consequently, a private
+`item-detail/2` read can correctly show terminal native usage while its item outcome and population remain missing.
+
 `tests/telemetry-runtime-receiver/run.sh` restores the exact public package, checks its installed version, executes
 the real packaged adapter around a controlled Codex process, proves exact argument forwarding, injects observer
-loss, and verifies unchanged native success and failure statuses.
+loss, verifies unchanged native success and failure statuses, and checks that process completion does not fabricate
+delivery or whole-item completion.
