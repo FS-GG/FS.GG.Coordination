@@ -113,6 +113,17 @@ if grep -Eq 'observation publication incomplete|reconciliation pending' "$SCRATC
   exit 1
 fi
 
+python3 - "$SCRATCH/persisted.stdout" <<'PY'
+import pathlib
+import sys
+
+observed = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+assert observed == [
+    '{"type":"thread.started","thread_id":"receiver-test-thread"}',
+    '{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}',
+], "receiver test: adapter changed native Codex JSONL output"
+PY
+
 python3 - "$STORE" <<'PY'
 import pathlib
 import sqlite3
