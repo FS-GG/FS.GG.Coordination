@@ -20,9 +20,10 @@
     "cancelInProgress": true
   },
   "requiredGateCount": 10,
-  "requiredProjectCount": 23,
+  "requiredProjectCount": 24,
   "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
   "requiredProjects": [
+    "eng/telemetry-host-manager/TelemetryHostManager.fsproj",
     "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj",
     "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj",
     "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj",
