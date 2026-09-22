@@ -408,8 +408,8 @@ is owner registration evidence rather than an acceptance receipt; `.github`
 projection remains asynchronous.
 
 That historical pin remains part of the callable amendment. The active index now binds
-`.github` revision `38c48ab82f71a7fc162c5bb7cc4d9a11213f6ed2` and roadmap SHA-256
-`0a3f16cbee0085cbf2f299eb19cfa5c9ca3f42f9a9fd4d5230dcaa008a96553e` after GS2-09.1 acceptance.
+`.github` revision `f2660ee972432be93fbca1f2675921327e6f3147` and roadmap SHA-256
+`a32d27f3ffdd1dae3d51590f0173dbc3c7f4bcd53dba870c94984388c0fdba21` after GS2-09.2 acceptance.
 The unit registers the Q5 `github-complete-discovery-contract` and Q6
 `github-complete-discovery-recovery-contract`, consumes the accepted GS2-08.9 receipt and protected
 callable discovery handoff, and closes the discovery population over issues, Project items and fields,
