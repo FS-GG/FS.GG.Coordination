@@ -22,7 +22,7 @@ assert manifest == {
     "isRoot": True,
     "tools": {
         "fs.gg.coord.cli": {
-            "version": "0.87.0",
+            "version": "0.91.4",
             "commands": ["fsgg-coord-engine"],
             "rollForward": False,
         },
@@ -58,8 +58,8 @@ PY
 
 dotnet tool restore --tool-manifest "$MANIFEST" >/dev/null
 version="$(dotnet tool run fsgg-coord-engine -- --version)"
-[[ "$version" == "0.87.0.0" ]] || {
-  echo "receiver test: expected installed engine 0.87.0.0, got $version" >&2
+[[ "$version" == "0.91.4.0" ]] || {
+  echo "receiver test: expected installed engine 0.91.4.0, got $version" >&2
   exit 1
 }
 
