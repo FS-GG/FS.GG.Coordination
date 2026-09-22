@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-09.2",
+  "state": "accepted",
+  "unitContractSha256": "09ba8dd5283ee6012fafc00ab17b20c5aae52480f4bc60485605b0c9f84b5fd0",
+  "sourceRevision": "1ec51937bf898ec4ad6facb2aaf1528a98ca0432",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-09.1-receipt",
+      "sha256": "7e7a6b680e0133dd6ff4d0541e8c54cbd82c7b3c63bb56ad541d4bf12caeaf1c"
+    },
+    {
+      "name": "immutable-manifest-contract",
+      "sha256": "ab9bce120d1a87a4bc97cbd3378da00c2a8d2e756d1d42a30c775601c436ca0c"
+    },
+    {
+      "name": "protected-acceptance",
+      "sha256": "f055ac669d558c807dcc9dfb777676d5a14284a6fd502938d7ef6e2c691f484c"
+    },
+    {
+      "name": "immutable-manifest-interface",
+      "sha256": "34ff5f7c8a09dc2f950e74069f94b08de7c6c119e240ea780616c231f2916c99"
+    },
+    {
+      "name": "immutable-manifest-validator",
+      "sha256": "0f69faa56987e021ad19d55d78ac52d4acfd88985129d360298f30f4adfc711d"
+    },
+    {
+      "name": "immutable-manifest-implementation",
+      "sha256": "9b91c21fa6de3e7b03ccad198836ff78cff10ff6e52d2ac32b0b92d57decb694"
+    },
+    {
+      "name": "immutable-manifest-unit-tests",
+      "sha256": "e39d3155f726bd2368a4de90b24f62791fe294dd2d09e63a01ec838cc642f7d8"
+    },
+    {
+      "name": "immutable-manifest-architecture-tests",
+      "sha256": "e99ed7c7e8c950fa36e63d138d4cecb03506d4566129412d9485d1db73b3ff84"
+    }
+  ],
+  "acceptedAt": "2026-09-22T23:02:04Z",
+  "digest": "c0fb9c28cbcee5d87812a0844da4a65bcf2077a9559224065a603273a87de85d"
+}
