@@ -15,6 +15,35 @@ database process. The installed adapter creates prospective activation, expected
 event-time and terminal observations. Descendants call the same entrypoint without an assignment and inherit the
 closed invocation context; `--relation follow-up` identifies a follow-up instead of the default child relation.
 
+The launcher owns expected dispatch and lineage facts, but it cannot authorize a cross-item original/member
+relationship from a private assignment. For distinct roadmap member items that share one canonical original,
+first merge each exact member/original mapping into the protected
+`.github/docs/coordination/telemetry-original-item-assignments.json` registry. Before each member's root
+launch, invoke the protected work-roadmap adapter and require the exact applied result:
+
+```console
+python3 /path/to/protected/.github/tools/roadmap-telemetry.py \
+  population-only --feature <feature> --item <member> --original-item <original>
+# {"schema":"fsgg.telemetry.original-binding-result/1","status":"applied"}
+```
+
+The operation requires a receipt-scoped workspace, distinct member and original identities, exactly one matching
+registry assignment, and read access to the immutable protected `.github/main` revision. It persists private
+mode-`0600` retry state before submission and replays the exact batch after an unknown response. A changed retry,
+malformed state, unavailable protected revision, or missing or duplicate registry entry is a refusal. An
+unapplied or unknown receipt cannot return the applied result and retains the exact pending batch for retry. The
+successful operation publishes only the deterministic open `budget-population` fact; it does not create a second
+expected dispatch. A conflicting source population can be retained as evidence, but the store keeps the member
+open. The private root assignment's `itemId`
+must equal that member, and descendants retain the member through the inherited launcher context. Do not also
+invoke the roadmap adapter's `begin`, `started`, or `finish` operations for launcher-owned invocations.
+
+A member becomes complete only after its native item outcome is settled and every launcher-owned expected
+dispatch for that member has one joined lineage and terminal. A canonical two-member original is therefore
+complete only when both protected population facts are present and both distinct member items meet that rule.
+Missing authorization, a non-applied population receipt, conflicting original claims, or an unsettled dispatch
+keeps the affected member and the shared original open.
+
 The receiver configuration in `.fsgg/telemetry-runtime.json` is an explicit capability declaration. It permits
 only future repository-owned `codex-exec` launches. It does not discover historical sessions, scan transcripts,
 import an existing database, start a hosted daemon, mutate a provider, or claim coverage for platform-native
