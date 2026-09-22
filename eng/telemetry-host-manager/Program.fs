@@ -59,9 +59,9 @@ let private verifyHash path expected =
     if actual <> expected then fail "release archive SHA-256 differs"
     actual
 
-let private safeDirectory path =
+let private safeDirectory (path: string) =
+    if not (Path.IsPathFullyQualified path) then fail "absolute directory required"
     let full = Path.GetFullPath path
-    if not (Path.IsPathFullyQualified full) then fail "absolute directory required"
     if not (Regex.IsMatch(full, "^/[A-Za-z0-9_./-]+$")) then fail "installation root contains unsafe characters"
     let mutable current = DirectoryInfo full
     while not (isNull current) do
@@ -108,9 +108,11 @@ let private installEngine values =
         for directory in Directory.EnumerateDirectories(staging, "*", SearchOption.AllDirectories) do
             File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute)
         File.SetUnixFileMode(staging, UnixFileMode.UserRead ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute)
+        let observed = checkedCommand 30000 "/usr/bin/dotnet" [ Path.Combine(staging, "fsgg-coord-engine.dll"); "--version" ]
+        if observed <> version + ".0" then fail "engine package version readback differs"
         Directory.Move(staging, destination)
-        let observed = checkedCommand 30000 (Path.Combine(destination, "fsgg-coord-engine")) [ "--version" ]
-        if observed <> version + ".0" then fail "installed engine version readback differs"
+        let installed = checkedCommand 30000 (Path.Combine(destination, "fsgg-coord-engine")) [ "--version" ]
+        if installed <> observed then fail "installed engine version readback differs"
         printfn "%s" (json {| status = "installed"; version = version; packageSha256 = digest; path = destination |})
     finally
         if Directory.Exists staging then
@@ -179,7 +181,7 @@ let private copyExact (source: string) (destination: string) (mode: UnixFileMode
     let sourceInfo = FileInfo source
     if not sourceInfo.Exists || not (isNull sourceInfo.LinkTarget) then fail "installation source is unsafe"
     let parent = Path.GetDirectoryName destination |> safeDirectory
-    Directory.CreateDirectory parent |> ignore
+    checkedCommand 10000 "/usr/bin/install" [ "-d"; "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0700"; parent ] |> ignore
     let original = File.ReadAllBytes source
     if File.Exists destination then
         let existing = FileInfo destination
@@ -189,14 +191,20 @@ let private copyExact (source: string) (destination: string) (mode: UnixFileMode
         try
             File.WriteAllBytes(temporary, original)
             File.SetUnixFileMode(temporary, mode)
+            checkedCommand 10000 "/usr/bin/chown" [ serviceAccount + ":" + serviceAccount; temporary ] |> ignore
             File.Move(temporary, destination)
         finally
             if File.Exists temporary then File.Delete temporary
     File.SetUnixFileMode(destination, mode)
+    let installed = FileInfo destination
+    let expectedOwner = checkedCommand 10000 "/usr/bin/id" [ "-u"; serviceAccount ] |> int
+    if installed.UnixFileMode <> mode || File.GetUnixFileMode(destination) <> mode then fail "installed file mode differs"
+    let owner = checkedCommand 10000 "/usr/bin/stat" [ "-c"; "%u"; destination ] |> int
+    if owner <> expectedOwner then fail "installed file owner differs"
 
 let private installHostFiles values =
     only (Set.ofList [ "--systemadmin-root" ]) values
-    requireServiceAccount ()
+    if Environment.UserName <> "root" then fail "root required to install Host files"
     let root = required "--systemadmin-root" values |> safeDirectory
     let executable = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
     let privateFile = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
@@ -212,6 +220,8 @@ let private installHostFiles values =
         (Path.Combine(serviceHome, ".config/systemd/user/fsgg-telemetry-host-podman.service")) privateFile
     copyExact (Path.Combine(podman, "fsgg-telemetry-host-update.service.example"))
         (Path.Combine(serviceHome, ".config/systemd/user/fsgg-telemetry-host-update.service")) privateFile
+    copyExact (Path.Combine(podman, "fsgg-telemetry-host-update.timer.example"))
+        (Path.Combine(serviceHome, ".config/systemd/user/fsgg-telemetry-host-update.timer")) privateFile
     printfn "%s" (json {| status = "host-files-installed"; account = serviceAccount; unitsEnabled = false |})
 
 let private buildHostImage values =
@@ -286,14 +296,16 @@ let private installGuardDropins values =
     guard (Map.ofList [ "--host-id", hostId ]) |> ignore
     let units = [ "fsgg-telemetry-dashboard-publisher-member-v3.service"; "fsgg-telemetry-member-registry-update.service" ]
     let content = "[Service]\nExecCondition=" + manager + " guard --host-id " + hostId + "\n"
+    // Refuse conflicting drop-ins before writing either unit.
+    for unit in units do
+        let target = Path.Combine("/etc/systemd/system", unit + ".d", "active-publisher.conf")
+        if File.Exists target && File.ReadAllText target <> content then fail "existing publisher guard differs"
     for unit in units do
         let directory = Path.Combine("/etc/systemd/system", unit + ".d")
         Directory.CreateDirectory directory |> ignore
         File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute)
         let target = Path.Combine(directory, "active-publisher.conf")
-        if File.Exists target then
-            if File.ReadAllText target <> content then fail "existing publisher guard differs"
-        else
+        if not (File.Exists target) then
             let temporary = Path.Combine(directory, ".guard-" + Guid.NewGuid().ToString("N"))
             try
                 File.WriteAllText(temporary, content)

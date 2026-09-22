@@ -17,9 +17,11 @@ The current public writer is selected by
 `FS-GG/.github/main:telemetry-dashboard/active-publisher.json`. `guard` reads
 the protected `main` commit and then the selector at that exact commit. It
 returns 0 only for the selected host. Missing, malformed, or unreachable
-control refuses the run. Install its `ExecCondition` drop-ins on both the
-member-v3 publisher and the member registry updater before changing the
-selector. A second Host may collect telemetry, build images, and stage
+control refuses the run. For the initial deployment, merge the selector with
+the legacy Host named, verify `guard --host-id main-legacy` on that Host, then
+install its `ExecCondition` drop-ins on both the member-v3 publisher and the
+member registry updater. This sequence keeps the current publisher active
+while the inert selector is introduced. A second Host may collect telemetry, build images, and stage
 projections while its publisher stays inactive.
 
 The supported host aliases are operator-assigned, public identifiers such as
@@ -39,10 +41,10 @@ private item identifiers, or telemetry payloads in the selector.
    range, plus private empty state/config/backup directories. This avoids
    assuming the legacy Host's numeric 953/954 identities, which are already
    assigned to other accounts on the successor machine.
-3. Run `install-host-files --systemadmin-root ABSOLUTE_PATH` as that service
-   account with `HOME=/var/lib/fs-gg/telemetry-podman`. It installs exact
-   reviewed SystemAdmin wrapper, verifier, updater, and unit bytes into the
-   service account's private home. It does not enable or start the units.
+3. Run `install-host-files --systemadmin-root ABSOLUTE_PATH` as root. It
+   installs exact reviewed SystemAdmin wrapper, verifier, updater, and unit
+   bytes into the service account's private home with that account as owner.
+   It does not enable or start the units.
 4. Run `stage-host-assets` as root with the exact package, manifest, journal,
    their three GitHub SHA-256 digests, version, and reviewed verifier path.
    It verifies the release and copies it into the account's private
