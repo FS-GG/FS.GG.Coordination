@@ -100,6 +100,24 @@ described below when recovering a partial preparation.
    and Pages units remain absent/inactive on the second machine during this
    preparation.
 
+## Separate development dashboard
+
+While the old Host remains the only public publisher, the second machine may
+run its own Host on loopback with a newly enrolled development workspace and
+private dashboard. Use a distinct TLS authority, producer credential, browser
+principal, state root, and backup root. The development client must reach this
+private endpoint and prove authenticated health before its repository is
+activated prospectively. The new workspace may be initialized empty because it
+is independent development data; it is not a restored copy of the old Host.
+The SystemAdmin development-client procedure records a tested local Podman
+route for that setup.
+
+Keep every public publisher and registry updater absent or disabled on the
+second machine. A later public Host migration must restore a verified old-Host
+backup into a **different** state root, reconcile private identities, and pass
+the switch gate below. The development store and its activation receipts are
+not cross-host migration evidence.
+
 For existing installations, `update-host --updater PATH --config PATH` invokes
 the reviewed rootless Podman updater as the service account. Its own durable
 transaction and schema-range checks decide whether an update may activate.
