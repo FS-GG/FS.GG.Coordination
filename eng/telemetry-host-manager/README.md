@@ -121,6 +121,12 @@ not cross-host migration evidence.
 For existing installations, `update-host --updater PATH --config PATH` invokes
 the reviewed rootless Podman updater as the service account. Its own durable
 transaction and schema-range checks decide whether an update may activate.
+`migrate-host --updater PATH --config PATH --command-id ID
+--expected-current-image sha256:... --target-qualified-release telemetry-host/vX.Y.Z`
+passes an explicit schema 9→10 request to the rootless updater. The command
+is only for a release whose old-backup restore and isolated rollback have
+passed the disposable migration qualification; it does not relax the timer's
+same-schema guard.
 `backup-stopped-host --operator PATH --deployment PATH --backup-id ID
 --host-unit fsgg-telemetry-host-podman.service` invokes the reviewed wrapper
 only after the service account's user unit is inactive. Neither command

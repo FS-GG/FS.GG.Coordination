@@ -470,6 +470,23 @@ let private runHostUpdater values =
     let output = checkedCommand 900000 "/usr/bin/python3" [ updater; "--config"; config ]
     printfn "%s" output
 
+let private migrateHost values =
+    only (Set.ofList [ "--updater"; "--config"; "--command-id"; "--expected-current-image"; "--target-qualified-release" ]) values
+    requireServiceAccount ()
+    let updater = required "--updater" values |> Path.GetFullPath
+    let config = required "--config" values |> Path.GetFullPath
+    let commandId = required "--command-id" values
+    let expectedImage = required "--expected-current-image" values
+    let target = required "--target-qualified-release" values
+    if not (Regex.IsMatch(commandId, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")) then fail "invalid migration command ID"
+    if not (Regex.IsMatch(expectedImage, "^sha256:[0-9a-f]{64}$")) then fail "invalid expected current image ID"
+    if not (Regex.IsMatch(target, "^telemetry-host/v[0-9]+[.][0-9]+[.][0-9]+$")) then fail "invalid qualified target release"
+    let output = checkedCommand 900000 "/usr/bin/python3"
+                    [ updater; "--config"; config; "--command-id"; commandId;
+                      "--expected-current-image"; expectedImage;
+                      "--target-qualified-release"; target; "--schema-migration" ]
+    printfn "%s" output
+
 let private backup values =
     only (Set.ofList [ "--operator"; "--deployment"; "--backup-id"; "--host-unit" ]) values
     let name = required "--backup-id" values
@@ -518,10 +535,11 @@ let main arguments =
         | "verify-host-release" :: rest -> verifyHostRelease (options rest); 0
         | "verify-engine-release" :: rest -> verifyEngineRelease (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
+        | "migrate-host" :: rest -> migrateHost (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|migrate-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message
