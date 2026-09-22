@@ -230,9 +230,16 @@ let private copyExact (source: string) (destination: string) (mode: UnixFileMode
     if owner <> expectedOwner then fail "installed file owner differs"
 
 let private installHostFiles values =
-    only (Set.ofList [ "--systemadmin-root" ]) values
+    only (Set.ofList [ "--systemadmin-root"; "--commit" ]) values
     if Environment.UserName <> "root" then fail "root required to install Host files"
     let root = required "--systemadmin-root" values |> safeDirectory
+    let expectedCommit = required "--commit" values
+    if not (sha40 expectedCommit) then fail "SystemAdmin commit must be a full SHA"
+    let observedCommit = checkedCommand 30000 "/usr/bin/git" [ "-C"; root; "rev-parse"; "HEAD" ]
+    if observedCommit <> expectedCommit then fail "SystemAdmin source commit differs"
+    let sourcePaths = [ "Services/telemetry-host-podman"; "Services/telemetry-host" ]
+    let clean, _, _ = command 30000 "/usr/bin/git" ([ "-C"; root; "diff"; "--quiet"; "HEAD"; "--" ] @ sourcePaths)
+    if clean <> 0 then fail "reviewed SystemAdmin source paths are dirty"
     let executable = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
     let privateFile = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
     let podman = Path.Combine(root, "Services/telemetry-host-podman")
@@ -369,7 +376,7 @@ let private backup values =
 
 let private prepareInert values =
     if Environment.UserName <> "root" then fail "root required to prepare inert Host"
-    let allowed = Set.ofList [ "--systemadmin-root"; "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version"; "--engine-package"; "--engine-sha256"; "--engine-manifest"; "--engine-manifest-sha256"; "--engine-version"; "--engine-root" ]
+    let allowed = Set.ofList [ "--systemadmin-root"; "--systemadmin-commit"; "--package"; "--manifest"; "--journal"; "--package-sha256"; "--manifest-sha256"; "--journal-sha256"; "--version"; "--engine-package"; "--engine-sha256"; "--engine-manifest"; "--engine-manifest-sha256"; "--engine-version"; "--engine-root" ]
     only allowed values
     let root = required "--systemadmin-root" values |> safeDirectory
     let verifier = Path.Combine(root, "Services/telemetry-host/telemetry_host_release.py")
@@ -379,7 +386,7 @@ let private prepareInert values =
     verifyEngineManifest (required "--engine-manifest" values) (required "--engine-manifest-sha256" values) (required "--engine-version" values) (required "--engine-sha256" values)
     installEngine engineValues
     createAccount ()
-    installHostFiles (Map.ofList [ "--systemadmin-root", root ])
+    installHostFiles (Map.ofList [ "--systemadmin-root", root; "--commit", required "--systemadmin-commit" values ])
     stageHostAssets assetValues
     printfn "%s" (json {| status = "inert-host-prepared"; account = serviceAccount; servicesStarted = false; unitsEnabled = false |})
 

@@ -33,7 +33,7 @@ private item identifiers, or telemetry payloads in the selector.
 `prepare-inert` combines verified CLI engine installation, account creation,
 reviewed file installation, and atomic Host release staging in one root
 invocation. Supply
-`--systemadmin-root`, `--package`, `--manifest`, `--journal`,
+`--systemadmin-root`, `--systemadmin-commit`, `--package`, `--manifest`, `--journal`,
 `--package-sha256`, `--manifest-sha256`, `--journal-sha256`, `--version`,
 `--engine-package`, `--engine-sha256`, `--engine-manifest`,
 `--engine-manifest-sha256`, `--engine-version`, and `--engine-root`.
@@ -51,7 +51,9 @@ described below when recovering a partial preparation.
    range, plus private empty state/config/backup directories. This avoids
    assuming the legacy Host's numeric 953/954 identities, which are already
    assigned to other accounts on the successor machine.
-3. Run `install-host-files --systemadmin-root ABSOLUTE_PATH` as root. It
+3. Run `install-host-files --systemadmin-root ABSOLUTE_PATH --commit FULL_SHA`
+   as root. It requires the exact reviewed SystemAdmin commit and clean
+   Host source paths, then
    installs exact reviewed SystemAdmin wrapper, verifier, updater, and unit
    bytes into the service account's private home with that account as owner.
    It does not enable or start the units.
