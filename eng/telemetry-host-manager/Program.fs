@@ -120,6 +120,36 @@ let private installEngine values =
             for directory in Directory.EnumerateDirectories(staging, "*", SearchOption.AllDirectories) do File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
             Directory.Delete(staging, true)
 
+let private installManager values =
+    only (Set.ofList [ "--root"; "--version" ]) values
+    if Environment.UserName <> "root" then fail "root required to install manager"
+    let root = required "--root" values |> safeDirectory
+    let version = required "--version" values
+    if not (Regex.IsMatch(version, "^[0-9]+[.][0-9]+[.][0-9]+$")) then fail "invalid manager version"
+    let source = AppContext.BaseDirectory
+    let names = [ "TelemetryHostManager"; "TelemetryHostManager.dll"; "TelemetryHostManager.deps.json"; "TelemetryHostManager.runtimeconfig.json"; "FSharp.Core.dll" ]
+    let destination = Path.Combine(root, version)
+    Directory.CreateDirectory root |> ignore
+    if Directory.Exists destination || File.Exists destination then fail "manager version already exists; inspect it before replacement"
+    let staging = Path.Combine(root, ".manager-" + Guid.NewGuid().ToString("N"))
+    Directory.CreateDirectory staging |> ignore
+    try
+        let receipts =
+            names |> List.map (fun name ->
+                let original = Path.Combine(source, name)
+                let info = FileInfo original
+                if not info.Exists || not (isNull info.LinkTarget) then fail "manager source file unsafe"
+                let bytes = File.ReadAllBytes original
+                let target = Path.Combine(staging, name)
+                File.WriteAllBytes(target, bytes)
+                File.SetUnixFileMode(target, if name = "TelemetryHostManager" then UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute else UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.GroupRead ||| UnixFileMode.OtherRead)
+                name, sha256 bytes)
+        File.SetUnixFileMode(staging, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute)
+        Directory.Move(staging, destination)
+        printfn "%s" (json {| status = "manager-installed"; version = version; path = destination; files = receipts |})
+    finally
+        if Directory.Exists staging then Directory.Delete(staging, true)
+
 let private verifyHostRelease values =
     only (Set.ofList [ "--package"; "--manifest"; "--sha256"; "--verifier" ]) values
     let package = required "--package" values |> Path.GetFullPath
@@ -407,6 +437,7 @@ let main arguments =
         | "guard" :: rest -> guard (options rest)
         | "install-guard-dropins" :: rest -> installGuardDropins (options rest); 0
         | "install-engine" :: rest -> installEngine (options rest); 0
+        | "install-manager" :: rest -> installManager (options rest); 0
         | "create-host-account" :: [] -> createAccount (); 0
         | "prepare-rootless-runtime" :: [] -> prepareRootlessRuntime (); 0
         | "stage-host-assets" :: rest -> stageHostAssets (options rest); 0
@@ -418,7 +449,7 @@ let main arguments =
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|guard|install-guard-dropins|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message

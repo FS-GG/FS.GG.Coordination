@@ -13,6 +13,14 @@ dotnet build eng/telemetry-host-manager/TelemetryHostManager.fsproj --no-restore
 dotnet run --project eng/telemetry-host-manager/TelemetryHostManager.fsproj -- status
 ```
 
+Publish the framework-dependent Linux executable with `dotnet publish -c
+Release -o ABSOLUTE_STAGING_DIRECTORY`, then run its `install-manager --root
+/opt/fs-gg/telemetry-host-manager --version VERSION` command as root. It
+copies the required files into a new, root-owned version directory. Use that
+absolute executable path for systemd guards and service-account operations.
+Each manager update gets a new version directory; existing versions are never
+overwritten.
+
 The current public writer is selected by
 `FS-GG/.github/main:telemetry-dashboard/active-publisher.json`. `guard` reads
 the protected `main` commit and then the selector at that exact commit. It
