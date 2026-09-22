@@ -101,6 +101,7 @@ let private vulnerabilityJson projectCount vulnerable =
 
     let requiredProjects =
         [
+            "eng/telemetry-host-manager/TelemetryHostManager.fsproj"
             "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj"
             "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
             "src/FS.GG.Coordination.Core/FS.GG.Coordination.Core.fsproj"
@@ -1112,7 +1113,7 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
 
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 300)
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 302)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
@@ -1433,14 +1434,14 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 23 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 24 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
-[<InlineData(23, true, "vulnerable-package")>]
+[<InlineData(24, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error =
         validateVulnerability (vulnerabilityJson projectCount vulnerable)
@@ -1485,7 +1486,7 @@ let ``incomplete vulnerability parameters are rejected`` () =
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
     let report =
-        (vulnerabilityJson 23 false)
+        (vulnerabilityJson 24 false)
             .Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
 
     let exitCode, _, error = validateVulnerability report
