@@ -81,6 +81,10 @@ described below when recovering a partial preparation.
    installs exact reviewed SystemAdmin wrapper, verifier, updater, and unit
    bytes into the service account's private home with that account as owner.
    It does not enable or start the units.
+   For an existing installation, use `update-host-files` with the same exact
+   source and commit options. It refuses absent, linked or foreign-owned
+   targets and atomically replaces only this fixed file inventory. It also
+   leaves all units disabled and stopped.
 4. Run `stage-host-assets` as root with the exact package, manifest, journal,
    their three GitHub SHA-256 digests, version, and reviewed verifier path.
    It verifies the release and copies it into the account's private
