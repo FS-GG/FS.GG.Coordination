@@ -2154,6 +2154,46 @@ type ExecutorRuntimeTests() =
         Assert.True((kinds = set [ "runtime-start"; "runtime-turn-usage"; "runtime-terminal" ]))
 
     [<Fact>]
+    member _.``concurrent telemetry admission respects the bounded outbox``() =
+        task {
+            let root = Directory.CreateTempSubdirectory("telemetry-admission-").FullName
+            let publisher =
+                TelemetryCliPublisher
+                    {
+                        Executable = "/missing/client"
+                        Config = "/missing/config"
+                        CredentialFile = "/missing/credential"
+                        CertificateAuthorityFile = "/missing/ca"
+                        Outbox = Path.Combine(root, "outbox")
+                        Repository = "FS-GG/.github"
+                        BindingDigest = String.replicate 64 "a"
+                    }
+
+            let payload = Encoding.UTF8.GetBytes "{\"fixture\":true}"
+
+            for index in 1 .. 120 do
+                Assert.True(Result.isOk (publisher.Queue($"batch-seed-{index}", payload)))
+
+            use start = new ManualResetEventSlim(false)
+            let attempts =
+                [| for index in 1 .. 32 ->
+                       Task.Factory.StartNew(
+                           (fun () ->
+                               start.Wait()
+                               publisher.Queue($"batch-concurrent-{index}", payload)),
+                           CancellationToken.None,
+                           TaskCreationOptions.LongRunning,
+                           TaskScheduler.Default
+                       ) |]
+
+            start.Set()
+            let! outcomes = Task.WhenAll attempts
+            Assert.Equal(8, outcomes |> Array.filter Result.isOk |> Array.length)
+            Assert.Equal(24, outcomes |> Array.filter ((=) (Error "telemetry-outbox-overload")) |> Array.length)
+            Assert.Equal(128, publisher.PendingCount)
+        }
+
+    [<Fact>]
     member _.``publisher pump drains more than sixteen batches after restart``() =
         task {
             let root = Directory.CreateTempSubdirectory("telemetry-pump-").FullName
