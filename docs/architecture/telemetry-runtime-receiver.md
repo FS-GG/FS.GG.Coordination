@@ -1,6 +1,6 @@
 # Prospective telemetry runtime receiver
 
-Coordination selects the published `FS.GG.Coord.Cli` `0.87.0` dotnet tool through the repository-root
+Coordination selects the published `FS.GG.Coord.Cli` `0.91.4` dotnet tool through the repository-root
 manifest. `eng/codex-exec.sh` is the repository-owned launch and dispatch boundary for future Codex work:
 
 ```bash

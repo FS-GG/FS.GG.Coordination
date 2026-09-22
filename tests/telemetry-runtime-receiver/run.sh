@@ -22,7 +22,7 @@ assert manifest == {
     "isRoot": True,
     "tools": {
         "fs.gg.coord.cli": {
-            "version": "0.87.0",
+            "version": "0.91.4",
             "commands": ["fsgg-coord-engine"],
             "rollForward": False,
         },
@@ -58,8 +58,8 @@ PY
 
 dotnet tool restore --tool-manifest "$MANIFEST" >/dev/null
 version="$(dotnet tool run fsgg-coord-engine -- --version)"
-[[ "$version" == "0.87.0.0" ]] || {
-  echo "receiver test: expected installed engine 0.87.0.0, got $version" >&2
+[[ "$version" == "0.91.4.0" ]] || {
+  echo "receiver test: expected installed engine 0.91.4.0, got $version" >&2
   exit 1
 }
 
@@ -112,6 +112,17 @@ if grep -Eq 'observation publication incomplete|reconciliation pending' "$SCRATC
   echo "receiver test: isolated store publication or reconciliation failed" >&2
   exit 1
 fi
+
+python3 - "$SCRATCH/persisted.stdout" <<'PY'
+import pathlib
+import sys
+
+observed = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
+assert observed == [
+    '{"type":"thread.started","thread_id":"receiver-test-thread"}',
+    '{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}',
+], "receiver test: adapter changed native Codex JSONL output"
+PY
 
 python3 - "$STORE" <<'PY'
 import pathlib
