@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-09.1",
+  "state": "accepted",
+  "unitContractSha256": "7110789f6b224da1c707c8cb2277b9751037d724c79655fb1c4660fd8191972c",
+  "sourceRevision": "49f4f7ad3a1f616a771645570e317f98bfd1a676",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-08.9-receipt",
+      "sha256": "5763daf077fa1eb271bd65fd6a77b0e53b4deee63fcdb44842ca1462a5f3c5f5"
+    },
+    {
+      "name": "callable-discovery-handoff",
+      "sha256": "b71ab73cb6c9fa98a250c9b4a97b1c6df1c969cc1165699428f79041c1ea6235"
+    },
+    {
+      "name": "complete-discovery-contract",
+      "sha256": "b7cb73218c80b5b2b6536e648542a2afbaefc672897aeb510cdc67fa33767f27"
+    },
+    {
+      "name": "protected-acceptance",
+      "sha256": "d355fe928c567e8a8f06a25c79e1a8e53e84486551878712837b7660cab40dee"
+    },
+    {
+      "name": "complete-discovery-validator",
+      "sha256": "2e535e4ea7679ca26dea3596f01f9a5dfd25e2de16d26d57192a8a05f559c11c"
+    },
+    {
+      "name": "complete-discovery-implementation",
+      "sha256": "fff487a234ce1f98348c881d752837eca3318fe9265b8afaff4082a22203f5c2"
+    },
+    {
+      "name": "complete-discovery-unit-tests",
+      "sha256": "09e2eec73e60c580866f2c12a5f04e9b2a7dc9243a5403260db2b3d4a351a415"
+    },
+    {
+      "name": "complete-discovery-architecture-tests",
+      "sha256": "cf4e5a41d3388960cba2c13f806642e2b07d3f08ca64363565a2113b68a33875"
+    }
+  ],
+  "acceptedAt": "2026-09-22T21:06:16Z",
+  "digest": "9cb3eb947ea4637ddb8452c9fdecd781d46101187e35958620884f4348651613"
+}
