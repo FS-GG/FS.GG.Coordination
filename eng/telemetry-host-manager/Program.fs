@@ -245,7 +245,14 @@ let private copyExact (source: string) (destination: string) (mode: UnixFileMode
     let sourceInfo = FileInfo source
     if not sourceInfo.Exists || not (isNull sourceInfo.LinkTarget) then fail "installation source is unsafe"
     let parent = Path.GetDirectoryName destination |> safeDirectory
-    checkedCommand 10000 "/usr/bin/install" [ "-d"; "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0700"; parent ] |> ignore
+    let relative = Path.GetRelativePath(serviceHome, parent)
+    if relative = "." || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathFullyQualified relative then fail "installation target escaped service home"
+    let mutable current = serviceHome
+    for segment in relative.Split(Path.DirectorySeparatorChar) do
+        current <- Path.Combine(current, segment)
+        let directory = DirectoryInfo current
+        if directory.Exists && not (isNull directory.LinkTarget) then fail "service directory symlink refused"
+        checkedCommand 10000 "/usr/bin/install" [ "-d"; "-o"; serviceAccount; "-g"; serviceAccount; "-m"; "0700"; current ] |> ignore
     let original = File.ReadAllBytes source
     if File.Exists destination then
         let existing = FileInfo destination
