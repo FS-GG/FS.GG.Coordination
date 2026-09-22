@@ -1,0 +1,132 @@
+{
+  "schema": "fsgg.coordination.callable-discovery-handoff/1",
+  "item": "V2-CALL-01.5b",
+  "originalItem": "V2-CALL-01.5",
+  "packet": {
+    "item": "V2-CALL-01.5a",
+    "repository": "FS-GG/FS.GG.Coordination",
+    "pullRequest": 464,
+    "candidateHead": "97b2d926888756521c9f8ac030e16d48b0614053",
+    "protectedMerge": "1de1393750951065eb38950586bc6aefe24e264b",
+    "protectedMergeTree": "0bf52745f017098eedee92a95c437f36743969a0",
+    "path": "evidence/github-substrate-v2/gs2-09-9/callable-readiness.json",
+    "blob": "51e584d6f54a990c47e58fc586f998c303d34369",
+    "sha256": "3a17f123ea95c75b3411cda667d09d96443613e32829c97b8613c043f8a38501",
+    "validator": {
+      "path": "eng/validate-callable-readiness.py",
+      "blob": "c4a00076ce03bb028195595a9510b6bba6e8e1f7",
+      "sha256": "da0c9c090c5d27faf9bb147f3b1d1b73826db89c50c1abdf5722bbaebd96c1b1"
+    }
+  },
+  "consumer": {
+    "roadmapRepository": "FS-GG/.github",
+    "roadmapRevision": "673c42d223ec3f0fa0a6dfaddc93edf7a25427c2",
+    "roadmapPath": "docs/github-substrate-v2-roadmap.md",
+    "roadmapBlob": "c660ca4c4d7d34f05088dfb61a0ec6137659deb0",
+    "roadmapSha256": "f437381531c994b6c602b740f05511fae45b882c668211e5d90b2cbbb70aa43c",
+    "populationMappingPath": "docs/coordination/telemetry-original-item-assignments.json",
+    "populationMappingBlob": "6074f6d69396e3e0a4b3f20838425904ab7bd998",
+    "populationMappingSha256": "a58d2458ebc8a9065559ff086df8c06856887babdee7542fe431017fbf5f8d17",
+    "parent": "GS2-09",
+    "firstGate": "GS2-09.1"
+  },
+  "runtimeInterface": {
+    "packageId": "FS.GG.Coordination.Cli",
+    "version": "0.1.1",
+    "command": "fsgg-coordination",
+    "managedCommandPath": "tools/net10.0/any/FS.GG.Coordination.Cli.dll",
+    "managedCommandSha256": "971dab56a82738e0b9a79114ae009a1ae0c18b8b26ad5906ec449f6aac00fef5",
+    "interpreter": "FS.GG.Coordination.Cli.DeliveryCommand",
+    "operatorInterpreter": "eng/callable-cli-isolated-operation.py",
+    "operatorInterpreterSha256": "e35f525b3c17c5c870d08d5d8d2fc3caa661fe98374c38463c6e2018575d6046",
+    "operations": [
+      "delivery inspect",
+      "delivery plan",
+      "delivery advance"
+    ],
+    "schemas": [
+      "fsgg.coordination.callable-isolated-admission-observation/1",
+      "fsgg.coordination.callable-isolated-creation-plan/1",
+      "fsgg.coordination.callable-isolated-creation-progress/1",
+      "fsgg.coordination.callable-isolated-creation-receipt/1",
+      "fsgg.coordination.callable-isolated-execution-plan/1",
+      "fsgg.coordination.callable-isolated-operation-contract/4",
+      "fsgg.coordination.callable-isolated-operation-grant-artifact-envelope/1",
+      "fsgg.coordination.callable-isolated-operation-grant/1",
+      "fsgg.coordination.callable-isolated-operation-inspection/1",
+      "fsgg.coordination.callable-isolated-operation-preflight/1",
+      "fsgg.coordination.callable-isolated-operation-progress/1",
+      "fsgg.coordination.callable-isolated-operation-proposal/4",
+      "fsgg.coordination.callable-isolated-operation-receipt/1",
+      "fsgg.coordination.ordinary-delivery-journal/1",
+      "fsgg.coordination.ordinary-delivery-plan/2"
+    ]
+  },
+  "recoveryPreconditions": [
+    "exact package, receiver, contract, operation, target, source, base, checks, epoch, policy and journal identities",
+    "distinct protected and unexpired grant plus exact credential roles and permissions",
+    "complete authorized and supported observation with every required check passed",
+    "OpenV2 epoch for the admitted synthetic target and an unchanged decision observation before effect",
+    "durable intent before dispatch and authoritative effect and journal readback before retry or settlement",
+    "fresh capability readback, exact installed plan and immutable repository identity",
+    "persisted cleanup intent and same-repository-id readback before cleanup settlement"
+  ],
+  "recovery": {
+    "observation": "Incomplete pages, observer failure, unauthorized or unsupported state refuse; absence is accepted only when authoritatively proven.",
+    "decision": "Source, base, checks, epoch, policy or subject drift refuses before dispatch; the sealed plan and operation identity remain immutable.",
+    "journal": "Intent precedes effect; unknown dispatch and lost journal acknowledgements resume by exact sharded-journal and native-effect readback; settled replay returns AdvanceAlreadySettled without another dispatch.",
+    "cleanup": "Cleanup resumes only from persisted intent and settles only after authoritative 404 for the same repository id."
+  },
+  "permissionCeiling": {
+    "scope": "one admitted public synthetic disposable repository",
+    "effect": "ordinary-source-delivery",
+    "installedExecution": {
+      "administration": "read",
+      "checks": "read",
+      "contents": "write",
+      "metadata": "read",
+      "pull_requests": "write"
+    },
+    "operationRoles": {
+      "authorityObserver": ["actions:read", "contents:read", "metadata:read"],
+      "reviewerMembershipObserver": ["members:read", "metadata:read"],
+      "creation": ["administration:write", "metadata:read"],
+      "setup": ["actions:write", "administration:write", "checks:read", "contents:write", "metadata:read", "pull_requests:write", "workflows:write"],
+      "execution": ["administration:read", "checks:read", "contents:write", "metadata:read", "pull_requests:write"],
+      "cleanup": ["administration:write", "metadata:read"]
+    },
+    "forbidden": [
+      "billing-or-entitlement-change",
+      "credential-or-app-provisioning",
+      "effect-before-protected-grant-and-fresh-capability-readback",
+      "fleet-epoch-mutation",
+      "migration-or-cutover",
+      "private-target-visibility-change",
+      "production-target",
+      "production-writer-enable",
+      "release-or-publication"
+    ]
+  },
+  "historicalNativeAcceptance": {
+    "labels": ["V2-CALL-01.4b", "V2-CALL-01.4c"],
+    "operationIdentity": "v2-call-01-4b-isolated-native-v1",
+    "contractSha256": "ac44c8b20dec09975f5cd17f134c4b17115ba3051ceb95e13e2a3ccdd0a050ff"
+  },
+  "pendingGates": [
+    {"name": "discovery", "unit": "GS2-09.1", "status": "pending", "independent": true},
+    {"name": "manifest", "unit": "GS2-09.2", "status": "pending", "independent": true},
+    {"name": "transform", "unit": "GS2-09.3", "status": "pending", "independent": true},
+    {"name": "archive", "unit": "GS2-09.5", "status": "pending", "independent": true},
+    {"name": "rollback", "unit": "GS2-09.6", "status": "pending", "independent": true},
+    {"name": "representative-rehearsal", "unit": "GS2-09.7", "status": "pending", "independent": true},
+    {"name": "omission", "unit": "GS2-09.8", "status": "pending", "independent": true}
+  ],
+  "completionClaim": "Receipt of the protected callable-readiness packet by GS2-09 discovery only.",
+  "notAccepted": [
+    "GS2-09 discovery or migration",
+    "migration manifest, transform, live-operation handling, archive, rollback, omission or representative rehearsal",
+    "OpenV2",
+    "Q4",
+    "production default"
+  ]
+}

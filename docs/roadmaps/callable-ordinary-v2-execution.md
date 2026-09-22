@@ -182,7 +182,7 @@ are never acceptance evidence.
     [`native-acceptance.json`](../../evidence/github-substrate-v2/gs2-09-9/native-acceptance.json) and its
     offline validator, which compare the interrupted `cli-intent` checkpoint with the final sealed receipt,
     exact installed plan, PR identity, settled sharded journal, fresh-process no-op replay and cleanup readback.
-- [ ] **V2-CALL-01.5 — Hand off exact callable readiness to GS2-09 migration.** Add durable evidence under
+- [x] **V2-CALL-01.5 — Hand off exact callable readiness to GS2-09 migration.** Add durable evidence under
   `evidence/github-substrate-v2/gs2-09-9/` binding source/release and package/feed hashes, the adopting receiver
   revision, installed commands and schemas, interpreter identity and permission ceiling, preconditions,
   observation/decision/journal recovery behavior, native acceptance, and known limitations. Supply those exact
@@ -195,11 +195,13 @@ are never acceptance evidence.
     This protected Coordination delivery adds the independently checkable
     [`callable-readiness.json`](../../evidence/github-substrate-v2/gs2-09-9/callable-readiness.json) packet and
     public-identity validator without broadening the installed permission ceiling or relabeling `.4b`/`.4c`.
-  - [ ] **V2-CALL-01.5b — Hand the packet to GS2-09 discovery.** In a separate protected Coordination delivery,
+  - [x] **V2-CALL-01.5b — Hand the packet to GS2-09 discovery.** In a separate protected Coordination delivery,
     record the exact `.5a` packet identity, the callable runtime interface and recovery preconditions that
     discovery can consume, and the independently pending discovery, manifest, transform, archive, rollback,
-    omission and representative-rehearsal gates. Completion proves receipt of the callable handoff only; it
-    does not accept migration, `OpenV2`, Q4, or a production default.
+    omission and representative-rehearsal gates. The independently checkable
+    [`callable-discovery-handoff.json`](../../evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json)
+    binds that receipt without broadening the installed permission ceiling. Completion proves receipt of the
+    callable handoff only; it does not accept migration, `OpenV2`, Q4, or a production default.
 
 Workspace and telemetry disposition: `.4a` added qualification source and an installed harness but changed no
 provider or lifecycle default. Its original 0.1.0 freeze ended when the observed App-token defect required
