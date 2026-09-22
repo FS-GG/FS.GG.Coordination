@@ -117,11 +117,12 @@ python3 - "$SCRATCH/persisted.stdout" <<'PY'
 import pathlib
 import sys
 
-observed = pathlib.Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
-assert observed == [
-    '{"type":"thread.started","thread_id":"receiver-test-thread"}',
-    '{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}',
-], "receiver test: adapter changed native Codex JSONL output"
+observed = pathlib.Path(sys.argv[1]).read_bytes()
+expected = b"\n".join([
+    b'{"type":"thread.started","thread_id":"receiver-test-thread"}',
+    b'{"type":"turn.completed","usage":{"input_tokens":12,"cached_input_tokens":4,"output_tokens":5,"reasoning_output_tokens":2}}',
+]) + b"\n"
+assert observed == expected, "receiver test: adapter changed native Codex JSONL bytes"
 PY
 
 python3 - "$STORE" <<'PY'
@@ -141,4 +142,4 @@ assert rows == [("UTEL-06.6", "receiver-test-thread", "gpt-5.6-sol", 12, 4, 5, 2
     "receiver test: expected exactly one attributed native token-usage observation"
 PY
 
-echo "telemetry runtime receiver: exact pin/config, native-result neutrality and persisted token usage passed"
+echo "telemetry runtime receiver: exact pin/config, native-result neutrality, byte-preserved JSONL and persisted token usage passed"
