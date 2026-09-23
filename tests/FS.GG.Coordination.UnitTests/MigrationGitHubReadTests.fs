@@ -38,13 +38,24 @@ let private issue number nodeId =
 let private relationNode id repositoryId =
     $"""{{"id":"{id}","repository":{{"databaseId":{repositoryId}}}}}"""
 
-let private relationConnection (nodes: string list) hasNext =
+let private relationPage (nodes: string list) total hasNext cursor =
     let joined = String.concat "," nodes
-    $"""{{"totalCount":{nodes.Length},"nodes":[{joined}],"pageInfo":{{"hasNextPage":{(if hasNext then "true" else "false")},"endCursor":null}}}}"""
+    let cursorJson = cursor |> Option.map (fun value -> $"\"{value}\"") |> Option.defaultValue "null"
+    $"""{{"totalCount":{total},"nodes":[{joined}],"pageInfo":{{"hasNextPage":{(if hasNext then "true" else "false")},"endCursor":{cursorJson}}}}}"""
+
+let private relationConnection (nodes: string list) hasNext =
+    relationPage nodes nodes.Length hasNext None
 
 let private relationReply id number parent children blockers blocking =
     let parentJson = parent |> Option.defaultValue "null"
     $"""{{"data":{{"node":{{"id":"{id}","number":{number},"updatedAt":"2026-09-23T10:00:00Z","repository":{{"databaseId":42}},"parent":{parentJson},"subIssues":{relationConnection children false},"blockedBy":{relationConnection blockers false},"blocking":{relationConnection blocking false}}}}}}}"""
+
+let private relationInitialBlocking connection =
+    let empty = relationConnection [] false
+    $"""{{"data":{{"node":{{"id":"ISSUE_1","number":1,"updatedAt":"2026-09-23T10:00:00Z","repository":{{"databaseId":42}},"parent":null,"subIssues":{empty},"blockedBy":{empty},"blocking":{connection}}}}}}}"""
+
+let private relationContinuationBlocking connection =
+    $"""{{"data":{{"node":{{"id":"ISSUE_1","number":1,"updatedAt":"2026-09-23T10:00:00Z","repository":{{"databaseId":42}},"blocking":{connection}}}}}}}"""
 
 type private FakeTransport(responses: TransportOutcome list) =
     let queue = Queue<TransportOutcome>(responses)
@@ -105,11 +116,59 @@ let ``native relation reader refuses nested truncation and partial GraphQL data`
     let first =
         $"""{{"data":{{"node":{{"id":"ISSUE_1","number":1,"updatedAt":"2026-09-23T10:00:00Z","repository":{{"databaseId":42}},"parent":null,"subIssues":{truncated},"blockedBy":{empty},"blocking":{empty}}}}}}}"""
     let transport = FakeTransport [ ok Map.empty first ]
-    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "subIssues:nested-continuation"),
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "subIssues:missing-end-cursor-or-page"),
                  MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport)
     let partial = FakeTransport [ ok Map.empty $"""{{"data":{{"node":null}},"errors":[{{"message":"forbidden"}}]}}""" ]
     Assert.Equal(Error MigrationReadFailure.GraphQLErrors,
                  MigrationGitHubRead.readNativeRelations options (issueCensus ()) partial)
+
+[<Fact>]
+let ``native relation reader follows a connection cursor and retains every provider page`` () =
+    let first = relationInitialBlocking (relationPage [relationNode "EXTERNAL_A" 77L] 2 true (Some "cursor-1"))
+    let continuation = relationContinuationBlocking (relationPage [relationNode "EXTERNAL_B" 77L] 2 false None)
+    let second = relationReply "ISSUE_2" 2 None [] [] []
+    let transport = FakeTransport [ ok Map.empty first; ok Map.empty continuation; ok Map.empty second ]
+    match MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport with
+    | Ok population ->
+        Assert.Equal(2, population.Edges.Length)
+        Assert.Equal(2, population.ExternalEdgeCount)
+        let evidence = population.Issues.Head.ContinuationPages
+        Assert.Single(evidence) |> ignore
+        Assert.Equal("blocking", evidence.Head.Connection)
+        Assert.Equal("cursor-1", evidence.Head.RequestedCursor)
+        let digest = evidence.Head.PayloadJson |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                     |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(evidence.Head.PayloadSha256, digest)
+        match transport.Requests.[1] with
+        | GraphQL request ->
+            Assert.Equal("cursor-1", request.Variables.["after"])
+            Assert.Contains("blocking(first:100,after:$after)", request.Document)
+        | _ -> failwith "continuation was not a GraphQL read"
+    | Error failure -> failwithf "unexpected continuation refusal: %A" failure
+
+[<Fact>]
+let ``native relation reader refuses absent repeated changed and duplicate continuation pages`` () =
+    let first = relationInitialBlocking (relationPage [relationNode "EXTERNAL_A" 77L] 2 true (Some "cursor-1"))
+    let run next =
+        MigrationGitHubRead.readNativeRelations options (issueCensus ())
+            (FakeTransport [ ok Map.empty first; next ])
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable, run NetworkFailure)
+    let repeated = relationContinuationBlocking (relationPage [relationNode "EXTERNAL_B" 77L] 2 true (Some "cursor-1"))
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "blocking:cycle-or-page-limit"),
+                 run (ok Map.empty repeated))
+    let changed = relationContinuationBlocking (relationPage [relationNode "EXTERNAL_B" 77L] 3 false None)
+    Assert.Equal(Error MigrationReadFailure.PopulationDrift, run (ok Map.empty changed))
+    let duplicate = relationContinuationBlocking (relationPage [relationNode "EXTERNAL_A" 77L] 2 false None)
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "EXTERNAL_A"),
+                 run (ok Map.empty duplicate))
+    let changedRevision =
+        (relationContinuationBlocking (relationPage [relationNode "EXTERNAL_B" 77L] 2 false None))
+            .Replace("2026-09-23T10:00:00Z", "2026-09-23T10:01:00Z")
+    Assert.Equal(Error MigrationReadFailure.PopulationDrift,
+                 run (ok Map.empty changedRevision))
+    let partial =
+        ok Map.empty """{"data":{"node":null},"errors":[{"message":"not authorized"}]}"""
+    Assert.Equal(Error MigrationReadFailure.GraphQLErrors, run partial)
 
 [<Fact>]
 let ``native relation reader refuses drift and vanished source issue`` () =

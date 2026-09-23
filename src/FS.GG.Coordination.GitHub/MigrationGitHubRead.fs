@@ -58,11 +58,18 @@ type MigrationRelationEdge =
       Source: MigrationRelationEndpoint
       Target: MigrationRelationEndpoint }
 
+type MigrationRelationContinuationPage =
+    { Connection: string
+      RequestedCursor: string
+      PayloadJson: string
+      PayloadSha256: string }
+
 type MigrationIssueRelationRecord =
     { IssueNodeId: string
       UpdatedAt: DateTimeOffset
       PayloadJson: string
-      PayloadSha256: string }
+      PayloadSha256: string
+      ContinuationPages: MigrationRelationContinuationPage list }
 
 type MigrationRelationPopulation =
     { RepositoryId: int64
@@ -285,6 +292,14 @@ module MigrationGitHubRead =
             if item.ValueKind = JsonValueKind.Number && item.TryGetInt32(&parsed) && parsed > 0 then Ok parsed
             else Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
 
+    let private requiredBool name value =
+        property name value
+        |> Result.bind (fun item ->
+            match item.ValueKind with
+            | JsonValueKind.True -> Ok true
+            | JsonValueKind.False -> Ok false
+            | _ -> Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
+
     let private sha (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -479,10 +494,24 @@ module MigrationGitHubRead =
                                 | Error error, _ | _, Error error -> Error error)
             pages Set.empty 0 [] None
 
-    // One issue per query keeps each connection's 100-node bound independently visible.
-    // An overfull connection is a refusal until a cursor-walking reader exists.
+    // Initial relation pages share one issue identity and revision; continuations
+    // are fetched only for these three closed connection names.
     let private nativeRelationsQuery =
         "query($id:ID!) { node(id:$id) { ... on Issue { id number updatedAt repository { databaseId } parent { id repository { databaseId } } subIssues(first:100) { totalCount nodes { id repository { databaseId } } pageInfo { hasNextPage endCursor } } blockedBy(first:100) { totalCount nodes { id repository { databaseId } } pageInfo { hasNextPage endCursor } } blocking(first:100) { totalCount nodes { id repository { databaseId } } pageInfo { hasNextPage endCursor } } } } }"
+
+    let private relationContinuationQuery connection =
+        let field =
+            match connection with
+            | "subIssues" -> "subIssues"
+            | "blockedBy" -> "blockedBy"
+            | "blocking" -> "blocking"
+            | _ -> invalidArg "connection" "relation connection is outside the closed reader"
+        $"query($id:ID!,$after:String!) {{ node(id:$id) {{ ... on Issue {{ id number updatedAt repository {{ databaseId }} {field}(first:100,after:$after) {{ totalCount nodes {{ id repository {{ databaseId }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"
+
+    type private RelationConnectionPage =
+        { TotalCount: int
+          Nodes: MigrationRelationEndpoint list
+          NextCursor: string option }
 
     let private relationEndpoint (value: JsonElement) =
         match requiredString "id" value,
@@ -500,19 +529,25 @@ module MigrationGitHubRead =
                 if total.ValueKind <> JsonValueKind.Number || not (total.TryGetInt32(&count)) || count < 0 then
                     Error(MigrationReadFailure.MalformedResponse $"invalid:{name}:totalCount")
                 else
-                    match property "hasNextPage" pageInfo with
-                    | Ok next when next.ValueKind = JsonValueKind.True ->
-                        Error(MigrationReadFailure.PaginationRefused $"{name}:nested-continuation")
-                    | Ok next when next.ValueKind = JsonValueKind.False ->
+                    match requiredBool "hasNextPage" pageInfo, property "endCursor" pageInfo with
+                    | Ok hasNext, Ok endCursor ->
                         let parsed = nodes.EnumerateArray() |> Seq.map relationEndpoint |> Seq.toList
                         match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
                         | Some failure -> Error failure
                         | None ->
                             let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
-                            if values.Length <> count then
-                                Error(MigrationReadFailure.PopulationDrift)
-                            else collectUnique (fun endpoint -> endpoint.NodeId) values
-                    | _ -> Error(MigrationReadFailure.MalformedResponse $"invalid:{name}:pageInfo")
+                            collectUnique (fun endpoint -> endpoint.NodeId) values
+                            |> Result.bind (fun unique ->
+                                if hasNext && (endCursor.ValueKind <> JsonValueKind.String
+                                               || not (text (endCursor.GetString()))
+                                               || values.IsEmpty) then
+                                    Error(MigrationReadFailure.PaginationRefused $"{name}:missing-end-cursor-or-page")
+                                elif not hasNext && values.Length > count then
+                                    Error MigrationReadFailure.PopulationDrift
+                                else
+                                    Ok { TotalCount=count; Nodes=unique
+                                         NextCursor=if hasNext then Some(endCursor.GetString()) else None })
+                    | Error failure, _ | _, Error failure -> Error failure
             | Ok _, Ok _, Ok _ -> Error(MigrationReadFailure.MalformedResponse $"invalid:{name}:nodes")
             | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
 
@@ -530,6 +565,77 @@ module MigrationGitHubRead =
                    || sha item.PayloadJson <> item.PayloadSha256)) then
                 Error(MigrationReadFailure.SnapshotMismatch "invalid-issue-census")
             else
+                let readContinuationPage (source: MigrationIssueRecord) connection cursor =
+                    let request =
+                        GraphQL { Uri=options.GraphQLUri
+                                  Document=relationContinuationQuery connection
+                                  Variables=Map.ofList [ "id", source.NodeId; "after", cursor ]
+                                  Headers=headers options.Token options.UserAgent
+                                  ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                    response transport request
+                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun document ->
+                        use document = document
+                        let root = document.RootElement
+                        let mutable errors = Unchecked.defaultof<JsonElement>
+                        if root.TryGetProperty("errors", &errors) then Error MigrationReadFailure.GraphQLErrors
+                        else
+                            match property "data" root |> Result.bind (property "node") with
+                            | Error failure -> Error failure
+                            | Ok issue when issue.ValueKind <> JsonValueKind.Object ->
+                                Error MigrationReadFailure.IdentityDrift
+                            | Ok issue ->
+                                match relationEndpoint issue, requiredInt "number" issue,
+                                      requiredString "updatedAt" issue,
+                                      relationConnection connection issue with
+                                | Ok current, Ok number, Ok updated, Ok page
+                                    when current.NodeId = source.NodeId
+                                         && current.RepositoryId = options.ExpectedRepositoryId
+                                         && number = source.Number ->
+                                    let mutable timestamp = DateTimeOffset.MinValue
+                                    if not (DateTimeOffset.TryParse(updated, &timestamp)) then
+                                        Error(MigrationReadFailure.MalformedResponse "invalid:relation-updatedAt")
+                                    elif timestamp <> source.UpdatedAt then
+                                        Error MigrationReadFailure.PopulationDrift
+                                    else
+                                        let payload = issue.GetRawText()
+                                        Ok (page,
+                                            { Connection=connection; RequestedCursor=cursor
+                                              PayloadJson=payload; PayloadSha256=sha payload })
+                                | Ok _, Ok _, Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                                | Error failure, _, _, _ | _, Error failure, _, _
+                                | _, _, Error failure, _ | _, _, _, Error failure -> Error failure)
+
+                let followConnection (source: MigrationIssueRecord) name
+                                     (initial: RelationConnectionPage) =
+                    let mutable nodes = initial.Nodes
+                    let mutable next = initial.NextCursor
+                    let mutable seen = Set.empty<string>
+                    let mutable pages: MigrationRelationContinuationPage list = []
+                    let mutable failure: MigrationReadFailure option = None
+                    while next.IsSome && failure.IsNone do
+                        let cursor = next.Value
+                        if pages.Length >= 1000 || Set.contains cursor seen then
+                            failure <- Some(MigrationReadFailure.PaginationRefused $"{name}:cycle-or-page-limit")
+                        else
+                            seen <- Set.add cursor seen
+                            match readContinuationPage source name cursor with
+                            | Error reason -> failure <- Some reason
+                            | Ok (page, evidence) when page.TotalCount <> initial.TotalCount ->
+                                failure <- Some MigrationReadFailure.PopulationDrift
+                            | Ok (page, evidence) ->
+                                nodes <- nodes @ page.Nodes
+                                pages <- evidence :: pages
+                                next <- page.NextCursor
+                                if nodes.Length > initial.TotalCount then
+                                    failure <- Some MigrationReadFailure.PopulationDrift
+                    match failure with
+                    | Some reason -> Error reason
+                    | None when nodes.Length <> initial.TotalCount -> Error MigrationReadFailure.PopulationDrift
+                    | None ->
+                        collectUnique (fun endpoint -> endpoint.NodeId) nodes
+                        |> Result.map (fun complete -> complete, List.rev pages)
+
                 let readOne (source: MigrationIssueRecord) =
                     let request =
                         GraphQL { Uri=options.GraphQLUri; Document=nativeRelationsQuery
@@ -571,23 +677,30 @@ module MigrationGitHubRead =
                                             else relationEndpoint parent |> Result.map Some
                                         parentResult
                                         |> Result.bind (fun parentValue ->
-                                            let edges =
-                                                [ match parentValue with
-                                                  | Some endpoint ->
-                                                      { Kind=MigrationRelationKind.ParentChild; Source=endpoint; Target=current }
-                                                  | None -> ()
-                                                  for endpoint in children do
-                                                      { Kind=MigrationRelationKind.ParentChild; Source=current; Target=endpoint }
-                                                  for endpoint in blockers do
-                                                      { Kind=MigrationRelationKind.Blocks; Source=endpoint; Target=current }
-                                                  for endpoint in blocked do
-                                                      { Kind=MigrationRelationKind.Blocks; Source=current; Target=endpoint } ]
-                                            if edges |> List.exists (fun edge -> edge.Source = edge.Target) then
-                                                Error(MigrationReadFailure.SnapshotMismatch "self-relation")
-                                            else
-                                                let payload = issue.GetRawText()
-                                                Ok ({ IssueNodeId=current.NodeId; UpdatedAt=timestamp
-                                                      PayloadJson=payload; PayloadSha256=sha payload }, edges))
+                                            followConnection source "subIssues" children
+                                            |> Result.bind (fun (allChildren, childPages) ->
+                                                followConnection source "blockedBy" blockers
+                                                |> Result.bind (fun (allBlockers, blockerPages) ->
+                                                    followConnection source "blocking" blocked
+                                                    |> Result.bind (fun (allBlocked, blockedPages) ->
+                                                        let edges =
+                                                            [ match parentValue with
+                                                              | Some endpoint ->
+                                                                  { Kind=MigrationRelationKind.ParentChild; Source=endpoint; Target=current }
+                                                              | None -> ()
+                                                              for endpoint in allChildren do
+                                                                  { Kind=MigrationRelationKind.ParentChild; Source=current; Target=endpoint }
+                                                              for endpoint in allBlockers do
+                                                                  { Kind=MigrationRelationKind.Blocks; Source=endpoint; Target=current }
+                                                              for endpoint in allBlocked do
+                                                                  { Kind=MigrationRelationKind.Blocks; Source=current; Target=endpoint } ]
+                                                        if edges |> List.exists (fun edge -> edge.Source = edge.Target) then
+                                                            Error(MigrationReadFailure.SnapshotMismatch "self-relation")
+                                                        else
+                                                            let payload = issue.GetRawText()
+                                                            Ok ({ IssueNodeId=current.NodeId; UpdatedAt=timestamp
+                                                                  PayloadJson=payload; PayloadSha256=sha payload
+                                                                  ContinuationPages=childPages @ blockerPages @ blockedPages }, edges)))))
                                 | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                                     Error MigrationReadFailure.IdentityDrift
                                 | Error failure, _, _, _, _, _, _
@@ -638,14 +751,6 @@ module MigrationGitHubRead =
 
     let private projectQuery number =
         $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{number}) {{ id number items(first:100,after:$after) {{ totalCount nodes {{ id isArchived updatedAt content {{ __typename ... on Issue {{ id number repository {{ databaseId }} }} ... on PullRequest {{ id number repository {{ databaseId }} }} ... on DraftIssue {{ id }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
-
-    let private requiredBool name value =
-        property name value
-        |> Result.bind (fun item ->
-            match item.ValueKind with
-            | JsonValueKind.True -> Ok true
-            | JsonValueKind.False -> Ok false
-            | _ -> Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
 
     let private nonNegativeInt name value =
         property name value

@@ -46,7 +46,10 @@ let fingerprint (issues: MigrationIssuePopulation, relations: MigrationRelationP
         [ string issues.RepositoryId; string issues.PageCount; string issues.PullRequestCount
           string relations.IssueCount; string relations.ExternalEdgeCount ]
         @ (issues.Issues |> List.collect (fun item -> [item.NodeId; item.PayloadSha256]))
-        @ (relations.Issues |> List.collect (fun item -> [item.IssueNodeId; item.PayloadSha256]))
+        @ (relations.Issues |> List.collect (fun item ->
+            [item.IssueNodeId; item.PayloadSha256]
+            @ (item.ContinuationPages |> List.collect (fun page ->
+                [page.Connection; page.RequestedCursor; page.PayloadSha256]))))
         @ (relations.Edges |> List.collect (fun edge ->
             [ string edge.Kind; string edge.Source.RepositoryId; edge.Source.NodeId
               string edge.Target.RepositoryId; edge.Target.NodeId ]))

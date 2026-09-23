@@ -52,11 +52,18 @@ type MigrationRelationEdge =
       Source: MigrationRelationEndpoint
       Target: MigrationRelationEndpoint }
 
+type MigrationRelationContinuationPage =
+    { Connection: string
+      RequestedCursor: string
+      PayloadJson: string
+      PayloadSha256: string }
+
 type MigrationIssueRelationRecord =
     { IssueNodeId: string
       UpdatedAt: DateTimeOffset
       PayloadJson: string
-      PayloadSha256: string }
+      PayloadSha256: string
+      ContinuationPages: MigrationRelationContinuationPage list }
 
 type MigrationRelationPopulation =
     { RepositoryId: int64
