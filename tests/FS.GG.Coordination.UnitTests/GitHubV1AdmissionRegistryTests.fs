@@ -409,6 +409,34 @@ let ``native admission journal binding is fresh read-only and never turns failur
     Assert.True(match port.Write proposal with ReceiveDefiniteRefusal "admission-journal-read-only" -> true | _ -> false)
 
 [<Fact>]
+let ``typed admission append encodes exact public CAS plan without credentials`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, durable, _ = admitted snapshot commit manifest "native-op"
+    let next =
+        match Registry.admit (Registry.head durable) snapshot (context commit manifest "second-op" 1L) durable with
+        | RegistryAdmissionAppended value -> value
+        | other -> failwithf "%A" other
+    let proposal = Registry.planAppend "second-admission" harness.Current next |> Result.defaultWith (String.concat "," >> failwith)
+    let cas = Registry.proposalCas proposal
+    let objects = Registry.proposalObjects proposal
+    let bytes = V1AdmissionJournalCasPlan.encode proposal |> Result.defaultWith (String.concat "," >> failwith)
+    use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
+    let root = document.RootElement
+    Assert.Equal("fsgg.v1-admission-journal-cas/1", root.GetProperty("schema").GetString())
+    Assert.Equal(1351660651L, root.GetProperty("repositoryId").GetInt64())
+    Assert.Equal((registryAddress ()).Ref, root.GetProperty("ref").GetString())
+    Assert.Equal(cas.ObservedObjectId, root.GetProperty("expectedParent").GetString())
+    Assert.Equal(Registry.gitObjectIdValue objects.CommitObjectId, root.GetProperty("proposedCommit").GetString())
+    Assert.Equal("second-admission", root.GetProperty("operationId").GetString())
+    let entries = root.GetProperty("objects").EnumerateArray() |> Seq.toArray
+    Assert.True((entries |> Array.map (fun entry -> entry.GetProperty("kind").GetString())) = [| "blob"; "blob"; "tree"; "commit" |])
+    for entry in entries do
+        let kind = entry.GetProperty("kind").GetString()
+        let raw = entry.GetProperty("bytesBase64").GetString() |> Convert.FromBase64String
+        Assert.Equal(entry.GetProperty("oid").GetString(), Registry.gitObjectIdValue (gitOid kind raw))
+    Assert.DoesNotContain("token", Encoding.UTF8.GetString bytes, StringComparison.OrdinalIgnoreCase)
+
+[<Fact>]
 let ``reader validates actual initializer objects and rejects moved head`` () =
     let snapshot, _, _, observed, _ = authority "OperatingV1" 1L None id
     Assert.NotNull snapshot
