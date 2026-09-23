@@ -1,8 +1,10 @@
 module FS.GG.Coordination.GitHubV1AdmissionRegistryTests
 
 open System
+open System.IO
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open FS.GG.Coordination.GitHub
 open Xunit
 
@@ -300,7 +302,10 @@ let ``genesis signature binds anchored signer, exact intent, run and expiry`` ()
     let snapshot, _, _, _, _ = authorityWithTrust trustDigest "OperatingV1" 1L None id
     let plan = Registry.planGenesis "protected-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
     let intent: GenesisAuthorizationIntent =
-        { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"; WorkflowSha256 = digest "4" }
+        { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"
+          WorkflowSha256 =
+            Registry.sha256Digest "e0682cdcb201781ef67308b1546e0e21090a6efebe1c92316cc9fbe110040767"
+            |> Result.defaultWith failwith }
     let now = DateTimeOffset(2026, 9, 23, 14, 0, 0, TimeSpan.Zero)
     let unsigned: GenesisSignature =
         { KeyId = "test-key"; PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(); ProtectedRunId = 42L
@@ -338,6 +343,57 @@ let ``genesis signature binds anchored signer, exact intent, run and expiry`` ()
     )
     Assert.True(V1AdmissionGenesisAuthorization.verify (now.AddMinutes 86.) trustBytes plan intent signature |> Result.isError)
     Assert.True(V1AdmissionGenesisAuthorization.verify now (Array.append trustBytes [| 10uy |]) plan intent signature |> Result.isError)
+
+    let artifact =
+        {| schema = "fsgg.v1-admission-genesis-protected-authorization/1"
+           operationId = "protected-genesis"
+           repository = "FS-GG/.github"
+           runId = 42L
+           workflowRevision = Registry.gitObjectIdValue intent.WorkflowRevision
+           coordinationRevision = Registry.gitObjectIdValue intent.SourceCommit
+           coordinationTree = Registry.gitObjectIdValue intent.SourceTree
+           environment = "fleet-cutover"
+           genesisIntentSha256 = V1AdmissionGenesisAuthorization.intentSha256 verified |> Registry.sha256Value
+           approvedAt = unsigned.AuthorizedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
+           expiresAt = unsigned.ExpiresAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
+           conclusion = "success" |}
+    let native: GenesisProtectedNativeRead =
+        { RunRepositoryId = 1269292704L
+          RunId = 42L
+          RunEvent = "workflow_dispatch"
+          RunPath = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
+          RunRef = "refs/heads/main"
+          RunHead = intent.WorkflowRevision
+          RunConclusion = "success"
+          RunActorId = 777L
+          RunAttempt = 1
+          WorkflowReadRevision = intent.WorkflowRevision
+          WorkflowBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gs2-v1-admission-protected-authorization.yml"))
+          ArtifactReadRunId = 42L
+          ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes artifact
+          EnvironmentName = "fleet-cutover"
+          EnvironmentBranchPolicy = "custom-main"
+          EnvironmentReviewerIds = [ 1645484L; 4456104L ]
+          EnvironmentPreventsSelfReview = true
+          Approvals = [ { ReviewerId = 1645484L; State = "approved" } ] }
+    let approved =
+        V1AdmissionGenesisProtectedApproval.verify now plan intent verified native
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(42L, V1AdmissionGenesisProtectedApproval.runId approved)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunActorId = 1645484L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunAttempt = 2 } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunRef = "refs/heads/other" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now alteredPlan intent verified native |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowBytes = Encoding.UTF8.GetBytes "changed" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowReadRevision = oid "7" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactReadRunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentPreventsSelfReview = false } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentBranchPolicy = "unrestricted" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved" } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved" }; { ReviewerId = 1645484L; State = "approved" } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes {| artifact with runId = 43L |} } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify (now.AddMinutes 86.) plan intent verified native |> Result.isError)
 
 [<Fact>]
 let ``canonical command log restores admission after process restart`` () =
