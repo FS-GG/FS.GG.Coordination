@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import re
+import subprocess
 import time
 import urllib.error
 import urllib.parse
@@ -28,6 +29,10 @@ APP_SLUG = "fs-gg-ordinary-journal-writer"
 INSTALLATION_ID = 160261608
 OPERATION_REF = "refs/heads/fsgg/v2/journal/operation/79"
 OID = re.compile(r"[0-9a-f]{40}\Z")
+WRITER_RULESET_ID = 21872113
+INTEGRITY_RULESET_ID = 21872115
+JOURNAL_PATTERN = "refs/heads/fsgg/v2/journal/**/*"
+CUTOVER_REF = "refs/heads/fsgg/v2/journal/cutover/d5"
 
 
 class Refused(RuntimeError):
@@ -109,6 +114,23 @@ def request(path: str, token: str, method: str = "GET", body: dict | None = None
         raise Refused("admission-provider-indeterminate") from error
 
 
+def read_rules_api(path: str):
+    """Use a read-only administrative observation; this token is never writer authority."""
+    require(path.startswith(f"repos/{REPOSITORY}/"), "admission-rules-path")
+    try:
+        result = subprocess.run(["gh", "api", "--method", "GET", path],
+                                stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                timeout=30, check=False)
+    except subprocess.TimeoutExpired as error:
+        raise Refused("admission-rules-read-timeout") from error
+    require(result.returncode == 0 and len(result.stdout) <= 2_000_000,
+            "admission-rules-read-unavailable")
+    try:
+        return json.loads(result.stdout)
+    except (UnicodeError, json.JSONDecodeError) as error:
+        raise Refused("admission-rules-read-json") from error
+
+
 def _person(value: str) -> dict:
     match = re.fullmatch(r"(.+) <([^<>]+)> ([0-9]+) ([+-][0-9]{4})", value)
     require(match is not None, "admission-commit-person")
@@ -173,7 +195,8 @@ class OrdinaryAdmissionTransport:
                 and installation.get("repository_selection") == "selected"
                 and isinstance(permissions, dict)
                 and permissions.get("contents") == "write"
-                and {name for name, level in permissions.items() if level == "write"} == {"contents"},
+                and all(level in {"read", "none"} for name, level in permissions.items()
+                        if name != "contents"),
                 "admission-installation-identity")
         status, minted = send(f"/app/installations/{INSTALLATION_ID}/access_tokens", app_jwt,
                               "POST", {"repository_ids": [REPOSITORY_ID],
@@ -183,7 +206,8 @@ class OrdinaryAdmissionTransport:
         require(isinstance(token, str) and bool(token)
                 and isinstance(token_permissions, dict)
                 and token_permissions.get("contents") == "write"
-                and {name for name, level in token_permissions.items() if level == "write"} == {"contents"}
+                and all(level in {"read", "none"} for name, level in token_permissions.items()
+                        if name != "contents")
                 and minted.get("repository_selection") == "selected", "admission-scoped-token")
         self._token = token
         status, repositories = send("/installation/repositories?per_page=100", token)
@@ -192,6 +216,76 @@ class OrdinaryAdmissionTransport:
                 and [(item.get("id"), item.get("full_name"))
                      for item in repositories.get("repositories", [])] == [(REPOSITORY_ID, REPOSITORY)],
                 "admission-token-repository-scope")
+
+    def protection_snapshot(self, read_rules=read_rules_api, observed_at: str | None = None) -> dict:
+        """Read exact effective rules twice; never infer an omitted bypass list is empty."""
+        prefix = f"repos/{REPOSITORY}"
+        repo = read_rules(prefix + "/rulesets/" + str(WRITER_RULESET_ID))
+        integrity = read_rules(prefix + "/rulesets/" + str(INTEGRITY_RULESET_ID))
+        branch = "fsgg%2Fv2%2Fjournal%2Foperation%2F79"
+        effective = read_rules(prefix + "/rules/branches/" + branch)
+        repo_again = read_rules(prefix + "/rulesets/" + str(WRITER_RULESET_ID))
+        integrity_again = read_rules(prefix + "/rulesets/" + str(INTEGRITY_RULESET_ID))
+        effective_again = read_rules(prefix + "/rules/branches/" + branch)
+        require(repo == repo_again and integrity == integrity_again and effective == effective_again,
+                "admission-rules-moved")
+
+        def ruleset(value, identifier, name, exclusions, types, actors):
+            require(isinstance(value, dict) and value.get("id") == identifier
+                    and value.get("name") == name and value.get("target") == "branch"
+                    and value.get("enforcement") == "active"
+                    and value.get("source_type") == "Repository"
+                    and value.get("source") == REPOSITORY
+                    and isinstance(value.get("conditions"), dict)
+                    and value["conditions"].get("ref_name") == {
+                        "include": [JOURNAL_PATTERN], "exclude": exclusions}
+                    and isinstance(value.get("rules"), list)
+                    and all(isinstance(item, dict) and isinstance(item.get("type"), str)
+                            for item in value["rules"])
+                    and sorted(item["type"] for item in value["rules"]) == sorted(types)
+                    and len(value["rules"]) == len(types)
+                    and "bypass_actors" in value
+                    and value["bypass_actors"] == actors,
+                    "admission-ruleset-binding")
+
+        ruleset(repo, WRITER_RULESET_ID, "v2-journal-writer", [CUTOVER_REF],
+                ["creation", "update"],
+                [{"actor_id": APP_ID, "actor_type": "Integration", "bypass_mode": "always"}])
+        ruleset(integrity, INTEGRITY_RULESET_ID, "v2-journal-integrity", [],
+                ["deletion", "non_fast_forward"], [])
+        require(isinstance(effective, list)
+                and all(isinstance(item, dict)
+                        and item.get("ruleset_source_type") == "Repository"
+                        and item.get("ruleset_source") == REPOSITORY
+                        and type(item.get("ruleset_id")) is int
+                        and isinstance(item.get("type"), str) for item in effective)
+                and sorted((item["ruleset_id"], item["type"]) for item in effective)
+                == sorted([(WRITER_RULESET_ID, "creation"), (WRITER_RULESET_ID, "update"),
+                           (INTEGRITY_RULESET_ID, "deletion"),
+                           (INTEGRITY_RULESET_ID, "non_fast_forward")])
+                and len(effective) == 4, "admission-effective-rules")
+        if observed_at is None:
+            observed_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        return {
+            "schema": "fsgg.v1-admission-genesis-protection-read/1",
+            "observedAt": observed_at,
+            "repositoryId": REPOSITORY_ID,
+            "writerRulesetId": WRITER_RULESET_ID,
+            "writerRulesetActive": True,
+            "writerRulesetMatchesRef": True,
+            "writerBypassAppIds": [APP_ID],
+            "integrityRulesetId": INTEGRITY_RULESET_ID,
+            "integrityRulesetActive": True,
+            "integrityRulesetMatchesRef": True,
+            "integrityRejectsDeletion": True,
+            "integrityRejectsNonFastForward": True,
+            "integrityBypassAppIds": [],
+            "credentialAppId": APP_ID,
+            "credentialInstallationId": INSTALLATION_ID,
+            "credentialRepositoryIds": [REPOSITORY_ID],
+            "credentialContentsWrite": True,
+            "credentialHasOtherWritePermissions": False,
+        }
 
     def read_ref(self, name: str) -> str | None:
         require(name == OPERATION_REF, "admission-ref-scope")

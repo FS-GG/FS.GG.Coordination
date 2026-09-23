@@ -122,6 +122,9 @@ for token in
         "admission-token-repository-scope"
         "admission-ref-scope"
         "admission-object-readback-mismatch"
+        "admission-rules-moved"
+        "admission-effective-rules"
+        "bypass_actors"
     ] do
     require token "eng/github-v1-admission-provider-transport.py"
 

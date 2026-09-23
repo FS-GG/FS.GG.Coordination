@@ -41,6 +41,9 @@ class FakeProvider:
         self.move_on_create = None
         self.lose_create_response = False
         self.calls = []
+        self.rules_calls = []
+        self.hide_bypass = False
+        self.move_effective = False
 
     def send(self, path, token, method="GET", body=None):
         self.calls.append((path, token, method, body))
@@ -99,6 +102,41 @@ class FakeProvider:
                              "message": stored["message"]}
         return 404, None
 
+    def read_rules(self, path):
+        self.rules_calls.append(path)
+        prefix = f"repos/{transport.REPOSITORY}/"
+        writer = path == prefix + f"rulesets/{transport.WRITER_RULESET_ID}"
+        integrity = path == prefix + f"rulesets/{transport.INTEGRITY_RULESET_ID}"
+        if writer or integrity:
+            value = {
+                "id": transport.WRITER_RULESET_ID if writer else transport.INTEGRITY_RULESET_ID,
+                "name": "v2-journal-writer" if writer else "v2-journal-integrity",
+                "target": "branch", "enforcement": "active",
+                "source_type": "Repository", "source": transport.REPOSITORY,
+                "conditions": {"ref_name": {"include": [transport.JOURNAL_PATTERN],
+                                            "exclude": [transport.CUTOVER_REF] if writer else []}},
+                "rules": [{"type": name} for name in
+                          (["creation", "update"] if writer else ["deletion", "non_fast_forward"])],
+            }
+            if not self.hide_bypass:
+                value["bypass_actors"] = ([{"actor_id": transport.APP_ID,
+                                            "actor_type": "Integration", "bypass_mode": "always"}]
+                                          if writer else [])
+            return value
+        if path == prefix + "rules/branches/fsgg%2Fv2%2Fjournal%2Foperation%2F79":
+            entries = [{"ruleset_id": identifier, "type": rule,
+                        "ruleset_source": transport.REPOSITORY,
+                        "ruleset_source_type": "Repository"}
+                       for identifier, rule in
+                       [(transport.WRITER_RULESET_ID, "creation"),
+                        (transport.WRITER_RULESET_ID, "update"),
+                        (transport.INTEGRITY_RULESET_ID, "deletion"),
+                        (transport.INTEGRITY_RULESET_ID, "non_fast_forward")]]
+            if self.move_effective and len(self.rules_calls) >= 6:
+                entries.pop()
+            return entries
+        raise AssertionError(path)
+
 
 def objects():
     event = b'{"event":"genesis"}\n'
@@ -132,15 +170,17 @@ class TransportTests(unittest.TestCase):
         self.assertTrue(all(token == "scoped-token" for _, token, _, _ in fake.calls[3:]))
 
     def test_wrong_app_installation_or_scope_refused_before_write(self):
-        for change in ("app", "repository", "permission"):
+        for change in ("app", "repository", "permission", "admin-permission"):
             with self.subTest(change=change):
                 fake = FakeProvider()
                 if change == "app":
                     fake.app_id = 4882399
                 elif change == "repository":
                     fake.repository_id = 1
-                else:
+                elif change == "permission":
                     fake.permissions = {"contents": "write", "actions": "write"}
+                else:
+                    fake.permissions = {"contents": "write", "actions": "admin"}
                 with self.assertRaises(transport.Refused):
                     transport.OrdinaryAdmissionTransport(JWT, fake.send, NOW)
                 self.assertFalse(any(method == "POST" and "/git/" in path
@@ -196,6 +236,25 @@ class TransportTests(unittest.TestCase):
             os.close(read_fd)
         with self.assertRaises(transport.Refused):
             transport.read_app_jwt_fd(0)
+
+    def test_protection_snapshot_requires_visible_stable_rules_and_scoped_app(self):
+        fake = FakeProvider()
+        port = transport.OrdinaryAdmissionTransport(JWT, fake.send, NOW)
+        read = port.protection_snapshot(fake.read_rules, "2026-09-23T14:00:00Z")
+        self.assertEqual([transport.APP_ID], read["writerBypassAppIds"])
+        self.assertEqual([], read["integrityBypassAppIds"])
+        self.assertTrue(read["credentialContentsWrite"])
+        self.assertEqual(6, len(fake.rules_calls))
+
+    def test_hidden_bypass_or_moving_effective_rules_refuse(self):
+        for failure in ("hidden", "moved"):
+            with self.subTest(failure=failure):
+                fake = FakeProvider()
+                fake.hide_bypass = failure == "hidden"
+                fake.move_effective = failure == "moved"
+                port = transport.OrdinaryAdmissionTransport(JWT, fake.send, NOW)
+                with self.assertRaises(transport.Refused):
+                    port.protection_snapshot(fake.read_rules, "2026-09-23T14:00:00Z")
 
 
 if __name__ == "__main__":

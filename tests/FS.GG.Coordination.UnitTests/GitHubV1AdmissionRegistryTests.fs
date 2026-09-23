@@ -1096,3 +1096,42 @@ let ``native source read requires stable main ancestry and exact source tree`` (
     Assert.True(changed (fun root -> root["compareHead"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
     Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
     Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)
+
+[<Fact>]
+let ``native protection read requires visible exact rules and scoped ordinary App`` () =
+    let timestamp = "2026-09-23T14:00:00Z"
+    let asOf = DateTimeOffset.Parse timestamp
+    let raw =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-protection-read/1"
+               observedAt = timestamp
+               repositoryId = 1351660651L
+               writerRulesetId = 21872113L
+               writerRulesetActive = true
+               writerRulesetMatchesRef = true
+               writerBypassAppIds = [ 4882140L ]
+               integrityRulesetId = 21872115L
+               integrityRulesetActive = true
+               integrityRulesetMatchesRef = true
+               integrityRejectsDeletion = true
+               integrityRejectsNonFastForward = true
+               integrityBypassAppIds = List.empty<int64>
+               credentialAppId = 4882140L
+               credentialInstallationId = 160261608L
+               credentialRepositoryIds = [ 1351660651L ]
+               credentialContentsWrite = true
+               credentialHasOtherWritePermissions = false |}
+    let decode bytes = V1AdmissionGenesisProtectionRead.decode asOf (ReadOnlyMemory bytes)
+    let read = decode raw |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(read.WriterBypassAppIds = [ 4882140L ])
+    Assert.True(read.CredentialRepositoryIds = [ 1351660651L ])
+    let changed action =
+        let root = JsonNode.Parse raw
+        action root
+        decode (Encoding.UTF8.GetBytes(root.ToJsonString()))
+    Assert.True(changed (fun root -> root["writerBypassAppIds"] <- JsonArray()) |> Result.isError)
+    Assert.True(changed (fun root -> root["integrityBypassAppIds"] <- JsonArray(JsonValue.Create(1))) |> Result.isError)
+    Assert.True(changed (fun root -> root["credentialHasOtherWritePermissions"] <- JsonValue.Create(true)) |> Result.isError)
+    Assert.True(changed (fun root -> root["credentialRepositoryIds"] <- JsonArray(JsonValue.Create(1))) |> Result.isError)
+    Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)
