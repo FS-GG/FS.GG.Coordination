@@ -5,6 +5,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 open FS.GG.Coordination.GitHub
 open Xunit
 
@@ -483,6 +484,7 @@ let ``protected genesis binds signature native approval and expected absent inst
             plan intent signature
     )
     Assert.Equal(GenesisRefAbsent, refRead)
+
     let mutable protectionReads = 0
     Assert.Equal(
         GenesisInstallRefused [ "genesis-protection-or-writer-drift" ],
@@ -542,6 +544,25 @@ let ``protected genesis binds signature native approval and expected absent inst
             plan intent signature
     )
     Assert.Equal(GenesisRefAbsent, refRead)
+
+[<Fact>]
+let ``native read-only collector evidence has a bounded typed decoder`` () =
+    let bytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-native-read.json"))
+    let read =
+        V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory bytes)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(42L, read.RunId)
+    Assert.Equal(21550151971L, read.EnvironmentId)
+    Assert.Equal("refs/heads/main", read.RunRef)
+    Assert.Equal("e0682cdcb201781ef67308b1546e0e21090a6efebe1c92316cc9fbe110040767",
+                 SHA256.HashData(read.WorkflowBytes) |> Convert.ToHexString |> _.ToLowerInvariant())
+    let changed = JsonNode.Parse bytes
+    changed["workflowBytesBase64"] <- JsonValue.Create("?")
+    Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Encoding.UTF8.GetBytes(changed.ToJsonString()))) |> Result.isError)
+    changed["workflowBytesBase64"] <- JsonValue.Create(Convert.ToBase64String read.WorkflowBytes)
+    changed["unreviewedField"] <- JsonValue.Create(1)
+    Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Encoding.UTF8.GetBytes(changed.ToJsonString()))) |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
 
 [<Fact>]
 let ``canonical command log restores admission after process restart`` () =

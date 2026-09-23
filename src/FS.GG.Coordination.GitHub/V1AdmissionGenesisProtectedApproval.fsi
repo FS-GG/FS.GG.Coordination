@@ -36,6 +36,9 @@ type VerifiedGenesisProtectedApproval
 
 [<RequireQualifiedAccess>]
 module V1AdmissionGenesisProtectedApproval =
+    /// Decode the bounded, exact-schema result emitted by the native read-only collector.
+    val decodeNativeRead: ReadOnlyMemory<byte> -> Result<GenesisProtectedNativeRead, string list>
+
     val verify:
         asOf: DateTimeOffset ->
         RegistryGenesisPlan ->

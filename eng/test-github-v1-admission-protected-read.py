@@ -4,6 +4,7 @@ import copy
 import hashlib
 import importlib.util
 import io
+import json
 import pathlib
 import sys
 import unittest
@@ -17,6 +18,7 @@ native = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(native)
 WORKFLOW = (ROOT.parent / "tests/FS.GG.Coordination.UnitTests/fixtures"
             / "gs2-v1-admission-protected-authorization.yml").read_bytes()
+NATIVE_FIXTURE = ROOT.parent / "tests/FS.GG.Coordination.UnitTests/fixtures/v1-admission-native-read.json"
 RUN_ID = 42
 HEAD = "a" * 40
 
@@ -95,6 +97,8 @@ class ProtectedNativeReadTests(unittest.TestCase):
         self.assertEqual(native.ENVIRONMENT_ID, evidence["approvals"][0]["environmentIds"][0])
         self.assertEqual(WORKFLOW, base64.b64decode(evidence["workflowBytesBase64"]))
         self.assertEqual(b'{"schema":"fixture"}\n', base64.b64decode(evidence["artifactBytesBase64"]))
+        self.assertEqual(NATIVE_FIXTURE.read_bytes(),
+                         json.dumps(evidence, sort_keys=True, separators=(",", ":")).encode() + b"\n")
 
     def test_changed_workflow_and_run_ref_refuse(self):
         source, archive = fixture()
