@@ -1,0 +1,5 @@
+# Conservative admission CAS port
+
+`V1AdmissionJournalCasPort.create` joins a fresh native journal reader to a public-only append-plan handoff. It passes the exact typed CAS envelope to an injected writer callback, but treats **every** callback result or exception as `ReceiveResponseUnknown`. Only a subsequent, independently decoded and replayed journal observation may confirm the append. This deliberately prevents a raw transport response from issuing an initial effect dispatch permit. When composed through `appendAndReconcile`, a failed native preflight remains unreadable and suppresses the writer call.
+
+The registry reconciler now classifies an unreadable preflight or unreadable parent-conflict reread as indeterminate, not as a proven competing parent. Fake-port tests cover a lost-success append with exact readback and no permit, a failed preflight with no writer call, and a failed post-write reread. No production credential, receive-pack implementation, claim-journal reader, or provider reconciliation is installed here. The ordinary CLI production fence remains in place, and the wrong public trust anchor still blocks protected genesis.

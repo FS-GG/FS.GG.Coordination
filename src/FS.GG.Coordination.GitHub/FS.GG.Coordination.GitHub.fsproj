@@ -27,6 +27,8 @@
     <Compile Include="V1AdmissionJournalGitRead.fs" />
     <Compile Include="V1AdmissionJournalCasPlan.fsi" />
     <Compile Include="V1AdmissionJournalCasPlan.fs" />
+    <Compile Include="V1AdmissionJournalCasPort.fsi" />
+    <Compile Include="V1AdmissionJournalCasPort.fs" />
     <Compile Include="V1AdmissionGenesisAuthorization.fsi" />
     <Compile Include="V1AdmissionGenesisAuthorization.fs" />
     <Compile Include="V1AdmissionGenesisGitRead.fsi" />

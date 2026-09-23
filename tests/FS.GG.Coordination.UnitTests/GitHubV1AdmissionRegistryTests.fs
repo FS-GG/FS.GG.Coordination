@@ -437,6 +437,80 @@ let ``typed admission append encodes exact public CAS plan without credentials``
     Assert.DoesNotContain("token", Encoding.UTF8.GetString bytes, StringComparison.OrdinalIgnoreCase)
 
 [<Fact>]
+let ``conservative native CAS port confirms lost append but never issues dispatch permit`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, registry, handle = admitted snapshot commit manifest "cas-port-op"
+    let request = mutationRequest commit 1L "cas-port-effect" "one"
+    let candidate =
+        match Registry.prepareEffect (Registry.head registry) snapshot handle "worker-a" request registry with
+        | EffectIntentAppended value -> value
+        | other -> failwithf "%A" other
+    let proposal = harness.Plan candidate
+    let now = DateTimeOffset.UtcNow
+    let mutable current = harness.Current
+    let mutable writes = 0
+    let readRaw () =
+        journalEvidence now current |> _.ToJsonString() |> Encoding.UTF8.GetBytes |> Ok
+    let writeRaw (raw: ReadOnlyMemory<byte>) =
+        use document = JsonDocument.Parse raw
+        Assert.Equal((registryAddress ()).Ref, document.RootElement.GetProperty("ref").GetString())
+        Assert.Equal(Registry.proposalCas proposal |> _.ObservedObjectId,
+                     document.RootElement.GetProperty("expectedParent").GetString())
+        writes <- writes + 1
+        current <- appendRead current proposal
+        Error "lost-success"
+    let port = V1AdmissionJournalCasPort.create (fun () -> now) readRaw writeRaw
+    match Registry.appendAndReconcile port proposal with
+    | DurableAppendAccepted(durable, None) ->
+        Assert.Equal(current.FirstHead, Some(Registry.head durable))
+    | other -> Assert.Fail($"exact readback must accept without permit: {other}")
+    Assert.Equal(1, writes)
+
+[<Fact>]
+let ``unreadable native CAS preflight and reread remain indeterminate`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, registry, _ = admitted snapshot commit manifest "cas-port-op"
+    let candidate =
+        match Registry.admit (Registry.head registry) snapshot (context commit manifest "next-op" 1L) registry with
+        | RegistryAdmissionAppended value -> value
+        | other -> failwithf "%A" other
+    let proposal = harness.Plan candidate
+    let now = DateTimeOffset.UtcNow
+    let mutable writes = 0
+    let writeRaw (_: ReadOnlyMemory<byte>) =
+        writes <- writes + 1
+        Ok()
+    let unavailable = V1AdmissionJournalCasPort.create (fun () -> now) (fun () -> Error "read-failed") writeRaw
+    Assert.True(match Registry.appendAndReconcile unavailable proposal with DurableAppendIndeterminate _ -> true | _ -> false)
+    Assert.Equal(0, writes)
+    let mutable reads = 0
+    let moved () =
+        reads <- reads + 1
+        if reads = 1 then
+            journalEvidence now harness.Current |> _.ToJsonString() |> Encoding.UTF8.GetBytes |> Ok
+        else Error "reread-failed"
+    let port = V1AdmissionJournalCasPort.create (fun () -> now) moved writeRaw
+    Assert.True(match Registry.appendAndReconcile port proposal with DurableAppendIndeterminate _ -> true | _ -> false)
+    Assert.Equal(1, writes)
+    let competitor =
+        match Registry.closeAdmissions (Registry.head registry) registry with
+        | RegistryAppended value -> value
+        | other -> failwithf "%A" other
+    let competingProposal = harness.Plan competitor
+    let competingRead = appendRead harness.Current competingProposal
+    let unreadable =
+        { competingRead with
+            FirstHead = None; SecondHead = None
+            Observation = JournalUnreadable "failed-conflict-reread" }
+    let mutable conflictReads = 0
+    let conflictPort: RegistryJournalPort =
+        { Read = fun _ ->
+              conflictReads <- conflictReads + 1
+              if conflictReads = 1 then competingRead else unreadable
+          Write = fun _ -> failwith "stale parent must not write" }
+    Assert.True(match Registry.appendAndReconcile conflictPort proposal with DurableAppendIndeterminate _ -> true | _ -> false)
+
+[<Fact>]
 let ``reader validates actual initializer objects and rejects moved head`` () =
     let snapshot, _, _, observed, _ = authority "OperatingV1" 1L None id
     Assert.NotNull snapshot
