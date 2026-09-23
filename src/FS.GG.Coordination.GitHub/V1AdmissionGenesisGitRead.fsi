@@ -9,6 +9,7 @@ type GenesisGitRead
 [<RequireQualifiedAccess>]
 module V1AdmissionGenesisGitRead =
     val decode: ReadOnlyMemory<byte> -> Result<GenesisGitRead, string list>
+    val observedAt: GenesisGitRead -> DateTimeOffset
     val authorityPort: GenesisGitRead -> AuthorityGitPort
     val registryRead: GenesisGitRead -> RegistryJournalRead
     val verifyPlan:

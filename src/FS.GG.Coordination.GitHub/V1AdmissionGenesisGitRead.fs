@@ -152,6 +152,8 @@ module V1AdmissionGenesisGitRead =
         with _ ->
             Error [ "genesis-git-evidence-invalid" ]
 
+    let observedAt (GenesisGitRead evidence) = evidence.ObservedAt
+
     let authorityPort (GenesisGitRead evidence) =
         { ReadObjects =
             fun () ->

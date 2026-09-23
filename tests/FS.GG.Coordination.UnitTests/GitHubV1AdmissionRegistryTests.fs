@@ -948,3 +948,110 @@ let ``installed raw Git readback requires exact planned genesis objects and stab
     Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
     Assert.True(changed (fun root -> root["unreviewedField"] <- JsonValue.Create(1)) |> Result.isError)
     Assert.True(V1AdmissionGenesisGitRead.decodeInstalled asOf plan (ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
+
+[<Fact>]
+let ``installer port binds fresh absent and installed evidence without caching a success`` () =
+    let asOf = DateTimeOffset.Parse "2026-09-23T14:00:00Z"
+    let _, authorityHead, manifest, observed, _ = authority "OperatingV1" 1L None id
+    let raw =
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-git-read.json"))
+        |> JsonNode.Parse
+    let cutover = raw["cutover"].AsObject()
+    let value id = Registry.gitObjectIdValue id
+    let eventOid, eventBytes = observed.EventBlob
+    let headOid, headBytes = observed.HeadBlob
+    for name in [ "firstHead"; "secondHead"; "tagTarget"; "commit"; "genesisCommit" ] do
+        cutover[name] <- JsonValue.Create(value authorityHead)
+    cutover["tagRef"] <- JsonValue.Create("refs/tags/fsgg/v2/fleet-cutover/operating-v1/genesis-" + (Registry.sha256Value manifest).Substring(0, 16))
+    cutover["parent"] <- null
+    cutover["ancestry"] <- JsonArray(JsonValue.Create(value authorityHead))
+    cutover["commitTree"] <- JsonValue.Create(value observed.CommitTree)
+    cutover["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.CommitBytes)
+    cutover["treeBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.TreeBytes)
+    let entries = JsonObject()
+    for KeyValue(name, id) in observed.TreeEntries do
+        entries[name] <- JsonValue.Create(value id)
+    cutover["treeEntries"] <- entries
+    cutover["eventOid"] <- JsonValue.Create(value eventOid)
+    cutover["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String eventBytes)
+    cutover["headOid"] <- JsonValue.Create(value headOid)
+    cutover["headBytesBase64"] <- JsonValue.Create(Convert.ToBase64String headBytes)
+    cutover["manifestSha256"] <- JsonValue.Create(Registry.sha256Value manifest)
+    cutover["trustAnchorSha256"] <- JsonValue.Create(Registry.sha256Value (digest "b"))
+    let initial = Encoding.UTF8.GetBytes(raw.ToJsonString())
+    let evidence =
+        V1AdmissionGenesisGitRead.decode (ReadOnlyMemory initial)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let plan =
+        V1AdmissionGenesisGitRead.verifyPlan asOf "protected-genesis" evidence
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let objects = Registry.genesisObjects plan
+    let address = Registry.genesisAddress plan
+    let authorityCommit = Registry.genesisAuthorityCommit plan
+    let installed =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-installed-read/1"
+               observedAt = "2026-09-23T14:00:00Z"
+               repository = "FS-GG/FS.GG.Coordination.Authority"
+               repositoryId = 1351660651L
+               cutoverFirstHead = value authorityCommit
+               cutoverSecondHead = value authorityCommit
+               operation =
+                 {| ``ref`` = address.Ref
+                    firstHead = value objects.CommitObjectId
+                    secondHead = value objects.CommitObjectId
+                    commitOid = value objects.CommitObjectId
+                    commitBytesBase64 = Convert.ToBase64String objects.CommitBytes
+                    treeOid = value objects.TreeObjectId
+                    treeBytesBase64 = Convert.ToBase64String objects.TreeBytes
+                    eventOid = value objects.EventObjectId
+                    eventBytesBase64 = Convert.ToBase64String objects.EventBytes
+                    headOid = value objects.HeadObjectId
+                    headBytesBase64 = Convert.ToBase64String objects.HeadBytes |} |}
+    let current = ref asOf
+    let refState = ref GenesisRefAbsent
+    let installedRead = ref installed
+    let absentCalls = ref 0
+    let installedCalls = ref 0
+    let native: GenesisInstallerNativeReaders =
+        { Now = fun () -> current.Value
+          ReadAbsentGit = fun () -> absentCalls.Value <- absentCalls.Value + 1; Ok initial
+          ReadInstalledGit = fun expected ->
+              Assert.Equal(objects.CommitObjectId, expected)
+              installedCalls.Value <- installedCalls.Value + 1
+              Ok installedRead.Value
+          ReadCutoverHead = fun () -> Ok authorityCommit
+          ReadRef = fun name -> Assert.Equal(address.Ref, name); refState.Value
+          ReadTrustAnchor = fun () -> Error "not-used"
+          ReadSource = fun () -> Error "not-used"
+          ReadProtection = fun () -> Error "not-used"
+          ReadApproval = fun _ -> Error "not-used" }
+    let writer: GenesisInstallerObjectPort =
+        { PutObject = fun _ _ _ -> Error "not-used"
+          ReadObject = fun _ _ -> Error "not-used"
+          CreateRefExpectedAbsent = fun _ _ -> Error "not-used" }
+    let port =
+        V1AdmissionGenesisPortBinding.create (ReadOnlyMemory initial) plan native writer
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(port.Authority.ReadObjects() |> Result.isOk)
+    Assert.True(port.ReadRegistry address |> Result.isOk)
+    Assert.True(port.ReadRegistry address |> Result.isOk)
+    Assert.Equal(2, absentCalls.Value)
+    refState.Value <- GenesisRefAt objects.CommitObjectId
+    let read = port.ReadRegistry address |> Result.defaultWith failwith
+    Assert.True(Registry.verifyGenesisReadback plan read |> Result.isOk)
+    Assert.Equal(1, installedCalls.Value)
+    installedRead.Value <-
+        let altered = JsonNode.Parse installed
+        altered["operation"]["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes "wrong"))
+        Encoding.UTF8.GetBytes(altered.ToJsonString())
+    Assert.True(port.ReadRegistry address |> Result.isError)
+    Assert.Equal(2, installedCalls.Value)
+    refState.Value <- GenesisRefAt(oid "f")
+    Assert.True(port.ReadRegistry address |> Result.isError)
+    current.Value <- asOf.AddMinutes 3.
+    Assert.True(port.Authority.ReadObjects() |> Result.isError)
+    Assert.True(port.Authority.RereadHead() |> Result.isError)
+    refState.Value <- GenesisRefAbsent
+    Assert.True(port.ReadRegistry address |> Result.isError)
+    Assert.True(V1AdmissionGenesisPortBinding.create (ReadOnlyMemory initial) plan native writer |> Result.isError)
