@@ -50,6 +50,7 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
     member _.Dispatches = dispatches
     member _.JournalWrites = journalWrites
     member _.Journal = journal
+    member _.InjectJournal value = journal <- value
 
     interface IMigrationStepRuntime with
         member _.ObserveEpoch() = Ok epoch
@@ -174,3 +175,28 @@ let ``stale epoch changed target and altered plan refuse before journal or provi
     let wrongPlan = { selected with DesiredTargetSha256=sha "substituted" }
     Assert.Equal(Error [ MigrationExecutionFailure.InvalidStep ], advance wrongPlan MigrationAdvanceCut.NoCut altered)
     Assert.Equal(0, altered.JournalWrites)
+
+[<Fact>]
+let ``intent cannot settle an externally applied effect without an in flight grant`` () =
+    let selected = step ()
+    let runtime = ControlledRuntime(selected)
+    Assert.Equal(MigrationAdvanceResult.Interrupted "after-intent-before-dispatch",
+                 advance selected MigrationAdvanceCut.StopAfterIntent runtime |> get)
+    runtime.Target <- { runtime.Target with Revision="external-v2"; Sha256=selected.DesiredTargetSha256 }
+    runtime.Effect <- MigrationEffectObservation.Applied selected.DesiredTargetSha256
+    Assert.Equal(Error [ MigrationExecutionFailure.JournalConflict ],
+                 advance selected MigrationAdvanceCut.NoCut runtime)
+    Assert.Equal(0, runtime.Dispatches)
+    Assert.Equal(1, runtime.JournalWrites)
+
+[<Fact>]
+let ``journal stages require their exact chained generation`` () =
+    let selected = step ()
+    let runtime = ControlledRuntime(selected)
+    runtime.InjectJournal
+        (Some { OperationId=selected.OperationId; StepSeal=selected.Seal
+                Generation=selected.JournalGeneration + 3L; Commit=revision "c"
+                Stage=MigrationJournalStage.InFlight; ResultSha256=None })
+    Assert.Equal(Error [ MigrationExecutionFailure.JournalConflict ],
+                 advance selected MigrationAdvanceCut.NoCut runtime)
+    Assert.Equal(0, runtime.Dispatches)

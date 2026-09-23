@@ -208,8 +208,13 @@ module MigrationStepExecution =
             else Error [ MigrationExecutionFailure.ChangedTarget ]
 
     let private inspectJournal (step: MigrationExecutionStep) (authority: MigrationJournalAuthority) =
+        let expectedGeneration =
+            match authority.Stage with
+            | MigrationJournalStage.IntentPersisted -> step.JournalGeneration + 1L
+            | MigrationJournalStage.InFlight -> step.JournalGeneration + 2L
+            | MigrationJournalStage.Settled -> step.JournalGeneration + 3L
         if authority.OperationId <> step.OperationId || authority.StepSeal <> step.Seal
-           || authority.Generation <= step.JournalGeneration || not (isSha 40 authority.Commit)
+           || authority.Generation <> expectedGeneration || not (isSha 40 authority.Commit)
            || (authority.Stage = MigrationJournalStage.Settled) <> authority.ResultSha256.IsSome then
             Error [ MigrationExecutionFailure.JournalConflict ]
         elif authority.Stage = MigrationJournalStage.Settled
@@ -235,7 +240,9 @@ module MigrationStepExecution =
 
     let advance (step: MigrationExecutionStep) cut (runtime: IMigrationStepRuntime) =
         let settle (authority: MigrationJournalAuthority) =
-            if cut = MigrationAdvanceCut.StopAfterEffect then
+            if authority.Stage <> MigrationJournalStage.InFlight then
+                Error [ MigrationExecutionFailure.JournalConflict ]
+            elif cut = MigrationAdvanceCut.StopAfterEffect then
                 Ok(MigrationAdvanceResult.Interrupted "after-effect-before-receipt")
             else
                 match inspectEpoch step runtime, inspectTarget true step runtime with
