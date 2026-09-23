@@ -50,7 +50,7 @@ jobs:
           [[ "$COORDINATION_REVISION" =~ ^[0-9a-f]{40}$ ]]
           [[ "$COORDINATION_TREE" =~ ^[0-9a-f]{40}$ ]]
           [[ "$GENESIS_INTENT_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$OPERATION_ID" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$ ]]
+          test "$OPERATION_ID" = 'fleet-v1-admission:fs-gg-production'
       - name: Materialize bounded authorization receipt
         env:
           COORDINATION_REVISION: ${{ inputs.coordination_revision }}

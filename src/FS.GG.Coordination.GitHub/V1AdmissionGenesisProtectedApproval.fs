@@ -37,7 +37,7 @@ type VerifiedGenesisProtectedApproval = private VerifiedGenesisProtectedApproval
 [<RequireQualifiedAccess>]
 module V1AdmissionGenesisProtectedApproval =
     let private workflowPath = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
-    let private workflowSha256 = "7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820"
+    let private workflowSha256 = "07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3"
     let private accountableOwnerId = 1645484L
     let private environmentId = 22582241959L
     let private environmentName = "fleet-v1-admission-owner"

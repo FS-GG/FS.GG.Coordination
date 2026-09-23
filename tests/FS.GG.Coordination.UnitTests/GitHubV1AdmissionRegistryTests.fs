@@ -305,7 +305,7 @@ let ``protected genesis binds signature native approval and expected absent inst
     let intent: GenesisAuthorizationIntent =
         { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"
           WorkflowSha256 =
-            Registry.sha256Digest "7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820"
+            Registry.sha256Digest "07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3"
             |> Result.defaultWith failwith }
     let now = DateTimeOffset(2026, 9, 23, 14, 0, 0, TimeSpan.Zero)
     let unsigned: GenesisSignature =
@@ -597,7 +597,7 @@ let ``native read-only collector evidence has a bounded typed decoder`` () =
     Assert.Equal(22582241959L, read.EnvironmentId)
     Assert.Equal(5, read.EnvironmentWaitMinutes)
     Assert.Equal("refs/heads/main", read.RunRef)
-    Assert.Equal("7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820",
+    Assert.Equal("07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3",
                  SHA256.HashData(read.WorkflowBytes) |> Convert.ToHexString |> _.ToLowerInvariant())
     let changed = JsonNode.Parse bytes
     changed["workflowBytesBase64"] <- JsonValue.Create("?")

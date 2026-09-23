@@ -23,7 +23,7 @@ ENVIRONMENT = "fleet-v1-admission-owner"
 ENVIRONMENT_ID = 22582241959
 ACCOUNTABLE_OWNER_ID = 1645484
 WORKFLOW = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
-WORKFLOW_SHA256 = "7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820"
+WORKFLOW_SHA256 = "07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3"
 MEMBER = "protected-v1-admission-genesis.json"
 
 
