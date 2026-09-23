@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-09.3",
+  "state": "accepted",
+  "unitContractSha256": "5a2121bcd893ad5ca018d444edba1acf062fd6f2fffd56b8e63ff28e842d2a2a",
+  "sourceRevision": "ac98b04e50165855c71425f99c1477b6e1ef31ef",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-09.2-receipt",
+      "sha256": "8d0ae7d5c0ce8f27cc9490128edd4c95adb9db5c406ca70ceb9331437894d7f8"
+    },
+    {
+      "name": "typed-transform-contract",
+      "sha256": "52b7829710502bea25e3ad974d0c2aacba1cec4aab8832db443554e411ebd406"
+    },
+    {
+      "name": "protected-acceptance",
+      "sha256": "300d43f62f6028f686ffcca0186159224d47264be480eb8a9a73cb35cf95fb33"
+    },
+    {
+      "name": "typed-transform-interface",
+      "sha256": "e9fe3dfefbf17bba906e46835e22db3606dd0901a73b1c0c7274f6c176800e5c"
+    },
+    {
+      "name": "typed-transform-validator",
+      "sha256": "96c6c39a459e67c77c647e918fdb53581e470c28fdeddc6574ea25df634393e7"
+    },
+    {
+      "name": "typed-transform-implementation",
+      "sha256": "cfad0aa279070ccdfd2fafbfbfbcb9c0850a109afb2d66872feeba2c974b1c72"
+    },
+    {
+      "name": "typed-transform-unit-tests",
+      "sha256": "5cf531ad78462d52b3cfd54f7cf46c18f3d3bd811289e29625840268ccc6090c"
+    },
+    {
+      "name": "typed-transform-architecture-tests",
+      "sha256": "c889095a6932b1b217368c7a478eb45d2dbb07cd741c5c9ad0d978510ad93edd"
+    }
+  ],
+  "acceptedAt": "2026-09-23T00:56:27Z",
+  "digest": "b3634a5c4334e2a112307136755dbdb3577e76181b852a7782689c873196ba71"
+}
