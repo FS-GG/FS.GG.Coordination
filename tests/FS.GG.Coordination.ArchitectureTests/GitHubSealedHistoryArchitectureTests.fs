@@ -70,3 +70,29 @@ let ``optimistic architecture provisioning reuses the pinned evaluator without a
     Assert.Contains("home/.quint/rust-evaluator-v0.6.0/quint_evaluator", provisioner)
     Assert.Contains("$evaluator_sha", provisioner)
     Assert.Contains("QUINT_HOME=\"$quint_home\"", provisioner)
+
+[<Fact>]
+let ``GS2-09-5 protected acceptance binds sealed history and complete repair lineage`` () =
+    let receiptBytes = File.ReadAllBytes(path "evidence/github-substrate-v2/accepted/GS2-09.5.json")
+    use receipt = JsonDocument.Parse(receiptBytes)
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+    Assert.Equal("0cf6bc02dde93d8153586a385bda217aa784fc91", value.GetProperty("sourceRevision").GetString())
+    Assert.Equal("a248fdc12f40013b3a16e6c61e0fe05f85955ce5bb0a8b991eacf8e51fd6e6b4", value.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("2c2b50af761a3e41f2fc4964f71b6eca0c9692adc270b8d738cf89a6fc2a097a", value.GetProperty("digest").GetString())
+    Assert.True(AcceptanceReceiptDigest.verify (System.ReadOnlyMemory receiptBytes) "GS2-09.5" (value.GetProperty("digest").GetString()) value |> Result.isOk)
+    let artifacts = value.GetProperty("artifacts").EnumerateArray() |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString()) |> Map.ofSeq
+    Assert.Equal("9dd17af4f2f6c636bf3881fbdc5af9fb2dc056573598f6e6506d5806661b3e93", artifacts["protected-acceptance"])
+    Assert.Equal("f198eb717094e8f8940007df4016dae0e4269198913037faf9bbe11168a600e6", artifacts["sealed-history-contract"])
+    use protectedAcceptance = JsonDocument.Parse(File.ReadAllBytes(path "evidence/github-substrate-v2/gs2-09-5/protected-acceptance.json"))
+    let protectedValue = protectedAcceptance.RootElement
+    Assert.Equal("aecc5a4d45d6fa325cdd96974c28004a9135792f", protectedValue.GetProperty("source").GetProperty("tree").GetString())
+    Assert.Equal(35824781230L, protectedValue.GetProperty("hosted").GetProperty("protectedMerge").GetProperty("optimisticValidationRun").GetInt64())
+    Assert.Equal(6, protectedValue.GetProperty("hosted").GetProperty("supersededFailures").GetArrayLength())
+    Assert.Equal(0, protectedValue.GetProperty("claims").GetProperty("v1ProductionUpcasterCount").GetInt32())
+    Assert.False(protectedValue.GetProperty("claims").GetProperty("archivePublished").GetBoolean())
+    Assert.False(protectedValue.GetProperty("claims").GetProperty("providerMutation").GetBoolean())
+    use index = JsonDocument.Parse(File.ReadAllBytes(path "evidence/github-substrate-v2/index.json"))
+    let entry = index.RootElement.GetProperty("entries").EnumerateArray() |> Seq.find (fun item -> item.GetProperty("id").GetString() = "accepted-GS2-09.5")
+    Assert.Equal(receiptBytes.Length, entry.GetProperty("bytes").GetInt32())
+    Assert.Equal(sha256 receiptBytes, entry.GetProperty("sha256").GetString())

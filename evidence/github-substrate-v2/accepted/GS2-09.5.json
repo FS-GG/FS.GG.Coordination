@@ -1,0 +1,55 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-09.5",
+  "state": "accepted",
+  "unitContractSha256": "a248fdc12f40013b3a16e6c61e0fe05f85955ce5bb0a8b991eacf8e51fd6e6b4",
+  "sourceRevision": "0cf6bc02dde93d8153586a385bda217aa784fc91",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-09.4-receipt",
+      "sha256": "e2ebb169ab5bcf77db921170e4a7938a3da254650fea7de84eb412180602b1b3"
+    },
+    {
+      "name": "sealed-history-contract",
+      "sha256": "f198eb717094e8f8940007df4016dae0e4269198913037faf9bbe11168a600e6"
+    },
+    {
+      "name": "protected-acceptance",
+      "sha256": "9dd17af4f2f6c636bf3881fbdc5af9fb2dc056573598f6e6506d5806661b3e93"
+    },
+    {
+      "name": "sealed-history-interface",
+      "sha256": "88e0b0da1d38ce9b31cbb1f5c914211c1a21e9fb3bccc80b90ab81b6f7908f8b"
+    },
+    {
+      "name": "sealed-history-validator",
+      "sha256": "dfd8c68b0b0b47ff0967a13194a2b89b5919e5e3a71243c3e138c6f489063c0a"
+    },
+    {
+      "name": "sealed-history-implementation",
+      "sha256": "27b4532ef1fa7a6840be9fe030a9bf6f39259968c967afd691f6519269cc5690"
+    },
+    {
+      "name": "sealed-history-unit-tests",
+      "sha256": "0615c1ad282c9f87899d6861e7b75b999ac033225f6eb68a78098ebd73312ed9"
+    },
+    {
+      "name": "sealed-history-architecture-tests",
+      "sha256": "2479f8ad3f9f9f736ad0df29ca1ef65e70e83defb040e99c4d47d6bafd2a83d9"
+    },
+    {
+      "name": "formal-parity-verifier",
+      "sha256": "7ececf42af80552ba68aa87942d7df82242b9786259f7880668a2a7535e7605f"
+    },
+    {
+      "name": "bootstrap-quint-provisioner",
+      "sha256": "8a3a16c90b1327d2e2350812a08ab2b7dc147006268e51a47f93665257f32e4b"
+    },
+    {
+      "name": "bootstrap-architecture-tests",
+      "sha256": "8c4fb6dcdb9eaa2036d7ff9d0d6203e9ab2668013db63ac7f6429e6702b0ec11"
+    }
+  ],
+  "acceptedAt": "2026-09-23T06:35:44Z",
+  "digest": "2c2b50af761a3e41f2fc4964f71b6eca0c9692adc270b8d738cf89a6fc2a097a"
+}
