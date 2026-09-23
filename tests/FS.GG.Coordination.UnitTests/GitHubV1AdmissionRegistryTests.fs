@@ -213,6 +213,110 @@ let private prepare (harness: Harness) snapshot handle registry owner request =
     durable, permit |> Option.defaultWith (fun () -> failwith "permit missing"), proposal
 
 [<Fact>]
+let ``admission service publishes a handle only after exact durable append`` () =
+    let _, commit, manifest, _, authorityPort = authority "OperatingV1" 1L None id
+    let mutable current = genesisRead manifest
+    let mutable writes = 0
+    let journal: RegistryJournalPort =
+        { Read = fun _ -> current
+          Write = fun proposal ->
+              writes <- writes + 1
+              current <- appendRead current proposal
+              ReceiveAccepted }
+    let ports: AdmissionServicePorts = { Authority = authorityPort; Journal = journal }
+    let requested = context commit manifest "service-op" 1L
+    match V1AdmissionService.admit ports requested with
+    | AdmissionDurablyAppended(handle, confirmed) ->
+        Assert.Equal(current.FirstHead, Some confirmed)
+        Assert.True(Registry.recoverOperation "service-op" (Registry.restore current |> Result.defaultWith (String.concat "," >> failwith)) |> Result.isOk)
+        Assert.NotNull handle
+    | other -> Assert.Fail($"durable admission expected: {other}")
+    match V1AdmissionService.admit ports requested with
+    | AdmissionAlreadyDurable(_, confirmed) -> Assert.Equal(current.FirstHead, Some confirmed)
+    | other -> Assert.Fail($"idempotent recovery expected: {other}")
+    Assert.Equal(1, writes)
+
+[<Fact>]
+let ``admission service refuses an absent journal and moved authority before writing`` () =
+    let _, commit, manifest, observedAuthority, _ = authority "OperatingV1" 1L None id
+    let mutable writes = 0
+    let absent: RegistryJournalPort =
+        { Read = fun _ -> absentRead ()
+          Write = fun _ -> writes <- writes + 1; ReceiveAccepted }
+    let movedAuthority: AuthorityGitPort =
+        { ReadObjects = fun () -> Ok observedAuthority
+          RereadHead = fun () -> Ok(oid "f") }
+    let installed: RegistryJournalPort = { absent with Read = fun _ -> genesisRead manifest }
+    let requested = context commit manifest "service-op" 1L
+    Assert.True(match V1AdmissionService.admit { Authority = movedAuthority; Journal = absent } requested with AdmissionServiceIndeterminate _ -> true | _ -> false)
+    Assert.True(match V1AdmissionService.admit { Authority = movedAuthority; Journal = installed } requested with AdmissionServiceIndeterminate _ -> true | _ -> false)
+    Assert.Equal(0, writes)
+
+[<Fact>]
+let ``admission service rereads fleet authority immediately before CAS`` () =
+    let _, commit, manifest, first, _ = authority "OperatingV1" 1L None id
+    let _, _, _, second, _ = authorityWithTrust (digest "c") "OperatingV1" 1L None id
+    let mutable reads = 0
+    let mutable observed = first
+    let mutable writes = 0
+    let moving: AuthorityGitPort =
+        { ReadObjects = fun () ->
+              reads <- reads + 1
+              observed <- if reads = 1 then first else second
+              Ok observed
+          RereadHead = fun () -> Ok observed.FirstHead }
+    let journal: RegistryJournalPort =
+        { Read = fun _ -> genesisRead manifest
+          Write = fun _ -> writes <- writes + 1; ReceiveAccepted }
+    match V1AdmissionService.admit { Authority = moving; Journal = journal } (context commit manifest "service-op" 1L) with
+    | AdmissionServiceIndeterminate reasons -> Assert.Contains("admission-authority-moved", reasons)
+    | other -> Assert.Fail($"authority movement refusal expected: {other}")
+    Assert.Equal(2, reads)
+    Assert.Equal(0, writes)
+
+[<Fact>]
+let ``admission service distinguishes lost success from unknown unobserved write`` () =
+    let _, commit, manifest, _, authorityPort = authority "OperatingV1" 1L None id
+    let mutable current = genesisRead manifest
+    let mutable persist = false
+    let journal: RegistryJournalPort =
+        { Read = fun _ -> current
+          Write = fun proposal ->
+              if persist then current <- appendRead current proposal
+              ReceiveResponseUnknown }
+    let ports: AdmissionServicePorts = { Authority = authorityPort; Journal = journal }
+    let requested = context commit manifest "service-op" 1L
+    Assert.True(match V1AdmissionService.admit ports requested with AdmissionServiceIndeterminate _ -> true | _ -> false)
+    Assert.Equal(1, commitsOf current |> List.length)
+    persist <- true
+    Assert.True(match V1AdmissionService.admit ports requested with AdmissionDurablyAppended _ -> true | _ -> false)
+    Assert.Equal(2, commitsOf current |> List.length)
+
+[<Fact>]
+let ``admission service reports concurrent parent movement without reusing the stale plan`` () =
+    let _, commit, manifest, _, authorityPort = authority "OperatingV1" 1L None id
+    let mutable current = genesisRead manifest
+    let mutable moved = false
+    let journal: RegistryJournalPort =
+        { Read = fun _ -> current
+          Write = fun _ ->
+              let registry = Registry.restore current |> Result.defaultWith (String.concat "," >> failwith)
+              let close =
+                  match Registry.closeAdmissions (Registry.head registry) registry with
+                  | RegistryAppended candidate -> candidate
+                  | other -> failwithf "%A" other
+              let proposal = Registry.planAppend "concurrent-close" current close |> Result.defaultWith (String.concat "," >> failwith)
+              current <- appendRead current proposal
+              moved <- true
+              ReceiveParentConflict }
+    let requested = context commit manifest "service-op" 1L
+    match V1AdmissionService.admit { Authority = authorityPort; Journal = journal } requested with
+    | AdmissionParentConflict(Some latest) -> Assert.Equal(current.FirstHead, Some latest)
+    | other -> Assert.Fail($"parent conflict expected: {other}")
+    Assert.True moved
+    Assert.True(Registry.recoverOperation "service-op" (Registry.restore current |> Result.defaultWith (String.concat "," >> failwith)) |> Result.isError)
+
+[<Fact>]
 let ``reader validates actual initializer objects and rejects moved head`` () =
     let snapshot, _, _, observed, _ = authority "OperatingV1" 1L None id
     Assert.NotNull snapshot
