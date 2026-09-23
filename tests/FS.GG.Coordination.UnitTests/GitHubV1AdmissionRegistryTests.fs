@@ -382,6 +382,33 @@ let ``native admission journal evidence rejects changed bytes stale heads and in
     Assert.True(decode reversed |> Result.isError)
 
 [<Fact>]
+let ``native admission journal binding is fresh read-only and never turns failure into absence`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, durable, _ = admitted snapshot commit manifest "native-op"
+    let now = DateTimeOffset.UtcNow
+    let bytes = journalEvidence now harness.Current |> _.ToJsonString() |> Encoding.UTF8.GetBytes
+    let mutable reads = 0
+    let native () =
+        reads <- reads + 1
+        if reads = 2 then Error "failed-read" else Ok bytes
+    let port = V1AdmissionJournalGitRead.createReadOnlyPort (fun () -> now) native
+    let first = port.Read(registryAddress ())
+    Assert.Equal(Registry.head durable, Registry.restore first |> Result.map Registry.head |> Result.defaultWith (String.concat "," >> failwith))
+    let second = port.Read(registryAddress ())
+    Assert.True(match second.Observation with JournalUnreadable _ -> true | _ -> false)
+    Assert.True(Registry.restore second |> Result.isError)
+    Assert.Equal(2, reads)
+    let wrong = ShardedJournalAdapter.address Operation "different-operation" |> Result.defaultWith (string >> failwith)
+    Assert.True(match (port.Read wrong).Observation with JournalUnreadable _ -> true | _ -> false)
+    Assert.Equal(2, reads)
+    let next =
+        match Registry.admit (Registry.head durable) snapshot (context commit manifest "second-op" 1L) durable with
+        | RegistryAdmissionAppended value -> value
+        | other -> failwithf "%A" other
+    let proposal = Registry.planAppend "second-admission" harness.Current next |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(match port.Write proposal with ReceiveDefiniteRefusal "admission-journal-read-only" -> true | _ -> false)
+
+[<Fact>]
 let ``reader validates actual initializer objects and rejects moved head`` () =
     let snapshot, _, _, observed, _ = authority "OperatingV1" 1L None id
     Assert.NotNull snapshot
