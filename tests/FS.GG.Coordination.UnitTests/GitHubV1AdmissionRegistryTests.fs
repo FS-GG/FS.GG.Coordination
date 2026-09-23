@@ -1055,3 +1055,44 @@ let ``installer port binds fresh absent and installed evidence without caching a
     refState.Value <- GenesisRefAbsent
     Assert.True(port.ReadRegistry address |> Result.isError)
     Assert.True(V1AdmissionGenesisPortBinding.create (ReadOnlyMemory initial) plan native writer |> Result.isError)
+
+[<Fact>]
+let ``native source read requires stable main ancestry and exact source tree`` () =
+    let timestamp = "2026-09-23T14:00:00Z"
+    let asOf = DateTimeOffset.Parse timestamp
+    let sourceCommit = String.replicate 40 "a"
+    let sourceTree = String.replicate 40 "b"
+    let mainHead = String.replicate 40 "c"
+    let raw =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-source-read/1"
+               observedAt = timestamp
+               repository = "FS-GG/FS.GG.Coordination"
+               repositoryId = 1346720714L
+               sourceCommit = sourceCommit
+               sourceTree = sourceTree
+               firstMainHead = mainHead
+               secondMainHead = mainHead
+               compareStatus = "ahead"
+               compareBase = sourceCommit
+               compareHead = mainHead
+               mergeBase = sourceCommit |}
+    let decode bytes = V1AdmissionGenesisSourceRead.decode asOf (ReadOnlyMemory bytes)
+    let read = decode raw |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(read.IsOnMain)
+    Assert.Equal(oid "b", read.Tree)
+    let changed action =
+        let root = JsonNode.Parse raw
+        action root
+        decode (Encoding.UTF8.GetBytes(root.ToJsonString()))
+    Assert.True(changed (fun root -> root["compareStatus"] <- JsonValue.Create("diverged")) |> Result.isOk)
+    Assert.False(
+        changed (fun root -> root["compareStatus"] <- JsonValue.Create("diverged"))
+        |> Result.defaultWith (String.concat "," >> failwith)
+        |> _.IsOnMain
+    )
+    Assert.True(changed (fun root -> root["secondMainHead"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
+    Assert.True(changed (fun root -> root["mergeBase"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
+    Assert.True(changed (fun root -> root["compareHead"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
+    Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)

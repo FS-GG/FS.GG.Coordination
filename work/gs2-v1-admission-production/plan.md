@@ -14,6 +14,8 @@ Keep the authored `src/FS.GG.Coordination.Protocol/Protocol.md` unchanged. The r
 4. Producer: implement live raw-Git authority/journal readers, exact-parent CAS writer, durable operation-scope composition and provider reconciliation. Keep `UnavailableProductionMutationFence` until all inputs and controls are installed. Prove unknown response, lost append, concurrent parent, stale epoch, retry, and old-client refusals against independent fake providers.
 5. Publish/adopt a coherent producer and verify installed runtime behavior with the existing guarded intake. Only then resume GS2-09.7 filing and protected acceptance; do not infer migration acceptance from this repair.
 
+The source-ancestry reader collects a stable Coordination `main` ref, exact source commit/tree, and native compare/merge-base evidence; its strict decoder rejects a stale or contradictory observation. This remains a read-only input to the installer, not a source-plan approval.
+
 The current step does not install the journal, enable v1 writes, or satisfy the remaining roadmap gates.
 
 The 2026-09-23 live read-only probe was refreshed during the install attempt. It again verified Authority commit `42a25b1480203207183f37c56d315c4161fb627b`, observed the canonical operation ref absent, and derived planned genesis commit `34f1ea8796e5a0bef515705c81a92fcb62620928`. This is an expiring observation, not an authorization or a write receipt. Recollect immediately before any protected installation.
@@ -24,6 +26,6 @@ On 2026-09-23 SystemAdmin reported a Main-host KDE Secret Service custody check:
 
 ## Current implementation gate
 
-- Provider transport and typed readback port binding: done locally; seven fake-provider controls, 29 focused F# controls, full solution build, 472 unit tests, Q6 operational validation, and both canonical Quint base gates pass.
-- Next: implement native source/rules/approval readers and join these callbacks to a reviewed host-side issuer or Actions consumer.
+- Provider transport, typed readback port binding, and read-only source-ancestry collector/decoder: done locally; seven provider controls, four source-collector controls, 30 focused F# controls, full solution build, 473 unit tests, Q6 operational validation, and three canonical Quint base gates pass. The source reader requires stable main heads and an exact compare/merge-base binding; a diverged draft source is not promoted to merged authority.
+- Next: implement native protection and approval readers and join these callbacks to a reviewed host-side issuer or Actions consumer. The live ruleset probe found writer `21872113` and integrity `21872115` with the four expected effective rules for the absent admission branch, but a production reader must require visible bypass actors and reject a hidden field.
 - Still missing: protected dispatch and final live readback. No protected write is authorized by this status.
