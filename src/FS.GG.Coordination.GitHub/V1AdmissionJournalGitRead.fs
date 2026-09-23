@@ -184,3 +184,25 @@ module V1AdmissionJournalGitRead =
                             V1AdmissionRegistry.restore read |> Result.map (fun _ -> read)
         with _ ->
             Error [ "admission-journal-evidence-invalid" ]
+
+    let createReadOnlyPort (now: unit -> DateTimeOffset) (readRaw: unit -> Result<byte array, string>) =
+        let unreadable reason =
+            { Repository = "FS-GG/FS.GG.Coordination.Authority"
+              RepositoryId = 1351660651L
+              Ref = address.Ref
+              FirstHead = None
+              SecondHead = None
+              Observation = JournalUnreadable reason
+              CommitBytes = Map.empty
+              TreeBytes = Map.empty }
+        { Read = fun requested ->
+              if requested <> address then
+                  unreadable "admission-journal-wrong-aggregate"
+              else
+                  match readRaw() with
+                  | Error _ -> unreadable "admission-journal-native-unavailable"
+                  | Ok raw ->
+                      match decode (now()) (ReadOnlyMemory raw) with
+                      | Ok read -> read
+                      | Error _ -> unreadable "admission-journal-native-invalid"
+          Write = fun _ -> ReceiveDefiniteRefusal "admission-journal-read-only" }
