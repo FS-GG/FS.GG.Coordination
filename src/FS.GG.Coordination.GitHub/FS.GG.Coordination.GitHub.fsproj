@@ -63,6 +63,8 @@
     <Compile Include="OrdinaryGitHubRuntime.fs" />
     <Compile Include="OrdinaryPostMergeSettlement.fs" />
     <Compile Include="OrdinarySettlementGitAuthority.fs" />
+    <Compile Include="MigrationStepExecution.fsi" />
+    <Compile Include="MigrationStepExecution.fs" />
     <Compile Include="LifecycleProjectionAdapter.fsi" />
     <Compile Include="LifecycleProjectionAdapter.fs" />
     <Compile Include="FleetShadowAdapter.fsi" />
