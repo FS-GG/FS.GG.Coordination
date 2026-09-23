@@ -18,6 +18,7 @@ type MigrationIssueRecord =
       NodeId: string
       State: string
       UpdatedAt: DateTimeOffset
+      PayloadJson: string
       PayloadSha256: string }
 
 type MigrationIssuePopulation =
@@ -27,7 +28,11 @@ type MigrationIssuePopulation =
       Issues: MigrationIssueRecord list
       PullRequestCount: int }
 
-type MigrationIssueTypeRecord = { NodeId: string; Name: string }
+type MigrationIssueTypeRecord =
+    { NodeId: string
+      Name: string
+      PayloadJson: string
+      PayloadSha256: string }
 
 type MigrationIssueTypePopulation =
     { RepositoryId: int64
@@ -54,6 +59,7 @@ type MigrationProjectItemRecord =
       Archived: bool
       UpdatedAt: DateTimeOffset
       Content: MigrationProjectContent
+      PayloadJson: string
       PayloadSha256: string }
 
 type MigrationProjectItemPopulation =
@@ -62,6 +68,57 @@ type MigrationProjectItemPopulation =
       Terminal: bool
       TotalCount: int
       Items: MigrationProjectItemRecord list }
+
+[<RequireQualifiedAccess>]
+type MigrationProjectFieldKind = BuiltIn | SingleSelect | MultiSelect | Iteration
+
+type MigrationProjectFieldOption = { Id: string; Name: string }
+
+type MigrationProjectFieldRecord =
+    { FieldNodeId: string
+      Name: string
+      DataType: string
+      Kind: MigrationProjectFieldKind
+      Options: MigrationProjectFieldOption list
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationProjectFieldPopulation =
+    { ProjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      TotalCount: int
+      Fields: MigrationProjectFieldRecord list }
+
+type MigrationProjectFieldValueRecord =
+    { FieldNodeId: string
+      ValueKind: string
+      ValueNodeId: string option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationProjectItemValueRecord =
+    { ItemNodeId: string
+      UpdatedAt: DateTimeOffset
+      FieldValueCount: int
+      FieldValues: MigrationProjectFieldValueRecord list }
+
+type MigrationProjectValuePopulation =
+    { ProjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      TotalCount: int
+      Items: MigrationProjectItemValueRecord list }
+
+type MigrationProjectSnapshot =
+    { ProjectNodeId: string
+      ItemCount: int
+      FieldCount: int
+      FieldValueCount: int
+      NormalizedSha256: string
+      Items: MigrationProjectItemPopulation
+      Fields: MigrationProjectFieldPopulation
+      Values: MigrationProjectValuePopulation }
 
 [<RequireQualifiedAccess>]
 type MigrationReadFailure =
@@ -74,6 +131,7 @@ type MigrationReadFailure =
     | PaginationRefused of reason:string
     | DuplicateIdentity of identity:string
     | PopulationDrift
+    | SnapshotMismatch of reason:string
 
 type IMigrationGitHubReadTransport =
     abstract Send: GitHubRequest -> TransportOutcome
@@ -95,3 +153,17 @@ module MigrationGitHubRead =
     val readProjectItems:
         options:MigrationProjectReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationProjectItemPopulation, MigrationReadFailure>
+
+    val readProjectFields:
+        options:MigrationProjectReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationProjectFieldPopulation, MigrationReadFailure>
+
+    val readProjectValues:
+        options:MigrationProjectReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationProjectValuePopulation, MigrationReadFailure>
+
+    val reconcileProject:
+        items:MigrationProjectItemPopulation ->
+        fields:MigrationProjectFieldPopulation ->
+        values:MigrationProjectValuePopulation ->
+            Result<MigrationProjectSnapshot, MigrationReadFailure>

@@ -94,4 +94,9 @@
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\eng\graphql\migration-project-values.graphql"
+                      LogicalName="FS.GG.Coordination.GitHub.MigrationProjectValues.graphql" />
+  </ItemGroup>
+
 </Project>

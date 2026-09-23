@@ -43,7 +43,7 @@ let fingerprint (issues: MigrationIssuePopulation, types: MigrationIssueTypePopu
         @ (issues.Issues |> List.collect (fun item ->
             [ string item.Number; string item.DatabaseId; item.NodeId; item.State
               item.UpdatedAt.ToUniversalTime().ToString("O"); item.PayloadSha256 ]))
-        @ (types.IssueTypes |> List.collect (fun item -> [ item.NodeId; item.Name ]))
+        @ (types.IssueTypes |> List.collect (fun item -> [ item.NodeId; item.Name; item.PayloadSha256 ]))
     fields
     |> List.map (fun value -> $"{Encoding.UTF8.GetByteCount value}:{value}")
     |> String.concat ""

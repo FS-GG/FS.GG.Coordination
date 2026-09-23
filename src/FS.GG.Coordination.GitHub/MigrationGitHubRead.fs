@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.GitHub
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Net.Http
 open System.Security.Cryptography
 open System.Text
@@ -23,6 +24,7 @@ type MigrationIssueRecord =
       NodeId: string
       State: string
       UpdatedAt: DateTimeOffset
+      PayloadJson: string
       PayloadSha256: string }
 
 type MigrationIssuePopulation =
@@ -32,7 +34,11 @@ type MigrationIssuePopulation =
       Issues: MigrationIssueRecord list
       PullRequestCount: int }
 
-type MigrationIssueTypeRecord = { NodeId: string; Name: string }
+type MigrationIssueTypeRecord =
+    { NodeId: string
+      Name: string
+      PayloadJson: string
+      PayloadSha256: string }
 
 type MigrationIssueTypePopulation =
     { RepositoryId: int64
@@ -59,6 +65,7 @@ type MigrationProjectItemRecord =
       Archived: bool
       UpdatedAt: DateTimeOffset
       Content: MigrationProjectContent
+      PayloadJson: string
       PayloadSha256: string }
 
 type MigrationProjectItemPopulation =
@@ -67,6 +74,57 @@ type MigrationProjectItemPopulation =
       Terminal: bool
       TotalCount: int
       Items: MigrationProjectItemRecord list }
+
+[<RequireQualifiedAccess>]
+type MigrationProjectFieldKind = BuiltIn | SingleSelect | MultiSelect | Iteration
+
+type MigrationProjectFieldOption = { Id: string; Name: string }
+
+type MigrationProjectFieldRecord =
+    { FieldNodeId: string
+      Name: string
+      DataType: string
+      Kind: MigrationProjectFieldKind
+      Options: MigrationProjectFieldOption list
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationProjectFieldPopulation =
+    { ProjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      TotalCount: int
+      Fields: MigrationProjectFieldRecord list }
+
+type MigrationProjectFieldValueRecord =
+    { FieldNodeId: string
+      ValueKind: string
+      ValueNodeId: string option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationProjectItemValueRecord =
+    { ItemNodeId: string
+      UpdatedAt: DateTimeOffset
+      FieldValueCount: int
+      FieldValues: MigrationProjectFieldValueRecord list }
+
+type MigrationProjectValuePopulation =
+    { ProjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      TotalCount: int
+      Items: MigrationProjectItemValueRecord list }
+
+type MigrationProjectSnapshot =
+    { ProjectNodeId: string
+      ItemCount: int
+      FieldCount: int
+      FieldValueCount: int
+      NormalizedSha256: string
+      Items: MigrationProjectItemPopulation
+      Fields: MigrationProjectFieldPopulation
+      Values: MigrationProjectValuePopulation }
 
 [<RequireQualifiedAccess>]
 type MigrationReadFailure =
@@ -79,6 +137,7 @@ type MigrationReadFailure =
     | PaginationRefused of reason:string
     | DuplicateIdentity of identity:string
     | PopulationDrift
+    | SnapshotMismatch of reason:string
 
 type IMigrationGitHubReadTransport =
     abstract Send: GitHubRequest -> TransportOutcome
@@ -233,10 +292,34 @@ module MigrationGitHubRead =
             if not (DateTimeOffset.TryParse(updated, &timestamp)) then
                 Error(MigrationReadFailure.MalformedResponse "invalid:updated_at")
             else
+                let payload = value.GetRawText()
                 Ok { Number=number; DatabaseId=databaseId; NodeId=nodeId; State=state
-                     UpdatedAt=timestamp; PayloadSha256=sha (value.GetRawText()) }
+                     UpdatedAt=timestamp; PayloadJson=payload; PayloadSha256=sha payload }
         | Error error, _, _, _, _ | _, Error error, _, _, _ | _, _, Error error, _, _
         | _, _, _, Error error, _ | _, _, _, _, Error error -> Error error
+
+    let private exactIssuePageQuery pageIndex (uri: Uri) =
+        let raw = uri.Query.TrimStart('?')
+        let entries =
+            raw.Split('&', StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map (fun part -> part.Split('=', 2))
+        let expected =
+            if pageIndex = 0 then Map.ofList [ "state", "all"; "per_page", "100" ]
+            else Map.ofList [ "state", "all"; "per_page", "100"; "page", string (pageIndex + 1) ]
+        let decoded =
+            entries
+            |> Array.choose (fun parts ->
+                if parts.Length = 2 then
+                    Some(Uri.UnescapeDataString parts.[0], Uri.UnescapeDataString parts.[1])
+                else None)
+        let keys = decoded |> Array.map fst |> Set.ofArray
+        decoded.Length = entries.Length && keys.Count = entries.Length
+        && (expected |> Map.forall (fun name value ->
+            decoded |> Array.exists (fun (observedName, observedValue) ->
+                observedName = name && observedValue = value)))
+        && (decoded |> Array.forall (fun (name, value) ->
+            Map.containsKey name expected
+            || (pageIndex > 0 && name = "after" && text value)))
 
     let readIssues (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         if not (valid options) then Error MigrationReadFailure.InvalidOptions
@@ -251,8 +334,9 @@ module MigrationGitHubRead =
                     if count >= 1000 || Set.contains current.AbsoluteUri seen then
                         Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
                     elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
-                         || current.AbsolutePath <> allowedPath
-                         || not (current.Query.Contains("state=all") && current.Query.Contains("per_page=100")) then
+                         || (current.AbsolutePath <> allowedPath
+                             && current.AbsolutePath <> $"/repositories/{repositoryId}/issues")
+                         || not (exactIssuePageQuery count current) then
                         Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
                     else
                         response transport (Rest { Method=Get; Uri=current; Headers=headers options.Token options.UserAgent; Body=None
@@ -339,7 +423,9 @@ module MigrationGitHubRead =
                                             nodes.EnumerateArray()
                                             |> Seq.map (fun node ->
                                                 match requiredString "id" node, requiredString "name" node with
-                                                | Ok id, Ok name -> Ok { NodeId=id; Name=name }
+                                                | Ok id, Ok name ->
+                                                    let payload = node.GetRawText()
+                                                    Ok { NodeId=id; Name=name; PayloadJson=payload; PayloadSha256=sha payload }
                                                 | Error error, _ | _, Error error -> Error error)
                                             |> Seq.toList
                                         match records |> List.tryPick (function Error error -> Some error | _ -> None) with
@@ -409,17 +495,21 @@ module MigrationGitHubRead =
         | Ok id, Ok archived, Ok updated, Ok content ->
             let mutable timestamp = DateTimeOffset.MinValue
             if DateTimeOffset.TryParse(updated, &timestamp) then
+                let payload = value.GetRawText()
                 Ok { ItemNodeId=id; Archived=archived; UpdatedAt=timestamp
-                     Content=content; PayloadSha256=sha (value.GetRawText()) }
+                     Content=content; PayloadJson=payload; PayloadSha256=sha payload }
             else Error(MigrationReadFailure.MalformedResponse "invalid:project-updatedAt")
         | Error failure, _, _, _ | _, Error failure, _, _
         | _, _, Error failure, _ | _, _, _, Error failure -> Error failure
 
+    let private validProjectOptions (options: MigrationProjectReadOptions) =
+        not (isNull options.GraphQLUri) && options.GraphQLUri.IsAbsoluteUri
+        && options.GraphQLUri.Scheme = Uri.UriSchemeHttps
+        && text options.UserAgent && text options.Organization && text options.ExpectedProjectNodeId
+        && options.ProjectNumber > 0
+
     let readProjectItems (options: MigrationProjectReadOptions) (transport: IMigrationGitHubReadTransport) =
-        if isNull options.GraphQLUri || not options.GraphQLUri.IsAbsoluteUri
-           || options.GraphQLUri.Scheme <> Uri.UriSchemeHttps
-           || not (text options.UserAgent && text options.Organization && text options.ExpectedProjectNodeId)
-           || options.ProjectNumber <= 0 then
+        if not (validProjectOptions options) then
             Error MigrationReadFailure.InvalidOptions
         else
             let rec pages (seen: Set<string>) (count: int) (population: int option)
@@ -475,8 +565,11 @@ module MigrationGitHubRead =
                                                 | Ok false, Ok _ when combined.Length = total ->
                                                     collectUnique (fun (value: MigrationProjectItemRecord) -> value.ItemNodeId) combined
                                                     |> Result.map (fun complete ->
-                                                        { ProjectNodeId=id; PageCount=count + 1; Terminal=true
-                                                          TotalCount=total; Items=List.sortBy _.ItemNodeId complete })
+                                                        let result: MigrationProjectItemPopulation =
+                                                            { ProjectNodeId=id; PageCount=count + 1; Terminal=true
+                                                              TotalCount=total
+                                                              Items=List.sortBy (fun (item: MigrationProjectItemRecord) -> item.ItemNodeId) complete }
+                                                        result)
                                                 | Ok false, Ok _ -> Error MigrationReadFailure.PopulationDrift
                                                 | Ok true, _ -> Error(MigrationReadFailure.PaginationRefused "missing-end-cursor")
                                                 | Error failure, _ | _, Error failure -> Error failure
@@ -484,3 +577,373 @@ module MigrationGitHubRead =
                                 | Ok _, Ok _, _ -> Error MigrationReadFailure.IdentityDrift
                                 | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
             pages Set.empty 0 None [] None
+
+    let private projectFieldQuery number =
+        $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{number}) {{ id number fields(first:100,after:$after) {{ totalCount nodes {{ __typename ... on ProjectV2FieldCommon {{ id name dataType }} ... on ProjectV2SingleSelectField {{ options {{ id name }} }} ... on ProjectV2MultiSelectField {{ multiSelectOptions {{ id name }} }} ... on ProjectV2IterationField {{ configuration {{ iterations {{ id title }} completedIterations {{ id title }} }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
+
+    let private fieldOption nameProperty (value: JsonElement) =
+        match requiredString "id" value, requiredString nameProperty value with
+        | Ok id, Ok name -> Ok { Id=id; Name=name }
+        | Error failure, _ | _, Error failure -> Error failure
+
+    let private fieldOptions (nameProperty: string) (arrayValue: JsonElement) =
+        if arrayValue.ValueKind <> JsonValueKind.Array then
+            Error(MigrationReadFailure.MalformedResponse "invalid:field-options")
+        else
+            let parsed = arrayValue.EnumerateArray() |> Seq.map (fieldOption nameProperty) |> Seq.toList
+            match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+            | Some failure -> Error failure
+            | None ->
+                let options = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+                collectUnique (fun option -> option.Id) options
+                |> Result.bind (collectUnique (fun option -> option.Name))
+
+    let private projectField (value: JsonElement) =
+        let optionSource =
+            match requiredString "__typename" value with
+            | Ok "ProjectV2Field" -> Ok(MigrationProjectFieldKind.BuiltIn, [])
+            | Ok "ProjectV2SingleSelectField" ->
+                property "options" value
+                |> Result.bind (fieldOptions "name")
+                |> Result.map (fun values -> MigrationProjectFieldKind.SingleSelect, values)
+            | Ok "ProjectV2MultiSelectField" ->
+                property "multiSelectOptions" value
+                |> Result.bind (fieldOptions "name")
+                |> Result.map (fun values -> MigrationProjectFieldKind.MultiSelect, values)
+            | Ok "ProjectV2IterationField" ->
+                property "configuration" value
+                |> Result.bind (fun configuration ->
+                    match property "iterations" configuration, property "completedIterations" configuration with
+                    | Ok current, Ok completed ->
+                        match fieldOptions "title" current, fieldOptions "title" completed with
+                        | Ok currentOptions, Ok completedOptions ->
+                            collectUnique (fun option -> option.Id) (currentOptions @ completedOptions)
+                            |> Result.map (fun values -> MigrationProjectFieldKind.Iteration, values)
+                        | Error failure, _ | _, Error failure -> Error failure
+                    | Error failure, _ | _, Error failure -> Error failure)
+            | Ok _ -> Error(MigrationReadFailure.MalformedResponse "unsupported:project-field-kind")
+            | Error failure -> Error failure
+        match requiredString "id" value, requiredString "name" value,
+              requiredString "dataType" value, optionSource with
+        | Ok id, Ok name, Ok dataType, Ok(kind, options) when
+            (match kind, dataType with
+             | MigrationProjectFieldKind.SingleSelect, "SINGLE_SELECT"
+             | MigrationProjectFieldKind.MultiSelect, "MULTI_SELECT"
+             | MigrationProjectFieldKind.Iteration, "ITERATION" -> true
+             | MigrationProjectFieldKind.BuiltIn, value ->
+                 Set.contains value
+                     (Set.ofList [ "ASSIGNEES"; "LINKED_PULL_REQUESTS"; "REVIEWERS"; "LABELS"
+                                   "MILESTONE"; "REPOSITORY"; "TITLE"; "TEXT"; "NUMBER"; "DATE"
+                                   "TRACKS"; "TRACKED_BY"; "ISSUE_TYPE"; "PARENT_ISSUE"
+                                   "SUB_ISSUES_PROGRESS"; "CREATED"; "UPDATED"; "CLOSED" ])
+             | _ -> false) ->
+            let payload = value.GetRawText()
+            Ok { FieldNodeId=id; Name=name; DataType=dataType; Kind=kind
+                 Options=options; PayloadJson=payload; PayloadSha256=sha payload }
+        | Ok _, Ok _, Ok _, Ok _ ->
+            Error(MigrationReadFailure.MalformedResponse "unsupported:project-field-data-type")
+        | Error failure, _, _, _ | _, Error failure, _, _
+        | _, _, Error failure, _ | _, _, _, Error failure -> Error failure
+
+    let readProjectFields (options: MigrationProjectReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if not (validProjectOptions options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let rec pages (seen: Set<string>) (count: int) (population: int option)
+                          (accumulated: MigrationProjectFieldRecord list) (cursor: string option) =
+                if count >= 1000 || (cursor |> Option.exists (fun value -> Set.contains value seen)) then
+                    Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                else
+                    let variables =
+                        [ "owner", options.Organization
+                          match cursor with Some value -> "after", value | None -> () ]
+                        |> Map.ofList
+                    let request =
+                        GraphQL { Uri=options.GraphQLUri; Document=projectFieldQuery options.ProjectNumber
+                                  Variables=variables; Headers=headers options.Token options.UserAgent
+                                  ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                    response transport request
+                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun document ->
+                        use document = document
+                        let root = document.RootElement
+                        let mutable errors = Unchecked.defaultof<JsonElement>
+                        if root.TryGetProperty("errors", &errors) then Error MigrationReadFailure.GraphQLErrors
+                        else
+                            match property "data" root |> Result.bind (property "organization")
+                                  |> Result.bind (property "projectV2") with
+                            | Error failure -> Error failure
+                            | Ok project when project.ValueKind = JsonValueKind.Null ->
+                                Error MigrationReadFailure.IdentityDrift
+                            | Ok project ->
+                                match requiredString "id" project, requiredInt "number" project,
+                                      property "fields" project with
+                                | Ok id, Ok number, Ok connection when
+                                    id = options.ExpectedProjectNodeId && number = options.ProjectNumber ->
+                                    match nonNegativeInt "totalCount" connection,
+                                          property "nodes" connection, property "pageInfo" connection with
+                                    | Ok total, Ok nodes, Ok pageInfo when nodes.ValueKind = JsonValueKind.Array ->
+                                        if population |> Option.exists ((<>) total) then
+                                            Error MigrationReadFailure.PopulationDrift
+                                        else
+                                            let parsed = nodes.EnumerateArray() |> Seq.map projectField |> Seq.toList
+                                            match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                                            | Some failure -> Error failure
+                                            | None ->
+                                                let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+                                                let combined = accumulated @ values
+                                                match requiredBool "hasNextPage" pageInfo,
+                                                      property "endCursor" pageInfo with
+                                                | Ok true, Ok endCursor when endCursor.ValueKind = JsonValueKind.String
+                                                                          && text (endCursor.GetString()) ->
+                                                    pages (cursor |> Option.map (fun value -> Set.add value seen)
+                                                                  |> Option.defaultValue seen)
+                                                          (count + 1) (Some total) combined (Some(endCursor.GetString()))
+                                                | Ok false, Ok _ when combined.Length = total ->
+                                                    collectUnique (fun (field: MigrationProjectFieldRecord) -> field.FieldNodeId) combined
+                                                    |> Result.bind (collectUnique (fun field -> field.Name))
+                                                    |> Result.map (fun complete ->
+                                                        { ProjectNodeId=id; PageCount=count + 1; Terminal=true
+                                                          TotalCount=total; Fields=List.sortBy _.FieldNodeId complete })
+                                                | Ok false, Ok _ -> Error MigrationReadFailure.PopulationDrift
+                                                | Ok true, _ -> Error(MigrationReadFailure.PaginationRefused "missing-end-cursor")
+                                                | Error failure, _ | _, Error failure -> Error failure
+                                    | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:project-fields")
+                                | Ok _, Ok _, _ -> Error MigrationReadFailure.IdentityDrift
+                                | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+            pages Set.empty 0 None [] None
+
+    let private projectValueQueryTemplate =
+        let name = "FS.GG.Coordination.GitHub.MigrationProjectValues.graphql"
+        use stream = typeof<MigrationProjectReadOptions>.Assembly.GetManifestResourceStream name
+        if isNull stream then invalidOp $"missing-embedded-query:{name}"
+        use reader = new StreamReader(stream, Encoding.UTF8)
+        reader.ReadToEnd()
+
+    let private nestedIds (name: string) (value: JsonElement) =
+        match property name value with
+        | Error failure -> Error failure
+        | Ok connection ->
+            match nonNegativeInt "totalCount" connection,
+                  property "nodes" connection, property "pageInfo" connection with
+            | Ok total, Ok nodes, Ok pageInfo when nodes.ValueKind = JsonValueKind.Array ->
+                match requiredBool "hasNextPage" pageInfo, property "endCursor" pageInfo with
+                | Ok false, Ok _ when nodes.GetArrayLength() = total ->
+                    let parsed =
+                        nodes.EnumerateArray()
+                        |> Seq.map (requiredString "id")
+                        |> Seq.toList
+                    match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                    | Some failure -> Error failure
+                    | None ->
+                        let ids = parsed |> List.choose (function Ok id -> Some id | _ -> None)
+                        collectUnique id ids |> Result.map ignore
+                | Ok true, _ -> Error(MigrationReadFailure.PaginationRefused $"nested:{name}")
+                | Ok false, Ok _ -> Error MigrationReadFailure.PopulationDrift
+                | Error failure, _ | _, Error failure -> Error failure
+            | _ -> Error(MigrationReadFailure.MalformedResponse $"invalid:nested:{name}")
+
+    let private requiredValueProperty name value =
+        property name value |> Result.map ignore
+
+    let private projectFieldValue (value: JsonElement) =
+        let fieldId =
+            property "field" value |> Result.bind (requiredString "id")
+        let kind = requiredString "__typename" value
+        let valueShape =
+            match kind with
+            | Ok "ProjectV2ItemFieldLabelValue" -> nestedIds "labels" value
+            | Ok "ProjectV2ItemFieldPullRequestValue" -> nestedIds "pullRequests" value
+            | Ok "ProjectV2ItemFieldReviewerValue" -> nestedIds "reviewers" value
+            | Ok "ProjectV2ItemFieldUserValue" -> nestedIds "users" value
+            | Ok "ProjectV2ItemFieldRepositoryValue" -> requiredValueProperty "repository" value
+            | Ok "ProjectV2ItemFieldMilestoneValue" -> requiredValueProperty "milestone" value
+            | Ok "ProjectV2ItemFieldMultiSelectValue" ->
+                property "options" value |> Result.bind (fieldOptions "name") |> Result.map ignore
+            | Ok "ProjectV2ItemFieldIterationValue" ->
+                match requiredValueProperty "iterationId" value,
+                      requiredValueProperty "startDate" value, requiredValueProperty "duration" value with
+                | Ok _, Ok _, Ok _ -> Ok()
+                | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure
+            | Ok "ProjectV2ItemFieldNumberValue" -> requiredValueProperty "number" value
+            | Ok "ProjectV2ItemFieldDateValue" -> requiredValueProperty "date" value
+            | Ok "ProjectV2ItemFieldTextValue" -> requiredValueProperty "text" value
+            | Ok "ProjectV2ItemFieldSingleSelectValue" -> requiredValueProperty "optionId" value
+            | Ok "ProjectV2ItemIssueFieldValue" ->
+                Error(MigrationReadFailure.MalformedResponse "unsupported:issue-field-value")
+            | Ok _ -> Error(MigrationReadFailure.MalformedResponse "unsupported:project-field-value-kind")
+            | Error failure -> Error failure
+        match fieldId, kind, valueShape with
+        | Ok id, Ok valueKind, Ok _ ->
+            let mutable valueNodeId = Unchecked.defaultof<JsonElement>
+            let nodeId =
+                if value.TryGetProperty("id", &valueNodeId)
+                   && valueNodeId.ValueKind = JsonValueKind.String
+                   && text (valueNodeId.GetString()) then Some(valueNodeId.GetString())
+                else None
+            let payload = value.GetRawText()
+            Ok { FieldNodeId=id; ValueKind=valueKind; ValueNodeId=nodeId
+                 PayloadJson=payload; PayloadSha256=sha payload }
+        | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure
+
+    let private projectItemValues (value: JsonElement) =
+        match requiredString "id" value, requiredString "updatedAt" value,
+              property "fieldValues" value with
+        | Ok itemId, Ok updated, Ok connection ->
+            let mutable timestamp = DateTimeOffset.MinValue
+            if not (DateTimeOffset.TryParse(updated, &timestamp)) then
+                Error(MigrationReadFailure.MalformedResponse "invalid:project-item-updatedAt")
+            else
+            match nonNegativeInt "totalCount" connection,
+                  property "nodes" connection, property "pageInfo" connection with
+            | Ok total, Ok nodes, Ok pageInfo when nodes.ValueKind = JsonValueKind.Array ->
+                match requiredBool "hasNextPage" pageInfo, property "endCursor" pageInfo with
+                | Ok false, Ok _ when nodes.GetArrayLength() = total ->
+                    let parsed = nodes.EnumerateArray() |> Seq.map projectFieldValue |> Seq.toList
+                    match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                    | Some failure -> Error failure
+                    | None ->
+                        let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+                        collectUnique (fun (entry: MigrationProjectFieldValueRecord) -> entry.FieldNodeId) values
+                        |> Result.map (fun complete ->
+                            { ItemNodeId=itemId; UpdatedAt=timestamp; FieldValueCount=total
+                              FieldValues=List.sortBy _.FieldNodeId complete })
+                | Ok true, _ -> Error(MigrationReadFailure.PaginationRefused "nested:fieldValues")
+                | Ok false, Ok _ -> Error MigrationReadFailure.PopulationDrift
+                | Error failure, _ | _, Error failure -> Error failure
+            | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:fieldValues")
+        | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure
+
+    let readProjectValues (options: MigrationProjectReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if not (validProjectOptions options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let query = projectValueQueryTemplate.Replace("__PROJECT_NUMBER__", string options.ProjectNumber)
+            let rec pages (seen: Set<string>) (count: int) (population: int option)
+                          (accumulated: MigrationProjectItemValueRecord list) (cursor: string option) =
+                if count >= 1000 || (cursor |> Option.exists (fun value -> Set.contains value seen)) then
+                    Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                else
+                    let variables =
+                        [ "organization", options.Organization
+                          match cursor with Some value -> "after", value | None -> () ]
+                        |> Map.ofList
+                    let request =
+                        GraphQL { Uri=options.GraphQLUri; Document=query; Variables=variables
+                                  Headers=headers options.Token options.UserAgent
+                                  ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                    response transport request
+                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun document ->
+                        use document = document
+                        let root = document.RootElement
+                        let mutable errors = Unchecked.defaultof<JsonElement>
+                        if root.TryGetProperty("errors", &errors) then Error MigrationReadFailure.GraphQLErrors
+                        else
+                            match property "data" root |> Result.bind (property "organization")
+                                  |> Result.bind (property "projectV2") with
+                            | Error failure -> Error failure
+                            | Ok project when project.ValueKind = JsonValueKind.Null ->
+                                Error MigrationReadFailure.IdentityDrift
+                            | Ok project ->
+                                match requiredString "id" project, requiredInt "number" project,
+                                      property "items" project with
+                                | Ok id, Ok number, Ok connection when
+                                    id = options.ExpectedProjectNodeId && number = options.ProjectNumber ->
+                                    match nonNegativeInt "totalCount" connection,
+                                          property "nodes" connection, property "pageInfo" connection with
+                                    | Ok total, Ok nodes, Ok pageInfo when nodes.ValueKind = JsonValueKind.Array ->
+                                        if population |> Option.exists ((<>) total) then
+                                            Error MigrationReadFailure.PopulationDrift
+                                        else
+                                            let parsed = nodes.EnumerateArray() |> Seq.map projectItemValues |> Seq.toList
+                                            match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                                            | Some failure -> Error failure
+                                            | None ->
+                                                let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+                                                let combined = accumulated @ values
+                                                match requiredBool "hasNextPage" pageInfo,
+                                                      property "endCursor" pageInfo with
+                                                | Ok true, Ok endCursor when endCursor.ValueKind = JsonValueKind.String
+                                                                          && text (endCursor.GetString()) ->
+                                                    pages (cursor |> Option.map (fun value -> Set.add value seen)
+                                                                  |> Option.defaultValue seen)
+                                                          (count + 1) (Some total) combined (Some(endCursor.GetString()))
+                                                | Ok false, Ok _ when combined.Length = total ->
+                                                    collectUnique (fun (item: MigrationProjectItemValueRecord) -> item.ItemNodeId) combined
+                                                    |> Result.map (fun complete ->
+                                                        let result: MigrationProjectValuePopulation =
+                                                            { ProjectNodeId=id; PageCount=count + 1; Terminal=true
+                                                              TotalCount=total
+                                                              Items=List.sortBy (fun (item: MigrationProjectItemValueRecord) -> item.ItemNodeId) complete }
+                                                        result)
+                                                | Ok false, Ok _ -> Error MigrationReadFailure.PopulationDrift
+                                                | Ok true, _ -> Error(MigrationReadFailure.PaginationRefused "missing-end-cursor")
+                                                | Error failure, _ | _, Error failure -> Error failure
+                                    | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:project-values")
+                                | Ok _, Ok _, _ -> Error MigrationReadFailure.IdentityDrift
+                                | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+            pages Set.empty 0 None [] None
+
+    let reconcileProject (items: MigrationProjectItemPopulation)
+                         (fields: MigrationProjectFieldPopulation)
+                         (values: MigrationProjectValuePopulation) =
+        let mismatch reason = Error(MigrationReadFailure.SnapshotMismatch reason)
+        let identitySet identities = identities |> Set.ofList
+        let itemIds = items.Items |> List.map _.ItemNodeId
+        let valueIds = values.Items |> List.map _.ItemNodeId
+        let fieldIds = fields.Fields |> List.map _.FieldNodeId
+        let validPayload raw digest = sha raw = digest
+        if not (text items.ProjectNodeId)
+           || items.ProjectNodeId <> fields.ProjectNodeId
+           || items.ProjectNodeId <> values.ProjectNodeId then
+            mismatch "project-identity"
+        elif not (items.Terminal && fields.Terminal && values.Terminal)
+             || items.PageCount < 1 || fields.PageCount < 1 || values.PageCount < 1 then
+            mismatch "nonterminal-population"
+        elif items.TotalCount <> items.Items.Length || values.TotalCount <> values.Items.Length
+             || fields.TotalCount <> fields.Fields.Length || items.TotalCount <> values.TotalCount then
+            mismatch "population-count"
+        elif (identitySet itemIds).Count <> itemIds.Length
+             || (identitySet valueIds).Count <> valueIds.Length
+             || (identitySet fieldIds).Count <> fieldIds.Length then
+            mismatch "duplicate-identity"
+        elif identitySet itemIds <> identitySet valueIds then
+            mismatch "item-population"
+        elif items.Items |> List.exists (fun item -> not (validPayload item.PayloadJson item.PayloadSha256))
+             || fields.Fields |> List.exists (fun field -> not (validPayload field.PayloadJson field.PayloadSha256))
+             || values.Items |> List.exists (fun item ->
+                 item.FieldValueCount <> item.FieldValues.Length
+                 || item.FieldValues |> List.exists (fun field -> not (validPayload field.PayloadJson field.PayloadSha256))) then
+            mismatch "payload-digest"
+        else
+            let itemById = items.Items |> List.map (fun item -> item.ItemNodeId, item) |> Map.ofList
+            let declared = identitySet fieldIds
+            let changedRevision =
+                values.Items
+                |> List.exists (fun item -> item.UpdatedAt <> itemById.[item.ItemNodeId].UpdatedAt)
+            let unknownField =
+                values.Items
+                |> List.exists (fun item ->
+                    let ids = item.FieldValues |> List.map _.FieldNodeId
+                    ids.Length <> (identitySet ids).Count
+                    || ids |> List.exists (fun id -> not (Set.contains id declared)))
+            if changedRevision then mismatch "item-revision"
+            elif unknownField then mismatch "undeclared-or-duplicate-field"
+            else
+                let framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+                let fieldValueCount = values.Items |> List.sumBy _.FieldValueCount
+                let parts =
+                    [ items.ProjectNodeId; string items.TotalCount; string fields.TotalCount
+                      string fieldValueCount; string items.PageCount; string fields.PageCount
+                      string values.PageCount ]
+                    @ (items.Items |> List.sortBy _.ItemNodeId |> List.collect (fun item ->
+                        [ item.ItemNodeId; item.UpdatedAt.ToUniversalTime().ToString("O"); item.PayloadSha256 ]))
+                    @ (fields.Fields |> List.sortBy _.FieldNodeId |> List.collect (fun field ->
+                        [ field.FieldNodeId; field.DataType; field.PayloadSha256 ]))
+                    @ (values.Items |> List.sortBy _.ItemNodeId |> List.collect (fun item ->
+                        [ item.ItemNodeId; item.UpdatedAt.ToUniversalTime().ToString("O") ]
+                        @ (item.FieldValues |> List.sortBy _.FieldNodeId |> List.collect (fun field ->
+                            [ field.FieldNodeId; field.ValueKind; field.PayloadSha256 ]))))
+                let digest = parts |> List.map framed |> String.concat "" |> sha
+                Ok { ProjectNodeId=items.ProjectNodeId; ItemCount=items.TotalCount
+                     FieldCount=fields.TotalCount; FieldValueCount=fieldValueCount
+                     NormalizedSha256=digest; Items=items; Fields=fields; Values=values }

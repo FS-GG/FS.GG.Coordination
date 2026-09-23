@@ -30,11 +30,17 @@ let client = new HttpClient(Timeout=TimeSpan.FromSeconds 45.)
 let transport = HttpMigrationGitHubReadTransport(client) :> IMigrationGitHubReadTransport
 
 let read () =
-    match MigrationGitHubRead.readProjectItems options transport with
-    | Ok population -> population
-    | Error failure -> failwithf "migration Project read refused: %A" failure
+    match MigrationGitHubRead.readProjectItems options transport,
+          MigrationGitHubRead.readProjectFields options transport,
+          MigrationGitHubRead.readProjectValues options transport with
+    | Ok items, Ok fields, Ok values ->
+        match MigrationGitHubRead.reconcileProject items fields values with
+        | Ok snapshot -> items, fields, values, snapshot
+        | Error failure -> failwithf "migration Project reconciliation refused: %A" failure
+    | Error failure, _, _ | _, Error failure, _ | _, _, Error failure ->
+        failwithf "migration Project read refused: %A" failure
 
-let fingerprint (population: MigrationProjectItemPopulation) =
+let fingerprintItems (population: MigrationProjectItemPopulation) =
     let values =
         [ population.ProjectNodeId; string population.TotalCount; string population.PageCount ]
         @ (population.Items |> List.collect (fun item ->
@@ -49,12 +55,53 @@ let fingerprint (population: MigrationProjectItemPopulation) =
     |> Convert.ToHexString
     |> _.ToLowerInvariant()
 
+let fingerprintFields (population: MigrationProjectFieldPopulation) =
+    let values =
+        [ population.ProjectNodeId; string population.TotalCount; string population.PageCount ]
+        @ (population.Fields |> List.collect (fun field ->
+            [ field.FieldNodeId; field.Name; field.DataType; string field.Kind; field.PayloadSha256 ]
+            @ (field.Options |> List.collect (fun option -> [ option.Id; option.Name ]))))
+    values
+    |> List.map (fun value -> $"{Encoding.UTF8.GetByteCount value}:{value}")
+    |> String.concat ""
+    |> Encoding.UTF8.GetBytes
+    |> SHA256.HashData
+    |> Convert.ToHexString
+    |> _.ToLowerInvariant()
+
+let fingerprintValues (population: MigrationProjectValuePopulation) =
+    let values =
+        [ population.ProjectNodeId; string population.TotalCount; string population.PageCount ]
+        @ (population.Items |> List.collect (fun item ->
+            [ item.ItemNodeId; string item.FieldValueCount ]
+            @ (item.FieldValues |> List.collect (fun field ->
+                [ field.FieldNodeId; field.ValueKind; field.PayloadSha256 ]))))
+    values
+    |> List.map (fun value -> $"{Encoding.UTF8.GetByteCount value}:{value}")
+    |> String.concat ""
+    |> Encoding.UTF8.GetBytes
+    |> SHA256.HashData
+    |> Convert.ToHexString
+    |> _.ToLowerInvariant()
+
 let first = read ()
 let second = read ()
-let firstDigest = fingerprint first
-let secondDigest = fingerprint second
-if firstDigest <> secondDigest then failwith "two Project read-only passes were not quiescent"
+let firstItems, firstFields, firstValues, firstSnapshot = first
+let secondItems, secondFields, secondValues, secondSnapshot = second
+let firstItemsDigest = fingerprintItems firstItems
+let secondItemsDigest = fingerprintItems secondItems
+let firstFieldsDigest = fingerprintFields firstFields
+let secondFieldsDigest = fingerprintFields secondFields
+let firstValuesDigest = fingerprintValues firstValues
+let secondValuesDigest = fingerprintValues secondValues
+if firstSnapshot.NormalizedSha256 <> secondSnapshot.NormalizedSha256
+   || firstItemsDigest <> secondItemsDigest || firstFieldsDigest <> secondFieldsDigest
+   || firstValuesDigest <> secondValuesDigest then
+    failwith "two Project read-only passes were not quiescent"
 
-printfn "MIGRATION_PROJECT_READ_PROBE_OK project=%s pages=%d items=%d twoPassSha256=%s"
-    second.ProjectNodeId second.PageCount second.TotalCount secondDigest
+let fieldValueCount = secondValues.Items |> List.sumBy _.FieldValueCount
+printfn "MIGRATION_PROJECT_READ_PROBE_OK project=%s itemPages=%d items=%d fieldPages=%d fields=%d valuePages=%d fieldValues=%d itemSha256=%s fieldSha256=%s valueSha256=%s snapshotSha256=%s"
+    secondItems.ProjectNodeId secondItems.PageCount secondItems.TotalCount
+    secondFields.PageCount secondFields.TotalCount secondValues.PageCount fieldValueCount
+    secondItemsDigest secondFieldsDigest secondValuesDigest secondSnapshot.NormalizedSha256
 client.Dispose()
