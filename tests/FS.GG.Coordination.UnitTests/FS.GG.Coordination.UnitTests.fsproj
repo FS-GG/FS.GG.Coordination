@@ -54,6 +54,7 @@
     <Compile Include="GitHubTypedTransformTests.fs" />
     <Compile Include="GitHubLiveOperationTests.fs" />
     <Compile Include="GitHubSealedHistoryTests.fs" />
+    <Compile Include="GitHubRollbackPlanTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />

@@ -113,6 +113,8 @@
     <Compile Include="GitHubLiveOperationQualification.fs" />
     <Compile Include="GitHubSealedHistoryQualification.fsi" />
     <Compile Include="GitHubSealedHistoryQualification.fs" />
+    <Compile Include="GitHubRollbackPlanQualification.fsi" />
+    <Compile Include="GitHubRollbackPlanQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -460,6 +460,15 @@ index. The v2 production closure must have zero v1 upcasters and expose only arc
 read-only lookup. Omission, reordering, byte changes, lookup repointing, malformed outcomes, tampering and
 seal replay refuse. This source boundary does not publish archives, mutate a provider, or run migration.
 
+GS2-09.6 is registered against that same active roadmap pin. Its sole prerequisite is the accepted
+GS2-09.5 receipt with digest `2c2b50af761a3e41f2fc4964f71b6eca0c9692adc270b8d738cf89a6fc2a097a`.
+The Q5 `github-rollback-plan-contract` and Q6 `github-rollback-plan-recovery-contract` bind exact reverse
+restoration of settings, receiver pins, v1 projections, schedules and the authority snapshot from
+`VerifiedV2` to `OperatingV1`. Each step binds captured state and restore payload digests; completed steps
+form a plan-bound hash-chained receipt prefix so retry resumes at exactly the next step. Missing domains,
+changed order or inputs, receipt gaps, foreign-plan receipts, tampering and replay refuse. This source
+boundary does not execute rollback, mutate a provider, or change fleet state.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

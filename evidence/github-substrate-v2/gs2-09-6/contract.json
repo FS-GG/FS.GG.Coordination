@@ -1,0 +1,24 @@
+{
+  "schema": "fsgg.coordination.github-rollback-plan-evidence/1",
+  "unit": "GS2-09.6",
+  "roadmapRevision": "a37321a880229ec3f2ff3ccb3c246b8beddbaf33",
+  "roadmapSha256": "ab04b4e9579e61b39520cc3eb7a9cc61691b6f9bbcec783b369ec8b8aaa717e2",
+  "unitContractSha256": "bc3580ded0745753c762aeefbd36c61b68e691d0bf88b16b10d3fe8ec5c3a550",
+  "predecessor": {
+    "path": "evidence/github-substrate-v2/accepted/GS2-09.5.json",
+    "fileSha256": "8180d7735719839c6eb8a42cc55f3fe342cd23c53108e5ae1cd82cb102328e87",
+    "receiptDigest": "2c2b50af761a3e41f2fc4964f71b6eca0c9692adc270b8d738cf89a6fc2a097a"
+  },
+  "manifestNormalizedDigest": "d7b0bd8c67c26e924c985bc3eb821fa86af51c66861cc82f9e9dbbb876745db8",
+  "manifestSeal": "22a5328e893b337d8b99c6c0beab22b89799e1ed61eff43bf526adb4899484c8",
+  "historyNormalizedDigest": "293a8fa8a566bb160ebbc82920eb4dc938d161b982e8e49eb3bdc9079b4bb0a2",
+  "historySeal": "faa7e4ab701f746e470905180b794b98c5c07fea582ca99ff8307ce7f7099da2",
+  "startEpoch": "VerifiedV2",
+  "terminalEpoch": "OperatingV1",
+  "rollbackNormalizedDigest": "6e030d4f99da811fe94fd0e18d6454774226651c55b4793b9d0d34b8397707c1",
+  "rollbackSeal": "e475b68ab2b65e1df253a0cfa007714a03f0c1bee65786d806857ed018fa676f",
+  "providerState": "controlled-source-qualification",
+  "rollbackExecuted": false,
+  "providerMutation": false,
+  "acceptanceReceiptCreated": false
+}

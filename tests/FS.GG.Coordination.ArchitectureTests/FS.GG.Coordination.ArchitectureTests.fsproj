@@ -71,6 +71,7 @@
     <Compile Include="GitHubTypedTransformArchitectureTests.fs" />
     <Compile Include="GitHubLiveOperationArchitectureTests.fs" />
     <Compile Include="GitHubSealedHistoryArchitectureTests.fs" />
+    <Compile Include="GitHubRollbackPlanArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="OrchestrationObserverArchitectureTests.fs" />
     <Compile Include="OrchestrationHostArchitectureTests.fs" />

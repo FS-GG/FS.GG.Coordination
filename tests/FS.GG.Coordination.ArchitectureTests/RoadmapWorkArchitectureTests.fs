@@ -1727,7 +1727,7 @@ let ``GS2-08-4 acceptance binds the common fence source and native gates`` () =
     Assert.Equal<Map<string, string>>(expected, artifacts)
 
 [<Fact>]
-let ``roadmap unit index advances through GS2-09-5 sealed history`` () =
+let ``roadmap unit index advances through GS2-09-6 rollback plans`` () =
     use document =
         JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/github-substrate-v2-units.json")))
 
@@ -1819,6 +1819,7 @@ let ``roadmap unit index advances through GS2-09-5 sealed history`` () =
             "GS2-09.3"
             "GS2-09.4"
             "GS2-09.5"
+            "GS2-09.6"
             "GS2-09.9"
         ]
     then
