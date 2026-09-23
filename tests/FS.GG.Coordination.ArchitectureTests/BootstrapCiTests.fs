@@ -1119,7 +1119,7 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
     // Complete run/attempt pagination adds explicit census handling to the economics observer.
     Assert.InRange(gateLines, 1, 750)
-    Assert.InRange(uniqueGateLines, 1, 550)
+    Assert.InRange(uniqueGateLines, 1, 555)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)

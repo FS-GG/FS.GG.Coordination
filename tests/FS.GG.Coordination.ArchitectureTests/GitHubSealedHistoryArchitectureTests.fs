@@ -63,3 +63,10 @@ let ``formal base parity uses supported reproducibility options and preserves fa
     Assert.Contains("--seed=0xC5F1", verifier)
     Assert.Contains("check=False, capture_output=True", verifier)
     Assert.Contains("print(diagnostic, file=sys.stderr)", verifier)
+
+[<Fact>]
+let ``optimistic architecture provisioning reuses the pinned evaluator without a network fetch`` () =
+    let provisioner = File.ReadAllText(path "eng/bootstrap-gates/provision-quint.sh")
+    Assert.Contains("home/.quint/rust-evaluator-v0.6.0/quint_evaluator", provisioner)
+    Assert.Contains("$evaluator_sha", provisioner)
+    Assert.Contains("QUINT_HOME=\"$quint_home\"", provisioner)
