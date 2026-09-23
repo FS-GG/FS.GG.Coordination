@@ -70,10 +70,10 @@ let ``GS2-08-2 registration binds accepted predecessor roadmap and exact Q3 Q4 a
     use units = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use gates = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let roadmap = units.RootElement.GetProperty("roadmap")
-    Assert.Equal("f2660ee972432be93fbca1f2675921327e6f3147", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("241859d3bad30dabaec45f82c38974814bc9a996", roadmap.GetProperty("revision").GetString())
 
     Assert.Equal(
-        "a32d27f3ffdd1dae3d51590f0173dbc3c7f4bcd53dba870c94984388c0fdba21",
+        "14aa6ae2e856784e16f2765681b17b8093fcd2bafce7b0bfb823e052c6737383",
         roadmap.GetProperty("sha256").GetString()
     )
 

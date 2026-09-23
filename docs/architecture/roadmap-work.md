@@ -408,8 +408,8 @@ is owner registration evidence rather than an acceptance receipt; `.github`
 projection remains asynchronous.
 
 That historical pin remains part of the callable amendment. The active index now binds
-`.github` revision `f2660ee972432be93fbca1f2675921327e6f3147` and roadmap SHA-256
-`a32d27f3ffdd1dae3d51590f0173dbc3c7f4bcd53dba870c94984388c0fdba21` after GS2-09.2 acceptance.
+`.github` revision `241859d3bad30dabaec45f82c38974814bc9a996` and roadmap SHA-256
+`14aa6ae2e856784e16f2765681b17b8093fcd2bafce7b0bfb823e052c6737383` after GS2-09.3 acceptance.
 The unit registers the Q5 `github-complete-discovery-contract` and Q6
 `github-complete-discovery-recovery-contract`, consumes the accepted GS2-08.9 receipt and protected
 callable discovery handoff, and closes the discovery population over issues, Project items and fields,
@@ -431,8 +431,8 @@ refuse. This source boundary performs no provider read or mutation and does not 
 create archives, execute rollback, or create a live migration manifest.
 
 GS2-09.3 is registered against `.github` roadmap commit
-`f2660ee972432be93fbca1f2675921327e6f3147` and exact roadmap SHA-256
-`a32d27f3ffdd1dae3d51590f0173dbc3c7f4bcd53dba870c94984388c0fdba21`.
+`241859d3bad30dabaec45f82c38974814bc9a996` and exact roadmap SHA-256
+`14aa6ae2e856784e16f2765681b17b8093fcd2bafce7b0bfb823e052c6737383`.
 Its sole prerequisite is the accepted GS2-09.2 receipt with digest
 `c0fb9c28cbcee5d87812a0844da4a65bcf2077a9559224065a603273a87de85d`.
 The Q5 `github-typed-transform-contract` and Q6
