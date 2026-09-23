@@ -13,10 +13,10 @@ open Xunit
 let private root =
     Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 
-let private roadmapRevision = "241859d3bad30dabaec45f82c38974814bc9a996"
+let private roadmapRevision = "f18cc5aa3810e60fa6f53c786953ba3d50577fad"
 
 let private roadmapSha256 =
-    "14aa6ae2e856784e16f2765681b17b8093fcd2bafce7b0bfb823e052c6737383"
+    "833105f6ec6fcfe9132cf861e2895862e8f45d8932cc9552757cba0929d6a093"
 
 let private runAt workingDirectory executable arguments =
     let startInfo = ProcessStartInfo(executable)
