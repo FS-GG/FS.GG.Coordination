@@ -1180,6 +1180,40 @@
       "contractSha256": "09ba8dd5283ee6012fafc00ab17b20c5aae52480f4bc60485605b0c9f84b5fd0"
     },
     {
+      "id": "GS2-09.3",
+      "title": "Implement typed transforms",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": [
+        "GS2-09.2"
+      ],
+      "permissionCeiling": [
+        "repository-local additive typed-transform types, exact immutable-manifest and accepted-receipt binding, deterministic normalization, complete obligation validation, controlled evidence, validation, documentation and tests",
+        "classification only as Migrated, Ambiguous or Unsupported; no live-operation disposition, archive production, rollback execution, provider read or mutation, receiver or settings change, migration execution, cutover transition, OpenV2, acceptance receipt, completion claim or successor-unit authority"
+      ],
+      "exitGate": "the Q5 github-typed-transform and Q6 github-typed-transform-recovery contracts bind the exact accepted GS2-09.2 receipt, immutable manifest digest/seal, transformer fingerprint and current governing roadmap; the exact ordered obligation population covers taxonomy, planning fields, repository scope, body metadata, blockers, hierarchy, scheduling holds, touch sets, lifecycle receipts and desired settings; every obligation has exactly one typed Migrated, Ambiguous or Unsupported result; Migrated retains the stable global ID and binds one target/schema/payload/mapping, Ambiguous binds a reason, evidence and at least two sorted distinct candidates, and Unsupported binds a stable code, reason and evidence; missing, duplicated, reordered or invented decisions, malformed hashes, empty explanations, one-candidate or duplicate ambiguity, changed global IDs, altered results, digest tampering and seal replay refuse; both complete green control inventories and fresh-process deterministic replay pass without network or provider mutation; source qualification does not claim live transforms, operation handling, archives, migration execution, acceptance or successor authority",
+      "qGates": [
+        "Q5",
+        "Q6"
+      ],
+      "gateCommands": [
+        "github-typed-transform-contract",
+        "github-typed-transform-recovery-contract"
+      ],
+      "gateContracts": [
+        {
+          "id": "github-typed-transform-contract",
+          "qGate": "Q5",
+          "commandSha256": "a37409e6b7f70598e08b9b523c4e4a73ce3dbbfcb6bd233e830198b42dd2eb49"
+        },
+        {
+          "id": "github-typed-transform-recovery-contract",
+          "qGate": "Q6",
+          "commandSha256": "8d9caad59b8e024a90e975f179099f42d839ce28bdf2bf98719fa75f2d13654f"
+        }
+      ],
+      "contractSha256": "5a2121bcd893ad5ca018d444edba1acf062fd6f2fffd56b8e63ff28e842d2a2a"
+    },
+    {
       "id": "GS2-09.9",
       "title": "Qualify callable ordinary v2 execution",
       "owner": "FS.GG.Coordination",

@@ -396,6 +396,18 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-immutable-manifest.fsx", "--", "--root", ".", "--phase", "recovery"]
+    },
+    {
+      "id": "github-typed-transform-contract",
+      "qGate": "Q5",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-typed-transforms.fsx", "--", "--root", ".", "--phase", "transforms"]
+    },
+    {
+      "id": "github-typed-transform-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-typed-transforms.fsx", "--", "--root", ".", "--phase", "recovery"]
     }
   ]
 }
