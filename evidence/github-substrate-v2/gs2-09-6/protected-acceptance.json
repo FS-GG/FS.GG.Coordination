@@ -1,0 +1,80 @@
+{
+  "schema": "fsgg.github-substrate-v2.rollback-plan-protected-acceptance/1",
+  "unit": "GS2-09.6",
+  "state": "accepted",
+  "source": {
+    "candidate": "ad8f3dda4791a34ac8fb747c18219b0a0061e5b3",
+    "merge": "8bec873d75e7ddd86b8ed67d0438341ba72479a7",
+    "tree": "2a51d0d50d1a3912a59c006e3512037197d66d11",
+    "pullRequest": 497
+  },
+  "repairLineage": [
+    {
+      "candidate": "a59fbdd5ce7cfc50cec85b9845b6f3764ee37203",
+      "bootstrapRun": 35839634727,
+      "optimisticValidationRun": 35839634723,
+      "disposition": "superseded-stale-gate-count"
+    },
+    {
+      "candidate": "ad8f3dda4791a34ac8fb747c18219b0a0061e5b3",
+      "merge": "8bec873d75e7ddd86b8ed67d0438341ba72479a7",
+      "pullRequest": 497,
+      "disposition": "accepted"
+    }
+  ],
+  "qualification": {
+    "manifestSha256": "46190723c2d9e022130022298a9ebb4f0bd0d667f17e787f81a979e56b3527c2",
+    "normalizedDigest": "6e030d4f99da811fe94fd0e18d6454774226651c55b4793b9d0d34b8397707c1",
+    "seal": "e475b68ab2b65e1df253a0cfa007714a03f0c1bee65786d806857ed018fa676f",
+    "q5Command": {
+      "id": "github-rollback-plan-contract",
+      "sha256": "d3cfc15c249ea988a98547b95cc7f00509caf8a07a9481ba8c896ca35ef6e099",
+      "conclusion": "success"
+    },
+    "q6Command": {
+      "id": "github-rollback-plan-recovery-contract",
+      "sha256": "6242a1f2cc348595aaabc772e37979108fb12e5cc5760e54f77206ec6c08a6a9",
+      "conclusion": "success"
+    }
+  },
+  "hosted": {
+    "candidate": {
+      "bootstrapRun": 35840768495,
+      "codeqlRun": 35840764171,
+      "optimisticValidationRun": 35840768310,
+      "conclusion": "success"
+    },
+    "protectedMerge": {
+      "bootstrapRun": 35842389772,
+      "codeqlRun": 35842389519,
+      "optimisticValidationRun": 35842389861,
+      "conclusion": "success"
+    },
+    "supersededFailures": [
+      {
+        "run": 35839634727,
+        "scope": "initial-candidate-bootstrap",
+        "failure": "stale-literal-gate-count"
+      },
+      {
+        "run": 35839634723,
+        "scope": "initial-candidate-optimistic",
+        "failure": "cancelled-after-candidate-superseded"
+      }
+    ]
+  },
+  "claims": {
+    "verifiedV2RollbackBoundary": true,
+    "allRestorationDomainsBound": true,
+    "reverseContiguousOrder": true,
+    "capturedStateAndRestorePayloadBound": true,
+    "receiptPrefixResumable": true,
+    "receiptPlanAndChainBound": true,
+    "deterministicFreshProcessReplay": true,
+    "tamperGapReorderForeignPlanRefusal": true,
+    "rollbackExecuted": false,
+    "providerMutation": false,
+    "successorAuthority": false
+  },
+  "acceptedAt": "2026-09-23T10:01:31Z"
+}
