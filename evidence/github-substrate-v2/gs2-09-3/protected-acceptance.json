@@ -1,0 +1,52 @@
+{
+  "schema": "fsgg.github-substrate-v2.typed-transform-protected-acceptance/1",
+  "unit": "GS2-09.3",
+  "state": "accepted",
+  "source": {
+    "candidate": "150c8b03fb763fd893f40c9bdbcfe407fb9f5d54",
+    "merge": "ac98b04e50165855c71425f99c1477b6e1ef31ef",
+    "tree": "8a89e3705156c92254dc4d497b0c45ecad9ce9ce",
+    "pullRequest": 485
+  },
+  "qualification": {
+    "manifestSha256": "c0d54d22d5926bd2d4b0c4a87666fdb0766d4c0cae36abc6eeccafbfc697534d",
+    "normalizedTransformDigest": "aec2736dd8c6194e9682b3f54ffa840c620185c0bb329334feb667a09fd1b41a",
+    "transformSeal": "8b54160ae1bf62734ec524df064f0fe54de58a17755a2a509ae8e5014b961b59",
+    "q5Command": {
+      "id": "github-typed-transform-contract",
+      "sha256": "a37409e6b7f70598e08b9b523c4e4a73ce3dbbfcb6bd233e830198b42dd2eb49",
+      "conclusion": "success"
+    },
+    "q6Command": {
+      "id": "github-typed-transform-recovery-contract",
+      "sha256": "8d9caad59b8e024a90e975f179099f42d839ce28bdf2bf98719fa75f2d13654f",
+      "conclusion": "success"
+    }
+  },
+  "hosted": {
+    "candidate": {
+      "bootstrapRun": 35800973815,
+      "codeqlRun": 35800972459,
+      "optimisticValidationRun": 35800973797,
+      "optimisticValidationAttempt": 1,
+      "conclusion": "success"
+    },
+    "protectedMerge": {
+      "bootstrapRun": 35801953350,
+      "optimisticValidationRun": 35801953346,
+      "conclusion": "success"
+    }
+  },
+  "claims": {
+    "acceptedManifestBound": true,
+    "completeTransformObligations": true,
+    "allTenFamiliesBound": true,
+    "closedTypedOutcomes": true,
+    "deterministicFreshProcessReplay": true,
+    "tamperAndOmissionRefusal": true,
+    "liveTransformsCreated": false,
+    "providerMutation": false,
+    "successorAuthority": false
+  },
+  "acceptedAt": "2026-09-23T00:56:27Z"
+}
