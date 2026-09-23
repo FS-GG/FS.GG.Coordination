@@ -40,6 +40,32 @@ type MigrationIssueTypePopulation =
       Terminal: bool
       IssueTypes: MigrationIssueTypeRecord list }
 
+[<RequireQualifiedAccess>]
+type MigrationRelationKind = ParentChild | Blocks
+
+type MigrationRelationEndpoint =
+    { NodeId: string
+      RepositoryId: int64 }
+
+type MigrationRelationEdge =
+    { Kind: MigrationRelationKind
+      Source: MigrationRelationEndpoint
+      Target: MigrationRelationEndpoint }
+
+type MigrationIssueRelationRecord =
+    { IssueNodeId: string
+      UpdatedAt: DateTimeOffset
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRelationPopulation =
+    { RepositoryId: int64
+      IssueCount: int
+      CompleteForRepository: bool
+      ExternalEdgeCount: int
+      Edges: MigrationRelationEdge list
+      Issues: MigrationIssueRelationRecord list }
+
 type MigrationProjectReadOptions =
     { GraphQLUri: Uri
       Token: string
@@ -149,6 +175,12 @@ module MigrationGitHubRead =
     val readIssueTypes:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssueTypePopulation, MigrationReadFailure>
+
+    val readNativeRelations:
+        options:MigrationGitHubReadOptions ->
+        issues:MigrationIssuePopulation ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRelationPopulation, MigrationReadFailure>
 
     val readProjectItems:
         options:MigrationProjectReadOptions -> transport:IMigrationGitHubReadTransport ->

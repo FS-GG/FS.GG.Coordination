@@ -35,6 +35,17 @@ let private repo = ok Map.empty """{"id":42,"full_name":"FS-GG/copy"}"""
 let private issue number nodeId =
     $"""{{"number":{number},"id":{number + 100},"node_id":"{nodeId}","state":"open","updated_at":"2026-09-23T10:00:00Z"}}"""
 
+let private relationNode id repositoryId =
+    $"""{{"id":"{id}","repository":{{"databaseId":{repositoryId}}}}}"""
+
+let private relationConnection (nodes: string list) hasNext =
+    let joined = String.concat "," nodes
+    $"""{{"totalCount":{nodes.Length},"nodes":[{joined}],"pageInfo":{{"hasNextPage":{(if hasNext then "true" else "false")},"endCursor":null}}}}"""
+
+let private relationReply id number parent children blockers blocking =
+    let parentJson = parent |> Option.defaultValue "null"
+    $"""{{"data":{{"node":{{"id":"{id}","number":{number},"updatedAt":"2026-09-23T10:00:00Z","repository":{{"databaseId":42}},"parent":{parentJson},"subIssues":{relationConnection children false},"blockedBy":{relationConnection blockers false},"blocking":{relationConnection blocking false}}}}}}}"""
+
 type private FakeTransport(responses: TransportOutcome list) =
     let queue = Queue<TransportOutcome>(responses)
     let requests = ResizeArray<GitHubRequest>()
@@ -43,6 +54,99 @@ type private FakeTransport(responses: TransportOutcome list) =
         member _.Send request =
             requests.Add request
             if queue.Count = 0 then NetworkFailure else queue.Dequeue()
+
+let private issueCensus () =
+    let first = issue 1 "ISSUE_1"
+    let second = issue 2 "ISSUE_2"
+    let transport = FakeTransport [ repo; ok Map.empty $"[{first},{second}]" ]
+    match MigrationGitHubRead.readIssues options transport with
+    | Ok population -> population
+    | Error failure -> failwithf "unexpected issue census refusal: %A" failure
+
+[<Fact>]
+let ``native relation reader proves reciprocal parent and blocking directions`` () =
+    let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] [relationNode "ISSUE_2" 42L]
+    let second = relationReply "ISSUE_2" 2 (Some(relationNode "ISSUE_1" 42L)) [] [relationNode "ISSUE_1" 42L] []
+    let transport = FakeTransport [ ok Map.empty first; ok Map.empty second ]
+    match MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport with
+    | Ok population ->
+        Assert.True(population.CompleteForRepository)
+        Assert.Equal(2, population.IssueCount)
+        Assert.Equal(0, population.ExternalEdgeCount)
+        Assert.Equal(2, population.Edges.Length)
+        Assert.Equal<MigrationRelationKind list>(
+            [MigrationRelationKind.ParentChild; MigrationRelationKind.Blocks],
+            population.Edges |> List.map _.Kind)
+        Assert.All(population.Edges, fun edge ->
+            Assert.Equal("ISSUE_1", edge.Source.NodeId)
+            Assert.Equal("ISSUE_2", edge.Target.NodeId))
+        Assert.All(population.Issues, fun record ->
+            let digest = record.PayloadJson |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                         |> Convert.ToHexString |> _.ToLowerInvariant()
+            Assert.Equal(record.PayloadSha256, digest))
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | GraphQL value -> Assert.StartsWith("query", value.Document)
+            | _ -> failwith "relation reader issued a non-GraphQL request")
+    | Error failure -> failwithf "unexpected relation refusal: %A" failure
+
+[<Fact>]
+let ``native relation reader refuses missing reciprocal edge`` () =
+    let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] []
+    let second = relationReply "ISSUE_2" 2 None [] [] []
+    let transport = FakeTransport [ ok Map.empty first; ok Map.empty second ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "relation-reciprocity-or-census"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport)
+
+[<Fact>]
+let ``native relation reader refuses nested truncation and partial GraphQL data`` () =
+    let empty = relationConnection [] false
+    let truncated = relationConnection [relationNode "ISSUE_2" 42L] true
+    let first =
+        $"""{{"data":{{"node":{{"id":"ISSUE_1","number":1,"updatedAt":"2026-09-23T10:00:00Z","repository":{{"databaseId":42}},"parent":null,"subIssues":{truncated},"blockedBy":{empty},"blocking":{empty}}}}}}}"""
+    let transport = FakeTransport [ ok Map.empty first ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "subIssues:nested-continuation"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport)
+    let partial = FakeTransport [ ok Map.empty $"""{{"data":{{"node":null}},"errors":[{{"message":"forbidden"}}]}}""" ]
+    Assert.Equal(Error MigrationReadFailure.GraphQLErrors,
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) partial)
+
+[<Fact>]
+let ``native relation reader refuses drift and vanished source issue`` () =
+    let changed = (relationReply "ISSUE_1" 1 None [] [] []).Replace("2026-09-23T10:00:00Z", "2026-09-23T10:01:00Z")
+    let transport = FakeTransport [ ok Map.empty changed ]
+    Assert.Equal(Error MigrationReadFailure.PopulationDrift,
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport)
+    let vanished = FakeTransport [ ok Map.empty """{"data":{"node":null}}""" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) vanished)
+
+[<Fact>]
+let ``native relation reader records external endpoints without inventing their reciprocal`` () =
+    let first = relationReply "ISSUE_1" 1 None [] [relationNode "EXTERNAL" 77L] []
+    let second = relationReply "ISSUE_2" 2 None [] [] []
+    let transport = FakeTransport [ ok Map.empty first; ok Map.empty second ]
+    match MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport with
+    | Ok population ->
+        Assert.Equal(1, population.ExternalEdgeCount)
+        Assert.Equal(MigrationRelationKind.Blocks, population.Edges.Head.Kind)
+        Assert.Equal("EXTERNAL", population.Edges.Head.Source.NodeId)
+        Assert.Equal("ISSUE_1", population.Edges.Head.Target.NodeId)
+    | Error failure -> failwithf "unexpected external edge refusal: %A" failure
+
+[<Fact>]
+let ``native relation reader refuses duplicate and uncensused local endpoints`` () =
+    let duplicate =
+        relationReply "ISSUE_1" 1 None
+            [relationNode "ISSUE_2" 42L; relationNode "ISSUE_2" 42L] [] []
+    let duplicateTransport = FakeTransport [ ok Map.empty duplicate ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "ISSUE_2"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) duplicateTransport)
+    let missing = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_3" 42L] [] []
+    let second = relationReply "ISSUE_2" 2 None [] [] []
+    let missingTransport = FakeTransport [ ok Map.empty missing; ok Map.empty second ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "relation-reciprocity-or-census"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ()) missingTransport)
 
 [<Fact>]
 let ``read-only issue census follows all pages and excludes pull requests explicitly`` () =
