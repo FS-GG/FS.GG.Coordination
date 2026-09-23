@@ -149,6 +149,9 @@ for token in [ "V1AdmissionRegistry.restore"; "admission-journal-evidence-moved-
 for token in [ "admission-cas-parent-moved"; "--force-with-lease="; "response-unknown" ] do
     require token "eng/github-v1-admission-journal-cas.py"
 
+for token in [ "V1AdmissionRegistry.proposalCas"; "fsgg.v1-admission-journal-cas/1" ] do
+    require token "src/FS.GG.Coordination.GitHub/V1AdmissionJournalCasPlan.fs"
+
 let credentialSurface =
     read "src/FS.GG.Coordination.Cli/LedgerProtectionCommand.fs"
     + read "src/FS.GG.Coordination.GitHub/LedgerInitializationAdapter.fs"
