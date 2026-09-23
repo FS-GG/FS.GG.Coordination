@@ -452,6 +452,14 @@ disposition-specific proof are sealed into a deterministic digest. Omission, dup
 malformed proof, changed global identity, tampering and seal replay refuse. This source boundary does not
 execute operations, produce archives, execute rollback, mutate a provider, or run migration.
 
+GS2-09.5 is registered against that same active roadmap pin. Its sole prerequisite is the accepted
+GS2-09.4 receipt with digest `f31c8c4f3720976cf7a467e5e9dae6359d4ab60ed92feaa219c502007426b65e`.
+The Q5 `github-sealed-history-contract` and Q6 `github-sealed-history-recovery-contract` preserve exact
+source schemas, bytes and digests, typed expected outcomes, a verifier artifact and a complete lookup
+index. The v2 production closure must have zero v1 upcasters and expose only archive verification and
+read-only lookup. Omission, reordering, byte changes, lookup repointing, malformed outcomes, tampering and
+seal replay refuse. This source boundary does not publish archives, mutate a provider, or run migration.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

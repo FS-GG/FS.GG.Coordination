@@ -111,6 +111,8 @@
     <Compile Include="GitHubTypedTransformQualification.fs" />
     <Compile Include="GitHubLiveOperationQualification.fsi" />
     <Compile Include="GitHubLiveOperationQualification.fs" />
+    <Compile Include="GitHubSealedHistoryQualification.fsi" />
+    <Compile Include="GitHubSealedHistoryQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

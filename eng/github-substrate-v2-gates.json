@@ -420,6 +420,18 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-live-operations.fsx", "--", "--root", ".", "--phase", "recovery"]
+    },
+    {
+      "id": "github-sealed-history-contract",
+      "qGate": "Q5",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-sealed-history.fsx", "--", "--root", ".", "--phase", "history"]
+    },
+    {
+      "id": "github-sealed-history-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-sealed-history.fsx", "--", "--root", ".", "--phase", "recovery"]
     }
   ]
 }
