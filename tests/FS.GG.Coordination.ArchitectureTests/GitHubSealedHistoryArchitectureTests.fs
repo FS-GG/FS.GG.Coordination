@@ -55,3 +55,11 @@ let ``GS2-09-5 gate identities bind the registered literal commands`` () =
         let command = commands |> List.find (fun item -> item.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
         Assert.Equal(command.GetProperty("qGate").GetString(), contract.GetProperty("qGate").GetString())
         Assert.Equal(gateCommandSha256 command, contract.GetProperty("commandSha256").GetString())
+
+[<Fact>]
+let ``formal base parity uses fixed seeds and preserves failure diagnostics`` () =
+    let verifier = File.ReadAllText(path "eng/verify-choreo-c5-parity.py")
+    Assert.Contains("--seed=0xC5F0", verifier)
+    Assert.Contains("--seed=0xC5F1", verifier)
+    Assert.Contains("check=False, capture_output=True", verifier)
+    Assert.Contains("print(diagnostic, file=sys.stderr)", verifier)
