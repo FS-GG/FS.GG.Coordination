@@ -78,6 +78,15 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="fixtures/gs2-v1-admission-protected-authorization.yml"
+             Link="Fixtures/gs2-v1-admission-protected-authorization.yml"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/v1-admission-native-read.json"
+             Link="Fixtures/v1-admission-native-read.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/v1-admission-git-read.json"
+             Link="Fixtures/v1-admission-git-read.json"
+             CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\..\work\96-gs2-03-5-native-quint-formal-tests\counterexamples\journal-fencing.itf.json"
              Link="Fixtures\journal-fencing.itf.json"
              CopyToOutputDirectory="PreserveNewest" />

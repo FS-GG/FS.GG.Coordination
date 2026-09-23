@@ -169,6 +169,18 @@ type RegistryGitObjects =
         CommitBytes: byte array
     }
 
+type private GenesisPlanData =
+    {
+        Address: AggregateAddress
+        AuthorityCommit: GitObjectId
+        Manifest: Sha256Digest
+        TrustDigest: Sha256Digest
+        Commit: JournalCommit
+        Objects: RegistryGitObjects
+    }
+
+type RegistryGenesisPlan = private RegistryGenesisPlan of GenesisPlanData
+
 type private CommandData =
     | InitializeCommand
     | AdmitCommand of MutationContext * Sha256Digest
@@ -1633,6 +1645,123 @@ module V1AdmissionRegistry =
                             })
                 )
 
+    let planGenesis operationId (VerifiedAuthoritySnapshot authority) (observed: RegistryJournalRead) =
+        let address = registryAddress ()
+
+        let errors =
+            [
+                if String.IsNullOrWhiteSpace operationId
+                   || operationId.Length > 128
+                   || (operationId |> Seq.exists Char.IsControl) then
+                    "registry-genesis-operation-id"
+                if authority.Phase <> V1OperatingV1 || authority.AdmissionSeal.IsSome then
+                    "registry-genesis-authority-phase"
+                if observed.Repository <> "FS-GG/FS.GG.Coordination.Authority"
+                   || observed.RepositoryId <> 1351660651L
+                   || observed.Ref <> address.Ref then
+                    "registry-genesis-journal-identity"
+                if observed.FirstHead.IsSome || observed.SecondHead.IsSome
+                   || observed.Observation <> JournalDeleted
+                   || not observed.CommitBytes.IsEmpty
+                   || not observed.TreeBytes.IsEmpty then
+                    "registry-genesis-journal-not-proven-absent"
+            ]
+
+        match errors with
+        | _ :: _ -> Error errors
+        | [] ->
+            let candidate =
+                {
+                    Address = address
+                    Head = authority.Commit
+                    Generation = 1L
+                    ExpectedParent = None
+                    Persisted = false
+                    PendingCommand = Some "initialize"
+                    ObservedCommits = Set.empty
+                    Round = 1L
+                    Manifest = authority.Manifest
+                    Phase = AdmissionsOpen
+                    Admissions = Map.empty
+                    Effects = Map.empty
+                    SealCommit = None
+                    SealGeneration = None
+                    SealDigest = None
+                }
+
+            let eventBytes = canonicalEventBytes operationId None candidate
+            let eventDigest = ShardedJournalAdapter.sha256 eventBytes
+            let eventOid = gitOid "blob" eventBytes
+            let provisionalHead =
+                {
+                    SchemaVersion = 1
+                    Address = address
+                    Generation = 1L
+                    EventDigest = eventDigest
+                    SnapshotDigest = None
+                    Terminal = false
+                    PriorHeadDigest = None
+                    HeadDigest = String.replicate 64 "0"
+                }
+            let head =
+                { provisionalHead with
+                    HeadDigest = ShardedJournalAdapter.journalHeadBytes provisionalHead |> ShardedJournalAdapter.sha256 }
+            let headBytes = ShardedJournalAdapter.journalHeadBytes head
+            let headOid = gitOid "blob" headBytes
+            let tree = treeBytes eventOid headOid
+            let treeOid = gitOid "tree" tree
+            let commitBytesValue = commitBytes treeOid None operationId
+            let commitOid = gitOid "commit" commitBytesValue
+            let commit =
+                {
+                    CommitOid = gitObjectIdValue commitOid
+                    ParentOid = None
+                    TreeOid = gitObjectIdValue treeOid
+                    OperationId = operationId
+                    Head = head
+                    HeadBytes = Array.copy headBytes
+                    Event = { Bytes = Array.copy eventBytes; Digest = eventDigest }
+                    Checkpoint = None
+                }
+            let objects =
+                {
+                    EventObjectId = eventOid
+                    EventBytes = Array.copy eventBytes
+                    HeadObjectId = headOid
+                    HeadBytes = Array.copy headBytes
+                    TreeObjectId = treeOid
+                    TreeBytes = Array.copy tree
+                    CommitObjectId = commitOid
+                    CommitBytes = Array.copy commitBytesValue
+                }
+
+            Ok(
+                RegistryGenesisPlan
+                    {
+                        Address = address
+                        AuthorityCommit = authority.Commit
+                        Manifest = authority.Manifest
+                        TrustDigest = authority.Trust
+                        Commit = commit
+                        Objects = objects
+                    }
+            )
+
+    let genesisAddress (RegistryGenesisPlan plan) = plan.Address
+    let genesisAuthorityCommit (RegistryGenesisPlan plan) = plan.AuthorityCommit
+    let genesisManifest (RegistryGenesisPlan plan) = plan.Manifest
+    let genesisTrustDigest (RegistryGenesisPlan plan) = plan.TrustDigest
+    let genesisMatchesAuthority (RegistryGenesisPlan plan) (VerifiedAuthoritySnapshot authority) =
+        authority.Phase = V1OperatingV1
+        && authority.AdmissionSeal.IsNone
+        && authority.Commit = plan.AuthorityCommit
+        && authority.Manifest = plan.Manifest
+        && authority.Trust = plan.TrustDigest
+    let genesisCommit (RegistryGenesisPlan plan) =
+        { plan.Commit with
+            HeadBytes = Array.copy plan.Commit.HeadBytes
+            Event = { plan.Commit.Event with Bytes = Array.copy plan.Commit.Event.Bytes } }
+
     let private exactProposal (RegistryAppendProposal proposal) (read: RegistryJournalRead) =
         match restore read with
         | Error _ -> false
@@ -1659,6 +1788,31 @@ module V1AdmissionRegistry =
 
     let proposalCas (RegistryAppendProposal proposal) = proposal.Cas
     let proposalObjects (RegistryAppendProposal proposal) = copyObjects proposal.Objects
+    let genesisObjects (RegistryGenesisPlan plan) = copyObjects plan.Objects
+
+    let verifyGenesisReadback (RegistryGenesisPlan plan) (read: RegistryJournalRead) =
+        let objects = plan.Objects
+
+        let exactRoot =
+            match read.Observation with
+            | JournalComplete(_, [ commit ]) -> commit = plan.Commit
+            | _ -> false
+
+        if not exactRoot
+           || read.FirstHead <> Some objects.CommitObjectId
+           || read.SecondHead <> Some objects.CommitObjectId
+           || read.CommitBytes <> Map.ofList [ plan.Commit.CommitOid, objects.CommitBytes ]
+           || read.TreeBytes <> Map.ofList [ plan.Commit.TreeOid, objects.TreeBytes ] then
+            Error [ "registry-genesis-readback-not-exact" ]
+        else
+            restore read
+            |> Result.bind (fun registry ->
+                if head registry = objects.CommitObjectId
+                   && generation registry = 1L
+                   && phase registry = AdmissionsOpen then
+                    Ok registry
+                else
+                    Error [ "registry-genesis-restored-state" ])
 
     let appendAndReconcile (port: RegistryJournalPort) (RegistryAppendProposal proposal as opaqueProposal) =
         let before = port.Read proposal.Cas.Address

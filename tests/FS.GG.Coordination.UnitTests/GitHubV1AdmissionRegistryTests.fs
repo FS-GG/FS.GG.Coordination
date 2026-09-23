@@ -1,8 +1,11 @@
 module FS.GG.Coordination.GitHubV1AdmissionRegistryTests
 
 open System
+open System.IO
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
+open System.Text.Json.Nodes
 open FS.GG.Coordination.GitHub
 open Xunit
 
@@ -25,8 +28,8 @@ let private treeBytes entries =
         @ (Registry.gitObjectIdValue value |> Convert.FromHexString |> Array.toList))
     |> List.toArray
 
-let private authority phase generation seal (transform: AuthorityGitObjects -> AuthorityGitObjects) =
-    let manifest, trust = digest "a", digest "b"
+let private authorityWithTrust trust phase generation seal (transform: AuthorityGitObjects -> AuthorityGitObjects) =
+    let manifest = digest "a"
     let sealFields =
         match seal with
         | None -> ""
@@ -60,6 +63,9 @@ let private authority phase generation seal (transform: AuthorityGitObjects -> A
         { ReadObjects = fun () -> Ok observed
           RereadHead = fun () -> Ok observed.FirstHead }
     Registry.readVerified port |> Result.defaultWith (String.concat "," >> failwith), commit, manifest, observed, port
+
+let private authority phase generation seal transform =
+    authorityWithTrust (digest "b") phase generation seal transform
 
 let private registryAddress () =
     ShardedJournalAdapter.address Operation "fleet-v1-admission:fs-gg-production"
@@ -224,6 +230,433 @@ let ``producer restore refuses deleted journal and accepts pinned initializer ge
     Assert.True(Registry.restore read |> Result.isOk)
     Assert.True(Registry.restore { read with SecondHead = Some(oid "1") } |> Result.isError)
     Assert.True(Registry.restore { read with RepositoryId = 7L } |> Result.isError)
+
+[<Fact>]
+let ``protected genesis plan binds verified OperatingV1 authority and restores exact objects`` () =
+    let snapshot, authorityCommit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let plan =
+        Registry.planGenesis "protected-genesis" snapshot (absentRead ())
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let commit = Registry.genesisCommit plan
+    let objects = Registry.genesisObjects plan
+    Assert.Equal(registryAddress (), Registry.genesisAddress plan)
+    Assert.Equal(authorityCommit, Registry.genesisAuthorityCommit plan)
+    Assert.Equal(Registry.gitObjectIdValue objects.CommitObjectId, commit.CommitOid)
+    Assert.Equal(Registry.gitObjectIdValue objects.TreeObjectId, commit.TreeOid)
+    let read =
+        { absentRead () with
+            FirstHead = Some objects.CommitObjectId
+            SecondHead = Some objects.CommitObjectId
+            Observation = JournalComplete("protected-genesis", [ commit ])
+            CommitBytes = Map.ofList [ commit.CommitOid, objects.CommitBytes ]
+            TreeBytes = Map.ofList [ commit.TreeOid, objects.TreeBytes ] }
+    let restored = Registry.restore read |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(Registry.verifyGenesisReadback plan read |> Result.isOk)
+    Assert.Equal(1L, Registry.generation restored)
+    Assert.Equal(AdmissionsOpen, Registry.phase restored)
+    Assert.Equal(Registry.gitObjectIdValue objects.CommitObjectId, Registry.gitObjectIdValue (Registry.head restored))
+    use eventDocument = System.Text.Json.JsonDocument.Parse objects.EventBytes
+    Assert.Equal(Registry.sha256Value manifest, eventDocument.RootElement.GetProperty("manifestSha256").GetString())
+    objects.EventBytes[0] <- 0uy
+    Assert.NotEqual(0uy, (Registry.genesisObjects plan).EventBytes[0])
+    let altered = { read with TreeBytes = Map.empty }
+    match Registry.verifyGenesisReadback plan altered with
+    | Error reasons -> Assert.Contains("registry-genesis-readback-not-exact", reasons)
+    | Ok _ -> Assert.Fail "a changed readback must not confirm genesis"
+
+[<Fact>]
+let ``protected genesis plan refuses ambiguous absence and existing journal`` () =
+    let snapshot, _, manifest, _, _ = authority "OperatingV1" 1L None id
+    let absent = absentRead ()
+    let cases =
+        [ { absent with SecondHead = Some(oid "1") }
+          { absent with Observation = JournalIncomplete "unreadable" }
+          { absent with Observation = JournalUnauthorized "no permission" }
+          genesisRead manifest ]
+    for read in cases do
+        match Registry.planGenesis "protected-genesis" snapshot read with
+        | Error reasons -> Assert.Contains("registry-genesis-journal-not-proven-absent", reasons)
+        | Ok _ -> Assert.Fail "genesis must require two known-absent heads"
+    Assert.True(Registry.planGenesis "bad\noperation" snapshot absent |> Result.isError)
+    Assert.True(Registry.planGenesis "bad\u0000operation" snapshot absent |> Result.isError)
+
+[<Fact>]
+let ``protected genesis plan refuses a verified non-OperatingV1 authority`` () =
+    let snapshot, _, _, _, _ = authority "Preparing" 2L (Some(oid "c", 1L, digest "d")) id
+    match Registry.planGenesis "protected-genesis" snapshot (absentRead ()) with
+    | Error reasons -> Assert.Contains("registry-genesis-authority-phase", reasons)
+    | Ok _ -> Assert.Fail "an incumbent-only epoch must not authorize admission genesis"
+
+[<Fact>]
+let ``protected genesis binds signature native approval and expected absent install`` () =
+    use rsa = RSA.Create(2048)
+    let spki = SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let receiptDigest = Registry.sha256Value (digest "c")
+    let manifestDigest = Registry.sha256Value (digest "a")
+    let trustJson =
+        $"{{\"acceptedGenesisReceiptDigest\":\"{receiptDigest}\",\"authorizer\":{{\"algorithm\":\"RSA-PSS-SHA256\",\"keyId\":\"test-key\",\"publicKeySpkiSha256\":\"{spki}\"}},\"manifestSha256\":\"{manifestDigest}\",\"schema\":\"fsgg.github-ledger-initial-trust/1\"}}"
+    let trustBytes =
+        ShardedJournalAdapter.canonicalJson trustJson
+        |> Result.defaultWith failwith
+        |> fun bytes -> Array.append bytes [| 10uy |]
+    let trustDigest = SHA256.HashData trustBytes |> Convert.ToHexString |> _.ToLowerInvariant() |> Registry.sha256Digest |> Result.defaultWith failwith
+    let snapshot, _, _, _, authorityPort = authorityWithTrust trustDigest "OperatingV1" 1L None id
+    let plan = Registry.planGenesis "protected-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
+    let intent: GenesisAuthorizationIntent =
+        { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"
+          WorkflowSha256 =
+            Registry.sha256Digest "07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3"
+            |> Result.defaultWith failwith }
+    let now = DateTimeOffset(2026, 9, 23, 14, 0, 0, TimeSpan.Zero)
+    let unsigned: GenesisSignature =
+        { KeyId = "test-key"; PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(); ProtectedRunId = 42L
+          AuthorizedAt = now.AddMinutes(-5.); ExpiresAt = now.AddMinutes(85.); Signature = Array.empty }
+    let signature =
+        { unsigned with
+            Signature = rsa.SignData(
+                V1AdmissionGenesisAuthorization.canonicalSignaturePayload plan intent unsigned,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pss
+            ) }
+    let intentSha256 =
+        SHA256.HashData(V1AdmissionGenesisAuthorization.canonicalIntent plan intent)
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+    let envelope =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.github-substrate.v1-admission-genesis-signature-envelope/1"
+               intentSha256 = intentSha256
+               keyId = signature.KeyId
+               protectedRunId = signature.ProtectedRunId
+               authorizedAt = signature.AuthorizedAt.ToUniversalTime().ToString("O")
+               expiresAt = signature.ExpiresAt.ToUniversalTime().ToString("O")
+               publicKeyPem = signature.PublicKeyPem
+               signatureBase64 = Convert.ToBase64String signature.Signature |}
+    let decoded =
+        V1AdmissionGenesisAuthorization.decodeEnvelope plan intent (ReadOnlyMemory envelope)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent decoded |> Result.isOk)
+    let changed action =
+        let root = JsonNode.Parse envelope
+        action root
+        V1AdmissionGenesisAuthorization.decodeEnvelope
+            plan intent (ReadOnlyMemory(Encoding.UTF8.GetBytes(root.ToJsonString())))
+    Assert.True(changed (fun root -> root["intentSha256"] <- JsonValue.Create(String.replicate 64 "f")) |> Result.isError)
+    Assert.True(changed (fun root -> root["publicKeyPem"] <- JsonValue.Create(rsa.ExportPkcs8PrivateKeyPem())) |> Result.isError)
+    Assert.True(changed (fun root -> root["signatureBase64"] <- JsonValue.Create("?")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)
+    let wrongSignature = Array.copy signature.Signature
+    wrongSignature[0] <- wrongSignature[0] ^^^ 1uy
+    let parsedWrongSignature =
+        changed (fun root -> root["signatureBase64"] <- JsonValue.Create(Convert.ToBase64String wrongSignature))
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent parsedWrongSignature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.decodeEnvelope plan intent (ReadOnlyMemory(Array.zeroCreate 8193)) |> Result.isError)
+    let duplicate = Encoding.UTF8.GetString envelope
+                    |> fun text -> text.Replace("\"keyId\":\"test-key\"", "\"keyId\":\"test-key\",\"keyId\":\"test-key\"")
+                    |> Encoding.UTF8.GetBytes
+    Assert.NotEqual(envelope, duplicate)
+    Assert.True(V1AdmissionGenesisAuthorization.decodeEnvelope plan intent (ReadOnlyMemory duplicate) |> Result.isError)
+    let verified =
+        V1AdmissionGenesisAuthorization.verify now trustBytes plan intent signature
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(42L, V1AdmissionGenesisAuthorization.protectedRunId verified)
+    Assert.Equal(
+        SHA256.HashData(V1AdmissionGenesisAuthorization.canonicalIntent plan intent) |> Convert.ToHexString |> _.ToLowerInvariant(),
+        V1AdmissionGenesisAuthorization.intentSha256 verified |> Registry.sha256Value
+    )
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan { intent with SourceCommit = oid "5" } signature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan { intent with WorkflowSha256 = digest "6" } signature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent { signature with ProtectedRunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent { signature with KeyId = "other" } |> Result.isError)
+    let alteredPlan = Registry.planGenesis "other-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes alteredPlan intent signature |> Result.isError)
+    use other = RSA.Create(2048)
+    Assert.True(
+        V1AdmissionGenesisAuthorization.verify
+            now
+            trustBytes
+            plan
+            intent
+            { signature with PublicKeyPem = other.ExportSubjectPublicKeyInfoPem() }
+        |> Result.isError
+    )
+    Assert.True(V1AdmissionGenesisAuthorization.verify (now.AddMinutes 86.) trustBytes plan intent signature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now (Array.append trustBytes [| 10uy |]) plan intent signature |> Result.isError)
+
+    let artifact =
+        {| schema = "fsgg.v1-admission-genesis-protected-authorization/2"
+           operationId = "protected-genesis"
+           repository = "FS-GG/.github"
+           runId = 42L
+           workflowRevision = Registry.gitObjectIdValue intent.WorkflowRevision
+           coordinationRevision = Registry.gitObjectIdValue intent.SourceCommit
+           coordinationTree = Registry.gitObjectIdValue intent.SourceTree
+           environment = "fleet-v1-admission-owner"
+           genesisIntentSha256 = V1AdmissionGenesisAuthorization.intentSha256 verified |> Registry.sha256Value
+           approvedAt = unsigned.AuthorizedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
+           expiresAt = unsigned.ExpiresAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
+           conclusion = "success" |}
+    let native: GenesisProtectedNativeRead =
+        { ObservedAt = now
+          RunRepositoryId = 1269292704L
+          RunId = 42L
+          RunEvent = "workflow_dispatch"
+          RunPath = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
+          RunRef = "refs/heads/main"
+          RunHead = intent.WorkflowRevision
+          RunConclusion = "success"
+          RunActorId = 1645484L
+          RunAttempt = 1
+          WorkflowReadRevision = intent.WorkflowRevision
+          WorkflowBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gs2-v1-admission-protected-authorization.yml"))
+          ArtifactReadRunId = 42L
+          ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes artifact
+          EnvironmentId = 22582241959L
+          EnvironmentName = "fleet-v1-admission-owner"
+          EnvironmentBranchPolicy = "custom-main"
+          EnvironmentWaitMinutes = 5
+          EnvironmentReviewerIds = [ 1645484L ]
+          EnvironmentPreventsSelfReview = false
+          Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] }
+    let approved =
+        V1AdmissionGenesisProtectedApproval.verify now plan intent verified native
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(42L, V1AdmissionGenesisProtectedApproval.runId approved)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ObservedAt = now.AddMinutes(-3.) } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunActorId = 777L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunAttempt = 2 } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunRef = "refs/heads/other" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now alteredPlan intent verified native |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowBytes = Encoding.UTF8.GetBytes "changed" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowReadRevision = oid "7" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactReadRunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentPreventsSelfReview = true } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentWaitMinutes = 0 } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentReviewerIds = [ 1645484L; 4456104L ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentId = 9L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentBranchPolicy = "unrestricted" } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 9L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] }; { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes {| artifact with runId = 43L |} } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify (now.AddMinutes 86.) plan intent verified native |> Result.isError)
+
+    let source: GenesisSourceRead =
+        { ObservedAt = now; RepositoryId = 1346720714L; Commit = intent.SourceCommit
+          Tree = intent.SourceTree; IsOnMain = true }
+    let protection: GenesisProtectionRead =
+        { ObservedAt = now; RepositoryId = 1351660651L
+          WriterRulesetId = 21872113L; WriterRulesetActive = true; WriterRulesetMatchesRef = true
+          WriterBypassAppIds = [ 4882140L ]
+          IntegrityRulesetId = 21872115L; IntegrityRulesetActive = true
+          IntegrityRulesetMatchesRef = true; IntegrityRejectsDeletion = true
+          IntegrityRejectsNonFastForward = true; IntegrityBypassAppIds = []
+          CredentialAppId = 4882140L; CredentialInstallationId = 160261608L
+          CredentialRepositoryIds = [ 1351660651L ]; CredentialContentsWrite = true
+          CredentialHasOtherWritePermissions = false }
+    let genesisObjects = Registry.genesisObjects plan
+    let genesisCommit = Registry.genesisCommit plan
+    let installedRead =
+        { absentRead () with
+            FirstHead = Some genesisObjects.CommitObjectId
+            SecondHead = Some genesisObjects.CommitObjectId
+            Observation = JournalComplete("protected-genesis", [ genesisCommit ])
+            CommitBytes = Map.ofList [ genesisCommit.CommitOid, genesisObjects.CommitBytes ]
+            TreeBytes = Map.ofList [ genesisCommit.TreeOid, genesisObjects.TreeBytes ] }
+    let mutable journal = absentRead ()
+    let mutable refRead = GenesisRefAbsent
+    let mutable writes = 0
+    let mutable objectStore = Map.empty<string * GitObjectId, byte array>
+    let installer: GenesisInstallerPort =
+        { Now = fun () -> now
+          Authority = authorityPort
+          ReadRegistry = fun _ -> Ok journal
+          ReadRef = fun _ -> refRead
+          ReadTrustAnchor = fun () -> Ok trustBytes
+          ReadSource = fun () -> Ok source
+          ReadProtection = fun () -> Ok protection
+          ReadApproval = fun _ -> Ok native
+          PutObject = fun kind id bytes ->
+              writes <- writes + 1
+              objectStore <- Map.add (kind, id) (Array.copy bytes) objectStore
+              Ok id
+          ReadObject = fun kind id ->
+              match Map.tryFind (kind, id) objectStore with
+              | Some bytes -> Ok bytes
+              | None -> Error "missing-object"
+          CreateRefExpectedAbsent = fun _ id ->
+              if refRead <> GenesisRefAbsent || id <> genesisObjects.CommitObjectId then
+                  Error "expected-absence-conflict"
+              else
+                  refRead <- GenesisRefAt id
+                  journal <- installedRead
+                  Ok() }
+    Assert.Equal(GenesisInstalled, V1AdmissionGenesisInstaller.apply installer plan intent signature)
+    Assert.Equal(4, writes)
+    Assert.Equal(GenesisAlreadyInstalled, V1AdmissionGenesisInstaller.apply installer plan intent signature)
+    Assert.Equal(4, writes)
+    Assert.Equal(
+        GenesisInstallRefused [ "genesis-protection-or-writer-drift" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with ReadProtection = fun () -> Ok { protection with WriterBypassAppIds = [ 9L ] } }
+            plan intent signature
+    )
+    Assert.Equal(4, writes)
+    journal <- absentRead ()
+    refRead <- GenesisRefAbsent
+    Assert.Equal(
+        GenesisInstalled,
+        V1AdmissionGenesisInstaller.apply
+            { installer with
+                CreateRefExpectedAbsent =
+                    fun _ id ->
+                        refRead <- GenesisRefAt id
+                        journal <- installedRead
+                        Error "response-lost" }
+            plan intent signature
+    )
+    journal <- absentRead ()
+    refRead <- GenesisRefAbsent
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-final-readback-indeterminate" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with CreateRefExpectedAbsent = fun _ _ -> Error "response-lost" }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+
+    let mutable protectionReads = 0
+    Assert.Equal(
+        GenesisInstallRefused [ "genesis-protection-or-writer-drift" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with
+                ReadProtection = fun () ->
+                    protectionReads <- protectionReads + 1
+                    if protectionReads = 1 then Ok protection
+                    else Ok { protection with CredentialContentsWrite = false } }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-object-readback-unknown" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with ReadObject = fun _ _ -> Error "provider-unreadable" }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-ref-read-unknown" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with ReadRef = fun _ -> GenesisRefUnknown "provider-unreadable" }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    let mutable refReads = 0
+    Assert.Equal(
+        GenesisInstallRefused [ "genesis-competing-ref" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with
+                ReadRef =
+                    fun _ ->
+                        refReads <- refReads + 1
+                        if refReads = 1 then GenesisRefAbsent else GenesisRefAt(oid "f") }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    let initialHead = authorityPort.RereadHead() |> Result.defaultWith failwith
+    let mutable authorityReads = 0
+    let movingAuthority =
+        { authorityPort with
+            RereadHead = fun () ->
+                authorityReads <- authorityReads + 1
+                if authorityReads = 1 then Ok initialHead else Ok(oid "f") }
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "authority-head-moved" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with Authority = movingAuthority }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-object-oid-mismatch" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with PutObject = fun _ _ _ -> Ok(oid "f") }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+
+[<Fact>]
+let ``native read-only collector evidence has a bounded typed decoder`` () =
+    let bytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-native-read.json"))
+    let read =
+        V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory bytes)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(42L, read.RunId)
+    Assert.Equal(22582241959L, read.EnvironmentId)
+    Assert.Equal(5, read.EnvironmentWaitMinutes)
+    Assert.Equal("refs/heads/main", read.RunRef)
+    Assert.Equal("07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3",
+                 SHA256.HashData(read.WorkflowBytes) |> Convert.ToHexString |> _.ToLowerInvariant())
+    let changed = JsonNode.Parse bytes
+    changed["workflowBytesBase64"] <- JsonValue.Create("?")
+    Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Encoding.UTF8.GetBytes(changed.ToJsonString()))) |> Result.isError)
+    changed["workflowBytesBase64"] <- JsonValue.Create(Convert.ToBase64String read.WorkflowBytes)
+    changed["unreviewedField"] <- JsonValue.Create(1)
+    Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Encoding.UTF8.GetBytes(changed.ToJsonString()))) |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
+
+[<Fact>]
+let ``raw Git collector evidence decodes and verifies an OperatingV1 genesis plan`` () =
+    let fixtureBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-git-read.json"))
+    let fixture =
+        V1AdmissionGenesisGitRead.decode(ReadOnlyMemory fixtureBytes)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisGitRead.verifyPlan (DateTimeOffset.Parse "2026-09-23T14:00:00Z") "protected-genesis" fixture |> Result.isError)
+    let _, commit, manifest, observed, _ = authority "OperatingV1" 1L None id
+    let raw = JsonNode.Parse fixtureBytes
+    let cutover = raw["cutover"].AsObject()
+    let value id = Registry.gitObjectIdValue id
+    let eventOid, eventBytes = observed.EventBlob
+    let headOid, headBytes = observed.HeadBlob
+    cutover["firstHead"] <- JsonValue.Create(value commit)
+    cutover["secondHead"] <- JsonValue.Create(value commit)
+    cutover["tagTarget"] <- JsonValue.Create(value commit)
+    cutover["tagRef"] <- JsonValue.Create("refs/tags/fsgg/v2/fleet-cutover/operating-v1/genesis-" + (Registry.sha256Value manifest).Substring(0, 16))
+    cutover["commit"] <- JsonValue.Create(value commit)
+    cutover["parent"] <- null
+    cutover["genesisCommit"] <- JsonValue.Create(value commit)
+    cutover["ancestry"] <- JsonArray(JsonValue.Create(value commit))
+    cutover["commitTree"] <- JsonValue.Create(value observed.CommitTree)
+    cutover["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.CommitBytes)
+    cutover["treeBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.TreeBytes)
+    let entries = JsonObject()
+    for KeyValue(name, id) in observed.TreeEntries do
+        entries[name] <- JsonValue.Create(value id)
+    cutover["treeEntries"] <- entries
+    cutover["eventOid"] <- JsonValue.Create(value eventOid)
+    cutover["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String eventBytes)
+    cutover["headOid"] <- JsonValue.Create(value headOid)
+    cutover["headBytesBase64"] <- JsonValue.Create(Convert.ToBase64String headBytes)
+    cutover["manifestSha256"] <- JsonValue.Create(Registry.sha256Value manifest)
+    cutover["trustAnchorSha256"] <- JsonValue.Create(Registry.sha256Value (digest "b"))
+    let now = DateTimeOffset.Parse "2026-09-23T14:00:00Z"
+    let encoded () = ReadOnlyMemory(Encoding.UTF8.GetBytes(raw.ToJsonString()))
+    let read = V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.defaultWith (String.concat "," >> failwith)
+    let plan = V1AdmissionGenesisGitRead.verifyPlan now "protected-genesis" read |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(commit, Registry.genesisAuthorityCommit plan)
+    Assert.True(V1AdmissionGenesisGitRead.verifyPlan (now.AddMinutes 3.) "protected-genesis" read |> Result.isError)
+    Assert.True(V1AdmissionGenesisGitRead.verifyPlan (now.AddSeconds(-1.)) "protected-genesis" read |> Result.isError)
+    Assert.True(V1AdmissionGenesisGitRead.decode(ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
+    cutover["commitBytesBase64"] <- JsonValue.Create("not-base64")
+    Assert.True(V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.isError)
+    cutover["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.CommitBytes)
+    raw["operation"]["secondHead"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.isError)
+    raw["operation"]["secondHead"] <- null
+    cutover["tagTarget"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.isError)
 
 [<Fact>]
 let ``canonical command log restores admission after process restart`` () =
@@ -505,3 +938,318 @@ let ``unconfirmed candidates grant no handle seal or dispatch authority`` () =
     let durable, _, _ = harness.Confirm(candidate, ReceiveAccepted)
     let closingCandidate = match Registry.closeAdmissions (Registry.head durable) durable with RegistryAppended value -> value | other -> failwithf "%A" other
     Assert.True(Registry.preparingReference closingCandidate |> Result.isError)
+
+[<Fact>]
+let ``installed raw Git readback requires exact planned genesis objects and stable native refs`` () =
+    let snapshot, authorityCommit, _, _, _ = authority "OperatingV1" 1L None id
+    let plan =
+        Registry.planGenesis "protected-genesis" snapshot (absentRead ())
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let objects = Registry.genesisObjects plan
+    let address = Registry.genesisAddress plan
+    let value = Registry.gitObjectIdValue
+    let timestamp = "2026-09-23T14:00:00Z"
+    let asOf = DateTimeOffset.Parse timestamp
+    let encoded =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-installed-read/1"
+               observedAt = timestamp
+               repository = "FS-GG/FS.GG.Coordination.Authority"
+               repositoryId = 1351660651L
+               cutoverFirstHead = value authorityCommit
+               cutoverSecondHead = value authorityCommit
+               operation =
+                 {| ``ref`` = address.Ref
+                    firstHead = value objects.CommitObjectId
+                    secondHead = value objects.CommitObjectId
+                    commitOid = value objects.CommitObjectId
+                    commitBytesBase64 = Convert.ToBase64String objects.CommitBytes
+                    treeOid = value objects.TreeObjectId
+                    treeBytesBase64 = Convert.ToBase64String objects.TreeBytes
+                    eventOid = value objects.EventObjectId
+                    eventBytesBase64 = Convert.ToBase64String objects.EventBytes
+                    headOid = value objects.HeadObjectId
+                    headBytesBase64 = Convert.ToBase64String objects.HeadBytes |} |}
+    let decode bytes = V1AdmissionGenesisGitRead.decodeInstalled asOf plan (ReadOnlyMemory bytes)
+    let read = decode encoded |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(Registry.verifyGenesisReadback plan read |> Result.isOk)
+    Assert.Equal(Some objects.CommitObjectId, read.FirstHead)
+
+    let changed action =
+        let root = JsonNode.Parse encoded
+        action root
+        decode (Encoding.UTF8.GetBytes(root.ToJsonString()))
+
+    Assert.True(changed (fun root -> root["cutoverSecondHead"] <- JsonValue.Create(String.replicate 40 "f")) |> Result.isError)
+    Assert.True(changed (fun root -> root["operation"]["secondHead"] <- JsonValue.Create(String.replicate 40 "f")) |> Result.isError)
+    Assert.True(changed (fun root -> root["operation"]["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes "changed"))) |> Result.isError)
+    Assert.True(changed (fun root -> root["operation"]["commitBytesBase64"] <- JsonValue.Create("not-base64")) |> Result.isError)
+    Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewedField"] <- JsonValue.Create(1)) |> Result.isError)
+    Assert.True(V1AdmissionGenesisGitRead.decodeInstalled asOf plan (ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
+
+[<Fact>]
+let ``installer port binds fresh absent and installed evidence without caching a success`` () =
+    let asOf = DateTimeOffset.Parse "2026-09-23T14:00:00Z"
+    let _, authorityHead, manifest, observed, _ = authority "OperatingV1" 1L None id
+    let raw =
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-git-read.json"))
+        |> JsonNode.Parse
+    let cutover = raw["cutover"].AsObject()
+    let value id = Registry.gitObjectIdValue id
+    let eventOid, eventBytes = observed.EventBlob
+    let headOid, headBytes = observed.HeadBlob
+    for name in [ "firstHead"; "secondHead"; "tagTarget"; "commit"; "genesisCommit" ] do
+        cutover[name] <- JsonValue.Create(value authorityHead)
+    cutover["tagRef"] <- JsonValue.Create("refs/tags/fsgg/v2/fleet-cutover/operating-v1/genesis-" + (Registry.sha256Value manifest).Substring(0, 16))
+    cutover["parent"] <- null
+    cutover["ancestry"] <- JsonArray(JsonValue.Create(value authorityHead))
+    cutover["commitTree"] <- JsonValue.Create(value observed.CommitTree)
+    cutover["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.CommitBytes)
+    cutover["treeBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.TreeBytes)
+    let entries = JsonObject()
+    for KeyValue(name, id) in observed.TreeEntries do
+        entries[name] <- JsonValue.Create(value id)
+    cutover["treeEntries"] <- entries
+    cutover["eventOid"] <- JsonValue.Create(value eventOid)
+    cutover["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String eventBytes)
+    cutover["headOid"] <- JsonValue.Create(value headOid)
+    cutover["headBytesBase64"] <- JsonValue.Create(Convert.ToBase64String headBytes)
+    cutover["manifestSha256"] <- JsonValue.Create(Registry.sha256Value manifest)
+    cutover["trustAnchorSha256"] <- JsonValue.Create(Registry.sha256Value (digest "b"))
+    let initial = Encoding.UTF8.GetBytes(raw.ToJsonString())
+    let evidence =
+        V1AdmissionGenesisGitRead.decode (ReadOnlyMemory initial)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let plan =
+        V1AdmissionGenesisGitRead.verifyPlan asOf "protected-genesis" evidence
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let objects = Registry.genesisObjects plan
+    let address = Registry.genesisAddress plan
+    let authorityCommit = Registry.genesisAuthorityCommit plan
+    let installed =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-installed-read/1"
+               observedAt = "2026-09-23T14:00:00Z"
+               repository = "FS-GG/FS.GG.Coordination.Authority"
+               repositoryId = 1351660651L
+               cutoverFirstHead = value authorityCommit
+               cutoverSecondHead = value authorityCommit
+               operation =
+                 {| ``ref`` = address.Ref
+                    firstHead = value objects.CommitObjectId
+                    secondHead = value objects.CommitObjectId
+                    commitOid = value objects.CommitObjectId
+                    commitBytesBase64 = Convert.ToBase64String objects.CommitBytes
+                    treeOid = value objects.TreeObjectId
+                    treeBytesBase64 = Convert.ToBase64String objects.TreeBytes
+                    eventOid = value objects.EventObjectId
+                    eventBytesBase64 = Convert.ToBase64String objects.EventBytes
+                    headOid = value objects.HeadObjectId
+                    headBytesBase64 = Convert.ToBase64String objects.HeadBytes |} |}
+    let current = ref asOf
+    let refState = ref GenesisRefAbsent
+    let installedRead = ref installed
+    let absentCalls = ref 0
+    let installedCalls = ref 0
+    let native: GenesisInstallerNativeReaders =
+        { Now = fun () -> current.Value
+          ReadAbsentGit = fun () -> absentCalls.Value <- absentCalls.Value + 1; Ok initial
+          ReadInstalledGit = fun expected ->
+              Assert.Equal(objects.CommitObjectId, expected)
+              installedCalls.Value <- installedCalls.Value + 1
+              Ok installedRead.Value
+          ReadCutoverHead = fun () -> Ok authorityCommit
+          ReadRef = fun name -> Assert.Equal(address.Ref, name); refState.Value
+          ReadTrustAnchor = fun () -> Error "not-used"
+          ReadSource = fun () -> Error "not-used"
+          ReadProtection = fun () -> Error "not-used"
+          ReadApproval = fun _ -> Error "not-used" }
+    let writer: GenesisInstallerObjectPort =
+        { PutObject = fun _ _ _ -> Error "not-used"
+          ReadObject = fun _ _ -> Error "not-used"
+          CreateRefExpectedAbsent = fun _ _ -> Error "not-used" }
+    let port =
+        V1AdmissionGenesisPortBinding.create (ReadOnlyMemory initial) plan native writer
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(port.Authority.ReadObjects() |> Result.isOk)
+    Assert.True(port.ReadRegistry address |> Result.isOk)
+    Assert.True(port.ReadRegistry address |> Result.isOk)
+    Assert.Equal(2, absentCalls.Value)
+    refState.Value <- GenesisRefAt objects.CommitObjectId
+    let read = port.ReadRegistry address |> Result.defaultWith failwith
+    Assert.True(Registry.verifyGenesisReadback plan read |> Result.isOk)
+    Assert.Equal(1, installedCalls.Value)
+    installedRead.Value <-
+        let altered = JsonNode.Parse installed
+        altered["operation"]["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes "wrong"))
+        Encoding.UTF8.GetBytes(altered.ToJsonString())
+    Assert.True(port.ReadRegistry address |> Result.isError)
+    Assert.Equal(2, installedCalls.Value)
+    refState.Value <- GenesisRefAt(oid "f")
+    Assert.True(port.ReadRegistry address |> Result.isError)
+    current.Value <- asOf.AddMinutes 3.
+    Assert.True(port.Authority.ReadObjects() |> Result.isError)
+    Assert.True(port.Authority.RereadHead() |> Result.isError)
+    refState.Value <- GenesisRefAbsent
+    Assert.True(port.ReadRegistry address |> Result.isError)
+    Assert.True(V1AdmissionGenesisPortBinding.create (ReadOnlyMemory initial) plan native writer |> Result.isError)
+
+    current.Value <- asOf
+    let sourceCommit = String.replicate 40 "a"
+    let sourceTree = String.replicate 40 "b"
+    let sourceBytes =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-source-read/1"
+               observedAt = "2026-09-23T14:00:00Z"
+               repository = "FS-GG/FS.GG.Coordination"
+               repositoryId = 1346720714L
+               sourceCommit = sourceCommit
+               sourceTree = sourceTree
+               firstMainHead = sourceCommit
+               secondMainHead = sourceCommit
+               compareStatus = "identical"
+               compareBase = sourceCommit
+               compareHead = sourceCommit
+               mergeBase = sourceCommit |}
+    let protectionBytes =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-protection-read/1"
+               observedAt = "2026-09-23T14:00:00Z"
+               repositoryId = 1351660651L
+               writerRulesetId = 21872113L
+               writerRulesetActive = true
+               writerRulesetMatchesRef = true
+               writerBypassAppIds = [ 4882140L ]
+               integrityRulesetId = 21872115L
+               integrityRulesetActive = true
+               integrityRulesetMatchesRef = true
+               integrityRejectsDeletion = true
+               integrityRejectsNonFastForward = true
+               integrityBypassAppIds = List.empty<int64>
+               credentialAppId = 4882140L
+               credentialInstallationId = 160261608L
+               credentialRepositoryIds = [ 1351660651L ]
+               credentialContentsWrite = true
+               credentialHasOtherWritePermissions = false |}
+    let approvalBytes =
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-native-read.json"))
+    let sourceRead = ref sourceBytes
+    let protectionRead = ref protectionBytes
+    let approvalRead = ref approvalBytes
+    let sourceCalls = ref 0
+    let protectionCalls = ref 0
+    let approvalCalls = ref 0
+    let rawNative: GenesisInstallerRawReaders =
+        { Now = native.Now
+          ReadAbsentGit = native.ReadAbsentGit
+          ReadInstalledGit = native.ReadInstalledGit
+          ReadCutoverHead = native.ReadCutoverHead
+          ReadRef = native.ReadRef
+          ReadTrustAnchor = native.ReadTrustAnchor
+          ReadSource = fun () -> sourceCalls.Value <- sourceCalls.Value + 1; Ok sourceRead.Value
+          ReadProtection = fun () -> protectionCalls.Value <- protectionCalls.Value + 1; Ok protectionRead.Value
+          ReadApproval = fun _ -> approvalCalls.Value <- approvalCalls.Value + 1; Ok approvalRead.Value }
+    let rawPort =
+        V1AdmissionGenesisPortBinding.createRaw (ReadOnlyMemory initial) plan rawNative writer
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(rawPort.ReadSource() |> Result.isOk)
+    Assert.True(rawPort.ReadProtection() |> Result.isOk)
+    Assert.True(rawPort.ReadApproval 42L |> Result.isOk)
+    Assert.True(rawPort.ReadApproval 43L |> Result.isError)
+    sourceRead.Value <- Array.zeroCreate 8193
+    protectionRead.Value <- Array.zeroCreate 8193
+    approvalRead.Value <- Array.zeroCreate 32769
+    Assert.True(rawPort.ReadSource() |> Result.isError)
+    Assert.True(rawPort.ReadProtection() |> Result.isError)
+    Assert.True(rawPort.ReadApproval 42L |> Result.isError)
+    Assert.Equal(2, sourceCalls.Value)
+    Assert.Equal(2, protectionCalls.Value)
+    Assert.Equal(3, approvalCalls.Value)
+    sourceRead.Value <- sourceBytes
+    protectionRead.Value <- protectionBytes
+    approvalRead.Value <- approvalBytes
+    current.Value <- asOf.AddMinutes 3.
+    Assert.True(rawPort.ReadSource() |> Result.isError)
+    Assert.True(rawPort.ReadProtection() |> Result.isError)
+    Assert.True(rawPort.ReadApproval 42L |> Result.isError)
+
+[<Fact>]
+let ``native source read requires stable main ancestry and exact source tree`` () =
+    let timestamp = "2026-09-23T14:00:00Z"
+    let asOf = DateTimeOffset.Parse timestamp
+    let sourceCommit = String.replicate 40 "a"
+    let sourceTree = String.replicate 40 "b"
+    let mainHead = String.replicate 40 "c"
+    let raw =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-source-read/1"
+               observedAt = timestamp
+               repository = "FS-GG/FS.GG.Coordination"
+               repositoryId = 1346720714L
+               sourceCommit = sourceCommit
+               sourceTree = sourceTree
+               firstMainHead = mainHead
+               secondMainHead = mainHead
+               compareStatus = "ahead"
+               compareBase = sourceCommit
+               compareHead = mainHead
+               mergeBase = sourceCommit |}
+    let decode bytes = V1AdmissionGenesisSourceRead.decode asOf (ReadOnlyMemory bytes)
+    let read = decode raw |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(read.IsOnMain)
+    Assert.Equal(oid "b", read.Tree)
+    let changed action =
+        let root = JsonNode.Parse raw
+        action root
+        decode (Encoding.UTF8.GetBytes(root.ToJsonString()))
+    Assert.True(changed (fun root -> root["compareStatus"] <- JsonValue.Create("diverged")) |> Result.isOk)
+    Assert.False(
+        changed (fun root -> root["compareStatus"] <- JsonValue.Create("diverged"))
+        |> Result.defaultWith (String.concat "," >> failwith)
+        |> _.IsOnMain
+    )
+    Assert.True(changed (fun root -> root["secondMainHead"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
+    Assert.True(changed (fun root -> root["mergeBase"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
+    Assert.True(changed (fun root -> root["compareHead"] <- JsonValue.Create(String.replicate 40 "d")) |> Result.isError)
+    Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)
+
+[<Fact>]
+let ``native protection read requires visible exact rules and scoped ordinary App`` () =
+    let timestamp = "2026-09-23T14:00:00Z"
+    let asOf = DateTimeOffset.Parse timestamp
+    let raw =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-protection-read/1"
+               observedAt = timestamp
+               repositoryId = 1351660651L
+               writerRulesetId = 21872113L
+               writerRulesetActive = true
+               writerRulesetMatchesRef = true
+               writerBypassAppIds = [ 4882140L ]
+               integrityRulesetId = 21872115L
+               integrityRulesetActive = true
+               integrityRulesetMatchesRef = true
+               integrityRejectsDeletion = true
+               integrityRejectsNonFastForward = true
+               integrityBypassAppIds = List.empty<int64>
+               credentialAppId = 4882140L
+               credentialInstallationId = 160261608L
+               credentialRepositoryIds = [ 1351660651L ]
+               credentialContentsWrite = true
+               credentialHasOtherWritePermissions = false |}
+    let decode bytes = V1AdmissionGenesisProtectionRead.decode asOf (ReadOnlyMemory bytes)
+    let read = decode raw |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(read.WriterBypassAppIds = [ 4882140L ])
+    Assert.True(read.CredentialRepositoryIds = [ 1351660651L ])
+    let changed action =
+        let root = JsonNode.Parse raw
+        action root
+        decode (Encoding.UTF8.GetBytes(root.ToJsonString()))
+    Assert.True(changed (fun root -> root["writerBypassAppIds"] <- JsonArray()) |> Result.isError)
+    Assert.True(changed (fun root -> root["integrityBypassAppIds"] <- JsonArray(JsonValue.Create(1))) |> Result.isError)
+    Assert.True(changed (fun root -> root["credentialHasOtherWritePermissions"] <- JsonValue.Create(true)) |> Result.isError)
+    Assert.True(changed (fun root -> root["credentialRepositoryIds"] <- JsonArray(JsonValue.Create(1))) |> Result.isError)
+    Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)

@@ -1,0 +1,82 @@
+name: GS2 v1 admission genesis protected authorization
+
+on:
+  workflow_dispatch:
+    inputs:
+      coordination_revision:
+        description: Exact merged FS.GG.Coordination source revision
+        required: true
+        type: string
+      coordination_tree:
+        description: Tree of the exact Coordination source revision
+        required: true
+        type: string
+      genesis_intent_sha256:
+        description: SHA-256 of the canonical v1 admission genesis intent
+        required: true
+        type: string
+      operation_id:
+        description: Bounded private genesis operation identity (no secret)
+        required: true
+        type: string
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: gs2-v1-admission-protected-authorization
+  cancel-in-progress: false
+
+jobs:
+  authorize:
+    name: gs2-v1-admission-protected-authorization
+    environment: fleet-v1-admission-owner
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Validate exact public bindings
+        env:
+          COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          COORDINATION_TREE: ${{ inputs.coordination_tree }}
+          GENESIS_INTENT_SHA256: ${{ inputs.genesis_intent_sha256 }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'FS-GG/.github'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$GITHUB_REF" = 'refs/heads/main'
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          [[ "$COORDINATION_REVISION" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$COORDINATION_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$GENESIS_INTENT_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          test "$OPERATION_ID" = 'fleet-v1-admission:fs-gg-production'
+      - name: Materialize bounded authorization receipt
+        env:
+          COORDINATION_REVISION: ${{ inputs.coordination_revision }}
+          COORDINATION_TREE: ${{ inputs.coordination_tree }}
+          GENESIS_INTENT_SHA256: ${{ inputs.genesis_intent_sha256 }}
+          OPERATION_ID: ${{ inputs.operation_id }}
+        run: |
+          set -euo pipefail
+          approved_at="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          expires_at="$(date -u -d "$approved_at + 90 minutes" +%Y-%m-%dT%H:%M:%SZ)"
+          jq -cn \
+            --arg operationId "$OPERATION_ID" \
+            --argjson runId "$GITHUB_RUN_ID" \
+            --arg workflowRevision "$GITHUB_SHA" \
+            --arg coordinationRevision "$COORDINATION_REVISION" \
+            --arg coordinationTree "$COORDINATION_TREE" \
+            --arg genesisIntentSha256 "$GENESIS_INTENT_SHA256" \
+            --arg approvedAt "$approved_at" \
+            --arg expiresAt "$expires_at" \
+            '{schema:"fsgg.v1-admission-genesis-protected-authorization/2",operationId:$operationId,repository:"FS-GG/.github",runId:$runId,workflowRevision:$workflowRevision,coordinationRevision:$coordinationRevision,coordinationTree:$coordinationTree,environment:"fleet-v1-admission-owner",genesisIntentSha256:$genesisIntentSha256,approvedAt:$approvedAt,expiresAt:$expiresAt,conclusion:"success"}' \
+            > protected-v1-admission-genesis.json
+          chmod 600 protected-v1-admission-genesis.json
+      - name: Retain reviewed receipt
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: gs2-v1-admission-protected-authorization-${{ github.run_id }}
+          path: protected-v1-admission-genesis.json
+          retention-days: 1
+          if-no-files-found: error

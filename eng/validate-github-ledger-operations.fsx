@@ -100,6 +100,46 @@ for token in
     ] do
     require token "eng/github-ledger-monitor-runner.py"
 
+for token in
+    [
+        "native-artifact-digest"
+        "native-approval-binding"
+        "native-environment-branch-policy"
+    ] do
+    require token "eng/github-v1-admission-protected-read.py"
+
+for token in
+    [
+        "authority-ref-census-moved"
+        "authority-claim-census-not-empty"
+        "authority-object-hash"
+    ] do
+    require token "eng/github-v1-admission-git-read.py"
+
+for token in
+    [
+        "admission-app-identity"
+        "admission-token-repository-scope"
+        "admission-ref-scope"
+        "admission-object-readback-mismatch"
+        "admission-rules-moved"
+        "admission-effective-rules"
+        "bypass_actors"
+    ] do
+    require token "eng/github-v1-admission-provider-transport.py"
+
+for token in [ "source-main-moved"; "source-compare-binding"; "source-repository-identity" ] do
+    require token "eng/github-v1-admission-source-read.py"
+
+for token in [ "admission-native-approval-expired"; "admission-authorizer-key-mismatch"; "memfd_create" ] do
+    require token "eng/github-v1-admission-main-custody.py"
+
+for token in [ "admission-bridge-object-not-planned"; "admission-bridge-ref-not-planned"; "admission-bridge-unbound" ] do
+    require token "eng/github-v1-admission-provider-bridge.py"
+
+for token in [ "V1AdmissionGenesisInstaller.apply"; "decodeEnvelope"; "createRaw"; "genesis-runner-trust-digest" ] do
+    require token "eng/run-v1-admission-genesis.fsx"
+
 let credentialSurface =
     read "src/FS.GG.Coordination.Cli/LedgerProtectionCommand.fs"
     + read "src/FS.GG.Coordination.GitHub/LedgerInitializationAdapter.fs"
@@ -124,6 +164,12 @@ run
 
 run "python3" [ "eng/test-monitor-github-ledger-protection.py" ]
 run "python3" [ "eng/test-github-ledger-live-operation.py" ]
+run "python3" [ "eng/test-github-v1-admission-protected-read.py" ]
+run "python3" [ "eng/test-github-v1-admission-git-read.py" ]
+run "python3" [ "eng/test-github-v1-admission-provider-transport.py" ]
+run "python3" [ "eng/test-github-v1-admission-source-read.py" ]
+run "python3" [ "eng/test-github-v1-admission-main-custody.py" ]
+run "python3" [ "eng/test-github-v1-admission-provider-bridge.py" ]
 
 printfn
     "GITHUB_LEDGER_OPERATIONAL_OK initializer=real-git-objects transport=github-rest protected-authorization=environment monitor=private-wal external-runner=explicit recovery=fail-closed q=Q6"

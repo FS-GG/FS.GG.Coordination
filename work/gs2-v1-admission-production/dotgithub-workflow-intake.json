@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coord.intake/v1",
+  "id": "gs2-v1-admission-single-owner-workflow-20260923",
+  "owner": "FS-GG",
+  "repository": ".github",
+  "title": "[cross-repo] Add single-owner protected v1 admission genesis workflow",
+  "observed": "From FS.GG.Coordination: the OperatingV1 fleet authority is live but the canonical production v1 admission operation journal is absent. A dedicated, review-gated authorization receipt is required before its one-time genesis; the pinned GS2-08.2 cutover workflow cannot change bytes.",
+  "rootCause": "The accepted v1 admission implementation is deliberately fail-closed without a protected operation scope and has no separate native human-approval channel for the missing journal's genesis.",
+  "acceptance": "Add a separate workflow_dispatch workflow bound to the dedicated fleet-v1-admission-owner environment under ADR-0087: sole accountable-owner approval, self-review permitted after a five-minute wait, and main-only branch policy. Validate exact source revision, genesis intent SHA-256, and bounded operation identity; emit a short-lived receipt containing run, source, workflow revision, intent, and expiry. Pin third-party actions. Keep the existing fleet-cutover environment and cutover authorization workflow unchanged. Add negative controls for unreviewed or altered invocation and exact receipt shape.",
+  "verification": "Run the dedicated workflow quality test; independently reread the workflow bytes and a reviewed Actions run before any signature or Authority ref creation. Coordination's protected installer must reject wrong workflow, reviewer, run, digest, or expiry.",
+  "paths": [
+    ".github/workflows",
+    "tests/skill-quality"
+  ],
+  "class": "hardening",
+  "severity": "High",
+  "status": "Ready",
+  "disposition": "create"
+}
