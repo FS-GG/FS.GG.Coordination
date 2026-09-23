@@ -531,6 +531,26 @@ let private migrateHost values =
                       "--target-qualified-release"; target; "--schema-migration" ]
     printfn "%s" output
 
+let private retryHost values =
+    only (Set.ofList [ "--updater"; "--config"; "--command-id"; "--expected-current-image"; "--target-qualified-release"; "--retry-failed-command" ]) values
+    requireServiceAccount ()
+    let updater = required "--updater" values |> Path.GetFullPath
+    let config = required "--config" values |> Path.GetFullPath
+    let commandId = required "--command-id" values
+    let expectedImage = required "--expected-current-image" values
+    let target = required "--target-qualified-release" values
+    let failedCommand = required "--retry-failed-command" values
+    let validId (value: string) = Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    if not (validId commandId && validId failedCommand && commandId <> failedCommand) then fail "invalid retry command IDs"
+    if not (Regex.IsMatch(expectedImage, "^sha256:[0-9a-f]{64}$")) then fail "invalid expected current image ID"
+    if not (Regex.IsMatch(target, "^telemetry-host/v[0-9]+[.][0-9]+[.][0-9]+$")) then fail "invalid qualified target release"
+    let output = checkedCommand 900000 "/usr/bin/python3"
+                    [ updater; "--config"; config; "--command-id"; commandId;
+                      "--expected-current-image"; expectedImage;
+                      "--target-qualified-release"; target;
+                      "--retry-failed-command"; failedCommand ]
+    printfn "%s" output
+
 let private backup values =
     only (Set.ofList [ "--operator"; "--deployment"; "--backup-id"; "--host-unit" ]) values
     let name = required "--backup-id" values
@@ -581,10 +601,11 @@ let main arguments =
         | "verify-engine-release" :: rest -> verifyEngineRelease (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
         | "migrate-host" :: rest -> migrateHost (options rest); 0
+        | "retry-host" :: rest -> retryHost (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|build-host-image|verify-host-release|verify-engine-release|update-host|migrate-host|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|migrate-host|retry-host|build-host-image|verify-host-release|verify-engine-release|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message

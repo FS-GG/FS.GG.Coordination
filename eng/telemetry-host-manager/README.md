@@ -131,6 +131,14 @@ passes an explicit schema 9→10 request to the rootless updater. The command
 is only for a release whose old-backup restore and isolated rollback have
 passed the disposable migration qualification; it does not relax the timer's
 same-schema guard.
+`retry-host --updater PATH --config PATH --command-id NEW_ID
+--expected-current-image sha256:... --target-qualified-release telemetry-host/vX.Y.Z
+--retry-failed-command OLD_ID` requests one reviewed same-schema retry after
+the named earlier command settled `failed-rolled-back` or `recovered`. The
+updater verifies the saved failed command, selected predecessor, qualified
+candidate image and durable receipt before creating a new transaction and
+backup. It keeps the earlier failure evidence. This command cannot request a
+schema migration; automatic updates remain held until a reviewed retry runs.
 `backup-stopped-host --operator PATH --deployment PATH --backup-id ID
 --host-unit fsgg-telemetry-host-podman.service` invokes the reviewed wrapper
 only after the service account's user unit is inactive. Neither command
