@@ -146,6 +146,9 @@ for token in [ "admission-journal-not-installed"; "admission-journal-refs-moved"
 for token in [ "V1AdmissionRegistry.restore"; "admission-journal-evidence-moved-or-stale" ] do
     require token "src/FS.GG.Coordination.GitHub/V1AdmissionJournalGitRead.fs"
 
+for token in [ "admission-cas-parent-moved"; "--force-with-lease="; "response-unknown" ] do
+    require token "eng/github-v1-admission-journal-cas.py"
+
 let credentialSurface =
     read "src/FS.GG.Coordination.Cli/LedgerProtectionCommand.fs"
     + read "src/FS.GG.Coordination.GitHub/LedgerInitializationAdapter.fs"
@@ -177,6 +180,7 @@ run "python3" [ "eng/test-github-v1-admission-source-read.py" ]
 run "python3" [ "eng/test-github-v1-admission-main-custody.py" ]
 run "python3" [ "eng/test-github-v1-admission-provider-bridge.py" ]
 run "python3" [ "eng/test-github-v1-admission-journal-read.py" ]
+run "python3" [ "eng/test-github-v1-admission-journal-cas.py" ]
 
 printfn
     "GITHUB_LEDGER_OPERATIONAL_OK initializer=real-git-objects transport=github-rest protected-authorization=environment monitor=private-wal external-runner=explicit recovery=fail-closed q=Q6"
