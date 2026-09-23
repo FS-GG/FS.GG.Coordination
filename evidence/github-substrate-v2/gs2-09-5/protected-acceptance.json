@@ -1,0 +1,107 @@
+{
+  "schema": "fsgg.github-substrate-v2.sealed-history-protected-acceptance/1",
+  "unit": "GS2-09.5",
+  "state": "accepted",
+  "source": {
+    "candidate": "9a52b771ce4632905ecc9338219826e3d0c1258d",
+    "merge": "0cf6bc02dde93d8153586a385bda217aa784fc91",
+    "tree": "aecc5a4d45d6fa325cdd96974c28004a9135792f",
+    "pullRequest": 493
+  },
+  "implementation": {
+    "candidate": "dd19d2e592c9fbc965519a089bb7c2164eaee653",
+    "merge": "2857744f6ce62079d8d83c2be255c0f1ea5ff59e",
+    "pullRequest": 491
+  },
+  "repairLineage": [
+    {
+      "candidate": "82aeee68e924a2598b9cddd9487850821462729a",
+      "merge": "694248fb43187b9c7e97fadb4a386c089e86fe73",
+      "pullRequest": 492,
+      "disposition": "superseded-invalid-quint-verify-seed"
+    },
+    {
+      "candidate": "9a52b771ce4632905ecc9338219826e3d0c1258d",
+      "merge": "0cf6bc02dde93d8153586a385bda217aa784fc91",
+      "pullRequest": 493,
+      "disposition": "accepted"
+    }
+  ],
+  "qualification": {
+    "manifestSha256": "44009688c0c25ad03c8ffe4ec2f1da0a13547c2473b151a3d17cfb5adde63e5e",
+    "archiveDigest": "88771aa83f88da07ec3eee618b7f11414dae4a23fb7b766f66255df60af5d3e0",
+    "lookupDigest": "bf02922de1f502c6de5db1edb2ab9ba82728612d3b0d8076b58f8b8dd5b6c7a2",
+    "normalizedDigest": "293a8fa8a566bb160ebbc82920eb4dc938d161b982e8e49eb3bdc9079b4bb0a2",
+    "seal": "faa7e4ab701f746e470905180b794b98c5c07fea582ca99ff8307ce7f7099da2",
+    "q5Command": {
+      "id": "github-sealed-history-contract",
+      "sha256": "3e7f489b2d0e52718bc5a37d40bf43d5fa281520dba3b9e46750c97e3168810d",
+      "conclusion": "success"
+    },
+    "q6Command": {
+      "id": "github-sealed-history-recovery-contract",
+      "sha256": "da934de3c71cbb3b8077fcf004adaecd273e5de64171890270baaca67eb646c4",
+      "conclusion": "success"
+    }
+  },
+  "hosted": {
+    "candidate": {
+      "bootstrapRun": 35822169240,
+      "codeqlRun": 35822166336,
+      "optimisticValidationRun": 35822169267,
+      "conclusion": "success"
+    },
+    "protectedMerge": {
+      "bootstrapRun": 35824781231,
+      "codeqlRun": 35824781348,
+      "optimisticValidationRun": 35824781230,
+      "conclusion": "success"
+    },
+    "supersededFailures": [
+      {
+        "run": 35815326863,
+        "scope": "implementation-protected-optimistic",
+        "failure": "formal-base-diagnostic-suppressed"
+      },
+      {
+        "run": 35817699009,
+        "scope": "first-repair-candidate-bootstrap",
+        "failure": "unsupported-quint-verify-seed"
+      },
+      {
+        "run": 35817699032,
+        "scope": "first-repair-candidate-optimistic",
+        "failure": "unsupported-quint-verify-seed"
+      },
+      {
+        "run": 35818903813,
+        "scope": "first-repair-protected-bootstrap",
+        "failure": "unsupported-quint-verify-seed"
+      },
+      {
+        "run": 35818903787,
+        "scope": "first-repair-protected-optimistic",
+        "failure": "unsupported-quint-verify-seed"
+      },
+      {
+        "run": 35819569718,
+        "scope": "second-repair-candidate-optimistic",
+        "failure": "partition-zero-evaluator-fetch-forbidden"
+      }
+    ]
+  },
+  "claims": {
+    "sourceSchemaBytesAndDigestsPreserved": true,
+    "expectedOutcomesBound": true,
+    "completeLookupIndexBound": true,
+    "archiveVerifierOnly": true,
+    "lookupReadOnly": true,
+    "v1ProductionUpcasterCount": 0,
+    "deterministicFreshProcessReplay": true,
+    "tamperOmissionReorderRepointRefusal": true,
+    "archivePublished": false,
+    "providerMutation": false,
+    "successorAuthority": false
+  },
+  "acceptedAt": "2026-09-23T06:35:44Z"
+}
