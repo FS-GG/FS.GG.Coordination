@@ -23,6 +23,8 @@
     <Compile Include="V1AdmissionRegistry.fs" />
     <Compile Include="V1AdmissionGenesisAuthorization.fsi" />
     <Compile Include="V1AdmissionGenesisAuthorization.fs" />
+    <Compile Include="V1AdmissionGenesisGitRead.fsi" />
+    <Compile Include="V1AdmissionGenesisGitRead.fs" />
     <Compile Include="V1AdmissionGenesisProtectedApproval.fsi" />
     <Compile Include="V1AdmissionGenesisProtectedApproval.fs" />
     <Compile Include="V1AdmissionGenesisInstaller.fsi" />

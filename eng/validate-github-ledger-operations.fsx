@@ -108,6 +108,14 @@ for token in
     ] do
     require token "eng/github-v1-admission-protected-read.py"
 
+for token in
+    [
+        "authority-ref-census-moved"
+        "authority-claim-census-not-empty"
+        "authority-object-hash"
+    ] do
+    require token "eng/github-v1-admission-git-read.py"
+
 let credentialSurface =
     read "src/FS.GG.Coordination.Cli/LedgerProtectionCommand.fs"
     + read "src/FS.GG.Coordination.GitHub/LedgerInitializationAdapter.fs"
@@ -133,6 +141,7 @@ run
 run "python3" [ "eng/test-monitor-github-ledger-protection.py" ]
 run "python3" [ "eng/test-github-ledger-live-operation.py" ]
 run "python3" [ "eng/test-github-v1-admission-protected-read.py" ]
+run "python3" [ "eng/test-github-v1-admission-git-read.py" ]
 
 printfn
     "GITHUB_LEDGER_OPERATIONAL_OK initializer=real-git-objects transport=github-rest protected-authorization=environment monitor=private-wal external-runner=explicit recovery=fail-closed q=Q6"

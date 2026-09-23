@@ -565,6 +565,57 @@ let ``native read-only collector evidence has a bounded typed decoder`` () =
     Assert.True(V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
 
 [<Fact>]
+let ``raw Git collector evidence decodes and verifies an OperatingV1 genesis plan`` () =
+    let fixtureBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-git-read.json"))
+    let fixture =
+        V1AdmissionGenesisGitRead.decode(ReadOnlyMemory fixtureBytes)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisGitRead.verifyPlan (DateTimeOffset.Parse "2026-09-23T14:00:00Z") "protected-genesis" fixture |> Result.isError)
+    let _, commit, manifest, observed, _ = authority "OperatingV1" 1L None id
+    let raw = JsonNode.Parse fixtureBytes
+    let cutover = raw["cutover"].AsObject()
+    let value id = Registry.gitObjectIdValue id
+    let eventOid, eventBytes = observed.EventBlob
+    let headOid, headBytes = observed.HeadBlob
+    cutover["firstHead"] <- JsonValue.Create(value commit)
+    cutover["secondHead"] <- JsonValue.Create(value commit)
+    cutover["tagTarget"] <- JsonValue.Create(value commit)
+    cutover["tagRef"] <- JsonValue.Create("refs/tags/fsgg/v2/fleet-cutover/operating-v1/genesis-" + (Registry.sha256Value manifest).Substring(0, 16))
+    cutover["commit"] <- JsonValue.Create(value commit)
+    cutover["parent"] <- null
+    cutover["genesisCommit"] <- JsonValue.Create(value commit)
+    cutover["ancestry"] <- JsonArray(JsonValue.Create(value commit))
+    cutover["commitTree"] <- JsonValue.Create(value observed.CommitTree)
+    cutover["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.CommitBytes)
+    cutover["treeBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.TreeBytes)
+    let entries = JsonObject()
+    for KeyValue(name, id) in observed.TreeEntries do
+        entries[name] <- JsonValue.Create(value id)
+    cutover["treeEntries"] <- entries
+    cutover["eventOid"] <- JsonValue.Create(value eventOid)
+    cutover["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String eventBytes)
+    cutover["headOid"] <- JsonValue.Create(value headOid)
+    cutover["headBytesBase64"] <- JsonValue.Create(Convert.ToBase64String headBytes)
+    cutover["manifestSha256"] <- JsonValue.Create(Registry.sha256Value manifest)
+    cutover["trustAnchorSha256"] <- JsonValue.Create(Registry.sha256Value (digest "b"))
+    let now = DateTimeOffset.Parse "2026-09-23T14:00:00Z"
+    let encoded () = ReadOnlyMemory(Encoding.UTF8.GetBytes(raw.ToJsonString()))
+    let read = V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.defaultWith (String.concat "," >> failwith)
+    let plan = V1AdmissionGenesisGitRead.verifyPlan now "protected-genesis" read |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(commit, Registry.genesisAuthorityCommit plan)
+    Assert.True(V1AdmissionGenesisGitRead.verifyPlan (now.AddMinutes 3.) "protected-genesis" read |> Result.isError)
+    Assert.True(V1AdmissionGenesisGitRead.verifyPlan (now.AddSeconds(-1.)) "protected-genesis" read |> Result.isError)
+    Assert.True(V1AdmissionGenesisGitRead.decode(ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)
+    cutover["commitBytesBase64"] <- JsonValue.Create("not-base64")
+    Assert.True(V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.isError)
+    cutover["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String observed.CommitBytes)
+    raw["operation"]["secondHead"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.isError)
+    raw["operation"]["secondHead"] <- null
+    cutover["tagTarget"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.isError)
+
+[<Fact>]
 let ``canonical command log restores admission after process restart`` () =
     let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
     let harness, registry, _ = admitted snapshot commit manifest "op-1"
