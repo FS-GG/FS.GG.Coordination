@@ -1248,6 +1248,24 @@
       "contractSha256": "3e54a9f1ba9c78646223be4a1b8f5057ae31d899048ac7899e3eeb9be7efcb1b"
     },
     {
+      "id": "GS2-09.5",
+      "title": "Implement sealed history",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-09.4"],
+      "permissionCeiling": [
+        "repository-local additive sealed-history types, exact accepted-receipt, immutable-manifest, typed-transform and live-operation binding, deterministic archive and lookup normalization, controlled evidence, validation, documentation and tests",
+        "archive qualification only; no permanent v1 upcaster in the v2 production closure, provider read or mutation, live operation execution, rollback execution, receiver or settings change, migration execution, cutover transition, OpenV2, acceptance receipt, completion claim or successor-unit authority"
+      ],
+      "exitGate": "the Q5 github-sealed-history and Q6 github-sealed-history-recovery contracts bind the exact accepted GS2-09.4 receipt, immutable manifest, typed transforms, live-operation plan, verifier artifact, production-closure fingerprint and current governing roadmap; every exact ordered archive record preserves source identity, schema, bytes, byte digest, value digest and a typed Verified or Rejected expected outcome; the complete sorted lookup index binds each source key to exactly one archive identity and record digest; the production closure has zero v1 upcasters and exposes only archive verification and read-only lookup; missing, duplicated, reordered, malformed or repointed records and lookups, changed bytes or digests, malformed outcomes, any production upcaster, digest tampering and seal replay refuse; both complete green control inventories and fresh-process deterministic replay pass without network or provider mutation; source qualification does not execute archive publication, live operations, rollback or migration, claim acceptance or grant successor authority",
+      "qGates": ["Q5", "Q6"],
+      "gateCommands": ["github-sealed-history-contract", "github-sealed-history-recovery-contract"],
+      "gateContracts": [
+        {"id": "github-sealed-history-contract", "qGate": "Q5", "commandSha256": "3e7f489b2d0e52718bc5a37d40bf43d5fa281520dba3b9e46750c97e3168810d"},
+        {"id": "github-sealed-history-recovery-contract", "qGate": "Q6", "commandSha256": "da934de3c71cbb3b8077fcf004adaecd273e5de64171890270baaca67eb646c4"}
+      ],
+      "contractSha256": "a248fdc12f40013b3a16e6c61e0fe05f85955ce5bb0a8b991eacf8e51fd6e6b4"
+    },
+    {
       "id": "GS2-09.9",
       "title": "Qualify callable ordinary v2 execution",
       "owner": "FS.GG.Coordination",

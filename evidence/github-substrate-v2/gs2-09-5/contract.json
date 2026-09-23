@@ -1,0 +1,28 @@
+{
+  "schema": "fsgg.coordination.github-sealed-history-evidence/1",
+  "unit": "GS2-09.5",
+  "roadmapRevision": "f18cc5aa3810e60fa6f53c786953ba3d50577fad",
+  "roadmapSha256": "833105f6ec6fcfe9132cf861e2895862e8f45d8932cc9552757cba0929d6a093",
+  "unitContractSha256": "a248fdc12f40013b3a16e6c61e0fe05f85955ce5bb0a8b991eacf8e51fd6e6b4",
+  "sourceRevision": "3022df2589ceba6bc4616688b386cd5dd08e758e",
+  "predecessor": {
+    "unit": "GS2-09.4",
+    "path": "evidence/github-substrate-v2/accepted/GS2-09.4.json",
+    "fileSha256": "e2ebb169ab5bcf77db921170e4a7938a3da254650fea7de84eb412180602b1b3",
+    "receiptDigest": "f31c8c4f3720976cf7a467e5e9dae6359d4ab60ed92feaa219c502007426b65e"
+  },
+  "manifestNormalizedDigest": "d7b0bd8c67c26e924c985bc3eb821fa86af51c66861cc82f9e9dbbb876745db8",
+  "manifestSeal": "22a5328e893b337d8b99c6c0beab22b89799e1ed61eff43bf526adb4899484c8",
+  "transformNormalizedDigest": "aec2736dd8c6194e9682b3f54ffa840c620185c0bb329334feb667a09fd1b41a",
+  "transformSeal": "8b54160ae1bf62734ec524df064f0fe54de58a17755a2a509ae8e5014b961b59",
+  "liveOperationNormalizedDigest": "9f5f1b5b29c2abf58c0fed6cdb34eb840e786615dd80a234ecde1b1373947dfe",
+  "liveOperationSeal": "d4b949ccae34c39daf091b96c66b0324a137b072d1e93f4bfc4e07911453eb7c",
+  "archiveDigest": "88771aa83f88da07ec3eee618b7f11414dae4a23fb7b766f66255df60af5d3e0",
+  "lookupDigest": "bf02922de1f502c6de5db1edb2ab9ba82728612d3b0d8076b58f8b8dd5b6c7a2",
+  "historyNormalizedDigest": "293a8fa8a566bb160ebbc82920eb4dc938d161b982e8e49eb3bdc9079b4bb0a2",
+  "historySeal": "faa7e4ab701f746e470905180b794b98c5c07fea582ca99ff8307ce7f7099da2",
+  "providerState": "controlled-source-qualification",
+  "archivePublished": false,
+  "productionV1Upcasters": 0,
+  "acceptanceReceiptCreated": false
+}
