@@ -152,6 +152,9 @@ for token in [ "admission-cas-parent-moved"; "--force-with-lease="; "response-un
 for token in [ "V1AdmissionRegistry.proposalCas"; "fsgg.v1-admission-journal-cas/1" ] do
     require token "src/FS.GG.Coordination.GitHub/V1AdmissionJournalCasPlan.fs"
 
+for token in [ "V1AdmissionJournalGitRead.createReadOnlyPort"; "ReceiveResponseUnknown" ] do
+    require token "src/FS.GG.Coordination.GitHub/V1AdmissionJournalCasPort.fs"
+
 let credentialSurface =
     read "src/FS.GG.Coordination.Cli/LedgerProtectionCommand.fs"
     + read "src/FS.GG.Coordination.GitHub/LedgerInitializationAdapter.fs"

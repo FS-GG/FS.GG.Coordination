@@ -1817,14 +1817,17 @@ module V1AdmissionRegistry =
     let appendAndReconcile (port: RegistryJournalPort) (RegistryAppendProposal proposal as opaqueProposal) =
         let before = port.Read proposal.Cas.Address
         let alreadyObserved = exactProposal opaqueProposal before
+        let beforeRestored = restore before
         let leaseMatches =
             before.FirstHead = before.SecondHead
             && (before.FirstHead |> Option.map gitObjectIdValue) = Some proposal.Cas.ObservedObjectId
-            && Result.isOk (restore before)
+            && Result.isOk beforeRestored
 
         let outcome =
             if alreadyObserved then
                 ReceiveParentConflict
+            elif Result.isError beforeRestored then
+                ReceiveResponseUnknown
             elif leaseMatches then
                 port.Write opaqueProposal
             else
@@ -1863,6 +1866,8 @@ module V1AdmissionRegistry =
             | None -> DurableAppendIndeterminate([ "registry-replay-failed" ], None)
         else
             match outcome with
+            | ReceiveParentConflict when restored.IsNone ->
+                DurableAppendIndeterminate([ "registry-reread-unverified" ], None)
             | ReceiveParentConflict -> DurableAppendParentConflict restored
             | ReceiveDefiniteRefusal reason -> DurableAppendRefused(reason, restored)
             | ReceiveAccepted -> DurableAppendIndeterminate([ "accepted-proposal-not-observed" ], restored)
