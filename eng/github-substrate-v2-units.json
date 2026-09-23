@@ -1266,6 +1266,24 @@
       "contractSha256": "a248fdc12f40013b3a16e6c61e0fe05f85955ce5bb0a8b991eacf8e51fd6e6b4"
     },
     {
+      "id": "GS2-09.6",
+      "title": "Implement rollback plans",
+      "owner": "FS.GG.Coordination",
+      "prerequisites": ["GS2-09.5"],
+      "permissionCeiling": [
+        "repository-local additive rollback-plan types, exact accepted-receipt, immutable-manifest and sealed-history binding, deterministic restoration-step and receipt-chain normalization, controlled evidence, validation, documentation and tests",
+        "rollback qualification only; no rollback execution, provider read or mutation, receiver, settings, projection, schedule or authority change, migration execution, cutover transition, OpenV2, acceptance receipt, completion claim or successor-unit authority"
+      ],
+      "exitGate": "the Q5 github-rollback-plan and Q6 github-rollback-plan-recovery contracts bind the exact accepted GS2-09.5 receipt, immutable manifest, sealed history and current governing roadmap; the plan starts at VerifiedV2, restores settings, receiver pins, v1 projections, schedules and the authority snapshot in exact contiguous reverse order, and terminates at OperatingV1; every step binds its target, captured state and restore payload; completed steps form an exact plan-bound hash-chained receipt prefix and resume selects only the next step; missing domains, reordered or duplicated steps, malformed or changed restoration inputs, receipt gaps, reordering, foreign-plan receipts, digest tampering and seal replay refuse; both complete green control inventories and fresh-process deterministic replay pass without provider access or mutation; source qualification does not execute rollback or migration, claim acceptance or grant successor authority",
+      "qGates": ["Q5", "Q6"],
+      "gateCommands": ["github-rollback-plan-contract", "github-rollback-plan-recovery-contract"],
+      "gateContracts": [
+        {"id": "github-rollback-plan-contract", "qGate": "Q5", "commandSha256": "d3cfc15c249ea988a98547b95cc7f00509caf8a07a9481ba8c896ca35ef6e099"},
+        {"id": "github-rollback-plan-recovery-contract", "qGate": "Q6", "commandSha256": "6242a1f2cc348595aaabc772e37979108fb12e5cc5760e54f77206ec6c08a6a9"}
+      ],
+      "contractSha256": "bc3580ded0745753c762aeefbd36c61b68e691d0bf88b16b10d3fe8ec5c3a550"
+    },
+    {
       "id": "GS2-09.9",
       "title": "Qualify callable ordinary v2 execution",
       "owner": "FS.GG.Coordination",
