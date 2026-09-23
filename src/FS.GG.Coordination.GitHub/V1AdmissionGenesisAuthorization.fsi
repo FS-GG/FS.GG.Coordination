@@ -29,6 +29,14 @@ module V1AdmissionGenesisAuthorization =
     val canonicalIntent: RegistryGenesisPlan -> GenesisAuthorizationIntent -> byte array
     val canonicalSignaturePayload: RegistryGenesisPlan -> GenesisAuthorizationIntent -> GenesisSignature -> byte array
 
+    /// Parse a bounded host-produced envelope containing only a public key and detached
+    /// signature. The embedded intent digest must match the exact freshly derived plan.
+    val decodeEnvelope:
+        RegistryGenesisPlan ->
+        GenesisAuthorizationIntent ->
+        raw: ReadOnlyMemory<byte> ->
+            Result<GenesisSignature, string list>
+
     val verify:
         asOf: DateTimeOffset ->
         trustAnchorBytes: byte array ->

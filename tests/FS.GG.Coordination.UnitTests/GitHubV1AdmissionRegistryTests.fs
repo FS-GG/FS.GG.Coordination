@@ -318,6 +318,45 @@ let ``protected genesis binds signature native approval and expected absent inst
                 HashAlgorithmName.SHA256,
                 RSASignaturePadding.Pss
             ) }
+    let intentSha256 =
+        SHA256.HashData(V1AdmissionGenesisAuthorization.canonicalIntent plan intent)
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+    let envelope =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.github-substrate.v1-admission-genesis-signature-envelope/1"
+               intentSha256 = intentSha256
+               keyId = signature.KeyId
+               protectedRunId = signature.ProtectedRunId
+               authorizedAt = signature.AuthorizedAt.ToUniversalTime().ToString("O")
+               expiresAt = signature.ExpiresAt.ToUniversalTime().ToString("O")
+               publicKeyPem = signature.PublicKeyPem
+               signatureBase64 = Convert.ToBase64String signature.Signature |}
+    let decoded =
+        V1AdmissionGenesisAuthorization.decodeEnvelope plan intent (ReadOnlyMemory envelope)
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent decoded |> Result.isOk)
+    let changed action =
+        let root = JsonNode.Parse envelope
+        action root
+        V1AdmissionGenesisAuthorization.decodeEnvelope
+            plan intent (ReadOnlyMemory(Encoding.UTF8.GetBytes(root.ToJsonString())))
+    Assert.True(changed (fun root -> root["intentSha256"] <- JsonValue.Create(String.replicate 64 "f")) |> Result.isError)
+    Assert.True(changed (fun root -> root["publicKeyPem"] <- JsonValue.Create(rsa.ExportPkcs8PrivateKeyPem())) |> Result.isError)
+    Assert.True(changed (fun root -> root["signatureBase64"] <- JsonValue.Create("?")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewed"] <- JsonValue.Create(1)) |> Result.isError)
+    let wrongSignature = Array.copy signature.Signature
+    wrongSignature[0] <- wrongSignature[0] ^^^ 1uy
+    let parsedWrongSignature =
+        changed (fun root -> root["signatureBase64"] <- JsonValue.Create(Convert.ToBase64String wrongSignature))
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent parsedWrongSignature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.decodeEnvelope plan intent (ReadOnlyMemory(Array.zeroCreate 8193)) |> Result.isError)
+    let duplicate = Encoding.UTF8.GetString envelope
+                    |> fun text -> text.Replace("\"keyId\":\"test-key\"", "\"keyId\":\"test-key\",\"keyId\":\"test-key\"")
+                    |> Encoding.UTF8.GetBytes
+    Assert.NotEqual(envelope, duplicate)
+    Assert.True(V1AdmissionGenesisAuthorization.decodeEnvelope plan intent (ReadOnlyMemory duplicate) |> Result.isError)
     let verified =
         V1AdmissionGenesisAuthorization.verify now trustBytes plan intent signature
         |> Result.defaultWith (String.concat "," >> failwith)

@@ -98,6 +98,63 @@ module V1AdmissionGenesisAuthorization =
             names.Length = (names |> List.distinct |> List.length)
             && Set.ofList names = Set.ofList expected
 
+    let decodeEnvelope plan intent (raw: ReadOnlyMemory<byte>) =
+        try
+            if raw.Length = 0 || raw.Length > 8192 then
+                Error [ "genesis-signature-envelope-size" ]
+            else
+                let _ = UTF8Encoding(false, true).GetString(raw.Span)
+                use document = JsonDocument.Parse raw
+                let root = document.RootElement
+                let fields =
+                    [ "schema"; "intentSha256"; "keyId"; "protectedRunId"
+                      "authorizedAt"; "expiresAt"; "publicKeyPem"; "signatureBase64" ]
+                if not (exactProperties fields root) then
+                    Error [ "genesis-signature-envelope-shape" ]
+                else
+                    let value (name: string) = root.GetProperty(name).GetString()
+                    let authorizedAt =
+                        DateTimeOffset.ParseExact(value "authorizedAt", "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                    let expiresAt =
+                        DateTimeOffset.ParseExact(value "expiresAt", "O", CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind)
+                    let keyId = value "keyId"
+                    let publicKeyPem = value "publicKeyPem"
+                    let encoded = value "signatureBase64"
+                    let signature = Convert.FromBase64String encoded
+                    let expectedIntent = sha256 (canonicalIntent plan intent)
+                    let pemLines = publicKeyPem.TrimEnd('\n').Split('\n')
+                    if value "schema" <> "fsgg.github-substrate.v1-admission-genesis-signature-envelope/1"
+                       || value "intentSha256" <> expectedIntent
+                       || String.IsNullOrWhiteSpace keyId
+                       || keyId.Length > 128
+                       || (keyId |> Seq.exists (fun ch -> ch < '!' || ch > '~'))
+                       || root.GetProperty("protectedRunId").GetInt64() < 1L
+                       || iso authorizedAt <> value "authorizedAt"
+                       || iso expiresAt <> value "expiresAt"
+                       || publicKeyPem.Length > 2048
+                       || pemLines.Length < 3
+                       || pemLines[0] <> "-----BEGIN PUBLIC KEY-----"
+                       || pemLines[pemLines.Length - 1] <> "-----END PUBLIC KEY-----"
+                       || signature.Length < 256
+                       || signature.Length > 512
+                       || Convert.ToBase64String(signature) <> encoded then
+                        Error [ "genesis-signature-envelope-binding" ]
+                    else
+                        use rsa = RSA.Create()
+                        rsa.ImportFromPem publicKeyPem
+                        if rsa.KeySize / 8 <> signature.Length then
+                            Error [ "genesis-signature-envelope-binding" ]
+                        else
+                            Ok
+                                { KeyId = keyId
+                                  PublicKeyPem = publicKeyPem
+                                  ProtectedRunId = root.GetProperty("protectedRunId").GetInt64()
+                                  AuthorizedAt = authorizedAt
+                                  ExpiresAt = expiresAt
+                                  Signature = signature }
+        with _ ->
+            Error [ "genesis-signature-envelope-invalid" ]
+
     let private trustSigner plan (trustAnchorBytes: byte array) =
         try
             if obj.ReferenceEquals(trustAnchorBytes, null) || trustAnchorBytes.Length > 8192 then
