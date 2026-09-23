@@ -173,6 +173,8 @@ type private GenesisPlanData =
     {
         Address: AggregateAddress
         AuthorityCommit: GitObjectId
+        Manifest: Sha256Digest
+        TrustDigest: Sha256Digest
         Commit: JournalCommit
         Objects: RegistryGitObjects
     }
@@ -1733,10 +1735,22 @@ module V1AdmissionRegistry =
                     CommitBytes = Array.copy commitBytesValue
                 }
 
-            Ok(RegistryGenesisPlan { Address = address; AuthorityCommit = authority.Commit; Commit = commit; Objects = objects })
+            Ok(
+                RegistryGenesisPlan
+                    {
+                        Address = address
+                        AuthorityCommit = authority.Commit
+                        Manifest = authority.Manifest
+                        TrustDigest = authority.Trust
+                        Commit = commit
+                        Objects = objects
+                    }
+            )
 
     let genesisAddress (RegistryGenesisPlan plan) = plan.Address
     let genesisAuthorityCommit (RegistryGenesisPlan plan) = plan.AuthorityCommit
+    let genesisManifest (RegistryGenesisPlan plan) = plan.Manifest
+    let genesisTrustDigest (RegistryGenesisPlan plan) = plan.TrustDigest
     let genesisCommit (RegistryGenesisPlan plan) =
         { plan.Commit with
             HeadBytes = Array.copy plan.Commit.HeadBytes

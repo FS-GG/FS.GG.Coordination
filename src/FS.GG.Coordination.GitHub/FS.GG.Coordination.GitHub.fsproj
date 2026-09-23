@@ -21,6 +21,8 @@
     <Compile Include="V1EffectFenceAdapter.fs" />
     <Compile Include="V1AdmissionRegistry.fsi" />
     <Compile Include="V1AdmissionRegistry.fs" />
+    <Compile Include="V1AdmissionGenesisAuthorization.fsi" />
+    <Compile Include="V1AdmissionGenesisAuthorization.fs" />
     <Compile Include="LedgerProtectionPlanAdapter.fsi" />
     <Compile Include="LedgerProtectionPlanAdapter.fs" />
     <Compile Include="LedgerProtectionProviderAdapter.fsi" />

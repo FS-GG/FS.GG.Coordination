@@ -25,8 +25,8 @@ let private treeBytes entries =
         @ (Registry.gitObjectIdValue value |> Convert.FromHexString |> Array.toList))
     |> List.toArray
 
-let private authority phase generation seal (transform: AuthorityGitObjects -> AuthorityGitObjects) =
-    let manifest, trust = digest "a", digest "b"
+let private authorityWithTrust trust phase generation seal (transform: AuthorityGitObjects -> AuthorityGitObjects) =
+    let manifest = digest "a"
     let sealFields =
         match seal with
         | None -> ""
@@ -60,6 +60,9 @@ let private authority phase generation seal (transform: AuthorityGitObjects -> A
         { ReadObjects = fun () -> Ok observed
           RereadHead = fun () -> Ok observed.FirstHead }
     Registry.readVerified port |> Result.defaultWith (String.concat "," >> failwith), commit, manifest, observed, port
+
+let private authority phase generation seal transform =
+    authorityWithTrust (digest "b") phase generation seal transform
 
 let private registryAddress () =
     ShardedJournalAdapter.address Operation "fleet-v1-admission:fs-gg-production"
@@ -280,6 +283,61 @@ let ``protected genesis plan refuses a verified non-OperatingV1 authority`` () =
     match Registry.planGenesis "protected-genesis" snapshot (absentRead ()) with
     | Error reasons -> Assert.Contains("registry-genesis-authority-phase", reasons)
     | Ok _ -> Assert.Fail "an incumbent-only epoch must not authorize admission genesis"
+
+[<Fact>]
+let ``genesis signature binds anchored signer, exact intent, run and expiry`` () =
+    use rsa = RSA.Create(2048)
+    let spki = SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let receiptDigest = Registry.sha256Value (digest "c")
+    let manifestDigest = Registry.sha256Value (digest "a")
+    let trustJson =
+        $"{{\"acceptedGenesisReceiptDigest\":\"{receiptDigest}\",\"authorizer\":{{\"algorithm\":\"RSA-PSS-SHA256\",\"keyId\":\"test-key\",\"publicKeySpkiSha256\":\"{spki}\"}},\"manifestSha256\":\"{manifestDigest}\",\"schema\":\"fsgg.github-ledger-initial-trust/1\"}}"
+    let trustBytes =
+        ShardedJournalAdapter.canonicalJson trustJson
+        |> Result.defaultWith failwith
+        |> fun bytes -> Array.append bytes [| 10uy |]
+    let trustDigest = SHA256.HashData trustBytes |> Convert.ToHexString |> _.ToLowerInvariant() |> Registry.sha256Digest |> Result.defaultWith failwith
+    let snapshot, _, _, _, _ = authorityWithTrust trustDigest "OperatingV1" 1L None id
+    let plan = Registry.planGenesis "protected-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
+    let intent: GenesisAuthorizationIntent =
+        { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"; WorkflowSha256 = digest "4" }
+    let now = DateTimeOffset(2026, 9, 23, 14, 0, 0, TimeSpan.Zero)
+    let unsigned: GenesisSignature =
+        { KeyId = "test-key"; PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(); ProtectedRunId = 42L
+          AuthorizedAt = now.AddMinutes(-5.); ExpiresAt = now.AddMinutes(85.); Signature = Array.empty }
+    let signature =
+        { unsigned with
+            Signature = rsa.SignData(
+                V1AdmissionGenesisAuthorization.canonicalSignaturePayload plan intent unsigned,
+                HashAlgorithmName.SHA256,
+                RSASignaturePadding.Pss
+            ) }
+    let verified =
+        V1AdmissionGenesisAuthorization.verify now trustBytes plan intent signature
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(42L, V1AdmissionGenesisAuthorization.protectedRunId verified)
+    Assert.Equal(
+        SHA256.HashData(V1AdmissionGenesisAuthorization.canonicalIntent plan intent) |> Convert.ToHexString |> _.ToLowerInvariant(),
+        V1AdmissionGenesisAuthorization.intentSha256 verified |> Registry.sha256Value
+    )
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan { intent with SourceCommit = oid "5" } signature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan { intent with WorkflowSha256 = digest "6" } signature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent { signature with ProtectedRunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes plan intent { signature with KeyId = "other" } |> Result.isError)
+    let alteredPlan = Registry.planGenesis "other-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now trustBytes alteredPlan intent signature |> Result.isError)
+    use other = RSA.Create(2048)
+    Assert.True(
+        V1AdmissionGenesisAuthorization.verify
+            now
+            trustBytes
+            plan
+            intent
+            { signature with PublicKeyPem = other.ExportSubjectPublicKeyInfoPem() }
+        |> Result.isError
+    )
+    Assert.True(V1AdmissionGenesisAuthorization.verify (now.AddMinutes 86.) trustBytes plan intent signature |> Result.isError)
+    Assert.True(V1AdmissionGenesisAuthorization.verify now (Array.append trustBytes [| 10uy |]) plan intent signature |> Result.isError)
 
 [<Fact>]
 let ``canonical command log restores admission after process restart`` () =
