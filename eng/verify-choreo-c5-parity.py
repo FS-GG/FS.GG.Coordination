@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 import re
+import sys
 from pathlib import Path
 import shutil
 import subprocess
@@ -36,9 +37,12 @@ def export_legacy(directory):
     verification = subprocess.run([
         quint, 'verify', str(model), '--main=O2HostedWriterModel',
         '--init=init', '--step=step', '--invariant=safety',
-        '--max-steps=20', '--backend=tlc', '--verbosity=3',
-    ], cwd=directory, check=True, capture_output=True, text=True, timeout=150)
+        '--max-steps=20', '--backend=tlc', '--seed=0xC5F0', '--verbosity=3',
+    ], cwd=directory, check=False, capture_output=True, text=True, timeout=150)
     diagnostic = verification.stdout + verification.stderr
+    if verification.returncode != 0:
+        print(diagnostic, file=sys.stderr)
+        raise RuntimeError(f'CHOREO_PARITY_REFUSED legacy safety verifier exited {verification.returncode}')
     require('[ok] No violation found' in diagnostic, 'legacy safety did not pass')
     counts = re.findall(r'(\d+) states generated, (\d+) distinct states found, 0 states left on queue', diagnostic)
     require(bool(counts), 'legacy graph did not finish')
@@ -48,7 +52,7 @@ def export_legacy(directory):
     subprocess.run([
         quint, 'test', str(model), '--main=O2HostedWriterLegacyScenarios',
         '--match=^(happy|lostApplied|claimAbsent|processRetry|restart|missingNative)$',
-        '--max-samples=1', '--backend=rust', '--verbosity=1',
+        '--max-samples=1', '--backend=rust', '--seed=0xC5F1', '--verbosity=1',
         '--out-itf=' + str(directory / '{test}.json'),
     ], cwd=directory, check=True)
 
