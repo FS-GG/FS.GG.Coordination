@@ -51,6 +51,7 @@
     <Compile Include="GitHubSandboxClosureTests.fs" />
     <Compile Include="GitHubCompleteDiscoveryTests.fs" />
     <Compile Include="GitHubImmutableManifestTests.fs" />
+    <Compile Include="GitHubTypedTransformTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />

@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coordination.github-typed-transform-evidence/1",
+  "unit": "GS2-09.3",
+  "roadmapRevision": "f2660ee972432be93fbca1f2675921327e6f3147",
+  "roadmapSha256": "a32d27f3ffdd1dae3d51590f0173dbc3c7f4bcd53dba870c94984388c0fdba21",
+  "unitContractSha256": "5a2121bcd893ad5ca018d444edba1acf062fd6f2fffd56b8e63ff28e842d2a2a",
+  "sourceRevision": "2c746ab23b58673044ce5176af66b197f8059acc",
+  "predecessor": {
+    "unit": "GS2-09.2",
+    "path": "evidence/github-substrate-v2/accepted/GS2-09.2.json",
+    "fileSha256": "8d0ae7d5c0ce8f27cc9490128edd4c95adb9db5c406ca70ceb9331437894d7f8",
+    "receiptDigest": "c0fb9c28cbcee5d87812a0844da4a65bcf2077a9559224065a603273a87de85d"
+  },
+  "manifestNormalizedDigest": "d7b0bd8c67c26e924c985bc3eb821fa86af51c66861cc82f9e9dbbb876745db8",
+  "manifestSeal": "22a5328e893b337d8b99c6c0beab22b89799e1ed61eff43bf526adb4899484c8",
+  "providerState": "controlled-source-qualification",
+  "liveTransformsCreated": false,
+  "acceptanceReceiptCreated": false
+}

@@ -430,6 +430,19 @@ rollback inputs. Omission, reordering, unknown rollback references, digest alter
 refuse. This source boundary performs no provider read or mutation and does not decide typed transforms,
 create archives, execute rollback, or create a live migration manifest.
 
+GS2-09.3 is registered against `.github` roadmap commit
+`f2660ee972432be93fbca1f2675921327e6f3147` and exact roadmap SHA-256
+`a32d27f3ffdd1dae3d51590f0173dbc3c7f4bcd53dba870c94984388c0fdba21`.
+Its sole prerequisite is the accepted GS2-09.2 receipt with digest
+`c0fb9c28cbcee5d87812a0844da4a65bcf2077a9559224065a603273a87de85d`.
+The Q5 `github-typed-transform-contract` and Q6
+`github-typed-transform-recovery-contract` reserve a complete ordered decision population for taxonomy,
+planning fields, repository scope, body metadata, blockers, hierarchy, scheduling holds, touch sets,
+lifecycle receipts and desired settings. Every obligation must resolve to the closed typed union
+`Migrated`, `Ambiguous` or `Unsupported`; omission, malformed ambiguity, changed global identity,
+tampering and non-deterministic replay refuse. This source boundary classifies controlled inputs only and
+does not handle live operations, create archives, execute rollback, mutate a provider, or run migration.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:
