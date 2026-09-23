@@ -1,0 +1,23 @@
+{
+  "schema": "fsgg.coordination.github-live-operation-evidence/1",
+  "unit": "GS2-09.4",
+  "roadmapRevision": "241859d3bad30dabaec45f82c38974814bc9a996",
+  "roadmapSha256": "14aa6ae2e856784e16f2765681b17b8093fcd2bafce7b0bfb823e052c6737383",
+  "unitContractSha256": "3e54a9f1ba9c78646223be4a1b8f5057ae31d899048ac7899e3eeb9be7efcb1b",
+  "sourceRevision": "b0bfb7be76eb5b5c4f72e49199692576d4759662",
+  "predecessor": {
+    "unit": "GS2-09.3",
+    "path": "evidence/github-substrate-v2/accepted/GS2-09.3.json",
+    "fileSha256": "8db7b12bb21ae47debbc0bca52815b2ed07a5ad50bb824ebbd2a2753d79382a6",
+    "receiptDigest": "b3634a5c4334e2a112307136755dbdb3577e76181b852a7782689c873196ba71"
+  },
+  "manifestNormalizedDigest": "d7b0bd8c67c26e924c985bc3eb821fa86af51c66861cc82f9e9dbbb876745db8",
+  "manifestSeal": "22a5328e893b337d8b99c6c0beab22b89799e1ed61eff43bf526adb4899484c8",
+  "transformNormalizedDigest": "aec2736dd8c6194e9682b3f54ffa840c620185c0bb329334feb667a09fd1b41a",
+  "transformSeal": "8b54160ae1bf62734ec524df064f0fe54de58a17755a2a509ae8e5014b961b59",
+  "liveOperationNormalizedDigest": "9f5f1b5b29c2abf58c0fed6cdb34eb840e786615dd80a234ecde1b1373947dfe",
+  "liveOperationSeal": "d4b949ccae34c39daf091b96c66b0324a137b072d1e93f4bfc4e07911453eb7c",
+  "providerState": "controlled-source-qualification",
+  "liveOperationsExecuted": false,
+  "acceptanceReceiptCreated": false
+}

@@ -408,6 +408,18 @@
       "qGate": "Q6",
       "executable": "dotnet",
       "args": ["fsi", "eng/validate-github-typed-transforms.fsx", "--", "--root", ".", "--phase", "recovery"]
+    },
+    {
+      "id": "github-live-operation-contract",
+      "qGate": "Q5",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-live-operations.fsx", "--", "--root", ".", "--phase", "operations"]
+    },
+    {
+      "id": "github-live-operation-recovery-contract",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-live-operations.fsx", "--", "--root", ".", "--phase", "recovery"]
     }
   ]
 }
