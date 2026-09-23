@@ -443,6 +443,15 @@ lifecycle receipts and desired settings. Every obligation must resolve to the cl
 tampering and non-deterministic replay refuse. This source boundary classifies controlled inputs only and
 does not handle live operations, create archives, execute rollback, mutate a provider, or run migration.
 
+GS2-09.4 is registered against that same active roadmap pin. Its sole prerequisite is the accepted
+GS2-09.3 receipt with digest `b3634a5c4334e2a112307136755dbdb3577e76181b852a7782689c873196ba71`.
+The Q5 `github-live-operation-contract` and Q6 `github-live-operation-recovery-contract` bind every
+claim, queued write, review, delivery, release and cutover-adjacent operation to exactly one `Drain`,
+`Migrate`, `Park` or explicit `Invalid` disposition. Stable identity, source bytes, dependencies and
+disposition-specific proof are sealed into a deterministic digest. Omission, duplication, reordering,
+malformed proof, changed global identity, tampering and seal replay refuse. This source boundary does not
+execute operations, produce archives, execute rollback, mutate a provider, or run migration.
+
 ## Command sequence
 
 The repository-owned `github-substrate-v2-work` skill calls the existing CLI with:

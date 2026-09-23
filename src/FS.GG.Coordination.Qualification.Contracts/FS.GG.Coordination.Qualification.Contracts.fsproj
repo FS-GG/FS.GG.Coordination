@@ -109,6 +109,8 @@
     <Compile Include="GitHubImmutableManifestQualification.fs" />
     <Compile Include="GitHubTypedTransformQualification.fsi" />
     <Compile Include="GitHubTypedTransformQualification.fs" />
+    <Compile Include="GitHubLiveOperationQualification.fsi" />
+    <Compile Include="GitHubLiveOperationQualification.fs" />
   </ItemGroup>
 
   <ItemGroup>

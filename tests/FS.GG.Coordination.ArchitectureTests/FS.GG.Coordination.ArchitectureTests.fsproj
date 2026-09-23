@@ -69,6 +69,7 @@
     <Compile Include="GitHubCompleteDiscoveryArchitectureTests.fs" />
     <Compile Include="GitHubImmutableManifestArchitectureTests.fs" />
     <Compile Include="GitHubTypedTransformArchitectureTests.fs" />
+    <Compile Include="GitHubLiveOperationArchitectureTests.fs" />
     <Compile Include="BootstrapCiTests.fs" />
     <Compile Include="OrchestrationObserverArchitectureTests.fs" />
     <Compile Include="OrchestrationHostArchitectureTests.fs" />
