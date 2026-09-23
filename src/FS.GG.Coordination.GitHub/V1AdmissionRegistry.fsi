@@ -110,6 +110,7 @@ type RegistryGitObjects =
 type RegistryCommand
 type RegistryAppendProposal
 type InitialDispatchPermit
+type RegistryGenesisPlan
 
 type ProviderEffectObservation =
     | ProviderApplied of responseDigest: Sha256Digest
@@ -184,6 +185,20 @@ module V1AdmissionRegistry =
     val recoverCommand:
         commandId: string -> expectedEventBytes: byte array -> RegistryJournalRead -> Result<AdmissionRegistry, string list>
     val recoverOperation: operationId: string -> AdmissionRegistry -> Result<OperationHandle, string list>
+
+    /// Produce exact genesis objects only after a verified OperatingV1 authority read and two
+    /// absent journal heads. This is a plan, not permission to create the protected ref.
+    val planGenesis:
+        operationId: string ->
+        authority: VerifiedAuthoritySnapshot ->
+        observed: RegistryJournalRead ->
+            Result<RegistryGenesisPlan, string list>
+
+    val genesisAddress: RegistryGenesisPlan -> AggregateAddress
+    val genesisAuthorityCommit: RegistryGenesisPlan -> GitObjectId
+    val genesisCommit: RegistryGenesisPlan -> JournalCommit
+    val genesisObjects: RegistryGenesisPlan -> RegistryGitObjects
+    val verifyGenesisReadback: RegistryGenesisPlan -> RegistryJournalRead -> Result<AdmissionRegistry, string list>
 
     val planAppend:
         operationId: string ->

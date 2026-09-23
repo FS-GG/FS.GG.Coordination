@@ -226,6 +226,62 @@ let ``producer restore refuses deleted journal and accepts pinned initializer ge
     Assert.True(Registry.restore { read with RepositoryId = 7L } |> Result.isError)
 
 [<Fact>]
+let ``protected genesis plan binds verified OperatingV1 authority and restores exact objects`` () =
+    let snapshot, authorityCommit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let plan =
+        Registry.planGenesis "protected-genesis" snapshot (absentRead ())
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let commit = Registry.genesisCommit plan
+    let objects = Registry.genesisObjects plan
+    Assert.Equal(registryAddress (), Registry.genesisAddress plan)
+    Assert.Equal(authorityCommit, Registry.genesisAuthorityCommit plan)
+    Assert.Equal(Registry.gitObjectIdValue objects.CommitObjectId, commit.CommitOid)
+    Assert.Equal(Registry.gitObjectIdValue objects.TreeObjectId, commit.TreeOid)
+    let read =
+        { absentRead () with
+            FirstHead = Some objects.CommitObjectId
+            SecondHead = Some objects.CommitObjectId
+            Observation = JournalComplete("protected-genesis", [ commit ])
+            CommitBytes = Map.ofList [ commit.CommitOid, objects.CommitBytes ]
+            TreeBytes = Map.ofList [ commit.TreeOid, objects.TreeBytes ] }
+    let restored = Registry.restore read |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(Registry.verifyGenesisReadback plan read |> Result.isOk)
+    Assert.Equal(1L, Registry.generation restored)
+    Assert.Equal(AdmissionsOpen, Registry.phase restored)
+    Assert.Equal(Registry.gitObjectIdValue objects.CommitObjectId, Registry.gitObjectIdValue (Registry.head restored))
+    use eventDocument = System.Text.Json.JsonDocument.Parse objects.EventBytes
+    Assert.Equal(Registry.sha256Value manifest, eventDocument.RootElement.GetProperty("manifestSha256").GetString())
+    objects.EventBytes[0] <- 0uy
+    Assert.NotEqual(0uy, (Registry.genesisObjects plan).EventBytes[0])
+    let altered = { read with TreeBytes = Map.empty }
+    match Registry.verifyGenesisReadback plan altered with
+    | Error reasons -> Assert.Contains("registry-genesis-readback-not-exact", reasons)
+    | Ok _ -> Assert.Fail "a changed readback must not confirm genesis"
+
+[<Fact>]
+let ``protected genesis plan refuses ambiguous absence and existing journal`` () =
+    let snapshot, _, manifest, _, _ = authority "OperatingV1" 1L None id
+    let absent = absentRead ()
+    let cases =
+        [ { absent with SecondHead = Some(oid "1") }
+          { absent with Observation = JournalIncomplete "unreadable" }
+          { absent with Observation = JournalUnauthorized "no permission" }
+          genesisRead manifest ]
+    for read in cases do
+        match Registry.planGenesis "protected-genesis" snapshot read with
+        | Error reasons -> Assert.Contains("registry-genesis-journal-not-proven-absent", reasons)
+        | Ok _ -> Assert.Fail "genesis must require two known-absent heads"
+    Assert.True(Registry.planGenesis "bad\noperation" snapshot absent |> Result.isError)
+    Assert.True(Registry.planGenesis "bad\u0000operation" snapshot absent |> Result.isError)
+
+[<Fact>]
+let ``protected genesis plan refuses a verified non-OperatingV1 authority`` () =
+    let snapshot, _, _, _, _ = authority "Preparing" 2L (Some(oid "c", 1L, digest "d")) id
+    match Registry.planGenesis "protected-genesis" snapshot (absentRead ()) with
+    | Error reasons -> Assert.Contains("registry-genesis-authority-phase", reasons)
+    | Ok _ -> Assert.Fail "an incumbent-only epoch must not authorize admission genesis"
+
+[<Fact>]
 let ``canonical command log restores admission after process restart`` () =
     let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
     let harness, registry, _ = admitted snapshot commit manifest "op-1"
