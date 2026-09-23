@@ -21,9 +21,24 @@ type MigrationExecutionStep =
       DesiredTargetSha256: string
       EpochGeneration: int64
       EpochCommit: string
+      AuthorityFence: MigrationAuthorityFence
       JournalGeneration: int64
       JournalHead: string
       Seal: string }
+
+and MigrationAuthorityFence =
+    { AdmissionGeneration: int64
+      AdmissionCommit: string
+      OperationGeneration: int64
+      OperationCommit: string
+      Claim: (int64 * string) option
+      SealCommit: string
+      RegistryCommit: string }
+
+type MigrationFenceObservation =
+    { Fence: MigrationAuthorityFence
+      Complete: bool
+      Authorized: bool }
 
 type MigrationEpochObservation =
     { Phase: string
@@ -86,6 +101,9 @@ type MigrationExecutionFailure =
     | StaleEpoch
     | UnauthorizedEpoch
     | IncompleteEpoch
+    | StaleAuthorityFence
+    | UnauthorizedAuthorityFence
+    | IncompleteAuthorityFence
     | ChangedTarget
     | UnauthorizedTarget
     | IncompleteTarget
@@ -95,6 +113,7 @@ type MigrationExecutionFailure =
 
 type IMigrationStepRuntime =
     abstract ObserveEpoch: unit -> Result<MigrationEpochObservation, string>
+    abstract ObserveAuthorityFence: unit -> Result<MigrationFenceObservation, string>
     abstract ObserveTarget: MigrationEffect -> Result<MigrationTargetObservation, string>
     abstract ObserveJournal: operationId:string -> Result<MigrationJournalAuthority option, string>
     abstract PersistIntent:

@@ -24,6 +24,10 @@ let private step () =
       DesiredTargetSha256=sha "new-type"
       EpochGeneration=7L
       EpochCommit=revision "a"
+      AuthorityFence=
+        { AdmissionGeneration=3L; AdmissionCommit=revision "f"
+          OperationGeneration=4L; OperationCommit=revision "1"
+          Claim=None; SealCommit=revision "2"; RegistryCommit=revision "3" }
       JournalGeneration=11L
       JournalHead=revision "b"
       Seal="" }
@@ -37,6 +41,8 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
     let mutable target =
         { Identity=step.TargetIdentity; Revision=step.ExpectedTargetRevision
           Sha256=step.ExpectedTargetSha256; Complete=true; Authorized=true }
+    let mutable fence = { Fence=step.AuthorityFence; Complete=true; Authorized=true }
+    let mutable fenceAfterInFlight: MigrationFenceObservation option = None
     let mutable journal: MigrationJournalAuthority option = None
     let mutable effect = MigrationEffectObservation.ProvenAbsent
     let mutable dispatches = 0
@@ -45,6 +51,8 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
 
     member _.Epoch with get() = epoch and set value = epoch <- value
     member _.Target with get() = target and set value = target <- value
+    member _.Fence with get() = fence and set value = fence <- value
+    member _.FenceAfterInFlight with get() = fenceAfterInFlight and set value = fenceAfterInFlight <- value
     member _.Effect with get() = effect and set value = effect <- value
     member _.DispatchResult with get() = dispatchResult and set value = dispatchResult <- value
     member _.Dispatches = dispatches
@@ -54,6 +62,7 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
 
     interface IMigrationStepRuntime with
         member _.ObserveEpoch() = Ok epoch
+        member _.ObserveAuthorityFence() = Ok fence
         member _.ObserveTarget _ = Ok target
         member _.ObserveJournal _ = Ok journal
         member _.PersistIntent(expected, head, operation, seal) =
@@ -75,6 +84,7 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
                                    Stage=MigrationJournalStage.InFlight }
                 journal <- Some authority
                 journalWrites <- journalWrites + 1
+                fenceAfterInFlight |> Option.iter (fun value -> fence <- value)
                 MigrationCasOutcome.Accepted authority
             | _ -> MigrationCasOutcome.Conflict
         member _.ObserveEffect(_, _) = Ok effect
@@ -200,3 +210,21 @@ let ``journal stages require their exact chained generation`` () =
     Assert.Equal(Error [ MigrationExecutionFailure.JournalConflict ],
                  advance selected MigrationAdvanceCut.NoCut runtime)
     Assert.Equal(0, runtime.Dispatches)
+
+[<Fact>]
+let ``authority fence drift refuses before intent and immediately before provider dispatch`` () =
+    let selected = step ()
+    let stale = ControlledRuntime(selected)
+    stale.Fence <- { stale.Fence with Fence={ stale.Fence.Fence with OperationGeneration=5L } }
+    Assert.Equal(Error [ MigrationExecutionFailure.StaleAuthorityFence ],
+                 advance selected MigrationAdvanceCut.NoCut stale)
+    Assert.Equal(0, stale.JournalWrites)
+    Assert.Equal(0, stale.Dispatches)
+
+    let late = ControlledRuntime(selected)
+    late.FenceAfterInFlight <-
+        Some { late.Fence with Fence={ late.Fence.Fence with RegistryCommit=revision "4" } }
+    Assert.Equal(Error [ MigrationExecutionFailure.StaleAuthorityFence ],
+                 advance selected MigrationAdvanceCut.NoCut late)
+    Assert.Equal(2, late.JournalWrites)
+    Assert.Equal(0, late.Dispatches)

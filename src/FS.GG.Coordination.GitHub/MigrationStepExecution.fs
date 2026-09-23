@@ -26,9 +26,24 @@ type MigrationExecutionStep =
       DesiredTargetSha256: string
       EpochGeneration: int64
       EpochCommit: string
+      AuthorityFence: MigrationAuthorityFence
       JournalGeneration: int64
       JournalHead: string
       Seal: string }
+
+and MigrationAuthorityFence =
+    { AdmissionGeneration: int64
+      AdmissionCommit: string
+      OperationGeneration: int64
+      OperationCommit: string
+      Claim: (int64 * string) option
+      SealCommit: string
+      RegistryCommit: string }
+
+type MigrationFenceObservation =
+    { Fence: MigrationAuthorityFence
+      Complete: bool
+      Authorized: bool }
 
 type MigrationEpochObservation =
     { Phase: string
@@ -91,6 +106,9 @@ type MigrationExecutionFailure =
     | StaleEpoch
     | UnauthorizedEpoch
     | IncompleteEpoch
+    | StaleAuthorityFence
+    | UnauthorizedAuthorityFence
+    | IncompleteAuthorityFence
     | ChangedTarget
     | UnauthorizedTarget
     | IncompleteTarget
@@ -100,6 +118,7 @@ type MigrationExecutionFailure =
 
 type IMigrationStepRuntime =
     abstract ObserveEpoch: unit -> Result<MigrationEpochObservation, string>
+    abstract ObserveAuthorityFence: unit -> Result<MigrationFenceObservation, string>
     abstract ObserveTarget: MigrationEffect -> Result<MigrationTargetObservation, string>
     abstract ObserveJournal: operationId:string -> Result<MigrationJournalAuthority option, string>
     abstract PersistIntent:
@@ -155,21 +174,34 @@ module MigrationStepExecution =
 
     let private fingerprint (step: MigrationExecutionStep) =
         let _, effect = effectParts step.Effect
+        let fence = step.AuthorityFence
+        let claim =
+            match fence.Claim with
+            | None -> [ "no-claim-required" ]
+            | Some(generation, commit) -> [ "claim-required"; string generation; commit ]
         [ step.OperationId; step.IdempotencyKey; step.ManifestSeal; step.TargetIdentity
           step.ExpectedTargetRevision; step.ExpectedTargetSha256; step.DesiredTargetSha256
-          string step.EpochGeneration; step.EpochCommit; string step.JournalGeneration; step.JournalHead ] @ effect
+          string step.EpochGeneration; step.EpochCommit; string step.JournalGeneration; step.JournalHead
+          string fence.AdmissionGeneration; fence.AdmissionCommit
+          string fence.OperationGeneration; fence.OperationCommit
+          fence.SealCommit; fence.RegistryCommit ] @ claim @ effect
         |> List.map (fun value -> $"{Encoding.UTF8.GetByteCount value}:{value}")
         |> String.concat ""
         |> sha
 
     let private shapeValid (step: MigrationExecutionStep) =
         let target, _ = effectParts step.Effect
+        let fence = step.AuthorityFence
         validText step.OperationId && validText step.IdempotencyKey
         && isSha 64 step.ManifestSeal && effectValid step.Effect
         && step.TargetIdentity = target && validText step.ExpectedTargetRevision
         && isSha 64 step.ExpectedTargetSha256 && isSha 64 step.DesiredTargetSha256
         && step.ExpectedTargetSha256 <> step.DesiredTargetSha256
         && step.EpochGeneration > 0L && isSha 40 step.EpochCommit
+        && fence.AdmissionGeneration > 0L && isSha 40 fence.AdmissionCommit
+        && fence.OperationGeneration > 0L && isSha 40 fence.OperationCommit
+        && (fence.Claim |> Option.forall (fun (generation, commit) -> generation > 0L && isSha 40 commit))
+        && isSha 40 fence.SealCommit && isSha 40 fence.RegistryCommit
         && step.JournalGeneration >= 0L && isSha 40 step.JournalHead
 
     let sealStep step =
@@ -192,6 +224,15 @@ module MigrationStepExecution =
                         || epoch.Generation <> step.EpochGeneration || epoch.Commit <> step.EpochCommit ->
             Error [ MigrationExecutionFailure.StaleEpoch ]
         | Ok epoch -> Ok epoch
+
+    let private inspectFence (step: MigrationExecutionStep) (runtime: IMigrationStepRuntime) =
+        match runtime.ObserveAuthorityFence() with
+        | Error reason -> journalFailure reason
+        | Ok observed when not observed.Complete -> Error [ MigrationExecutionFailure.IncompleteAuthorityFence ]
+        | Ok observed when not observed.Authorized -> Error [ MigrationExecutionFailure.UnauthorizedAuthorityFence ]
+        | Ok observed when observed.Fence <> step.AuthorityFence ->
+            Error [ MigrationExecutionFailure.StaleAuthorityFence ]
+        | Ok observed -> Ok observed
 
     let private inspectTarget expectedDesired (step: MigrationExecutionStep) (runtime: IMigrationStepRuntime) =
         match runtime.ObserveTarget step.Effect with
@@ -245,9 +286,9 @@ module MigrationStepExecution =
             elif cut = MigrationAdvanceCut.StopAfterEffect then
                 Ok(MigrationAdvanceResult.Interrupted "after-effect-before-receipt")
             else
-                match inspectEpoch step runtime, inspectTarget true step runtime with
-                | Error failures, _ | _, Error failures -> Error failures
-                | Ok _, Ok _ ->
+                match inspectEpoch step runtime, inspectFence step runtime, inspectTarget true step runtime with
+                | Error failures, _, _ | _, Error failures, _ | _, _, Error failures -> Error failures
+                | Ok _, Ok _, Ok _ ->
                     match runtime.PersistSettlement(authority.Generation, authority.Commit, step.OperationId, step.DesiredTargetSha256) with
                     | MigrationCasOutcome.Unknown -> Ok(MigrationAdvanceResult.Pending "settlement-outcome-unknown")
                     | outcome ->
@@ -267,21 +308,21 @@ module MigrationStepExecution =
             | Ok value -> Ok value
 
         let continueFrom (authority: MigrationJournalAuthority) =
-            match inspectEpoch step runtime, effectRead () with
-            | Error failures, _ | _, Error failures -> Error failures
-            | Ok _, Ok(MigrationEffectObservation.Applied result) when result = step.DesiredTargetSha256 ->
+            match inspectEpoch step runtime, inspectFence step runtime, effectRead () with
+            | Error failures, _, _ | _, Error failures, _ | _, _, Error failures -> Error failures
+            | Ok _, Ok _, Ok(MigrationEffectObservation.Applied result) when result = step.DesiredTargetSha256 ->
                 settle authority
-            | Ok _, Ok(MigrationEffectObservation.Applied _) ->
+            | Ok _, Ok _, Ok(MigrationEffectObservation.Applied _) ->
                 Error [ MigrationExecutionFailure.EffectRefused "wrong-effect-readback" ]
-            | Ok _, Ok(MigrationEffectObservation.Partial _) ->
+            | Ok _, Ok _, Ok(MigrationEffectObservation.Partial _) ->
                 Ok(MigrationAdvanceResult.Pending "effect-partial")
-            | Ok _, Ok MigrationEffectObservation.Unknown ->
+            | Ok _, Ok _, Ok MigrationEffectObservation.Unknown ->
                 Ok(MigrationAdvanceResult.Pending "effect-observation-unknown")
-            | Ok _, Ok MigrationEffectObservation.ProvenAbsent when authority.Stage = MigrationJournalStage.InFlight ->
+            | Ok _, Ok _, Ok MigrationEffectObservation.ProvenAbsent when authority.Stage = MigrationJournalStage.InFlight ->
                 // A restored in-flight request is recovery-only. Absence without exclusion of a delayed
                 // original cannot authorize another send under the canonical protocol.
                 Ok(MigrationAdvanceResult.Pending "in-flight-absence-needs-exclusion")
-            | Ok _, Ok MigrationEffectObservation.ProvenAbsent ->
+            | Ok _, Ok _, Ok MigrationEffectObservation.ProvenAbsent ->
                 match inspectTarget false step runtime with
                 | Error failures -> Error failures
                 | Ok _ ->
@@ -294,9 +335,11 @@ module MigrationStepExecution =
                         | Ok(Some grant) when cut = MigrationAdvanceCut.StopAfterInFlight ->
                             Ok(MigrationAdvanceResult.Interrupted "after-in-flight-before-dispatch")
                         | Ok(Some grant) ->
-                            match inspectEpoch step runtime, observeJournal step runtime, inspectTarget false step runtime with
-                            | Error failures, _, _ | _, Error failures, _ | _, _, Error failures -> Error failures
-                            | Ok _, Ok(Some fresh), Ok _ when fresh = grant ->
+                            match inspectEpoch step runtime, inspectFence step runtime,
+                                  observeJournal step runtime, inspectTarget false step runtime with
+                            | Error failures, _, _, _ | _, Error failures, _, _
+                            | _, _, Error failures, _ | _, _, _, Error failures -> Error failures
+                            | Ok _, Ok _, Ok(Some fresh), Ok _ when fresh = grant ->
                                 match runtime.Dispatch(step, grant.Generation, grant.Commit) with
                                 | MigrationDispatchOutcome.Refused reason ->
                                     Error [ MigrationExecutionFailure.EffectRefused reason ]
@@ -316,16 +359,16 @@ module MigrationStepExecution =
         match inspectStep step with
         | Error failures -> Error failures
         | Ok _ ->
-            match inspectEpoch step runtime, observeJournal step runtime with
-            | Error failures, _ | _, Error failures -> Error failures
-            | Ok _, Ok(Some authority) when authority.Stage = MigrationJournalStage.Settled ->
+            match inspectEpoch step runtime, inspectFence step runtime, observeJournal step runtime with
+            | Error failures, _, _ | _, Error failures, _ | _, _, Error failures -> Error failures
+            | Ok _, Ok _, Ok(Some authority) when authority.Stage = MigrationJournalStage.Settled ->
                 match effectRead (), inspectTarget true step runtime with
                 | Ok(MigrationEffectObservation.Applied result), Ok _ when result = step.DesiredTargetSha256 ->
                     Ok(MigrationAdvanceResult.AlreadySettled result)
                 | Error failures, _ | _, Error failures -> Error failures
                 | _ -> Error [ MigrationExecutionFailure.JournalConflict ]
-            | Ok _, Ok(Some authority) -> continueFrom authority
-            | Ok _, Ok None ->
+            | Ok _, Ok _, Ok(Some authority) -> continueFrom authority
+            | Ok _, Ok _, Ok None ->
                 match inspectTarget false step runtime with
                 | Error failures -> Error failures
                 | Ok _ ->
