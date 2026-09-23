@@ -64,3 +64,29 @@ let ``GS2-09-4 gate identities bind the registered literal commands`` () =
         let command = commands |> List.find (fun item -> item.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
         Assert.Equal(command.GetProperty("qGate").GetString(), contract.GetProperty("qGate").GetString())
         Assert.Equal(gateCommandSha256 command, contract.GetProperty("commandSha256").GetString())
+
+[<Fact>]
+let ``GS2-09-4 protected acceptance binds merged live operation handling`` () =
+    let receiptBytes = File.ReadAllBytes(path "evidence/github-substrate-v2/accepted/GS2-09.4.json")
+    use receipt = JsonDocument.Parse(receiptBytes)
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+    Assert.Equal("8ce6ba2a65af7c9d32768b2a044f381d852f9b90", value.GetProperty("sourceRevision").GetString())
+    Assert.Equal("3e54a9f1ba9c78646223be4a1b8f5057ae31d899048ac7899e3eeb9be7efcb1b", value.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("f31c8c4f3720976cf7a467e5e9dae6359d4ab60ed92feaa219c502007426b65e", value.GetProperty("digest").GetString())
+    Assert.True(AcceptanceReceiptDigest.verify (System.ReadOnlyMemory receiptBytes) "GS2-09.4" (value.GetProperty("digest").GetString()) value |> Result.isOk)
+    let artifacts = value.GetProperty("artifacts").EnumerateArray() |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString()) |> Map.ofSeq
+    Assert.Equal("2fe6bac5a30a7506b3ec68b4ed784a719ff28504456999781d59899f82e469b7", artifacts["protected-acceptance"])
+    Assert.Equal("455e361f754392f0bcdd68092af3c373900e9fd1d1a409c1159d43d1e802a939", artifacts["live-operation-contract"])
+    use protectedAcceptance = JsonDocument.Parse(File.ReadAllBytes(path "evidence/github-substrate-v2/gs2-09-4/protected-acceptance.json"))
+    let protectedValue = protectedAcceptance.RootElement
+    Assert.Equal("8ce6ba2a65af7c9d32768b2a044f381d852f9b90", protectedValue.GetProperty("source").GetProperty("merge").GetString())
+    Assert.Equal("8ea34748d554823eb9bdf07e1ecd3b19d76d0ca7", protectedValue.GetProperty("source").GetProperty("tree").GetString())
+    Assert.Equal("success", protectedValue.GetProperty("hosted").GetProperty("protectedMerge").GetProperty("conclusion").GetString())
+    Assert.Equal(35808904885L, protectedValue.GetProperty("hosted").GetProperty("protectedMerge").GetProperty("optimisticValidationRun").GetInt64())
+    Assert.False(protectedValue.GetProperty("claims").GetProperty("liveOperationsExecuted").GetBoolean())
+    Assert.False(protectedValue.GetProperty("claims").GetProperty("providerMutation").GetBoolean())
+    use index = JsonDocument.Parse(File.ReadAllBytes(path "evidence/github-substrate-v2/index.json"))
+    let entry = index.RootElement.GetProperty("entries").EnumerateArray() |> Seq.find (fun item -> item.GetProperty("id").GetString() = "accepted-GS2-09.4")
+    Assert.Equal(receiptBytes.Length, entry.GetProperty("bytes").GetInt32())
+    Assert.Equal(sha256 receiptBytes, entry.GetProperty("sha256").GetString())

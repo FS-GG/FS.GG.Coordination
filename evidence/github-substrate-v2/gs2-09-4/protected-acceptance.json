@@ -1,0 +1,53 @@
+{
+  "schema": "fsgg.github-substrate-v2.live-operation-protected-acceptance/1",
+  "unit": "GS2-09.4",
+  "state": "accepted",
+  "source": {
+    "candidate": "fc4d1aa95552440093eedcd6b810805231f1b002",
+    "merge": "8ce6ba2a65af7c9d32768b2a044f381d852f9b90",
+    "tree": "8ea34748d554823eb9bdf07e1ecd3b19d76d0ca7",
+    "pullRequest": 488
+  },
+  "qualification": {
+    "manifestSha256": "17f75b4d2e8716a605746410d7fcff7a5cbd5ae7156e7acb0dcb20b914e62326",
+    "normalizedLiveOperationDigest": "9f5f1b5b29c2abf58c0fed6cdb34eb840e786615dd80a234ecde1b1373947dfe",
+    "liveOperationSeal": "d4b949ccae34c39daf091b96c66b0324a137b072d1e93f4bfc4e07911453eb7c",
+    "q5Command": {
+      "id": "github-live-operation-contract",
+      "sha256": "35eadfab26d5746aaf0ea8a85fd9dc9ca1a5170af7cfe730978d92804b9ce657",
+      "conclusion": "success"
+    },
+    "q6Command": {
+      "id": "github-live-operation-recovery-contract",
+      "sha256": "984836d2f17c245ef924e761235232422342e0a5f98b3c0e83619728e6ef2079",
+      "conclusion": "success"
+    }
+  },
+  "hosted": {
+    "candidate": {
+      "bootstrapRun": 35808092516,
+      "codeqlRun": 35808090646,
+      "optimisticValidationRun": 35808092484,
+      "optimisticValidationAttempt": 1,
+      "conclusion": "success"
+    },
+    "protectedMerge": {
+      "bootstrapRun": 35808904821,
+      "codeqlRun": 35808903755,
+      "optimisticValidationRun": 35808904885,
+      "conclusion": "success"
+    }
+  },
+  "claims": {
+    "acceptedTypedTransformsBound": true,
+    "completeLiveOperationObligations": true,
+    "allSixFamiliesBound": true,
+    "closedTypedDispositions": true,
+    "deterministicFreshProcessReplay": true,
+    "tamperAndOmissionRefusal": true,
+    "liveOperationsExecuted": false,
+    "providerMutation": false,
+    "successorAuthority": false
+  },
+  "acceptedAt": "2026-09-23T02:36:34Z"
+}

@@ -1,0 +1,43 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-09.4",
+  "state": "accepted",
+  "unitContractSha256": "3e54a9f1ba9c78646223be4a1b8f5057ae31d899048ac7899e3eeb9be7efcb1b",
+  "sourceRevision": "8ce6ba2a65af7c9d32768b2a044f381d852f9b90",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-09.3-receipt",
+      "sha256": "8db7b12bb21ae47debbc0bca52815b2ed07a5ad50bb824ebbd2a2753d79382a6"
+    },
+    {
+      "name": "live-operation-contract",
+      "sha256": "455e361f754392f0bcdd68092af3c373900e9fd1d1a409c1159d43d1e802a939"
+    },
+    {
+      "name": "protected-acceptance",
+      "sha256": "2fe6bac5a30a7506b3ec68b4ed784a719ff28504456999781d59899f82e469b7"
+    },
+    {
+      "name": "live-operation-interface",
+      "sha256": "ae906fc76e7cab137a0e9fcf684dc36796563ece026d05ff1ed524e3b59f6cfb"
+    },
+    {
+      "name": "live-operation-validator",
+      "sha256": "35ced0a6029bd4833fb8d5f5a92db1cb6c06318380eea8ac82e078695a1581c6"
+    },
+    {
+      "name": "live-operation-implementation",
+      "sha256": "84cc160667220d7ac647b8882b65698f1873bf2edc5be82641320b7333c49321"
+    },
+    {
+      "name": "live-operation-unit-tests",
+      "sha256": "bbf963e82522fb68fdbc7d8a21a2c266af4a67a679c32fbc9ae1f2a2e8261b2b"
+    },
+    {
+      "name": "live-operation-architecture-tests",
+      "sha256": "e9877bf4edfe8dd4cc82b25b62cac63594a2f466afd3ce1ff1fee09b71189741"
+    }
+  ],
+  "acceptedAt": "2026-09-23T02:36:34Z",
+  "digest": "f31c8c4f3720976cf7a467e5e9dae6359d4ab60ed92feaa219c502007426b65e"
+}
