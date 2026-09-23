@@ -1,0 +1,47 @@
+{
+  "schema": "fsgg.coordination.unit-acceptance/1",
+  "unitId": "GS2-09.6",
+  "state": "accepted",
+  "unitContractSha256": "bc3580ded0745753c762aeefbd36c61b68e691d0bf88b16b10d3fe8ec5c3a550",
+  "sourceRevision": "8bec873d75e7ddd86b8ed67d0438341ba72479a7",
+  "artifacts": [
+    {
+      "name": "accepted-GS2-09.5-receipt",
+      "sha256": "8180d7735719839c6eb8a42cc55f3fe342cd23c53108e5ae1cd82cb102328e87"
+    },
+    {
+      "name": "rollback-plan-contract",
+      "sha256": "785338cebb3f0a442007f173037b68b140831f92b91f56ccf24154d5dad1d450"
+    },
+    {
+      "name": "protected-acceptance",
+      "sha256": "2c21c3778f2f8f813846135cae6924424d933e52016cdb2b2f95fe3c1660f357"
+    },
+    {
+      "name": "rollback-plan-interface",
+      "sha256": "df8401f52268adadfda96c2786c6d7d4c9942bbc64257e671a8e7ef1bbb53b1f"
+    },
+    {
+      "name": "rollback-plan-implementation",
+      "sha256": "3dbbaa8d2c212f726ae13d493a2ba246f69a40ff37300cf1220e67f1622d329d"
+    },
+    {
+      "name": "rollback-plan-validator",
+      "sha256": "631d3b0c6f552874c0746068f7f895b68db6ab422ee30f2bbdb514579b8b4360"
+    },
+    {
+      "name": "rollback-plan-unit-tests",
+      "sha256": "9469d530200cdb9d0efa2ce408fa6299707977f488c0612219c39647521ee439"
+    },
+    {
+      "name": "rollback-plan-architecture-tests",
+      "sha256": "a20bf0e10ea5fb1a2fdc1f6a662277f0a1662ec43a3fe5c95b97f38529274d98"
+    },
+    {
+      "name": "rollback-plan-documentation",
+      "sha256": "a1c13afe2a3d03fbbf8f2b7193fb5ce2390c54088dd9ccb416a343613b3fd36a"
+    }
+  ],
+  "acceptedAt": "2026-09-23T10:01:31Z",
+  "digest": "a0b9cd7778ee3769c294f1dd2e26292a29cde84731841f1cb5165a74832b3c6f"
+}

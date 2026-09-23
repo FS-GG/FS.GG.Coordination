@@ -5,6 +5,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open Xunit
+open FS.GG.Coordination.Qualification.Contracts
 open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackPlanQualification
 
 let private root = Path.GetFullPath(Path.Combine(System.AppContext.BaseDirectory, "../../../../.."))
@@ -57,3 +58,28 @@ let ``GS2-09-6 gate identities bind the registered literal commands`` () =
         let command = commands |> List.find (fun item -> item.GetProperty("id").GetString() = contract.GetProperty("id").GetString())
         Assert.Equal(command.GetProperty("qGate").GetString(), contract.GetProperty("qGate").GetString())
         Assert.Equal(gateCommandSha256 command, contract.GetProperty("commandSha256").GetString())
+
+[<Fact>]
+let ``GS2-09-6 protected acceptance binds rollback plans and repair lineage`` () =
+    let receiptBytes = File.ReadAllBytes(path "evidence/github-substrate-v2/accepted/GS2-09.6.json")
+    use receipt = JsonDocument.Parse(receiptBytes)
+    let value = receipt.RootElement
+    Assert.Equal("accepted", value.GetProperty("state").GetString())
+    Assert.Equal("8bec873d75e7ddd86b8ed67d0438341ba72479a7", value.GetProperty("sourceRevision").GetString())
+    Assert.Equal("bc3580ded0745753c762aeefbd36c61b68e691d0bf88b16b10d3fe8ec5c3a550", value.GetProperty("unitContractSha256").GetString())
+    Assert.Equal("a0b9cd7778ee3769c294f1dd2e26292a29cde84731841f1cb5165a74832b3c6f", value.GetProperty("digest").GetString())
+    Assert.True(AcceptanceReceiptDigest.verify (System.ReadOnlyMemory receiptBytes) "GS2-09.6" (value.GetProperty("digest").GetString()) value |> Result.isOk)
+    let artifacts = value.GetProperty("artifacts").EnumerateArray() |> Seq.map (fun artifact -> artifact.GetProperty("name").GetString(), artifact.GetProperty("sha256").GetString()) |> Map.ofSeq
+    Assert.Equal("2c21c3778f2f8f813846135cae6924424d933e52016cdb2b2f95fe3c1660f357", artifacts["protected-acceptance"])
+    Assert.Equal("785338cebb3f0a442007f173037b68b140831f92b91f56ccf24154d5dad1d450", artifacts["rollback-plan-contract"])
+    use protectedAcceptance = JsonDocument.Parse(File.ReadAllBytes(path "evidence/github-substrate-v2/gs2-09-6/protected-acceptance.json"))
+    let protectedValue = protectedAcceptance.RootElement
+    Assert.Equal("2a51d0d50d1a3912a59c006e3512037197d66d11", protectedValue.GetProperty("source").GetProperty("tree").GetString())
+    Assert.Equal(35842389861L, protectedValue.GetProperty("hosted").GetProperty("protectedMerge").GetProperty("optimisticValidationRun").GetInt64())
+    Assert.Equal(2, protectedValue.GetProperty("hosted").GetProperty("supersededFailures").GetArrayLength())
+    Assert.False(protectedValue.GetProperty("claims").GetProperty("rollbackExecuted").GetBoolean())
+    Assert.False(protectedValue.GetProperty("claims").GetProperty("providerMutation").GetBoolean())
+    use index = JsonDocument.Parse(File.ReadAllBytes(path "evidence/github-substrate-v2/index.json"))
+    let entry = index.RootElement.GetProperty("entries").EnumerateArray() |> Seq.find (fun item -> item.GetProperty("id").GetString() = "accepted-GS2-09.6")
+    Assert.Equal(receiptBytes.Length, entry.GetProperty("bytes").GetInt32())
+    Assert.Equal(sha256 receiptBytes, entry.GetProperty("sha256").GetString())
