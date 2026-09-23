@@ -37,7 +37,7 @@ def export_legacy(directory):
     verification = subprocess.run([
         quint, 'verify', str(model), '--main=O2HostedWriterModel',
         '--init=init', '--step=step', '--invariant=safety',
-        '--max-steps=20', '--backend=tlc', '--seed=0xC5F0', '--verbosity=3',
+        '--max-steps=20', '--backend=tlc', '--verbosity=3',
     ], cwd=directory, check=False, capture_output=True, text=True, timeout=150)
     diagnostic = verification.stdout + verification.stderr
     if verification.returncode != 0:
