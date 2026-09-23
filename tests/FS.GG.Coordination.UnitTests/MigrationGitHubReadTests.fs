@@ -15,6 +15,14 @@ let private options =
       Repository="copy"
       ExpectedRepositoryId=42L }
 
+let private projectOptions =
+    { GraphQLUri=Uri "https://api.github.test/graphql"
+      Token="test-token"
+      UserAgent="fsgg-migration-test"
+      Organization="FS-GG"
+      ProjectNumber=1
+      ExpectedProjectNodeId="PROJECT_1" }
+
 let private ok headers body =
     Response
         { StatusCode=200; Headers=headers; Body=body; ETag=None
@@ -119,3 +127,55 @@ let ``HTTP migration read transport refuses mutation-shaped requests before netw
                   Variables=Map.empty; Headers=headers; ApiVersion=ApiVersion.required; Idempotency=NeverReplay }
     Assert.Equal(NetworkFailure, transport.Send rest)
     Assert.Equal(NetworkFailure, transport.Send graphQL)
+
+let private projectPage total hasNext cursor nodes =
+    sprintf """{"data":{"organization":{"projectV2":{"id":"PROJECT_1","number":1,"items":{"totalCount":%d,"nodes":%s,"pageInfo":{"hasNextPage":%s,"endCursor":%s}}}}}}"""
+        total nodes hasNext cursor
+
+[<Fact>]
+let ``Project census binds item identity and complete total across pages`` () =
+    let issueItem =
+        """{"id":"ITEM_1","isArchived":false,"updatedAt":"2026-09-23T10:00:00Z","content":{"__typename":"Issue","id":"ISSUE_1","number":7,"repository":{"databaseId":42}}}"""
+    let draftItem =
+        """{"id":"ITEM_2","isArchived":true,"updatedAt":"2026-09-23T10:01:00Z","content":{"__typename":"DraftIssue","id":"DRAFT_1"}}"""
+    let first = projectPage 2 "true" "\"cursor-1\"" $"[{issueItem}]"
+    let second = projectPage 2 "false" "\"cursor-2\"" $"[{draftItem}]"
+    let transport = FakeTransport [ ok Map.empty first; ok Map.empty second ]
+    match MigrationGitHubRead.readProjectItems projectOptions transport with
+    | Ok population ->
+        Assert.Equal(2, population.PageCount)
+        Assert.Equal(2, population.TotalCount)
+        Assert.Equal(2, population.Items.Length)
+        Assert.Equal(MigrationProjectContent.Issue("ISSUE_1", 42L, 7), population.Items.Head.Content)
+        Assert.Equal(MigrationProjectContent.DraftIssue "DRAFT_1", population.Items.Tail.Head.Content)
+    | Error failure -> failwithf "unexpected refusal: %A" failure
+
+[<Fact>]
+let ``Project population drift and partial GraphQL response refuse`` () =
+    let first = projectPage 2 "true" "\"cursor-1\"" "[]"
+    let changed = projectPage 3 "false" "null" "[]"
+    Assert.Equal(Error MigrationReadFailure.PopulationDrift,
+                 MigrationGitHubRead.readProjectItems projectOptions
+                     (FakeTransport [ ok Map.empty first; ok Map.empty changed ]))
+    let truncated = projectPage 2 "false" "\"cursor-1\"" "[]"
+    Assert.Equal(Error MigrationReadFailure.PopulationDrift,
+                 MigrationGitHubRead.readProjectItems projectOptions
+                     (FakeTransport [ ok Map.empty truncated ]))
+    let partial =
+        """{"data":{"organization":{"projectV2":{"id":"PROJECT_1","number":1,"items":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}}},"errors":[{"type":"FORBIDDEN"}]}"""
+    Assert.Equal(Error MigrationReadFailure.GraphQLErrors,
+                 MigrationGitHubRead.readProjectItems projectOptions
+                     (FakeTransport [ ok Map.empty partial ]))
+
+[<Fact>]
+let ``Project census rejects duplicate items and a missing cursor`` () =
+    let item =
+        """{"id":"ITEM_1","isArchived":false,"updatedAt":"2026-09-23T10:00:00Z","content":{"__typename":"DraftIssue","id":"DRAFT_1"}}"""
+    let duplicate = projectPage 2 "false" "\"terminal\"" $"[{item},{item}]"
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "ITEM_1"),
+                 MigrationGitHubRead.readProjectItems projectOptions
+                     (FakeTransport [ ok Map.empty duplicate ]))
+    let missingCursor = projectPage 0 "true" "null" "[]"
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "missing-end-cursor"),
+                 MigrationGitHubRead.readProjectItems projectOptions
+                     (FakeTransport [ ok Map.empty missingCursor ]))

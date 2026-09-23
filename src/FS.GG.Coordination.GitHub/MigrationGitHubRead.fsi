@@ -35,6 +35,34 @@ type MigrationIssueTypePopulation =
       Terminal: bool
       IssueTypes: MigrationIssueTypeRecord list }
 
+type MigrationProjectReadOptions =
+    { GraphQLUri: Uri
+      Token: string
+      UserAgent: string
+      Organization: string
+      ProjectNumber: int
+      ExpectedProjectNodeId: string }
+
+[<RequireQualifiedAccess>]
+type MigrationProjectContent =
+    | Issue of nodeId:string * repositoryId:int64 * number:int
+    | PullRequest of nodeId:string * repositoryId:int64 * number:int
+    | DraftIssue of nodeId:string
+
+type MigrationProjectItemRecord =
+    { ItemNodeId: string
+      Archived: bool
+      UpdatedAt: DateTimeOffset
+      Content: MigrationProjectContent
+      PayloadSha256: string }
+
+type MigrationProjectItemPopulation =
+    { ProjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      TotalCount: int
+      Items: MigrationProjectItemRecord list }
+
 [<RequireQualifiedAccess>]
 type MigrationReadFailure =
     | InvalidOptions
@@ -45,6 +73,7 @@ type MigrationReadFailure =
     | IdentityDrift
     | PaginationRefused of reason:string
     | DuplicateIdentity of identity:string
+    | PopulationDrift
 
 type IMigrationGitHubReadTransport =
     abstract Send: GitHubRequest -> TransportOutcome
@@ -62,3 +91,7 @@ module MigrationGitHubRead =
     val readIssueTypes:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssueTypePopulation, MigrationReadFailure>
+
+    val readProjectItems:
+        options:MigrationProjectReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationProjectItemPopulation, MigrationReadFailure>

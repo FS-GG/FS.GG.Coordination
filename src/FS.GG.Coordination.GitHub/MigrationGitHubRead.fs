@@ -40,6 +40,34 @@ type MigrationIssueTypePopulation =
       Terminal: bool
       IssueTypes: MigrationIssueTypeRecord list }
 
+type MigrationProjectReadOptions =
+    { GraphQLUri: Uri
+      Token: string
+      UserAgent: string
+      Organization: string
+      ProjectNumber: int
+      ExpectedProjectNodeId: string }
+
+[<RequireQualifiedAccess>]
+type MigrationProjectContent =
+    | Issue of nodeId:string * repositoryId:int64 * number:int
+    | PullRequest of nodeId:string * repositoryId:int64 * number:int
+    | DraftIssue of nodeId:string
+
+type MigrationProjectItemRecord =
+    { ItemNodeId: string
+      Archived: bool
+      UpdatedAt: DateTimeOffset
+      Content: MigrationProjectContent
+      PayloadSha256: string }
+
+type MigrationProjectItemPopulation =
+    { ProjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      TotalCount: int
+      Items: MigrationProjectItemRecord list }
+
 [<RequireQualifiedAccess>]
 type MigrationReadFailure =
     | InvalidOptions
@@ -50,6 +78,7 @@ type MigrationReadFailure =
     | IdentityDrift
     | PaginationRefused of reason:string
     | DuplicateIdentity of identity:string
+    | PopulationDrift
 
 type IMigrationGitHubReadTransport =
     abstract Send: GitHubRequest -> TransportOutcome
@@ -129,11 +158,11 @@ module MigrationGitHubRead =
         && text options.UserAgent && text options.Owner && text options.Repository
         && options.ExpectedRepositoryId > 0L
 
-    let private headers (options: MigrationGitHubReadOptions) =
+    let private headers token userAgent =
         [ "accept", "application/vnd.github+json"
           "x-github-api-version", ApiVersion.value ApiVersion.required
-          "user-agent", options.UserAgent
-          if text options.Token then "authorization", $"Bearer {options.Token}" ]
+          "user-agent", userAgent
+          if text token then "authorization", $"Bearer {token}" ]
         |> Map.ofList
 
     let private response (transport: IMigrationGitHubReadTransport) (request: GitHubRequest) =
@@ -185,7 +214,7 @@ module MigrationGitHubRead =
     let private readRepository (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
         let uri = Uri(options.ApiBase, path)
-        response transport (Rest { Method=Get; Uri=uri; Headers=headers options; Body=None
+        response transport (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
                                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
         |> Result.bind (fun result -> parse result.Body)
         |> Result.bind (fun document ->
@@ -226,7 +255,7 @@ module MigrationGitHubRead =
                          || not (current.Query.Contains("state=all") && current.Query.Contains("per_page=100")) then
                         Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
                     else
-                        response transport (Rest { Method=Get; Uri=current; Headers=headers options; Body=None
+                        response transport (Rest { Method=Get; Uri=current; Headers=headers options.Token options.UserAgent; Body=None
                                                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
                         |> Result.bind (fun result ->
                             parse result.Body
@@ -286,7 +315,7 @@ module MigrationGitHubRead =
                         |> Map.ofList
                     let request =
                         GraphQL { Uri=options.GraphQLUri; Document=issueTypeQuery; Variables=variables
-                                  Headers=headers options; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                                  Headers=headers options.Token options.UserAgent; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
                     |> Result.bind (fun result -> parse result.Body)
                     |> Result.bind (fun document ->
@@ -337,3 +366,121 @@ module MigrationGitHubRead =
                                 | Ok _, _ -> Error MigrationReadFailure.IdentityDrift
                                 | Error error, _ | _, Error error -> Error error)
             pages Set.empty 0 [] None
+
+    let private projectQuery number =
+        $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{number}) {{ id number items(first:100,after:$after) {{ totalCount nodes {{ id isArchived updatedAt content {{ __typename ... on Issue {{ id number repository {{ databaseId }} }} ... on PullRequest {{ id number repository {{ databaseId }} }} ... on DraftIssue {{ id }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
+
+    let private requiredBool name value =
+        property name value
+        |> Result.bind (fun item ->
+            match item.ValueKind with
+            | JsonValueKind.True -> Ok true
+            | JsonValueKind.False -> Ok false
+            | _ -> Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
+
+    let private nonNegativeInt name value =
+        property name value
+        |> Result.bind (fun item ->
+            let mutable parsed = 0
+            if item.ValueKind = JsonValueKind.Number && item.TryGetInt32(&parsed) && parsed >= 0 then Ok parsed
+            else Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
+
+    let private projectContent (item: JsonElement) =
+        match property "content" item with
+        | Error failure -> Error failure
+        | Ok content when content.ValueKind <> JsonValueKind.Object ->
+            Error(MigrationReadFailure.MalformedResponse "invalid:project-content")
+        | Ok content ->
+            match requiredString "__typename" content, requiredString "id" content with
+            | Ok "DraftIssue", Ok id -> Ok(MigrationProjectContent.DraftIssue id)
+            | Ok kind, Ok id when kind = "Issue" || kind = "PullRequest" ->
+                match requiredInt "number" content,
+                      property "repository" content |> Result.bind (requiredInt64 "databaseId") with
+                | Ok number, Ok repositoryId ->
+                    if kind = "Issue" then Ok(MigrationProjectContent.Issue(id, repositoryId, number))
+                    else Ok(MigrationProjectContent.PullRequest(id, repositoryId, number))
+                | Error failure, _ | _, Error failure -> Error failure
+            | Ok _, Ok _ -> Error(MigrationReadFailure.MalformedResponse "unsupported:project-content-kind")
+            | Error failure, _ | _, Error failure -> Error failure
+
+    let private projectItem (value: JsonElement) =
+        match requiredString "id" value, requiredBool "isArchived" value,
+              requiredString "updatedAt" value, projectContent value with
+        | Ok id, Ok archived, Ok updated, Ok content ->
+            let mutable timestamp = DateTimeOffset.MinValue
+            if DateTimeOffset.TryParse(updated, &timestamp) then
+                Ok { ItemNodeId=id; Archived=archived; UpdatedAt=timestamp
+                     Content=content; PayloadSha256=sha (value.GetRawText()) }
+            else Error(MigrationReadFailure.MalformedResponse "invalid:project-updatedAt")
+        | Error failure, _, _, _ | _, Error failure, _, _
+        | _, _, Error failure, _ | _, _, _, Error failure -> Error failure
+
+    let readProjectItems (options: MigrationProjectReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if isNull options.GraphQLUri || not options.GraphQLUri.IsAbsoluteUri
+           || options.GraphQLUri.Scheme <> Uri.UriSchemeHttps
+           || not (text options.UserAgent && text options.Organization && text options.ExpectedProjectNodeId)
+           || options.ProjectNumber <= 0 then
+            Error MigrationReadFailure.InvalidOptions
+        else
+            let rec pages (seen: Set<string>) (count: int) (population: int option)
+                          (accumulated: MigrationProjectItemRecord list) (cursor: string option) =
+                if count >= 1000 || (cursor |> Option.exists (fun value -> Set.contains value seen)) then
+                    Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                else
+                    let variables =
+                        [ "owner", options.Organization
+                          match cursor with Some value -> "after", value | None -> () ]
+                        |> Map.ofList
+                    let request =
+                        GraphQL { Uri=options.GraphQLUri; Document=projectQuery options.ProjectNumber
+                                  Variables=variables; Headers=headers options.Token options.UserAgent
+                                  ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                    response transport request
+                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun document ->
+                        use document = document
+                        let root = document.RootElement
+                        let mutable errors = Unchecked.defaultof<JsonElement>
+                        if root.TryGetProperty("errors", &errors) then Error MigrationReadFailure.GraphQLErrors
+                        else
+                            match property "data" root |> Result.bind (property "organization")
+                                  |> Result.bind (property "projectV2") with
+                            | Error failure -> Error failure
+                            | Ok project when project.ValueKind = JsonValueKind.Null ->
+                                Error MigrationReadFailure.IdentityDrift
+                            | Ok project ->
+                                match requiredString "id" project, requiredInt "number" project,
+                                      property "items" project with
+                                | Ok id, Ok number, Ok connection when
+                                    id = options.ExpectedProjectNodeId && number = options.ProjectNumber ->
+                                    match nonNegativeInt "totalCount" connection,
+                                          property "nodes" connection, property "pageInfo" connection with
+                                    | Ok total, Ok nodes, Ok pageInfo when nodes.ValueKind = JsonValueKind.Array ->
+                                        if population |> Option.exists ((<>) total) then
+                                            Error MigrationReadFailure.PopulationDrift
+                                        else
+                                            let parsed = nodes.EnumerateArray() |> Seq.map projectItem |> Seq.toList
+                                            match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                                            | Some failure -> Error failure
+                                            | None ->
+                                                let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+                                                let combined = accumulated @ values
+                                                match requiredBool "hasNextPage" pageInfo,
+                                                      property "endCursor" pageInfo with
+                                                | Ok true, Ok endCursor when endCursor.ValueKind = JsonValueKind.String
+                                                                          && text (endCursor.GetString()) ->
+                                                    pages (cursor |> Option.map (fun value -> Set.add value seen)
+                                                                  |> Option.defaultValue seen)
+                                                          (count + 1) (Some total) combined (Some(endCursor.GetString()))
+                                                | Ok false, Ok _ when combined.Length = total ->
+                                                    collectUnique (fun (value: MigrationProjectItemRecord) -> value.ItemNodeId) combined
+                                                    |> Result.map (fun complete ->
+                                                        { ProjectNodeId=id; PageCount=count + 1; Terminal=true
+                                                          TotalCount=total; Items=List.sortBy _.ItemNodeId complete })
+                                                | Ok false, Ok _ -> Error MigrationReadFailure.PopulationDrift
+                                                | Ok true, _ -> Error(MigrationReadFailure.PaginationRefused "missing-end-cursor")
+                                                | Error failure, _ | _, Error failure -> Error failure
+                                    | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:project-items")
+                                | Ok _, Ok _, _ -> Error MigrationReadFailure.IdentityDrift
+                                | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+            pages Set.empty 0 None [] None
