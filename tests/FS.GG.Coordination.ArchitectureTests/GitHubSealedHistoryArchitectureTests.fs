@@ -57,9 +57,16 @@ let ``GS2-09-5 gate identities bind the registered literal commands`` () =
         Assert.Equal(gateCommandSha256 command, contract.GetProperty("commandSha256").GetString())
 
 [<Fact>]
-let ``formal base parity uses fixed seeds and preserves failure diagnostics`` () =
+let ``formal base parity uses supported reproducibility options and preserves failure diagnostics`` () =
     let verifier = File.ReadAllText(path "eng/verify-choreo-c5-parity.py")
-    Assert.Contains("--seed=0xC5F0", verifier)
+    Assert.DoesNotContain("--backend=tlc', '--seed", verifier)
     Assert.Contains("--seed=0xC5F1", verifier)
     Assert.Contains("check=False, capture_output=True", verifier)
     Assert.Contains("print(diagnostic, file=sys.stderr)", verifier)
+
+[<Fact>]
+let ``optimistic architecture provisioning reuses the pinned evaluator without a network fetch`` () =
+    let provisioner = File.ReadAllText(path "eng/bootstrap-gates/provision-quint.sh")
+    Assert.Contains("home/.quint/rust-evaluator-v0.6.0/quint_evaluator", provisioner)
+    Assert.Contains("$evaluator_sha", provisioner)
+    Assert.Contains("QUINT_HOME=\"$quint_home\"", provisioner)
