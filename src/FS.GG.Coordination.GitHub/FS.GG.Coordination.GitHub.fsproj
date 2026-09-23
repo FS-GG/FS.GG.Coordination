@@ -23,6 +23,8 @@
     <Compile Include="V1AdmissionRegistry.fs" />
     <Compile Include="V1AdmissionService.fsi" />
     <Compile Include="V1AdmissionService.fs" />
+    <Compile Include="V1AdmissionJournalGitRead.fsi" />
+    <Compile Include="V1AdmissionJournalGitRead.fs" />
     <Compile Include="V1AdmissionGenesisAuthorization.fsi" />
     <Compile Include="V1AdmissionGenesisAuthorization.fs" />
     <Compile Include="V1AdmissionGenesisGitRead.fsi" />

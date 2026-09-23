@@ -316,6 +316,98 @@ let ``admission service reports concurrent parent movement without reusing the s
     Assert.True moved
     Assert.True(Registry.recoverOperation "service-op" (Registry.restore current |> Result.defaultWith (String.concat "," >> failwith)) |> Result.isError)
 
+let private journalEvidence (now: DateTimeOffset) (read: RegistryJournalRead) =
+    let root = JsonObject()
+    root["schema"] <- JsonValue.Create("fsgg.v1-admission-journal-git-read/1")
+    root["observedAt"] <- JsonValue.Create(now.ToString("yyyy-MM-ddTHH:mm:ss'Z'"))
+    root["repository"] <- JsonValue.Create(read.Repository)
+    root["repositoryId"] <- JsonValue.Create(read.RepositoryId)
+    root["ref"] <- JsonValue.Create(read.Ref)
+    root["firstHead"] <- JsonValue.Create(read.FirstHead.Value |> Registry.gitObjectIdValue)
+    root["secondHead"] <- JsonValue.Create(read.SecondHead.Value |> Registry.gitObjectIdValue)
+    let commits = JsonArray()
+    for commit in commitsOf read do
+        let entry = JsonObject()
+        entry["commitOid"] <- JsonValue.Create(commit.CommitOid)
+        entry["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(read.CommitBytes[commit.CommitOid]))
+        entry["treeOid"] <- JsonValue.Create(commit.TreeOid)
+        entry["treeBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(read.TreeBytes[commit.TreeOid]))
+        entry["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(commit.Event.Bytes))
+        entry["headBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(commit.HeadBytes))
+        commits.Add entry
+    root["commits"] <- commits
+    root
+
+[<Fact>]
+let ``native admission journal evidence restores a parented operation history`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, durable, _ = admitted snapshot commit manifest "native-op"
+    let now = DateTimeOffset.UtcNow
+    let evidence = journalEvidence now harness.Current
+    let bytes = Encoding.UTF8.GetBytes(evidence.ToJsonString())
+    let restored =
+        V1AdmissionJournalGitRead.decode now (ReadOnlyMemory bytes)
+        |> Result.defaultWith (String.concat "," >> failwith)
+        |> Registry.restore
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.Equal(Registry.head durable, Registry.head restored)
+    Assert.Equal(2L, Registry.generation restored)
+
+[<Fact>]
+let ``native admission journal evidence rejects changed bytes stale heads and incomplete order`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, _, _ = admitted snapshot commit manifest "native-op"
+    let now = DateTimeOffset.UtcNow
+    let valid = journalEvidence now harness.Current
+    let decode (root: JsonObject) =
+        root.ToJsonString() |> Encoding.UTF8.GetBytes |> ReadOnlyMemory
+        |> V1AdmissionJournalGitRead.decode now
+    Assert.True(decode valid |> Result.isOk)
+    let changedBytes = JsonNode.Parse(valid.ToJsonString()).AsObject()
+    let changedEntries = changedBytes["commits"].AsArray()
+    let changedEvent = changedEntries[1].AsObject()
+    changedEvent["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes("{}\n")))
+    Assert.True(decode changedBytes |> Result.isError)
+    let moved = JsonNode.Parse(valid.ToJsonString()).AsObject()
+    moved["secondHead"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(decode moved |> Result.isError)
+    let stale = JsonNode.Parse(valid.ToJsonString()).AsObject()
+    stale["observedAt"] <- JsonValue.Create(now.AddMinutes(-3.).ToString("yyyy-MM-ddTHH:mm:ss'Z'"))
+    Assert.True(decode stale |> Result.isError)
+    let reversed = JsonNode.Parse(valid.ToJsonString()).AsObject()
+    let entries = reversed["commits"].AsArray()
+    let first, second = entries[0].DeepClone(), entries[1].DeepClone()
+    entries[0] <- second
+    entries[1] <- first
+    Assert.True(decode reversed |> Result.isError)
+
+[<Fact>]
+let ``native admission journal binding is fresh read-only and never turns failure into absence`` () =
+    let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
+    let harness, durable, _ = admitted snapshot commit manifest "native-op"
+    let now = DateTimeOffset.UtcNow
+    let bytes = journalEvidence now harness.Current |> _.ToJsonString() |> Encoding.UTF8.GetBytes
+    let mutable reads = 0
+    let native () =
+        reads <- reads + 1
+        if reads = 2 then Error "failed-read" else Ok bytes
+    let port = V1AdmissionJournalGitRead.createReadOnlyPort (fun () -> now) native
+    let first = port.Read(registryAddress ())
+    Assert.Equal(Registry.head durable, Registry.restore first |> Result.map Registry.head |> Result.defaultWith (String.concat "," >> failwith))
+    let second = port.Read(registryAddress ())
+    Assert.True(match second.Observation with JournalUnreadable _ -> true | _ -> false)
+    Assert.True(Registry.restore second |> Result.isError)
+    Assert.Equal(2, reads)
+    let wrong = ShardedJournalAdapter.address Operation "different-operation" |> Result.defaultWith (string >> failwith)
+    Assert.True(match (port.Read wrong).Observation with JournalUnreadable _ -> true | _ -> false)
+    Assert.Equal(2, reads)
+    let next =
+        match Registry.admit (Registry.head durable) snapshot (context commit manifest "second-op" 1L) durable with
+        | RegistryAdmissionAppended value -> value
+        | other -> failwithf "%A" other
+    let proposal = Registry.planAppend "second-admission" harness.Current next |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(match port.Write proposal with ReceiveDefiniteRefusal "admission-journal-read-only" -> true | _ -> false)
+
 [<Fact>]
 let ``reader validates actual initializer objects and rejects moved head`` () =
     let snapshot, _, _, observed, _ = authority "OperatingV1" 1L None id
