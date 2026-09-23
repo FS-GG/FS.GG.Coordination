@@ -1751,6 +1751,12 @@ module V1AdmissionRegistry =
     let genesisAuthorityCommit (RegistryGenesisPlan plan) = plan.AuthorityCommit
     let genesisManifest (RegistryGenesisPlan plan) = plan.Manifest
     let genesisTrustDigest (RegistryGenesisPlan plan) = plan.TrustDigest
+    let genesisMatchesAuthority (RegistryGenesisPlan plan) (VerifiedAuthoritySnapshot authority) =
+        authority.Phase = V1OperatingV1
+        && authority.AdmissionSeal.IsNone
+        && authority.Commit = plan.AuthorityCommit
+        && authority.Manifest = plan.Manifest
+        && authority.Trust = plan.TrustDigest
     let genesisCommit (RegistryGenesisPlan plan) =
         { plan.Commit with
             HeadBytes = Array.copy plan.Commit.HeadBytes

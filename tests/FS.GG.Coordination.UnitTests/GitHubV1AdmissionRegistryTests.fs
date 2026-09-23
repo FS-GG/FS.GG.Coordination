@@ -287,7 +287,7 @@ let ``protected genesis plan refuses a verified non-OperatingV1 authority`` () =
     | Ok _ -> Assert.Fail "an incumbent-only epoch must not authorize admission genesis"
 
 [<Fact>]
-let ``genesis signature binds anchored signer, exact intent, run and expiry`` () =
+let ``protected genesis binds signature native approval and expected absent install`` () =
     use rsa = RSA.Create(2048)
     let spki = SHA256.HashData(rsa.ExportSubjectPublicKeyInfo()) |> Convert.ToHexString |> _.ToLowerInvariant()
     let receiptDigest = Registry.sha256Value (digest "c")
@@ -299,7 +299,7 @@ let ``genesis signature binds anchored signer, exact intent, run and expiry`` ()
         |> Result.defaultWith failwith
         |> fun bytes -> Array.append bytes [| 10uy |]
     let trustDigest = SHA256.HashData trustBytes |> Convert.ToHexString |> _.ToLowerInvariant() |> Registry.sha256Digest |> Result.defaultWith failwith
-    let snapshot, _, _, _, _ = authorityWithTrust trustDigest "OperatingV1" 1L None id
+    let snapshot, _, _, _, authorityPort = authorityWithTrust trustDigest "OperatingV1" 1L None id
     let plan = Registry.planGenesis "protected-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
     let intent: GenesisAuthorizationIntent =
         { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"
@@ -358,7 +358,8 @@ let ``genesis signature binds anchored signer, exact intent, run and expiry`` ()
            expiresAt = unsigned.ExpiresAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
            conclusion = "success" |}
     let native: GenesisProtectedNativeRead =
-        { RunRepositoryId = 1269292704L
+        { ObservedAt = now
+          RunRepositoryId = 1269292704L
           RunId = 42L
           RunEvent = "workflow_dispatch"
           RunPath = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
@@ -371,16 +372,18 @@ let ``genesis signature binds anchored signer, exact intent, run and expiry`` ()
           WorkflowBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gs2-v1-admission-protected-authorization.yml"))
           ArtifactReadRunId = 42L
           ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes artifact
+          EnvironmentId = 21550151971L
           EnvironmentName = "fleet-cutover"
           EnvironmentBranchPolicy = "custom-main"
           EnvironmentReviewerIds = [ 1645484L; 4456104L ]
           EnvironmentPreventsSelfReview = true
-          Approvals = [ { ReviewerId = 1645484L; State = "approved" } ] }
+          Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 21550151971L ] } ] }
     let approved =
         V1AdmissionGenesisProtectedApproval.verify now plan intent verified native
         |> Result.defaultWith (String.concat "," >> failwith)
     Assert.Equal(42L, V1AdmissionGenesisProtectedApproval.runId approved)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunId = 43L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ObservedAt = now.AddMinutes(-3.) } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunActorId = 1645484L } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunAttempt = 2 } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunRef = "refs/heads/other" } |> Result.isError)
@@ -389,11 +392,156 @@ let ``genesis signature binds anchored signer, exact intent, run and expiry`` ()
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowReadRevision = oid "7" } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactReadRunId = 43L } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentPreventsSelfReview = false } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentId = 9L } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentBranchPolicy = "unrestricted" } |> Result.isError)
-    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved" } ] } |> Result.isError)
-    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved" }; { ReviewerId = 1645484L; State = "approved" } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved"; EnvironmentIds = [ 21550151971L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 9L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 21550151971L ] }; { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 21550151971L ] } ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes {| artifact with runId = 43L |} } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify (now.AddMinutes 86.) plan intent verified native |> Result.isError)
+
+    let source: GenesisSourceRead =
+        { ObservedAt = now; RepositoryId = 1346720714L; Commit = intent.SourceCommit
+          Tree = intent.SourceTree; IsOnMain = true }
+    let protection: GenesisProtectionRead =
+        { ObservedAt = now; RepositoryId = 1351660651L
+          WriterRulesetId = 21872113L; WriterRulesetActive = true; WriterRulesetMatchesRef = true
+          WriterBypassAppIds = [ 4882140L ]
+          IntegrityRulesetId = 21872115L; IntegrityRulesetActive = true
+          IntegrityRulesetMatchesRef = true; IntegrityRejectsDeletion = true
+          IntegrityRejectsNonFastForward = true; IntegrityBypassAppIds = []
+          CredentialAppId = 4882140L; CredentialInstallationId = 160261608L
+          CredentialRepositoryIds = [ 1351660651L ]; CredentialContentsWrite = true
+          CredentialHasOtherWritePermissions = false }
+    let genesisObjects = Registry.genesisObjects plan
+    let genesisCommit = Registry.genesisCommit plan
+    let installedRead =
+        { absentRead () with
+            FirstHead = Some genesisObjects.CommitObjectId
+            SecondHead = Some genesisObjects.CommitObjectId
+            Observation = JournalComplete("protected-genesis", [ genesisCommit ])
+            CommitBytes = Map.ofList [ genesisCommit.CommitOid, genesisObjects.CommitBytes ]
+            TreeBytes = Map.ofList [ genesisCommit.TreeOid, genesisObjects.TreeBytes ] }
+    let mutable journal = absentRead ()
+    let mutable refRead = GenesisRefAbsent
+    let mutable writes = 0
+    let mutable objectStore = Map.empty<string * GitObjectId, byte array>
+    let installer: GenesisInstallerPort =
+        { Now = fun () -> now
+          Authority = authorityPort
+          ReadRegistry = fun _ -> Ok journal
+          ReadRef = fun _ -> refRead
+          ReadTrustAnchor = fun () -> Ok trustBytes
+          ReadSource = fun () -> Ok source
+          ReadProtection = fun () -> Ok protection
+          ReadApproval = fun _ -> Ok native
+          PutObject = fun kind id bytes ->
+              writes <- writes + 1
+              objectStore <- Map.add (kind, id) (Array.copy bytes) objectStore
+              Ok id
+          ReadObject = fun kind id ->
+              match Map.tryFind (kind, id) objectStore with
+              | Some bytes -> Ok bytes
+              | None -> Error "missing-object"
+          CreateRefExpectedAbsent = fun _ id ->
+              if refRead <> GenesisRefAbsent || id <> genesisObjects.CommitObjectId then
+                  Error "expected-absence-conflict"
+              else
+                  refRead <- GenesisRefAt id
+                  journal <- installedRead
+                  Ok() }
+    Assert.Equal(GenesisInstalled, V1AdmissionGenesisInstaller.apply installer plan intent signature)
+    Assert.Equal(4, writes)
+    Assert.Equal(GenesisAlreadyInstalled, V1AdmissionGenesisInstaller.apply installer plan intent signature)
+    Assert.Equal(4, writes)
+    Assert.Equal(
+        GenesisInstallRefused [ "genesis-protection-or-writer-drift" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with ReadProtection = fun () -> Ok { protection with WriterBypassAppIds = [ 9L ] } }
+            plan intent signature
+    )
+    Assert.Equal(4, writes)
+    journal <- absentRead ()
+    refRead <- GenesisRefAbsent
+    Assert.Equal(
+        GenesisInstalled,
+        V1AdmissionGenesisInstaller.apply
+            { installer with
+                CreateRefExpectedAbsent =
+                    fun _ id ->
+                        refRead <- GenesisRefAt id
+                        journal <- installedRead
+                        Error "response-lost" }
+            plan intent signature
+    )
+    journal <- absentRead ()
+    refRead <- GenesisRefAbsent
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-final-readback-indeterminate" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with CreateRefExpectedAbsent = fun _ _ -> Error "response-lost" }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    let mutable protectionReads = 0
+    Assert.Equal(
+        GenesisInstallRefused [ "genesis-protection-or-writer-drift" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with
+                ReadProtection = fun () ->
+                    protectionReads <- protectionReads + 1
+                    if protectionReads = 1 then Ok protection
+                    else Ok { protection with CredentialContentsWrite = false } }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-object-readback-unknown" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with ReadObject = fun _ _ -> Error "provider-unreadable" }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-ref-read-unknown" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with ReadRef = fun _ -> GenesisRefUnknown "provider-unreadable" }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    let mutable refReads = 0
+    Assert.Equal(
+        GenesisInstallRefused [ "genesis-competing-ref" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with
+                ReadRef =
+                    fun _ ->
+                        refReads <- refReads + 1
+                        if refReads = 1 then GenesisRefAbsent else GenesisRefAt(oid "f") }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    let initialHead = authorityPort.RereadHead() |> Result.defaultWith failwith
+    let mutable authorityReads = 0
+    let movingAuthority =
+        { authorityPort with
+            RereadHead = fun () ->
+                authorityReads <- authorityReads + 1
+                if authorityReads = 1 then Ok initialHead else Ok(oid "f") }
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "authority-head-moved" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with Authority = movingAuthority }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
+    Assert.Equal(
+        GenesisInstallIndeterminate [ "genesis-object-oid-mismatch" ],
+        V1AdmissionGenesisInstaller.apply
+            { installer with PutObject = fun _ _ _ -> Ok(oid "f") }
+            plan intent signature
+    )
+    Assert.Equal(GenesisRefAbsent, refRead)
 
 [<Fact>]
 let ``canonical command log restores admission after process restart`` () =

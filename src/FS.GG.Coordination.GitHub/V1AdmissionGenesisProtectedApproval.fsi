@@ -2,12 +2,13 @@ namespace FS.GG.Coordination.GitHub
 
 open System
 
-type GenesisNativeApproval = { ReviewerId: int64; State: string }
+type GenesisNativeApproval = { ReviewerId: int64; State: string; EnvironmentIds: int64 list }
 
 /// Values must be independently fetched from GitHub at the protection boundary. In particular,
 /// ArtifactBytes must come from the artifact attached to this exact run, not from a caller's file.
 type GenesisProtectedNativeRead =
     {
+        ObservedAt: DateTimeOffset
         RunRepositoryId: int64
         RunId: int64
         RunEvent: string
@@ -21,6 +22,7 @@ type GenesisProtectedNativeRead =
         WorkflowBytes: byte array
         ArtifactReadRunId: int64
         ArtifactBytes: byte array
+        EnvironmentId: int64
         EnvironmentName: string
         EnvironmentBranchPolicy: string
         EnvironmentReviewerIds: int64 list

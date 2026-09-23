@@ -5,10 +5,11 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 
-type GenesisNativeApproval = { ReviewerId: int64; State: string }
+type GenesisNativeApproval = { ReviewerId: int64; State: string; EnvironmentIds: int64 list }
 
 type GenesisProtectedNativeRead =
     {
+        ObservedAt: DateTimeOffset
         RunRepositoryId: int64
         RunId: int64
         RunEvent: string
@@ -22,6 +23,7 @@ type GenesisProtectedNativeRead =
         WorkflowBytes: byte array
         ArtifactReadRunId: int64
         ArtifactBytes: byte array
+        EnvironmentId: int64
         EnvironmentName: string
         EnvironmentBranchPolicy: string
         EnvironmentReviewerIds: int64 list
@@ -98,6 +100,8 @@ module V1AdmissionGenesisProtectedApproval =
                 |> sha256
             let errors =
                 [
+                    if native.ObservedAt > asOf || asOf - native.ObservedAt > TimeSpan.FromMinutes 2. then
+                        "genesis-protected-native-stale"
                     if plannedIntentSha256
                        <> (V1AdmissionGenesisAuthorization.intentSha256 signature |> V1AdmissionRegistry.sha256Value) then
                         "genesis-protected-signature-intent"
@@ -134,7 +138,8 @@ module V1AdmissionGenesisProtectedApproval =
                         "genesis-protected-workflow-drift"
                     if native.ArtifactReadRunId <> native.RunId then
                         "genesis-protected-artifact-provenance"
-                    if native.EnvironmentName <> "fleet-cutover"
+                    if native.EnvironmentId <> 21550151971L
+                       || native.EnvironmentName <> "fleet-cutover"
                        || native.EnvironmentBranchPolicy <> "custom-main"
                        || not native.EnvironmentPreventsSelfReview
                        || Set.ofList native.EnvironmentReviewerIds <> eligibleReviewers
@@ -147,7 +152,8 @@ module V1AdmissionGenesisProtectedApproval =
                        || (approved
                            |> List.exists (fun approval ->
                                not (eligibleReviewers.Contains approval.ReviewerId)
-                               || approval.ReviewerId = native.RunActorId)) then
+                               || approval.ReviewerId = native.RunActorId
+                               || approval.EnvironmentIds <> [ 21550151971L ])) then
                         "genesis-protected-native-approvals"
                 ]
 

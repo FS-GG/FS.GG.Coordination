@@ -198,6 +198,7 @@ module V1AdmissionRegistry =
     val genesisAuthorityCommit: RegistryGenesisPlan -> GitObjectId
     val genesisManifest: RegistryGenesisPlan -> Sha256Digest
     val genesisTrustDigest: RegistryGenesisPlan -> Sha256Digest
+    val genesisMatchesAuthority: RegistryGenesisPlan -> VerifiedAuthoritySnapshot -> bool
     val genesisCommit: RegistryGenesisPlan -> JournalCommit
     val genesisObjects: RegistryGenesisPlan -> RegistryGitObjects
     val verifyGenesisReadback: RegistryGenesisPlan -> RegistryJournalRead -> Result<AdmissionRegistry, string list>

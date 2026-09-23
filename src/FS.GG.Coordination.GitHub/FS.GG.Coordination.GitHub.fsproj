@@ -25,6 +25,8 @@
     <Compile Include="V1AdmissionGenesisAuthorization.fs" />
     <Compile Include="V1AdmissionGenesisProtectedApproval.fsi" />
     <Compile Include="V1AdmissionGenesisProtectedApproval.fs" />
+    <Compile Include="V1AdmissionGenesisInstaller.fsi" />
+    <Compile Include="V1AdmissionGenesisInstaller.fs" />
     <Compile Include="LedgerProtectionPlanAdapter.fsi" />
     <Compile Include="LedgerProtectionPlanAdapter.fs" />
     <Compile Include="LedgerProtectionProviderAdapter.fsi" />
