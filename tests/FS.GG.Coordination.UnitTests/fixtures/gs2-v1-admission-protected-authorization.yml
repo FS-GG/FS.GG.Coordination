@@ -31,7 +31,7 @@ concurrency:
 jobs:
   authorize:
     name: gs2-v1-admission-protected-authorization
-    environment: fleet-cutover
+    environment: fleet-v1-admission-owner
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -70,7 +70,7 @@ jobs:
             --arg genesisIntentSha256 "$GENESIS_INTENT_SHA256" \
             --arg approvedAt "$approved_at" \
             --arg expiresAt "$expires_at" \
-            '{schema:"fsgg.v1-admission-genesis-protected-authorization/1",operationId:$operationId,repository:"FS-GG/.github",runId:$runId,workflowRevision:$workflowRevision,coordinationRevision:$coordinationRevision,coordinationTree:$coordinationTree,environment:"fleet-cutover",genesisIntentSha256:$genesisIntentSha256,approvedAt:$approvedAt,expiresAt:$expiresAt,conclusion:"success"}' \
+            '{schema:"fsgg.v1-admission-genesis-protected-authorization/2",operationId:$operationId,repository:"FS-GG/.github",runId:$runId,workflowRevision:$workflowRevision,coordinationRevision:$coordinationRevision,coordinationTree:$coordinationTree,environment:"fleet-v1-admission-owner",genesisIntentSha256:$genesisIntentSha256,approvedAt:$approvedAt,expiresAt:$expiresAt,conclusion:"success"}' \
             > protected-v1-admission-genesis.json
           chmod 600 protected-v1-admission-genesis.json
       - name: Retain reviewed receipt

@@ -26,6 +26,7 @@ type GenesisProtectedNativeRead =
         EnvironmentId: int64
         EnvironmentName: string
         EnvironmentBranchPolicy: string
+        EnvironmentWaitMinutes: int
         EnvironmentReviewerIds: int64 list
         EnvironmentPreventsSelfReview: bool
         Approvals: GenesisNativeApproval list
@@ -36,8 +37,10 @@ type VerifiedGenesisProtectedApproval = private VerifiedGenesisProtectedApproval
 [<RequireQualifiedAccess>]
 module V1AdmissionGenesisProtectedApproval =
     let private workflowPath = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
-    let private workflowSha256 = "e0682cdcb201781ef67308b1546e0e21090a6efebe1c92316cc9fbe110040767"
-    let private eligibleReviewers = Set.ofList [ 1645484L; 4456104L ]
+    let private workflowSha256 = "7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820"
+    let private accountableOwnerId = 1645484L
+    let private environmentId = 22582241959L
+    let private environmentName = "fleet-v1-admission-owner"
 
     let private sha256 (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -70,11 +73,11 @@ module V1AdmissionGenesisProtectedApproval =
                       "runPath"; "runRef"; "runHead"; "runConclusion"; "runActorId"
                       "runAttempt"; "workflowReadRevision"; "workflowBytesBase64"
                       "artifactReadRunId"; "artifactBytesBase64"; "environmentId"
-                      "environmentName"; "environmentBranchPolicy"; "environmentReviewerIds"
+                      "environmentName"; "environmentBranchPolicy"; "environmentWaitMinutes"; "environmentReviewerIds"
                       "environmentPreventsSelfReview"; "approvals" ]
 
                 if not (exactProperties expected root)
-                   || root.GetProperty("schema").GetString() <> "fsgg.v1-admission-genesis-native-read/1" then
+                   || root.GetProperty("schema").GetString() <> "fsgg.v1-admission-genesis-native-read/2" then
                     Error [ "genesis-native-evidence-shape" ]
                 else
                     let string (name: string) = root.GetProperty(name).GetString()
@@ -121,6 +124,7 @@ module V1AdmissionGenesisProtectedApproval =
                           EnvironmentId = root.GetProperty("environmentId").GetInt64()
                           EnvironmentName = string "environmentName"
                           EnvironmentBranchPolicy = string "environmentBranchPolicy"
+                          EnvironmentWaitMinutes = root.GetProperty("environmentWaitMinutes").GetInt32()
                           EnvironmentReviewerIds = reviewerIds
                           EnvironmentPreventsSelfReview = root.GetProperty("environmentPreventsSelfReview").GetBoolean()
                           Approvals = approvals }
@@ -174,7 +178,7 @@ module V1AdmissionGenesisProtectedApproval =
                     if plannedIntentSha256
                        <> (V1AdmissionGenesisAuthorization.intentSha256 signature |> V1AdmissionRegistry.sha256Value) then
                         "genesis-protected-signature-intent"
-                    if schema <> "fsgg.v1-admission-genesis-protected-authorization/1"
+                    if schema <> "fsgg.v1-admission-genesis-protected-authorization/2"
                        || repository <> "FS-GG/.github"
                        || operationId <> (V1AdmissionRegistry.genesisCommit plan).OperationId
                        || artifactRunId <> native.RunId
@@ -183,7 +187,7 @@ module V1AdmissionGenesisProtectedApproval =
                        || coordinationRevision <> (V1AdmissionRegistry.gitObjectIdValue intent.SourceCommit)
                        || coordinationTree <> (V1AdmissionRegistry.gitObjectIdValue intent.SourceTree)
                        || intentSha256 <> (V1AdmissionGenesisAuthorization.intentSha256 signature |> V1AdmissionRegistry.sha256Value)
-                       || environment <> "fleet-cutover"
+                       || environment <> environmentName
                        || conclusion <> "success" then
                         "genesis-protected-artifact-binding"
                     if approvedAt > asOf || asOf >= expiresAt
@@ -197,7 +201,8 @@ module V1AdmissionGenesisProtectedApproval =
                        || native.RunRef <> "refs/heads/main"
                        || native.RunHead <> intent.WorkflowRevision
                        || native.RunConclusion <> "success"
-                       || native.RunAttempt <> 1 then
+                       || native.RunAttempt <> 1
+                       || native.RunActorId <> accountableOwnerId then
                         "genesis-protected-native-run"
                     if obj.ReferenceEquals(native.WorkflowBytes, null)
                        || native.WorkflowBytes.Length > 16384
@@ -207,22 +212,20 @@ module V1AdmissionGenesisProtectedApproval =
                         "genesis-protected-workflow-drift"
                     if native.ArtifactReadRunId <> native.RunId then
                         "genesis-protected-artifact-provenance"
-                    if native.EnvironmentId <> 21550151971L
-                       || native.EnvironmentName <> "fleet-cutover"
+                    if native.EnvironmentId <> environmentId
+                       || native.EnvironmentName <> environmentName
                        || native.EnvironmentBranchPolicy <> "custom-main"
-                       || not native.EnvironmentPreventsSelfReview
-                       || Set.ofList native.EnvironmentReviewerIds <> eligibleReviewers
-                       || native.EnvironmentReviewerIds.Length <> eligibleReviewers.Count then
+                       || native.EnvironmentWaitMinutes <> 5
+                       || native.EnvironmentPreventsSelfReview
+                       || native.EnvironmentReviewerIds <> [ accountableOwnerId ] then
                         "genesis-protected-environment"
-                    if approved.IsEmpty
-                       || approved.Length > eligibleReviewers.Count
-                       || (approved |> List.map _.ReviewerId |> List.distinct |> List.length) <> approved.Length
-                       || native.Approvals.Length <> approved.Length
+                    if approved.Length <> 1
+                       || native.Approvals.Length <> 1
                        || (approved
                            |> List.exists (fun approval ->
-                               not (eligibleReviewers.Contains approval.ReviewerId)
-                               || approval.ReviewerId = native.RunActorId
-                               || approval.EnvironmentIds <> [ 21550151971L ])) then
+                               approval.ReviewerId <> accountableOwnerId
+                               || approval.ReviewerId <> native.RunActorId
+                               || approval.EnvironmentIds <> [ environmentId ])) then
                         "genesis-protected-native-approvals"
                 ]
 

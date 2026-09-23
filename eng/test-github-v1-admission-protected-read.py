@@ -39,7 +39,8 @@ def fixture():
         f"{prefix}/actions/runs/{RUN_ID}": {
             "id": RUN_ID, "repository": {"id": native.REPOSITORY_ID}, "head_sha": HEAD,
             "head_branch": "main", "path": native.WORKFLOW, "event": "workflow_dispatch",
-            "run_attempt": 1, "status": "completed", "conclusion": "success", "actor": {"id": 777},
+            "run_attempt": 1, "status": "completed", "conclusion": "success",
+            "actor": {"id": native.ACCOUNTABLE_OWNER_ID},
         },
         f"{prefix}/contents/{native.WORKFLOW}?ref={HEAD}": {
             "type": "file", "encoding": "base64", "content": base64.b64encode(WORKFLOW).decode(),
@@ -48,9 +49,9 @@ def fixture():
             "id": native.ENVIRONMENT_ID, "name": native.ENVIRONMENT,
             "deployment_branch_policy": {"custom_branch_policies": True, "protected_branches": False},
             "protection_rules": [
-                {"type": "required_reviewers", "prevent_self_review": True,
-                 "reviewers": [{"type": "User", "reviewer": {"id": 1645484}},
-                               {"type": "User", "reviewer": {"id": 4456104}}]},
+                {"type": "required_reviewers", "prevent_self_review": False,
+                 "reviewers": [{"type": "User", "reviewer": {"id": native.ACCOUNTABLE_OWNER_ID}}]},
+                {"type": "wait_timer", "wait_timer": 5},
                 {"type": "branch_policy"},
             ],
         },
@@ -58,7 +59,7 @@ def fixture():
             "total_count": 1, "branch_policies": [{"name": "main", "type": "branch"}],
         },
         f"{prefix}/actions/runs/{RUN_ID}/approvals?per_page=100": [[{
-            "state": "approved", "user": {"id": 1645484},
+            "state": "approved", "user": {"id": native.ACCOUNTABLE_OWNER_ID},
             "environments": [{"id": native.ENVIRONMENT_ID, "name": native.ENVIRONMENT}],
         }]],
         f"{prefix}/actions/runs/{RUN_ID}/artifacts?per_page=100": [{
@@ -92,7 +93,7 @@ class ProtectedNativeReadTests(unittest.TestCase):
     def test_exact_reviewed_run_artifact_and_workflow(self):
         source, archive = fixture()
         evidence = collect(source, archive)
-        self.assertEqual("fsgg.v1-admission-genesis-native-read/1", evidence["schema"])
+        self.assertEqual("fsgg.v1-admission-genesis-native-read/2", evidence["schema"])
         self.assertEqual(RUN_ID, evidence["artifactReadRunId"])
         self.assertEqual(native.ENVIRONMENT_ID, evidence["approvals"][0]["environmentIds"][0])
         self.assertEqual(WORKFLOW, base64.b64decode(evidence["workflowBytesBase64"]))
@@ -110,15 +111,30 @@ class ProtectedNativeReadTests(unittest.TestCase):
         with self.assertRaisesRegex(native.Refused, "native-run-state"):
             collect(source, archive)
 
-    def test_wrong_reviewer_environment_and_self_approval_refuse(self):
+    def test_wrong_reviewer_environment_and_other_actor_refuse(self):
         source, archive = fixture()
         approval = source[f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}/approvals?per_page=100"][0][0]
         approval["environments"][0]["id"] = 9
         with self.assertRaisesRegex(native.Refused, "native-approval-binding"):
             collect(source, archive)
         source, archive = fixture()
-        source[f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}"]["actor"]["id"] = 1645484
+        source[f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}"]["actor"]["id"] = 777
+        with self.assertRaisesRegex(native.Refused, "native-run-actor"):
+            collect(source, archive)
+        source, archive = fixture()
+        approval = source[f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}/approvals?per_page=100"][0][0]
+        approval["user"]["id"] = 4456104
         with self.assertRaisesRegex(native.Refused, "native-approval-binding"):
+            collect(source, archive)
+        source, archive = fixture()
+        rules = source[f"repos/{native.REPOSITORY}/environments/{native.ENVIRONMENT}"]["protection_rules"]
+        rules[0]["prevent_self_review"] = True
+        with self.assertRaisesRegex(native.Refused, "native-environment-reviewers"):
+            collect(source, archive)
+        source, archive = fixture()
+        rules = source[f"repos/{native.REPOSITORY}/environments/{native.ENVIRONMENT}"]["protection_rules"]
+        rules[1]["wait_timer"] = 0
+        with self.assertRaisesRegex(native.Refused, "native-environment-rules"):
             collect(source, archive)
 
     def test_artifact_origin_digest_expiry_and_extra_member_refuse(self):

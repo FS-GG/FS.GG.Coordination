@@ -25,6 +25,7 @@ type GenesisProtectedNativeRead =
         EnvironmentId: int64
         EnvironmentName: string
         EnvironmentBranchPolicy: string
+        EnvironmentWaitMinutes: int
         EnvironmentReviewerIds: int64 list
         EnvironmentPreventsSelfReview: bool
         Approvals: GenesisNativeApproval list

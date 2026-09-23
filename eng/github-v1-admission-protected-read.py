@@ -19,10 +19,11 @@ import zipfile
 
 REPOSITORY = "FS-GG/.github"
 REPOSITORY_ID = 1269292704
-ENVIRONMENT = "fleet-cutover"
-ENVIRONMENT_ID = 21550151971
+ENVIRONMENT = "fleet-v1-admission-owner"
+ENVIRONMENT_ID = 22582241959
+ACCOUNTABLE_OWNER_ID = 1645484
 WORKFLOW = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
-WORKFLOW_SHA256 = "e0682cdcb201781ef67308b1546e0e21090a6efebe1c92316cc9fbe110040767"
+WORKFLOW_SHA256 = "7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820"
 MEMBER = "protected-v1-admission-genesis.json"
 
 
@@ -110,7 +111,7 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
             and run.get("status") == "completed" and run.get("conclusion") == "success",
             "native-run-state")
     actor = (run.get("actor") or {}).get("id")
-    require(isinstance(actor, int) and actor > 0, "native-run-actor")
+    require(actor == ACCOUNTABLE_OWNER_ID, "native-run-actor")
 
     workflow = read_json(f"{prefix}/contents/{WORKFLOW}?ref={head}")
     require(isinstance(workflow, dict) and workflow.get("type") == "file"
@@ -125,16 +126,18 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
     require(isinstance(environment, dict) and environment.get("id") == ENVIRONMENT_ID
             and environment.get("name") == ENVIRONMENT, "native-environment-identity")
     rules = environment.get("protection_rules")
-    require(isinstance(rules, list) and len(rules) == 2, "native-environment-rules")
+    require(isinstance(rules, list) and len(rules) == 3, "native-environment-rules")
     reviewer_rules = [rule for rule in rules if rule.get("type") == "required_reviewers"]
     branch_rules = [rule for rule in rules if rule.get("type") == "branch_policy"]
-    require(len(reviewer_rules) == len(branch_rules) == 1, "native-environment-rules")
+    wait_rules = [rule for rule in rules if rule.get("type") == "wait_timer"]
+    require(len(reviewer_rules) == len(branch_rules) == len(wait_rules) == 1
+            and wait_rules[0].get("wait_timer") == 5, "native-environment-rules")
     reviewer_rule = reviewer_rules[0]
     reviewers = reviewer_rule.get("reviewers")
-    require(reviewer_rule.get("prevent_self_review") is True and isinstance(reviewers, list),
+    require(reviewer_rule.get("prevent_self_review") is False and isinstance(reviewers, list),
             "native-environment-reviewers")
     reviewer_ids = [item.get("reviewer", {}).get("id") for item in reviewers if item.get("type") == "User"]
-    require(len(reviewer_ids) == len(reviewers) == 2 and set(reviewer_ids) == {1645484, 4456104},
+    require(reviewer_ids == [ACCOUNTABLE_OWNER_ID] and len(reviewers) == 1,
             "native-environment-reviewers")
     require(environment.get("deployment_branch_policy") ==
             {"custom_branch_policies": True, "protected_branches": False}, "native-environment-branch-mode")
@@ -147,7 +150,7 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
 
     approval_pages = read_json(f"{prefix}/actions/runs/{run_id}/approvals?per_page=100", True)
     approvals = pages(approval_pages)
-    require(0 < len(approvals) <= 2, "native-approvals-count")
+    require(len(approvals) == 1, "native-approvals-count")
     normalized_approvals = []
     for approval in approvals:
         require(isinstance(approval, dict) and isinstance(approval.get("environments"), list),
@@ -156,9 +159,8 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
                                      "state": approval.get("state"),
                                      "environmentIds": [item.get("id") for item in approval["environments"]]})
     require(all(item["state"] == "approved" and item["environmentIds"] == [ENVIRONMENT_ID]
-                and item["reviewerId"] in reviewer_ids and item["reviewerId"] != actor
-                for item in normalized_approvals)
-            and len({item["reviewerId"] for item in normalized_approvals}) == len(normalized_approvals),
+                and item["reviewerId"] == actor == ACCOUNTABLE_OWNER_ID
+                for item in normalized_approvals),
             "native-approval-binding")
 
     artifact_pages = read_json(f"{prefix}/actions/runs/{run_id}/artifacts?per_page=100", True)
@@ -181,7 +183,7 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
     if observed_at is None:
         observed_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
-        "schema": "fsgg.v1-admission-genesis-native-read/1",
+        "schema": "fsgg.v1-admission-genesis-native-read/2",
         "observedAt": observed_at,
         "runRepositoryId": REPOSITORY_ID,
         "runId": run_id,
@@ -199,8 +201,9 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
         "environmentId": environment["id"],
         "environmentName": environment["name"],
         "environmentBranchPolicy": "custom-main",
+        "environmentWaitMinutes": wait_rules[0]["wait_timer"],
         "environmentReviewerIds": reviewer_ids,
-        "environmentPreventsSelfReview": True,
+        "environmentPreventsSelfReview": False,
         "approvals": normalized_approvals,
     }
 
@@ -216,7 +219,7 @@ def main() -> int:
         descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "wb") as output:
             output.write(json.dumps(value, sort_keys=True, separators=(",", ":")).encode() + b"\n")
-        print(json.dumps({"schema": "fsgg.v1-admission-genesis-native-read-result/1",
+        print(json.dumps({"schema": "fsgg.v1-admission-genesis-native-read-result/2",
                           "runId": args.run_id, "evidenceSha256": sha256(args.output.read_bytes())},
                          sort_keys=True, separators=(",", ":")))
         return 0

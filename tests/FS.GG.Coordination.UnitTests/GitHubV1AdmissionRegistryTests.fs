@@ -305,7 +305,7 @@ let ``protected genesis binds signature native approval and expected absent inst
     let intent: GenesisAuthorizationIntent =
         { SourceCommit = oid "1"; SourceTree = oid "2"; WorkflowRevision = oid "3"
           WorkflowSha256 =
-            Registry.sha256Digest "e0682cdcb201781ef67308b1546e0e21090a6efebe1c92316cc9fbe110040767"
+            Registry.sha256Digest "7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820"
             |> Result.defaultWith failwith }
     let now = DateTimeOffset(2026, 9, 23, 14, 0, 0, TimeSpan.Zero)
     let unsigned: GenesisSignature =
@@ -346,14 +346,14 @@ let ``protected genesis binds signature native approval and expected absent inst
     Assert.True(V1AdmissionGenesisAuthorization.verify now (Array.append trustBytes [| 10uy |]) plan intent signature |> Result.isError)
 
     let artifact =
-        {| schema = "fsgg.v1-admission-genesis-protected-authorization/1"
+        {| schema = "fsgg.v1-admission-genesis-protected-authorization/2"
            operationId = "protected-genesis"
            repository = "FS-GG/.github"
            runId = 42L
            workflowRevision = Registry.gitObjectIdValue intent.WorkflowRevision
            coordinationRevision = Registry.gitObjectIdValue intent.SourceCommit
            coordinationTree = Registry.gitObjectIdValue intent.SourceTree
-           environment = "fleet-cutover"
+           environment = "fleet-v1-admission-owner"
            genesisIntentSha256 = V1AdmissionGenesisAuthorization.intentSha256 verified |> Registry.sha256Value
            approvedAt = unsigned.AuthorizedAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
            expiresAt = unsigned.ExpiresAt.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss'Z'")
@@ -367,37 +367,40 @@ let ``protected genesis binds signature native approval and expected absent inst
           RunRef = "refs/heads/main"
           RunHead = intent.WorkflowRevision
           RunConclusion = "success"
-          RunActorId = 777L
+          RunActorId = 1645484L
           RunAttempt = 1
           WorkflowReadRevision = intent.WorkflowRevision
           WorkflowBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "gs2-v1-admission-protected-authorization.yml"))
           ArtifactReadRunId = 42L
           ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes artifact
-          EnvironmentId = 21550151971L
-          EnvironmentName = "fleet-cutover"
+          EnvironmentId = 22582241959L
+          EnvironmentName = "fleet-v1-admission-owner"
           EnvironmentBranchPolicy = "custom-main"
-          EnvironmentReviewerIds = [ 1645484L; 4456104L ]
-          EnvironmentPreventsSelfReview = true
-          Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 21550151971L ] } ] }
+          EnvironmentWaitMinutes = 5
+          EnvironmentReviewerIds = [ 1645484L ]
+          EnvironmentPreventsSelfReview = false
+          Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] }
     let approved =
         V1AdmissionGenesisProtectedApproval.verify now plan intent verified native
         |> Result.defaultWith (String.concat "," >> failwith)
     Assert.Equal(42L, V1AdmissionGenesisProtectedApproval.runId approved)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunId = 43L } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ObservedAt = now.AddMinutes(-3.) } |> Result.isError)
-    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunActorId = 1645484L } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunActorId = 777L } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunAttempt = 2 } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with RunRef = "refs/heads/other" } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now alteredPlan intent verified native |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowBytes = Encoding.UTF8.GetBytes "changed" } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with WorkflowReadRevision = oid "7" } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactReadRunId = 43L } |> Result.isError)
-    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentPreventsSelfReview = false } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentPreventsSelfReview = true } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentWaitMinutes = 0 } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentReviewerIds = [ 1645484L; 4456104L ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentId = 9L } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with EnvironmentBranchPolicy = "unrestricted" } |> Result.isError)
-    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved"; EnvironmentIds = [ 21550151971L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 9L ] } ] } |> Result.isError)
-    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 21550151971L ] }; { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 21550151971L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] }; { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes {| artifact with runId = 43L |} } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify (now.AddMinutes 86.) plan intent verified native |> Result.isError)
 
@@ -552,9 +555,10 @@ let ``native read-only collector evidence has a bounded typed decoder`` () =
         V1AdmissionGenesisProtectedApproval.decodeNativeRead(ReadOnlyMemory bytes)
         |> Result.defaultWith (String.concat "," >> failwith)
     Assert.Equal(42L, read.RunId)
-    Assert.Equal(21550151971L, read.EnvironmentId)
+    Assert.Equal(22582241959L, read.EnvironmentId)
+    Assert.Equal(5, read.EnvironmentWaitMinutes)
     Assert.Equal("refs/heads/main", read.RunRef)
-    Assert.Equal("e0682cdcb201781ef67308b1546e0e21090a6efebe1c92316cc9fbe110040767",
+    Assert.Equal("7193f2b3636984b25bd92f5ea19c41cc7d1a855425454d32d69ef65782506820",
                  SHA256.HashData(read.WorkflowBytes) |> Convert.ToHexString |> _.ToLowerInvariant())
     let changed = JsonNode.Parse bytes
     changed["workflowBytesBase64"] <- JsonValue.Create("?")
