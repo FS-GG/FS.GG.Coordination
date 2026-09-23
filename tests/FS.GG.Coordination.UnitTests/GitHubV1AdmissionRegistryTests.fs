@@ -1056,6 +1056,85 @@ let ``installer port binds fresh absent and installed evidence without caching a
     Assert.True(port.ReadRegistry address |> Result.isError)
     Assert.True(V1AdmissionGenesisPortBinding.create (ReadOnlyMemory initial) plan native writer |> Result.isError)
 
+    current.Value <- asOf
+    let sourceCommit = String.replicate 40 "a"
+    let sourceTree = String.replicate 40 "b"
+    let sourceBytes =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-source-read/1"
+               observedAt = "2026-09-23T14:00:00Z"
+               repository = "FS-GG/FS.GG.Coordination"
+               repositoryId = 1346720714L
+               sourceCommit = sourceCommit
+               sourceTree = sourceTree
+               firstMainHead = sourceCommit
+               secondMainHead = sourceCommit
+               compareStatus = "identical"
+               compareBase = sourceCommit
+               compareHead = sourceCommit
+               mergeBase = sourceCommit |}
+    let protectionBytes =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-protection-read/1"
+               observedAt = "2026-09-23T14:00:00Z"
+               repositoryId = 1351660651L
+               writerRulesetId = 21872113L
+               writerRulesetActive = true
+               writerRulesetMatchesRef = true
+               writerBypassAppIds = [ 4882140L ]
+               integrityRulesetId = 21872115L
+               integrityRulesetActive = true
+               integrityRulesetMatchesRef = true
+               integrityRejectsDeletion = true
+               integrityRejectsNonFastForward = true
+               integrityBypassAppIds = List.empty<int64>
+               credentialAppId = 4882140L
+               credentialInstallationId = 160261608L
+               credentialRepositoryIds = [ 1351660651L ]
+               credentialContentsWrite = true
+               credentialHasOtherWritePermissions = false |}
+    let approvalBytes =
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-native-read.json"))
+    let sourceRead = ref sourceBytes
+    let protectionRead = ref protectionBytes
+    let approvalRead = ref approvalBytes
+    let sourceCalls = ref 0
+    let protectionCalls = ref 0
+    let approvalCalls = ref 0
+    let rawNative: GenesisInstallerRawReaders =
+        { Now = native.Now
+          ReadAbsentGit = native.ReadAbsentGit
+          ReadInstalledGit = native.ReadInstalledGit
+          ReadCutoverHead = native.ReadCutoverHead
+          ReadRef = native.ReadRef
+          ReadTrustAnchor = native.ReadTrustAnchor
+          ReadSource = fun () -> sourceCalls.Value <- sourceCalls.Value + 1; Ok sourceRead.Value
+          ReadProtection = fun () -> protectionCalls.Value <- protectionCalls.Value + 1; Ok protectionRead.Value
+          ReadApproval = fun _ -> approvalCalls.Value <- approvalCalls.Value + 1; Ok approvalRead.Value }
+    let rawPort =
+        V1AdmissionGenesisPortBinding.createRaw (ReadOnlyMemory initial) plan rawNative writer
+        |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(rawPort.ReadSource() |> Result.isOk)
+    Assert.True(rawPort.ReadProtection() |> Result.isOk)
+    Assert.True(rawPort.ReadApproval 42L |> Result.isOk)
+    Assert.True(rawPort.ReadApproval 43L |> Result.isError)
+    sourceRead.Value <- Array.zeroCreate 8193
+    protectionRead.Value <- Array.zeroCreate 8193
+    approvalRead.Value <- Array.zeroCreate 32769
+    Assert.True(rawPort.ReadSource() |> Result.isError)
+    Assert.True(rawPort.ReadProtection() |> Result.isError)
+    Assert.True(rawPort.ReadApproval 42L |> Result.isError)
+    Assert.Equal(2, sourceCalls.Value)
+    Assert.Equal(2, protectionCalls.Value)
+    Assert.Equal(3, approvalCalls.Value)
+    sourceRead.Value <- sourceBytes
+    protectionRead.Value <- protectionBytes
+    approvalRead.Value <- approvalBytes
+    current.Value <- asOf.AddMinutes 3.
+    Assert.True(rawPort.ReadSource() |> Result.isError)
+    Assert.True(rawPort.ReadProtection() |> Result.isError)
+    Assert.True(rawPort.ReadApproval 42L |> Result.isError)
+
 [<Fact>]
 let ``native source read requires stable main ancestry and exact source tree`` () =
     let timestamp = "2026-09-23T14:00:00Z"

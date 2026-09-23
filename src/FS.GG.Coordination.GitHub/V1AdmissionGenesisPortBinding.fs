@@ -15,6 +15,19 @@ type GenesisInstallerNativeReaders =
         ReadApproval: int64 -> Result<GenesisProtectedNativeRead, string>
     }
 
+type GenesisInstallerRawReaders =
+    {
+        Now: unit -> DateTimeOffset
+        ReadAbsentGit: unit -> Result<byte array, string>
+        ReadInstalledGit: GitObjectId -> Result<byte array, string>
+        ReadCutoverHead: unit -> Result<GitObjectId, string>
+        ReadRef: string -> GenesisRefRead
+        ReadTrustAnchor: unit -> Result<byte array, string>
+        ReadSource: unit -> Result<byte array, string>
+        ReadProtection: unit -> Result<byte array, string>
+        ReadApproval: int64 -> Result<byte array, string>
+    }
+
 type GenesisInstallerObjectPort =
     {
         PutObject: string -> GitObjectId -> byte array -> Result<GitObjectId, string>
@@ -41,7 +54,7 @@ module V1AdmissionGenesisPortBinding =
                 else
                     Error [ "genesis-live-absent-plan-drift" ]))
 
-    let create initialAbsentGit plan native objects =
+    let create initialAbsentGit plan (native: GenesisInstallerNativeReaders) objects =
         let operationId = (V1AdmissionRegistry.genesisCommit plan).OperationId
         V1AdmissionGenesisGitRead.decode initialAbsentGit
         |> Result.bind (fun initial ->
@@ -95,3 +108,39 @@ module V1AdmissionGenesisPortBinding =
               PutObject = objects.PutObject
               ReadObject = objects.ReadObject
               CreateRefExpectedAbsent = objects.CreateRefExpectedAbsent })
+
+    let createRaw initialAbsentGit plan (native: GenesisInstallerRawReaders) objects =
+        let source () =
+            native.ReadSource()
+            |> Result.bind (fun raw ->
+                V1AdmissionGenesisSourceRead.decode (native.Now()) (ReadOnlyMemory raw)
+                |> Result.mapError (String.concat ","))
+        let protection () =
+            native.ReadProtection()
+            |> Result.bind (fun raw ->
+                V1AdmissionGenesisProtectionRead.decode (native.Now()) (ReadOnlyMemory raw)
+                |> Result.mapError (String.concat ","))
+        let approval runId =
+            native.ReadApproval runId
+            |> Result.bind (fun raw ->
+                V1AdmissionGenesisProtectedApproval.decodeNativeRead (ReadOnlyMemory raw)
+                |> Result.mapError (String.concat ","))
+            |> Result.bind (fun read ->
+                let now = native.Now()
+                if read.RunId = runId
+                   && read.ObservedAt <= now
+                   && now - read.ObservedAt <= TimeSpan.FromMinutes 2. then
+                    Ok read
+                else
+                    Error "genesis-native-approval-stale-or-wrong-run")
+        let decoded: GenesisInstallerNativeReaders =
+            { Now = native.Now
+              ReadAbsentGit = native.ReadAbsentGit
+              ReadInstalledGit = native.ReadInstalledGit
+              ReadCutoverHead = native.ReadCutoverHead
+              ReadRef = native.ReadRef
+              ReadTrustAnchor = native.ReadTrustAnchor
+              ReadSource = source
+              ReadProtection = protection
+              ReadApproval = approval }
+        create initialAbsentGit plan decoded objects
