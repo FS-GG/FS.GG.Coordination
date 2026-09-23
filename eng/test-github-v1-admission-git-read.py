@@ -57,6 +57,18 @@ def collect(store, read_refs=reader.refs):
                           "2026-09-23T14:00:00Z")
 
 
+def install_genesis(store):
+    event = b'{"kind":"initialize"}'
+    head = b'{"generation":1}'
+    event_oid = git(store, "hash-object", "-w", "--stdin", input_bytes=event)
+    head_oid = git(store, "hash-object", "-w", "--stdin", input_bytes=head)
+    tree = git(store, "mktree", input_bytes=(f"100644 blob {event_oid}\tevent.json\n"
+                                             f"100644 blob {head_oid}\thead.json\n").encode())
+    commit = git(store, "commit-tree", tree, input_bytes=b"Initialize admission genesis\n")
+    git(store, "update-ref", reader.OPERATION_REF, commit)
+    return commit, event, head
+
+
 class AuthorityGitReadTests(unittest.TestCase):
     def test_exact_raw_git_and_stable_absence(self):
         with tempfile.TemporaryDirectory() as directory:
@@ -104,6 +116,55 @@ class AuthorityGitReadTests(unittest.TestCase):
                 collect(store, moving)
             with self.assertRaisesRegex(reader.Refused, "authority-repository-id"):
                 reader.collect(str(store), lambda: 0, reader.refs)
+
+    def test_installed_genesis_has_two_stable_refs_and_exact_raw_objects(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store, cutover, _, _ = fixture(pathlib.Path(directory))
+            commit, event, head = install_genesis(store)
+            result = reader.collect_installed(commit, str(store), lambda: reader.REPOSITORY_ID,
+                                              reader.refs, "2026-09-23T14:00:00Z")
+            self.assertEqual("fsgg.v1-admission-genesis-installed-read/1", result["schema"])
+            self.assertEqual(cutover, result["cutoverFirstHead"])
+            self.assertEqual(cutover, result["cutoverSecondHead"])
+            self.assertEqual(commit, result["operation"]["firstHead"])
+            self.assertEqual(commit, result["operation"]["secondHead"])
+            self.assertEqual(event, base64.b64decode(result["operation"]["eventBytesBase64"]))
+            self.assertEqual(head, base64.b64decode(result["operation"]["headBytesBase64"]))
+
+    def test_installed_genesis_ref_parent_and_census_drift_refuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store, cutover, _, _ = fixture(pathlib.Path(directory))
+            commit, _, _ = install_genesis(store)
+            with self.assertRaisesRegex(reader.Refused, "admission-competing-ref"):
+                reader.collect_installed(cutover, str(store), lambda: reader.REPOSITORY_ID)
+            with self.assertRaisesRegex(reader.Refused, "authority-repository-id"):
+                reader.collect_installed(commit, str(store), lambda: 0)
+            git(store, "update-ref", reader.OPERATION_PREFIX + "another", commit)
+            with self.assertRaisesRegex(reader.Refused, "admission-operation-census"):
+                reader.collect_installed(commit, str(store), lambda: reader.REPOSITORY_ID)
+            git(store, "update-ref", "-d", reader.OPERATION_PREFIX + "another")
+            git(store, "update-ref", reader.CLAIM_PREFIX + "one", commit)
+            with self.assertRaisesRegex(reader.Refused, "authority-claim-census-not-empty"):
+                reader.collect_installed(commit, str(store), lambda: reader.REPOSITORY_ID)
+            git(store, "update-ref", "-d", reader.CLAIM_PREFIX + "one")
+
+            reads = 0
+            def moving(remote):
+                nonlocal reads
+                reads += 1
+                observed = reader.refs(remote)
+                if reads == 2:
+                    observed[reader.OPERATION_REF] = cutover
+                return observed
+            with self.assertRaisesRegex(reader.Refused, "authority-ref-census-moved"):
+                reader.collect_installed(commit, str(store), lambda: reader.REPOSITORY_ID,
+                                         moving)
+            tree = git(store, "rev-parse", f"{commit}^{{tree}}")
+            parented = git(store, "commit-tree", tree, "-p", cutover,
+                           input_bytes=b"Not a genesis\n")
+            git(store, "update-ref", reader.OPERATION_REF, parented)
+            with self.assertRaisesRegex(reader.Refused, "admission-genesis-has-parent"):
+                reader.collect_installed(parented, str(store), lambda: reader.REPOSITORY_ID)
 
 
 if __name__ == "__main__":

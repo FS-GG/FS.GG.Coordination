@@ -899,3 +899,52 @@ let ``unconfirmed candidates grant no handle seal or dispatch authority`` () =
     let durable, _, _ = harness.Confirm(candidate, ReceiveAccepted)
     let closingCandidate = match Registry.closeAdmissions (Registry.head durable) durable with RegistryAppended value -> value | other -> failwithf "%A" other
     Assert.True(Registry.preparingReference closingCandidate |> Result.isError)
+
+[<Fact>]
+let ``installed raw Git readback requires exact planned genesis objects and stable native refs`` () =
+    let snapshot, authorityCommit, _, _, _ = authority "OperatingV1" 1L None id
+    let plan =
+        Registry.planGenesis "protected-genesis" snapshot (absentRead ())
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let objects = Registry.genesisObjects plan
+    let address = Registry.genesisAddress plan
+    let value = Registry.gitObjectIdValue
+    let timestamp = "2026-09-23T14:00:00Z"
+    let asOf = DateTimeOffset.Parse timestamp
+    let encoded =
+        JsonSerializer.SerializeToUtf8Bytes
+            {| schema = "fsgg.v1-admission-genesis-installed-read/1"
+               observedAt = timestamp
+               repository = "FS-GG/FS.GG.Coordination.Authority"
+               repositoryId = 1351660651L
+               cutoverFirstHead = value authorityCommit
+               cutoverSecondHead = value authorityCommit
+               operation =
+                 {| ``ref`` = address.Ref
+                    firstHead = value objects.CommitObjectId
+                    secondHead = value objects.CommitObjectId
+                    commitOid = value objects.CommitObjectId
+                    commitBytesBase64 = Convert.ToBase64String objects.CommitBytes
+                    treeOid = value objects.TreeObjectId
+                    treeBytesBase64 = Convert.ToBase64String objects.TreeBytes
+                    eventOid = value objects.EventObjectId
+                    eventBytesBase64 = Convert.ToBase64String objects.EventBytes
+                    headOid = value objects.HeadObjectId
+                    headBytesBase64 = Convert.ToBase64String objects.HeadBytes |} |}
+    let decode bytes = V1AdmissionGenesisGitRead.decodeInstalled asOf plan (ReadOnlyMemory bytes)
+    let read = decode encoded |> Result.defaultWith (String.concat "," >> failwith)
+    Assert.True(Registry.verifyGenesisReadback plan read |> Result.isOk)
+    Assert.Equal(Some objects.CommitObjectId, read.FirstHead)
+
+    let changed action =
+        let root = JsonNode.Parse encoded
+        action root
+        decode (Encoding.UTF8.GetBytes(root.ToJsonString()))
+
+    Assert.True(changed (fun root -> root["cutoverSecondHead"] <- JsonValue.Create(String.replicate 40 "f")) |> Result.isError)
+    Assert.True(changed (fun root -> root["operation"]["secondHead"] <- JsonValue.Create(String.replicate 40 "f")) |> Result.isError)
+    Assert.True(changed (fun root -> root["operation"]["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes "changed"))) |> Result.isError)
+    Assert.True(changed (fun root -> root["operation"]["commitBytesBase64"] <- JsonValue.Create("not-base64")) |> Result.isError)
+    Assert.True(changed (fun root -> root["observedAt"] <- JsonValue.Create("2026-09-23T13:57:00Z")) |> Result.isError)
+    Assert.True(changed (fun root -> root["unreviewedField"] <- JsonValue.Create(1)) |> Result.isError)
+    Assert.True(V1AdmissionGenesisGitRead.decodeInstalled asOf plan (ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)

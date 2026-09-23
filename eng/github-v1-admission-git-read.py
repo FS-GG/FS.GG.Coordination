@@ -209,20 +209,86 @@ def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=re
     }
 
 
+def collect_installed(expected_commit: str, remote: str = REMOTE,
+                      read_repository_id=repository_id, read_refs=refs,
+                      observed_at: str | None = None) -> dict:
+    """Read back one exact genesis without treating an absent ref as installed."""
+    require(OID.fullmatch(expected_commit) is not None, "admission-expected-commit")
+    require(read_repository_id() == REPOSITORY_ID, "authority-repository-id")
+    before = read_refs(remote)
+    cutover = before.get(CUTOVER_REF)
+    require(isinstance(cutover, str) and OID.fullmatch(cutover) is not None,
+            "authority-cutover-ref")
+    require(not any(ref.startswith(CLAIM_PREFIX) for ref in before),
+            "authority-claim-census-not-empty")
+    require({ref for ref in before if ref.startswith(OPERATION_PREFIX)} == {OPERATION_REF},
+            "admission-operation-census")
+    require(before[OPERATION_REF] == expected_commit, "admission-competing-ref")
+
+    with tempfile.TemporaryDirectory(prefix="fsgg-v1-admission-installed-read-") as directory:
+        store = pathlib.Path(directory) / "authority.git"
+        git(["init", "--bare", str(store)])
+        git([f"--git-dir={store}", "fetch", "--no-tags", remote, OPERATION_REF])
+        fetched = git([f"--git-dir={store}", "rev-parse", "FETCH_HEAD"]).decode().strip()
+        require(fetched == expected_commit, "admission-fetch-moved")
+        commit_bytes = object_bytes(store, "commit", expected_commit)
+        tree_oid, parent = parse_commit(commit_bytes)
+        require(parent is None, "admission-genesis-has-parent")
+        tree_bytes = object_bytes(store, "tree", tree_oid)
+        entries = parse_tree(tree_bytes)
+        event_bytes = object_bytes(store, "blob", entries["event.json"])
+        head_bytes = object_bytes(store, "blob", entries["head.json"])
+
+    after = read_refs(remote)
+    require(after == before, "authority-ref-census-moved")
+    if observed_at is None:
+        observed_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {
+        "schema": "fsgg.v1-admission-genesis-installed-read/1",
+        "observedAt": observed_at,
+        "repository": REPOSITORY,
+        "repositoryId": REPOSITORY_ID,
+        "cutoverFirstHead": cutover,
+        "cutoverSecondHead": after[CUTOVER_REF],
+        "operation": {
+            "ref": OPERATION_REF,
+            "firstHead": before[OPERATION_REF],
+            "secondHead": after[OPERATION_REF],
+            "commitOid": expected_commit,
+            "commitBytesBase64": base64.b64encode(commit_bytes).decode(),
+            "treeOid": tree_oid,
+            "treeBytesBase64": base64.b64encode(tree_bytes).decode(),
+            "eventOid": entries["event.json"],
+            "eventBytesBase64": base64.b64encode(event_bytes).decode(),
+            "headOid": entries["head.json"],
+            "headBytesBase64": base64.b64encode(head_bytes).decode(),
+        },
+    }
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=pathlib.Path, required=True)
+    parser.add_argument("--expect-installed-commit")
     args = parser.parse_args()
     try:
-        value = collect()
+        value = (collect_installed(args.expect_installed_commit)
+                 if args.expect_installed_commit else collect())
         require(not args.output.is_symlink() and not args.output.exists(), "authority-output-exists")
         descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "wb") as output:
             output.write(json.dumps(value, sort_keys=True, separators=(",", ":")).encode() + b"\n")
-        print(json.dumps({"schema": "fsgg.v1-admission-genesis-git-read-result/1",
-                          "authorityHead": value["cutover"]["commit"],
-                          "operationRef": OPERATION_REF, "operation": "absent"},
-                         sort_keys=True, separators=(",", ":")))
+        if args.expect_installed_commit:
+            print(json.dumps({"schema": "fsgg.v1-admission-genesis-installed-read-result/1",
+                              "authorityHead": value["cutoverFirstHead"],
+                              "operationRef": OPERATION_REF,
+                              "operationCommit": value["operation"]["commitOid"]},
+                             sort_keys=True, separators=(",", ":")))
+        else:
+            print(json.dumps({"schema": "fsgg.v1-admission-genesis-git-read-result/1",
+                              "authorityHead": value["cutover"]["commit"],
+                              "operationRef": OPERATION_REF, "operation": "absent"},
+                             sort_keys=True, separators=(",", ":")))
         return 0
     except (Refused, OSError, UnicodeError, KeyError, TypeError, ValueError) as error:
         print(f"v1 admission git read refused: {error}", file=sys.stderr)

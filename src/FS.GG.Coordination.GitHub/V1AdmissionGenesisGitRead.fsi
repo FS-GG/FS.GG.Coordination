@@ -13,3 +13,11 @@ module V1AdmissionGenesisGitRead =
     val registryRead: GenesisGitRead -> RegistryJournalRead
     val verifyPlan:
         asOf: DateTimeOffset -> operationId: string -> GenesisGitRead -> Result<RegistryGenesisPlan, string list>
+
+    /// Decode a fresh native readback of the exact planned genesis. Matching plan bytes are
+    /// still replayed through the registry validator; no reported ref alone proves installation.
+    val decodeInstalled:
+        asOf: DateTimeOffset ->
+        plan: RegistryGenesisPlan ->
+        raw: ReadOnlyMemory<byte> ->
+            Result<RegistryJournalRead, string list>

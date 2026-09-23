@@ -175,3 +175,72 @@ module V1AdmissionGenesisGitRead =
             V1AdmissionRegistry.readVerified (authorityPort read)
             |> Result.bind (fun authority ->
                 V1AdmissionRegistry.planGenesis operationId authority evidence.Registry)
+
+    let decodeInstalled asOf plan (raw: ReadOnlyMemory<byte>) =
+        try
+            if raw.Length > 32768 then
+                Error [ "genesis-installed-evidence-size" ]
+            else
+                use document = JsonDocument.Parse raw
+                let root = document.RootElement
+                let operation = root.GetProperty("operation")
+                let rootFields =
+                    [ "schema"; "observedAt"; "repository"; "repositoryId"
+                      "cutoverFirstHead"; "cutoverSecondHead"; "operation" ]
+                let operationFields =
+                    [ "ref"; "firstHead"; "secondHead"; "commitOid"; "commitBytesBase64"
+                      "treeOid"; "treeBytesBase64"; "eventOid"; "eventBytesBase64"
+                      "headOid"; "headBytesBase64" ]
+                let text (entry: JsonElement) (name: string) = entry.GetProperty(name).GetString()
+                let observedAt = text root "observedAt" |> time
+                let address = V1AdmissionRegistry.genesisAddress plan
+                let objects = V1AdmissionRegistry.genesisObjects plan
+                let commit = V1AdmissionRegistry.genesisCommit plan
+                let authorityCommit =
+                    V1AdmissionRegistry.genesisAuthorityCommit plan
+                    |> V1AdmissionRegistry.gitObjectIdValue
+                let objectId = V1AdmissionRegistry.gitObjectIdValue
+
+                if not (exactProperties rootFields root)
+                   || not (exactProperties operationFields operation)
+                   || text root "schema" <> "fsgg.v1-admission-genesis-installed-read/1"
+                   || text root "repository" <> "FS-GG/FS.GG.Coordination.Authority"
+                   || root.GetProperty("repositoryId").GetInt64() <> 1351660651L
+                   || observedAt > asOf
+                   || asOf - observedAt > TimeSpan.FromMinutes 2.
+                   || text root "cutoverFirstHead" <> authorityCommit
+                   || text root "cutoverSecondHead" <> authorityCommit
+                   || text operation "ref" <> address.Ref
+                   || text operation "firstHead" <> commit.CommitOid
+                   || text operation "secondHead" <> commit.CommitOid
+                   || text operation "commitOid" <> commit.CommitOid
+                   || text operation "treeOid" <> objectId objects.TreeObjectId
+                   || text operation "eventOid" <> objectId objects.EventObjectId
+                   || text operation "headOid" <> objectId objects.HeadObjectId then
+                    Error [ "genesis-installed-evidence-binding" ]
+                else
+                    let commitBytes = operation.GetProperty("commitBytesBase64") |> bytes 8192
+                    let treeBytes = operation.GetProperty("treeBytesBase64") |> bytes 8192
+                    let eventBytes = operation.GetProperty("eventBytesBase64") |> bytes 8192
+                    let headBytes = operation.GetProperty("headBytesBase64") |> bytes 8192
+
+                    if commitBytes <> objects.CommitBytes
+                       || treeBytes <> objects.TreeBytes
+                       || eventBytes <> objects.EventBytes
+                       || headBytes <> objects.HeadBytes then
+                        Error [ "genesis-installed-object-drift" ]
+                    else
+                        let read: RegistryJournalRead =
+                            { Repository = "FS-GG/FS.GG.Coordination.Authority"
+                              RepositoryId = 1351660651L
+                              Ref = address.Ref
+                              FirstHead = Some objects.CommitObjectId
+                              SecondHead = Some objects.CommitObjectId
+                              Observation = JournalComplete(commit.CommitOid, [ commit ])
+                              CommitBytes = Map.ofList [ commit.CommitOid, commitBytes ]
+                              TreeBytes = Map.ofList [ commit.TreeOid, treeBytes ] }
+
+                        V1AdmissionRegistry.verifyGenesisReadback plan read
+                        |> Result.map (fun _ -> read)
+        with _ ->
+            Error [ "genesis-installed-evidence-invalid" ]
