@@ -1,0 +1,7 @@
+# Read-only installed admission journal port
+
+The production admission service cannot treat a 404 as an empty registry. This slice adds a native, read-only Git collector and an independent typed decoder for the one canonical Operation journal ref. The collector requires the expected repository identity, installed ref and cutover ref, two identical full ref censuses, a fetch of the exact first head, parent ancestry back to the root, and Git object hashes for every commit, tree and blob. It emits only bounded public Git bytes. The decoder requires exact evidence shape, fresh observation time, matching heads, canonical journal head bytes, canonical commit author/message, exact Git object hashes, and a full `V1AdmissionRegistry.restore` replay before returning a `RegistryJournalRead`.
+
+History is deliberately bounded at 4,096 commits, 8,192 bytes per object, and 32 MB of raw objects. Exceeding a bound is an explicit failed read; it is not truncation, an empty answer, or an invitation to skip ancestors. A future checkpoint/retention design must be separately reviewed before raising or replacing those limits.
+
+This is not yet a production `RegistryJournalPort`: there is no receive-pack CAS writer, credential handoff for post-genesis appends, claim-journal reader, or provider reconciliation. The ordinary CLI remains fenced. The live journal is still absent and the only copied public trust anchor does not match the current `OperatingV1` digest, so no protected dispatch or production write follows from this slice.
