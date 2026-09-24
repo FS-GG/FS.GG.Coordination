@@ -36,3 +36,9 @@ module MigrationNativeActivity =
         options:MigrationGitHubReadOptions ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationNativeActivityCapture, MigrationReadFailure>
+
+    /// Two complete independent captures must agree on every bound input and digest.
+    val captureStable:
+        options:MigrationGitHubReadOptions ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationNativeActivityCapture, MigrationReadFailure>

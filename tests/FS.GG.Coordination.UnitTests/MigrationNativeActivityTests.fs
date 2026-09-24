@@ -237,3 +237,26 @@ let ``provider capture reads every nonempty native stream before reconciling`` (
     Assert.Equal(1, capture.Snapshot.ReviewCount)
     Assert.Equal(1, capture.Snapshot.InlineCommentCount)
     Assert.Equal(18, transport.Requests.Length)
+
+[<Fact>]
+let ``two complete native passes agree before a stable result is returned`` () =
+    let onePass =
+        emptyCensusResponses @ emptyCensusResponses @ emptyCensusResponses @ emptyCensusResponses
+    let transport = FakeTransport(onePass @ onePass)
+    let capture = MigrationNativeActivity.captureStable options transport |> requireOk
+    Assert.Equal(0, capture.Snapshot.IssueCount)
+    Assert.Equal(16, transport.Requests.Length)
+
+[<Fact>]
+let ``changed raw issue census page between two full passes refuses`` () =
+    let onePass =
+        emptyCensusResponses @ emptyCensusResponses @ emptyCensusResponses @ emptyCensusResponses
+    let changedIssues =
+        [ response """{"id":42,"full_name":"FS-GG/copy"}"""; response "[ ]" ]
+    let changedPass =
+        changedIssues @ emptyCensusResponses @ changedIssues @ emptyCensusResponses
+    let transport = FakeTransport(onePass @ changedPass)
+    match MigrationNativeActivity.captureStable options transport with
+    | Error MigrationReadFailure.PopulationDrift -> ()
+    | other -> failwithf "Expected changed raw page refusal; got %A" other
+    Assert.Equal(16, transport.Requests.Length)

@@ -239,3 +239,11 @@ module MigrationNativeActivity =
                                                       PullRequestInlineComments=inlineComments }
                                                 reconcile input
                                                 |> Result.map (fun snapshot -> { Input=input; Snapshot=snapshot }))))))))))
+
+    let captureStable (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        capture options transport
+        |> Result.bind (fun first ->
+            capture options transport
+            |> Result.bind (fun second ->
+                if first <> second then Error MigrationReadFailure.PopulationDrift
+                else Ok second))
