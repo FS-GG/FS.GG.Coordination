@@ -60,6 +60,7 @@
     <Compile Include="GitHubRollbackPlanTests.fs" />
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
+    <Compile Include="MigrationNativeActivityTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
