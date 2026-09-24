@@ -146,8 +146,14 @@ for token in [ "admission-journal-not-installed"; "admission-journal-refs-moved"
 for token in [ "V1AdmissionRegistry.restore"; "admission-journal-evidence-moved-or-stale" ] do
     require token "src/FS.GG.Coordination.GitHub/V1AdmissionJournalGitRead.fs"
 
-for token in [ "admission-cas-parent-moved"; "--force-with-lease="; "response-unknown" ] do
+for token in [ "admission-cas-parent-moved"; "--force-with-lease="; "response-unknown"; "append_with_ordinary_app"; "provider.protection_snapshot()" ] do
     require token "eng/github-v1-admission-journal-cas.py"
+
+for token in [ "GIT_REMOTE"; "GIT_ASKPASS"; "pass_fds"; "credential.helper=" ] do
+    require token "eng/github-v1-admission-provider-transport.py"
+
+for token in [ "FSGG_ADMISSION_TOKEN_FD"; "x-access-token" ] do
+    require token "eng/github-v1-admission-git-askpass.py"
 
 for token in [ "V1AdmissionRegistry.proposalCas"; "fsgg.v1-admission-journal-cas/1" ] do
     require token "src/FS.GG.Coordination.GitHub/V1AdmissionJournalCasPlan.fs"

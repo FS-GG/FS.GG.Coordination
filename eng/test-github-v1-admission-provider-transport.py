@@ -8,8 +8,12 @@ import importlib.util
 import json
 import os
 import pathlib
+import subprocess
 import sys
+import tempfile
+import types
 import unittest
+from unittest.mock import patch
 
 
 ROOT = pathlib.Path(__file__).resolve().parent
@@ -255,6 +259,80 @@ class TransportTests(unittest.TestCase):
                 port = transport.OrdinaryAdmissionTransport(JWT, fake.send, NOW)
                 with self.assertRaises(transport.Refused):
                     port.protection_snapshot(fake.read_rules, "2026-09-23T14:00:00Z")
+
+    def test_scoped_git_uses_fixed_remote_ref_and_descriptor_only(self):
+        fake = FakeProvider()
+        port = transport.OrdinaryAdmissionTransport(JWT, fake.send, NOW)
+        with tempfile.TemporaryDirectory() as directory:
+            store = pathlib.Path(directory)
+            calls = []
+
+            def inspect_call(argv, **options):
+                calls.append(argv)
+                self.assertNotIn("scoped-token", repr(argv))
+                self.assertNotIn("scoped-token", repr(options["env"]))
+                self.assertEqual((options["pass_fds"][0],), options["pass_fds"])
+                self.assertEqual(b"scoped-token", os.read(options["pass_fds"][0], 8193))
+                self.assertEqual(subprocess.DEVNULL, options["stderr"])
+                return types.SimpleNamespace(returncode=0)
+
+            with patch.object(transport.subprocess, "run", side_effect=inspect_call):
+                port.fetch_admission_ref(store)
+                self.assertTrue(port.push_admission_ref(store, "a" * 40, "b" * 40))
+            self.assertEqual(2, len(calls))
+            self.assertIn(transport.GIT_REMOTE, calls[0])
+            self.assertIn(transport.OPERATION_REF, calls[0])
+            self.assertIn(f"--force-with-lease={transport.OPERATION_REF}:{'a' * 40}", calls[1])
+            with self.assertRaises(transport.Refused):
+                port.push_admission_ref(store, "not-an-oid", "b" * 40)
+
+    def test_askpass_rejects_unrelated_prompt(self):
+        helper = pathlib.Path(transport.ASKPASS)
+        username = subprocess.run(
+            [sys.executable, str(helper), "Username for 'https://github.com/': "],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
+        self.assertEqual(b"x-access-token\n", username.stdout)
+        refused = subprocess.run(
+            [sys.executable, str(helper), "Password for 'https://example.com/': "],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=False)
+        self.assertNotEqual(0, refused.returncode)
+        self.assertEqual(b"", refused.stdout)
+        descriptor = os.memfd_create("fsgg-askpass-test")
+        try:
+            os.write(descriptor, b"fixture-token")
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            environment = {**os.environ, "FSGG_ADMISSION_TOKEN_FD": str(descriptor)}
+            password = subprocess.run(
+                [sys.executable, str(helper),
+                 "Password for 'https://x-access-token@github.com/': "],
+                env=environment, pass_fds=(descriptor,), stdout=subprocess.PIPE,
+                stderr=subprocess.DEVNULL, check=False)
+            self.assertEqual(0, password.returncode)
+            self.assertEqual(b"fixture-token\n", password.stdout)
+        finally:
+            os.close(descriptor)
+
+    def test_git_credential_prompt_consumes_inherited_descriptor(self):
+        descriptor = os.memfd_create("fsgg-git-credential-test")
+        try:
+            os.write(descriptor, b"fixture-token")
+            os.lseek(descriptor, 0, os.SEEK_SET)
+            environment = {"PATH": os.defpath, "HOME": os.devnull,
+                           "LC_ALL": "C", "GIT_ASKPASS": str(transport.ASKPASS),
+                           "GIT_TERMINAL_PROMPT": "0",
+                           "GIT_CONFIG_NOSYSTEM": "1",
+                           "GIT_CONFIG_GLOBAL": os.devnull,
+                           "FSGG_ADMISSION_TOKEN_FD": str(descriptor)}
+            result = subprocess.run(
+                ["git", "-c", "credential.helper=", "credential", "fill"],
+                input=b"protocol=https\nhost=github.com\n\n", env=environment,
+                pass_fds=(descriptor,), stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE, check=False)
+            self.assertEqual(0, result.returncode, result.stderr.decode("utf-8", "replace"))
+            self.assertIn(b"username=x-access-token\n", result.stdout)
+            self.assertIn(b"password=fixture-token\n", result.stdout)
+        finally:
+            os.close(descriptor)
 
 
 if __name__ == "__main__":

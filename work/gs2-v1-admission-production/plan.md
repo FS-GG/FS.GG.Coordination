@@ -48,3 +48,20 @@ Source-only step 3 is merged on Coordination `main` by PR #502 at `8d04536becb6e
 ## 2026-09-24 read and CAS continuation
 
 The read-only native journal collector and strict typed restore are merged by PR #503 at `c00179a7c7305cee03e6d7e84112dd25a0d16c61`. The public typed CAS envelope and local bare-Git expected-parent fixture are merged by PR #504 at `75fc2e2fb714255b73f6f269a072b3d245871edb`. The fixture refuses network remotes and has no credential path. A conservative source-only port now joins fresh native reads to a future writer callback while mapping every raw write response to unknown until exact durable readback; unreadable preflight and unreadable conflict reread are indeterminate, not parent conflict. This does not install the journal or lift the ordinary CLI production fence. The scoped production receive-pack credential path, claim-journal reader, provider reconciliation, and installed runtime acceptance remain open. The copied public trust anchor still does not match live `OperatingV1`; no protected dispatch or write has occurred.
+
+## 2026-09-24 scoped CAS source continuation
+
+An import-only receive-pack path now validates the fixed-repository public CAS
+envelope, rechecks effective journal protection rules and ordinary-App scope,
+fetches the exact parent, stages only the validated objects, and pushes the
+canonical operation ref under an exact expected-parent lease. Its installation
+token reaches Git only through an anonymous descriptor and fixed askpass helper;
+Git receives a minimal environment with ambient credential helpers and hooks
+excluded. Even a successful Git response remains unknown to the typed port until
+fresh independent journal readback. Fake-provider, local competing-parent,
+credential-prompt, Q6, all 690 architecture controls, and the unchanged full
+canonical Quint qualification pass. This is source only: no approved
+per-admission JWT issuer/process composition, claim-journal reader, provider
+reconciliation, installed runtime acceptance, or live write exists. The ordinary
+CLI production fence stays in place. The incorrect public trust anchor still
+blocks protected genesis installation.

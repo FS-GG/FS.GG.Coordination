@@ -13,6 +13,7 @@ import datetime as dt
 import hashlib
 import json
 import os
+import pathlib
 import re
 import subprocess
 import time
@@ -33,6 +34,8 @@ WRITER_RULESET_ID = 21872113
 INTEGRITY_RULESET_ID = 21872115
 JOURNAL_PATTERN = "refs/heads/fsgg/v2/journal/**/*"
 CUTOVER_REF = "refs/heads/fsgg/v2/journal/cutover/d5"
+GIT_REMOTE = "https://github.com/FS-GG/FS.GG.Coordination.Authority.git"
+ASKPASS = pathlib.Path(__file__).with_name("github-v1-admission-git-askpass.py")
 
 
 class Refused(RuntimeError):
@@ -216,6 +219,48 @@ class OrdinaryAdmissionTransport:
                 and [(item.get("id"), item.get("full_name"))
                      for item in repositories.get("repositories", [])] == [(REPOSITORY_ID, REPOSITORY)],
                 "admission-token-repository-scope")
+
+    def _admission_git(self, store: pathlib.Path, arguments: list[str]) -> bool:
+        """Run only a fixed-ref Git operation with the scoped token on a memfd."""
+        require(isinstance(store, pathlib.Path) and store.is_absolute()
+                and store.is_dir() and not store.is_symlink()
+                and ASKPASS.is_file(), "admission-git-local-store")
+        token = self._token.encode("ascii")
+        require(0 < len(token) <= 8192 and b"\n" not in token and b"\0" not in token,
+                "admission-git-token")
+        try:
+            descriptor = os.memfd_create("fsgg-admission-token")
+            try:
+                require(os.write(descriptor, token) == len(token), "admission-git-token-write")
+                os.lseek(descriptor, 0, os.SEEK_SET)
+                environment = {"PATH": os.defpath, "HOME": str(store.parent),
+                               "LC_ALL": "C", "GIT_ASKPASS": str(ASKPASS),
+                               "GIT_TERMINAL_PROMPT": "0",
+                               "GIT_CONFIG_NOSYSTEM": "1",
+                               "GIT_CONFIG_GLOBAL": os.devnull,
+                               "FSGG_ADMISSION_TOKEN_FD": str(descriptor)}
+                result = subprocess.run(
+                    ["git", f"--git-dir={store}", "-c", "credential.helper=", *arguments],
+                    stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL, env=environment,
+                    pass_fds=(descriptor,), timeout=45, check=False)
+                return result.returncode == 0
+            finally:
+                os.close(descriptor)
+        except (AttributeError, OSError, UnicodeError, subprocess.TimeoutExpired) as error:
+            raise Refused("admission-git-transport-indeterminate") from error
+
+    def fetch_admission_ref(self, store: pathlib.Path) -> None:
+        require(self._admission_git(store, ["fetch", "--no-tags", GIT_REMOTE, OPERATION_REF]),
+                "admission-git-fetch-indeterminate")
+
+    def push_admission_ref(self, store: pathlib.Path, expected: str, proposed: str) -> bool:
+        require(isinstance(expected, str) and OID.fullmatch(expected) is not None
+                and isinstance(proposed, str) and OID.fullmatch(proposed) is not None,
+                "admission-git-lease-binding")
+        return self._admission_git(
+            store, ["push", "--porcelain", f"--force-with-lease={OPERATION_REF}:{expected}",
+                    GIT_REMOTE, f"refs/heads/proposed:{OPERATION_REF}"])
 
     def protection_snapshot(self, read_rules=read_rules_api, observed_at: str | None = None) -> dict:
         """Read exact effective rules twice; never infer an omitted bypass list is empty."""
