@@ -49,6 +49,40 @@ let ``receipt prefix resumes at exactly the next reverse step`` () =
     Assert.Equal(Ok(Some plan.Steps[2]), resume plan [ first; second ])
 
 [<Fact>]
+let ``every interrupted rollback prefix resumes deterministically and a completed replay is inert`` () =
+    let plan = baseline () |> get
+    let restored = plan.Steps |> List.map (fun step -> step.TargetIdentity, step.RestorePayloadSha256) |> Map.ofList
+
+    for interruptedAfter in 0 .. plan.Steps.Length do
+        let mutable copy =
+            plan.Steps
+            |> List.map (fun step -> step.TargetIdentity, sha $"mutated:{step.StepId}")
+            |> Map.ofList
+        let mutable receipts: GitHubRollbackReceipt list = []
+
+        let applyOne () =
+            match resume plan receipts |> get with
+            | None -> false
+            | Some step ->
+                copy <- copy |> Map.add step.TargetIdentity step.RestorePayloadSha256
+                let receipt = createReceipt plan (List.tryLast receipts) step copy[step.TargetIdentity]
+                receipts <- receipts @ [ receipt ]
+                true
+
+        for _ in 1 .. interruptedAfter do
+            Assert.True(applyOne ())
+
+        Assert.Equal(Ok(List.tryItem interruptedAfter plan.Steps), resume plan receipts)
+
+        while applyOne () do ()
+
+        Assert.True((copy = restored))
+        Assert.Equal(Ok None, resume plan receipts)
+        Assert.False(applyOne ())
+        Assert.True((copy = restored))
+        Assert.Contains(InvalidReceipt receipts.Head.StepId, resume plan [ receipts.Head; receipts.Head ] |> refusal)
+
+[<Fact>]
 let ``receipt gaps reordering and foreign plan binding refuse`` () =
     let plan = baseline () |> get
     let first = createReceipt plan None plan.Steps[0] (sha "result:5")

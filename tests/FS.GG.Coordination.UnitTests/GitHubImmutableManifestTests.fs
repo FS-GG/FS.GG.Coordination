@@ -125,6 +125,27 @@ let ``omitted discovered subject and duplicate global id refuse`` () =
     Assert.Contains(GitHubImmutableManifestFinding.InvalidManifestPopulation "globalIds", verify discovered baseline.Seal duplicate |> refusal)
 
 [<Fact>]
+let ``fresh unknown subject refuses an otherwise sealed manifest`` () =
+    let baseline = qualifyBaseline () |> get
+    let freshDiscovery = discovered @ [ "workflow-pins:unexpected" ] |> List.sort
+
+    Assert.Equal(Ok baseline, verify discovered baseline.Seal baseline)
+    Assert.Contains(
+        GitHubImmutableManifestFinding.InvalidManifestPopulation "subjects",
+        verify freshDiscovery baseline.Seal baseline |> refusal
+    )
+
+[<Fact>]
+let ``exact manifest requalification is stable and changes no planned result`` () =
+    let first = qualifyBaseline () |> get
+    let replay = qualifyBaseline () |> get
+
+    Assert.Equal(first.Seal, replay.Seal)
+    Assert.Equal(first.NormalizedDigest, replay.NormalizedDigest)
+    Assert.True(first.Subjects = replay.Subjects)
+    Assert.True(first.PhasePlans = replay.PhasePlans)
+
+[<Fact>]
 let ``reordered artifacts and incomplete archives refuse`` () =
     let baseline = qualifyBaseline () |> get
     let reordered = { baseline with ArtifactFingerprints = List.rev baseline.ArtifactFingerprints }
