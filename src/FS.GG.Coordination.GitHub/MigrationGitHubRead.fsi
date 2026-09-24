@@ -107,6 +107,47 @@ type MigrationIssueEventPopulation =
       Pages: MigrationRestPageEvidence list
       Events: MigrationIssueEventRecord list }
 
+type MigrationPullRequestReviewRecord =
+    { DatabaseId: int64
+      NodeId: string
+      PullRequestNumber: int
+      State: string
+      ActorLogin: string option
+      CommitSha: string option
+      SubmittedAt: DateTimeOffset option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationPullRequestReviewPopulation =
+    { RepositoryId: int64
+      PullRequestNumber: int
+      PullRequestNodeId: string
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      Reviews: MigrationPullRequestReviewRecord list }
+
+type MigrationPullRequestReviewCommentRecord =
+    { DatabaseId: int64
+      NodeId: string
+      PullRequestNumber: int
+      ReviewId: int64 option
+      Path: string
+      Body: string
+      CreatedAt: DateTimeOffset
+      UpdatedAt: DateTimeOffset
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationPullRequestReviewCommentPopulation =
+    { RepositoryId: int64
+      PullRequestNumber: int
+      PullRequestNodeId: string
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      Comments: MigrationPullRequestReviewCommentRecord list }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -281,6 +322,20 @@ module MigrationGitHubRead =
         pullRequestNumber:int ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssueCommentPopulation, MigrationReadFailure>
+
+    val readPullRequestReviews:
+        options:MigrationGitHubReadOptions ->
+        pullRequests:MigrationPullRequestPopulation ->
+        pullRequestNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationPullRequestReviewPopulation, MigrationReadFailure>
+
+    val readPullRequestReviewComments:
+        options:MigrationGitHubReadOptions ->
+        pullRequests:MigrationPullRequestPopulation ->
+        pullRequestNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationPullRequestReviewCommentPopulation, MigrationReadFailure>
 
     val readIssueEvents:
         options:MigrationGitHubReadOptions ->

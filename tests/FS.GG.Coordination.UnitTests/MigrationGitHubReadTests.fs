@@ -261,6 +261,113 @@ let ``pull request comments refuse nonterminal PR census before dispatch`` () =
                  MigrationGitHubRead.readPullRequestComments options incomplete 3 noRequests)
     Assert.Empty(noRequests.Requests)
 
+let private pullRequestReview id nodeId state number =
+    let commit = String.replicate 40 "a"
+    $"""{{"id":{id},"node_id":"{nodeId}","pull_request_url":"https://api.github.test/repos/FS-GG/copy/pulls/{number}","state":"{state}","commit_id":"{commit}","submitted_at":"2026-09-23T10:00:00Z","user":{{"login":"reviewer"}}}}"""
+
+[<Fact>]
+let ``pull request reviews retain exact terminal pages and native review facts`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/pulls/3/reviews?per_page=100&page=2"
+    let first = pullRequestReview 601 "REVIEW_601" "APPROVED" 3
+    let second = pullRequestReview 602 "REVIEW_602" "COMMENTED" 3
+    let transport =
+        FakeTransport [ repo
+                        ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) $"[{first}]"
+                        ok Map.empty $"[{second}]" ]
+    match MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3 transport with
+    | Ok observed ->
+        Assert.Equal("PR_3", observed.PullRequestNodeId)
+        Assert.Equal(2, observed.PageCount)
+        Assert.Equal<string list>([ "APPROVED"; "COMMENTED" ], observed.Reviews |> List.map _.State)
+        Assert.Equal(Some "reviewer", observed.Reviews.Head.ActorLogin)
+        Assert.Equal(Some next, observed.Pages.Head.NextUri)
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method)
+            | _ -> failwith "pull request review reader issued a non-REST request")
+    | Error failure -> failwithf "unexpected pull request review refusal: %A" failure
+
+[<Fact>]
+let ``pull request reviews refuse foreign subject unknown state and duplicates`` () =
+    let foreign = pullRequestReview 601 "REVIEW_601" "APPROVED" 4
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{foreign}]" ]))
+    let unknown = pullRequestReview 601 "REVIEW_601" "UNKNOWN" 3
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:review-state"),
+                 MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{unknown}]" ]))
+    let first = pullRequestReview 601 "REVIEW_601" "APPROVED" 3
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "REVIEW_601"),
+                 MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{first},{first}]" ]))
+
+[<Fact>]
+let ``pull request reviews refuse missing continuation and nonterminal source`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/pulls/3/reviews?per_page=100&page=2"
+    let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; first ]))
+    let noRequests = FakeTransport []
+    let incomplete = { pullRequestCensus () with Terminal=false }
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "pull-request-census"),
+                 MigrationGitHubRead.readPullRequestReviews options incomplete 3 noRequests)
+    Assert.Empty(noRequests.Requests)
+
+let private pullRequestReviewComment id nodeId number =
+    $"""{{"id":{id},"node_id":"{nodeId}","pull_request_url":"https://api.github.test/repos/FS-GG/copy/pulls/{number}","pull_request_review_id":601,"path":"src/Program.fs","body":"please guard this","created_at":"2026-09-23T10:00:00Z","updated_at":"2026-09-23T10:01:00Z"}}"""
+
+[<Fact>]
+let ``inline review comments retain exact terminal pages and parent review identity`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/pulls/3/comments?per_page=100&page=2"
+    let first = pullRequestReviewComment 701 "REVIEW_COMMENT_701" 3
+    let second = pullRequestReviewComment 702 "REVIEW_COMMENT_702" 3
+    let transport =
+        FakeTransport [ repo
+                        ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) $"[{first}]"
+                        ok Map.empty $"[{second}]" ]
+    match MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3 transport with
+    | Ok observed ->
+        Assert.Equal("PR_3", observed.PullRequestNodeId)
+        Assert.Equal(2, observed.PageCount)
+        Assert.Equal(Some 601L, observed.Comments.Head.ReviewId)
+        Assert.Equal("src/Program.fs", observed.Comments.Head.Path)
+        Assert.Equal(Some next, observed.Pages.Head.NextUri)
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method)
+            | _ -> failwith "inline review comment reader issued a non-REST request")
+    | Error failure -> failwithf "unexpected inline review comment refusal: %A" failure
+
+[<Fact>]
+let ``inline review comments refuse cross-subject and malformed parent review`` () =
+    let foreign = pullRequestReviewComment 701 "REVIEW_COMMENT_701" 4
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{foreign}]" ]))
+    let badParent = (pullRequestReviewComment 701 "REVIEW_COMMENT_701" 3).Replace("\"pull_request_review_id\":601", "\"pull_request_review_id\":0")
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:pull_request_review_id"),
+                 MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{badParent}]" ]))
+
+[<Fact>]
+let ``inline review comments refuse missing page duplicate and nonterminal PR census`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/pulls/3/comments?per_page=100&page=2"
+    let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; first ]))
+    let record = pullRequestReviewComment 701 "REVIEW_COMMENT_701" 3
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "REVIEW_COMMENT_701"),
+                 MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{record},{record}]" ]))
+    let noRequests = FakeTransport []
+    let incomplete = { pullRequestCensus () with Terminal=false }
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "pull-request-census"),
+                 MigrationGitHubRead.readPullRequestReviewComments options incomplete 3 noRequests)
+    Assert.Empty(noRequests.Requests)
+
 [<Fact>]
 let ``issue comment stream binds a censused subject and terminal raw pages`` () =
     let next = "https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=2"
