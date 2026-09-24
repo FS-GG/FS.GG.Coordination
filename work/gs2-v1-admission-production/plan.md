@@ -1,5 +1,14 @@
 # Production v1 admission repair
 
+**Current status (2026-09-24): genesis installed and independently accepted.**
+The canonical operation ref resolves to parentless commit
+`34f1ea8796e5a0bef515705c81a92fcb62620928`; typed exact-object replay
+restores generation 1, `AdmissionsOpen`. This completes the protected genesis
+step, **not** the production append port, incumbent inventory, provider
+reconciliation, ordinary CLI enablement, or GS2-09.7 acceptance. The sequence
+below records the earlier fail-closed work chronologically; the final section
+contains the installation receipt and remaining gates.
+
 The accepted GS2-08 bridge is fail-closed in production. On 2026-09-23 the protected fleet cutover ref existed, while the canonical `fleet-v1-admission:fs-gg-production` operation ref returned 404. The ordinary CLI must not infer an operation scope, use an ambient token as protected authority, or initialize this ref.
 
 ## Formal constraint
@@ -244,3 +253,55 @@ canonical helper output directly and makes the test use one LF, while an
 extra-LF refusal remains. It requires reviewed merge, fresh host/source
 readback, a new native protected run, new bounded signature/JWT handoffs,
 one expected-absent apply attempt, and independent durable readback.
+
+## 2026-09-24 installed genesis and independent acceptance
+
+PR #512 merged the one-LF trust-anchor repair on Coordination `main` at
+`5ad2ce746ed21c6201200e40e8f877f9d9678d3f` after Main exact-head
+source review, local Release build, UnitTests 488/488, ArchitectureTests
+690/690, custody controls 5/5, and all 49 hosted checks including the formal
+aggregate. Fresh read-only `prepare` bound source tree
+`d1bd5a5e7c55c7480a2e7f3e6ec8f0ee465b9c47`, `.github` workflow revision
+`3ae459cfb1d9f2b57af69d88a09732af07bb0047`, intent SHA-256
+`68e579a4869efeb8e0b97a7dc986fe9d8c09c4f8df7c66c9fb1f2f13397a3bec`,
+current public anchor SHA-256
+`0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e87d9a779`,
+and expected genesis commit `34f1ea8796e5a0bef515705c81a92fcb62620928`.
+The operation ref and commit were independently absent before the write.
+
+New protected [run 36000944254](https://github.com/FS-GG/.github/actions/runs/36000944254)
+completed success on attempt 1. Native readback showed exactly owner
+`1645484` and five-minute wait-timer bot `41898282` approvals for the dedicated
+environment. Main independently reread that receipt, signed only the exact
+public payload with the pinned current authorizer, and returned a public
+envelope. Container checks matched every payload/envelope field, the pinned
+SPKI, and the RSA-PSS signature. A separate one-attempt handoff then let Main
+issue one short-lived ordinary-App JWT directly through an anonymous FD3
+pipe to the merged runner; no private key, JWT, or provider token entered the
+container filesystem, repo, log, or chat. The runner returned
+`GENESIS_INSTALLED ref=refs/heads/fsgg/v2/journal/operation/79
+commit=34f1ea8796e5a0bef515705c81a92fcb62620928`. Main made no retry.
+
+Independent installed collector evidence SHA-256
+`62ac6e95ab1ae3ca4540c0a7fa01cdfede55ef0010c681cc8c536139658cca19`
+was decoded by `V1AdmissionGenesisGitRead.decodeInstalled` and
+`V1AdmissionRegistry.verifyGenesisReadback` against the captured absent plan.
+The typed result was exact ref/commit, generation 1, `AdmissionsOpen`. A second
+fresh installed collector (SHA-256
+`943c3b6a02225737da604733b60a928dffe8d9003cf476cf7b86963abd748fa6`)
+again found the exact raw objects and stable ref; independent `git ls-remote`
+resolved operation/79 to the expected commit and unchanged cutover/d5 to
+`42a25b1480203207183f37c56d315c4161fb627b`. The captured preinstall
+observation was older than the convenience probe's two-minute *current-clock*
+window by the time postinstall readback ran. Historical typed verification
+used each captured observation timestamp without relaxing any object/ref or
+postinstall freshness check; the installer itself used fresh reads at apply.
+The durable handoff and acceptance receipt is
+[Coordination PR #508 comment](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5814570932).
+
+The protected genesis write is complete. Next work remains the production
+expected-parent CAS append writer and credential handoff for post-genesis
+admissions, incumbent operation/claim inventory, provider reconciliation and
+uncertain-response recovery, ordinary CLI fence removal only after installed
+runtime acceptance, and GS2-09.7 guarded intake/acceptance. Do not treat this
+root journal as proof those downstream gates are complete.

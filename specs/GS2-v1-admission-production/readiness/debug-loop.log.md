@@ -68,6 +68,13 @@ Rerun the full architecture suite from the committed clean tree before merge.
 ## Result
 
 The targeted trust-anchor regression is green after one source iteration.
-Full verification, reviewed merge, a new protected run and live installed
-readback remain required. No assertion was weakened and the spent JWT/apply
-scope is not reused.
+The clean committed tree passed ArchitectureTests 690/690, and PR #512 passed
+Main exact-head review plus all 49 hosted checks, including the formal
+aggregate. The fix merged at `5ad2ce746ed21c6201200e40e8f877f9d9678d3f`.
+New protected run `36000944254` completed with exact native approvals; its
+one separately authorized Main FD3 apply returned `GENESIS_INSTALLED` for the
+expected operation ref and commit. Independent exact-object typed readback
+restored generation 1 `AdmissionsOpen`, and a second fresh collector confirmed
+durability. No assertion was weakened and the earlier spent JWT/apply scope
+was not reused. The production append port and ordinary CLI remain separate
+downstream gates.
