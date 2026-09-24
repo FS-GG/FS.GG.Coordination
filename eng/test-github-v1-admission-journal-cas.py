@@ -8,6 +8,7 @@ import pathlib
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 
 sys.dont_write_bytecode = True
 SOURCE = pathlib.Path(__file__).with_name("github-v1-admission-journal-cas.py")
@@ -111,6 +112,79 @@ class CasTests(unittest.TestCase):
                 cas.append_local_fixture(changed, str(self.remote))
         with self.assertRaisesRegex(cas.Refused, "local-remote"):
             cas.append_local_fixture(self.plan, "https://github.com/FS-GG/FS.GG.Coordination.Authority.git")
+        self.assertEqual(self.root, self.head())
+
+    def test_scoped_path_never_promotes_a_push_response(self):
+        class Scoped:
+            def __init__(inner):
+                inner.pushes = 0
+
+            def fetch_admission_ref(inner, store):
+                cas.git(store, ["fetch", "--no-tags", str(self.remote), cas.REF])
+
+            def push_admission_ref(inner, store, expected, proposed):
+                inner.pushes += 1
+                return cas.push_local(store, str(self.remote), expected, proposed)
+
+        provider = Scoped()
+        self.assertEqual("response-unknown", cas._append_scoped_for_qualification(self.plan, provider))
+        self.assertEqual(1, provider.pushes)
+        self.assertEqual(self.plan["proposedCommit"], self.head())
+
+    def test_scoped_path_refuses_moved_parent_before_write(self):
+        competitor = self.commit(self.root, "competing")
+        cas.git(self.remote, ["update-ref", cas.REF, competitor])
+
+        class Scoped:
+            def fetch_admission_ref(inner, store):
+                cas.git(store, ["fetch", "--no-tags", str(self.remote), cas.REF])
+
+            def push_admission_ref(inner, store, expected, proposed):
+                self.fail("stale parent reached push")
+
+        with self.assertRaises(cas.ParentConflict):
+            cas._append_scoped_for_qualification(self.plan, Scoped())
+        self.assertEqual(competitor, self.head())
+
+    def test_scoped_path_lost_response_and_racing_sibling_stay_unknown(self):
+        competitor = self.commit(self.root, "competing")
+
+        class Scoped:
+            def __init__(inner, race):
+                inner.race = race
+
+            def fetch_admission_ref(inner, store):
+                cas.git(store, ["fetch", "--no-tags", str(self.remote), cas.REF])
+
+            def push_admission_ref(inner, store, expected, proposed):
+                if inner.race:
+                    cas.git(self.remote, ["update-ref", cas.REF, competitor])
+                cas.push_local(store, str(self.remote), expected, proposed)
+                raise TimeoutError("lost provider response")
+
+        self.assertEqual("response-unknown", cas._append_scoped_for_qualification(self.plan, Scoped(False)))
+        self.assertEqual(self.plan["proposedCommit"], self.head())
+        cas.git(self.remote, ["update-ref", cas.REF, self.root])
+        self.assertEqual("response-unknown", cas._append_scoped_for_qualification(self.plan, Scoped(True)))
+        self.assertEqual(competitor, self.head())
+
+    def test_production_wrapper_requires_fresh_protection_before_fetch(self):
+        class Scoped:
+            def __init__(inner):
+                inner.calls = []
+
+            def protection_snapshot(inner):
+                inner.calls.append("protection")
+                raise cas.Refused("rules-unavailable")
+
+            def fetch_admission_ref(inner, store):
+                self.fail("unprotected fetch")
+
+        provider = Scoped()
+        with patch.object(cas.provider_transport, "OrdinaryAdmissionTransport", return_value=provider):
+            with self.assertRaisesRegex(cas.Refused, "rules-unavailable"):
+                cas.append_with_ordinary_app(self.plan, "fixture-jwt")
+        self.assertEqual(["protection"], provider.calls)
         self.assertEqual(self.root, self.head())
 
 

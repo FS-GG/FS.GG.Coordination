@@ -21,6 +21,10 @@ SOURCE = pathlib.Path(__file__).with_name("github-v1-admission-git-read.py")
 spec = importlib.util.spec_from_file_location("v1_admission_cas_git", SOURCE)
 git_read = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(git_read)
+PROVIDER_SOURCE = pathlib.Path(__file__).with_name("github-v1-admission-provider-transport.py")
+provider_spec = importlib.util.spec_from_file_location("v1_admission_cas_provider", PROVIDER_SOURCE)
+provider_transport = importlib.util.module_from_spec(provider_spec)
+provider_spec.loader.exec_module(provider_transport)
 
 REF = git_read.OPERATION_REF
 REPOSITORY_ID = git_read.REPOSITORY_ID
@@ -153,3 +157,39 @@ def append_local_fixture(plan: dict, remote: str, push=push_local) -> str:
         except Exception:
             return "response-unknown"
         return "accepted" if pushed is True else "response-unknown"
+
+
+def _append_checked_scoped(checked: dict, provider) -> str:
+    """Network path: a raw push response never confirms durable admission."""
+    with tempfile.TemporaryDirectory(prefix="fsgg-v1-admission-scoped-cas-") as directory:
+        store = pathlib.Path(directory) / "journal.git"
+        template = pathlib.Path(directory) / "empty-template"
+        template.mkdir()
+        git(None, ["init", "--bare", f"--template={template}", str(store)])
+        provider.fetch_admission_ref(store)
+        fetched = git(store, ["rev-parse", "FETCH_HEAD"]).decode("ascii").strip()
+        if fetched != checked["expectedParent"]:
+            raise ParentConflict("admission-cas-parent-moved")
+        for (kind, oid), raw in checked["decodedObjects"].items():
+            actual = git(store, ["hash-object", "-w", "-t", kind, "--stdin"], raw)
+            require(actual.decode("ascii").strip() == oid, "admission-cas-local-object")
+        git(store, ["update-ref", "refs/heads/proposed", checked["proposedCommit"]])
+        try:
+            provider.push_admission_ref(
+                store, checked["expectedParent"], checked["proposedCommit"])
+        except Exception:
+            pass
+        return "response-unknown"
+
+
+def _append_scoped_for_qualification(plan: dict, provider) -> str:
+    """Inject a fixture provider only for local qualification."""
+    return _append_checked_scoped(decode_plan(plan), provider)
+
+
+def append_with_ordinary_app(plan: dict, app_jwt: str) -> str:
+    """Import-only production path; caller must supply a separately approved JWT."""
+    checked = decode_plan(plan)
+    provider = provider_transport.OrdinaryAdmissionTransport(app_jwt)
+    provider.protection_snapshot()
+    return _append_checked_scoped(checked, provider)
