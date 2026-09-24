@@ -596,7 +596,8 @@ let ``protected genesis binds signature native approval and expected absent inst
     let trustBytes =
         ShardedJournalAdapter.canonicalJson trustJson
         |> Result.defaultWith failwith
-        |> fun bytes -> Array.append bytes [| 10uy |]
+    Assert.Equal(10uy, Array.last trustBytes)
+    Assert.NotEqual(10uy, trustBytes[trustBytes.Length - 2])
     let trustDigest = SHA256.HashData trustBytes |> Convert.ToHexString |> _.ToLowerInvariant() |> Registry.sha256Digest |> Result.defaultWith failwith
     let snapshot, _, _, _, authorityPort = authorityWithTrust trustDigest "OperatingV1" 1L None id
     let plan = Registry.planGenesis "protected-genesis" snapshot (absentRead ()) |> Result.defaultWith (String.concat "," >> failwith)
