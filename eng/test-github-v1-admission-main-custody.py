@@ -115,7 +115,9 @@ class MainCustodyTests(unittest.TestCase):
                                   expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "trust-anchor-digest"):
             wrong = trust.replace(self.spki.encode("ascii"), b"f" * 64)
-            custody.sign_envelope(payload, wrong, lambda role: self.key,
+            def unexpected_lookup(role):
+                self.fail("authorizer lookup happened before anchor refusal")
+            custody.sign_envelope(payload, wrong, unexpected_lookup,
                                   self.native, now=self.timestamp(),
                                   expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
@@ -143,10 +145,16 @@ class MainCustodyTests(unittest.TestCase):
                           "role", "authorizer", "key-id", custody.AUTHORIZER_KEY_ID,
                           "spki-sha256", custody.AUTHORIZER_SPKI_SHA256,
                           "trust-anchor-sha256", custody.TRUST_ANCHOR_SHA256], calls[1])
+        calls.clear()
         def missing(command, **kwargs):
+            calls.append(command)
             return subprocess.CompletedProcess(command, 1, b"")
         with self.assertRaisesRegex(custody.Refused, "custody-unavailable"):
             custody.secret("authorizer", missing)
+        self.assertEqual([["secret-tool", "lookup", "service", "fsgg-v1-admission",
+                           "role", "authorizer", "key-id", custody.AUTHORIZER_KEY_ID,
+                           "spki-sha256", custody.AUTHORIZER_SPKI_SHA256,
+                           "trust-anchor-sha256", custody.TRUST_ANCHOR_SHA256]], calls)
 
 
 if __name__ == "__main__":

@@ -26,6 +26,7 @@ sys.dont_write_bytecode = True
 APP_ID = 4882140
 SERVICE = "fsgg-ledger-protection"
 AUTHORIZER_SERVICE = "fsgg-v1-admission"
+# Never fall back to the legacy fsgg-ledger-protection/authorizer record.
 AUTHORIZER_KEY_ID = "main-gs2-08-2-authorizer-2dc8d29f8d5a675d"
 AUTHORIZER_SPKI_SHA256 = "2dc8d29f8d5a675d070701dacd6dacf2ca3e368ecf823fa9eaf560ddd22d77be"
 TRUST_ANCHOR_SHA256 = "0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e87d9a779"

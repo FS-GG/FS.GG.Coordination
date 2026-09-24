@@ -93,9 +93,8 @@ current authorizer under distinct `service=fsgg-v1-admission` attributes. This
 is a host custody report, not independently verified in this container. Main
 also [reported exact later user wording](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808930572)
 authorizing additive secret sync so work could continue on either computer.
-That later instruction is not directly visible in the fdev user thread, whose
-prior direction required an approved **Work-host** signing path. The location
-rule therefore awaits direct user reconciliation. The older Main wallet
+The user has now directly confirmed additive synchronization in this fdev
+thread, superseding the earlier Work-only signer-route constraint. The older Main wallet
 authorizer fingerprint `54568140db351fbc525043601cec0ecbffda12e235436d44d68bed10f14fb7d6`
 remains nonmatching and must not sign.
 
@@ -108,39 +107,41 @@ with the exact pinned .NET SDK. Main [reported a read-only host check](https://g
 of all five exact lookup attributes, the derived public SPKI and the public
 anchor digest; this report has not been independently reproduced from this
 container. The PR is not auto-merged, and no Main-host `sign-intent` may be
-invoked until the user reconciles the custody-location rule and the separate
+invoked until the source is reviewed and merged and the separate native
 protected approval is complete.
 
 The handoff intake draft validated, but `fsgg-coord intake apply` refused its
 production v1 admission room read because the journal is not installed. It
 created no issue. Main responded in the existing PR #508 thread, so that
 thread is the active handoff channel for this request; the Work-only signer
-draft is superseded as a mailbox draft, but its location constraint remains
-unresolved pending direct user confirmation. Source-only work may continue in
+draft and its location constraint are superseded by direct user confirmation.
+Source-only work may continue in
 parallel. Protected genesis still requires (1) a reviewed custody/signing
 interface at the user-approved host and independent custody verification, (2) the
 separately approved protected workflow and ordinary-App credential handoff,
 and (3) exact expected-absent installation with independent durable readback.
 Custody evidence, source tests and this plan are not approval.
 
-## 2026-09-24 contradictory host custody report
+## 2026-09-24 custody reconciliation
 
-The SystemAdmin handoff owner reported directly in the fdev user thread that
+An earlier SystemAdmin handoff message reported directly in the fdev user thread that
 the current matching authorizer private key remains on Work, while Main Secret
 Service has only the older, nonmatching authorizer key. This directly conflicts
 with the earlier Main-host [read-only receipt](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808996870)
-claiming that an exact current record is present on Main. These are conflicting
-attributed host reports, not independently reconciled facts from this container.
-The public anchor and successful read-only `prepare` check do not settle private
-key custody. The earlier wording that the Work-only draft was superseded as a
-mailbox draft does not qualify the Main execution route.
+claiming that an exact current record is present on Main. The user subsequently
+confirmed directly that additive synchronization was authorized and completed:
+both KDE wallets hold the same six FS-GG records with matching lookup attributes
+and public SPKI fingerprints, including the distinct current OperatingV1 record;
+the older Main authorizer remains unchanged. This supersedes the Work-only
+route. The host inventory remains a reported observation, not a wallet read
+independently performed from this container.
 
-PR #508 is now **draft**, with auto-merge disabled. Its exact-Main-lookup source
-patch is frozen as an unqualified candidate; it must not be merged or used for
-signing while host custody and the user-approved location rule are unresolved.
-The active Coordination [handoff comment](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5809070489)
-asks the host owner for a fresh read-only, non-secret comparison and, if Work-only
-is confirmed, a narrow Work-host signing route for review. Governed issue intake
-previously failed closed, so there is no issue URL. No private-key transfer,
-signer invocation, JWT issuance, workflow dispatch, or journal mutation follows
-from these reports.
+PR #508 contains the exact-record source candidate and synthetic refusal tests.
+It remains draft with auto-merge disabled pending source review. The next gate
+is a reviewed and merged helper with old/wrong-key, wrong-anchor, missing-record
+and native-approval refusal controls. The separate protected workflow approval,
+fresh authority/ref readback and exact installed-state readback follow; custody
+evidence and the user's synchronization authorization are not approval for a
+protected write. Governed issue intake previously failed closed, so the PR is
+the active handoff thread and no issue URL exists. No signer invocation, JWT
+issuance, workflow dispatch, or journal mutation occurred in this source step.
