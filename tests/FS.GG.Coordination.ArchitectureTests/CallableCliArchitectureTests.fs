@@ -60,8 +60,8 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     for expected in
         [
             "operation:"
-            "publish-v2-call-01.3b"
-            "ce318148d288051eaeb55ebb0e81bb0172d3194523c95ea9caeed5b5091a15cf"
+            "publish-v2-ci-i1-cli-012"
+            "5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68"
             "packages: write"
             "id-token: write"
             "attestations: write"
@@ -80,10 +80,10 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
     Assert.True(githubPush >= 0 && publicPush > githubPush)
 
-    let operation = read "eng/callable-cli-release-operation.json"
-    Assert.Contains("\"operation\":\"publish-v2-call-01.3b\"", operation, StringComparison.Ordinal)
-    Assert.Contains("\"receiverAdoption\":{\"authorized\":false", operation, StringComparison.Ordinal)
-    Assert.Contains("\"tagAfterBothFeeds\":true", operation, StringComparison.Ordinal)
+    let operation = read "eng/callable-cli-release-operation-012.json"
+    Assert.Contains("\"operation\": \"publish-v2-ci-i1-cli-012\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"authorized\": false", operation, StringComparison.Ordinal)
+    Assert.Contains("\"tagAfterBothFeeds\": true", operation, StringComparison.Ordinal)
 
 [<Fact>]
 let ``native ordinary provider uses typed REST transport and protected journal adapter`` () =
