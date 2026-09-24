@@ -11,7 +11,9 @@
     "sourceCommit": "a6c1155591836582e28a0651def31cb6afeb8859",
     "sourceTree": "7e6888613fd7bb5d40c5e27f00d048af9535a437",
     "packageSha256": "5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68",
-    "canonicalSourceRoot": "/home/developer/projects/FS.GG.Coordination"
+    "canonicalSourceRoot": "/home/runner/work/FS.GG.Coordination/FS.GG.Coordination",
+    "preparationRunId": 36028503111,
+    "preparationArtifactId": 10819803371
   },
   "protectedMerge": "57f1328345fd58915da3f398e5c442dbd40b891a",
   "tag": "v0.1.2",

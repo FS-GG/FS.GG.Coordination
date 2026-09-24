@@ -49,7 +49,7 @@ jobs:
       EXPECTED_SHA256: 5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
-      CANONICAL_SOURCE: /home/developer/projects/FS.GG.Coordination
+      CANONICAL_SOURCE: ${{ github.workspace }}
     steps:
       - name: Check out the protected workflow revision
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -89,26 +89,35 @@ jobs:
             echo "::error::protected-main desired state does not admit only the exact NuGet/login action"
             exit 1
           }
-      - name: Reproduce the reviewed bytes at their preparation root
+      - name: Retrieve the immutable reviewed preparation artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: callable-cli-a6c1155591836582e28a0651def31cb6afeb8859
+          run-id: 36028503111
+          repository: FS-GG/FS.GG.Coordination
+          github-token: ${{ github.token }}
+          path: ${{ env.CANDIDATE_OUTPUT }}
+      - name: Reproduce and compare the reviewed bytes at their preparation root
         shell: bash
         run: |
           set -euo pipefail
-          test ! -e "$CANONICAL_SOURCE"
-          sudo install -d -o "$(id -u)" -g "$(id -g)" "$(dirname "$CANONICAL_SOURCE")"
-          git clone --no-local --no-checkout "$GITHUB_WORKSPACE" "$CANONICAL_SOURCE"
-          git -C "$CANONICAL_SOURCE" fetch origin "$EXPECTED_SOURCE"
-          git -C "$CANONICAL_SOURCE" checkout --detach FETCH_HEAD
-          git -C "$CANONICAL_SOURCE" remote set-url origin "https://github.com/${GITHUB_REPOSITORY}.git"
+          test "$CANONICAL_SOURCE" = "$GITHUB_WORKSPACE"
+          test "$(sha256sum "$CANDIDATE_OUTPUT/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          test "$(jq -r .packageSha256 "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_SHA256"
+          test "$(jq -r .sourceCommit "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_SOURCE"
+          test "$(jq -r .sourceTree "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_TREE"
+          git -C "$CANONICAL_SOURCE" checkout --detach "$EXPECTED_SOURCE"
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
           git -C "$CANONICAL_SOURCE" tag -d v0.1.2 2>/dev/null || true
           dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
-          mkdir "$CANDIDATE_OUTPUT"
+          mkdir -p "$READBACK_OUTPUT/reproduced"
           (
             cd "$CANONICAL_SOURCE"
             dotnet fsi eng/callable-cli-release.fsx prepare \
-              --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION" --output "$CANDIDATE_OUTPUT"
+              --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION" --output "$READBACK_OUTPUT/reproduced"
           )
-          test "$(sha256sum "$CANDIDATE_OUTPUT/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
-          test "$(jq -r .sourceTree "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_TREE"
+          test "$(sha256sum "$READBACK_OUTPUT/reproduced/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          cmp "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/reproduced/$PACKAGE_FILE"
       - name: Retain exact candidate before any external package or tag effect
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
