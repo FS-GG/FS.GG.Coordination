@@ -90,22 +90,32 @@ or journal write was used in this check.
 Main/SystemAdmin reported in [PR #508](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808787528)
 that Work and Main now hold matching Secret Service records, including the
 current authorizer under distinct `service=fsgg-v1-admission` attributes. This
-is a host custody report, not independently verified in this container. It
-conflicts with the user's explicit direction that any later signing use an
-approved **Work-host** custody path. Copying a matching key to Main does not
-change that authorization boundary. The older Main wallet authorizer
-fingerprint `54568140db351fbc525043601cec0ecbffda12e235436d44d68bed10f14fb7d6`
-also remains nonmatching. Do not qualify or invoke Main-host `sign-intent` for
-the current anchor without an explicit user change to the custody rule.
+is a host custody report, not independently verified in this container. Main
+also [reported exact later user wording](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808930572)
+authorizing additive secret sync so work could continue on either computer.
+That later instruction is not directly visible in the fdev user thread, whose
+prior direction required an approved **Work-host** signing path. The location
+rule therefore awaits direct user reconciliation. The older Main wallet
+authorizer fingerprint `54568140db351fbc525043601cec0ecbffda12e235436d44d68bed10f14fb7d6`
+remains nonmatching and must not sign.
+
+Candidate source revision `e53208d` in PR #508 selects the distinct current
+Main record by exact key ID, SPKI and anchor digest, and refuses altered
+anchor bytes before lookup. Synthetic controls cover old/wrong key, wrong
+anchor and missing record; 3 custody and 4 protected-read tests pass. This is
+source qualification only. The PR is not auto-merged, Main's independent
+read-only host check is pending, and no Main-host `sign-intent` may be invoked
+until the user reconciles the custody-location rule and the separate protected
+approval is complete.
 
 The handoff intake draft validated, but `fsgg-coord intake apply` refused its
 production v1 admission room read because the journal is not installed. It
 created no issue. Main responded in the existing PR #508 thread, so that
 thread is the active handoff channel for this request; the Work-only signer
-draft is superseded as a mailbox draft, but its location constraint remains.
-Source-only work may continue in parallel. Protected genesis still requires
-(1) a reviewed narrow Work-host signing interface and independent custody
-verification, or an explicit user decision changing that requirement, (2) the
+draft is superseded as a mailbox draft, but its location constraint remains
+unresolved pending direct user confirmation. Source-only work may continue in
+parallel. Protected genesis still requires (1) a reviewed custody/signing
+interface at the user-approved host and independent custody verification, (2) the
 separately approved protected workflow and ordinary-App credential handoff,
 and (3) exact expected-absent installation with independent durable readback.
 Custody evidence, source tests and this plan are not approval.
