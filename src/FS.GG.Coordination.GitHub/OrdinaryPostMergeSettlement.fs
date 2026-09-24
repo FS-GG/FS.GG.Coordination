@@ -14,6 +14,7 @@ type OrdinaryMergedPullRequest =
         NodeId: string
         Repository: string
         BaseRef: string
+        HeadCommit: string
         MergeCommit: string
         Merged: bool
     }
@@ -28,9 +29,8 @@ type OrdinarySettlementCredentialBinding =
 
 type OrdinarySettlementReadBinding =
     {
-        AppId: int64
-        InstallationId: int64
-        RepositoryIds: int64 list
+        CredentialKind: string
+        RepositoryId: int64
         Permissions: Map<string, string>
     }
 
@@ -63,6 +63,7 @@ type OrdinarySettlementPlan =
         AuthorityRepositoryId: int64
         PullRequestNumber: int
         PullRequestNodeId: string
+        PullRequestHeadCommit: string
         SourceCommit: string
         SourceTree: string
         WorkflowRevision: string
@@ -73,6 +74,7 @@ type OrdinarySettlementPlan =
         EpochGeneration: int64
         EpochCommit: string
         SourcePlanSeal: string
+        RequiredChecks: OrdinaryCheckFact list
         JournalAddress: AggregateAddress
         Seal: string
     }
@@ -89,6 +91,7 @@ type OrdinarySettlementFailure =
     | SettlementTrustMismatch
     | SettlementSignatureInvalid
     | SettlementAlteredPlan
+    | SettlementRequiredCheckSetMismatch
     | SettlementProviderUnavailable of string
     | SettlementJournalConflict
     | SettlementJournalUnavailable of string
@@ -152,6 +155,14 @@ module OrdinaryPostMergeSettlement =
     let private schema = "fsgg.coordination.ordinary-post-merge-settlement-plan/1"
     let private operationClass = "ordinary-post-merge-delivery-settlement"
     let private environment = "ordinary-v2"
+    let private githubActionsAppId = 15368L
+    let private requiredCheckIdentities =
+        Set [ "contract-coherence / coherence"; "routine-eligibility" ]
+
+    let private requiredChecksValid (checks: OrdinaryCheckFact list) =
+        checks.Length = requiredCheckIdentities.Count
+        && (checks |> List.map _.Identity |> Set.ofList) = requiredCheckIdentities
+        && checks |> List.forall (fun check -> check.AppId = githubActionsAppId && check.Conclusion = CheckPassed)
 
     let private validText (value: string) =
         not (String.IsNullOrWhiteSpace value) && value = value.Trim()
@@ -186,8 +197,7 @@ module OrdinaryPostMergeSettlement =
 
     let private expectedReadPermissions =
         Map
-            [ "administration", "read"; "checks", "read"; "contents", "read"
-              "metadata", "read"; "pull_requests", "read" ]
+            [ "checks", "read"; "contents", "read"; "pull_requests", "read" ]
 
     let private bindingValid authorityRepositoryId (binding: OrdinarySettlementCredentialBinding) =
         binding.AppId > 0L
@@ -196,12 +206,11 @@ module OrdinaryPostMergeSettlement =
         && binding.Permissions = expectedPermissions
 
     let private readBindingValid sourceRepositoryId (binding: OrdinarySettlementReadBinding) =
-        binding.AppId > 0L
-        && binding.InstallationId > 0L
-        && binding.RepositoryIds = [ sourceRepositoryId ]
+        binding.CredentialKind = "github-actions-repository-token"
+        && binding.RepositoryId = sourceRepositoryId
         && binding.Permissions = expectedReadPermissions
 
-    let private associationFor (observation: OrdinaryDeliveryObservation) associations =
+    let private associationFor (triggerCommit: string) (observation: OrdinaryDeliveryObservation) associations =
         match associations with
         | [] -> Error MissingMergedPullRequest
         | [ association ] when not association.Merged -> Error MissingMergedPullRequest
@@ -211,10 +220,28 @@ module OrdinaryPostMergeSettlement =
             || not (String.Equals(association.Repository, observation.Repository, StringComparison.OrdinalIgnoreCase))
             || association.BaseRef <> observation.BaseRef
             || association.BaseRef <> "main"
-            || not (String.Equals(association.MergeCommit, observation.HeadSha, StringComparison.OrdinalIgnoreCase))
+            || not (String.Equals(association.HeadCommit, observation.HeadSha, StringComparison.OrdinalIgnoreCase))
+            || not (String.Equals(association.MergeCommit, triggerCommit, StringComparison.OrdinalIgnoreCase))
             -> Error MismatchedMergedPullRequest
         | [ association ] -> Ok association
         | _ -> Error AmbiguousMergedPullRequest
+
+    let private checksNode checks =
+        let values = JsonArray()
+        for check in checks |> List.sortBy (fun value -> value.Identity, value.AppId) do
+            let item = JsonObject()
+            item.Add("appId", check.AppId)
+            item.Add("identity", check.Identity)
+            item.Add(
+                "conclusion",
+                match check.Conclusion with
+                | CheckPassed -> "passed"
+                | CheckFailed -> "failed"
+                | CheckPending -> "pending"
+                | CheckUnknown -> "unknown"
+            )
+            values.Add item
+        values
 
     let private unsignedNode
         (originalPlanId: string)
@@ -242,8 +269,10 @@ module OrdinaryPostMergeSettlement =
         root.Add("policyRevision", observation.PolicyRevision.ToLowerInvariant())
         root.Add("pullRequestNodeId", association.NodeId)
         root.Add("pullRequestNumber", association.Number)
+        root.Add("pullRequestHeadCommit", association.HeadCommit.ToLowerInvariant())
         root.Add("repository", observation.Repository.ToLowerInvariant())
         root.Add("repositoryId", observation.RepositoryId)
+        root.Add("requiredChecks", checksNode observation.Checks)
         root.Add("schema", schema)
         root.Add("sourceCommit", association.MergeCommit.ToLowerInvariant())
         root.Add("sourcePlanSeal", sourcePlanSeal)
@@ -256,6 +285,7 @@ module OrdinaryPostMergeSettlement =
         (authorityRepositoryId: int64)
         (sourceTree: string)
         (workflowRevision: string)
+        (triggerCommit: string)
         (operationClassValue: string)
         (environmentValue: string)
         (observation: OrdinaryDeliveryObservation)
@@ -270,14 +300,23 @@ module OrdinaryPostMergeSettlement =
                     yield InvalidSettlementIdentity "original-plan-id"
                 if not (validOid sourceTree) then yield InvalidSettlementIdentity "source-tree"
                 if not (validOid workflowRevision) then yield InvalidSettlementIdentity "workflow-revision"
+                if not (validOid triggerCommit) then yield InvalidSettlementIdentity "trigger-commit"
                 if operationClassValue <> operationClass then yield UnsupportedSettlementClass
                 if environmentValue <> environment then yield InvalidSettlementIdentity "environment"
                 if authorityRepositoryId <= 0L then yield InvalidSettlementIdentity "authority-repository-id"
                 if not (readBindingValid observation.RepositoryId readBinding) then yield SettlementCredentialMismatch
                 if not (bindingValid authorityRepositoryId binding) then yield SettlementCredentialMismatch
+                if not (requiredChecksValid observation.Checks) then
+                    yield SettlementRequiredCheckSetMismatch
             ]
 
-        match failures, associationFor observation associations, OrdinaryDelivery.plan observation with
+        // The current journal revision is a CAS input, not part of the immutable
+        // source identity. Normalize it so a workflow rerun reconstructs the same
+        // signed plan after its own first journal mutation.
+        let stableSourceObservation =
+            { observation with JournalGeneration = 0L; JournalHead = String.replicate 40 "0" }
+
+        match failures, associationFor triggerCommit observation associations, OrdinaryDelivery.plan stableSourceObservation with
         | _ :: _, _, _ -> Error failures
         | [], Error failure, _ -> Error [ failure ]
         | [], _, Error source -> Error(source |> List.map SettlementSourceFailure)
@@ -286,7 +325,8 @@ module OrdinaryPostMergeSettlement =
                 Encoding.UTF8.GetBytes(
                     String.concat "\n"
                         [ originalPlanId; observation.Repository.ToLowerInvariant(); string association.Number
-                          association.MergeCommit.ToLowerInvariant(); sourcePlan.Seal; observation.PolicyRevision.ToLowerInvariant()
+                          association.HeadCommit.ToLowerInvariant(); association.MergeCommit.ToLowerInvariant(); sourcePlan.Seal
+                          observation.PolicyRevision.ToLowerInvariant()
                           observation.EpochCommit.ToLowerInvariant(); string observation.EpochGeneration ]
                 )
             let operationId = "ordinary-settlement:" + sha256 seed
@@ -310,6 +350,7 @@ module OrdinaryPostMergeSettlement =
                         AuthorityRepositoryId = authorityRepositoryId
                         PullRequestNumber = association.Number
                         PullRequestNodeId = association.NodeId
+                        PullRequestHeadCommit = association.HeadCommit.ToLowerInvariant()
                         SourceCommit = association.MergeCommit.ToLowerInvariant()
                         SourceTree = sourceTree.ToLowerInvariant()
                         WorkflowRevision = workflowRevision.ToLowerInvariant()
@@ -320,6 +361,7 @@ module OrdinaryPostMergeSettlement =
                         EpochGeneration = observation.EpochGeneration
                         EpochCommit = observation.EpochCommit.ToLowerInvariant()
                         SourcePlanSeal = sourcePlan.Seal
+                        RequiredChecks = observation.Checks |> List.sortBy (fun value -> value.Identity, value.AppId)
                         JournalAddress = address
                         Seal = seal
                     },
@@ -347,9 +389,11 @@ module OrdinaryPostMergeSettlement =
         root.Add("policyRevision", plan.PolicyRevision)
         root.Add("pullRequestNodeId", plan.PullRequestNodeId)
         root.Add("pullRequestNumber", plan.PullRequestNumber)
+        root.Add("pullRequestHeadCommit", plan.PullRequestHeadCommit)
         root.Add("repository", plan.Repository)
         root.Add("repositoryId", plan.RepositoryId)
         root.Add("repositoryIds", repositories)
+        root.Add("requiredChecks", checksNode plan.RequiredChecks)
         root.Add("schema", "fsgg.coordination.ordinary-post-merge-settlement-intent/1")
         root.Add("sourceCommit", plan.SourceCommit)
         root.Add("sourceTree", plan.SourceTree)
@@ -479,7 +523,11 @@ module OrdinaryPostMergeSettlement =
                 |> Result.bind (fun entry ->
                     if entry.Stage = SettlementComplete then
                         match entry.ReceiptDigest with
-                        | Some receipt -> Ok(SettlementAlreadyComplete receipt)
+                        | Some receipt ->
+                            match runtime.ReadBack plan with
+                            | Ok(Some observed) when observed = receipt -> Ok(SettlementAlreadyComplete receipt)
+                            | Ok _ -> Error [ SettlementReadbackMismatch ]
+                            | Error reason -> Error [ SettlementJournalUnavailable reason ]
                         | None -> Error [ SettlementJournalConflict ]
                     elif cut = StopAfterIntent then Ok(SettlementInterrupted "after-intent")
                     else

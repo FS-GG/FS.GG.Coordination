@@ -19,8 +19,8 @@ let private observation epoch =
       HeadSha = sha "b"
       PolicyRevision = sha "c"
       Checks =
-        [ { Identity = "coherent-qualification"; AppId = 10L; Conclusion = CheckPassed }
-          { Identity = "ordinary-settlement-contract"; AppId = 11L; Conclusion = CheckPassed } ]
+        [ { Identity = "contract-coherence / coherence"; AppId = 15368L; Conclusion = CheckPassed }
+          { Identity = "routine-eligibility"; AppId = 15368L; Conclusion = CheckPassed } ]
       Epoch = epoch
       EpochGeneration = 3L
       EpochCommit = sha "9"
@@ -36,6 +36,7 @@ let private association merged commit =
       NodeId = "PR_kwDOordinary"
       Repository = "FS-GG/FS.GG.Coordination"
       BaseRef = "main"
+      HeadCommit = sha "b"
       MergeCommit = commit
       Merged = merged }
 
@@ -46,11 +47,10 @@ let private writerBinding: OrdinarySettlementCredentialBinding =
       Permissions = Map [ "contents", "write"; "metadata", "read" ] }
 
 let private readBinding: OrdinarySettlementReadBinding =
-    { AppId = 7002L
-      InstallationId = 8002L
-      RepositoryIds = [ 101L ]
+    { CredentialKind = "github-actions-repository-token"
+      RepositoryId = 101L
       Permissions =
-        Map [ "administration", "read"; "checks", "read"; "contents", "read"; "metadata", "read"; "pull_requests", "read" ] }
+        Map [ "checks", "read"; "contents", "read"; "pull_requests", "read" ] }
 
 let private prepare
     (observed: OrdinaryDeliveryObservation)
@@ -59,10 +59,11 @@ let private prepare
     (writer: OrdinarySettlementCredentialBinding)
     =
     OrdinaryPostMergeSettlement.prepare
-        "workflow-run:36004284186:attempt:1"
+        "workflow-run:36004284186"
         202L
         (sha "e")
         (sha "f")
+        (sha "8")
         "ordinary-post-merge-delivery-settlement"
         "ordinary-v2"
         observed
@@ -71,7 +72,7 @@ let private prepare
         writer
 
 let private prepared () =
-    prepare (observation "OpenV2") [ association true (sha "b") ] readBinding writerBinding
+    prepare (observation "OpenV2") [ association true (sha "8") ] readBinding writerBinding
     |> Result.defaultWith (sprintf "%A" >> failwith)
     |> fst
 
@@ -161,32 +162,48 @@ let private errors result =
 [<Fact>]
 let ``preparation binds one merged main PR and stable workflow identity`` () =
     let observed = observation "OpenV2"
-    let first = prepare observed [ association true observed.HeadSha ] readBinding writerBinding
-    let second = prepare observed [ association true observed.HeadSha ] readBinding writerBinding
+    let first = prepare observed [ association true (sha "8") ] readBinding writerBinding
+    let second = prepare observed [ association true (sha "8") ] readBinding writerBinding
     Assert.Equal(first, second)
+    let afterJournalMutation =
+        prepare
+            { observed with JournalGeneration = observed.JournalGeneration + 4L; JournalHead = sha "4" }
+            [ association true (sha "8") ]
+            readBinding
+            writerBinding
+    Assert.Equal(first, afterJournalMutation)
     let plan = first |> Result.defaultWith (sprintf "%A" >> failwith) |> fst
     Assert.Equal(101L, plan.RepositoryId)
     Assert.Equal(202L, plan.AuthorityRepositoryId)
+    Assert.Equal(observed.HeadSha, plan.PullRequestHeadCommit)
+    Assert.Equal(sha "8", plan.SourceCommit)
+    Assert.True((plan.RequiredChecks |> List.map _.Identity |> Set.ofList) = Set [ "contract-coherence / coherence"; "routine-eligibility" ])
     Assert.Equal(plan.OperationId + ":attempt:1", plan.AttemptId)
 
     Assert.Equal(Error [ MissingMergedPullRequest ], prepare observed [] readBinding writerBinding)
-    Assert.Equal(Error [ MissingMergedPullRequest ], prepare observed [ association false observed.HeadSha ] readBinding writerBinding)
-    Assert.Equal(Error [ AmbiguousMergedPullRequest ], prepare observed [ association true observed.HeadSha; association true observed.HeadSha ] readBinding writerBinding)
-    Assert.Equal(Error [ MismatchedMergedPullRequest ], prepare observed [ association true (sha "8") ] readBinding writerBinding)
+    Assert.Equal(Error [ MissingMergedPullRequest ], prepare observed [ association false (sha "8") ] readBinding writerBinding)
+    Assert.Equal(Error [ AmbiguousMergedPullRequest ], prepare observed [ association true (sha "8"); association true (sha "8") ] readBinding writerBinding)
+    Assert.Equal(Error [ MismatchedMergedPullRequest ], prepare observed [ association true (sha "0") ] readBinding writerBinding)
+    let wrongHead = { (association true (sha "8")) with HeadCommit = sha "0" }
+    Assert.Equal(Error [ MismatchedMergedPullRequest ], prepare observed [ wrongHead ] readBinding writerBinding)
 
 [<Fact>]
 let ``preparation refuses stale source qualification epoch and credential scope`` () =
     let observed = observation "OpenV2"
-    let associations = [ association true observed.HeadSha ]
-    let failed = { observed with Checks = [ { Identity = "coherent-qualification"; AppId = 10L; Conclusion = CheckFailed } ] }
+    let associations = [ association true (sha "8") ]
+    let failed = { observed with Checks = [ { Identity = "contract-coherence / coherence"; AppId = 15368L; Conclusion = CheckFailed } ] }
     match prepare failed associations readBinding writerBinding with
-    | Error failures -> Assert.Contains(SettlementSourceFailure(RequiredCheckNotPassed "coherent-qualification"), failures)
+    | Error failures -> Assert.Contains(SettlementSourceFailure(RequiredCheckNotPassed "contract-coherence / coherence"), failures)
     | Ok _ -> Assert.Fail "failed qualification accepted"
+    let missingCheck = { observed with Checks = [ observed.Checks.Head ] }
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare missingCheck associations readBinding writerBinding |> errors)
+    let wrongApp = { observed with Checks = observed.Checks |> List.map (fun check -> { check with AppId = 1L }) }
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongApp associations readBinding writerBinding |> errors)
     Assert.Contains(SettlementPreOpenV2, prepare { observed with Epoch = "OperatingV1" } associations readBinding writerBinding |> errors)
     let broadWriter = { writerBinding with RepositoryIds = [ 101L; 202L ] }
     Assert.Contains(SettlementCredentialMismatch, prepare observed associations readBinding broadWriter |> errors)
-    let broadReader = { readBinding with RepositoryIds = [ 101L; 202L ] }
-    Assert.Contains(SettlementCredentialMismatch, prepare observed associations broadReader writerBinding |> errors)
+    let wrongReader = { readBinding with RepositoryId = 202L }
+    Assert.Contains(SettlementCredentialMismatch, prepare observed associations wrongReader writerBinding |> errors)
 
 [<Fact>]
 let ``canonical authorization rejects wrong key anchor altered intent and stale plan`` () =
@@ -239,6 +256,9 @@ let ``lost replies crashes and replay reconcile without duplicate effect`` () =
     Assert.Equal(1, runtime.ApplyCount)
     Assert.Equal(Ok(SettlementAlreadyComplete(sha "7")), OrdinaryPostMergeSettlement.execute plan writerBinding trusted signed SettlementNoCut runtime)
     Assert.Equal(1, runtime.ApplyCount)
+    runtime.ReadbackOverride <- Some(Some(sha "8"))
+    Assert.Equal(Error [ SettlementReadbackMismatch ], OrdinaryPostMergeSettlement.execute plan writerBinding trusted signed SettlementNoCut runtime)
+    runtime.ReadbackOverride <- None
 
     let afterWrite = Runtime(plan, None, None)
     Assert.Equal(Ok(SettlementInterrupted "after-effect"), OrdinaryPostMergeSettlement.execute plan writerBinding trusted signed OrdinarySettlementCut.StopAfterEffect afterWrite)
