@@ -65,3 +65,104 @@ per-admission JWT issuer/process composition, claim-journal reader, provider
 reconciliation, installed runtime acceptance, or live write exists. The ordinary
 CLI production fence stays in place. The incorrect public trust anchor still
 blocks protected genesis installation.
+
+## 2026-09-24 current-anchor read-only handoff
+
+This section supersedes the earlier statements that the current public trust
+anchor is unavailable. The exact public `OperatingV1` anchor is readable at
+`/home/developer/.local/share/fs-gg-public/ledger-protection/operating-v1-trust-anchor.json`;
+its SHA-256 is `0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e87d9a779`.
+It pins authorizer public SPKI SHA-256
+`2dc8d29f8d5a675d070701dacd6dacf2ca3e368ecf823fa9eaf560ddd22d77be`.
+The older `trust-anchor.json` is unchanged and must not be substituted.
+
+The read-only `eng/run-v1-admission-genesis.fsx prepare` check passed on
+Coordination `main` source commit `4f8b7f7b7acb22bfa2cc80a7752f6cc3a185c1b4`
+(tree `80547c83d176873c55de8cf21ead6a187393e66d`) against `.github/main`
+workflow revision `d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5`.
+It produced genesis intent SHA-256
+`e32bc9f6ddc547fb8eb57a643a3dc9a47d82d6a1fa42d439ca0d9e6cefee8f86`
+and expected genesis commit `34f1ea8796e5a0bef515705c81a92fcb62620928`.
+An independent `git ls-remote` of the canonical admission operation ref returned
+no ref. No protected workflow was dispatched and no key, JWT, token, signature,
+or journal write was used in this check.
+
+Main/SystemAdmin reported in [PR #508](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808787528)
+that Work and Main now hold matching Secret Service records, including the
+current authorizer under distinct `service=fsgg-v1-admission` attributes. This
+is a host custody report, not independently verified in this container. Main
+also [reported exact later user wording](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808930572)
+authorizing additive secret sync so work could continue on either computer.
+The user has now directly confirmed additive synchronization in this fdev
+thread, superseding the earlier Work-only signer-route constraint. The older Main wallet
+authorizer fingerprint `54568140db351fbc525043601cec0ecbffda12e235436d44d68bed10f14fb7d6`
+remains nonmatching and must not sign.
+
+Candidate source revision `e53208d` in PR #508 selects the distinct current
+Main record by exact key ID, SPKI and anchor digest, and refuses altered
+anchor bytes before lookup. Synthetic controls cover old/wrong key, wrong
+anchor and missing record; 3 custody and 4 protected-read tests pass. This is
+source qualification only. The broader ledger-operations validator also passed
+with the exact pinned .NET SDK. Main [reported a read-only host check](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808996870)
+of all five exact lookup attributes, the derived public SPKI and the public
+anchor digest; this report has not been independently reproduced from this
+container. The PR is not auto-merged, and no Main-host `sign-intent` may be
+invoked until the source is reviewed and merged and the separate native
+protected approval is complete.
+
+The handoff intake draft validated, but `fsgg-coord intake apply` refused its
+production v1 admission room read because the journal is not installed. It
+created no issue. Main responded in the existing PR #508 thread, so that
+thread is the active handoff channel for this request; the Work-only signer
+draft and its location constraint are superseded by direct user confirmation.
+Source-only work may continue in
+parallel. Protected genesis still requires (1) a reviewed custody/signing
+interface at the user-approved host and independent custody verification, (2) the
+separately approved protected workflow and ordinary-App credential handoff,
+and (3) exact expected-absent installation with independent durable readback.
+Custody evidence, source tests and this plan are not approval.
+
+## 2026-09-24 custody reconciliation
+
+An earlier SystemAdmin handoff message reported directly in the fdev user thread that
+the current matching authorizer private key remains on Work, while Main Secret
+Service has only the older, nonmatching authorizer key. This directly conflicts
+with the earlier Main-host [read-only receipt](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808996870)
+claiming that an exact current record is present on Main. The user subsequently
+confirmed directly that additive synchronization was authorized and completed:
+both KDE wallets hold the same six FS-GG records with matching lookup attributes
+and public SPKI fingerprints, including the distinct current OperatingV1 record;
+the older Main authorizer remains unchanged. This supersedes the Work-only
+route. The host inventory remains a reported observation, not a wallet read
+independently performed from this container.
+
+PR #508 contains the exact-record source candidate and synthetic refusal tests.
+It remains draft with auto-merge disabled pending source review. The next gate
+is a reviewed and merged helper with old/wrong-key, wrong-anchor, missing-record
+and native-approval refusal controls. The separate protected workflow approval,
+fresh authority/ref readback and exact installed-state readback follow; custody
+evidence and the user's synchronization authorization are not approval for a
+protected write. Governed issue intake previously failed closed, so the PR is
+the active handoff thread and no issue URL exists. No signer invocation, JWT
+issuance, workflow dispatch, or journal mutation occurred in this source step.
+
+Main/SystemAdmin's source review found no exact-record mismatch but identified
+that the existing `issue-jwt` CLI could print a bearer token to terminal stdout.
+The helper now requires FIFO stdout before the native approval read or key lookup;
+synthetic CLI controls reject both terminal and regular-file stdout. Four custody
+tests and four protected-read tests pass. A real JWT was not issued. This safeguard
+is part of the reviewed-source gate, not evidence of protected approval.
+
+The first PR #508 validation [run 35966388039](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35966388039)
+failed when the `formal-review-epoch` negative control exhausted Apalache's
+300-second execution budget after an early startup retry. A failed-job rerun
+passed that shard but the formal aggregate rejected a missing/foreign-file set;
+the run contained two same-named review-epoch artifacts from different attempts.
+No formal model was changed or invariant weakened. A fresh, separate ordinary
+validation [run 35971759660](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35971759660)
+bound candidate `e38743819acee1f1f3c5340e8ae98861c9be1c69` and base
+`4f8b7f7b7acb22bfa2cc80a7752f6cc3a185c1b4` in its downloaded obligation
+artifact and passed every job, including the formal and overall aggregates.
+Because that manual run is not a green PR-associated check, the PR still needs
+fresh head-associated validation before merge. Neither CI run was the protected
+admission workflow or authorized a signer, JWT, or journal mutation.
