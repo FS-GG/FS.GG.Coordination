@@ -54,6 +54,7 @@
     <Compile Include="GitHubSandboxClosureTests.fs" />
     <Compile Include="GitHubCompleteDiscoveryTests.fs" />
     <Compile Include="GitHubImmutableManifestTests.fs" />
+    <Compile Include="GitHubMigrationInspectTests.fs" />
     <Compile Include="GitHubTypedTransformTests.fs" />
     <Compile Include="GitHubLiveOperationTests.fs" />
     <Compile Include="GitHubSealedHistoryTests.fs" />
