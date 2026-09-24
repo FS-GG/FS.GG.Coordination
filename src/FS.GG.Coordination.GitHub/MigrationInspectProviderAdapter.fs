@@ -516,8 +516,16 @@ module MigrationInspectProviderAdapter =
                     | "ProjectV2ItemFieldMilestoneValue" -> value.GetProperty("milestone") |> ignore
                     | "ProjectV2ItemFieldMultiSelectValue" ->
                         let options = value.GetProperty("options").EnumerateArray() |> Seq.toList
-                        options |> List.iter (fun option ->
-                            option.GetProperty("id") |> ignore; option.GetProperty("name") |> ignore)
+                        let entries =
+                            options |> List.map (fun option ->
+                                option.GetProperty("id").GetString(), option.GetProperty("name").GetString())
+                        let ids = entries |> List.map fst
+                        let names = entries |> List.map snd
+                        if entries |> List.exists (fun (id, name) ->
+                            String.IsNullOrWhiteSpace id || String.IsNullOrWhiteSpace name)
+                           || (ids |> Set.ofList |> Set.count) <> ids.Length
+                           || (names |> Set.ofList |> Set.count) <> names.Length then
+                            failwith "multi-select-options"
                     | "ProjectV2ItemFieldIterationValue" ->
                         for name in [ "iterationId"; "startDate"; "duration" ] do
                             value.GetProperty(name) |> ignore
@@ -551,7 +559,7 @@ module MigrationInspectProviderAdapter =
                  population.PageCount population.TotalCount population.Items _.ItemNodeId
                  (parseValueNode options) captures
 
-    let combineProjectItemsAndValues (items: MigrationProjectItemPopulation)
+    let internal combineProjectItemsAndValues (items: MigrationProjectItemPopulation)
                                      (values: MigrationProjectValuePopulation)
                                      (membership: GitHubMigrationInspectAuthority)
                                      (valuePages: GitHubMigrationInspectAuthority) =
@@ -578,6 +586,16 @@ module MigrationInspectProviderAdapter =
 
 type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
                                      transport: IMigrationGitHubReadTransport) =
+    let fieldProofs = System.Collections.Generic.Dictionary<int * string, string>()
+    let cohortDigest = GitHubMigrationInspect.cohortSha256 options.Cohort
+    let fieldFingerprint (proof: GitHubMigrationInspectAuthority) =
+        proof.Pages
+        |> List.collect (fun page ->
+            [ page.RequestIdentitySha256; page.PayloadSha256
+              defaultArg page.NextRequestIdentitySha256 "terminal" ])
+        |> List.map (fun part -> $"{Encoding.UTF8.GetByteCount part}:{part}")
+        |> String.concat ""
+        |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     interface IGitHubMigrationInspectSource with
         member _.ReadAuthority(passOrdinal, authority) =
             if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
@@ -588,6 +606,7 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
                 |> Result.bind (fun population ->
                     MigrationInspectProviderAdapter.bindIssues options population capture.Calls)
             elif authority = "project-items" then
+                lock fieldProofs (fun () -> fieldProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let membershipCapture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
                 MigrationGitHubRead.readProjectItems options.Project membershipCapture
                 |> Result.mapError (fun failure -> $"project-read:{failure}")
@@ -599,11 +618,35 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
                         |> Result.mapError (fun failure -> $"project-value-read:{failure}")
                         |> Result.bind (fun values ->
                             MigrationInspectProviderAdapter.bindProjectValues options values valueCapture.Calls
-                            |> Result.bind (MigrationInspectProviderAdapter.combineProjectItemsAndValues items values membership))))
+                            |> Result.bind (fun valueProof ->
+                                let fieldCapture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options "project-fields")
+                                MigrationGitHubRead.readProjectFields options.Project fieldCapture
+                                |> Result.mapError (fun failure -> $"project-field-read:{failure}")
+                                |> Result.bind (fun fields ->
+                                    MigrationInspectProviderAdapter.bindProjectFields options fields fieldCapture.Calls
+                                    |> Result.bind (fun fieldProof ->
+                                        MigrationGitHubRead.reconcileProject items fields values
+                                        |> Result.mapError (fun failure -> $"project-reconcile:{failure}")
+                                        |> Result.bind (fun _ ->
+                                            MigrationInspectProviderAdapter.combineProjectItemsAndValues items values membership valueProof
+                                            |> Result.map (fun combined ->
+                                                lock fieldProofs (fun () ->
+                                                    fieldProofs.[(passOrdinal, cohortDigest)] <- fieldFingerprint fieldProof)
+                                                combined))))))))
             elif authority = "project-fields" then
-                let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
-                MigrationGitHubRead.readProjectFields options.Project capture
-                |> Result.mapError (fun failure -> $"project-field-read:{failure}")
-                |> Result.bind (fun population ->
-                    MigrationInspectProviderAdapter.bindProjectFields options population capture.Calls)
+                let expected =
+                    lock fieldProofs (fun () ->
+                        match fieldProofs.TryGetValue((passOrdinal, cohortDigest)) with
+                        | true, proof -> Some proof | _ -> None)
+                match expected with
+                | None -> Error "project-item-field-proof-required"
+                | Some fingerprint ->
+                    let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
+                    MigrationGitHubRead.readProjectFields options.Project capture
+                    |> Result.mapError (fun failure -> $"project-field-read:{failure}")
+                    |> Result.bind (fun population ->
+                        MigrationInspectProviderAdapter.bindProjectFields options population capture.Calls)
+                    |> Result.bind (fun proof ->
+                        if fieldFingerprint proof = fingerprint then Ok proof
+                        else Error "project-field-proof-drift")
             else Error $"authority-adapter-unavailable:{authority}"

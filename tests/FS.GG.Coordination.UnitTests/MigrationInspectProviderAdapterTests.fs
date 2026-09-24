@@ -152,7 +152,8 @@ let ``Project adapter binds GraphQL owner cursor and copy content`` () =
     let values =
         projectValuePage 2 "false" "null"
             """[{"id":"ITEM_1","updatedAt":"2026-09-25T10:00:00Z","fieldValues":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}},{"id":"ITEM_2","updatedAt":"2026-09-25T10:01:00Z","fieldValues":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}]"""
-    let source = MigrationInspectProviderAdapter(options, FakeTransport [ reply first; reply second; reply values ])
+    let fields = projectFieldPage 0 "false" "null" "[]"
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [ reply first; reply second; reply values; reply fields ])
                  :> IGitHubMigrationInspectSource
     match source.ReadAuthority(1, "project-items") with
     | Ok value ->
@@ -243,8 +244,14 @@ let ``Project field adapter binds raw declarations and terminal cursor chain`` (
     let status = """{"__typename":"ProjectV2SingleSelectField","id":"FIELD_2","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"OPT_1","name":"Ready"}]}"""
     let first = projectFieldPage 2 "true" "\"field-cursor\"" $"[{title}]"
     let last = projectFieldPage 2 "false" "null" $"[{status}]"
-    let source = MigrationInspectProviderAdapter(options, FakeTransport [ reply first; reply last ])
+    let emptyMembership = projectPage 0 "false" "null" "[]"
+    let emptyValues = projectValuePage 0 "false" "null" "[]"
+    let source = MigrationInspectProviderAdapter(options,
+                     FakeTransport [ reply emptyMembership; reply emptyValues
+                                     reply first; reply last; reply first; reply last ])
                  :> IGitHubMigrationInspectSource
+    Assert.True(source.ReadAuthority(1, "project-fields") |> Result.isError)
+    Assert.True(source.ReadAuthority(1, "project-items") |> Result.isOk)
     match source.ReadAuthority(1, "project-fields") with
     | Ok value ->
         Assert.Equal(2, value.Pages.Length)
@@ -263,8 +270,8 @@ let ``Project field adapter binds raw declarations and terminal cursor chain`` (
             | other -> other)
     Assert.Equal(Error "project-request-scope",
                  MigrationInspectProviderAdapter.bindProjectFields options population forged)
-    Assert.True((MigrationInspectProviderAdapter(options, FakeTransport [ reply first ])
-                 :> IGitHubMigrationInspectSource).ReadAuthority(1, "project-fields") |> Result.isError)
+    Assert.True((MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource).ReadAuthority(2, "project-fields") |> Result.isError)
 
 [<Fact>]
 let ``Project value adapter binds raw values and refuses typed or nested drift`` () =
@@ -301,6 +308,20 @@ let ``Project value adapter binds raw values and refuses typed or nested drift``
             | other -> request, other)
     Assert.Equal(Error "project-value-shape",
                  MigrationInspectProviderAdapter.bindProjectValues options population nestedCapture)
+    let multi =
+        """{"__typename":"ProjectV2ItemFieldMultiSelectValue","field":{"id":"FIELD_1"},"options":[{"id":"OPT_1","name":"Ready"},{"id":"OPT_2","name":"Done"}]}"""
+    let multiItem =
+        $"""{{"id":"ITEM_1","updatedAt":"2026-09-25T10:00:00Z","fieldValues":{{"totalCount":1,"nodes":[{multi}],"pageInfo":{{"hasNextPage":false,"endCursor":null}}}}}}"""
+    let multiBody = projectValuePage 1 "false" "null" $"[{multiItem}]"
+    let multiPopulation, multiCalls = readProjectValues [ reply multiBody ]
+    let duplicateOption = multiBody.Replace("\"OPT_2\"", "\"OPT_1\"")
+    let duplicateCapture =
+        multiCalls |> List.map (fun (request, outcome) ->
+            match outcome with
+            | Response value -> request, Response { value with Body=duplicateOption }
+            | other -> request, other)
+    Assert.Equal(Error "project-value-shape",
+                 MigrationInspectProviderAdapter.bindProjectValues options multiPopulation duplicateCapture)
 
 [<Fact>]
 let ``Project value pages require terminal continuation and exact Project identity`` () =
@@ -342,15 +363,11 @@ let ``Project item and value streams retain distinct sorted subjects and refuse 
     let valueItem =
         """{"id":"ITEM_1","updatedAt":"2026-09-25T10:00:00Z","fieldValues":{"totalCount":0,"nodes":[],"pageInfo":{"hasNextPage":false,"endCursor":null}}}"""
     let valuesBody = projectValuePage 1 "false" "null" $"[{valueItem}]"
-    let items, itemCalls = readProjectItems [ reply membershipBody ]
-    let values, valueCalls = readProjectValues [ reply valuesBody ]
-    let itemProof =
-        match MigrationInspectProviderAdapter.bindProjectItems options items itemCalls with
-        | Ok proof -> proof | Error reason -> failwithf "Item proof refused: %s" reason
-    let valueProof =
-        match MigrationInspectProviderAdapter.bindProjectValues options values valueCalls with
-        | Ok proof -> proof | Error reason -> failwithf "Value proof refused: %s" reason
-    match MigrationInspectProviderAdapter.combineProjectItemsAndValues items values itemProof valueProof with
+    let fieldBody = projectFieldPage 0 "false" "null" "[]"
+    let source = MigrationInspectProviderAdapter(options,
+                     FakeTransport [ reply membershipBody; reply valuesBody; reply fieldBody ])
+                 :> IGitHubMigrationInspectSource
+    match source.ReadAuthority(1, "project-items") with
     | Ok combined ->
         Assert.Equal(2, combined.Pages.Length)
         Assert.Equal(2, combined.Read.Subjects.Length)
@@ -359,9 +376,43 @@ let ``Project item and value streams retain distinct sorted subjects and refuse 
         Assert.Equal(Some combined.Pages.[1].RequestIdentitySha256,
                      combined.Pages.[0].NextRequestIdentitySha256)
     | Error reason -> failwithf "Unexpected Project combination refusal: %s" reason
-    let drift = { values with Items=[ { values.Items.Head with UpdatedAt=DateTimeOffset.Parse("2026-09-25T11:00:00Z") } ] }
-    Assert.Equal(Error "project-item-value-drift",
-                 MigrationInspectProviderAdapter.combineProjectItemsAndValues items drift itemProof valueProof)
+    let driftItem = valueItem.Replace("10:00:00Z", "11:00:00Z")
+    let driftValues = projectValuePage 1 "false" "null" $"[{driftItem}]"
+    let drift = MigrationInspectProviderAdapter(options,
+                    FakeTransport [ reply membershipBody; reply driftValues; reply fieldBody ])
+                :> IGitHubMigrationInspectSource
+    Assert.True(drift.ReadAuthority(1, "project-items") |> Result.isError)
+
+[<Fact>]
+let ``Project inspect refuses unknown value field and changed same-pass field proof`` () =
+    let membership = projectPage 1 "false" "null" $"[{projectItem}]"
+    let unknownValue =
+        """{"__typename":"ProjectV2ItemFieldTextValue","id":"VALUE_1","field":{"id":"FIELD_UNKNOWN"},"text":"ready"}"""
+    let valueItem =
+        $"""{{"id":"ITEM_1","updatedAt":"2026-09-25T10:00:00Z","fieldValues":{{"totalCount":1,"nodes":[{unknownValue}],"pageInfo":{{"hasNextPage":false,"endCursor":null}}}}}}"""
+    let values = projectValuePage 1 "false" "null" $"[{valueItem}]"
+    let declared =
+        """{"__typename":"ProjectV2Field","id":"FIELD_1","name":"Title","dataType":"TITLE"}"""
+    let fieldPage = projectFieldPage 1 "false" "null" $"[{declared}]"
+    let source = MigrationInspectProviderAdapter(options,
+                     FakeTransport [ reply membership; reply values; reply fieldPage ])
+                 :> IGitHubMigrationInspectSource
+    Assert.Contains("undeclared-or-duplicate-field",
+                    source.ReadAuthority(1, "project-items") |> function Error reason -> reason | Ok _ -> "")
+    Assert.Equal(Error "project-item-field-proof-required",
+                 source.ReadAuthority(1, "project-fields"))
+
+    let emptyMembership = projectPage 0 "false" "null" "[]"
+    let emptyValues = projectValuePage 0 "false" "null" "[]"
+    let changedDeclaration = declared.Replace("FIELD_1", "FIELD_2").Replace("Title", "Other")
+    let changedFieldPage = projectFieldPage 1 "false" "null" $"[{changedDeclaration}]"
+    let changed = MigrationInspectProviderAdapter(options,
+                      FakeTransport [ reply emptyMembership; reply emptyValues; reply fieldPage
+                                      reply changedFieldPage ])
+                  :> IGitHubMigrationInspectSource
+    Assert.True(changed.ReadAuthority(1, "project-items") |> Result.isOk)
+    Assert.Equal(Error "project-field-proof-drift", changed.ReadAuthority(1, "project-fields"))
+    Assert.Equal(Error "project-item-field-proof-required", changed.ReadAuthority(2, "project-fields"))
     let noCalls = FakeTransport []
     let unsupported = MigrationInspectProviderAdapter(options, noCalls) :> IGitHubMigrationInspectSource
     Assert.Equal(Error "authority-adapter-unavailable:claim-and-event-streams",

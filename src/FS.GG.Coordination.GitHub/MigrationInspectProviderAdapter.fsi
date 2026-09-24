@@ -45,10 +45,3 @@ module MigrationInspectProviderAdapter =
         population:MigrationProjectValuePopulation ->
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
-
-    val combineProjectItemsAndValues:
-        items:MigrationProjectItemPopulation ->
-        values:MigrationProjectValuePopulation ->
-        membership:GitHubMigrationInspectAuthority ->
-        valuePages:GitHubMigrationInspectAuthority ->
-            Result<GitHubMigrationInspectAuthority, string>
