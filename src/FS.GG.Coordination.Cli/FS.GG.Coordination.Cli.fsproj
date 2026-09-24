@@ -24,6 +24,7 @@
     <Compile Include="LedgerProtectionCommand.fs" />
     <Compile Include="ObserverViewCommand.fs" />
     <Compile Include="DeliveryCommand.fs" />
+    <Compile Include="OrdinarySettlementCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
