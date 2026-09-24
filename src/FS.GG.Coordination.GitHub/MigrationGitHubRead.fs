@@ -94,6 +94,45 @@ type MigrationCustomProperties =
       Definitions: MigrationCustomPropertyDefinition list
       Values: MigrationCustomPropertyValue list }
 
+type MigrationRulesetListPage =
+    { ListRequestedUri: string
+      ListPayloadJson: string
+      ListPayloadSha256: string
+      ListNextUri: string option }
+
+type MigrationRulesetBypassActor =
+    { ActorId: int64 option
+      ActorType: string
+      BypassMode: string }
+
+type MigrationRulesetRule =
+    { RuleType: string
+      ParametersJson: string option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRepositoryRuleset =
+    { RulesetId: int64
+      RulesetNodeId: string
+      RulesetName: string
+      Target: string
+      Enforcement: string
+      UpdatedAt: DateTimeOffset
+      IncludeRefs: string list
+      ExcludeRefs: string list
+      BypassActors: MigrationRulesetBypassActor list
+      Rules: MigrationRulesetRule list
+      DetailUri: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRepositoryRulesets =
+    { RepositoryId: int64
+      PageCount: int
+      Terminal: bool
+      ListPages: MigrationRulesetListPage list
+      Rulesets: MigrationRepositoryRuleset list }
+
 type MigrationPullRequestRecord =
     { Number: int
       DatabaseId: int64
@@ -750,6 +789,299 @@ module MigrationGitHubRead =
                                                  ValuesPayloadSha256=sha valuesBody
                                                  Definitions=definitions
                                                  Values=values })))))
+
+    type private RulesetSummary =
+        { RulesetId: int64
+          RulesetNodeId: string
+          RulesetName: string
+          RulesetTarget: string option
+          RulesetEnforcement: string
+          RulesetUpdatedAt: DateTimeOffset }
+
+    let private sequenceResults values =
+        values
+        |> List.fold (fun state value ->
+            match state, value with
+            | Ok previous, Ok item -> Ok(item :: previous)
+            | Error failure, _ | _, Error failure -> Error failure) (Ok [])
+        |> Result.map List.rev
+
+    let private rulesetTimestamp (element: JsonElement) =
+        requiredString "updated_at" element
+        |> Result.bind (fun value ->
+            let mutable timestamp = DateTimeOffset.MinValue
+            if DateTimeOffset.TryParse(value, &timestamp) then Ok timestamp
+            else Error(MigrationReadFailure.MalformedResponse "invalid:ruleset-updated-at"))
+
+    let private rulesetTarget (element: JsonElement) (required: bool) =
+        let mutable value = Unchecked.defaultof<JsonElement>
+        if not (element.TryGetProperty("target", &value)) && not required then Ok None
+        else
+            requiredString "target" element
+            |> Result.bind (fun target ->
+                match target with
+                | "branch" | "tag" -> Ok(Some target)
+                | "push" -> Error(MigrationReadFailure.MalformedResponse "unsupported:push-ruleset")
+                | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:ruleset-target"))
+
+    let private rulesetSource (options: MigrationGitHubReadOptions) (element: JsonElement) =
+        match requiredString "source_type" element, requiredString "source" element with
+        | Ok "Repository", Ok source when source = $"{options.Owner}/{options.Repository}" -> Ok()
+        | Ok _, Ok _ -> Error(MigrationReadFailure.MalformedResponse "unsupported:inherited-ruleset")
+        | Error failure, _ | _, Error failure -> Error failure
+
+    let private rulesetEnforcement allowEnabled (element: JsonElement) =
+        requiredString "enforcement" element
+        |> Result.bind (function
+            | "active" -> Ok "active"
+            | "enabled" when allowEnabled -> Ok "active"
+            | "disabled" -> Ok "disabled"
+            | "evaluate" -> Ok "evaluate"
+            | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:ruleset-enforcement"))
+
+    let private rulesetSummary options (element: JsonElement) =
+        uniqueObjectMembers element
+        |> Result.bind (fun () ->
+            match requiredInt64 "id" element, requiredString "node_id" element,
+                  requiredString "name" element, rulesetTimestamp element,
+                  rulesetSource options element, rulesetTarget element false,
+                  rulesetEnforcement true element with
+            | Ok id, Ok nodeId, Ok name, Ok updated, Ok (), Ok target, Ok enforcement ->
+                Ok { RulesetId=id; RulesetNodeId=nodeId; RulesetName=name
+                     RulesetTarget=target; RulesetEnforcement=enforcement
+                     RulesetUpdatedAt=updated }
+            | Error failure, _, _, _, _, _, _ | _, Error failure, _, _, _, _, _
+            | _, _, Error failure, _, _, _, _ | _, _, _, Error failure, _, _, _
+            | _, _, _, _, Error failure, _, _ | _, _, _, _, _, Error failure, _
+            | _, _, _, _, _, _, Error failure -> Error failure)
+
+    let private rulesetStrings fieldName (element: JsonElement) (requireItems: bool) =
+        property fieldName element
+        |> Result.bind (fun value ->
+            if value.ValueKind <> JsonValueKind.Array then
+                Error(MigrationReadFailure.MalformedResponse $"invalid:{fieldName}")
+            else
+                let entries = value.EnumerateArray() |> Seq.toList
+                let names =
+                    entries
+                    |> List.choose (fun entry ->
+                        if entry.ValueKind = JsonValueKind.String then Some(entry.GetString()) else None)
+                if names.Length <> entries.Length
+                   || (requireItems && List.isEmpty names)
+                   || names |> List.exists (fun name -> isNull name || not (text name))
+                   || (names |> Set.ofList |> Set.count) <> names.Length then
+                    Error(MigrationReadFailure.MalformedResponse $"invalid:{fieldName}")
+                else Ok names)
+
+    let private rulesetConditions (element: JsonElement) =
+        property "conditions" element
+        |> Result.bind (property "ref_name")
+        |> Result.bind (fun refName ->
+            uniqueObjectMembers refName
+            |> Result.bind (fun () ->
+                match rulesetStrings "include" refName true, rulesetStrings "exclude" refName false with
+                | Ok includes, Ok excludes -> Ok(includes, excludes)
+                | Error failure, _ | _, Error failure -> Error failure))
+
+    let private rulesetBypassActor (target: string) (element: JsonElement) =
+        uniqueObjectMembers element
+        |> Result.bind (fun () ->
+            match requiredString "actor_type" element, requiredString "bypass_mode" element,
+                  property "actor_id" element with
+            | Ok actorType, Ok mode, Ok actorId ->
+                let allowedType =
+                    Set.contains actorType
+                        (set [ "Integration"; "OrganizationAdmin"; "RepositoryRole"; "Team"
+                               "DeployKey"; "User" ])
+                let allowedMode = Set.contains mode (set [ "always"; "pull_request"; "exempt" ])
+                let mutable parsedId = 0L
+                let id =
+                    if actorId.ValueKind = JsonValueKind.Null then Ok None
+                    elif actorId.ValueKind = JsonValueKind.Number
+                         && actorId.TryGetInt64(&parsedId) && parsedId > 0L then Ok(Some parsedId)
+                    else Error(MigrationReadFailure.MalformedResponse "invalid:bypass-actor-id")
+                id
+                |> Result.bind (fun value ->
+                    if not allowedType || not allowedMode
+                       || (mode = "pull_request" && (target <> "branch" || actorType = "DeployKey"))
+                       || (value.IsNone && actorType <> "DeployKey" && actorType <> "OrganizationAdmin")
+                       || (value.IsSome && actorType = "DeployKey") then
+                        Error(MigrationReadFailure.MalformedResponse "invalid:bypass-actor")
+                    else Ok { ActorId=value; ActorType=actorType; BypassMode=mode })
+            | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+
+    let private rulesetRule (element: JsonElement) =
+        uniqueObjectMembers element
+        |> Result.bind (fun () ->
+            requiredString "type" element
+            |> Result.bind (fun kind ->
+                let known =
+                    set [ "creation"; "update"; "deletion"; "required_linear_history"
+                          "required_signatures"; "pull_request"; "required_status_checks"
+                          "non_fast_forward"; "commit_message_pattern"; "commit_author_email_pattern"
+                          "committer_email_pattern"; "branch_name_pattern"; "tag_name_pattern"
+                          "required_deployments"; "code_scanning"; "file_path_restriction"
+                          "max_file_path_length"; "file_extension_restriction"; "max_file_size"
+                          "required_workflows"; "copilot_code_review" ]
+                let mutable parameters = Unchecked.defaultof<JsonElement>
+                let parametersJson =
+                    if not (element.TryGetProperty("parameters", &parameters)) then Ok None
+                    elif parameters.ValueKind = JsonValueKind.Object then
+                        uniqueObjectMembers parameters
+                        |> Result.map (fun () -> Some(parameters.GetRawText()))
+                    else Error(MigrationReadFailure.MalformedResponse "invalid:rule-parameters")
+                parametersJson
+                |> Result.bind (fun value ->
+                    if not (Set.contains kind known) then
+                        Error(MigrationReadFailure.MalformedResponse "unsupported:rule-type")
+                    else
+                        let payload = element.GetRawText()
+                        Ok { RuleType=kind; ParametersJson=value; PayloadJson=payload
+                             PayloadSha256=sha payload })))
+
+    let private rulesetDetail options (summary: RulesetSummary) (uri: Uri) (payload: string) =
+        parse payload
+        |> Result.bind (fun document ->
+            use document = document
+            let root = document.RootElement
+            uniqueObjectMembers root
+            |> Result.bind (fun () ->
+                match requiredInt64 "id" root, requiredString "node_id" root,
+                      requiredString "name" root, rulesetTimestamp root,
+                      rulesetSource options root, rulesetTarget root true,
+                      rulesetEnforcement false root, rulesetConditions root,
+                      property "bypass_actors" root, property "rules" root with
+                | Ok id, Ok nodeId, Ok name, Ok updated, Ok (), Ok(Some target),
+                  Ok enforcement, Ok(includes, excludes), Ok bypass, Ok rules ->
+                    if id <> summary.RulesetId || nodeId <> summary.RulesetNodeId
+                       || name <> summary.RulesetName || updated <> summary.RulesetUpdatedAt
+                       || enforcement <> summary.RulesetEnforcement
+                       || (summary.RulesetTarget.IsSome && summary.RulesetTarget <> Some target) then
+                        Error MigrationReadFailure.PopulationDrift
+                    elif bypass.ValueKind <> JsonValueKind.Array || rules.ValueKind <> JsonValueKind.Array then
+                        Error(MigrationReadFailure.MalformedResponse "invalid:ruleset-detail")
+                    else
+                        let actors =
+                            bypass.EnumerateArray() |> Seq.map (rulesetBypassActor target) |> Seq.toList
+                            |> sequenceResults
+                        let parsedRules =
+                            rules.EnumerateArray() |> Seq.map rulesetRule |> Seq.toList
+                            |> sequenceResults
+                        match actors, parsedRules with
+                        | Ok bypassActors, Ok ruleRecords ->
+                            bypassActors
+                            |> collectUnique (fun actor -> $"{actor.ActorType}:{actor.ActorId}")
+                            |> Result.map (fun uniqueActors ->
+                                { RulesetId=id; RulesetNodeId=nodeId; RulesetName=name; Target=target
+                                  Enforcement=enforcement; UpdatedAt=updated
+                                  IncludeRefs=includes; ExcludeRefs=excludes
+                                  BypassActors=uniqueActors; Rules=ruleRecords
+                                  DetailUri=uri.AbsoluteUri; PayloadJson=payload; PayloadSha256=sha payload })
+                        | Error failure, _ | _, Error failure -> Error failure
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok None, _, _, _, _ ->
+                    Error(MigrationReadFailure.MalformedResponse "missing:ruleset-target")
+                | Error failure, _, _, _, _, _, _, _, _, _
+                | _, Error failure, _, _, _, _, _, _, _, _
+                | _, _, Error failure, _, _, _, _, _, _, _
+                | _, _, _, Error failure, _, _, _, _, _, _
+                | _, _, _, _, Error failure, _, _, _, _, _
+                | _, _, _, _, _, Error failure, _, _, _, _
+                | _, _, _, _, _, _, Error failure, _, _, _
+                | _, _, _, _, _, _, _, Error failure, _, _
+                | _, _, _, _, _, _, _, _, Error failure, _
+                | _, _, _, _, _, _, _, _, _, Error failure -> Error failure))
+
+    let private exactRulesetPageQuery pageNumber (uri: Uri) =
+        let parts = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+        let values =
+            parts
+            |> Array.choose (fun part ->
+                let pieces = part.Split('=', 2)
+                if pieces.Length = 2 then
+                    Some(Uri.UnescapeDataString pieces.[0], Uri.UnescapeDataString pieces.[1])
+                else None)
+        let expected =
+            Map.ofList [ "per_page", "100"; "page", string pageNumber; "includes_parents", "true" ]
+        values.Length = expected.Count && values.Length = parts.Length
+        && (values |> Array.map fst |> Set.ofArray |> Set.count) = expected.Count
+        && (values |> Array.forall (fun (key, value) -> Map.tryFind key expected = Some value))
+
+    let readRepositoryBranchTagRulesets (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            readRepository options transport
+            |> Result.bind (fun repositoryId ->
+                let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+                let listUri = Uri(options.ApiBase, $"{repositoryPath}/rulesets?per_page=100&page=1&includes_parents=true")
+                let get (uri: Uri) =
+                    response transport
+                        (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                                ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                    |> Result.bind (fun result ->
+                        if result.StatusCode = 200 then Ok result
+                        else Error(MigrationReadFailure.HttpRefused result.StatusCode))
+                let rec listPages (seen: Set<string>) (pageNumber: int)
+                                  (summaries: RulesetSummary list) (pages: MigrationRulesetListPage list)
+                                  (current: Uri) =
+                    if pageNumber > 1000 || Set.contains current.AbsoluteUri seen then
+                        Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                    elif current.Scheme <> listUri.Scheme || current.Authority <> listUri.Authority
+                         || (current.AbsolutePath <> listUri.AbsolutePath
+                             && current.AbsolutePath <> $"/repositories/{repositoryId}/rulesets")
+                         || not (exactRulesetPageQuery pageNumber current) then
+                        Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
+                    else
+                        get current
+                        |> Result.bind (fun result ->
+                            parse result.Body
+                            |> Result.bind (fun document ->
+                                use document = document
+                                if document.RootElement.ValueKind <> JsonValueKind.Array then
+                                    Error(MigrationReadFailure.MalformedResponse "invalid:ruleset-list")
+                                else
+                                    let parsed =
+                                        document.RootElement.EnumerateArray()
+                                        |> Seq.map (rulesetSummary options) |> Seq.toList
+                                        |> sequenceResults
+                                    parsed
+                                    |> Result.bind (fun records ->
+                                        let link =
+                                            result.Headers
+                                            |> Map.toSeq
+                                            |> Seq.tryPick (fun (key, value) ->
+                                                if String.Equals(key, "link", StringComparison.OrdinalIgnoreCase) then
+                                                    Some value else None)
+                                            |> Option.defaultValue ""
+                                        match Transport.tryNextLink link with
+                                        | Error failure ->
+                                            Error(MigrationReadFailure.PaginationRefused $"{failure}")
+                                        | Ok next ->
+                                            let page =
+                                                { ListRequestedUri=current.AbsoluteUri
+                                                  ListPayloadJson=result.Body; ListPayloadSha256=sha result.Body
+                                                  ListNextUri=next |> Option.map _.AbsoluteUri }
+                                            let allRecords = summaries @ records
+                                            let allPages = pages @ [ page ]
+                                            match next with
+                                            | Some uri ->
+                                                listPages (Set.add current.AbsoluteUri seen)
+                                                    (pageNumber + 1) allRecords allPages uri
+                                            | None -> Ok(allRecords, allPages))))
+                listPages Set.empty 1 [] [] listUri
+                |> Result.bind (fun (summaries, pages) ->
+                    summaries
+                    |> collectUnique (fun (item: RulesetSummary) -> string item.RulesetId)
+                    |> Result.bind (collectUnique (fun (item: RulesetSummary) -> item.RulesetNodeId))
+                    |> Result.bind (fun unique ->
+                        unique
+                        |> List.map (fun summary ->
+                            let uri = Uri(options.ApiBase, $"{repositoryPath}/rulesets/{summary.RulesetId}?includes_parents=true")
+                            get uri
+                            |> Result.bind (fun result -> rulesetDetail options summary uri result.Body))
+                        |> sequenceResults
+                        |> Result.map (fun rulesets ->
+                            { RepositoryId=repositoryId; PageCount=pages.Length; Terminal=true
+                              ListPages=pages; Rulesets=List.sortBy _.RulesetId rulesets }))))
 
     let private parseIssue (value: JsonElement) =
         match requiredInt "number" value, requiredInt64 "id" value, requiredString "node_id" value,

@@ -254,6 +254,108 @@ let ``custom properties require an explicitly set value when schema says so`` ()
     Assert.Equal(Error(MigrationReadFailure.MalformedResponse "missing:required-property-value"),
                  MigrationGitHubRead.readCustomProperties options transport)
 
+let private rulesetSummary id name target enforcement =
+    let targetField = target |> Option.map (fun value -> $"\"target\":\"{value}\",") |> Option.defaultValue ""
+    $"""{{"id":{id},"node_id":"RRS_{id}","name":"{name}",{targetField}"source_type":"Repository","source":"FS-GG/copy","enforcement":"{enforcement}","updated_at":"2026-09-24T10:00:00Z"}}"""
+
+let private rulesetDetail id name target =
+    $"""{{"id":{id},"node_id":"RRS_{id}","name":"{name}","target":"{target}","source_type":"Repository","source":"FS-GG/copy","enforcement":"active","updated_at":"2026-09-24T10:00:00Z","conditions":{{"ref_name":{{"include":["refs/heads/main"],"exclude":[]}}}},"bypass_actors":[{{"actor_id":7,"actor_type":"Team","bypass_mode":"always"}}],"rules":[{{"type":"required_signatures"}}]}}"""
+
+[<Fact>]
+let ``repository rulesets close list pages and bind branch and tag details`` () =
+    let first = rulesetSummary 91 "main" None "enabled"
+    let second = rulesetSummary 92 "release" (Some "tag") "active"
+    let next = "https://api.github.test/repos/FS-GG/copy/rulesets?per_page=100&page=2&includes_parents=true"
+    let transport =
+        FakeTransport
+            [ repo
+              ok (Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ]) $"[{first}]"
+              ok Map.empty $"[{second}]"
+              ok Map.empty (rulesetDetail 91 "main" "branch")
+              ok Map.empty (rulesetDetail 92 "release" "tag") ]
+    match MigrationGitHubRead.readRepositoryBranchTagRulesets options transport with
+    | Error failure -> failwithf "unexpected ruleset refusal: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.Equal(2, observed.PageCount)
+        Assert.True(observed.Terminal)
+        Assert.Equal(2, observed.ListPages.Length)
+        Assert.Equal(Some next, observed.ListPages.Head.ListNextUri)
+        Assert.Equal(2, observed.Rulesets.Length)
+        Assert.Equal("branch", observed.Rulesets.Head.Target)
+        Assert.Equal("tag", observed.Rulesets.[1].Target)
+        Assert.Equal("active", observed.Rulesets.Head.Enforcement)
+        Assert.Single(observed.Rulesets.Head.BypassActors) |> ignore
+        Assert.Equal(5, transport.Requests.Length)
+        transport.Requests
+        |> List.iter (function
+            | Rest request -> Assert.Equal(Get, request.Method); Assert.True(request.Body.IsNone)
+            | _ -> failwith "ruleset reader issued GraphQL")
+
+[<Fact>]
+let ``repository rulesets refuse inherited and push targets before detail reads`` () =
+    let baseRow = rulesetSummary 91 "main" (Some "branch") "active"
+    for row in
+        [ baseRow.Replace("\"source_type\":\"Repository\"", "\"source_type\":\"Organization\"")
+          baseRow.Replace("\"target\":\"branch\"", "\"target\":\"push\"") ] do
+        let transport = FakeTransport [ repo; ok Map.empty $"[{row}]" ]
+        match MigrationGitHubRead.readRepositoryBranchTagRulesets options transport with
+        | Error(MigrationReadFailure.MalformedResponse _) -> ()
+        | outcome -> failwithf "inherited or push ruleset accepted: %A" outcome
+        Assert.Equal(2, transport.Requests.Length)
+
+[<Fact>]
+let ``repository rulesets refuse hidden bypass and malformed detail`` () =
+    let row = rulesetSummary 91 "main" (Some "branch") "active"
+    let detail = rulesetDetail 91 "main" "branch"
+    let malformed =
+        [ detail.Replace("\"bypass_actors\":[{\"actor_id\":7,\"actor_type\":\"Team\",\"bypass_mode\":\"always\"}],", "")
+          detail.Replace("\"include\":[\"refs/heads/main\"]", "\"include\":[]")
+          detail.Replace("\"rules\":[{\"type\":\"required_signatures\"}]", "\"rules\":[{\"type\":7}]")
+          detail.Replace("\"enforcement\":\"active\"", "\"enforcement\":\"disabled\"")
+          detail.Replace("2026-09-24T10:00:00Z", "2026-09-25T10:00:00Z")
+          detail.Replace("\"actor_id\":7,\"actor_type\":\"Team\",\"bypass_mode\":\"always\"",
+                         "\"actor_id\":7,\"actor_type\":\"Team\",\"bypass_mode\":\"always\"},{\"actor_id\":7,\"actor_type\":\"Team\",\"bypass_mode\":\"exempt\"") ]
+    for changed in malformed do
+        let transport = FakeTransport [ repo; ok Map.empty $"[{row}]"; ok Map.empty changed ]
+        match MigrationGitHubRead.readRepositoryBranchTagRulesets options transport with
+        | Error _ -> ()
+        | Ok _ -> failwith "hidden bypass or malformed ruleset accepted"
+
+[<Fact>]
+let ``repository rulesets refuse incomplete pages and provider failures`` () =
+    let row = rulesetSummary 91 "main" (Some "branch") "active"
+    let next = "https://api.github.test/repos/FS-GG/copy/rulesets?per_page=100&page=2&includes_parents=true"
+    let firstPage = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) $"[{row}]"
+    let repeated = FakeTransport [ repo; firstPage; ok Map.empty $"[{row}]" ]
+    match MigrationGitHubRead.readRepositoryBranchTagRulesets options repeated with
+    | Error(MigrationReadFailure.DuplicateIdentity _) -> ()
+    | outcome -> failwithf "changed page census accepted: %A" outcome
+    let escaped = "https://api.github.test/repos/FS-GG/foreign/rulesets?per_page=100&page=2&includes_parents=true"
+    let transport = FakeTransport [ repo; ok (Map.ofList [ "link", $"<{escaped}>; rel=\"next\"" ]) $"[{row}]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readRepositoryBranchTagRulesets options transport)
+    for status in [ 403; 404; 500 ] do
+        let refused =
+            Response
+                { StatusCode=status; Headers=Map.empty; Body="{}"; ETag=None
+                  RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+        let listFailure = FakeTransport [ repo; refused ]
+        Assert.Equal(Error(MigrationReadFailure.HttpRefused status),
+                     MigrationGitHubRead.readRepositoryBranchTagRulesets options listFailure)
+        let detailFailure = FakeTransport [ repo; ok Map.empty $"[{row}]"; refused ]
+        Assert.Equal(Error(MigrationReadFailure.HttpRefused status),
+                     MigrationGitHubRead.readRepositoryBranchTagRulesets options detailFailure)
+
+[<Fact>]
+let ``repository ruleset page evidence detects changed raw bytes across reads`` () =
+    let read body =
+        let transport = FakeTransport [ repo; ok Map.empty body ]
+        match MigrationGitHubRead.readRepositoryBranchTagRulesets options transport with
+        | Ok observed -> observed.ListPages.Head.ListPayloadSha256
+        | Error failure -> failwithf "unexpected empty ruleset refusal: %A" failure
+    Assert.NotEqual(read "[]", read " [ ] ")
+
 let private issueCensus () =
     let first = issue 1 "ISSUE_1"
     let second = issue 2 "ISSUE_2"

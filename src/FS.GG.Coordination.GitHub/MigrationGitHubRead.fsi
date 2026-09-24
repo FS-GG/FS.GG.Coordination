@@ -91,6 +91,46 @@ type MigrationCustomProperties =
       Definitions: MigrationCustomPropertyDefinition list
       Values: MigrationCustomPropertyValue list }
 
+/// Only repository-owned branch/tag rulesets. Inherited, push, or hidden bypass state refuses.
+type MigrationRulesetListPage =
+    { ListRequestedUri: string
+      ListPayloadJson: string
+      ListPayloadSha256: string
+      ListNextUri: string option }
+
+type MigrationRulesetBypassActor =
+    { ActorId: int64 option
+      ActorType: string
+      BypassMode: string }
+
+type MigrationRulesetRule =
+    { RuleType: string
+      ParametersJson: string option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRepositoryRuleset =
+    { RulesetId: int64
+      RulesetNodeId: string
+      RulesetName: string
+      Target: string
+      Enforcement: string
+      UpdatedAt: DateTimeOffset
+      IncludeRefs: string list
+      ExcludeRefs: string list
+      BypassActors: MigrationRulesetBypassActor list
+      Rules: MigrationRulesetRule list
+      DetailUri: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRepositoryRulesets =
+    { RepositoryId: int64
+      PageCount: int
+      Terminal: bool
+      ListPages: MigrationRulesetListPage list
+      Rulesets: MigrationRepositoryRuleset list }
+
 type MigrationPullRequestRecord =
     { Number: int
       DatabaseId: int64
@@ -353,6 +393,11 @@ module MigrationGitHubRead =
     val readCustomProperties:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationCustomProperties, MigrationReadFailure>
+
+    /// Read-only repository-owned branch/tag snapshot; refuses inherited, push and omitted bypass state.
+    val readRepositoryBranchTagRulesets:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryRulesets, MigrationReadFailure>
 
     val readIssues:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
