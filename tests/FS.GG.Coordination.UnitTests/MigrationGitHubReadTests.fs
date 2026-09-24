@@ -274,6 +274,60 @@ let ``issue comment stream refuses unavailable body and uncensused source`` () =
                  MigrationGitHubRead.readIssueComments options (issueCensus ()) 99 noRequests)
     Assert.Empty(noRequests.Requests)
 
+let private issueEvent id nodeId kind =
+    $"""{{"id":{id},"node_id":"{nodeId}","event":"{kind}","created_at":"2026-09-23T10:00:00Z","actor":null}}"""
+
+[<Fact>]
+let ``issue event stream retains terminal provider pages and system actor absence`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=100&page=2"
+    let firstRecord = issueEvent 401 "EVENT_401" "labeled"
+    let secondRecord = issueEvent 402 "EVENT_402" "added_to_project_v2"
+    let transport =
+        FakeTransport [ repo
+                        ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) $"[{firstRecord}]"
+                        ok Map.empty $"[{secondRecord}]" ]
+    match MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1 transport with
+    | Ok observed ->
+        Assert.Equal("ISSUE_1", observed.SubjectNodeId)
+        Assert.Equal(2, observed.PageCount)
+        Assert.Equal<string list>([ "labeled"; "added_to_project_v2" ],
+                                  observed.Events |> List.map _.EventKind)
+        Assert.Equal(None, observed.Events.Head.ActorLogin)
+        Assert.Equal(Some next, observed.Pages.Head.NextUri)
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method)
+            | _ -> failwith "issue event stream issued a non-REST request")
+    | Error failure -> failwithf "unexpected issue event refusal: %A" failure
+
+[<Fact>]
+let ``issue event stream refuses missing skipped and cross-subject pages`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=100&page=2"
+    let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1 (FakeTransport [ repo; first ]))
+    let skipped = FakeTransport [ repo; ok (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=100&page=3>; rel=\"next\"" ]) "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1 skipped)
+    let foreign = FakeTransport [ repo; ok (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/copy/issues/2/events?per_page=100&page=2>; rel=\"next\"" ]) "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1 foreign)
+
+[<Fact>]
+let ``issue event stream refuses duplicates malformed actor and uncensused issue`` () =
+    let first = issueEvent 401 "EVENT_401" "labeled"
+    let duplicate = FakeTransport [ repo; ok Map.empty $"[{first},{first}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "EVENT_401"),
+                 MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1 duplicate)
+    let badActor = first.Replace("\"actor\":null", "\"actor\":{}")
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "missing:login"),
+                 MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1
+                     (FakeTransport [ repo; ok Map.empty $"[{badActor}]" ]))
+    let noRequests = FakeTransport []
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "uncensused-issue"),
+                 MigrationGitHubRead.readIssueEvents options (issueCensus ()) 99 noRequests)
+    Assert.Empty(noRequests.Requests)
+
 [<Fact>]
 let ``native relation reader proves reciprocal parent and blocking directions`` () =
     let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] [relationNode "ISSUE_2" 42L]
