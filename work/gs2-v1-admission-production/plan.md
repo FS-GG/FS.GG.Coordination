@@ -145,3 +145,10 @@ evidence and the user's synchronization authorization are not approval for a
 protected write. Governed issue intake previously failed closed, so the PR is
 the active handoff thread and no issue URL exists. No signer invocation, JWT
 issuance, workflow dispatch, or journal mutation occurred in this source step.
+
+Main/SystemAdmin's source review found no exact-record mismatch but identified
+that the existing `issue-jwt` CLI could print a bearer token to terminal stdout.
+The helper now requires FIFO stdout before the native approval read or key lookup;
+synthetic CLI controls reject both terminal and regular-file stdout. Four custody
+tests and four protected-read tests pass. A real JWT was not issued. This safeguard
+is part of the reviewed-source gate, not evidence of protected approval.

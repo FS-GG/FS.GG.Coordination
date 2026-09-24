@@ -17,6 +17,7 @@ import json
 import os
 import pathlib
 import re
+import stat
 import subprocess
 import sys
 import time
@@ -270,6 +271,8 @@ def main() -> int:
     args = parser.parse_args()
     try:
         if args.command == "issue-jwt":
+            require(stat.S_ISFIFO(os.fstat(sys.stdout.fileno()).st_mode),
+                    "admission-jwt-output-not-pipe")
             sys.stdout.buffer.write(issue_jwt(args.run_id))
         else:
             require(not args.output.exists() and not args.output.is_symlink(),

@@ -10,6 +10,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import tempfile
 import unittest
 
 
@@ -155,6 +156,26 @@ class MainCustodyTests(unittest.TestCase):
                            "role", "authorizer", "key-id", custody.AUTHORIZER_KEY_ID,
                            "spki-sha256", custody.AUTHORIZER_SPKI_SHA256,
                            "trust-anchor-sha256", custody.TRUST_ANCHOR_SHA256]], calls)
+
+    def test_jwt_cli_refuses_non_pipe_stdout_before_native_read(self):
+        with tempfile.TemporaryFile() as output:
+            result = subprocess.run([sys.executable, str(SOURCE), "issue-jwt",
+                                     "--run-id", "42"], stdout=output,
+                                    stderr=subprocess.PIPE, check=False)
+            output.seek(0)
+            self.assertEqual(b"", output.read())
+        self.assertEqual(3, result.returncode)
+        self.assertIn(b"admission-jwt-output-not-pipe", result.stderr)
+        master, terminal = os.openpty()
+        try:
+            result = subprocess.run([sys.executable, str(SOURCE), "issue-jwt",
+                                     "--run-id", "42"], stdout=terminal,
+                                    stderr=subprocess.PIPE, check=False)
+            self.assertEqual(3, result.returncode)
+            self.assertIn(b"admission-jwt-output-not-pipe", result.stderr)
+        finally:
+            os.close(terminal)
+            os.close(master)
 
 
 if __name__ == "__main__":
