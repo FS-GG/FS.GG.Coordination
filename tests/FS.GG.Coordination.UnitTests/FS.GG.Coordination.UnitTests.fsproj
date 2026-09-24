@@ -14,6 +14,7 @@
     <Compile Include="GitHubReviewDeliveryTests.fs" />
     <Compile Include="GitHubOrdinaryDeliveryTests.fs" />
     <Compile Include="GitHubOrdinaryRuntimeTests.fs" />
+    <Compile Include="GitHubOrdinaryPostMergeSettlementTests.fs" />
     <Compile Include="GitHubLifecycleProjectionTests.fs" />
     <Compile Include="GitHubFleetShadowTests.fs" />
     <Compile Include="GitHubRepositoryProfileTests.fs" />
