@@ -3488,6 +3488,9 @@ finally:
 
             do! Task.Delay 50
             use client = new HttpClient()
+            // The fixture replaces its HTTP server on the same port. Avoid reusing
+            // a connection to the stopped server after the recovery wait.
+            client.DefaultRequestHeaders.ConnectionClose <- Nullable true
 
             let admissionBytes =
                 MainRouteAdmission.encode (MainRouteAdmission.commandId preparation) preparation
