@@ -25,6 +25,8 @@
     <Compile Include="ObserverViewCommand.fs" />
     <Compile Include="DeliveryCommand.fs" />
     <Compile Include="InstalledOrdinarySettlementProvider.fs" />
+    <Compile Include="MigrationInspectProviderAdapter.fsi" />
+    <Compile Include="MigrationInspectProviderAdapter.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

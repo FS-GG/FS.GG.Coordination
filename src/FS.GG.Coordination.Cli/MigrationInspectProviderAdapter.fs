@@ -1,9 +1,10 @@
-namespace FS.GG.Coordination.GitHub
+namespace FS.GG.Coordination.Cli
 
 open System
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Qualification.Contracts
 
 type MigrationInspectProviderOptions =
@@ -433,10 +434,11 @@ module MigrationInspectProviderAdapter =
             let name = item.GetProperty("name").GetString()
             let dataType = item.GetProperty("dataType").GetString()
             if List.exists String.IsNullOrWhiteSpace [ id; name; dataType ] then failwith "field-identity"
-            let readOptions (nameProperty: string) (values: JsonElement) =
+            let readOptions (nameProperty: string) (values: JsonElement) : MigrationProjectFieldOption list =
                 values.EnumerateArray()
                 |> Seq.map (fun value ->
-                    { Id=value.GetProperty("id").GetString(); Name=value.GetProperty(nameProperty).GetString() })
+                    ({ Id=value.GetProperty("id").GetString(); Name=value.GetProperty(nameProperty).GetString() }
+                     : MigrationProjectFieldOption))
                 |> Seq.toList
             let kind, optionsList =
                 match item.GetProperty("__typename").GetString() with

@@ -1,5 +1,6 @@
-namespace FS.GG.Coordination.GitHub
+namespace FS.GG.Coordination.Cli
 
+open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Qualification.Contracts
 
 type MigrationInspectProviderOptions =

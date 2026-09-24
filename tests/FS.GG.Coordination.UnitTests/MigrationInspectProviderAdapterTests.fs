@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open Xunit
 open FS.GG.Coordination.GitHub
+open FS.GG.Coordination.Cli
 open FS.GG.Coordination.Qualification.Contracts
 
 let private cohort =

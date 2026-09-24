@@ -69,8 +69,6 @@
     <Compile Include="MigrationGitHubRead.fs" />
     <Compile Include="MigrationNativeActivity.fsi" />
     <Compile Include="MigrationNativeActivity.fs" />
-    <Compile Include="MigrationInspectProviderAdapter.fsi" />
-    <Compile Include="MigrationInspectProviderAdapter.fs" />
     <Compile Include="LifecycleProjectionAdapter.fsi" />
     <Compile Include="LifecycleProjectionAdapter.fs" />
     <Compile Include="FleetShadowAdapter.fsi" />
@@ -95,7 +93,6 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FS.GG.Coordination.Protocol\FS.GG.Coordination.Protocol.fsproj" />
-    <ProjectReference Include="..\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
   </ItemGroup>
 

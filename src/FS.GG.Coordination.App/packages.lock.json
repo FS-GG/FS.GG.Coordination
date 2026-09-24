@@ -8,19 +8,6 @@
         "resolved": "10.1.302",
         "contentHash": "bN7XMQrAQg1dyHScJ7FcsznERBkvm74LtIo1O6C5mUzgbDqSwNbDpb3+nBGaJAjDmtC/suK5Vx5pFysKY6Hm+Q=="
       },
-      "FS.GG.Contracts": {
-        "type": "Transitive",
-        "resolved": "7.5.2",
-        "contentHash": "1Y2r/C1ibQTY1pJP6RzJdsUrV2d2PccLm+mTrOg74Okz6RgxXmogYrLWqv7Cq7pm+IhVyXSiFsfVAytBVzJU4A==",
-        "dependencies": {
-          "FSharp.Core": "10.1.302"
-        }
-      },
-      "YamlDotNet": {
-        "type": "Transitive",
-        "resolved": "18.1.0",
-        "contentHash": "5K+9KFg2TdTl7VXv88Qzi/0lqK6JFoNP3lRuImPYGRV7K/QYklDyTrj4+A+KAki1JsQi6qKY+hDyY7d6WRqjrw=="
-      },
       "fs.gg.coordination.core": {
         "type": "Project",
         "dependencies": {
@@ -33,7 +20,6 @@
         "dependencies": {
           "FS.GG.Coordination.Core": "[1.0.0, )",
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
-          "FS.GG.Coordination.Qualification.Contracts": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },
@@ -41,25 +27,6 @@
         "type": "Project",
         "dependencies": {
           "FSharp.Core": "[10.1.302, )"
-        }
-      },
-      "fs.gg.coordination.qualification.contracts": {
-        "type": "Project",
-        "dependencies": {
-          "FS.GG.Coordination.Protocol": "[1.0.0, )",
-          "FS.GG.SDD.Artifacts": "[1.5.0, 1.5.0]",
-          "FSharp.Core": "[10.1.302, )"
-        }
-      },
-      "FS.GG.SDD.Artifacts": {
-        "type": "CentralTransitive",
-        "requested": "[1.5.0, 1.5.0]",
-        "resolved": "1.5.0",
-        "contentHash": "RAVNLuyPScmeoH+v5fSs5Ahd5DlR+S8kO1wSbX+xIOJ6WsLsF9iDIkXbqTCuwZFOWx72fARJEw4nZrBClUUxGw==",
-        "dependencies": {
-          "FS.GG.Contracts": "7.5.2",
-          "FSharp.Core": "10.1.302",
-          "YamlDotNet": "18.1.0"
         }
       }
     }
