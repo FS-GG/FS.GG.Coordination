@@ -87,20 +87,25 @@ An independent `git ls-remote` of the canonical admission operation ref returned
 no ref. No protected workflow was dispatched and no key, JWT, token, signature,
 or journal write was used in this check.
 
-Reported custody evidence, not locally verified in this container: the matching
-authorizer private key remains on Work. The older Main wallet authorizer
+Main/SystemAdmin reported in [PR #508](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808787528)
+that Work and Main now hold matching Secret Service records, including the
+current authorizer under distinct `service=fsgg-v1-admission` attributes. This
+is a host custody report, not independently verified in this container. It
+conflicts with the user's explicit direction that any later signing use an
+approved **Work-host** custody path. Copying a matching key to Main does not
+change that authorization boundary. The older Main wallet authorizer
 fingerprint `54568140db351fbc525043601cec0ecbffda12e235436d44d68bed10f14fb7d6`
-does not match the current anchor and must not sign. The Main-only helper has no
-reviewed narrow Work-host signing route yet. Source-only work may continue in
-parallel; protected genesis requires (1) a reviewed Work-host custody/signing
-interface that returns only a public signature envelope after fresh native
-approval, (2) the separately approved protected workflow and ordinary-App
-credential handoff, and (3) exact expected-absent installation with independent
-durable readback. Custody evidence and this read-only plan are not approval.
+also remains nonmatching. Do not qualify or invoke Main-host `sign-intent` for
+the current anchor without an explicit user change to the custody rule.
 
-The handoff draft `work-host-signer-handoff-intake.json` validates, but
-`fsgg-coord intake apply` refused its production v1 admission room read because
-the journal is not installed. A fresh GitHub issue search returned zero matches;
-no issue was created and no Main receipt can be claimed. Use an explicitly
-approved alternate channel or restore the governed intake before treating the
-request as delivered.
+The handoff intake draft validated, but `fsgg-coord intake apply` refused its
+production v1 admission room read because the journal is not installed. It
+created no issue. Main responded in the existing PR #508 thread, so that
+thread is the active handoff channel for this request; the Work-only signer
+draft is superseded as a mailbox draft, but its location constraint remains.
+Source-only work may continue in parallel. Protected genesis still requires
+(1) a reviewed narrow Work-host signing interface and independent custody
+verification, or an explicit user decision changing that requirement, (2) the
+separately approved protected workflow and ordinary-App credential handoff,
+and (3) exact expected-absent installation with independent durable readback.
+Custody evidence, source tests and this plan are not approval.
