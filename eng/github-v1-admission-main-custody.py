@@ -25,6 +25,7 @@ import time
 sys.dont_write_bytecode = True
 
 APP_ID = 4882140
+WAIT_TIMER_BOT_ID = 41898282
 SERVICE = "fsgg-ledger-protection"
 AUTHORIZER_SERVICE = "fsgg-v1-admission"
 # Never fall back to the legacy fsgg-ledger-protection/authorizer record.
@@ -163,8 +164,11 @@ def approved(run_id: int, read_native=native_approval, now: int | None = None) -
             and native.get("environmentWaitMinutes") == 5
             and native.get("environmentPreventsSelfReview") is False
             and native.get("environmentReviewerIds") == [1645484]
-            and native.get("approvals") == [{"reviewerId": 1645484, "state": "approved",
-                                             "environmentIds": [22582241959]}]
+            and native.get("approvals") == [
+                {"reviewerId": 1645484, "state": "approved",
+                 "environmentIds": [22582241959]},
+                {"reviewerId": WAIT_TIMER_BOT_ID, "state": "approved",
+                 "environmentIds": [22582241959]}]
             and artifact.get("schema") == "fsgg.v1-admission-genesis-protected-authorization/2"
             and artifact.get("operationId") == "fleet-v1-admission:fs-gg-production"
             and artifact.get("repository") == "FS-GG/.github"

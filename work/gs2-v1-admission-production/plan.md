@@ -153,6 +153,37 @@ synthetic CLI controls reject both terminal and regular-file stdout. Four custod
 tests and four protected-read tests pass. A real JWT was not issued. This safeguard
 is part of the reviewed-source gate, not evidence of protected approval.
 
+## 2026-09-24 live wait-timer approval readback
+
+The exact-record helper was merged by PR #508 at Coordination `e96f482`. Main/SystemAdmin
+verified those host-side source bytes, the current public anchor, and a dummy
+host-to-container FD-3 pipe without invoking either key. Fresh read-only `prepare`
+bound source `e96f4821a40c595ebe960e6cf126ace748852f30`, tree
+`629d024f96b81c4670d6d37a28cc21bb9ee6b26d`, workflow
+`d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5`, and intent
+`752cee03dbedc9aa80e444dd20984b6fd538d518cc34c32c83dd38a1022878eb`.
+The operation ref was independently absent.
+
+The accountable owner dispatched protected run
+[`35980891625`](https://github.com/FS-GG/.github/actions/runs/35980891625) and
+approved its dedicated environment through GitHub's native pending-deployment
+review. The run completed successfully, but the merged native reader refused
+`native-approvals-count` before writing evidence. The completed-run API contains
+both the owner review and a separate `github-actions[bot]` approval with comment
+`5 minute wait timer`, each scoped to the exact environment; synthetic fixtures
+had modeled only the owner. No signing payload, signature, JWT, provider token,
+or journal mutation followed. **Do not use this run for signing or apply.**
+
+The repair admits only the exact owner-plus-wait-timer-bot pair after checking
+their identities, states, environment scope, and the bot's timer comment; it
+normalizes their evidence order and rejects missing, wrong, duplicate, or extra
+entries. The Main helper and typed verifier must accept the same pair. Local
+Python controls, focused F# tests, Q6 operational validation, and a read-only
+replay of the completed run are repair gates; a reviewed and merged source
+revision, fresh `prepare`, a **new** protected run with native approval, then
+fresh host-side signing/credential handoff and exact durable readback remain
+required. The first run's successful workflow conclusion is not a write permit.
+
 The first PR #508 validation [run 35966388039](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35966388039)
 failed when the `formal-review-epoch` negative control exhausted Apalache's
 300-second execution budget after an early startup retry. A failed-job rerun

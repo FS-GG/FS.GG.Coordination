@@ -22,6 +22,7 @@ REPOSITORY_ID = 1269292704
 ENVIRONMENT = "fleet-v1-admission-owner"
 ENVIRONMENT_ID = 22582241959
 ACCOUNTABLE_OWNER_ID = 1645484
+WAIT_TIMER_BOT_ID = 41898282
 WORKFLOW = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
 WORKFLOW_SHA256 = "07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3"
 MEMBER = "protected-v1-admission-genesis.json"
@@ -150,17 +151,35 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
 
     approval_pages = read_json(f"{prefix}/actions/runs/{run_id}/approvals?per_page=100", True)
     approvals = pages(approval_pages)
-    require(len(approvals) == 1, "native-approvals-count")
-    normalized_approvals = []
+    # A completed five-minute environment wait has its own GitHub Actions bot
+    # approval in addition to the owner's native review. Neither is optional.
+    require(len(approvals) == 2, "native-approvals-count")
+    normalized_approvals = {}
     for approval in approvals:
-        require(isinstance(approval, dict) and isinstance(approval.get("environments"), list),
+        require(isinstance(approval, dict), "native-approval-shape")
+        environments = approval.get("environments")
+        require(isinstance(environments, list) and len(environments) == 1
+                and isinstance(environments[0], dict)
+                and environments[0].get("id") == ENVIRONMENT_ID
+                and environments[0].get("name") == ENVIRONMENT,
                 "native-approval-shape")
-        normalized_approvals.append({"reviewerId": (approval.get("user") or {}).get("id"),
-                                     "state": approval.get("state"),
-                                     "environmentIds": [item.get("id") for item in approval["environments"]]})
-    require(all(item["state"] == "approved" and item["environmentIds"] == [ENVIRONMENT_ID]
-                and item["reviewerId"] == actor == ACCOUNTABLE_OWNER_ID
-                for item in normalized_approvals),
+        user = approval.get("user")
+        require(isinstance(user, dict), "native-approval-shape")
+        identifier = user.get("id")
+        require(identifier not in normalized_approvals and approval.get("state") == "approved",
+                "native-approval-binding")
+        if identifier == ACCOUNTABLE_OWNER_ID:
+            require(user.get("login") == "EHotwagner" and user.get("type") == "User"
+                    and identifier == actor, "native-approval-binding")
+        elif identifier == WAIT_TIMER_BOT_ID:
+            require(user.get("login") == "github-actions[bot]" and user.get("type") == "Bot"
+                    and approval.get("comment") == "5 minute wait timer",
+                    "native-approval-binding")
+        else:
+            raise Refused("native-approval-binding")
+        normalized_approvals[identifier] = {"reviewerId": identifier, "state": "approved",
+                                            "environmentIds": [ENVIRONMENT_ID]}
+    require(set(normalized_approvals) == {ACCOUNTABLE_OWNER_ID, WAIT_TIMER_BOT_ID},
             "native-approval-binding")
 
     artifact_pages = read_json(f"{prefix}/actions/runs/{run_id}/artifacts?per_page=100", True)
@@ -204,7 +223,8 @@ def collect(run_id: int, read_json=gh_json, read_bytes=gh_bytes, observed_at: st
         "environmentWaitMinutes": wait_rules[0]["wait_timer"],
         "environmentReviewerIds": reviewer_ids,
         "environmentPreventsSelfReview": False,
-        "approvals": normalized_approvals,
+        "approvals": [normalized_approvals[ACCOUNTABLE_OWNER_ID],
+                      normalized_approvals[WAIT_TIMER_BOT_ID]],
     }
 
 
