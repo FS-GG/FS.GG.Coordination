@@ -214,6 +214,53 @@ let ``pull request census refuses malformed revisions and a nonterminal issue ce
 let private issueComment id nodeId issueNumber =
     $"""{{"id":{id},"node_id":"{nodeId}","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/{issueNumber}","body":"fsgg:claim payload","created_at":"2026-09-23T10:00:00Z","updated_at":"2026-09-23T10:01:00Z","user":{{"login":"reviewer"}}}}"""
 
+let private pullRequestCensus () =
+    let record = pullRequest 3 "PR_3"
+    let transport = FakeTransport [ repo; ok Map.empty $"[{record}]" ]
+    match MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) transport with
+    | Ok population -> population
+    | Error failure -> failwithf "unexpected pull request census refusal: %A" failure
+
+[<Fact>]
+let ``pull request issue comments bind the exact PR census and use only GET`` () =
+    let record = issueComment 501 "COMMENT_501" 3
+    let transport = FakeTransport [ repo; ok Map.empty $"[{record}]" ]
+    match MigrationGitHubRead.readPullRequestComments options (pullRequestCensus ()) 3 transport with
+    | Ok observed ->
+        Assert.Equal("PR_3", observed.SubjectNodeId)
+        Assert.Equal(3, observed.SubjectNumber)
+        Assert.Equal("COMMENT_501", observed.Comments.Head.NodeId)
+        Assert.True(observed.Terminal)
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method)
+            | _ -> failwith "pull request comments issued a non-REST request")
+    | Error failure -> failwithf "unexpected pull request comment refusal: %A" failure
+
+[<Fact>]
+let ``pull request comments refuse foreign subject missing page and missing census`` () =
+    let foreign = issueComment 501 "COMMENT_501" 4
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readPullRequestComments options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; ok Map.empty $"[{foreign}]" ]))
+    let next = "https://api.github.test/repos/FS-GG/copy/issues/3/comments?per_page=100&page=2"
+    let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readPullRequestComments options (pullRequestCensus ()) 3
+                     (FakeTransport [ repo; first ]))
+    let noRequests = FakeTransport []
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "uncensused-pull-request"),
+                 MigrationGitHubRead.readPullRequestComments options (pullRequestCensus ()) 99 noRequests)
+    Assert.Empty(noRequests.Requests)
+
+[<Fact>]
+let ``pull request comments refuse nonterminal PR census before dispatch`` () =
+    let noRequests = FakeTransport []
+    let incomplete = { pullRequestCensus () with Terminal=false }
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "pull-request-census"),
+                 MigrationGitHubRead.readPullRequestComments options incomplete 3 noRequests)
+    Assert.Empty(noRequests.Requests)
+
 [<Fact>]
 let ``issue comment stream binds a censused subject and terminal raw pages`` () =
     let next = "https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=2"

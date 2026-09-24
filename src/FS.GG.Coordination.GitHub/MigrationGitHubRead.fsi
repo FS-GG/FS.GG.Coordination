@@ -275,6 +275,13 @@ module MigrationGitHubRead =
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssueCommentPopulation, MigrationReadFailure>
 
+    val readPullRequestComments:
+        options:MigrationGitHubReadOptions ->
+        pullRequests:MigrationPullRequestPopulation ->
+        pullRequestNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationIssueCommentPopulation, MigrationReadFailure>
+
     val readIssueEvents:
         options:MigrationGitHubReadOptions ->
         issues:MigrationIssuePopulation ->
