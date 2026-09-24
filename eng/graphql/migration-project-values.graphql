@@ -1,0 +1,78 @@
+query MigrationProjectValues($organization: String!, $after: String) {
+  organization(login: $organization) {
+    projectV2(number: __PROJECT_NUMBER__) {
+      id
+      number
+      items(first: 25, after: $after) {
+        totalCount
+        nodes {
+          id
+          updatedAt
+          fieldValues(first: 100) {
+            totalCount
+            nodes {
+              __typename
+              ... on ProjectV2ItemFieldValueCommon {
+                id
+                updatedAt
+                field { ... on ProjectV2FieldCommon { id } }
+              }
+              ... on ProjectV2ItemFieldLabelValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                labels(first: 100) {
+                  totalCount
+                  nodes { id }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+              ... on ProjectV2ItemFieldPullRequestValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                pullRequests(first: 100) {
+                  totalCount
+                  nodes { id }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+              ... on ProjectV2ItemFieldRepositoryValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                repository { id }
+              }
+              ... on ProjectV2ItemFieldReviewerValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                reviewers(first: 100) {
+                  totalCount
+                  nodes { ... on User { id } ... on Team { id } }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+              ... on ProjectV2ItemFieldUserValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                users(first: 100) {
+                  totalCount
+                  nodes { id }
+                  pageInfo { hasNextPage endCursor }
+                }
+              }
+              ... on ProjectV2ItemFieldMilestoneValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                milestone { id }
+              }
+              ... on ProjectV2ItemIssueFieldValue {
+                field { ... on ProjectV2FieldCommon { id } }
+                issueFieldValue { __typename }
+              }
+              ... on ProjectV2ItemFieldMultiSelectValue { options { id name } }
+              ... on ProjectV2ItemFieldIterationValue { iterationId title startDate duration }
+              ... on ProjectV2ItemFieldNumberValue { number }
+              ... on ProjectV2ItemFieldDateValue { date }
+              ... on ProjectV2ItemFieldTextValue { text }
+              ... on ProjectV2ItemFieldSingleSelectValue { optionId name }
+            }
+            pageInfo { hasNextPage endCursor }
+          }
+        }
+        pageInfo { hasNextPage endCursor }
+      }
+    }
+  }
+}
