@@ -65,3 +65,42 @@ per-admission JWT issuer/process composition, claim-journal reader, provider
 reconciliation, installed runtime acceptance, or live write exists. The ordinary
 CLI production fence stays in place. The incorrect public trust anchor still
 blocks protected genesis installation.
+
+## 2026-09-24 current-anchor read-only handoff
+
+This section supersedes the earlier statements that the current public trust
+anchor is unavailable. The exact public `OperatingV1` anchor is readable at
+`/home/developer/.local/share/fs-gg-public/ledger-protection/operating-v1-trust-anchor.json`;
+its SHA-256 is `0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e87d9a779`.
+It pins authorizer public SPKI SHA-256
+`2dc8d29f8d5a675d070701dacd6dacf2ca3e368ecf823fa9eaf560ddd22d77be`.
+The older `trust-anchor.json` is unchanged and must not be substituted.
+
+The read-only `eng/run-v1-admission-genesis.fsx prepare` check passed on
+Coordination `main` source commit `4f8b7f7b7acb22bfa2cc80a7752f6cc3a185c1b4`
+(tree `80547c83d176873c55de8cf21ead6a187393e66d`) against `.github/main`
+workflow revision `d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5`.
+It produced genesis intent SHA-256
+`e32bc9f6ddc547fb8eb57a643a3dc9a47d82d6a1fa42d439ca0d9e6cefee8f86`
+and expected genesis commit `34f1ea8796e5a0bef515705c81a92fcb62620928`.
+An independent `git ls-remote` of the canonical admission operation ref returned
+no ref. No protected workflow was dispatched and no key, JWT, token, signature,
+or journal write was used in this check.
+
+Reported custody evidence, not locally verified in this container: the matching
+authorizer private key remains on Work. The older Main wallet authorizer
+fingerprint `54568140db351fbc525043601cec0ecbffda12e235436d44d68bed10f14fb7d6`
+does not match the current anchor and must not sign. The Main-only helper has no
+reviewed narrow Work-host signing route yet. Source-only work may continue in
+parallel; protected genesis requires (1) a reviewed Work-host custody/signing
+interface that returns only a public signature envelope after fresh native
+approval, (2) the separately approved protected workflow and ordinary-App
+credential handoff, and (3) exact expected-absent installation with independent
+durable readback. Custody evidence and this read-only plan are not approval.
+
+The handoff draft `work-host-signer-handoff-intake.json` validates, but
+`fsgg-coord intake apply` refused its production v1 admission room read because
+the journal is not installed. A fresh GitHub issue search returned zero matches;
+no issue was created and no Main receipt can be claimed. Use an explicitly
+approved alternate channel or restore the governed intake before treating the
+request as delivered.

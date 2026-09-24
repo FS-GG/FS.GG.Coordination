@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coord.intake/v1",
+  "id": "gs2-v1-admission-work-host-signer-handoff-20260924",
+  "owner": "FS-GG",
+  "repository": "FS.GG.Coordination",
+  "title": "[cross-repo] Establish approved Work-host authorizer signing handoff for v1 admission",
+  "observed": "Read-only genesis prepare on 2026-09-24 succeeded at Coordination main 4f8b7f7b7acb22bfa2cc80a7752f6cc3a185c1b4 with public OperatingV1 trust-anchor SHA-256 0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e87d9a779 and genesis intent SHA-256 e32bc9f6ddc547fb8eb57a643a3dc9a47d82d6a1fa42d439ca0d9e6cefee8f86. A separate custody report says the matching authorizer key (public SPKI SHA-256 2dc8d29f8d5a675d070701dacd6dacf2ca3e368ecf823fa9eaf560ddd22d77be) is retained on Work, not in Main's older wallet record. The canonical admission journal ref remains absent. This request does not authorize workflow dispatch, signing, credential issuance, or journal creation.",
+  "rootCause": "The installed Main-only sign-intent helper resolves its authorizer from Main Secret Service, whose previously verified key has a different public fingerprint. There is no reviewed narrow Work-host custody/signing interface bound to the protected native approval flow for the current OperatingV1 anchor.",
+  "acceptance": "Main/SystemAdmin and Coordination agree on a narrow Work-host signing interface that keeps private bytes on Work, binds the exact current public trust anchor and canonical payload, and requires fresh native protected-workflow approval before any signature. Deliver a reviewed implementation and synthetic-key tests or identify the precise approval/access blocker; do not sign a production intent or dispatch the workflow under this request. The caller can consume only a public detached signature envelope. Preserve the separate ordinary-App JWT route, independent installer preflight, and expected-absent journal write fence. State which owner holds the next protected action and what receipt unlocks it.",
+  "verification": "Source: FS-GG/FS.GG.Coordination@4f8b7f7b7acb22bfa2cc80a7752f6cc3a185c1b4; workflow: FS-GG/.github@d6ee7c79d67c3bdc2e3af07dcbe0e606967f76b5; plan: work/gs2-v1-admission-production/plan.md; handoff: work/gs2-v1-admission-production/main-host-handoff.md. Return in this issue a receipt/owner and ETA within 15 minutes of seeing it, then a source PR or exact blocker with evidence and next update time. No private key, JWT, token, or raw secret output in the thread.",
+  "paths": [
+    "eng/github-v1-admission-main-custody.py",
+    "work/gs2-v1-admission-production/main-host-handoff.md"
+  ],
+  "class": "hardening",
+  "severity": "High",
+  "status": "Ready",
+  "disposition": "create"
+}
