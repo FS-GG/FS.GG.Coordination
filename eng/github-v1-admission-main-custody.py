@@ -25,6 +25,10 @@ sys.dont_write_bytecode = True
 
 APP_ID = 4882140
 SERVICE = "fsgg-ledger-protection"
+AUTHORIZER_SERVICE = "fsgg-v1-admission"
+AUTHORIZER_KEY_ID = "main-gs2-08-2-authorizer-2dc8d29f8d5a675d"
+AUTHORIZER_SPKI_SHA256 = "2dc8d29f8d5a675d070701dacd6dacf2ca3e368ecf823fa9eaf560ddd22d77be"
+TRUST_ANCHOR_SHA256 = "0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e87d9a779"
 SIGNATURE_SCHEMA = "fsgg.github-substrate.v1-admission-genesis-signature/1"
 ENVELOPE_SCHEMA = "fsgg.github-substrate.v1-admission-genesis-signature-envelope/1"
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
@@ -51,9 +55,13 @@ def read_public(path: pathlib.Path, ceiling: int = 8192) -> bytes:
 
 def secret(role: str, run=subprocess.run) -> bytes:
     require(role in {"ordinary", "authorizer"}, "admission-custody-role")
-    attributes = ["service", SERVICE, "role", role]
     if role == "ordinary":
-        attributes += ["app-id", str(APP_ID)]
+        attributes = ["service", SERVICE, "role", role, "app-id", str(APP_ID)]
+    else:
+        attributes = ["service", AUTHORIZER_SERVICE, "role", role,
+                      "key-id", AUTHORIZER_KEY_ID,
+                      "spki-sha256", AUTHORIZER_SPKI_SHA256,
+                      "trust-anchor-sha256", TRUST_ANCHOR_SHA256]
     try:
         result = run(["secret-tool", "lookup", *attributes], stdout=subprocess.PIPE,
                      stderr=subprocess.DEVNULL, timeout=15, check=False)
@@ -212,7 +220,8 @@ def parse_payload(raw: bytes) -> dict:
 
 
 def sign_envelope(payload: bytes, trust: bytes, lookup=secret,
-                  read_native=native_approval, now: int | None = None) -> bytes:
+                  read_native=native_approval, now: int | None = None,
+                  expected_trust_sha256: str = TRUST_ANCHOR_SHA256) -> bytes:
     value = parse_payload(payload)
     artifact = approved(value["protectedRunId"], read_native, now)
     require(artifact.get("genesisIntentSha256") == value["intentSha256"]
@@ -221,6 +230,10 @@ def sign_envelope(payload: bytes, trust: bytes, lookup=secret,
             and dt.datetime.fromisoformat(artifact["expiresAt"].replace("Z", "+00:00"))
                 == dt.datetime.fromisoformat(value["expiresAt"]),
             "admission-native-signature-binding")
+    require(isinstance(expected_trust_sha256, str)
+            and HEX64.fullmatch(expected_trust_sha256) is not None
+            and hashlib.sha256(trust).hexdigest() == expected_trust_sha256,
+            "admission-trust-anchor-digest")
     try:
         anchor = json.loads(trust)
         authorizer = anchor["authorizer"]

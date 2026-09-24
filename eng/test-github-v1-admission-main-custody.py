@@ -3,6 +3,7 @@
 
 import base64
 import datetime as dt
+import hashlib
 import importlib.util
 import json
 import os
@@ -23,6 +24,9 @@ class MainCustodyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.key = subprocess.run(
+            ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:3072"],
+            stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True).stdout
+        cls.old_key = subprocess.run(
             ["openssl", "genpkey", "-algorithm", "RSA", "-pkeyopt", "rsa_keygen_bits:3072"],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, check=True).stdout
         cls.public, cls.spki = custody.public_key(cls.key)
@@ -95,8 +99,10 @@ class MainCustodyTests(unittest.TestCase):
                                    "authorizer": {"keyId": "test-key",
                                                   "algorithm": "RSA-PSS-SHA256",
                                                   "publicKeySpkiSha256": self.spki}}) + b"\n"
+        trust_sha256 = hashlib.sha256(trust).hexdigest()
         encoded = custody.sign_envelope(payload, trust, lambda role: self.key,
-                                        self.native, now=self.timestamp())
+                                        self.native, now=self.timestamp(),
+                                        expected_trust_sha256=trust_sha256)
         envelope = json.loads(encoded)
         self.assertEqual(custody.ENVELOPE_SCHEMA, envelope["schema"])
         self.assertEqual(self.public.decode("ascii"), envelope["publicKeyPem"])
@@ -104,15 +110,22 @@ class MainCustodyTests(unittest.TestCase):
         self.verify(payload, base64.b64decode(envelope["signatureBase64"]), True)
         self.assertNotIn("PRIVATE KEY", encoded.decode("ascii"))
         with self.assertRaisesRegex(custody.Refused, "authorizer-key-mismatch"):
+            custody.sign_envelope(payload, trust, lambda role: self.old_key,
+                                  self.native, now=self.timestamp(),
+                                  expected_trust_sha256=trust_sha256)
+        with self.assertRaisesRegex(custody.Refused, "trust-anchor-digest"):
             wrong = trust.replace(self.spki.encode("ascii"), b"f" * 64)
             custody.sign_envelope(payload, wrong, lambda role: self.key,
-                                  self.native, now=self.timestamp())
+                                  self.native, now=self.timestamp(),
+                                  expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
             custody.sign_envelope(payload + b"\n", trust, lambda role: self.key,
-                                  self.native, now=self.timestamp())
+                                  self.native, now=self.timestamp(),
+                                  expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
             custody.sign_envelope(payload.replace(b"a" * 64, b"?" * 64), trust,
-                                  lambda role: self.key, self.native, now=self.timestamp())
+                                  lambda role: self.key, self.native, now=self.timestamp(),
+                                  expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "native-approval-expired"):
             custody.issue_jwt(42, lambda role: self.key, self.native,
                               now=self.timestamp() + 7200)
@@ -126,8 +139,14 @@ class MainCustodyTests(unittest.TestCase):
         self.assertEqual(self.key, custody.secret("authorizer", run))
         self.assertEqual(["secret-tool", "lookup", "service", "fsgg-ledger-protection",
                           "role", "ordinary", "app-id", "4882140"], calls[0])
-        self.assertEqual(["secret-tool", "lookup", "service", "fsgg-ledger-protection",
-                          "role", "authorizer"], calls[1])
+        self.assertEqual(["secret-tool", "lookup", "service", "fsgg-v1-admission",
+                          "role", "authorizer", "key-id", custody.AUTHORIZER_KEY_ID,
+                          "spki-sha256", custody.AUTHORIZER_SPKI_SHA256,
+                          "trust-anchor-sha256", custody.TRUST_ANCHOR_SHA256], calls[1])
+        def missing(command, **kwargs):
+            return subprocess.CompletedProcess(command, 1, b"")
+        with self.assertRaisesRegex(custody.Refused, "custody-unavailable"):
+            custody.secret("authorizer", missing)
 
 
 if __name__ == "__main__":
