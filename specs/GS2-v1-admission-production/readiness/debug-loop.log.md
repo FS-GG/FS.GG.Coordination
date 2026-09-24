@@ -21,4 +21,18 @@ F# unit test.
 
 **Narrow re-run result:** Python 5/5 and focused F# 1/1 pass; the live public
 payload parses read-only with the patched helper.
-**Full verify result:** pending.
+**Full verify result:** Release build passed with zero warnings/errors; full
+unit suite passed 488/488. A broad solution test command failed because
+installed PostgreSQL fixture paths are absent in this container and two
+generated Python bytecode files made the supply-chain reproducibility test
+see a dirty tree. After removing only those generated files and disabling
+bytecode output, the supply-chain test and full architecture suite passed
+690/690. Hosted qualification is pending.
+
+## Result
+
+The targeted integration regression is green after one source iteration.
+The automatic solution-wide verify command is not green in this container
+because its PostgreSQL installed-fixture prerequisites are absent; no assertion
+or unrelated test was weakened. Protected live qualification remains pending
+hosted checks, reviewed merge, and a new source-bound native run.
