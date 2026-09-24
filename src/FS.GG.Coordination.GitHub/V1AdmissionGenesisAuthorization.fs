@@ -167,7 +167,6 @@ module V1AdmissionGenesisAuthorization =
                 let expected =
                     ShardedJournalAdapter.canonicalJson content
                     |> Result.defaultWith invalidOp
-                    |> fun bytes -> Array.append bytes [| 10uy |]
 
                 if expected <> trustAnchorBytes then
                     Error [ "genesis-trust-canonical" ]

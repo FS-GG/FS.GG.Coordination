@@ -220,3 +220,27 @@ serialization. The first post-#510 run is bound to pre-repair source and is
 new protected run and native approval, exact host restaging, then a new public
 payload and separate host signing/JWT handoff are required before one
 expected-absent installation attempt.
+
+## 2026-09-24 live trust-anchor canonical refusal
+
+PR #511 merged the public signing-payload byte repair at Coordination
+d29c5df41ebceba93346a14aa862a4733a2727d2. A new native protected
+[run 35994662078](https://github.com/FS-GG/.github/actions/runs/35994662078)
+completed successfully with exact owner and wait-timer approvals. Main signed
+the new public payload with the current anchored key; independent RSA-PSS
+verification of the returned public envelope passed. The one authorized apply
+attempt issued a bounded JWT only through the host-to-container FD3 pipe but
+the runner refused genesis-trust-canonical. Main stopped without retry.
+Independent Authority readback still found no operation/79 ref, and the
+planned genesis commit object returned 404. This run and JWT attempt must not
+be reused after a source repair.
+
+The public installed OperatingV1 anchor has exactly one final LF and its
+SHA-256 matches the authority digest. The trust verifier called
+ShardedJournalAdapter.canonicalJson, which already appends one LF, then
+appended a second LF before byte comparison. A synthetic test had copied that
+double-LF mistake and concealed the live mismatch. The narrow repair uses the
+canonical helper output directly and makes the test use one LF, while an
+extra-LF refusal remains. It requires reviewed merge, fresh host/source
+readback, a new native protected run, new bounded signature/JWT handoffs,
+one expected-absent apply attempt, and independent durable readback.
