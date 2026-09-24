@@ -28,6 +28,23 @@ type MigrationIssuePopulation =
       Issues: MigrationIssueRecord list
       PullRequestCount: int }
 
+/// One explicitly partial repository-settings surface, bound to the raw provider response.
+type MigrationRepositoryCoreSettings =
+    { RepositoryId: int64
+      NodeId: string
+      FullName: string
+      DefaultBranch: string
+      Visibility: string
+      Archived: bool
+      Disabled: bool
+      HasIssues: bool
+      AllowSquashMerge: bool
+      AllowMergeCommit: bool
+      AllowRebaseMerge: bool
+      DeleteBranchOnMerge: bool
+      PayloadJson: string
+      PayloadSha256: string }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -175,6 +192,10 @@ type HttpMigrationGitHubReadTransport =
 
 [<RequireQualifiedAccess>]
 module MigrationGitHubRead =
+    val readRepositoryCoreSettings:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryCoreSettings, MigrationReadFailure>
+
     val readIssues:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssuePopulation, MigrationReadFailure>

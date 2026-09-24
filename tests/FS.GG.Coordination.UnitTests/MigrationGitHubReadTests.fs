@@ -32,6 +32,9 @@ let private ok headers body =
 
 let private repo = ok Map.empty """{"id":42,"full_name":"FS-GG/copy"}"""
 
+let private repositoryCore =
+    """{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy","default_branch":"main","visibility":"private","archived":false,"disabled":false,"has_issues":true,"allow_squash_merge":true,"allow_merge_commit":false,"allow_rebase_merge":false,"delete_branch_on_merge":true}"""
+
 let private issue number nodeId =
     $"""{{"number":{number},"id":{number + 100},"node_id":"{nodeId}","state":"open","updated_at":"2026-09-23T10:00:00Z"}}"""
 
@@ -65,6 +68,65 @@ type private FakeTransport(responses: TransportOutcome list) =
         member _.Send request =
             requests.Add request
             if queue.Count = 0 then NetworkFailure else queue.Dequeue()
+
+[<Fact>]
+let ``repository core settings retain exact response and use only a GET`` () =
+    let responseBody = " \n" + repositoryCore + "\n"
+    let transport = FakeTransport [ ok Map.empty responseBody ]
+    match MigrationGitHubRead.readRepositoryCoreSettings options transport with
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.Equal("REPO_42", observed.NodeId)
+        Assert.Equal("main", observed.DefaultBranch)
+        Assert.Equal("private", observed.Visibility)
+        Assert.True(observed.HasIssues)
+        Assert.False(observed.AllowMergeCommit)
+        Assert.Equal(responseBody, observed.PayloadJson)
+        let digest = responseBody |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                     |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(digest, observed.PayloadSha256)
+        Assert.Single(transport.Requests) |> ignore
+        match transport.Requests.Head with
+        | Rest request ->
+            Assert.Equal(Get, request.Method)
+            Assert.Equal("https://api.github.test/repos/FS-GG/copy", request.Uri.AbsoluteUri)
+        | _ -> failwith "repository settings reader issued a non-REST request"
+    | Error failure -> failwithf "unexpected repository settings refusal: %A" failure
+
+[<Fact>]
+let ``repository core settings refuse identity drift and unknown visibility`` () =
+    for changed in
+        [ repositoryCore.Replace("\"id\":42", "\"id\":43")
+          repositoryCore.Replace("FS-GG/copy", "FS-GG/other") ] do
+        let transport = FakeTransport [ ok Map.empty changed ]
+        Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                     MigrationGitHubRead.readRepositoryCoreSettings options transport)
+    let unknown = FakeTransport [ ok Map.empty (repositoryCore.Replace("\"visibility\":\"private\"", "\"visibility\":\"mystery\"")) ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:visibility"),
+                 MigrationGitHubRead.readRepositoryCoreSettings options unknown)
+
+[<Fact>]
+let ``repository core settings refuse missing and malformed fields without another request`` () =
+    for changed in
+        [ repositoryCore.Replace("\"allow_merge_commit\":false,", "")
+          repositoryCore.Replace("\"archived\":false", "\"archived\":null")
+          repositoryCore.Replace("\"default_branch\":\"main\"", "\"default_branch\":\"\"") ] do
+        let transport = FakeTransport [ ok Map.empty changed ]
+        match MigrationGitHubRead.readRepositoryCoreSettings options transport with
+        | Error(MigrationReadFailure.MalformedResponse _) -> ()
+        | outcome -> failwithf "malformed repository settings were accepted: %A" outcome
+        Assert.Single(transport.Requests) |> ignore
+
+[<Fact>]
+let ``repository core settings refuse invalid options and unavailable provider`` () =
+    let invalid = { options with ExpectedRepositoryId=0L }
+    let noRequests = FakeTransport []
+    Assert.Equal(Error MigrationReadFailure.InvalidOptions,
+                 MigrationGitHubRead.readRepositoryCoreSettings invalid noRequests)
+    Assert.Empty(noRequests.Requests)
+    let unavailable = FakeTransport [ NetworkFailure ]
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readRepositoryCoreSettings options unavailable)
 
 let private issueCensus () =
     let first = issue 1 "ISSUE_1"

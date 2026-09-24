@@ -34,6 +34,22 @@ type MigrationIssuePopulation =
       Issues: MigrationIssueRecord list
       PullRequestCount: int }
 
+type MigrationRepositoryCoreSettings =
+    { RepositoryId: int64
+      NodeId: string
+      FullName: string
+      DefaultBranch: string
+      Visibility: string
+      Archived: bool
+      Disabled: bool
+      HasIssues: bool
+      AllowSquashMerge: bool
+      AllowMergeCommit: bool
+      AllowRebaseMerge: bool
+      DeleteBranchOnMerge: bool
+      PayloadJson: string
+      PayloadSha256: string }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -324,6 +340,54 @@ module MigrationGitHubRead =
                                       && fullName = $"{options.Owner}/{options.Repository}" -> Ok id
             | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
             | Error error, _ | _, Error error -> Error error)
+
+    let readRepositoryCoreSettings (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let request =
+                Rest { Method=Get; Uri=Uri(options.ApiBase, path)
+                       Headers=headers options.Token options.UserAgent; Body=None
+                       ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+            response transport request
+            |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result.Body, document))
+            |> Result.bind (fun (payload, document) ->
+                use document = document
+                let root = document.RootElement
+                match requiredInt64 "id" root, requiredString "node_id" root,
+                      requiredString "full_name" root, requiredString "default_branch" root,
+                      requiredString "visibility" root with
+                | Ok id, Ok _, Ok fullName, Ok _, Ok _ when
+                    id <> options.ExpectedRepositoryId
+                    || fullName <> $"{options.Owner}/{options.Repository}" ->
+                    Error MigrationReadFailure.IdentityDrift
+                | Ok _, Ok _, Ok _, Ok _, Ok visibility when
+                    not (Set.contains visibility (set [ "public"; "private"; "internal" ])) ->
+                    Error(MigrationReadFailure.MalformedResponse "invalid:visibility")
+                | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok visibility when
+                    id = options.ExpectedRepositoryId
+                    && fullName = $"{options.Owner}/{options.Repository}" ->
+                    let flags =
+                        [ "archived"; "disabled"; "has_issues"; "allow_squash_merge"
+                          "allow_merge_commit"; "allow_rebase_merge"; "delete_branch_on_merge" ]
+                        |> List.map (fun name -> requiredBool name root)
+                    match flags |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
+                    | Some failure -> Error failure
+                    | None ->
+                        let values = flags |> List.choose (function Ok value -> Some value | Error _ -> None)
+                        match values with
+                        | [ archived; disabled; hasIssues; allowSquash; allowMerge; allowRebase; deleteBranch ] ->
+                            Ok { RepositoryId=id; NodeId=nodeId; FullName=fullName
+                                 DefaultBranch=defaultBranch; Visibility=visibility
+                                 Archived=archived; Disabled=disabled; HasIssues=hasIssues
+                                 AllowSquashMerge=allowSquash; AllowMergeCommit=allowMerge
+                                 AllowRebaseMerge=allowRebase; DeleteBranchOnMerge=deleteBranch
+                                 PayloadJson=payload; PayloadSha256=sha payload }
+                        | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:repository-settings")
+                | Ok _, Ok _, Ok _, Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                | Error failure, _, _, _, _ | _, Error failure, _, _, _
+                | _, _, Error failure, _, _ | _, _, _, Error failure, _
+                | _, _, _, _, Error failure -> Error failure)
 
     let private parseIssue (value: JsonElement) =
         match requiredInt "number" value, requiredInt64 "id" value, requiredString "node_id" value,
