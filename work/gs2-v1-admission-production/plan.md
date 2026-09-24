@@ -103,10 +103,13 @@ Candidate source revision `e53208d` in PR #508 selects the distinct current
 Main record by exact key ID, SPKI and anchor digest, and refuses altered
 anchor bytes before lookup. Synthetic controls cover old/wrong key, wrong
 anchor and missing record; 3 custody and 4 protected-read tests pass. This is
-source qualification only. The PR is not auto-merged, Main's independent
-read-only host check is pending, and no Main-host `sign-intent` may be invoked
-until the user reconciles the custody-location rule and the separate protected
-approval is complete.
+source qualification only. The broader ledger-operations validator also passed
+with the exact pinned .NET SDK. Main [reported a read-only host check](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808996870)
+of all five exact lookup attributes, the derived public SPKI and the public
+anchor digest; this report has not been independently reproduced from this
+container. The PR is not auto-merged, and no Main-host `sign-intent` may be
+invoked until the user reconciles the custody-location rule and the separate
+protected approval is complete.
 
 The handoff intake draft validated, but `fsgg-coord intake apply` refused its
 production v1 admission room read because the journal is not installed. It
