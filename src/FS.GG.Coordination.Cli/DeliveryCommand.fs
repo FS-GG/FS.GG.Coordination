@@ -213,7 +213,7 @@ module DeliveryCommand =
                     {
                         ApiBase = uri
                         Token = token
-                        UserAgent = "fsgg-coordination/0.1.1"
+                        UserAgent = "fsgg-coordination/0.1.2"
                         Repository = repository
                         PullRequestNumber = pr
                         PolicyRef = policyRef

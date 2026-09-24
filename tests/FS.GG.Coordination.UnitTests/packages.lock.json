@@ -52,6 +52,14 @@
           "FSharp.Core": "10.1.302"
         }
       },
+      "FSharp.SystemTextJson": {
+        "type": "Transitive",
+        "resolved": "1.4.36",
+        "contentHash": "1xLk0SBF1nedD74B77rcArjD2d+DeZwbNI7BVCAyKwIBERo1VoX8Mf4AtX0OV2L3ZeM/XS1b6BuhXCyoh0KBnw==",
+        "dependencies": {
+          "FSharp.Core": "4.7.0"
+        }
+      },
       "Microsoft.CodeCoverage": {
         "type": "Transitive",
         "resolved": "18.8.1",
@@ -124,6 +132,17 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.cli": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.GitHub": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Observer": "[1.0.0, )",
+          "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FS.GG.Coordination.Qualification.Contracts": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.coordination.core": {
         "type": "Project",
         "dependencies": {
@@ -137,6 +156,15 @@
           "FS.GG.Coordination.Core": "[1.0.0, )",
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.coordination.orchestration.observer": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.GitHub": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )",
+          "FSharp.SystemTextJson": "[1.4.36, )"
         }
       },
       "fs.gg.coordination.protocol": {
