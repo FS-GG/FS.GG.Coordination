@@ -16,6 +16,8 @@ let private cohort =
                        FullName="FS-GG/disposable-copy"
                        SourceHead=String.replicate 40 "e"
                        TargetHead=String.replicate 40 "f" } ]
+      Receivers=[ { Receiver="disposable-receiver"; RepositoryId=42L
+                    RefName="refs/heads/main"; ExpectedHead=String.replicate 40 "f" } ]
       ProjectOrganization="FS-GG"
       ProjectNumber=99
       ProjectNodeId="PVT_disposable_copy"
@@ -80,6 +82,22 @@ let ``cohort digest changes with source revision and repository heads`` () =
         { cohort with Repositories=[ { cohort.Repositories.Head with TargetHead=String.replicate 40 "8" } ] }
     Assert.NotEqual(original, GitHubMigrationInspect.cohortSha256 changedRevision)
     Assert.NotEqual(original, GitHubMigrationInspect.cohortSha256 changedHead)
+    let changedReceiver =
+        { cohort with Receivers=[ { cohort.Receivers.Head with RefName="refs/heads/other" } ] }
+    Assert.NotEqual(original, GitHubMigrationInspect.cohortSha256 changedReceiver)
+
+[<Fact>]
+let ``receiver cohort rejects ambiguous or unsafe branch refs before discovery`` () =
+    for invalid in [ "refs/tags/v1"; "refs/heads/a?b"; "refs/heads/a#b";
+                     "refs/heads/a%b"; "refs/heads/a.lock"; "refs/heads/a..b"; "refs/heads/a.";
+                     "refs/heads/a b"; "refs/heads/a^b"; "refs/heads/a:b";
+                     "refs/heads/a*b"; "refs/heads/a[b"; "refs/heads/a\\b" ] do
+        let changed = { cohort with Receivers=[ { cohort.Receivers.Head with RefName=invalid } ] }
+        Assert.False(GitHubMigrationInspect.validCohort changed)
+    Assert.False(GitHubMigrationInspect.validCohort { cohort with Receivers=[] })
+    Assert.True(GitHubMigrationInspect.validCohort
+        { cohort with Receivers=[ { cohort.Receivers.Head with ExpectedHead=String.replicate 40 "1" } ] })
+    Assert.True(GitHubMigrationInspect.validCohort cohort)
 
 [<Fact>]
 let ``one unavailable authority refuses without manufacturing a nine-authority pass`` () =

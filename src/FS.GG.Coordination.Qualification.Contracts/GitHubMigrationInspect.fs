@@ -11,8 +11,15 @@ type GitHubMigrationCopyRepository =
       SourceHead: string
       TargetHead: string }
 
+type GitHubMigrationCopyReceiver =
+    { Receiver: string
+      RepositoryId: int64
+      RefName: string
+      ExpectedHead: string }
+
 type GitHubMigrationCopyCohort =
     { Repositories: GitHubMigrationCopyRepository list
+      Receivers: GitHubMigrationCopyReceiver list
       ProjectOrganization: string
       ProjectNumber: int
       ProjectNodeId: string
@@ -95,6 +102,26 @@ module GitHubMigrationInspect =
 
     let private unique (values: 'a list) = values.Length = (values |> Set.ofList |> Set.count)
 
+    let private validReceiverRef (value: string) =
+        let prefix = "refs/heads/"
+        if String.IsNullOrWhiteSpace value || not (value.StartsWith(prefix, StringComparison.Ordinal)) then false
+        else
+            let suffix = value.Substring(prefix.Length)
+            let segments = suffix.Split('/')
+            let letterOrDigit character =
+                (character >= 'a' && character <= 'z')
+                || (character >= 'A' && character <= 'Z')
+                || (character >= '0' && character <= '9')
+            segments.Length > 0
+            && (segments |> Array.forall (fun segment ->
+                segment.Length > 0
+                && letterOrDigit segment.[0]
+                && segment.[segment.Length - 1] <> '.'
+                && not (segment.Contains("..", StringComparison.Ordinal))
+                && not (segment.EndsWith(".lock", StringComparison.OrdinalIgnoreCase))
+                && (segment |> Seq.forall (fun character ->
+                    letterOrDigit character || character = '_' || character = '-' || character = '.'))))
+
     let cohortSha256 (cohort: GitHubMigrationCopyCohort) =
         [ yield string cohort.Isolated
           yield cohort.SourceRevision
@@ -106,10 +133,15 @@ module GitHubMigrationInspect =
               yield repository.NodeId
               yield repository.FullName
               yield repository.SourceHead
-              yield repository.TargetHead ]
+              yield repository.TargetHead
+          for receiver in cohort.Receivers |> List.sortBy _.Receiver do
+              yield receiver.Receiver
+              yield string receiver.RepositoryId
+              yield receiver.RefName
+              yield receiver.ExpectedHead ]
         |> List.map framed |> String.concat "" |> sha
 
-    let private validCohort cohort =
+    let validCohort cohort =
         cohort.Isolated && validSha 40 cohort.SourceRevision
         && not (String.IsNullOrWhiteSpace cohort.ProjectOrganization)
         && cohort.ProjectNumber > 0
@@ -125,6 +157,15 @@ module GitHubMigrationInspect =
         && unique (cohort.Repositories |> List.map _.Id)
         && unique (cohort.Repositories |> List.map _.NodeId)
         && unique (cohort.Repositories |> List.map _.FullName)
+        && not cohort.Receivers.IsEmpty
+        && unique (cohort.Receivers |> List.map _.Receiver)
+        && unique (cohort.Receivers |> List.map (fun receiver -> receiver.RepositoryId, receiver.RefName))
+        && (cohort.Receivers |> List.forall (fun receiver ->
+            not (String.IsNullOrWhiteSpace receiver.Receiver)
+            && validReceiverRef receiver.RefName
+            && validSha 40 receiver.ExpectedHead
+            && (cohort.Repositories |> List.exists (fun repository ->
+                repository.Id = receiver.RepositoryId))))
 
     let private validateAuthority passOrdinal expected cohortDigest (value: GitHubMigrationInspectAuthority) =
         let fail reason =

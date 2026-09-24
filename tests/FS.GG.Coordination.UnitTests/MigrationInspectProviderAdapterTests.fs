@@ -10,6 +10,8 @@ open FS.GG.Coordination.Qualification.Contracts
 let private cohort =
     { Repositories=[ { Id=42L; NodeId="R_42"; FullName="FS-GG/copy"
                        SourceHead=String.replicate 40 "a"; TargetHead=String.replicate 40 "b" } ]
+      Receivers=[ { Receiver="copy-receiver"; RepositoryId=42L
+                    RefName="refs/heads/main"; ExpectedHead=String.replicate 40 "b" } ]
       ProjectOrganization="FS-GG"; ProjectNumber=1; ProjectNodeId="PROJECT_1"
       SourceRevision=String.replicate 40 "c"; Isolated=true }
 

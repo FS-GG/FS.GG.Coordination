@@ -3,10 +3,14 @@ module FS.GG.Coordination.MigrationGitHubReadTests
 open System
 open System.Collections.Generic
 open System.Net.Http
+open System.Threading
+open System.Threading.Tasks
 open System.Security.Cryptography
 open System.Text
 open Xunit
 open FS.GG.Coordination.GitHub
+open FS.GG.Coordination.Cli
+open FS.GG.Coordination.Qualification.Contracts
 
 let private options =
     { ApiBase=Uri "https://api.github.test/"
@@ -68,6 +72,148 @@ type private FakeTransport(responses: TransportOutcome list) =
         member _.Send request =
             requests.Add request
             if queue.Count = 0 then NetworkFailure else queue.Dequeue()
+
+let private receiverHead = String.replicate 40 "a"
+let private receiverTree = String.replicate 40 "b"
+let private receiverBlob = String.replicate 40 "c"
+let private receiverIdentity = ok Map.empty """{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}"""
+let private receiverRef =
+    ok Map.empty $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
+let private receiverCommit =
+    ok Map.empty $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+let private receiverTreeResponse =
+    ok Map.empty $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}"}}]}}"""
+let private receiverResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; receiverTreeResponse; receiverRef ]
+
+[<Fact>]
+let ``receiver snapshot binds exact branch commit recursive tree and terminal ref`` () =
+    let transport = FakeTransport receiverResponses
+    match MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead transport with
+    | Error failure -> failwithf "receiver read refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.Equal(receiverHead, observed.CommitSha)
+        Assert.Equal(receiverTree, observed.TreeSha)
+        Assert.Equal("https://api.github.test/repos/FS-GG/copy/git/trees/" + receiverTree + "?recursive=1",
+                     observed.TreeEvidence.RequestUri)
+        Assert.Equal(receiverBlob, observed.TreeEntries.Head.EntrySha)
+        Assert.Equal(5, transport.Requests.Length)
+        for request in transport.Requests do
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method); Assert.True(value.Body.IsNone)
+            | _ -> failwith "receiver read emitted GraphQL"
+        let treeRequest = transport.Requests.[3]
+        match treeRequest with
+        | Rest value -> Assert.Equal(observed.TreeEvidence.RequestUri, value.Uri.AbsoluteUri)
+        | _ -> failwith "tree was not REST"
+
+[<Fact>]
+let ``receiver snapshot refuses malformed refs before transport and typed drift`` () =
+    for invalid in [ "refs/tags/v1"; "refs/heads/a?b"; "refs/heads/a#b"; "refs/heads/a%b";
+                     "refs/heads/a.lock"; "refs/heads/a..b"; "refs/heads/a.";
+                     "refs/heads/a b"; "refs/heads/a~b" ] do
+        let transport = FakeTransport receiverResponses
+        Assert.Equal(Error MigrationReadFailure.InvalidOptions,
+                     MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" invalid receiverHead transport)
+        Assert.Empty(transport.Requests)
+    for index, replacement in
+        [ 0, ok Map.empty """{"id":42,"node_id":"FOREIGN","full_name":"FS-GG/copy"}"""
+          1, ok Map.empty $"""{{"ref":"refs/heads/main","object":{{"type":"tag","sha":"{receiverHead}"}}}}"""
+          2, ok Map.empty $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverBlob}"}}}}"""
+          3, ok Map.empty $"""{{"sha":"{receiverTree}","truncated":true,"tree":[]}}"""
+          4, ok Map.empty $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverBlob}"}}}}""" ] do
+        let responses = receiverResponses |> List.mapi (fun i response -> if i = index then replacement else response)
+        let transport = FakeTransport responses
+        match MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead transport with
+        | Error _ -> ()
+        | Ok _ -> failwithf "receiver drift at read %d was accepted" index
+
+[<Fact>]
+let ``receiver snapshot refuses missing tree proof and response links`` () =
+    let missing = FakeTransport (receiverResponses |> List.take 3)
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead missing)
+    let linked = FakeTransport [ ok (Map [ "Link", "<https://api.github.test/next>; rel=next" ])
+                                     """{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}""" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "unexpected:receiver-link"),
+                 MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead linked)
+
+[<Fact>]
+let ``receiver tree normalizes provider order and refuses duplicate paths`` () =
+    let alternate = String.replicate 40 "d"
+    let treeBody =
+        $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"z.txt","mode":"100644","type":"blob","sha":"{alternate}"}},{{"path":"a.txt","mode":"100644","type":"blob","sha":"{receiverBlob}"}}]}}"""
+    let responses = receiverResponses |> List.mapi (fun i item -> if i = 3 then ok Map.empty treeBody else item)
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead transport with
+    | Error failure -> failwithf "complete unsorted tree refused: %A" failure
+    | Ok proof -> Assert.Equal([ "a.txt"; "z.txt" ], proof.TreeEntries |> List.map _.EntryPath)
+    let duplicate = treeBody.Replace("z.txt", "a.txt")
+    let drift = FakeTransport (receiverResponses |> List.mapi (fun i item -> if i = 3 then ok Map.empty duplicate else item))
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "a.txt"),
+                 MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead drift)
+
+[<Fact>]
+let ``receiver cohort reads every declared snapshot twice and refuses raw drift`` () =
+    let cohort: GitHubMigrationCopyCohort =
+        { Repositories=[ { Id=42L; NodeId="REPO_42"; FullName="FS-GG/copy"
+                           SourceHead=String.replicate 40 "d"; TargetHead=receiverHead } ]
+          Receivers=[ { Receiver="receiver-a"; RepositoryId=42L
+                        RefName="refs/heads/main"; ExpectedHead=receiverHead } ]
+          ProjectOrganization="FS-GG"; ProjectNumber=1; ProjectNodeId="PROJECT_1"
+          SourceRevision=String.replicate 40 "e"; Isolated=true }
+    let stable = FakeTransport (receiverResponses @ receiverResponses)
+    match MigrationReceiverCapture.captureTwoPass cohort options stable with
+    | Error failure -> failwithf "stable receiver refused: %s" failure
+    | Ok proof ->
+        Assert.Equal(GitHubMigrationInspect.cohortSha256 cohort, proof.CohortSha256)
+        Assert.Single(proof.First) |> ignore
+        Assert.Equal(proof.First.Head.SnapshotSha256, proof.Second.Head.SnapshotSha256)
+        Assert.Equal(10, stable.Requests.Length)
+    let second = { cohort.Receivers.Head with Receiver="receiver-b"; RefName="refs/heads/release" }
+    let twoReceivers = { cohort with Receivers=[ cohort.Receivers.Head; second ] }
+    let releaseRef =
+        ok Map.empty $"""{{"ref":"refs/heads/release","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
+    let releaseResponses =
+        receiverResponses |> List.mapi (fun i item -> if i = 1 || i = 4 then releaseRef else item)
+    let complete = FakeTransport (receiverResponses @ releaseResponses @ receiverResponses @ releaseResponses)
+    match MigrationReceiverCapture.captureTwoPass twoReceivers options complete with
+    | Error failure -> failwithf "complete two-receiver cohort refused: %s" failure
+    | Ok proof ->
+        Assert.Equal([ "receiver-a"; "receiver-b" ], proof.First |> List.map _.ReceiverName)
+        Assert.Equal(20, complete.Requests.Length)
+    let missingSecond = FakeTransport (receiverResponses @ releaseResponses @ receiverResponses)
+    match MigrationReceiverCapture.captureTwoPass twoReceivers options missingSecond with
+    | Error _ -> ()
+    | Ok _ -> failwith "incomplete second receiver passed"
+    let changedIdentity = ok Map.empty """ {"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}"""
+    let drift = FakeTransport (receiverResponses @ (changedIdentity :: receiverResponses.Tail))
+    Assert.Equal(Error "changed:receiver-snapshot",
+                 MigrationReceiverCapture.captureTwoPass cohort options drift)
+    let invalid = { cohort with Receivers=[ { cohort.Receivers.Head with RefName="refs/tags/v1" } ] }
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:receiver-cohort",
+                 MigrationReceiverCapture.captureTwoPass invalid options noCalls)
+    Assert.Empty(noCalls.Requests)
+
+type private RedirectedHandler() =
+    inherit HttpMessageHandler()
+    member private _.Redirected() =
+        let response = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        response.RequestMessage <- new HttpRequestMessage(HttpMethod.Get, "https://foreign.example/repos/FS-GG/copy")
+        response.Content <- new StringContent("""{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}""")
+        response
+    override this.Send(_request: HttpRequestMessage, _cancel: CancellationToken) = this.Redirected()
+    override this.SendAsync(_request: HttpRequestMessage, _cancel: CancellationToken) =
+        Task.FromResult(this.Redirected())
+
+[<Fact>]
+let ``HTTP migration transport refuses a redirected final URI`` () =
+    use client = new HttpClient(new RedirectedHandler())
+    let transport = HttpMigrationGitHubReadTransport(client) :> IMigrationGitHubReadTransport
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead transport)
 
 [<Fact>]
 let ``repository core settings retain exact response and use only a GET`` () =

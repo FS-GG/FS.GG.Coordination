@@ -112,6 +112,34 @@ type MigrationRepositoryActionsPolicy =
       VerifiedAllowed: bool option
       PatternsAllowed: string list option }
 
+/// One exact receiver ref/commit/recursive-tree observation. Blob pin bytes are not read here.
+type MigrationReceiverObjectEvidence =
+    { RequestUri: string
+      RawBody: string
+      RawSha256: string }
+
+type MigrationReceiverTreeEntry =
+    { EntryPath: string
+      EntryMode: string
+      EntryKind: string
+      EntrySha: string }
+
+type MigrationReceiverSnapshot =
+    { ReceiverName: string
+      RepositoryId: int64
+      RepositoryNodeId: string
+      RepositoryFullName: string
+      RefName: string
+      CommitSha: string
+      TreeSha: string
+      IdentityEvidence: MigrationReceiverObjectEvidence
+      InitialRefEvidence: MigrationReceiverObjectEvidence
+      CommitEvidence: MigrationReceiverObjectEvidence
+      TreeEvidence: MigrationReceiverObjectEvidence
+      TerminalRefEvidence: MigrationReceiverObjectEvidence
+      TreeEntries: MigrationReceiverTreeEntry list
+      SnapshotSha256: string }
+
 /// Only repository-owned branch/tag rulesets. Inherited, push, or hidden bypass state refuses.
 type MigrationRulesetListPage =
     { ListRequestedUri: string
@@ -419,6 +447,12 @@ module MigrationGitHubRead =
     val readRepositoryActionsPolicy:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryActionsPolicy, MigrationReadFailure>
+
+    /// Exact branch ref, commit and complete recursive-tree read, closed by a second ref read.
+    val readReceiverSnapshot:
+        options:MigrationGitHubReadOptions -> receiverName:string -> expectedNodeId:string ->
+        refName:string -> expectedHead:string -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationReceiverSnapshot, MigrationReadFailure>
 
     /// Read-only repository-owned branch/tag snapshot; refuses inherited, push and omitted bypass state.
     val readRepositoryBranchTagRulesets:

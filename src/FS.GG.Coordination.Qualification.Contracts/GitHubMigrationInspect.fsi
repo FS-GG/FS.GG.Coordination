@@ -9,8 +9,18 @@ type GitHubMigrationCopyRepository =
       SourceHead: string
       TargetHead: string }
 
+/// One member of the exhaustive receiver declaration for the isolated copy cohort.
+/// Exhaustiveness remains a caller assertion until independently qualified.
+type GitHubMigrationCopyReceiver =
+    { Receiver: string
+      RepositoryId: int64
+      RefName: string
+      ExpectedHead: string }
+
 type GitHubMigrationCopyCohort =
     { Repositories: GitHubMigrationCopyRepository list
+      /// Exact declared copy receivers; this is not inferred from any production fleet.
+      Receivers: GitHubMigrationCopyReceiver list
       ProjectOrganization: string
       ProjectNumber: int
       ProjectNodeId: string
@@ -84,6 +94,7 @@ type GitHubMigrationInspectFailure =
 [<RequireQualifiedAccess>]
 module GitHubMigrationInspect =
     val cohortSha256: GitHubMigrationCopyCohort -> string
+    val validCohort: GitHubMigrationCopyCohort -> bool
     val inspect:
         request:GitHubMigrationInspectRequest ->
         source:IGitHubMigrationInspectSource ->

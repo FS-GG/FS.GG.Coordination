@@ -113,6 +113,33 @@ type MigrationRepositoryActionsPolicy =
       VerifiedAllowed: bool option
       PatternsAllowed: string list option }
 
+type MigrationReceiverObjectEvidence =
+    { RequestUri: string
+      RawBody: string
+      RawSha256: string }
+
+type MigrationReceiverTreeEntry =
+    { EntryPath: string
+      EntryMode: string
+      EntryKind: string
+      EntrySha: string }
+
+type MigrationReceiverSnapshot =
+    { ReceiverName: string
+      RepositoryId: int64
+      RepositoryNodeId: string
+      RepositoryFullName: string
+      RefName: string
+      CommitSha: string
+      TreeSha: string
+      IdentityEvidence: MigrationReceiverObjectEvidence
+      InitialRefEvidence: MigrationReceiverObjectEvidence
+      CommitEvidence: MigrationReceiverObjectEvidence
+      TreeEvidence: MigrationReceiverObjectEvidence
+      TerminalRefEvidence: MigrationReceiverObjectEvidence
+      TreeEntries: MigrationReceiverTreeEntry list
+      SnapshotSha256: string }
+
 type MigrationRulesetListPage =
     { ListRequestedUri: string
       ListPayloadJson: string
@@ -430,6 +457,10 @@ type HttpMigrationGitHubReadTransport(client: HttpClient) =
                     | Some value -> message.Content <- new StringContent(value, Encoding.UTF8, "application/json")
                     | None -> ()
                     use response = client.Send message
+                    if isNull response.RequestMessage
+                       || isNull response.RequestMessage.RequestUri
+                       || response.RequestMessage.RequestUri.AbsoluteUri <> uri.AbsoluteUri then
+                        raise (HttpRequestException "redirected-read-uri")
                     let headerValues =
                         Seq.append response.Headers response.Content.Headers
                         |> Seq.map (fun item -> item.Key.ToLowerInvariant(), String.concat "," item.Value)
@@ -925,6 +956,166 @@ module MigrationGitHubRead =
                                 Error(MigrationReadFailure.MalformedResponse "invalid:allowed-actions")
                             | Error failure, _, _, _ | _, Error failure, _, _
                             | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))))
+
+    let readReceiverSnapshot (options: MigrationGitHubReadOptions) receiverName expectedNodeId refName expectedHead
+                             (transport: IMigrationGitHubReadTransport) =
+        let validSha (value: string) =
+            not (isNull value) && value.Length = 40
+            && (value |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f'))
+        let validRef (value: string) =
+            if not (text value) || not (value.StartsWith("refs/heads/", StringComparison.Ordinal)) then false
+            else
+                let allowed c = Char.IsAsciiLetterOrDigit c || c = '_' || c = '-' || c = '.'
+                value.Substring("refs/heads/".Length).Split('/')
+                |> Array.forall (fun segment ->
+                    segment.Length > 0 && Char.IsAsciiLetterOrDigit segment.[0]
+                    && segment.[segment.Length - 1] <> '.'
+                    && not (segment.Contains("..", StringComparison.Ordinal))
+                    && not (segment.EndsWith(".lock", StringComparison.OrdinalIgnoreCase))
+                    && (segment |> Seq.forall allowed))
+        if not (valid options) || not (text receiverName) || not (text expectedNodeId)
+           || not (validRef refName) || not (validSha expectedHead) then
+            Error MigrationReadFailure.InvalidOptions
+        else
+            let repoPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let exactRef = Uri(options.ApiBase, $"{repoPath}/git/ref/{refName.Substring(5)}")
+            let identity = Uri(options.ApiBase, repoPath)
+            let commit = Uri(options.ApiBase, $"{repoPath}/git/commits/{expectedHead}")
+            let get (uri: Uri) =
+                response transport
+                    (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                            ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:receiver-link")
+                    else Ok { RequestUri=uri.AbsoluteUri; RawBody=result.Body; RawSha256=sha result.Body })
+            let parseEvidence evidence f =
+                parse evidence.RawBody
+                |> Result.bind (fun document ->
+                    use document = document
+                    uniqueObjectMembers document.RootElement
+                    |> Result.bind (fun () -> f document.RootElement))
+            let requireSha name root =
+                requiredString name root
+                |> Result.bind (fun value ->
+                    if validSha value then Ok value
+                    else Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
+            let sequence values =
+                values
+                |> List.fold (fun state value ->
+                    match state, value with
+                    | Ok previous, Ok item -> Ok(item :: previous)
+                    | Error failure, _ | _, Error failure -> Error failure) (Ok [])
+                |> Result.map List.rev
+            let refValue evidence =
+                parseEvidence evidence (fun root ->
+                    match requiredString "ref" root, property "object" root with
+                    | Ok actualRef, Ok objectValue ->
+                        uniqueObjectMembers objectValue
+                        |> Result.bind (fun () ->
+                            match requiredString "type" objectValue, requireSha "sha" objectValue with
+                            | Ok "commit", Ok head when actualRef = refName && head = expectedHead -> Ok()
+                            | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                            | Error failure, _ | _, Error failure -> Error failure)
+                    | Error failure, _ | _, Error failure -> Error failure)
+            let readIdentity evidence =
+                parseEvidence evidence (fun root ->
+                    match requiredInt64 "id" root, requiredString "node_id" root,
+                          requiredString "full_name" root with
+                    | Ok id, Ok node, Ok name when
+                        id = options.ExpectedRepositoryId && node = expectedNodeId
+                        && name = $"{options.Owner}/{options.Repository}" -> Ok()
+                    | Ok _, Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                    | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+            let readCommit evidence =
+                parseEvidence evidence (fun root ->
+                    match requireSha "sha" root, property "tree" root with
+                    | Ok actualHead, Ok tree ->
+                        uniqueObjectMembers tree
+                        |> Result.bind (fun () ->
+                            requireSha "sha" tree
+                            |> Result.bind (fun treeSha ->
+                                if actualHead = expectedHead then Ok treeSha
+                                else Error MigrationReadFailure.IdentityDrift))
+                    | Error failure, _ | _, Error failure -> Error failure)
+            let readTree treeSha evidence =
+                parseEvidence evidence (fun root ->
+                    match requireSha "sha" root, requiredBool "truncated" root, property "tree" root with
+                    | Ok actualSha, Ok false, Ok entries when
+                        actualSha = treeSha && entries.ValueKind = JsonValueKind.Array ->
+                        entries.EnumerateArray()
+                        |> Seq.map (fun entry ->
+                            uniqueObjectMembers entry
+                            |> Result.bind (fun () ->
+                                match requiredString "path" entry, requiredString "mode" entry,
+                                      requiredString "type" entry, requireSha "sha" entry with
+                                | Ok path, Ok mode, Ok kind, Ok hash when
+                                    not (path.StartsWith('/')) && not (path.Contains("..", StringComparison.Ordinal))
+                                    && not (path.Contains('\\'))
+                                    && (path.Split('/') |> Array.forall (fun part -> text part && part <> "."))
+                                    && Set.contains kind (set [ "blob"; "tree" ])
+                                    && (kind = "blob" && Set.contains mode (set [ "100644"; "100755"; "120000" ])
+                                        || kind = "tree" && mode = "040000") ->
+                                    Ok { EntryPath=path; EntryMode=mode; EntryKind=kind; EntrySha=hash }
+                                | Ok _, Ok _, Ok _, Ok _ ->
+                                    Error(MigrationReadFailure.MalformedResponse "invalid:tree-entry")
+                                | Error failure, _, _, _ | _, Error failure, _, _
+                                | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))
+                        |> Seq.toList |> sequence
+                        |> Result.bind (collectUnique _.EntryPath)
+                        |> Result.map (List.sortBy _.EntryPath)
+                    | Ok _, Ok true, Ok _ -> Error(MigrationReadFailure.PaginationRefused "truncated:receiver-tree")
+                    | Ok _, Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                    | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+            get identity
+            |> Result.bind (fun identityEvidence ->
+                readIdentity identityEvidence
+                |> Result.bind (fun () ->
+                    get exactRef
+                    |> Result.bind (fun initialRef ->
+                        refValue initialRef
+                        |> Result.bind (fun () ->
+                            get commit
+                            |> Result.bind (fun commitEvidence ->
+                                readCommit commitEvidence
+                                |> Result.bind (fun treeSha ->
+                                    let treeUri = Uri(options.ApiBase, $"{repoPath}/git/trees/{treeSha}?recursive=1")
+                                    get treeUri
+                                    |> Result.bind (fun treeEvidence ->
+                                        readTree treeSha treeEvidence
+                                        |> Result.bind (fun entries ->
+                                            get exactRef
+                                            |> Result.bind (fun terminalRef ->
+                                                refValue terminalRef
+                                                |> Result.map (fun () ->
+                                                    let evidence = [ identityEvidence; initialRef; commitEvidence; treeEvidence; terminalRef ]
+                                                    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+                                                    let digest =
+                                                        [ yield receiverName
+                                                          yield string options.ExpectedRepositoryId
+                                                          yield expectedNodeId
+                                                          yield $"{options.Owner}/{options.Repository}"
+                                                          yield refName
+                                                          yield expectedHead
+                                                          yield treeSha
+                                                          for item in evidence do
+                                                              yield item.RequestUri
+                                                              yield item.RawSha256
+                                                          for item in entries do
+                                                              yield item.EntryPath
+                                                              yield item.EntryMode
+                                                              yield item.EntryKind
+                                                              yield item.EntrySha ]
+                                                        |> List.map frame |> String.concat "" |> sha
+                                                    { ReceiverName=receiverName; RepositoryId=options.ExpectedRepositoryId
+                                                      RepositoryNodeId=expectedNodeId
+                                                      RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                                      RefName=refName; CommitSha=expectedHead; TreeSha=treeSha
+                                                      IdentityEvidence=identityEvidence; InitialRefEvidence=initialRef
+                                                      CommitEvidence=commitEvidence; TreeEvidence=treeEvidence
+                                                      TerminalRefEvidence=terminalRef; TreeEntries=entries
+                                                      SnapshotSha256=digest }))))))))))
 
     type private RulesetSummary =
         { RulesetId: int64
