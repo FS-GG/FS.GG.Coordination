@@ -152,3 +152,17 @@ The helper now requires FIFO stdout before the native approval read or key looku
 synthetic CLI controls reject both terminal and regular-file stdout. Four custody
 tests and four protected-read tests pass. A real JWT was not issued. This safeguard
 is part of the reviewed-source gate, not evidence of protected approval.
+
+The first PR #508 validation [run 35966388039](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35966388039)
+failed when the `formal-review-epoch` negative control exhausted Apalache's
+300-second execution budget after an early startup retry. A failed-job rerun
+passed that shard but the formal aggregate rejected a missing/foreign-file set;
+the run contained two same-named review-epoch artifacts from different attempts.
+No formal model was changed or invariant weakened. A fresh, separate ordinary
+validation [run 35971759660](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/35971759660)
+bound candidate `e38743819acee1f1f3c5340e8ae98861c9be1c69` and base
+`4f8b7f7b7acb22bfa2cc80a7752f6cc3a185c1b4` in its downloaded obligation
+artifact and passed every job, including the formal and overall aggregates.
+Because that manual run is not a green PR-associated check, the PR still needs
+fresh head-associated validation before merge. Neither CI run was the protected
+admission workflow or authorized a signer, JWT, or journal mutation.
