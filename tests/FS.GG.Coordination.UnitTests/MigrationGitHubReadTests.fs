@@ -356,6 +356,130 @@ let ``repository ruleset page evidence detects changed raw bytes across reads`` 
         | Error failure -> failwithf "unexpected empty ruleset refusal: %A" failure
     Assert.NotEqual(read "[]", read " [ ] ")
 
+let private actionsAll =
+    """{"enabled":true,"allowed_actions":"all","selected_actions_url":null,"sha_pinning_required":false}"""
+
+let private actionsSelected =
+    """{"enabled":true,"allowed_actions":"selected","selected_actions_url":"https://api.github.test/repositories/42/actions/permissions/selected-actions","sha_pinning_required":true}"""
+
+let private selectedActions =
+    """{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":["FS-GG/*@*"]}"""
+
+[<Fact>]
+let ``repository Actions core policy reads only exact identity and policy GETs`` () =
+    let transport = FakeTransport [ repo; ok Map.empty actionsAll ]
+    match MigrationGitHubRead.readRepositoryActionsPolicy options transport with
+    | Error failure -> failwithf "unexpected Actions refusal: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.True(observed.Enabled)
+        Assert.Equal("all", observed.AllowedActions)
+        Assert.False(observed.ShaPinningRequired)
+        Assert.Equal(None, observed.SelectedActionsUri)
+        Assert.Equal(actionsAll, observed.PolicyPayloadJson)
+        let expectedHash = actionsAll |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                           |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(expectedHash, observed.PolicyPayloadSha256)
+        Assert.Equal(2, transport.Requests.Length)
+        let uris =
+            transport.Requests
+            |> List.map (function
+                | Rest request ->
+                    Assert.Equal(Get, request.Method)
+                    Assert.True(request.Body.IsNone)
+                    request.Uri.AbsoluteUri
+                | _ -> failwith "Actions reader issued GraphQL")
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/copy"
+              "https://api.github.test/repos/FS-GG/copy/actions/permissions" ], uris)
+
+[<Fact>]
+let ``selected Actions policy follows only the exact numeric repository URL`` () =
+    let transport = FakeTransport [ repo; ok Map.empty actionsSelected; ok Map.empty selectedActions ]
+    match MigrationGitHubRead.readRepositoryActionsPolicy options transport with
+    | Error failure -> failwithf "unexpected selected Actions refusal: %A" failure
+    | Ok observed ->
+        Assert.Equal("selected", observed.AllowedActions)
+        Assert.Equal(Some true, observed.GitHubOwnedAllowed)
+        Assert.Equal(Some false, observed.VerifiedAllowed)
+        Assert.Equal(Some [ "FS-GG/*@*" ], observed.PatternsAllowed)
+        Assert.Equal(Some selectedActions, observed.SelectedActionsPayloadJson)
+        Assert.Equal(3, transport.Requests.Length)
+        match transport.Requests.[2] with
+        | Rest request ->
+            Assert.Equal(Get, request.Method)
+            Assert.Equal("https://api.github.test/repositories/42/actions/permissions/selected-actions",
+                         request.Uri.AbsoluteUri)
+        | _ -> failwith "selected Actions read was not REST"
+
+[<Fact>]
+let ``selected Actions policy accepts exact canonical repository URL`` () =
+    let canonical = "https://api.github.test/repos/FS-GG/copy/actions/permissions/selected-actions"
+    let policy =
+        actionsSelected.Replace("https://api.github.test/repositories/42/actions/permissions/selected-actions", canonical)
+    let transport = FakeTransport [ repo; ok Map.empty policy; ok Map.empty selectedActions ]
+    match MigrationGitHubRead.readRepositoryActionsPolicy options transport with
+    | Error failure -> failwithf "canonical selected URL refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(Some canonical, observed.SelectedActionsUri)
+        match transport.Requests.[2] with
+        | Rest request -> Assert.Equal(canonical, request.Uri.AbsoluteUri)
+        | _ -> failwith "selected Actions read was not REST"
+
+[<Fact>]
+let ``repository Actions policy refuses foreign selected URL before dispatch`` () =
+    for url in
+        [ "https://foreign.example/repositories/42/actions/permissions/selected-actions"
+          "https://api.github.test/repositories/43/actions/permissions/selected-actions"
+          "http://api.github.test/repositories/42/actions/permissions/selected-actions"
+          "https://api.github.test/repositories/42/actions/permissions/selected-actions?redirect=1" ] do
+        let changed = actionsSelected.Replace("https://api.github.test/repositories/42/actions/permissions/selected-actions", url)
+        let transport = FakeTransport [ repo; ok Map.empty changed ]
+        Assert.Equal(Error(MigrationReadFailure.MalformedResponse "foreign:selected-actions-url"),
+                     MigrationGitHubRead.readRepositoryActionsPolicy options transport)
+        Assert.Equal(2, transport.Requests.Length)
+
+[<Fact>]
+let ``repository Actions policy refuses incomplete core and selected allowlist`` () =
+    let malformedCore =
+        [ actionsAll.Replace("\"enabled\":true", "\"enabled\":null")
+          actionsAll.Replace("\"allowed_actions\":\"all\"", "\"allowed_actions\":\"mystery\"")
+          actionsSelected.Replace("\"selected_actions_url\":\"https://api.github.test/repositories/42/actions/permissions/selected-actions\",", "")
+          actionsAll.Replace("\"selected_actions_url\":null", "\"selected_actions_url\":\"https://api.github.test/repositories/42/actions/permissions/selected-actions\"") ]
+    for core in malformedCore do
+        let transport = FakeTransport [ repo; ok Map.empty core ]
+        match MigrationGitHubRead.readRepositoryActionsPolicy options transport with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete Actions core accepted"
+        Assert.Equal(2, transport.Requests.Length)
+    let malformedSelected =
+        [ selectedActions.Replace("\"verified_allowed\":false,", "")
+          selectedActions.Replace("\"patterns_allowed\":[\"FS-GG/*@*\"]", "\"patterns_allowed\":[\"x\",\"x\"]")
+          selectedActions.Replace("\"github_owned_allowed\":true", "\"github_owned_allowed\":\"yes\"") ]
+    for selected in malformedSelected do
+        let transport = FakeTransport [ repo; ok Map.empty actionsSelected; ok Map.empty selected ]
+        match MigrationGitHubRead.readRepositoryActionsPolicy options transport with
+        | Error _ -> ()
+        | Ok _ -> failwith "malformed selected Actions allowlist accepted"
+
+[<Fact>]
+let ``repository Actions policy refuses identity drift and HTTP failures`` () =
+    let drift = FakeTransport [ ok Map.empty """{"id":43,"full_name":"FS-GG/copy"}""" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readRepositoryActionsPolicy options drift)
+    Assert.Single(drift.Requests) |> ignore
+    for status in [ 302; 403; 404; 500 ] do
+        let refused =
+            Response
+                { StatusCode=status; Headers=Map.empty; Body="{}"; ETag=None
+                  RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+        for responses in
+            [ [ repo; refused ]
+              [ repo; ok Map.empty actionsSelected; refused ] ] do
+            let transport = FakeTransport responses
+            Assert.Equal(Error(MigrationReadFailure.HttpRefused status),
+                         MigrationGitHubRead.readRepositoryActionsPolicy options transport)
+
 let private issueCensus () =
     let first = issue 1 "ISSUE_1"
     let second = issue 2 "ISSUE_2"

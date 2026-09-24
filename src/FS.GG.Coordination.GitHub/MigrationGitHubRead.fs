@@ -94,6 +94,25 @@ type MigrationCustomProperties =
       Definitions: MigrationCustomPropertyDefinition list
       Values: MigrationCustomPropertyValue list }
 
+type MigrationRepositoryActionsPolicy =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PolicyUri: string
+      PolicyPayloadJson: string
+      PolicyPayloadSha256: string
+      Enabled: bool
+      AllowedActions: string
+      ShaPinningRequired: bool
+      SelectedActionsUri: string option
+      SelectedActionsPayloadJson: string option
+      SelectedActionsPayloadSha256: string option
+      GitHubOwnedAllowed: bool option
+      VerifiedAllowed: bool option
+      PatternsAllowed: string list option }
+
 type MigrationRulesetListPage =
     { ListRequestedUri: string
       ListPayloadJson: string
@@ -789,6 +808,123 @@ module MigrationGitHubRead =
                                                  ValuesPayloadSha256=sha valuesBody
                                                  Definitions=definitions
                                                  Values=values })))))
+
+    let readRepositoryActionsPolicy (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let identityUri = Uri(options.ApiBase, repositoryPath)
+            let policyUri = Uri(options.ApiBase, $"{repositoryPath}/actions/permissions")
+            let get (uri: Uri) =
+                response transport
+                    (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                            ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers
+                         |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:actions-link")
+                    else Ok result.Body)
+            let readIdentity () =
+                get identityUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredInt64 "id" document.RootElement,
+                                  requiredString "full_name" document.RootElement with
+                            | Ok id, Ok name when id = options.ExpectedRepositoryId
+                                                  && name = $"{options.Owner}/{options.Repository}" -> Ok body
+                            | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                            | Error failure, _ | _, Error failure -> Error failure)))
+            let selectedUri (root: JsonElement) =
+                let mutable selected = Unchecked.defaultof<JsonElement>
+                if not (root.TryGetProperty("selected_actions_url", &selected))
+                   || selected.ValueKind = JsonValueKind.Null then Ok None
+                elif selected.ValueKind <> JsonValueKind.String then
+                    Error(MigrationReadFailure.MalformedResponse "invalid:selected-actions-url")
+                else
+                    let mutable uri = Unchecked.defaultof<Uri>
+                    let raw = selected.GetString()
+                    let repoUri = Uri(options.ApiBase, $"{repositoryPath}/actions/permissions/selected-actions")
+                    let numericUri = Uri(options.ApiBase, $"repositories/{options.ExpectedRepositoryId}/actions/permissions/selected-actions")
+                    if not (Uri.TryCreate(raw, UriKind.Absolute, &uri))
+                       || uri.Scheme <> Uri.UriSchemeHttps
+                       || (uri.AbsoluteUri <> repoUri.AbsoluteUri && uri.AbsoluteUri <> numericUri.AbsoluteUri) then
+                        Error(MigrationReadFailure.MalformedResponse "foreign:selected-actions-url")
+                    else Ok(Some uri)
+            readIdentity ()
+            |> Result.bind (fun identityBody ->
+                get policyUri
+                |> Result.bind (fun policyBody ->
+                    parse policyBody
+                    |> Result.bind (fun document ->
+                        use document = document
+                        let root = document.RootElement
+                        uniqueObjectMembers root
+                        |> Result.bind (fun () ->
+                            match requiredBool "enabled" root, requiredString "allowed_actions" root,
+                                  requiredBool "sha_pinning_required" root, selectedUri root with
+                            | Ok enabled, Ok allowed, Ok pinning, Ok selected when
+                                Set.contains allowed (set [ "all"; "local_only"; "selected" ]) ->
+                                if (allowed = "selected") <> selected.IsSome then
+                                    Error(MigrationReadFailure.MalformedResponse "invalid:selected-actions-boundary")
+                                else
+                                    let selectedRead =
+                                        match selected with
+                                        | None -> Ok(None, None, None, None, None)
+                                        | Some uri ->
+                                            get uri
+                                            |> Result.bind (fun body ->
+                                                parse body
+                                                |> Result.bind (fun selectedDocument ->
+                                                    use selectedDocument = selectedDocument
+                                                    let selectedRoot = selectedDocument.RootElement
+                                                    uniqueObjectMembers selectedRoot
+                                                    |> Result.bind (fun () ->
+                                                        match requiredBool "github_owned_allowed" selectedRoot,
+                                                              requiredBool "verified_allowed" selectedRoot,
+                                                              property "patterns_allowed" selectedRoot with
+                                                        | Ok githubOwned, Ok verified, Ok patterns when
+                                                            patterns.ValueKind = JsonValueKind.Array ->
+                                                            let entries = patterns.EnumerateArray() |> Seq.toList
+                                                            let names =
+                                                                entries
+                                                                |> List.choose (fun item ->
+                                                                    if item.ValueKind = JsonValueKind.String then
+                                                                        Some(item.GetString()) else None)
+                                                            if names.Length <> entries.Length
+                                                               || names |> List.exists (fun name -> isNull name || not (text name))
+                                                               || (names |> Set.ofList |> Set.count) <> names.Length then
+                                                                Error(MigrationReadFailure.MalformedResponse "invalid:patterns-allowed")
+                                                            else Ok(Some body, Some(sha body), Some githubOwned,
+                                                                    Some verified, Some names)
+                                                        | Ok _, Ok _, Ok _ ->
+                                                            Error(MigrationReadFailure.MalformedResponse "invalid:patterns-allowed")
+                                                        | Error failure, _, _ | _, Error failure, _
+                                                        | _, _, Error failure -> Error failure)))
+                                    selectedRead
+                                    |> Result.map (fun (selectedBody, selectedHash, githubOwned, verified, patterns) ->
+                                        { RepositoryId=options.ExpectedRepositoryId
+                                          RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                          IdentityUri=identityUri.AbsoluteUri
+                                          IdentityPayloadJson=identityBody
+                                          IdentityPayloadSha256=sha identityBody
+                                          PolicyUri=policyUri.AbsoluteUri
+                                          PolicyPayloadJson=policyBody
+                                          PolicyPayloadSha256=sha policyBody
+                                          Enabled=enabled; AllowedActions=allowed; ShaPinningRequired=pinning
+                                          SelectedActionsUri=selected |> Option.map _.AbsoluteUri
+                                          SelectedActionsPayloadJson=selectedBody
+                                          SelectedActionsPayloadSha256=selectedHash
+                                          GitHubOwnedAllowed=githubOwned; VerifiedAllowed=verified
+                                          PatternsAllowed=patterns })
+                            | Ok _, Ok _, Ok _, Ok _ ->
+                                Error(MigrationReadFailure.MalformedResponse "invalid:allowed-actions")
+                            | Error failure, _, _, _ | _, Error failure, _, _
+                            | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))))
 
     type private RulesetSummary =
         { RulesetId: int64

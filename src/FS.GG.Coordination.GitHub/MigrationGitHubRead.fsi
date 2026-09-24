@@ -91,6 +91,27 @@ type MigrationCustomProperties =
       Definitions: MigrationCustomPropertyDefinition list
       Values: MigrationCustomPropertyValue list }
 
+/// Repository Actions policy and its conditional selected-actions allowlist only.
+/// Organization inheritance and other Actions settings remain outside this observation.
+type MigrationRepositoryActionsPolicy =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PolicyUri: string
+      PolicyPayloadJson: string
+      PolicyPayloadSha256: string
+      Enabled: bool
+      AllowedActions: string
+      ShaPinningRequired: bool
+      SelectedActionsUri: string option
+      SelectedActionsPayloadJson: string option
+      SelectedActionsPayloadSha256: string option
+      GitHubOwnedAllowed: bool option
+      VerifiedAllowed: bool option
+      PatternsAllowed: string list option }
+
 /// Only repository-owned branch/tag rulesets. Inherited, push, or hidden bypass state refuses.
 type MigrationRulesetListPage =
     { ListRequestedUri: string
@@ -393,6 +414,11 @@ module MigrationGitHubRead =
     val readCustomProperties:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationCustomProperties, MigrationReadFailure>
+
+    /// Read-only partial repository Actions policy; selected allowlist is required when selected.
+    val readRepositoryActionsPolicy:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryActionsPolicy, MigrationReadFailure>
 
     /// Read-only repository-owned branch/tag snapshot; refuses inherited, push and omitted bypass state.
     val readRepositoryBranchTagRulesets:
