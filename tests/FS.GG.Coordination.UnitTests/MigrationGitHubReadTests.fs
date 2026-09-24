@@ -136,6 +136,81 @@ let private issueCensus () =
     | Ok population -> population
     | Error failure -> failwithf "unexpected issue census refusal: %A" failure
 
+let private pullRequest number nodeId =
+    let head = String.replicate 40 "a"
+    let baseRevision = String.replicate 40 "b"
+    $"""{{"number":{number},"id":{number + 200},"node_id":"{nodeId}","state":"open","updated_at":"2026-09-23T10:00:00Z","head":{{"sha":"{head}"}},"base":{{"sha":"{baseRevision}","repo":{{"id":42}}}}}}"""
+
+let private issuesWithPullRequests count =
+    { issueCensus () with PullRequestCount=count }
+
+[<Fact>]
+let ``pull request census binds terminal pages to the issue count and raw page bytes`` () =
+    let next = "https://api.github.test/repositories/42/pulls?state=all&per_page=100&after=cursor&page=2"
+    let firstRecord = pullRequest 3 "PR_3"
+    let secondRecord = pullRequest 4 "PR_4"
+    let firstBody = $"[{firstRecord}]"
+    let secondBody = $"[{secondRecord}]"
+    let transport =
+        FakeTransport [ repo
+                        ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) firstBody
+                        ok Map.empty secondBody ]
+    match MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 2) transport with
+    | Ok observed ->
+        Assert.True(observed.Terminal)
+        Assert.Equal(2, observed.PageCount)
+        Assert.Equal<int list>([ 3; 4 ], observed.PullRequests |> List.map _.Number)
+        Assert.Equal(2, observed.Pages.Length)
+        Assert.Equal(Some next, observed.Pages.Head.NextUri)
+        let digest = firstBody |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                     |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(digest, observed.Pages.Head.PayloadSha256)
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method)
+            | _ -> failwith "pull request census issued a non-REST request")
+    | Error failure -> failwithf "unexpected pull request census refusal: %A" failure
+
+[<Fact>]
+let ``pull request census refuses missing skipped and escaped terminal pages`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/pulls?state=all&per_page=100&page=2"
+    let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
+    let missing = FakeTransport [ repo; first ]
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 0) missing)
+    let skipped = FakeTransport [ repo; ok (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/copy/pulls?state=all&per_page=100&page=3>; rel=\"next\"" ]) "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 0) skipped)
+    let escaped = FakeTransport [ repo; ok (Map.ofList [ "link", "<https://other.test/pulls?state=all&per_page=100&page=2>; rel=\"next\"" ]) "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 0) escaped)
+
+[<Fact>]
+let ``pull request census refuses changed population duplicate and wrong base repository`` () =
+    let first = pullRequest 3 "PR_3"
+    let short = FakeTransport [ repo; ok Map.empty $"[{first}]" ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "pull-request-count"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 2) short)
+    let duplicate = FakeTransport [ repo; ok Map.empty $"[{first},{first}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "PR_3"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 2) duplicate)
+    let wrongBase = first.Replace("\"id\":42", "\"id\":43")
+    let drift = FakeTransport [ repo; ok Map.empty $"[{wrongBase}]" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) drift)
+
+[<Fact>]
+let ``pull request census refuses malformed revisions and a nonterminal issue census`` () =
+    let malformed = (pullRequest 3 "PR_3").Replace(String.replicate 40 "a", "not-a-sha")
+    let transport = FakeTransport [ repo; ok Map.empty $"[{malformed}]" ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-revision"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) transport)
+    let noRequests = FakeTransport []
+    let nonterminal = { issuesWithPullRequests 1 with Terminal=false }
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "issue-census"),
+                 MigrationGitHubRead.readPullRequests options nonterminal noRequests)
+    Assert.Empty(noRequests.Requests)
+
 [<Fact>]
 let ``native relation reader proves reciprocal parent and blocking directions`` () =
     let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] [relationNode "ISSUE_2" 42L]

@@ -50,6 +50,29 @@ type MigrationRepositoryCoreSettings =
       PayloadJson: string
       PayloadSha256: string }
 
+type MigrationPullRequestRecord =
+    { Number: int
+      DatabaseId: int64
+      NodeId: string
+      State: string
+      UpdatedAt: DateTimeOffset
+      HeadSha: string
+      BaseSha: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRestPageEvidence =
+    { RequestedUri: string
+      PayloadSha256: string
+      NextUri: string option }
+
+type MigrationPullRequestPopulation =
+    { RepositoryId: int64
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      PullRequests: MigrationPullRequestRecord list }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -486,6 +509,92 @@ module MigrationGitHubRead =
                                                     { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
                                                       Issues=List.sortBy _.Number complete; PullRequestCount=prCount })))
                 pages Set.empty 0 [] 0 start)
+
+    let private parsePullRequest repositoryId (value: JsonElement) =
+        let baseRepositoryId = property "base" value |> Result.bind (property "repo")
+                               |> Result.bind (requiredInt64 "id")
+        let headSha = property "head" value |> Result.bind (requiredString "sha")
+        let baseSha = property "base" value |> Result.bind (requiredString "sha")
+        match requiredInt "number" value, requiredInt64 "id" value,
+              requiredString "node_id" value, requiredString "state" value,
+              requiredString "updated_at" value, baseRepositoryId, headSha, baseSha with
+        | Ok number, Ok databaseId, Ok nodeId, Ok state, Ok updated, Ok baseRepository, Ok head, Ok baseRevision ->
+            let mutable timestamp = DateTimeOffset.MinValue
+            let revision (value: string) =
+                value.Length = 40 && (value |> Seq.forall Uri.IsHexDigit)
+            if baseRepository <> repositoryId then Error MigrationReadFailure.IdentityDrift
+            elif state <> "open" && state <> "closed" then
+                Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-state")
+            elif not (revision head && revision baseRevision)
+                 || not (DateTimeOffset.TryParse(updated, &timestamp)) then
+                Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-revision")
+            else
+                let payload = value.GetRawText()
+                Ok { Number=number; DatabaseId=databaseId; NodeId=nodeId; State=state
+                     UpdatedAt=timestamp; HeadSha=head; BaseSha=baseRevision
+                     PayloadJson=payload; PayloadSha256=sha payload }
+        | Error failure, _, _, _, _, _, _, _ | _, Error failure, _, _, _, _, _, _
+        | _, _, Error failure, _, _, _, _, _ | _, _, _, Error failure, _, _, _, _
+        | _, _, _, _, Error failure, _, _, _ | _, _, _, _, _, Error failure, _, _
+        | _, _, _, _, _, _, Error failure, _ | _, _, _, _, _, _, _, Error failure -> Error failure
+
+    let readPullRequests (options: MigrationGitHubReadOptions) (issues: MigrationIssuePopulation)
+                         (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        elif not issues.Terminal || issues.PageCount < 1 || issues.RepositoryId <> options.ExpectedRepositoryId
+             || issues.PullRequestCount < 0 then
+            Error(MigrationReadFailure.SnapshotMismatch "issue-census")
+        else
+            readRepository options transport
+            |> Result.bind (fun repositoryId ->
+                let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}/pulls?state=all&per_page=100"
+                let start = Uri(options.ApiBase, path)
+                let rec pages (seen: Set<string>) (count: int) (records: MigrationPullRequestRecord list)
+                              (evidence: MigrationRestPageEvidence list) (current: Uri) =
+                    if count >= 1000 || Set.contains current.AbsoluteUri seen then
+                        Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                    elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
+                         || (current.AbsolutePath <> start.AbsolutePath
+                             && current.AbsolutePath <> $"/repositories/{repositoryId}/pulls")
+                         || not (exactIssuePageQuery count current) then
+                        Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
+                    else
+                        response transport (Rest { Method=Get; Uri=current; Headers=headers options.Token options.UserAgent
+                                                   Body=None; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                        |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result, document))
+                        |> Result.bind (fun (result, document) ->
+                            use document = document
+                            if document.RootElement.ValueKind <> JsonValueKind.Array then
+                                Error(MigrationReadFailure.MalformedResponse "pull-requests-not-array")
+                            else
+                                let parsed =
+                                    document.RootElement.EnumerateArray()
+                                    |> Seq.map (parsePullRequest repositoryId) |> Seq.toList
+                                match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
+                                | Some failure -> Error failure
+                                | None ->
+                                    let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
+                                    let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                    match Transport.tryNextLink link with
+                                    | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
+                                    | Ok next ->
+                                        let page =
+                                            { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
+                                              NextUri=next |> Option.map _.AbsoluteUri }
+                                        let all = records @ values
+                                        let allPages = evidence @ [ page ]
+                                        match next with
+                                        | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) all allPages uri
+                                        | None when all.Length <> issues.PullRequestCount ->
+                                            Error(MigrationReadFailure.SnapshotMismatch "pull-request-count")
+                                        | None ->
+                                            collectUnique (fun (value: MigrationPullRequestRecord) -> value.NodeId) all
+                                            |> Result.bind (collectUnique (fun value -> string value.DatabaseId))
+                                            |> Result.bind (collectUnique (fun value -> string value.Number))
+                                            |> Result.map (fun complete ->
+                                                { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
+                                                  Pages=allPages; PullRequests=List.sortBy _.Number complete }))
+                pages Set.empty 0 [] [] start)
 
     let private issueTypeQuery =
         "query($owner:String!,$name:String!,$after:String) { repository(owner:$owner,name:$name) { databaseId issueTypes(first:100,after:$after) { nodes { id name } pageInfo { hasNextPage endCursor } } } }"

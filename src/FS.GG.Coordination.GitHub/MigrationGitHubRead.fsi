@@ -45,6 +45,29 @@ type MigrationRepositoryCoreSettings =
       PayloadJson: string
       PayloadSha256: string }
 
+type MigrationPullRequestRecord =
+    { Number: int
+      DatabaseId: int64
+      NodeId: string
+      State: string
+      UpdatedAt: DateTimeOffset
+      HeadSha: string
+      BaseSha: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationRestPageEvidence =
+    { RequestedUri: string
+      PayloadSha256: string
+      NextUri: string option }
+
+type MigrationPullRequestPopulation =
+    { RepositoryId: int64
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      PullRequests: MigrationPullRequestRecord list }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -199,6 +222,12 @@ module MigrationGitHubRead =
     val readIssues:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssuePopulation, MigrationReadFailure>
+
+    val readPullRequests:
+        options:MigrationGitHubReadOptions ->
+        issues:MigrationIssuePopulation ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationPullRequestPopulation, MigrationReadFailure>
 
     val readIssueTypes:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
