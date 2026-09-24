@@ -122,3 +122,25 @@ interface at the user-approved host and independent custody verification, (2) th
 separately approved protected workflow and ordinary-App credential handoff,
 and (3) exact expected-absent installation with independent durable readback.
 Custody evidence, source tests and this plan are not approval.
+
+## 2026-09-24 contradictory host custody report
+
+The SystemAdmin handoff owner reported directly in the fdev user thread that
+the current matching authorizer private key remains on Work, while Main Secret
+Service has only the older, nonmatching authorizer key. This directly conflicts
+with the earlier Main-host [read-only receipt](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5808996870)
+claiming that an exact current record is present on Main. These are conflicting
+attributed host reports, not independently reconciled facts from this container.
+The public anchor and successful read-only `prepare` check do not settle private
+key custody. The earlier wording that the Work-only draft was superseded as a
+mailbox draft does not qualify the Main execution route.
+
+PR #508 is now **draft**, with auto-merge disabled. Its exact-Main-lookup source
+patch is frozen as an unqualified candidate; it must not be merged or used for
+signing while host custody and the user-approved location rule are unresolved.
+The active Coordination [handoff comment](https://github.com/FS-GG/FS.GG.Coordination/pull/508#issuecomment-5809070489)
+asks the host owner for a fresh read-only, non-secret comparison and, if Work-only
+is confirmed, a narrow Work-host signing route for review. Governed issue intake
+previously failed closed, so there is no issue URL. No private-key transfer,
+signer invocation, JWT issuance, workflow dispatch, or journal mutation follows
+from these reports.
