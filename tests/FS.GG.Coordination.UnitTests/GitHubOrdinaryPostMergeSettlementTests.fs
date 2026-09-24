@@ -50,7 +50,7 @@ let private readBinding: OrdinarySettlementReadBinding =
     { CredentialKind = "github-actions-repository-token"
       RepositoryId = 101L
       Permissions =
-        Map [ "checks", "read"; "contents", "read"; "pull_requests", "read" ] }
+        Map [ "actions", "read"; "checks", "read"; "contents", "read"; "pull_requests", "read" ] }
 
 let private prepare
     (observed: OrdinaryDeliveryObservation)
@@ -180,6 +180,17 @@ let ``preparation binds one merged main PR and stable workflow identity`` () =
     Assert.True((plan.RequiredChecks |> List.map _.Identity |> Set.ofList) = Set [ "contract-coherence / coherence"; "routine-eligibility" ])
     Assert.Equal(plan.OperationId + ":attempt:1", plan.AttemptId)
 
+    let advancedEpoch =
+        prepare
+            { observed with EpochGeneration = observed.EpochGeneration + 1L; EpochCommit = sha "7" }
+            [ association true (sha "8") ]
+            readBinding
+            writerBinding
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+        |> fst
+    Assert.Equal(plan.OperationId, advancedEpoch.OperationId)
+    Assert.NotEqual(plan.Seal, advancedEpoch.Seal)
+
     Assert.Equal(Error [ MissingMergedPullRequest ], prepare observed [] readBinding writerBinding)
     Assert.Equal(Error [ MissingMergedPullRequest ], prepare observed [ association false (sha "8") ] readBinding writerBinding)
     Assert.Equal(Error [ AmbiguousMergedPullRequest ], prepare observed [ association true (sha "8"); association true (sha "8") ] readBinding writerBinding)
@@ -282,6 +293,27 @@ let ``CAS race unknown write and independent readback fail closed`` () =
     Assert.Equal(Error [ SettlementReadbackMismatch ], OrdinaryPostMergeSettlement.execute plan writerBinding trusted signed SettlementNoCut mismatched)
     Assert.Equal(1, mismatched.ApplyCount)
     rsa.Dispose()
+
+[<Fact>]
+let ``later epoch reuses source operation key and refuses a different signed plan digest`` () =
+    let original = prepared ()
+    use rsa = RSA.Create(2048)
+    let trusted = anchor rsa "v2-test-key"
+    let signed = authorization rsa "v2-test-key" original writerBinding
+    let runtime = Runtime(original, None, None)
+    Assert.True(OrdinaryPostMergeSettlement.execute original writerBinding trusted signed SettlementNoCut runtime |> Result.isOk)
+    let advanced =
+        prepare
+            { observation "OpenV2" with EpochGeneration = 4L; EpochCommit = sha "7" }
+            [ association true (sha "8") ] readBinding writerBinding
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+        |> fst
+    Assert.Equal(original.OperationId, advanced.OperationId)
+    let advancedSigned = authorization rsa "v2-test-key" advanced writerBinding
+    Assert.Equal(
+        Error [ SettlementJournalConflict ],
+        OrdinaryPostMergeSettlement.execute advanced writerBinding trusted advancedSigned SettlementNoCut runtime)
+    Assert.Equal(1, runtime.ApplyCount)
 
 [<Fact>]
 let ``one-attempt command refuses when trusted workflow provider is not installed`` () =

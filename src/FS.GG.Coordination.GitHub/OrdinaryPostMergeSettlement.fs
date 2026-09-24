@@ -154,7 +154,7 @@ type IOrdinarySettlementCommandProvider =
 module OrdinaryPostMergeSettlement =
     let private schema = "fsgg.coordination.ordinary-post-merge-settlement-plan/1"
     let private operationClass = "ordinary-post-merge-delivery-settlement"
-    let private environment = "ordinary-v2"
+    let private environments = Set [ "ordinary-v2"; "ordinary-v2-rehearsal" ]
     let private githubActionsAppId = 15368L
     let private requiredCheckIdentities =
         Set [ "contract-coherence / coherence"; "routine-eligibility" ]
@@ -197,7 +197,7 @@ module OrdinaryPostMergeSettlement =
 
     let private expectedReadPermissions =
         Map
-            [ "checks", "read"; "contents", "read"; "pull_requests", "read" ]
+            [ "actions", "read"; "checks", "read"; "contents", "read"; "pull_requests", "read" ]
 
     let private bindingValid authorityRepositoryId (binding: OrdinarySettlementCredentialBinding) =
         binding.AppId > 0L
@@ -251,6 +251,7 @@ module OrdinaryPostMergeSettlement =
         (observation: OrdinaryDeliveryObservation)
         (association: OrdinaryMergedPullRequest)
         (sourcePlanSeal: string)
+        (environment: string)
         (operationId: string)
         (attemptId: string)
         (address: AggregateAddress)
@@ -302,7 +303,7 @@ module OrdinaryPostMergeSettlement =
                 if not (validOid workflowRevision) then yield InvalidSettlementIdentity "workflow-revision"
                 if not (validOid triggerCommit) then yield InvalidSettlementIdentity "trigger-commit"
                 if operationClassValue <> operationClass then yield UnsupportedSettlementClass
-                if environmentValue <> environment then yield InvalidSettlementIdentity "environment"
+                if not (environments.Contains environmentValue) then yield InvalidSettlementIdentity "environment"
                 if authorityRepositoryId <= 0L then yield InvalidSettlementIdentity "authority-repository-id"
                 if not (readBindingValid observation.RepositoryId readBinding) then yield SettlementCredentialMismatch
                 if not (bindingValid authorityRepositoryId binding) then yield SettlementCredentialMismatch
@@ -325,9 +326,8 @@ module OrdinaryPostMergeSettlement =
                 Encoding.UTF8.GetBytes(
                     String.concat "\n"
                         [ originalPlanId; observation.Repository.ToLowerInvariant(); string association.Number
-                          association.HeadCommit.ToLowerInvariant(); association.MergeCommit.ToLowerInvariant(); sourcePlan.Seal
-                          observation.PolicyRevision.ToLowerInvariant()
-                          observation.EpochCommit.ToLowerInvariant(); string observation.EpochGeneration ]
+                          association.NodeId; association.HeadCommit.ToLowerInvariant(); association.MergeCommit.ToLowerInvariant()
+                          observation.PolicyRevision.ToLowerInvariant() ]
                 )
             let operationId = "ordinary-settlement:" + sha256 seed
             let attemptId = operationId + ":attempt:1"
@@ -335,7 +335,7 @@ module OrdinaryPostMergeSettlement =
             | Error _ -> Error [ InvalidSettlementIdentity "journal-address" ]
             | Ok address ->
                 let unsigned =
-                    unsignedNode originalPlanId authorityRepositoryId sourceTree workflowRevision observation association sourcePlan.Seal operationId attemptId address
+                    unsignedNode originalPlanId authorityRepositoryId sourceTree workflowRevision observation association sourcePlan.Seal environmentValue operationId attemptId address
                 let seal = sha256 (canonical unsigned)
                 unsigned.Add("seal", seal)
                 let bytes = canonical unsigned
@@ -355,7 +355,7 @@ module OrdinaryPostMergeSettlement =
                         SourceTree = sourceTree.ToLowerInvariant()
                         WorkflowRevision = workflowRevision.ToLowerInvariant()
                         PolicyRevision = observation.PolicyRevision.ToLowerInvariant()
-                        Environment = environment
+                        Environment = environmentValue
                         OperationClass = operationClass
                         Epoch = observation.Epoch
                         EpochGeneration = observation.EpochGeneration

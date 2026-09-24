@@ -15,6 +15,8 @@
     <Compile Include="GitHubOrdinaryDeliveryTests.fs" />
     <Compile Include="GitHubOrdinaryRuntimeTests.fs" />
     <Compile Include="GitHubOrdinaryPostMergeSettlementTests.fs" />
+    <Compile Include="GitHubOrdinarySettlementGitAuthorityTests.fs" />
+    <Compile Include="InstalledOrdinarySettlementProviderTests.fs" />
     <Compile Include="GitHubLifecycleProjectionTests.fs" />
     <Compile Include="GitHubFleetShadowTests.fs" />
     <Compile Include="GitHubRepositoryProfileTests.fs" />
@@ -76,6 +78,7 @@
     <ProjectReference Include="..\..\src\FS.GG.Coordination.App\FS.GG.Coordination.App.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.GitHub\FS.GG.Coordination.GitHub.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Cli\FS.GG.Coordination.Cli.fsproj" />
   </ItemGroup>
 
   <ItemGroup>

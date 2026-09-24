@@ -22,7 +22,7 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.1.1</Version>"
+            "<Version>0.1.2</Version>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =
@@ -42,6 +42,17 @@ let ``release preparation route has no publication tag or credential authority``
     Assert.Contains("\"authorized\":false", contract, StringComparison.Ordinal)
     Assert.Contains("github-packages-then-byte-identical-nuget-org", contract.Replace("[\"github-packages\",\"nuget.org-byte-identical\"]", "github-packages-then-byte-identical-nuget-org"), StringComparison.Ordinal)
     Assert.Contains("separate-protected-.3b-operation", contract, StringComparison.Ordinal)
+
+[<Fact>]
+let ``callable CLI release preparation binds reviewed version project and tag`` () =
+    let script = read "eng/callable-cli-release.fsx"
+    for expected in
+        [
+            "[ \"0.1.1\"; \"0.1.2\" ]"
+            "projectPackageVersion () = version"
+            "let tag = $\"v{version}\""
+            "root.GetProperty(\"tag\").GetString() = tag"
+        ] do Assert.Contains(expected, script, StringComparison.Ordinal)
 
 [<Fact>]
 let ``protected publication route preserves exact bytes ordering and recovery boundaries`` () =

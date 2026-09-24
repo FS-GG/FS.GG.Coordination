@@ -6,6 +6,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
+open System.Xml.Linq
 
 let fail message = eprintfn "CALLABLE_CLI_RELEASE_REFUSED %s" message; exit 2
 let require condition message = if not condition then fail message
@@ -78,6 +79,15 @@ let packageId = "FS.GG.Coordination.Cli"
 let packageName = $"{packageId}.{version}.nupkg"
 let packagePath = Path.Combine(output, packageName)
 let manifestPath = Path.Combine(output, "callable-cli-release-manifest.json")
+let tag = $"v{version}"
+let project = Path.Combine(repo, "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj")
+
+let projectPackageVersion () =
+    let document = XDocument.Load project
+    document.Descendants(XName.Get "PackageVersion")
+    |> Seq.tryExactlyOne
+    |> Option.map _.Value
+    |> Option.defaultWith (fun () -> fail "callable CLI project must declare exactly one PackageVersion")
 
 let verify () =
     require (File.Exists manifestPath) "manifest is missing"
@@ -87,6 +97,7 @@ let verify () =
     require (root.GetProperty("schema").GetString() = "fsgg.coordination.callable-cli-release-preparation/1") "manifest schema changed"
     require (root.GetProperty("packageId").GetString() = packageId) "package identity changed"
     require (root.GetProperty("version").GetString() = version) "package version changed"
+    require (root.GetProperty("tag").GetString() = tag) "package tag changed"
     require (root.GetProperty("sourceCommit").GetString() = source) "source identity changed"
     require (root.GetProperty("packageSha256").GetString() = sha256 packagePath) "candidate package digest changed"
     require (root.GetProperty("publicationAuthorized").GetBoolean() = false) "preparation cannot authorize publication"
@@ -96,12 +107,13 @@ let verify () =
 
 match command with
 | "prepare" ->
-    require (version = "0.1.1") "only the reviewed callable repair version 0.1.1 may be prepared"
+    require (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2" ])) "only reviewed callable CLI versions 0.1.1 and 0.1.2 may be prepared"
+    require (projectPackageVersion () = version) "requested version does not equal the callable CLI PackageVersion"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" [ "rev-parse"; "HEAD" ] = source) "source does not equal HEAD"
     require (String.IsNullOrWhiteSpace(capture repo "git" [ "status"; "--porcelain" ])) "source worktree is not clean"
-    let tags = capture repo "git" [ "tag"; "--list"; "v0.1.1" ]
-    require (String.IsNullOrWhiteSpace tags) "v0.1.1 already exists"
+    let tags = capture repo "git" [ "tag"; "--list"; tag ]
+    require (String.IsNullOrWhiteSpace tags) $"{tag} already exists"
     require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "output must be empty"
     Directory.CreateDirectory output |> ignore
     let scratch = Path.Combine(Path.GetTempPath(), "fsgg-callable-cli-" + Guid.NewGuid().ToString("N"))
@@ -110,7 +122,6 @@ match command with
         let second = Path.Combine(scratch, "second-independent-root")
         Directory.CreateDirectory first |> ignore
         Directory.CreateDirectory second |> ignore
-        let project = Path.Combine(repo, "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj")
         let pack target =
             run repo "dotnet" [ "pack"; project; "--configuration"; "Release"; "--output"; target; "--no-restore"; "-p:ContinuousIntegrationBuild=true"; "-p:Deterministic=true"; $"-p:PackageVersion={version}"; $"-p:RepositoryCommit={source}"; "-p:RepositoryBranch=main" ]
             let path = Path.Combine(target, packageName)
@@ -129,7 +140,7 @@ match command with
         manifest.Add("schema", "fsgg.coordination.callable-cli-release-preparation/1")
         manifest.Add("sourceCommit", source.ToLowerInvariant())
         manifest.Add("sourceTree", capture repo "git" [ "rev-parse"; source + "^{tree}" ])
-        manifest.Add("tag", "v0.1.1")
+        manifest.Add("tag", tag)
         manifest.Add("tagAuthorized", false)
         manifest.Add("version", version)
         let ownership = JsonObject()
