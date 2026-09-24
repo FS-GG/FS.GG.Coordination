@@ -716,7 +716,9 @@ let ``protected genesis binds signature native approval and expected absent inst
           EnvironmentWaitMinutes = 5
           EnvironmentReviewerIds = [ 1645484L ]
           EnvironmentPreventsSelfReview = false
-          Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] }
+          Approvals =
+            [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] }
+              { ReviewerId = 41898282L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] }
     let approved =
         V1AdmissionGenesisProtectedApproval.verify now plan intent verified native
         |> Result.defaultWith (String.concat "," >> failwith)
@@ -738,6 +740,10 @@ let ``protected genesis binds signature native approval and expected absent inst
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 9L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 9L ] } ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] }; { ReviewerId = 1645484L; State = "approved"; EnvironmentIds = [ 22582241959L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = native.Approvals |> List.take 1 } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ native.Approvals[0]; { native.Approvals[1] with ReviewerId = 9L } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ native.Approvals[0]; { native.Approvals[1] with EnvironmentIds = [ 9L ] } ] } |> Result.isError)
+    Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with Approvals = [ native.Approvals[0]; { native.Approvals[1] with State = "rejected" } ] } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify now plan intent verified { native with ArtifactBytes = JsonSerializer.SerializeToUtf8Bytes {| artifact with runId = 43L |} } |> Result.isError)
     Assert.True(V1AdmissionGenesisProtectedApproval.verify (now.AddMinutes 86.) plan intent verified native |> Result.isError)
 
@@ -894,6 +900,7 @@ let ``native read-only collector evidence has a bounded typed decoder`` () =
     Assert.Equal(42L, read.RunId)
     Assert.Equal(22582241959L, read.EnvironmentId)
     Assert.Equal(5, read.EnvironmentWaitMinutes)
+    Assert.True((read.Approvals |> List.map _.ReviewerId) = [ 1645484L; 41898282L ])
     Assert.Equal("refs/heads/main", read.RunRef)
     Assert.Equal("07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3",
                  SHA256.HashData(read.WorkflowBytes) |> Convert.ToHexString |> _.ToLowerInvariant())

@@ -72,6 +72,8 @@ class MainCustodyTests(unittest.TestCase):
                 "environmentPreventsSelfReview": False,
                 "environmentReviewerIds": [1645484],
                 "approvals": [{"reviewerId": 1645484, "state": "approved",
+                               "environmentIds": [22582241959]},
+                              {"reviewerId": custody.WAIT_TIMER_BOT_ID, "state": "approved",
                                "environmentIds": [22582241959]}],
                 "artifactBytesBase64": base64.b64encode(custody.canonical(artifact)).decode()}
 
@@ -156,6 +158,16 @@ class MainCustodyTests(unittest.TestCase):
                            "role", "authorizer", "key-id", custody.AUTHORIZER_KEY_ID,
                            "spki-sha256", custody.AUTHORIZER_SPKI_SHA256,
                            "trust-anchor-sha256", custody.TRUST_ANCHOR_SHA256]], calls)
+
+    def test_native_approval_requires_owner_and_wait_timer_bot(self):
+        value = self.native(42)
+        value["approvals"].pop()
+        with self.assertRaisesRegex(custody.Refused, "native-approval-invalid"):
+            custody.approved(42, lambda run_id: value, now=self.timestamp())
+        value = self.native(42)
+        value["approvals"][1]["reviewerId"] = 9
+        with self.assertRaisesRegex(custody.Refused, "native-approval-invalid"):
+            custody.approved(42, lambda run_id: value, now=self.timestamp())
 
     def test_jwt_cli_refuses_non_pipe_stdout_before_native_read(self):
         with tempfile.TemporaryFile() as output:

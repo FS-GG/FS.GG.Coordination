@@ -59,7 +59,13 @@ def fixture():
             "total_count": 1, "branch_policies": [{"name": "main", "type": "branch"}],
         },
         f"{prefix}/actions/runs/{RUN_ID}/approvals?per_page=100": [[{
-            "state": "approved", "user": {"id": native.ACCOUNTABLE_OWNER_ID},
+            "state": "approved", "user": {"id": native.ACCOUNTABLE_OWNER_ID,
+                                           "login": "EHotwagner", "type": "User"},
+            "environments": [{"id": native.ENVIRONMENT_ID, "name": native.ENVIRONMENT}],
+        }, {
+            "state": "approved", "user": {"id": native.WAIT_TIMER_BOT_ID,
+                                           "login": "github-actions[bot]", "type": "Bot"},
+            "comment": "5 minute wait timer",
             "environments": [{"id": native.ENVIRONMENT_ID, "name": native.ENVIRONMENT}],
         }]],
         f"{prefix}/actions/runs/{RUN_ID}/artifacts?per_page=100": [{
@@ -96,6 +102,8 @@ class ProtectedNativeReadTests(unittest.TestCase):
         self.assertEqual("fsgg.v1-admission-genesis-native-read/2", evidence["schema"])
         self.assertEqual(RUN_ID, evidence["artifactReadRunId"])
         self.assertEqual(native.ENVIRONMENT_ID, evidence["approvals"][0]["environmentIds"][0])
+        self.assertEqual([native.ACCOUNTABLE_OWNER_ID, native.WAIT_TIMER_BOT_ID],
+                         [item["reviewerId"] for item in evidence["approvals"]])
         self.assertEqual(WORKFLOW, base64.b64decode(evidence["workflowBytesBase64"]))
         self.assertEqual(b'{"schema":"fixture"}\n', base64.b64decode(evidence["artifactBytesBase64"]))
         self.assertEqual(NATIVE_FIXTURE.read_bytes(),
@@ -115,7 +123,7 @@ class ProtectedNativeReadTests(unittest.TestCase):
         source, archive = fixture()
         approval = source[f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}/approvals?per_page=100"][0][0]
         approval["environments"][0]["id"] = 9
-        with self.assertRaisesRegex(native.Refused, "native-approval-binding"):
+        with self.assertRaisesRegex(native.Refused, "native-approval-shape"):
             collect(source, archive)
         source, archive = fixture()
         source[f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}"]["actor"]["id"] = 777
@@ -135,6 +143,37 @@ class ProtectedNativeReadTests(unittest.TestCase):
         rules = source[f"repos/{native.REPOSITORY}/environments/{native.ENVIRONMENT}"]["protection_rules"]
         rules[1]["wait_timer"] = 0
         with self.assertRaisesRegex(native.Refused, "native-environment-rules"):
+            collect(source, archive)
+
+    def test_wait_timer_bot_is_required_and_exact(self):
+        path = f"repos/{native.REPOSITORY}/actions/runs/{RUN_ID}/approvals?per_page=100"
+        source, archive = fixture()
+        source[path][0].reverse()  # GitHub returned the bot before the owner in the live run.
+        self.assertEqual([native.ACCOUNTABLE_OWNER_ID, native.WAIT_TIMER_BOT_ID],
+                         [item["reviewerId"] for item in collect(source, archive)["approvals"]])
+        source, archive = fixture()
+        source[path][0].pop()
+        with self.assertRaisesRegex(native.Refused, "native-approvals-count"):
+            collect(source, archive)
+        source, archive = fixture()
+        source[path][0][1]["comment"] = "different timer"
+        with self.assertRaisesRegex(native.Refused, "native-approval-binding"):
+            collect(source, archive)
+        source, archive = fixture()
+        source[path][0][1]["user"]["id"] = 9
+        with self.assertRaisesRegex(native.Refused, "native-approval-binding"):
+            collect(source, archive)
+        source, archive = fixture()
+        source[path][0][1]["user"] = []
+        with self.assertRaisesRegex(native.Refused, "native-approval-shape"):
+            collect(source, archive)
+        source, archive = fixture()
+        source[path][0][1]["environments"] = [9]
+        with self.assertRaisesRegex(native.Refused, "native-approval-shape"):
+            collect(source, archive)
+        source, archive = fixture()
+        source[path][0].append(copy.deepcopy(source[path][0][0]))
+        with self.assertRaisesRegex(native.Refused, "native-approvals-count"):
             collect(source, archive)
 
     def test_artifact_origin_digest_expiry_and_extra_member_refuse(self):

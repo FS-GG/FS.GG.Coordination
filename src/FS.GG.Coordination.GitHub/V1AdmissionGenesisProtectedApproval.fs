@@ -39,6 +39,7 @@ module V1AdmissionGenesisProtectedApproval =
     let private workflowPath = ".github/workflows/gs2-v1-admission-protected-authorization.yml"
     let private workflowSha256 = "07435f26a2e22b6bd597aa89ce83192b39c8ab19d7aeabd74c9a67e16be4adf3"
     let private accountableOwnerId = 1645484L
+    let private waitTimerBotId = 41898282L
     let private environmentId = 22582241959L
     let private environmentName = "fleet-v1-admission-owner"
 
@@ -167,7 +168,9 @@ module V1AdmissionGenesisProtectedApproval =
     let verify asOf plan intent signature native =
         receipt native.ArtifactBytes
         |> Result.bind (fun (schema, operationId, repository, artifactRunId, workflowRevision, coordinationRevision, coordinationTree, environment, intentSha256, approvedAt, expiresAt, conclusion) ->
-            let approved = native.Approvals |> List.filter (fun approval -> approval.State = "approved")
+            let expectedApprovals =
+                [ { ReviewerId = accountableOwnerId; State = "approved"; EnvironmentIds = [ environmentId ] }
+                  { ReviewerId = waitTimerBotId; State = "approved"; EnvironmentIds = [ environmentId ] } ]
             let plannedIntentSha256 =
                 V1AdmissionGenesisAuthorization.canonicalIntent plan intent
                 |> sha256
@@ -219,13 +222,8 @@ module V1AdmissionGenesisProtectedApproval =
                        || native.EnvironmentPreventsSelfReview
                        || native.EnvironmentReviewerIds <> [ accountableOwnerId ] then
                         "genesis-protected-environment"
-                    if approved.Length <> 1
-                       || native.Approvals.Length <> 1
-                       || (approved
-                           |> List.exists (fun approval ->
-                               approval.ReviewerId <> accountableOwnerId
-                               || approval.ReviewerId <> native.RunActorId
-                               || approval.EnvironmentIds <> [ environmentId ])) then
+                    if native.Approvals <> expectedApprovals
+                       || native.RunActorId <> accountableOwnerId then
                         "genesis-protected-native-approvals"
                 ]
 
