@@ -51,6 +51,46 @@ type MigrationRepositoryCoreSettings =
       PayloadJson: string
       PayloadSha256: string }
 
+/// A bounded read of organization definitions and one repository's set values.
+/// This does not qualify the eleven-surface repository-settings authority.
+type MigrationCustomPropertyData =
+    | PropertyText of string
+    | PropertyChoices of string list
+    | PropertyFlag of bool
+
+type MigrationCustomPropertyDefinition =
+    { Name: string
+      SourceType: string
+      ValueType: string
+      Required: bool
+      RequireExplicitValues: bool option
+      ValuesEditableBy: string option option
+      DefaultValue: MigrationCustomPropertyData option option
+      AllowedValues: string list option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationCustomPropertyValue =
+    { Name: string
+      Value: MigrationCustomPropertyData
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationCustomProperties =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      SchemaUri: string
+      SchemaPayloadJson: string
+      SchemaPayloadSha256: string
+      ValuesUri: string
+      ValuesPayloadJson: string
+      ValuesPayloadSha256: string
+      Definitions: MigrationCustomPropertyDefinition list
+      Values: MigrationCustomPropertyValue list }
+
 type MigrationPullRequestRecord =
     { Number: int
       DatabaseId: int64
@@ -308,6 +348,11 @@ module MigrationGitHubRead =
     val readRepositoryCoreSettings:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryCoreSettings, MigrationReadFailure>
+
+    /// Read-only, exact organization schema and repository values; still a partial settings observation.
+    val readCustomProperties:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationCustomProperties, MigrationReadFailure>
 
     val readIssues:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->

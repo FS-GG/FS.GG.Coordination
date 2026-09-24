@@ -128,6 +128,132 @@ let ``repository core settings refuse invalid options and unavailable provider``
     Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
                  MigrationGitHubRead.readRepositoryCoreSettings options unavailable)
 
+let private propertySchema =
+    """[{"property_name":"environment","source_type":"organization","value_type":"single_select","required":true,"require_explicit_values":true,"values_editable_by":"org_actors","default_value":"production","allowed_values":["production","development"]},{"property_name":"teams","source_type":"organization","value_type":"multi_select","required":false,"values_editable_by":null,"allowed_values":["backend","frontend"]},{"property_name":"approved","source_type":"organization","value_type":"true_false","required":false}]"""
+
+let private propertyValues =
+    """[{"property_name":"environment","value":"production"},{"property_name":"teams","value":["backend"]},{"property_name":"approved","value":true}]"""
+
+[<Fact>]
+let ``custom properties bind exact organization schema and repository values without writes`` () =
+    let transport = FakeTransport [ repo; ok Map.empty propertySchema; ok Map.empty propertyValues ]
+    match MigrationGitHubRead.readCustomProperties options transport with
+    | Error failure -> failwithf "unexpected custom-property refusal: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.Equal("FS-GG/copy", observed.RepositoryFullName)
+        Assert.Equal("""{"id":42,"full_name":"FS-GG/copy"}""", observed.IdentityPayloadJson)
+        Assert.Equal(3, observed.Definitions.Length)
+        Assert.Equal(3, observed.Values.Length)
+        Assert.Equal(Some true, observed.Definitions.Head.RequireExplicitValues)
+        Assert.Equal(Some(Some "org_actors"), observed.Definitions.Head.ValuesEditableBy)
+        Assert.Equal(Some None, observed.Definitions.[1].ValuesEditableBy)
+        Assert.Equal(None, observed.Definitions.[2].ValuesEditableBy)
+        Assert.Equal(propertySchema, observed.SchemaPayloadJson)
+        Assert.Equal(propertyValues, observed.ValuesPayloadJson)
+        let hash (body: string) =
+            body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+            |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(hash propertySchema, observed.SchemaPayloadSha256)
+        Assert.Equal(hash propertyValues, observed.ValuesPayloadSha256)
+        Assert.Equal(3, transport.Requests.Length)
+        let uris =
+            transport.Requests
+            |> List.map (function
+                | Rest request ->
+                    Assert.Equal(Get, request.Method)
+                    Assert.True(request.Body.IsNone)
+                    request.Uri.AbsoluteUri
+                | _ -> failwith "custom-property reader issued GraphQL")
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/copy"
+              "https://api.github.test/orgs/FS-GG/properties/schema"
+              "https://api.github.test/repos/FS-GG/copy/properties/values" ], uris)
+
+[<Fact>]
+let ``custom properties refuse identity drift and stop before organization read`` () =
+    let transport = FakeTransport [ ok Map.empty """{"id":43,"full_name":"FS-GG/copy"}""" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readCustomProperties options transport)
+    Assert.Single(transport.Requests) |> ignore
+
+[<Fact>]
+let ``custom properties refuse unauthorized or missing schema and values`` () =
+    for failingCall in [ 1; 2 ] do
+        for status in [ 403; 404 ] do
+            let refused =
+                Response
+                    { StatusCode=status; Headers=Map.empty; Body="{}"; ETag=None
+                      RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+            let responses =
+                if failingCall = 1 then [ repo; refused ]
+                else [ repo; ok Map.empty propertySchema; refused ]
+            let transport = FakeTransport responses
+            Assert.Equal(Error(MigrationReadFailure.HttpRefused status),
+                         MigrationGitHubRead.readCustomProperties options transport)
+            Assert.Equal(failingCall + 1, transport.Requests.Length)
+
+[<Fact>]
+let ``custom properties refuse incomplete schema and malformed values`` () =
+    let badSchemas =
+        [ propertySchema.Replace("\"property_name\":\"teams\"", "\"property_name\":\"environment\"")
+          propertySchema.Replace("\"property_name\":\"teams\"", "\"property_name\":\"teams\",\"property_name\":\"approved\"")
+          propertySchema.Replace("\"default_value\":\"production\"", "\"default_value\":\"unknown\"")
+          propertySchema.Replace("\"source_type\":\"organization\"", "\"source_type\":\"enterprise\"")
+          propertySchema.Replace("\"required\":true,", "")
+          propertySchema.Replace("\"require_explicit_values\":true", "\"require_explicit_values\":\"yes\"")
+          propertySchema.Replace("\"values_editable_by\":\"org_actors\"", "\"values_editable_by\":\"everyone\"")
+          propertySchema.Replace("\"value_type\":\"single_select\"", "\"value_type\":\"mystery\"")
+          propertySchema.Substring(0, propertySchema.Length - 1) ]
+    for schema in badSchemas do
+        let transport = FakeTransport [ repo; ok Map.empty schema ]
+        match MigrationGitHubRead.readCustomProperties options transport with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete or contradictory schema accepted"
+        Assert.Equal(2, transport.Requests.Length)
+    let badValues =
+        [ propertyValues.Replace("\"property_name\":\"approved\"", "\"property_name\":\"unknown\"")
+          propertyValues.Replace("\"property_name\":\"approved\"", "\"property_name\":\"environment\"")
+          propertyValues.Replace("\"property_name\":\"approved\"", "\"property_name\":\"approved\",\"property_name\":\"teams\"")
+          propertyValues.Replace("\"value\":true", "\"value\":\"yes\"")
+          propertyValues.Replace("\"value\":[\"backend\"]", "\"value\":[\"backend\",\"backend\"]")
+          propertyValues.Replace("\"value\":\"production\"", "\"value\":\"unknown\"")
+          propertyValues.Replace("[{\"property_name\":\"environment\",\"value\":\"production\"},", "")
+          propertyValues + "{" ]
+    for values in badValues do
+        let transport = FakeTransport [ repo; ok Map.empty propertySchema; ok Map.empty values ]
+        match MigrationGitHubRead.readCustomProperties options transport with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete or contradictory values accepted"
+
+[<Fact>]
+let ``custom properties refuse pagination and non-200 partial response`` () =
+    let linked = ok (Map.ofList [ "Link", "<https://api.github.test/next>; rel=\"next\"" ]) propertySchema
+    let transport = FakeTransport [ repo; linked ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "unexpected:link"),
+                 MigrationGitHubRead.readCustomProperties options transport)
+    let partial =
+        Response
+            { StatusCode=206; Headers=Map.empty; Body=propertySchema; ETag=None
+              RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+    let transport = FakeTransport [ repo; partial ]
+    Assert.Equal(Error(MigrationReadFailure.HttpRefused 206),
+                 MigrationGitHubRead.readCustomProperties options transport)
+
+[<Fact>]
+let ``custom properties refuse invalid URL value`` () =
+    let schema = """[{"property_name":"site","source_type":"organization","value_type":"url","required":true}]"""
+    let transport = FakeTransport [ repo; ok Map.empty schema; ok Map.empty """[{"property_name":"site","value":"not-a-url"}]""" ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:property-url"),
+                 MigrationGitHubRead.readCustomProperties options transport)
+
+[<Fact>]
+let ``custom properties require an explicitly set value when schema says so`` () =
+    let schema = """[{"property_name":"owner","source_type":"organization","value_type":"string","required":false,"require_explicit_values":true}]"""
+    let transport = FakeTransport [ repo; ok Map.empty schema; ok Map.empty "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "missing:required-property-value"),
+                 MigrationGitHubRead.readCustomProperties options transport)
+
 let private issueCensus () =
     let first = issue 1 "ISSUE_1"
     let second = issue 2 "ISSUE_2"

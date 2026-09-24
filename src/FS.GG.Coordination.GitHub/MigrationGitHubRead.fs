@@ -56,6 +56,44 @@ type MigrationRepositoryCoreSettings =
       PayloadJson: string
       PayloadSha256: string }
 
+type MigrationCustomPropertyData =
+    | PropertyText of string
+    | PropertyChoices of string list
+    | PropertyFlag of bool
+
+type MigrationCustomPropertyDefinition =
+    { Name: string
+      SourceType: string
+      ValueType: string
+      Required: bool
+      RequireExplicitValues: bool option
+      ValuesEditableBy: string option option
+      DefaultValue: MigrationCustomPropertyData option option
+      AllowedValues: string list option
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationCustomPropertyValue =
+    { Name: string
+      Value: MigrationCustomPropertyData
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationCustomProperties =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      SchemaUri: string
+      SchemaPayloadJson: string
+      SchemaPayloadSha256: string
+      ValuesUri: string
+      ValuesPayloadJson: string
+      ValuesPayloadSha256: string
+      Definitions: MigrationCustomPropertyDefinition list
+      Values: MigrationCustomPropertyValue list }
+
 type MigrationPullRequestRecord =
     { Number: int
       DatabaseId: int64
@@ -431,6 +469,15 @@ module MigrationGitHubRead =
             | Some value -> Error(MigrationReadFailure.DuplicateIdentity value)
             | None -> Ok values
 
+    let private uniqueObjectMembers (element: JsonElement) =
+        if element.ValueKind <> JsonValueKind.Object then
+            Error(MigrationReadFailure.MalformedResponse "invalid:object")
+        else
+            let names = element.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            match names |> List.countBy id |> List.tryFind (fun (_, count) -> count > 1) with
+            | Some(name, _) -> Error(MigrationReadFailure.DuplicateIdentity $"json-member:{name}")
+            | None -> Ok()
+
     let private readRepository (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
         let uri = Uri(options.ApiBase, path)
@@ -492,6 +539,217 @@ module MigrationGitHubRead =
                 | Error failure, _, _, _, _ | _, Error failure, _, _, _
                 | _, _, Error failure, _, _ | _, _, _, Error failure, _
                 | _, _, _, _, Error failure -> Error failure)
+
+    let private customPropertyData valueType (value: JsonElement) =
+        match valueType, value.ValueKind with
+        | ("string" | "single_select" | "url"), JsonValueKind.String ->
+            let textValue = value.GetString()
+            if isNull textValue then Error(MigrationReadFailure.MalformedResponse "invalid:property-value")
+            elif valueType = "url" then
+                let mutable uri = Unchecked.defaultof<Uri>
+                if not (Uri.TryCreate(textValue, UriKind.Absolute, &uri))
+                   || (uri.Scheme <> Uri.UriSchemeHttps && uri.Scheme <> Uri.UriSchemeHttp) then
+                    Error(MigrationReadFailure.MalformedResponse "invalid:property-url")
+                else Ok(PropertyText textValue)
+            else Ok(PropertyText textValue)
+        | "multi_select", JsonValueKind.Array ->
+            let elements = value.EnumerateArray() |> Seq.toList
+            let strings =
+                elements
+                |> List.choose (fun element ->
+                    if element.ValueKind = JsonValueKind.String then Some(element.GetString()) else None)
+            if strings.Length <> elements.Length || strings |> List.exists (fun item -> isNull item || not (text item))
+               || (strings |> Set.ofList |> Set.count) <> strings.Length then
+                Error(MigrationReadFailure.MalformedResponse "invalid:property-value")
+            else Ok(PropertyChoices strings)
+        | "true_false", JsonValueKind.True -> Ok(PropertyFlag true)
+        | "true_false", JsonValueKind.False -> Ok(PropertyFlag false)
+        | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:property-value")
+
+    let private customPropertyDefault valueType (definition: JsonElement) =
+        let mutable value = Unchecked.defaultof<JsonElement>
+        if not (definition.TryGetProperty("default_value", &value)) then
+            Ok None
+        elif value.ValueKind = JsonValueKind.Null then Ok(Some None)
+        else customPropertyData valueType value |> Result.map (Some >> Some)
+
+    let private customPropertyAllowed valueType (definition: JsonElement) =
+        let mutable value = Unchecked.defaultof<JsonElement>
+        if not (definition.TryGetProperty("allowed_values", &value)) || value.ValueKind = JsonValueKind.Null then
+            if valueType = "single_select" || valueType = "multi_select" then
+                Error(MigrationReadFailure.MalformedResponse "missing:allowed_values")
+            else Ok None
+        elif valueType <> "single_select" && valueType <> "multi_select" then
+            Error(MigrationReadFailure.MalformedResponse "invalid:allowed_values")
+        elif value.ValueKind <> JsonValueKind.Array then
+            Error(MigrationReadFailure.MalformedResponse "invalid:allowed_values")
+        else
+            let entries = value.EnumerateArray() |> Seq.toList
+            let names =
+                entries
+                |> List.choose (fun entry ->
+                    if entry.ValueKind = JsonValueKind.String then Some(entry.GetString()) else None)
+            if names.Length <> entries.Length || names |> List.exists (fun item -> isNull item || not (text item))
+               || (names |> Set.ofList |> Set.count) <> names.Length then
+                Error(MigrationReadFailure.MalformedResponse "invalid:allowed_values")
+            else Ok(Some names)
+
+    let private customPropertyDefinition (element: JsonElement) =
+        match requiredString "property_name" element, requiredString "source_type" element,
+              requiredString "value_type" element with
+        | Ok name, Ok sourceType, Ok valueType ->
+            if sourceType <> "organization"
+               || not (Set.contains valueType (set [ "string"; "single_select"; "multi_select"; "true_false"; "url" ])) then
+                Error(MigrationReadFailure.MalformedResponse "invalid:property-definition")
+            else
+                let optionalBool (key: string) =
+                    let mutable found = Unchecked.defaultof<JsonElement>
+                    if not (element.TryGetProperty(key, &found)) then Ok None
+                    else requiredBool key element |> Result.map Some
+                let valuesEditableBy () =
+                    let mutable found = Unchecked.defaultof<JsonElement>
+                    if not (element.TryGetProperty("values_editable_by", &found)) then Ok None
+                    elif found.ValueKind = JsonValueKind.Null then Ok(Some None)
+                    elif found.ValueKind = JsonValueKind.String
+                         && Set.contains (found.GetString()) (set [ "org_actors"; "org_and_repo_actors" ]) then
+                        Ok(Some(Some(found.GetString())))
+                    else Error(MigrationReadFailure.MalformedResponse "invalid:values_editable_by")
+                match requiredBool "required" element, customPropertyDefault valueType element,
+                      customPropertyAllowed valueType element,
+                      optionalBool "require_explicit_values", valuesEditableBy () with
+                | Ok required, Ok defaultValue, Ok allowed, Ok requireExplicit, Ok editableBy ->
+                    let allowedSet = allowed |> Option.defaultValue [] |> Set.ofList
+                    let permitted = function
+                        | PropertyText item when valueType = "single_select" -> allowedSet.Contains item
+                        | PropertyChoices items when valueType = "multi_select" ->
+                            items |> List.forall allowedSet.Contains
+                        | _ -> true
+                    if defaultValue |> Option.bind id |> Option.exists (permitted >> not) then
+                        Error(MigrationReadFailure.MalformedResponse "invalid:default_value")
+                    else
+                        let payload = element.GetRawText()
+                        Ok { Name=name; SourceType=sourceType; ValueType=valueType; Required=required
+                             RequireExplicitValues=requireExplicit; ValuesEditableBy=editableBy
+                             DefaultValue=defaultValue; AllowedValues=allowed
+                             PayloadJson=payload; PayloadSha256=sha payload }
+                | Error failure, _, _, _, _ | _, Error failure, _, _, _
+                | _, _, Error failure, _, _ | _, _, _, Error failure, _
+                | _, _, _, _, Error failure -> Error failure
+        | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure
+
+    let private customPropertyValue (definitions: Map<string, MigrationCustomPropertyDefinition>) (element: JsonElement) =
+        match requiredString "property_name" element, property "value" element with
+        | Ok name, Ok value ->
+            match Map.tryFind name definitions with
+            | None -> Error(MigrationReadFailure.MalformedResponse "unknown:property_name")
+            | Some definition ->
+                customPropertyData definition.ValueType value
+                |> Result.bind (fun typed ->
+                    let permitted =
+                        match typed, definition.AllowedValues with
+                        | PropertyText choice, Some allowed -> List.contains choice allowed
+                        | PropertyChoices choices, Some allowed ->
+                            choices |> List.forall (fun choice -> List.contains choice allowed)
+                        | _, Some _ -> false
+                        | _, None -> true
+                    if not permitted then Error(MigrationReadFailure.MalformedResponse "invalid:property-choice")
+                    else
+                        let payload = element.GetRawText()
+                        Ok { Name=name; Value=typed; PayloadJson=payload; PayloadSha256=sha payload })
+        | Error failure, _ | _, Error failure -> Error failure
+
+    let readCustomProperties (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let identityUri = Uri(options.ApiBase, repositoryPath)
+            let schemaUri = Uri(options.ApiBase, $"orgs/{Uri.EscapeDataString options.Owner}/properties/schema")
+            let valuesUri = Uri(options.ApiBase, $"{repositoryPath}/properties/values")
+            let get (uri: Uri) =
+                let request =
+                    Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                           ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                response transport request
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:link")
+                    else Ok result.Body)
+            get identityUri
+            |> Result.bind (fun body ->
+                parse body
+                |> Result.bind (fun document ->
+                    use document = document
+                    uniqueObjectMembers document.RootElement
+                    |> Result.bind (fun () ->
+                        match requiredInt64 "id" document.RootElement, requiredString "full_name" document.RootElement with
+                        | Ok id, Ok name when id = options.ExpectedRepositoryId
+                                              && name = $"{options.Owner}/{options.Repository}" -> Ok(body, sha body)
+                        | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                        | Error failure, _ | _, Error failure -> Error failure)))
+            |> Result.bind (fun (identityBody, identityHash) ->
+                get schemaUri
+                |> Result.bind (fun schemaBody ->
+                    parse schemaBody
+                    |> Result.bind (fun document ->
+                        use document = document
+                        if document.RootElement.ValueKind <> JsonValueKind.Array then
+                            Error(MigrationReadFailure.MalformedResponse "invalid:property-schema")
+                        else
+                            let parsed =
+                                document.RootElement.EnumerateArray()
+                                |> Seq.map (fun element ->
+                                    uniqueObjectMembers element
+                                    |> Result.bind (fun () -> customPropertyDefinition element))
+                                |> Seq.toList
+                            match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                            | Some failure -> Error failure
+                            | None ->
+                                parsed |> List.choose (function Ok item -> Some item | _ -> None)
+                                |> collectUnique _.Name
+                                |> Result.map (fun definitions -> schemaBody, definitions)))
+                |> Result.bind (fun (schemaBody, definitions) ->
+                    let definitionMap = definitions |> List.map (fun item -> item.Name, item) |> Map.ofList
+                    get valuesUri
+                    |> Result.bind (fun valuesBody ->
+                        parse valuesBody
+                        |> Result.bind (fun document ->
+                            use document = document
+                            if document.RootElement.ValueKind <> JsonValueKind.Array then
+                                Error(MigrationReadFailure.MalformedResponse "invalid:property-values")
+                            else
+                                let parsed =
+                                    document.RootElement.EnumerateArray()
+                                    |> Seq.map (fun element ->
+                                        uniqueObjectMembers element
+                                        |> Result.bind (fun () -> customPropertyValue definitionMap element))
+                                    |> Seq.toList
+                                match parsed |> List.tryPick (function Error failure -> Some failure | _ -> None) with
+                                | Some failure -> Error failure
+                                | None ->
+                                    parsed |> List.choose (function Ok item -> Some item | _ -> None)
+                                    |> collectUnique _.Name
+                                    |> Result.bind (fun values ->
+                                        let setNames = values |> List.map _.Name |> Set.ofList
+                                        if definitions
+                                           |> List.exists (fun item ->
+                                               (item.Required || item.RequireExplicitValues = Some true)
+                                               && not (setNames.Contains item.Name)) then
+                                            Error(MigrationReadFailure.MalformedResponse "missing:required-property-value")
+                                        else
+                                            Ok { RepositoryId=options.ExpectedRepositoryId
+                                                 RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                                 IdentityUri=identityUri.AbsoluteUri
+                                                 IdentityPayloadJson=identityBody
+                                                 IdentityPayloadSha256=identityHash
+                                                 SchemaUri=schemaUri.AbsoluteUri
+                                                 SchemaPayloadJson=schemaBody
+                                                 SchemaPayloadSha256=sha schemaBody
+                                                 ValuesUri=valuesUri.AbsoluteUri
+                                                 ValuesPayloadJson=valuesBody
+                                                 ValuesPayloadSha256=sha valuesBody
+                                                 Definitions=definitions
+                                                 Values=values })))))
 
     let private parseIssue (value: JsonElement) =
         match requiredInt "number" value, requiredInt64 "id" value, requiredString "node_id" value,
