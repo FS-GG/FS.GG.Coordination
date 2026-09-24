@@ -197,3 +197,26 @@ artifact and passed every job, including the formal and overall aggregates.
 Because that manual run is not a green PR-associated check, the PR still needs
 fresh head-associated validation before merge. Neither CI run was the protected
 admission workflow or authorized a signer, JWT, or journal mutation.
+
+## 2026-09-24 exact signing-payload byte repair
+
+PR #510 merged the exact owner-plus-wait-timer native read at Coordination
+4e338d89b3cc66e07ae967b7fc94fdecee2140d6. A fresh protected workflow
+[run 35989238513](https://github.com/FS-GG/.github/actions/runs/35989238513)
+completed successfully with both native approvals and a receipt bound to that
+source. The container runner prepared a public signing payload, but the staged
+Main helper refused admission-signing-payload-binding before native reread or
+key lookup. The F# canonical writer escapes U+002B in UTC offsets and appends
+one LF; the Python helper had compared against literal plus signs and no LF.
+No signature, JWT, provider token, or journal mutation followed.
+
+The repair makes the helper compare exact F# canonical bytes under bounded
+ASCII key ID and round-trip UTC timestamp shapes. One shared public synthetic
+fixture is asserted by both the F# producer test and Python signer test; the
+Python controls refuse literal plus, missing/extra LF, altered digest, and
+wrong key. Do not rewrite the public payload on Main or sign an alternate
+serialization. The first post-#510 run is bound to pre-repair source and is
+**ineligible for signing or apply**. A reviewed/merged repair, fresh prepare,
+new protected run and native approval, exact host restaging, then a new public
+payload and separate host signing/JWT handoff are required before one
+expected-absent installation attempt.
