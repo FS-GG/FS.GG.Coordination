@@ -59,7 +59,8 @@ token reaches Git only through an anonymous descriptor and fixed askpass helper;
 Git receives a minimal environment with ambient credential helpers and hooks
 excluded. Even a successful Git response remains unknown to the typed port until
 fresh independent journal readback. Fake-provider, local competing-parent,
-credential-prompt, and Q6 controls pass. This is source only: no approved
+credential-prompt, Q6, all 690 architecture controls, and the unchanged full
+canonical Quint qualification pass. This is source only: no approved
 per-admission JWT issuer/process composition, claim-journal reader, provider
 reconciliation, installed runtime acceptance, or live write exists. The ordinary
 CLI production fence stays in place. The incorrect public trust anchor still
