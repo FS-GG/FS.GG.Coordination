@@ -1403,8 +1403,8 @@ module MigrationGitHubRead =
                                  CompleteForRepository=true; ExternalEdgeCount=externalCount
                                  Edges=sorted; Issues=List.rev records }
 
-    let private projectQuery number =
-        $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{number}) {{ id number items(first:100,after:$after) {{ totalCount nodes {{ id isArchived updatedAt content {{ __typename ... on Issue {{ id number repository {{ databaseId }} }} ... on PullRequest {{ id number repository {{ databaseId }} }} ... on DraftIssue {{ id }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
+    let projectItemsQuery (projectNumber: int) =
+        $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{projectNumber}) {{ id number items(first:100,after:$after) {{ totalCount nodes {{ id isArchived updatedAt content {{ __typename ... on Issue {{ id number repository {{ databaseId }} }} ... on PullRequest {{ id number repository {{ databaseId }} }} ... on DraftIssue {{ id }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
 
     let private nonNegativeInt name value =
         property name value
@@ -1464,7 +1464,7 @@ module MigrationGitHubRead =
                           match cursor with Some value -> "after", value | None -> () ]
                         |> Map.ofList
                     let request =
-                        GraphQL { Uri=options.GraphQLUri; Document=projectQuery options.ProjectNumber
+                        GraphQL { Uri=options.GraphQLUri; Document=projectItemsQuery options.ProjectNumber
                                   Variables=variables; Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request

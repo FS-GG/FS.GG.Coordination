@@ -62,6 +62,7 @@
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
     <Compile Include="MigrationNativeActivityTests.fs" />
+    <Compile Include="MigrationInspectProviderAdapterTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
