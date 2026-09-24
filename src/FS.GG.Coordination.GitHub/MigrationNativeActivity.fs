@@ -80,7 +80,8 @@ module MigrationNativeActivity =
             && exactPopulation pullRequestNumbers input.PullRequestReviews _.PullRequestNumber
             && exactPopulation pullRequestNumbers input.PullRequestInlineComments _.PullRequestNumber
         let allPageSets =
-            pagesValid pullRequests.PageCount pullRequests.Pages
+            pagesValid issues.PageCount issues.Pages
+            && pagesValid pullRequests.PageCount pullRequests.Pages
             && (input.IssueComments |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
             && (input.IssueEvents |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
             && (input.PullRequestComments |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
@@ -172,6 +173,7 @@ module MigrationNativeActivity =
                   string pullRequests.PageCount; string pullRequests.PullRequests.Length
                   string issueCommentCount; string issueEventCount; string pullRequestCommentCount
                   string reviewCount; string inlineCount ]
+                @ pageParts issues.Pages
                 @ (issues.Issues |> List.sortBy _.Number |> List.collect (fun issue ->
                     [ string issue.Number; issue.NodeId; issue.PayloadSha256 ]))
                 @ pageParts pullRequests.Pages

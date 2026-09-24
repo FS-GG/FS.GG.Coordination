@@ -21,10 +21,16 @@ type MigrationIssueRecord =
       PayloadJson: string
       PayloadSha256: string }
 
+type MigrationRestPageEvidence =
+    { RequestedUri: string
+      PayloadSha256: string
+      NextUri: string option }
+
 type MigrationIssuePopulation =
     { RepositoryId: int64
       PageCount: int
       Terminal: bool
+      Pages: MigrationRestPageEvidence list
       Issues: MigrationIssueRecord list
       PullRequestCount: int }
 
@@ -55,11 +61,6 @@ type MigrationPullRequestRecord =
       BaseSha: string
       PayloadJson: string
       PayloadSha256: string }
-
-type MigrationRestPageEvidence =
-    { RequestedUri: string
-      PayloadSha256: string
-      NextUri: string option }
 
 type MigrationPullRequestPopulation =
     { RepositoryId: int64

@@ -27,10 +27,16 @@ type MigrationIssueRecord =
       PayloadJson: string
       PayloadSha256: string }
 
+type MigrationRestPageEvidence =
+    { RequestedUri: string
+      PayloadSha256: string
+      NextUri: string option }
+
 type MigrationIssuePopulation =
     { RepositoryId: int64
       PageCount: int
       Terminal: bool
+      Pages: MigrationRestPageEvidence list
       Issues: MigrationIssueRecord list
       PullRequestCount: int }
 
@@ -60,11 +66,6 @@ type MigrationPullRequestRecord =
       BaseSha: string
       PayloadJson: string
       PayloadSha256: string }
-
-type MigrationRestPageEvidence =
-    { RequestedUri: string
-      PayloadSha256: string
-      NextUri: string option }
 
 type MigrationPullRequestPopulation =
     { RepositoryId: int64
@@ -538,7 +539,7 @@ module MigrationGitHubRead =
                 let start = Uri(options.ApiBase, path)
                 let allowedPath = start.AbsolutePath
                 let rec pages (seen: Set<string>) (count: int) (issues: MigrationIssueRecord list)
-                              (pullRequests: int) (current: Uri) =
+                              (pullRequests: int) (evidence: MigrationRestPageEvidence list) (current: Uri) =
                     if count >= 1000 || Set.contains current.AbsoluteUri seen then
                         Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
                     elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
@@ -579,16 +580,21 @@ module MigrationGitHubRead =
                                         | Ok next ->
                                             let accumulated = issues @ records
                                             let prCount = pullRequests + items.Length - records.Length
+                                            let page =
+                                                { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
+                                                  NextUri=next |> Option.map _.AbsoluteUri }
+                                            let allPages = evidence @ [ page ]
                                             match next with
-                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) accumulated prCount uri
+                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) accumulated prCount allPages uri
                                             | None ->
                                                 collectUnique (fun (issue: MigrationIssueRecord) -> issue.NodeId) accumulated
                                                 |> Result.bind (collectUnique (fun issue -> string issue.DatabaseId))
                                                 |> Result.bind (collectUnique (fun issue -> string issue.Number))
                                                 |> Result.map (fun complete ->
                                                     { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
-                                                      Issues=List.sortBy _.Number complete; PullRequestCount=prCount })))
-                pages Set.empty 0 [] 0 start)
+                                                      Pages=allPages; Issues=List.sortBy _.Number complete
+                                                      PullRequestCount=prCount })))
+                pages Set.empty 0 [] 0 [] start)
 
     let private parsePullRequest repositoryId (value: JsonElement) =
         let baseRepositoryId = property "base" value |> Result.bind (property "repo")

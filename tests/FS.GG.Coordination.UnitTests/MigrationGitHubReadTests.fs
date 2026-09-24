@@ -630,6 +630,19 @@ let ``read-only issue census follows all pages and excludes pull requests explic
         Assert.Equal(42L, population.RepositoryId)
         Assert.Equal(2, population.PageCount)
         Assert.True(population.Terminal)
+        Assert.Equal(2, population.Pages.Length)
+        Assert.Equal("https://api.github.test/repos/FS-GG/copy/issues?state=all&per_page=100", population.Pages.Head.RequestedUri)
+        Assert.Equal(Some next, population.Pages.Head.NextUri)
+        Assert.Equal(next, population.Pages.[1].RequestedUri)
+        Assert.Equal(None, population.Pages.[1].NextUri)
+        let pageDigest (value: string) =
+            value |> Encoding.UTF8.GetBytes |> SHA256.HashData
+            |> Convert.ToHexString |> _.ToLowerInvariant()
+        match first, second with
+        | Response firstPage, Response lastPage ->
+            Assert.Equal(pageDigest firstPage.Body, population.Pages.Head.PayloadSha256)
+            Assert.Equal(pageDigest lastPage.Body, population.Pages.[1].PayloadSha256)
+        | _ -> failwith "controlled pages were not responses"
         Assert.Equal<int list>([ 1; 3 ], population.Issues |> List.map _.Number)
         Assert.Equal(1, population.PullRequestCount)
         for issue in population.Issues do

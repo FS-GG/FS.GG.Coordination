@@ -51,7 +51,7 @@ let private inlineComment =
       PayloadJson=raw; PayloadSha256=rawDigest }
 
 let private sample () : MigrationNativeActivityInput =
-    { Issues={ RepositoryId=42L; PageCount=1; Terminal=true
+    { Issues={ RepositoryId=42L; PageCount=1; Terminal=true; Pages=[ page "issues" ]
                Issues=[ issue ]; PullRequestCount=1 }
       PullRequests={ RepositoryId=42L; PageCount=1; Terminal=true
                      Pages=[ page "pulls" ]; PullRequests=[ pullRequest ] }
@@ -134,6 +134,16 @@ let ``nonterminal and disconnected page chains refuse`` () =
     assertRefused "stream-pages" { input with IssueComments=[ { first with Terminal=false } ] }
     let badPage = { first.Pages.Head with NextUri=Some "https://api.github.test/absent" }
     assertRefused "stream-pages" { input with IssueComments=[ { first with Pages=[ badPage ] } ] }
+
+[<Fact>]
+let ``missing issue census page proof refuses and changed proof changes digest`` () =
+    let input = sample ()
+    assertRefused "stream-pages" { input with Issues={ input.Issues with Pages=[] } }
+    let first = MigrationNativeActivity.reconcile input |> requireOk
+    let alteredPage = { input.Issues.Pages.Head with PayloadSha256=digest "changed issue page" }
+    let altered = { input with Issues={ input.Issues with Pages=[ alteredPage ] } }
+    let second = MigrationNativeActivity.reconcile altered |> requireOk
+    Assert.NotEqual(first.NormalizedSha256, second.NormalizedSha256)
 
 [<Fact>]
 let ``modified raw activity and wrong subject identity refuse`` () =
