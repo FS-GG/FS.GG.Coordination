@@ -41,6 +41,7 @@
         "dependencies": {
           "FS.GG.Coordination.Core": "[1.0.0, )",
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
+          "FS.GG.Coordination.Qualification.Contracts": "[1.0.0, )",
           "FSharp.Core": "[10.1.302, )"
         }
       },

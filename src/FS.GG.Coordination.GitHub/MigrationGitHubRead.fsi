@@ -298,6 +298,9 @@ type HttpMigrationGitHubReadTransport =
 module MigrationGitHubRead =
     /// Canonical read-only Project item document used by the provider reader.
     val projectItemsQuery: projectNumber:int -> string
+    /// Canonical read-only Project field and value documents used by the provider readers.
+    val projectFieldsQuery: projectNumber:int -> string
+    val projectValuesQuery: projectNumber:int -> string
 
     val readRepositoryCoreSettings:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->

@@ -35,13 +35,19 @@ module MigrationInspectProviderAdapter =
             && (value.Uri.AbsoluteUri = repository.AbsoluteUri
                 || value.Uri.AbsolutePath = issuesPath
                 || value.Uri.AbsolutePath = $"/repositories/{options.Repository.ExpectedRepositoryId}/issues")
-        | "project-items", GraphQL value ->
+        | ("project-items" | "project-fields" | "project-values"), GraphQL value ->
+            let document =
+                match authority with
+                | "project-fields" -> MigrationGitHubRead.projectFieldsQuery options.Project.ProjectNumber
+                | "project-values" -> MigrationGitHubRead.projectValuesQuery options.Project.ProjectNumber
+                | _ -> MigrationGitHubRead.projectItemsQuery options.Project.ProjectNumber
+            let ownerKey = if authority = "project-values" then "organization" else "owner"
             value.Uri = options.Project.GraphQLUri
             && value.Uri.Scheme = Uri.UriSchemeHttps
-            && value.Document = MigrationGitHubRead.projectItemsQuery options.Project.ProjectNumber
-            && Map.tryFind "owner" value.Variables = Some options.Project.Organization
+            && value.Document = document
+            && Map.tryFind ownerKey value.Variables = Some options.Project.Organization
             && (value.Variables |> Map.toList
-                |> List.forall (fun (key, v) -> key = "owner" || (key = "after" && not (String.IsNullOrWhiteSpace v))))
+                |> List.forall (fun (key, v) -> key = ownerKey || (key = "after" && not (String.IsNullOrWhiteSpace v))))
         | _ -> false
 
     /// A provider-call fence that refuses a write-shaped request before the inner transport sees it.
@@ -152,7 +158,9 @@ module MigrationInspectProviderAdapter =
                 captures |> List.skip (min 1 captures.Length) |> List.choose (function
                     | Rest request, outcome when request.Method = Get -> Some(request, outcome)
                     | _ -> None)
-            if not validRepositoryCall || captures.Length <> population.PageCount + 1
+            if not validRepositoryCall
+               || (captures |> List.exists (fst >> allowedRequest options "issues-open-and-relevant-closed" >> not))
+               || captures.Length <> population.PageCount + 1
                || calls.Length <> population.PageCount then
                 Error "issue-capture-shape"
             elif calls.Length <> population.Pages.Length then Error "issue-page-count"
@@ -267,6 +275,8 @@ module MigrationInspectProviderAdapter =
                     | _ -> None)
             if captures.Length <> population.PageCount || calls.Length <> population.PageCount then
                 Error "project-page-count"
+            elif captures |> List.exists (fst >> allowedRequest options "project-items" >> not) then
+                Error "project-request-scope"
             elif calls |> List.exists (fun (request, _) ->
                     request.Uri <> options.Project.GraphQLUri
                     || request.Document <> MigrationGitHubRead.projectItemsQuery options.Project.ProjectNumber
@@ -322,6 +332,250 @@ module MigrationInspectProviderAdapter =
                                         Subjects=subjects }
                                  Pages=evidence }
 
+    let private parseProjectConnection (options: MigrationInspectProviderOptions) (connectionName: string) (body: string) =
+        try
+            use document = JsonDocument.Parse body
+            let root = document.RootElement
+            let mutable errors = Unchecked.defaultof<JsonElement>
+            if root.TryGetProperty("errors", &errors) then failwith "graphql-errors"
+            let project = root.GetProperty("data").GetProperty("organization").GetProperty("projectV2")
+            if project.GetProperty("id").GetString() <> options.Project.ExpectedProjectNodeId
+               || project.GetProperty("number").GetInt32() <> options.Project.ProjectNumber then
+                failwith "project-identity"
+            let connection = project.GetProperty(connectionName)
+            let total = connection.GetProperty("totalCount").GetInt32()
+            if total < 0 then failwith "negative-total"
+            let pageInfo = connection.GetProperty("pageInfo")
+            let next =
+                if pageInfo.GetProperty("hasNextPage").GetBoolean() then
+                    let cursor = pageInfo.GetProperty("endCursor").GetString()
+                    if String.IsNullOrWhiteSpace cursor then failwith "missing-cursor"
+                    Some cursor
+                else None
+            let nodes = connection.GetProperty("nodes").EnumerateArray() |> Seq.map _.GetRawText() |> Seq.toList
+            Ok(total, next, nodes)
+        with _ -> Error "project-raw-page-or-scope"
+
+    let private bindProjectConnection options authority connectionName projectId pageCount totalCount
+                                      (typed: 'a list) (key: 'a -> string)
+                                      (parseNode: string -> Result<'a * GitHubDiscoverySubject, string>)
+                                      (captures: (GitHubRequest * TransportOutcome) list) =
+        if not (projectBinding options) || projectId <> options.Project.ExpectedProjectNodeId
+           || pageCount < 1 || captures.Length <> pageCount then Error "project-capture-shape"
+        elif captures |> List.exists (fst >> allowedRequest options authority >> not) then
+            Error "project-request-scope"
+        else
+            let calls = captures |> List.choose (function GraphQL request, outcome -> Some(request, outcome) | _ -> None)
+            if calls.Length <> pageCount then Error "project-capture-shape"
+            else
+                let bodies = calls |> List.map (snd >> responseBody)
+                match bodies |> List.tryPick (function Error reason -> Some reason | _ -> None) with
+                | Some reason -> Error reason
+                | None ->
+                    let raw = bodies |> List.choose (function Ok body -> Some body | _ -> None)
+                    let parsed = raw |> List.map (parseProjectConnection options connectionName)
+                    match parsed |> List.tryPick (function Error reason -> Some reason | _ -> None) with
+                    | Some reason -> Error reason
+                    | None ->
+                        let pages = parsed |> List.choose (function Ok page -> Some page | _ -> None)
+                        let linked =
+                            calls |> List.mapi (fun index (request, _) ->
+                                let previous = if index = 0 then None else let _, next, _ = pages.[index - 1] in next
+                                Map.tryFind "after" request.Variables = previous)
+                            |> List.forall id
+                        let terminal =
+                            pages |> List.mapi (fun index (_, next, _) ->
+                                if index + 1 < pages.Length then next.IsSome else next.IsNone)
+                            |> List.forall id
+                        let sameTotal = pages |> List.forall (fun (total, _, _) -> total = totalCount)
+                        if not linked || not terminal then Error "project-page-chain"
+                        elif not sameTotal || (pages |> List.sumBy (fun (_, _, nodes) -> nodes.Length)) <> totalCount then
+                            Error "project-total"
+                        else
+                            let perPage =
+                                pages |> List.map (fun (_, _, nodes) -> nodes |> List.map parseNode)
+                            let all = perPage |> List.collect id
+                            match all |> List.tryPick (function Error reason -> Some reason | _ -> None) with
+                            | Some reason -> Error reason
+                            | None ->
+                                let rows = all |> List.choose (function Ok row -> Some row | _ -> None)
+                                let rawTyped = rows |> List.map fst |> List.sortBy key
+                                let keys = rawTyped |> List.map key
+                                if (keys |> Set.ofList |> Set.count) <> keys.Length then
+                                    Error "project-duplicate-identity"
+                                elif rawTyped <> typed then Error "project-raw-typed-mismatch"
+                                else
+                                    let evidence =
+                                        List.zip3 calls raw perPage
+                                        |> List.mapi (fun index ((request, _), body, parsedNodes) ->
+                                            { RequestedUri=request.Uri.AbsoluteUri
+                                              RequestIdentitySha256=graphQLIdentity request
+                                              RawBody=body; PayloadSha256=sha body
+                                              NextRequestIdentitySha256=
+                                                if index + 1 < calls.Length then Some(graphQLIdentity (fst calls.[index + 1]))
+                                                else None
+                                              Subjects=parsedNodes |> List.choose (function Ok (_, item) -> Some item | _ -> None) })
+                                    let subjects = evidence |> List.collect _.Subjects |> List.sortBy _.Identity
+                                    Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                                         ScopeVerified=true; SubjectsParsedFromRaw=true
+                                         Read={ Authority=authority; ObservedAt=DateTimeOffset.UtcNow
+                                                PageCount=evidence.Length; ItemCount=subjects.Length
+                                                Terminal=true; NextCursor=None
+                                                HighWaterMark=digestParts (evidence |> List.map _.PayloadSha256)
+                                                Subjects=subjects }
+                                         Pages=evidence }
+
+    let private parseFieldNode (options: MigrationInspectProviderOptions) (raw: string) =
+        try
+            use document = JsonDocument.Parse raw
+            let item = document.RootElement
+            let id = item.GetProperty("id").GetString()
+            let name = item.GetProperty("name").GetString()
+            let dataType = item.GetProperty("dataType").GetString()
+            if List.exists String.IsNullOrWhiteSpace [ id; name; dataType ] then failwith "field-identity"
+            let readOptions (nameProperty: string) (values: JsonElement) =
+                values.EnumerateArray()
+                |> Seq.map (fun value ->
+                    { Id=value.GetProperty("id").GetString(); Name=value.GetProperty(nameProperty).GetString() })
+                |> Seq.toList
+            let kind, optionsList =
+                match item.GetProperty("__typename").GetString() with
+                | "ProjectV2Field" -> MigrationProjectFieldKind.BuiltIn, []
+                | "ProjectV2SingleSelectField" ->
+                    MigrationProjectFieldKind.SingleSelect, readOptions "name" (item.GetProperty("options"))
+                | "ProjectV2MultiSelectField" ->
+                    MigrationProjectFieldKind.MultiSelect, readOptions "name" (item.GetProperty("multiSelectOptions"))
+                | "ProjectV2IterationField" ->
+                    let configuration = item.GetProperty("configuration")
+                    MigrationProjectFieldKind.Iteration,
+                    (readOptions "title" (configuration.GetProperty("iterations"))
+                     @ readOptions "title" (configuration.GetProperty("completedIterations")))
+                | _ -> failwith "unsupported-field-kind"
+            let allowedType =
+                match kind with
+                | MigrationProjectFieldKind.SingleSelect -> dataType = "SINGLE_SELECT"
+                | MigrationProjectFieldKind.MultiSelect -> dataType = "MULTI_SELECT"
+                | MigrationProjectFieldKind.Iteration -> dataType = "ITERATION"
+                | MigrationProjectFieldKind.BuiltIn ->
+                    Set.contains dataType
+                        (Set.ofList [ "ASSIGNEES"; "LINKED_PULL_REQUESTS"; "REVIEWERS"; "LABELS"
+                                      "MILESTONE"; "REPOSITORY"; "TITLE"; "TEXT"; "NUMBER"; "DATE"
+                                      "TRACKS"; "TRACKED_BY"; "ISSUE_TYPE"; "PARENT_ISSUE"
+                                      "SUB_ISSUES_PROGRESS"; "CREATED"; "UPDATED"; "CLOSED" ])
+            if not allowedType || (optionsList |> List.exists (fun value ->
+                String.IsNullOrWhiteSpace value.Id || String.IsNullOrWhiteSpace value.Name))
+               || (optionsList |> List.map _.Id |> Set.ofList |> Set.count) <> optionsList.Length
+               || (optionsList |> List.map _.Name |> Set.ofList |> Set.count) <> optionsList.Length then
+                failwith "field-shape"
+            let field =
+                { FieldNodeId=id; Name=name; DataType=dataType; Kind=kind
+                  Options=optionsList; PayloadJson=raw; PayloadSha256=sha raw }
+            Ok(field, subject $"project:{options.Project.ExpectedProjectNodeId}:field:{id}" (sha raw) raw)
+        with _ -> Error "project-field-shape"
+
+    let bindProjectFields options (population: MigrationProjectFieldPopulation) captures =
+        if not population.Terminal then Error "project-cohort"
+        else bindProjectConnection options "project-fields" "fields" population.ProjectNodeId
+                 population.PageCount population.TotalCount population.Fields _.FieldNodeId
+                 (parseFieldNode options) captures
+
+    let private parseValueNode (options: MigrationInspectProviderOptions) (raw: string) =
+        try
+            use document = JsonDocument.Parse raw
+            let item = document.RootElement
+            let itemId = item.GetProperty("id").GetString()
+            let updated = DateTimeOffset.Parse(item.GetProperty("updatedAt").GetString())
+            if String.IsNullOrWhiteSpace itemId then failwith "item-identity"
+            let connection = item.GetProperty("fieldValues")
+            let total = connection.GetProperty("totalCount").GetInt32()
+            let pageInfo = connection.GetProperty("pageInfo")
+            if total < 0 || pageInfo.GetProperty("hasNextPage").GetBoolean() then
+                failwith "nested-values-incomplete"
+            let checkNested (name: string) (value: JsonElement) =
+                let nested = value.GetProperty(name)
+                let count = nested.GetProperty("totalCount").GetInt32()
+                let nodes = nested.GetProperty("nodes").EnumerateArray() |> Seq.toList
+                if count < 0 || count <> nodes.Length
+                   || nested.GetProperty("pageInfo").GetProperty("hasNextPage").GetBoolean() then
+                    failwith "nested-value-incomplete"
+                let ids = nodes |> List.map (fun node -> node.GetProperty("id").GetString())
+                if ids |> List.exists String.IsNullOrWhiteSpace
+                   || (ids |> Set.ofList |> Set.count) <> ids.Length then failwith "nested-value-ids"
+            let values =
+                connection.GetProperty("nodes").EnumerateArray()
+                |> Seq.map (fun value ->
+                    let fieldId = value.GetProperty("field").GetProperty("id").GetString()
+                    let kind = value.GetProperty("__typename").GetString()
+                    if String.IsNullOrWhiteSpace fieldId then failwith "field-identity"
+                    match kind with
+                    | "ProjectV2ItemFieldLabelValue" -> checkNested "labels" value
+                    | "ProjectV2ItemFieldPullRequestValue" -> checkNested "pullRequests" value
+                    | "ProjectV2ItemFieldReviewerValue" -> checkNested "reviewers" value
+                    | "ProjectV2ItemFieldUserValue" -> checkNested "users" value
+                    | "ProjectV2ItemFieldRepositoryValue" -> value.GetProperty("repository") |> ignore
+                    | "ProjectV2ItemFieldMilestoneValue" -> value.GetProperty("milestone") |> ignore
+                    | "ProjectV2ItemFieldMultiSelectValue" ->
+                        let options = value.GetProperty("options").EnumerateArray() |> Seq.toList
+                        options |> List.iter (fun option ->
+                            option.GetProperty("id") |> ignore; option.GetProperty("name") |> ignore)
+                    | "ProjectV2ItemFieldIterationValue" ->
+                        for name in [ "iterationId"; "startDate"; "duration" ] do
+                            value.GetProperty(name) |> ignore
+                    | "ProjectV2ItemFieldNumberValue" -> value.GetProperty("number") |> ignore
+                    | "ProjectV2ItemFieldDateValue" -> value.GetProperty("date") |> ignore
+                    | "ProjectV2ItemFieldTextValue" -> value.GetProperty("text") |> ignore
+                    | "ProjectV2ItemFieldSingleSelectValue" -> value.GetProperty("optionId") |> ignore
+                    | _ -> failwith "unsupported-value-kind"
+                    let mutable node = Unchecked.defaultof<JsonElement>
+                    let nodeId =
+                        if value.TryGetProperty("id", &node) && node.ValueKind = JsonValueKind.String
+                           && not (String.IsNullOrWhiteSpace(node.GetString())) then Some(node.GetString())
+                        else None
+                    let payload = value.GetRawText()
+                    { FieldNodeId=fieldId; ValueKind=kind; ValueNodeId=nodeId
+                      PayloadJson=payload; PayloadSha256=sha payload })
+                |> Seq.toList
+            if values.Length <> total
+               || (values |> List.map _.FieldNodeId |> Set.ofList |> Set.count) <> values.Length then
+                failwith "value-count-or-duplicate"
+            let typed =
+                { ItemNodeId=itemId; UpdatedAt=updated; FieldValueCount=total
+                  FieldValues=values |> List.sortBy _.FieldNodeId }
+            Ok(typed, subject $"project:{options.Project.ExpectedProjectNodeId}:value-item:{itemId}"
+                              (updated.ToUniversalTime().ToString("O")) raw)
+        with _ -> Error "project-value-shape"
+
+    let bindProjectValues options (population: MigrationProjectValuePopulation) captures =
+        if not population.Terminal then Error "project-cohort"
+        else bindProjectConnection options "project-values" "items" population.ProjectNodeId
+                 population.PageCount population.TotalCount population.Items _.ItemNodeId
+                 (parseValueNode options) captures
+
+    let combineProjectItemsAndValues (items: MigrationProjectItemPopulation)
+                                     (values: MigrationProjectValuePopulation)
+                                     (membership: GitHubMigrationInspectAuthority)
+                                     (valuePages: GitHubMigrationInspectAuthority) =
+        let membershipKeys = items.Items |> List.map (fun item -> item.ItemNodeId, item.UpdatedAt)
+        let valueKeys = values.Items |> List.map (fun item -> item.ItemNodeId, item.UpdatedAt)
+        if membershipKeys <> valueKeys || membership.CohortSha256 <> valuePages.CohortSha256
+           || membership.Pages.IsEmpty || valuePages.Pages.IsEmpty then
+            Error "project-item-value-drift"
+        else
+            let linkedMembership =
+                membership.Pages |> List.mapi (fun index page ->
+                    if index + 1 = membership.Pages.Length then
+                        { page with NextRequestIdentitySha256=Some valuePages.Pages.Head.RequestIdentitySha256 }
+                    else page)
+            let pages = linkedMembership @ valuePages.Pages
+            let subjects = (membership.Read.Subjects @ valuePages.Read.Subjects) |> List.sortBy _.Identity
+            Ok { membership with
+                   Read={ membership.Read with
+                            ObservedAt=max membership.Read.ObservedAt valuePages.Read.ObservedAt
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                   Pages=pages }
+
 type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
                                      transport: IMigrationGitHubReadTransport) =
     interface IGitHubMigrationInspectSource with
@@ -334,9 +588,22 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
                 |> Result.bind (fun population ->
                     MigrationInspectProviderAdapter.bindIssues options population capture.Calls)
             elif authority = "project-items" then
-                let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
-                MigrationGitHubRead.readProjectItems options.Project capture
+                let membershipCapture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
+                MigrationGitHubRead.readProjectItems options.Project membershipCapture
                 |> Result.mapError (fun failure -> $"project-read:{failure}")
+                |> Result.bind (fun items ->
+                    MigrationInspectProviderAdapter.bindProjectItems options items membershipCapture.Calls
+                    |> Result.bind (fun membership ->
+                        let valueCapture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options "project-values")
+                        MigrationGitHubRead.readProjectValues options.Project valueCapture
+                        |> Result.mapError (fun failure -> $"project-value-read:{failure}")
+                        |> Result.bind (fun values ->
+                            MigrationInspectProviderAdapter.bindProjectValues options values valueCapture.Calls
+                            |> Result.bind (MigrationInspectProviderAdapter.combineProjectItemsAndValues items values membership))))
+            elif authority = "project-fields" then
+                let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
+                MigrationGitHubRead.readProjectFields options.Project capture
+                |> Result.mapError (fun failure -> $"project-field-read:{failure}")
                 |> Result.bind (fun population ->
-                    MigrationInspectProviderAdapter.bindProjectItems options population capture.Calls)
+                    MigrationInspectProviderAdapter.bindProjectFields options population capture.Calls)
             else Error $"authority-adapter-unavailable:{authority}"

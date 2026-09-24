@@ -1520,8 +1520,8 @@ module MigrationGitHubRead =
                                 | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
             pages Set.empty 0 None [] None
 
-    let private projectFieldQuery number =
-        $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{number}) {{ id number fields(first:100,after:$after) {{ totalCount nodes {{ __typename ... on ProjectV2FieldCommon {{ id name dataType }} ... on ProjectV2SingleSelectField {{ options {{ id name }} }} ... on ProjectV2MultiSelectField {{ multiSelectOptions {{ id name }} }} ... on ProjectV2IterationField {{ configuration {{ iterations {{ id title }} completedIterations {{ id title }} }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
+    let projectFieldsQuery (projectNumber: int) =
+        $"""query($owner:String!,$after:String) {{ organization(login:$owner) {{ projectV2(number:{projectNumber}) {{ id number fields(first:100,after:$after) {{ totalCount nodes {{ __typename ... on ProjectV2FieldCommon {{ id name dataType }} ... on ProjectV2SingleSelectField {{ options {{ id name }} }} ... on ProjectV2MultiSelectField {{ multiSelectOptions {{ id name }} }} ... on ProjectV2IterationField {{ configuration {{ iterations {{ id title }} completedIterations {{ id title }} }} }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"""
 
     let private fieldOption nameProperty (value: JsonElement) =
         match requiredString "id" value, requiredString nameProperty value with
@@ -1600,7 +1600,7 @@ module MigrationGitHubRead =
                           match cursor with Some value -> "after", value | None -> () ]
                         |> Map.ofList
                     let request =
-                        GraphQL { Uri=options.GraphQLUri; Document=projectFieldQuery options.ProjectNumber
+                        GraphQL { Uri=options.GraphQLUri; Document=projectFieldsQuery options.ProjectNumber
                                   Variables=variables; Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
@@ -1660,6 +1660,9 @@ module MigrationGitHubRead =
         if isNull stream then invalidOp $"missing-embedded-query:{name}"
         use reader = new StreamReader(stream, Encoding.UTF8)
         reader.ReadToEnd()
+
+    let projectValuesQuery (projectNumber: int) =
+        projectValueQueryTemplate.Replace("__PROJECT_NUMBER__", string projectNumber)
 
     let private nestedIds (name: string) (value: JsonElement) =
         match property name value with
@@ -1758,7 +1761,7 @@ module MigrationGitHubRead =
     let readProjectValues (options: MigrationProjectReadOptions) (transport: IMigrationGitHubReadTransport) =
         if not (validProjectOptions options) then Error MigrationReadFailure.InvalidOptions
         else
-            let query = projectValueQueryTemplate.Replace("__PROJECT_NUMBER__", string options.ProjectNumber)
+            let query = projectValuesQuery options.ProjectNumber
             let rec pages (seen: Set<string>) (count: int) (population: int option)
                           (accumulated: MigrationProjectItemValueRecord list) (cursor: string option) =
                 if count >= 1000 || (cursor |> Option.exists (fun value -> Set.contains value seen)) then

@@ -33,3 +33,22 @@ module MigrationInspectProviderAdapter =
         population:MigrationProjectItemPopulation ->
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
+
+    val bindProjectFields:
+        options:MigrationInspectProviderOptions ->
+        population:MigrationProjectFieldPopulation ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    val bindProjectValues:
+        options:MigrationInspectProviderOptions ->
+        population:MigrationProjectValuePopulation ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    val combineProjectItemsAndValues:
+        items:MigrationProjectItemPopulation ->
+        values:MigrationProjectValuePopulation ->
+        membership:GitHubMigrationInspectAuthority ->
+        valuePages:GitHubMigrationInspectAuthority ->
+            Result<GitHubMigrationInspectAuthority, string>
