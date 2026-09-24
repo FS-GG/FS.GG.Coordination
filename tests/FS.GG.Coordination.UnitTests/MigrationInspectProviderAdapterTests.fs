@@ -82,6 +82,20 @@ let private projectFieldPage total hasNext cursor nodes =
         .Replace("TOTAL", string total).Replace("NODES", nodes)
         .Replace("HAS_NEXT", hasNext).Replace("CURSOR", cursor)
 
+let private relationNode id repositoryId =
+    sprintf """{"id":"%s","repository":{"databaseId":%d}}""" id repositoryId
+
+let private relationConnection (nodes: string list) total hasNext cursor =
+    let cursorJson = cursor |> Option.map (sprintf "\"%s\"") |> Option.defaultValue "null"
+    sprintf """{"totalCount":%d,"nodes":[%s],"pageInfo":{"hasNextPage":%s,"endCursor":%s}}"""
+        total (String.concat "," nodes) (if hasNext then "true" else "false") cursorJson
+
+let private relationReply id number parent children blockers blocking =
+    let empty = relationConnection [] 0 false None
+    sprintf """{"data":{"node":{"id":"%s","number":%d,"updatedAt":"2026-09-25T10:00:00Z","repository":{"databaseId":42},"parent":%s,"subIssues":%s,"blockedBy":%s,"blocking":%s}}}"""
+        id number (Option.defaultValue "null" parent)
+        (Option.defaultValue empty children) (Option.defaultValue empty blockers) (Option.defaultValue empty blocking)
+
 [<Fact>]
 let ``issue adapter binds exact repository request and raw parsed subjects`` () =
     let source = MigrationInspectProviderAdapter(options, FakeTransport [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ])
@@ -414,6 +428,164 @@ let ``Project inspect refuses unknown value field and changed same-pass field pr
     Assert.True(changed.ReadAuthority(1, "project-items") |> Result.isOk)
     Assert.Equal(Error "project-field-proof-drift", changed.ReadAuthority(1, "project-fields"))
     Assert.Equal(Error "project-item-field-proof-required", changed.ReadAuthority(2, "project-fields"))
+
+[<Fact>]
+let ``native relation adapter binds census and reciprocal raw edges`` () =
+    let issue2 =
+        """{"number":2,"id":102,"node_id":"ISSUE_2","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+    let issuesBody = $"[{issueBody.TrimStart('[').TrimEnd(']')},{issue2}]"
+    let first =
+        relationReply "ISSUE_1" 1 None
+            (Some(relationConnection [ relationNode "ISSUE_2" 42L ] 1 false None))
+            None (Some(relationConnection [ relationNode "ISSUE_2" 42L ] 1 false None))
+    let second =
+        relationReply "ISSUE_2" 2 (Some(relationNode "ISSUE_1" 42L)) None
+            (Some(relationConnection [ relationNode "ISSUE_1" 42L ] 1 false None)) None
+    let source = MigrationInspectProviderAdapter(options,
+                     FakeTransport [ reply """{"id":42,"full_name":"FS-GG/copy"}"""
+                                     reply issuesBody
+                                     reply """{"id":42,"full_name":"FS-GG/copy"}"""
+                                     reply issuesBody; reply first; reply second ])
+                 :> IGitHubMigrationInspectSource
+    Assert.True(source.ReadAuthority(1, "issues-open-and-relevant-closed") |> Result.isOk)
+    match source.ReadAuthority(1, "hierarchy-and-dependencies") with
+    | Ok proof ->
+        Assert.Equal(3, proof.Pages.Length)
+        Assert.Equal(4, proof.Read.Subjects.Length)
+        Assert.Equal(Some proof.Pages.[1].RequestIdentitySha256,
+                     proof.Pages.[0].NextRequestIdentitySha256)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+    | Error reason -> failwithf "Unexpected relation adapter refusal: %s" reason
+
+    let issues, issueCalls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issuesBody ]
+    let issueProof =
+        match MigrationInspectProviderAdapter.bindIssues options issues issueCalls with
+        | Ok proof -> proof | Error reason -> failwithf "Issue proof refused: %s" reason
+    let relationTransport = FakeTransport [ reply first; reply second ]
+    let population =
+        match MigrationGitHubRead.readNativeRelations options.Repository issues relationTransport with
+        | Ok value -> value | Error failure -> failwithf "Relation reader refused: %A" failure
+    let changed = { population with Edges=[] }
+    match MigrationInspectProviderAdapter.bindNativeRelations
+              options issues issueProof changed relationTransport.Calls with
+    | Error reason -> Assert.StartsWith("relation-raw-or-scope:", reason)
+    | Ok _ -> failwith "Forged relation edge set was accepted"
+    let alteredIssueProof =
+        { issueProof with Pages=[ { issueProof.Pages.Head with RawBody="[]" } ] }
+    Assert.Equal(Error "relation-cohort-or-population",
+                 MigrationInspectProviderAdapter.bindNativeRelations
+                     options issues alteredIssueProof population relationTransport.Calls)
+    let wrongIdentity =
+        relationTransport.Calls |> List.mapi (fun index (request, outcome) ->
+            match request with
+            | GraphQL value when index = 0 ->
+                GraphQL { value with Variables=Map.ofList [ "id", "FOREIGN" ] }, outcome
+            | _ -> request, outcome)
+    match MigrationInspectProviderAdapter.bindNativeRelations
+              options issues issueProof population wrongIdentity with
+    | Error reason -> Assert.StartsWith("relation-raw-or-scope:", reason)
+    | Ok _ -> failwith "Wrong relation request identity was accepted"
+    let extraMutation =
+        let request =
+            match fst relationTransport.Calls.Head with
+            | GraphQL value -> GraphQL { value with Document="mutation { deleteIssue(input:{}) { clientMutationId } }" }
+            | _ -> failwith "Expected GraphQL relation request"
+        relationTransport.Calls @ [ request, reply "{}" ]
+    Assert.Equal(Error "relation-request-scope",
+                 MigrationInspectProviderAdapter.bindNativeRelations
+                     options issues issueProof population extraMutation)
+
+[<Fact>]
+let ``native relation continuation contributes linked raw page evidence`` () =
+    let issue2 =
+        """{"number":2,"id":102,"node_id":"ISSUE_2","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+    let issue3 =
+        """{"number":3,"id":103,"node_id":"ISSUE_3","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+    let issuesBody = $"[{issueBody.TrimStart('[').TrimEnd(']')},{issue2},{issue3}]"
+    let first = relationReply "ISSUE_1" 1 None None None
+                    (Some(relationConnection [ relationNode "ISSUE_2" 42L ] 2 true (Some "cursor-1")))
+    let continuationConnection = relationConnection [ relationNode "ISSUE_3" 42L ] 2 false None
+    let continuation =
+        sprintf """{"data":{"node":{"id":"ISSUE_1","number":1,"updatedAt":"2026-09-25T10:00:00Z","repository":{"databaseId":42},"blocking":%s}}}"""
+            continuationConnection
+    let second = relationReply "ISSUE_2" 2 None None
+                     (Some(relationConnection [ relationNode "ISSUE_1" 42L ] 1 false None)) None
+    let third = relationReply "ISSUE_3" 3 None None
+                    (Some(relationConnection [ relationNode "ISSUE_1" 42L ] 1 false None)) None
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let source = MigrationInspectProviderAdapter(options,
+                     FakeTransport [ repository; reply issuesBody; repository; reply issuesBody
+                                     reply first; reply continuation; reply second; reply third ])
+                 :> IGitHubMigrationInspectSource
+    Assert.True(source.ReadAuthority(1, "issues-open-and-relevant-closed") |> Result.isOk)
+    match source.ReadAuthority(1, "hierarchy-and-dependencies") with
+    | Ok proof ->
+        Assert.Equal(5, proof.Pages.Length)
+        Assert.Equal(Some proof.Pages.[2].RequestIdentitySha256,
+                     proof.Pages.[1].NextRequestIdentitySha256)
+        Assert.Empty(proof.Pages.[2].Subjects)
+        Assert.Equal(6, proof.Read.Subjects.Length)
+    | Error reason -> failwithf "Unexpected continuation adapter refusal: %s" reason
+
+[<Fact>]
+let ``native relation adapter refuses multi repository and foreign endpoint cohorts`` () =
+    let extraRepository =
+        { cohort.Repositories.Head with Id=77L; NodeId="R_77"; FullName="FS-GG/other" }
+    let foreignCohort =
+        { options with Cohort={ cohort with Repositories=cohort.Repositories @ [ extraRepository ] } }
+    let noCalls = FakeTransport []
+    let multi = MigrationInspectProviderAdapter(foreignCohort, noCalls) :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "relation-single-repository-cohort-required",
+                 multi.ReadAuthority(1, "hierarchy-and-dependencies"))
+    Assert.Empty(noCalls.Calls)
+    let foreign = relationReply "ISSUE_1" 1 None None
+                      (Some(relationConnection [ relationNode "FOREIGN" 77L ] 1 false None)) None
+    let source = MigrationInspectProviderAdapter(options,
+                     FakeTransport [ reply """{"id":42,"full_name":"FS-GG/copy"}"""
+                                     reply issueBody
+                                     reply """{"id":42,"full_name":"FS-GG/copy"}"""
+                                     reply issueBody; reply foreign ])
+                 :> IGitHubMigrationInspectSource
+    Assert.True(source.ReadAuthority(1, "issues-open-and-relevant-closed") |> Result.isOk)
+    Assert.Equal(Error "relation-cohort-or-population", source.ReadAuthority(1, "hierarchy-and-dependencies"))
+
+[<Fact>]
+let ``native relation adapter refuses missing continuation foreign ID and mutation dispatch`` () =
+    let first = relationReply "ISSUE_1" 1 None None None
+                    (Some(relationConnection [ relationNode "ISSUE_1" 42L ] 2 true (Some "cursor")))
+    let missing = MigrationInspectProviderAdapter(options,
+                      FakeTransport [ reply """{"id":42,"full_name":"FS-GG/copy"}"""
+                                      reply issueBody
+                                      reply """{"id":42,"full_name":"FS-GG/copy"}"""
+                                      reply issueBody; reply first ])
+                  :> IGitHubMigrationInspectSource
+    Assert.True(missing.ReadAuthority(1, "issues-open-and-relevant-closed") |> Result.isOk)
+    Assert.True(missing.ReadAuthority(1, "hierarchy-and-dependencies") |> Result.isError)
+    let inner = FakeTransport [ reply "{}" ]
+    let guard = MigrationInspectProviderAdapter.guardRelationTransport options [ "ISSUE_1" ] inner
+    let _, calls = readProjectItems [ reply (projectPage 1 "false" "null" $"[{projectItem}]") ]
+    let foreignRequest, mutation =
+        match fst calls.Head with
+        | GraphQL value ->
+            GraphQL { value with Document=MigrationGitHubRead.nativeRelationsQuery
+                                 Variables=Map.ofList [ "id", "FOREIGN" ] },
+            GraphQL { value with Document="mutation { deleteIssue(input:{}) { clientMutationId } }"
+                                 Variables=Map.ofList [ "id", "ISSUE_1" ] }
+        | _ -> failwith "Expected GraphQL"
+    Assert.Equal(NetworkFailure, guard.Send foreignRequest)
+    Assert.Equal(NetworkFailure, guard.Send mutation)
+    Assert.Empty(inner.Calls)
+
+[<Fact>]
+let ``relation authority refuses changed issue page and missing pass proof`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let changedIssueBody = issueBody.Replace("\"state\":\"open\"", "\"state\": \"open\"")
+    let transport = FakeTransport [ repository; reply issueBody; repository; reply changedIssueBody ]
+    let source = MigrationInspectProviderAdapter(options, transport) :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "relation-issue-proof-required", source.ReadAuthority(2, "hierarchy-and-dependencies"))
+    Assert.True(source.ReadAuthority(1, "issues-open-and-relevant-closed") |> Result.isOk)
+    Assert.Equal(Error "relation-issue-proof-drift", source.ReadAuthority(1, "hierarchy-and-dependencies"))
+    Assert.Equal(4, transport.Calls.Length)
     let noCalls = FakeTransport []
     let unsupported = MigrationInspectProviderAdapter(options, noCalls) :> IGitHubMigrationInspectSource
     Assert.Equal(Error "authority-adapter-unavailable:claim-and-event-streams",

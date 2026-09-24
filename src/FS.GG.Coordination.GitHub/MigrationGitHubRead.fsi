@@ -301,6 +301,9 @@ module MigrationGitHubRead =
     /// Canonical read-only Project field and value documents used by the provider readers.
     val projectFieldsQuery: projectNumber:int -> string
     val projectValuesQuery: projectNumber:int -> string
+    /// Canonical read-only native relation documents used by the provider reader.
+    val nativeRelationsQuery: string
+    val relationContinuationQuery: connection:string -> string
 
     val readRepositoryCoreSettings:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->

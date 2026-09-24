@@ -1150,10 +1150,10 @@ module MigrationGitHubRead =
 
     // Initial relation pages share one issue identity and revision; continuations
     // are fetched only for these three closed connection names.
-    let private nativeRelationsQuery =
+    let nativeRelationsQuery =
         "query($id:ID!) { node(id:$id) { ... on Issue { id number updatedAt repository { databaseId } parent { id repository { databaseId } } subIssues(first:100) { totalCount nodes { id repository { databaseId } } pageInfo { hasNextPage endCursor } } blockedBy(first:100) { totalCount nodes { id repository { databaseId } } pageInfo { hasNextPage endCursor } } blocking(first:100) { totalCount nodes { id repository { databaseId } } pageInfo { hasNextPage endCursor } } } } }"
 
-    let private relationContinuationQuery connection =
+    let relationContinuationQuery connection =
         let field =
             match connection with
             | "subIssues" -> "subIssues"

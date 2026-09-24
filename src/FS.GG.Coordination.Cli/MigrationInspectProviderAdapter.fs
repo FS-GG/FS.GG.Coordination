@@ -49,11 +49,38 @@ module MigrationInspectProviderAdapter =
             && Map.tryFind ownerKey value.Variables = Some options.Project.Organization
             && (value.Variables |> Map.toList
                 |> List.forall (fun (key, v) -> key = ownerKey || (key = "after" && not (String.IsNullOrWhiteSpace v))))
+        | "hierarchy-and-dependencies", GraphQL value ->
+            let exactInitial =
+                value.Document = MigrationGitHubRead.nativeRelationsQuery
+                && value.Variables.Count = 1
+                && (Map.tryFind "id" value.Variables |> Option.exists (String.IsNullOrWhiteSpace >> not))
+            let exactContinuation =
+                [ "subIssues"; "blockedBy"; "blocking" ]
+                |> List.exists (fun connection ->
+                    value.Document = MigrationGitHubRead.relationContinuationQuery connection)
+                && value.Variables.Count = 2
+                && (Map.tryFind "id" value.Variables |> Option.exists (String.IsNullOrWhiteSpace >> not))
+                && (Map.tryFind "after" value.Variables |> Option.exists (String.IsNullOrWhiteSpace >> not))
+            value.Uri = options.Repository.GraphQLUri
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && (exactInitial || exactContinuation)
         | _ -> false
 
     /// A provider-call fence that refuses a write-shaped request before the inner transport sees it.
     let guardReadTransport options authority (inner: IMigrationGitHubReadTransport) =
         CapturingTransport(inner, allowedRequest options authority) :> IMigrationGitHubReadTransport
+
+    let internal allowedRelationIssueRequest options issueIds request =
+        allowedRequest options "hierarchy-and-dependencies" request
+        && (match request with
+            | GraphQL value ->
+                Map.tryFind "id" value.Variables |> Option.exists (fun id -> Set.contains id issueIds)
+            | _ -> false)
+
+    /// Fences relation reads to the exact issue census before dispatch.
+    let guardRelationTransport options issueNodeIds (inner: IMigrationGitHubReadTransport) =
+        CapturingTransport(inner, allowedRelationIssueRequest options (Set.ofList issueNodeIds))
+        :> IMigrationGitHubReadTransport
 
     let private sha (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData
@@ -586,9 +613,206 @@ module MigrationInspectProviderAdapter =
                             Subjects=subjects }
                    Pages=pages }
 
+    let bindNativeRelations (options: MigrationInspectProviderOptions)
+                                     (issues: MigrationIssuePopulation)
+                                     (issueProof: GitHubMigrationInspectAuthority)
+                                     (population: MigrationRelationPopulation)
+                                     (captures: (GitHubRequest * TransportOutcome) list) =
+        let repositoryId = options.Repository.ExpectedRepositoryId
+        let validIssueProof =
+            if issues.Pages.Length <> issues.PageCount || issueProof.Pages.Length <> issues.Pages.Length
+               || issueProof.Read.PageCount <> issueProof.Pages.Length
+               || issueProof.Read.ItemCount <> issueProof.Read.Subjects.Length
+               || not issueProof.Read.Terminal || issueProof.Read.NextCursor.IsSome
+               || not issueProof.ScopeVerified || not issueProof.SubjectsParsedFromRaw
+               || issueProof.Read.Subjects <> (issueProof.Pages |> List.collect _.Subjects |> List.sortBy _.Identity)
+               || issueProof.Read.HighWaterMark <> digestParts (issueProof.Pages |> List.map _.PayloadSha256)
+               || not issues.Terminal then false
+            else
+                let pageFacts =
+                    List.zip issues.Pages issueProof.Pages
+                    |> List.forall (fun (census, proof) ->
+                        proof.RequestedUri = census.RequestedUri
+                        && proof.RequestIdentitySha256 = sha census.RequestedUri
+                        && proof.PayloadSha256 = census.PayloadSha256
+                        && proof.PayloadSha256 = sha proof.RawBody
+                        && proof.NextRequestIdentitySha256 = (census.NextUri |> Option.map sha))
+                let parsed = parseIssuePages repositoryId (issueProof.Pages |> List.map _.RawBody)
+                match parsed with
+                | Error _ -> false
+                | Ok pages ->
+                    let rawRecords =
+                        pages |> List.collect (fst >> List.map fst)
+                        |> List.sortBy (fun (number, _, _, _, _, _) -> number)
+                    let typedRecords =
+                        issues.Issues |> List.map (fun item ->
+                            item.Number, item.DatabaseId, item.NodeId, item.State, item.UpdatedAt, item.PayloadJson)
+                    let subjectFacts =
+                        List.zip pages issueProof.Pages
+                        |> List.forall (fun ((rows, _), proof) -> proof.Subjects = (rows |> List.map snd))
+                    pageFacts && subjectFacts && rawRecords = typedRecords
+                    && (pages |> List.sumBy snd) = issues.PullRequestCount
+        if options.Cohort.Repositories.Length <> 1
+           || options.Cohort.Repositories.Head.Id <> repositoryId
+           || not population.CompleteForRepository || population.RepositoryId <> repositoryId
+           || population.IssueCount <> issues.Issues.Length || population.Issues.Length <> issues.Issues.Length
+           || population.ExternalEdgeCount <> 0
+           || issueProof.Read.Authority <> "issues-open-and-relevant-closed"
+           || issueProof.CohortSha256 <> GitHubMigrationInspect.cohortSha256 options.Cohort
+           || not validIssueProof then
+            Error "relation-cohort-or-population"
+        elif captures |> List.exists (fst >> allowedRequest options "hierarchy-and-dependencies" >> not) then
+            Error "relation-request-scope"
+        else
+            try
+                let issueIds = issues.Issues |> List.map (fun (issue: MigrationIssueRecord) -> issue.NodeId) |> Set.ofList
+                let calls = captures |> List.toArray
+                let mutable index = 0
+                let mutable stage = "request"
+                let require condition = if not condition then failwith stage
+                let take document variables =
+                    require (index < calls.Length)
+                    let request, outcome = calls.[index]
+                    index <- index + 1
+                    match request with
+                    | GraphQL value ->
+                        require (value.Uri = options.Repository.GraphQLUri
+                                 && value.Document = document && value.Variables = variables)
+                        let body =
+                            match responseBody outcome with
+                            | Ok value -> value | Error _ -> failwith "relation-response"
+                        value, body
+                    | _ -> failwith "relation-request"
+                let endpoint (value: JsonElement) =
+                    stage <- "endpoint"
+                    let id = value.GetProperty("id").GetString()
+                    let repo = value.GetProperty("repository").GetProperty("databaseId").GetInt64()
+                    require (not (String.IsNullOrWhiteSpace id)
+                             && repo = repositoryId && Set.contains id issueIds)
+                    { NodeId=id; RepositoryId=repo }
+                let parseResponse (source: MigrationIssueRecord) (body: string) =
+                    stage <- "response"
+                    use document = JsonDocument.Parse body
+                    let root = document.RootElement
+                    let mutable errors = Unchecked.defaultof<JsonElement>
+                    require (not (root.TryGetProperty("errors", &errors)))
+                    let item = root.GetProperty("data").GetProperty("node")
+                    let current = endpoint item
+                    let number = item.GetProperty("number").GetInt32()
+                    let updated = DateTimeOffset.Parse(item.GetProperty("updatedAt").GetString())
+                    require (current.NodeId = source.NodeId && number = source.Number
+                             && updated = source.UpdatedAt)
+                    item.Clone()
+                let connection (name: string) (item: JsonElement) =
+                    stage <- $"connection:{name}"
+                    let value = item.GetProperty(name)
+                    let total = value.GetProperty("totalCount").GetInt32()
+                    require (total >= 0)
+                    let nodes = value.GetProperty("nodes").EnumerateArray() |> Seq.map endpoint |> Seq.toList
+                    let pageInfo = value.GetProperty("pageInfo")
+                    let next =
+                        if pageInfo.GetProperty("hasNextPage").GetBoolean() then
+                            let cursor = pageInfo.GetProperty("endCursor").GetString()
+                            require (not (String.IsNullOrWhiteSpace cursor) && not nodes.IsEmpty)
+                            Some cursor
+                        else None
+                    require (nodes.Length <= total)
+                    total, nodes, next
+                let evidence = ResizeArray<GitHubMigrationInspectPage>()
+                let edges = ResizeArray<MigrationRelationEdge>()
+                for source, record in List.zip issues.Issues population.Issues do
+                    stage <- $"issue:{source.NodeId}"
+                    require (record.IssueNodeId = source.NodeId && record.UpdatedAt = source.UpdatedAt)
+                    let initialRequest, initialBody =
+                        take MigrationGitHubRead.nativeRelationsQuery (Map.ofList [ "id", source.NodeId ])
+                    let initial = parseResponse source initialBody
+                    let initialRaw = initial.GetRawText()
+                    require (record.PayloadJson = initialRaw && record.PayloadSha256 = sha initialRaw)
+                    let current = { NodeId=source.NodeId; RepositoryId=repositoryId }
+                    let parent = initial.GetProperty("parent")
+                    if parent.ValueKind <> JsonValueKind.Null then
+                        edges.Add { Kind=MigrationRelationKind.ParentChild
+                                    Source=endpoint parent; Target=current }
+                    evidence.Add
+                        { RequestedUri=initialRequest.Uri.AbsoluteUri
+                          RequestIdentitySha256=graphQLIdentity initialRequest
+                          RawBody=initialBody; PayloadSha256=sha initialBody
+                          NextRequestIdentitySha256=None
+                          Subjects=[ subject $"repository:{repositoryId}:relation:{source.NodeId}"
+                                             (source.UpdatedAt.ToUniversalTime().ToString("O")) initialRaw ] }
+                    let mutable continuation = 0
+                    for name in [ "subIssues"; "blockedBy"; "blocking" ] do
+                        let total, firstNodes, firstNext = connection name initial
+                        let mutable nodes = firstNodes
+                        let mutable next = firstNext
+                        let mutable cursors = Set.empty<string>
+                        while next.IsSome do
+                            let cursor = next.Value
+                            require (not (Set.contains cursor cursors) && continuation < 1000)
+                            cursors <- Set.add cursor cursors
+                            let request, body =
+                                take (MigrationGitHubRead.relationContinuationQuery name)
+                                     (Map.ofList [ "id", source.NodeId; "after", cursor ])
+                            let item = parseResponse source body
+                            let raw = item.GetRawText()
+                            require (continuation < record.ContinuationPages.Length)
+                            let retained = record.ContinuationPages.[continuation]
+                            continuation <- continuation + 1
+                            require (retained.Connection = name && retained.RequestedCursor = cursor
+                                     && retained.PayloadJson = raw && retained.PayloadSha256 = sha raw)
+                            let count, added, cursorNext = connection name item
+                            require (count = total)
+                            nodes <- nodes @ added
+                            next <- cursorNext
+                            evidence.Add
+                                { RequestedUri=request.Uri.AbsoluteUri
+                                  RequestIdentitySha256=graphQLIdentity request
+                                  RawBody=body; PayloadSha256=sha body
+                                  NextRequestIdentitySha256=None; Subjects=[] }
+                        require (nodes.Length = total
+                                 && (nodes |> List.map _.NodeId |> Set.ofList |> Set.count) = nodes.Length)
+                        for other in nodes do
+                            edges.Add
+                                (match name with
+                                 | "subIssues" ->
+                                     { Kind=MigrationRelationKind.ParentChild; Source=current; Target=other }
+                                 | "blockedBy" ->
+                                     { Kind=MigrationRelationKind.Blocks; Source=other; Target=current }
+                                 | _ ->
+                                     { Kind=MigrationRelationKind.Blocks; Source=current; Target=other })
+                    require (continuation = record.ContinuationPages.Length)
+                require (index = calls.Length)
+                stage <- "reciprocity"
+                let grouped = edges |> Seq.toList |> List.countBy id
+                require (grouped |> List.forall (fun (_, count) -> count = 2))
+                let typed = grouped |> List.map fst
+                            |> List.sortBy (fun edge ->
+                                edge.Kind, edge.Source.RepositoryId, edge.Source.NodeId,
+                                edge.Target.RepositoryId, edge.Target.NodeId)
+                require (typed = population.Edges)
+                let relationPages = evidence |> Seq.toList
+                let pages = issueProof.Pages @ relationPages
+                let linked =
+                    pages |> List.mapi (fun position page ->
+                        let nextIdentity =
+                            if position + 1 < pages.Length then Some pages.[position + 1].RequestIdentitySha256
+                            else None
+                        { page with NextRequestIdentitySha256=nextIdentity })
+                let subjects = linked |> List.collect _.Subjects |> List.sortBy _.Identity
+                Ok { CohortSha256=issueProof.CohortSha256
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="hierarchy-and-dependencies"; ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=linked.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (linked |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=linked }
+            with failure -> Error $"relation-raw-or-scope:{failure.Message}"
+
 type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
                                      transport: IMigrationGitHubReadTransport) =
     let fieldProofs = System.Collections.Generic.Dictionary<int * string, string>()
+    let issueProofs = System.Collections.Generic.Dictionary<int * string, string>()
     let cohortDigest = GitHubMigrationInspect.cohortSha256 options.Cohort
     let fieldFingerprint (proof: GitHubMigrationInspectAuthority) =
         proof.Pages
@@ -602,11 +826,48 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
         member _.ReadAuthority(passOrdinal, authority) =
             if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
             elif authority = "issues-open-and-relevant-closed" then
+                lock issueProofs (fun () -> issueProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
                 MigrationGitHubRead.readIssues options.Repository capture
                 |> Result.mapError (fun failure -> $"issue-read:{failure}")
                 |> Result.bind (fun population ->
                     MigrationInspectProviderAdapter.bindIssues options population capture.Calls)
+                |> Result.map (fun proof ->
+                    lock issueProofs (fun () ->
+                        issueProofs.[(passOrdinal, cohortDigest)] <- fieldFingerprint proof)
+                    proof)
+            elif authority = "hierarchy-and-dependencies" then
+                if options.Cohort.Repositories.Length <> 1
+                   || options.Cohort.Repositories.Head.Id <> options.Repository.ExpectedRepositoryId then
+                    Error "relation-single-repository-cohort-required"
+                else
+                    let expectedIssueProof =
+                        lock issueProofs (fun () ->
+                            match issueProofs.TryGetValue((passOrdinal, cohortDigest)) with
+                            | true, proof -> Some proof | _ -> None)
+                    match expectedIssueProof with
+                    | None -> Error "relation-issue-proof-required"
+                    | Some fingerprint ->
+                        let issueCapture =
+                            CapturingTransport(transport,
+                                MigrationInspectProviderAdapter.allowedRequest options "issues-open-and-relevant-closed")
+                        MigrationGitHubRead.readIssues options.Repository issueCapture
+                        |> Result.mapError (fun failure -> $"relation-issue-read:{failure}")
+                        |> Result.bind (fun issues ->
+                            MigrationInspectProviderAdapter.bindIssues options issues issueCapture.Calls
+                            |> Result.bind (fun issueProof ->
+                                if fieldFingerprint issueProof <> fingerprint then
+                                    Error "relation-issue-proof-drift"
+                                else
+                                    let relationCapture =
+                                        CapturingTransport(transport,
+                                            MigrationInspectProviderAdapter.allowedRelationIssueRequest options
+                                                (issues.Issues |> List.map _.NodeId |> Set.ofList))
+                                    MigrationGitHubRead.readNativeRelations options.Repository issues relationCapture
+                                    |> Result.mapError (fun failure -> $"relation-read:{failure}")
+                                    |> Result.bind (fun population ->
+                                        MigrationInspectProviderAdapter.bindNativeRelations
+                                            options issues issueProof population relationCapture.Calls)))
             elif authority = "project-items" then
                 lock fieldProofs (fun () -> fieldProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let membershipCapture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)

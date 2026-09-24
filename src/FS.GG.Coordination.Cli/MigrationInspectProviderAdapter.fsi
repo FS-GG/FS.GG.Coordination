@@ -8,8 +8,8 @@ type MigrationInspectProviderOptions =
       Repository: MigrationGitHubReadOptions
       Project: MigrationProjectReadOptions }
 
-/// Only issue census and Project item membership have concrete raw-to-typed adapters.
-/// Every other GS2-09.1 authority returns an explicit refusal.
+/// Issue census, Project membership/schema/values and single-repository native relations
+/// have concrete raw-to-typed adapters. Remaining GS2-09.1 authorities refuse.
 type MigrationInspectProviderAdapter =
     new: options:MigrationInspectProviderOptions * transport:IMigrationGitHubReadTransport -> MigrationInspectProviderAdapter
     interface IGitHubMigrationInspectSource
@@ -19,6 +19,11 @@ module MigrationInspectProviderAdapter =
     /// Refuses requests outside one declared read-only authority before dispatching to inner.
     val guardReadTransport:
         options:MigrationInspectProviderOptions -> authority:string ->
+        inner:IMigrationGitHubReadTransport -> IMigrationGitHubReadTransport
+
+    /// Refuses any relation query outside the exact source issue NodeIds before dispatch.
+    val guardRelationTransport:
+        options:MigrationInspectProviderOptions -> issueNodeIds:string list ->
         inner:IMigrationGitHubReadTransport -> IMigrationGitHubReadTransport
 
     /// Exposed for independent adapter controls; captured requests must be from one read-only provider call.
@@ -44,5 +49,14 @@ module MigrationInspectProviderAdapter =
     val bindProjectValues:
         options:MigrationInspectProviderOptions ->
         population:MigrationProjectValuePopulation ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
+    val bindNativeRelations:
+        options:MigrationInspectProviderOptions ->
+        issues:MigrationIssuePopulation ->
+        issueProof:GitHubMigrationInspectAuthority ->
+        population:MigrationRelationPopulation ->
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
