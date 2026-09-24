@@ -68,6 +68,26 @@ type MigrationPullRequestPopulation =
       Pages: MigrationRestPageEvidence list
       PullRequests: MigrationPullRequestRecord list }
 
+type MigrationIssueCommentRecord =
+    { DatabaseId: int64
+      NodeId: string
+      SubjectNumber: int
+      ActorLogin: string
+      CreatedAt: DateTimeOffset
+      UpdatedAt: DateTimeOffset
+      Body: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationIssueCommentPopulation =
+    { RepositoryId: int64
+      SubjectNumber: int
+      SubjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      Comments: MigrationIssueCommentRecord list }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -228,6 +248,13 @@ module MigrationGitHubRead =
         issues:MigrationIssuePopulation ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationPullRequestPopulation, MigrationReadFailure>
+
+    val readIssueComments:
+        options:MigrationGitHubReadOptions ->
+        issues:MigrationIssuePopulation ->
+        issueNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationIssueCommentPopulation, MigrationReadFailure>
 
     val readIssueTypes:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->

@@ -211,6 +211,69 @@ let ``pull request census refuses malformed revisions and a nonterminal issue ce
                  MigrationGitHubRead.readPullRequests options nonterminal noRequests)
     Assert.Empty(noRequests.Requests)
 
+let private issueComment id nodeId issueNumber =
+    $"""{{"id":{id},"node_id":"{nodeId}","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/{issueNumber}","body":"fsgg:claim payload","created_at":"2026-09-23T10:00:00Z","updated_at":"2026-09-23T10:01:00Z","user":{{"login":"reviewer"}}}}"""
+
+[<Fact>]
+let ``issue comment stream binds a censused subject and terminal raw pages`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=2"
+    let firstRecord = issueComment 301 "COMMENT_301" 1
+    let secondRecord = issueComment 302 "COMMENT_302" 1
+    let firstBody = $"[{firstRecord}]"
+    let secondBody = $"[{secondRecord}]"
+    let transport =
+        FakeTransport [ repo
+                        ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) firstBody
+                        ok Map.empty secondBody ]
+    match MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 transport with
+    | Ok observed ->
+        Assert.Equal("ISSUE_1", observed.SubjectNodeId)
+        Assert.Equal(2, observed.PageCount)
+        Assert.Equal<int64 list>([ 301L; 302L ], observed.Comments |> List.map _.DatabaseId)
+        Assert.Equal("fsgg:claim payload", observed.Comments.Head.Body)
+        Assert.Equal(Some next, observed.Pages.Head.NextUri)
+        Assert.All(transport.Requests, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method)
+            | _ -> failwith "comment stream issued a non-REST request")
+    | Error failure -> failwithf "unexpected comment stream refusal: %A" failure
+
+[<Fact>]
+let ``issue comment stream refuses missing skipped and escaped continuation`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=2"
+    let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
+    let missing = FakeTransport [ repo; first ]
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 missing)
+    let skipped = FakeTransport [ repo; ok (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=3>; rel=\"next\"" ]) "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 skipped)
+    let escaped = FakeTransport [ repo; ok (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/copy/issues/2/comments?per_page=100&page=2>; rel=\"next\"" ]) "[]" ]
+    Assert.Equal(Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope"),
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 escaped)
+
+[<Fact>]
+let ``issue comment stream refuses duplicate and cross-subject comments`` () =
+    let first = issueComment 301 "COMMENT_301" 1
+    let duplicate = FakeTransport [ repo; ok Map.empty $"[{first},{first}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "COMMENT_301"),
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 duplicate)
+    let foreign = issueComment 301 "COMMENT_301" 2
+    let drift = FakeTransport [ repo; ok Map.empty $"[{foreign}]" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 drift)
+
+[<Fact>]
+let ``issue comment stream refuses unavailable body and uncensused source`` () =
+    let missingBody = (issueComment 301 "COMMENT_301" 1).Replace("\"body\":\"fsgg:claim payload\"", "\"body\":null")
+    let transport = FakeTransport [ repo; ok Map.empty $"[{missingBody}]" ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:body"),
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 1 transport)
+    let noRequests = FakeTransport []
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "uncensused-issue"),
+                 MigrationGitHubRead.readIssueComments options (issueCensus ()) 99 noRequests)
+    Assert.Empty(noRequests.Requests)
+
 [<Fact>]
 let ``native relation reader proves reciprocal parent and blocking directions`` () =
     let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] [relationNode "ISSUE_2" 42L]

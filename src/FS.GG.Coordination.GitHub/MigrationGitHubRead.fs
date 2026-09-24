@@ -73,6 +73,26 @@ type MigrationPullRequestPopulation =
       Pages: MigrationRestPageEvidence list
       PullRequests: MigrationPullRequestRecord list }
 
+type MigrationIssueCommentRecord =
+    { DatabaseId: int64
+      NodeId: string
+      SubjectNumber: int
+      ActorLogin: string
+      CreatedAt: DateTimeOffset
+      UpdatedAt: DateTimeOffset
+      Body: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationIssueCommentPopulation =
+    { RepositoryId: int64
+      SubjectNumber: int
+      SubjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      Comments: MigrationIssueCommentRecord list }
+
 type MigrationIssueTypeRecord =
     { NodeId: string
       Name: string
@@ -595,6 +615,112 @@ module MigrationGitHubRead =
                                                 { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
                                                   Pages=allPages; PullRequests=List.sortBy _.Number complete }))
                 pages Set.empty 0 [] [] start)
+
+    let private exactCommentPageQuery pageIndex (uri: Uri) =
+        let raw = uri.Query.TrimStart('?')
+        let entries =
+            raw.Split('&', StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map (fun part -> part.Split('=', 2))
+        let expected =
+            if pageIndex = 0 then Map.ofList [ "per_page", "100" ]
+            else Map.ofList [ "per_page", "100"; "page", string (pageIndex + 1) ]
+        let decoded =
+            entries
+            |> Array.choose (fun parts ->
+                if parts.Length = 2 then
+                    Some(Uri.UnescapeDataString parts.[0], Uri.UnescapeDataString parts.[1])
+                else None)
+        let keys = decoded |> Array.map fst |> Set.ofArray
+        decoded.Length = entries.Length && keys.Count = entries.Length
+        && (expected |> Map.forall (fun name value ->
+            decoded |> Array.exists (fun (observedName, observedValue) ->
+                observedName = name && observedValue = value)))
+        && (decoded |> Array.forall (fun (name, value) ->
+            Map.containsKey name expected
+            || (pageIndex > 0 && name = "after" && text value)))
+
+    let private parseIssueComment expectedIssueUrl issueNumber (value: JsonElement) =
+        let actor = property "user" value |> Result.bind (requiredString "login")
+        match requiredInt64 "id" value, requiredString "node_id" value,
+              requiredString "issue_url" value, requiredString "body" value,
+              requiredString "created_at" value, requiredString "updated_at" value, actor with
+        | Ok id, Ok nodeId, Ok issueUrl, Ok body, Ok created, Ok updated, Ok login ->
+            let mutable createdAt = DateTimeOffset.MinValue
+            let mutable updatedAt = DateTimeOffset.MinValue
+            if issueUrl <> expectedIssueUrl then Error MigrationReadFailure.IdentityDrift
+            elif not (DateTimeOffset.TryParse(created, &createdAt))
+                 || not (DateTimeOffset.TryParse(updated, &updatedAt))
+                 || updatedAt < createdAt then
+                Error(MigrationReadFailure.MalformedResponse "invalid:comment-revision")
+            else
+                let payload = value.GetRawText()
+                Ok { DatabaseId=id; NodeId=nodeId; SubjectNumber=issueNumber
+                     ActorLogin=login; CreatedAt=createdAt; UpdatedAt=updatedAt
+                     Body=body; PayloadJson=payload; PayloadSha256=sha payload }
+        | Error failure, _, _, _, _, _, _ | _, Error failure, _, _, _, _, _
+        | _, _, Error failure, _, _, _, _ | _, _, _, Error failure, _, _, _
+        | _, _, _, _, Error failure, _, _ | _, _, _, _, _, Error failure, _
+        | _, _, _, _, _, _, Error failure -> Error failure
+
+    let readIssueComments (options: MigrationGitHubReadOptions) (issues: MigrationIssuePopulation)
+                          (issueNumber: int) (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        elif not issues.Terminal || issues.PageCount < 1 || issues.RepositoryId <> options.ExpectedRepositoryId then
+            Error(MigrationReadFailure.SnapshotMismatch "issue-census")
+        else
+            match issues.Issues |> List.tryFind (fun issue -> issue.Number = issueNumber) with
+            | None -> Error(MigrationReadFailure.SnapshotMismatch "uncensused-issue")
+            | Some issue ->
+                readRepository options transport
+                |> Result.bind (fun repositoryId ->
+                    let basePath =
+                        $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}/issues/{issueNumber}"
+                    let expectedIssueUrl = Uri(options.ApiBase, basePath).AbsoluteUri
+                    let start = Uri(options.ApiBase, basePath + "/comments?per_page=100")
+                    let rec pages (seen: Set<string>) (count: int) (records: MigrationIssueCommentRecord list)
+                                  (evidence: MigrationRestPageEvidence list) (current: Uri) =
+                        if count >= 1000 || Set.contains current.AbsoluteUri seen then
+                            Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                        elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
+                             || current.AbsolutePath <> start.AbsolutePath
+                             || not (exactCommentPageQuery count current) then
+                            Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
+                        else
+                            response transport (Rest { Method=Get; Uri=current; Headers=headers options.Token options.UserAgent
+                                                       Body=None; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                            |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result, document))
+                            |> Result.bind (fun (result, document) ->
+                                use document = document
+                                if document.RootElement.ValueKind <> JsonValueKind.Array then
+                                    Error(MigrationReadFailure.MalformedResponse "comments-not-array")
+                                else
+                                    let parsed =
+                                        document.RootElement.EnumerateArray()
+                                        |> Seq.map (parseIssueComment expectedIssueUrl issueNumber) |> Seq.toList
+                                    match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
+                                    | Some failure -> Error failure
+                                    | None ->
+                                        let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
+                                        let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                        match Transport.tryNextLink link with
+                                        | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
+                                        | Ok next ->
+                                            let page =
+                                                { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
+                                                  NextUri=next |> Option.map _.AbsoluteUri }
+                                            let all = records @ values
+                                            let allPages = evidence @ [ page ]
+                                            match next with
+                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) all allPages uri
+                                            | None ->
+                                                collectUnique (fun (value: MigrationIssueCommentRecord) -> value.NodeId) all
+                                                |> Result.bind (collectUnique (fun value -> string value.DatabaseId))
+                                                |> Result.map (fun complete ->
+                                                    { RepositoryId=repositoryId; SubjectNumber=issueNumber
+                                                      SubjectNodeId=issue.NodeId; PageCount=count + 1
+                                                      Terminal=true; Pages=allPages
+                                                      Comments=List.sortBy _.DatabaseId complete }))
+                    pages Set.empty 0 [] [] start)
 
     let private issueTypeQuery =
         "query($owner:String!,$name:String!,$after:String) { repository(owner:$owner,name:$name) { databaseId issueTypes(first:100,after:$after) { nodes { id name } pageInfo { hasNextPage endCursor } } } }"
