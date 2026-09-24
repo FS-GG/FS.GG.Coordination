@@ -620,6 +620,17 @@ let ``protected genesis binds signature native approval and expected absent inst
         SHA256.HashData(V1AdmissionGenesisAuthorization.canonicalIntent plan intent)
         |> Convert.ToHexString
         |> _.ToLowerInvariant()
+    let wireShapeSignature =
+        { unsigned with AuthorizedAt = now; ExpiresAt = now.AddMinutes 90. }
+    let expectedWirePayload =
+        File.ReadAllText(
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "v1-admission-signing-payload.json")
+        ).Replace(String.replicate 64 "a", intentSha256)
+        |> Encoding.UTF8.GetBytes
+    Assert.Equal(
+        expectedWirePayload,
+        V1AdmissionGenesisAuthorization.canonicalSignaturePayload plan intent wireShapeSignature
+    )
     let envelope =
         JsonSerializer.SerializeToUtf8Bytes
             {| schema = "fsgg.github-substrate.v1-admission-genesis-signature-envelope/1"

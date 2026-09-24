@@ -35,6 +35,8 @@ TRUST_ANCHOR_SHA256 = "0a9f84f72ca10c01b5acc386a32ce6920fea15231f90f65a8f17df9e8
 SIGNATURE_SCHEMA = "fsgg.github-substrate.v1-admission-genesis-signature/1"
 ENVELOPE_SCHEMA = "fsgg.github-substrate.v1-admission-genesis-signature-envelope/1"
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+KEY_ID = re.compile(r"[A-Za-z0-9._-]{1,128}\Z")
+ISO_UTC = re.compile(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{7}\+00:00\Z")
 
 
 class Refused(RuntimeError):
@@ -48,6 +50,13 @@ def require(condition: bool, reason: str) -> None:
 
 def canonical(value: dict) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+
+
+def canonical_signature_payload(value: dict) -> bytes:
+    # The F# producer uses Utf8JsonWriter, which escapes U+002B in its strict
+    # UTC offsets, and ShardedJournalAdapter appends one final LF. The other
+    # fields are restricted to ASCII without characters that writer escapes.
+    return canonical(value).replace(b"+", b"\\u002B") + b"\n"
 
 
 def read_public(path: pathlib.Path, ceiling: int = 8192) -> bytes:
@@ -207,11 +216,17 @@ def parse_payload(raw: bytes) -> dict:
         raise Refused("admission-signing-payload-json") from error
     require(isinstance(value, dict) and set(value) == {
         "schema", "intentSha256", "keyId", "protectedRunId", "authorizedAt", "expiresAt"}
-        and raw == canonical(value) and value["schema"] == SIGNATURE_SCHEMA
+        and value["schema"] == SIGNATURE_SCHEMA
         and isinstance(value["intentSha256"], str)
         and HEX64.fullmatch(value["intentSha256"]) is not None
-        and isinstance(value["keyId"], str) and 0 < len(value["keyId"]) <= 128
-        and type(value["protectedRunId"]) is int and value["protectedRunId"] > 0,
+        and isinstance(value["keyId"], str)
+        and KEY_ID.fullmatch(value["keyId"]) is not None
+        and type(value["protectedRunId"]) is int and value["protectedRunId"] > 0
+        and isinstance(value["authorizedAt"], str)
+        and ISO_UTC.fullmatch(value["authorizedAt"]) is not None
+        and isinstance(value["expiresAt"], str)
+        and ISO_UTC.fullmatch(value["expiresAt"]) is not None
+        and raw == canonical_signature_payload(value),
         "admission-signing-payload-binding")
     try:
         start = dt.datetime.fromisoformat(value["authorizedAt"])

@@ -84,6 +84,9 @@
     <Content Include="fixtures/v1-admission-native-read.json"
              Link="Fixtures/v1-admission-native-read.json"
              CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="fixtures/v1-admission-signing-payload.json"
+             Link="Fixtures/v1-admission-signing-payload.json"
+             CopyToOutputDirectory="PreserveNewest" />
     <Content Include="fixtures/v1-admission-git-read.json"
              Link="Fixtures/v1-admission-git-read.json"
              CopyToOutputDirectory="PreserveNewest" />

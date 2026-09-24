@@ -16,6 +16,9 @@ import unittest
 
 sys.dont_write_bytecode = True
 SOURCE = pathlib.Path(__file__).with_name("github-v1-admission-main-custody.py")
+SIGNING_PAYLOAD_FIXTURE = (SOURCE.parent.parent / "tests" /
+                           "FS.GG.Coordination.UnitTests" / "fixtures" /
+                           "v1-admission-signing-payload.json")
 spec = importlib.util.spec_from_file_location("v1_admission_main_custody", SOURCE)
 custody = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(custody)
@@ -93,11 +96,9 @@ class MainCustodyTests(unittest.TestCase):
         self.assertEqual(3, len(token.split(".")))
 
     def test_signing_envelope_matches_trust_and_rejects_wrong_key(self):
-        payload = custody.canonical({
-            "schema": custody.SIGNATURE_SCHEMA, "intentSha256": "a" * 64,
-            "keyId": "test-key", "protectedRunId": 42,
-            "authorizedAt": "2026-09-23T14:00:00.0000000+00:00",
-            "expiresAt": "2026-09-23T15:30:00.0000000+00:00"})
+        payload = SIGNING_PAYLOAD_FIXTURE.read_bytes()
+        self.assertIn(b"\\u002B00:00", payload)
+        self.assertTrue(payload.endswith(b"\n"))
         trust = custody.canonical({"schema": "fsgg.github-ledger-initial-trust/1",
                                    "authorizer": {"keyId": "test-key",
                                                   "algorithm": "RSA-PSS-SHA256",
@@ -125,6 +126,14 @@ class MainCustodyTests(unittest.TestCase):
                                   expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
             custody.sign_envelope(payload + b"\n", trust, lambda role: self.key,
+                                  self.native, now=self.timestamp(),
+                                  expected_trust_sha256=trust_sha256)
+        with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
+            custody.sign_envelope(payload.replace(b"\\u002B", b"+"), trust,
+                                  lambda role: self.key, self.native, now=self.timestamp(),
+                                  expected_trust_sha256=trust_sha256)
+        with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
+            custody.sign_envelope(payload[:-1], trust, lambda role: self.key,
                                   self.native, now=self.timestamp(),
                                   expected_trust_sha256=trust_sha256)
         with self.assertRaisesRegex(custody.Refused, "signing-payload-binding"):
