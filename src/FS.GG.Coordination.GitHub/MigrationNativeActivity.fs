@@ -128,7 +128,25 @@ module MigrationNativeActivity =
 
     let private framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
-    let reconcile (input: MigrationNativeActivityInput) =
+    let private initialCensusWithinOptions (options: MigrationGitHubReadOptions)
+                                          (input: MigrationNativeActivityInput) =
+        try
+            match input.Issues.Pages with
+            | [] -> false
+            | first :: _ ->
+                let mutable actual = Unchecked.defaultof<Uri>
+                let expected =
+                    Uri(options.ApiBase,
+                        $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}/issues")
+                input.Issues.RepositoryId = options.ExpectedRepositoryId
+                && options.ExpectedRepositoryId > 0L
+                && Uri.TryCreate(first.RequestedUri, UriKind.Absolute, &actual)
+                && actual.Scheme = Uri.UriSchemeHttps
+                && actual.GetLeftPart(UriPartial.Authority) = expected.GetLeftPart(UriPartial.Authority)
+                && actual.AbsolutePath = expected.AbsolutePath
+        with _ -> false
+
+    let reconcile (options: MigrationGitHubReadOptions) (input: MigrationNativeActivityInput) =
         let fail reason = Error(MigrationReadFailure.SnapshotMismatch reason)
         let issues = input.Issues
         let pullRequests = input.PullRequests
@@ -215,7 +233,9 @@ module MigrationNativeActivity =
                 |> List.exists (fun comment ->
                     comment.ReviewId |> Option.exists (fun parent ->
                         parentReviews |> Option.forall (fun reviews -> not (Set.contains parent reviews)))))
-        if issues.RepositoryId <= 0L || issues.RepositoryId <> pullRequests.RepositoryId
+        if not (initialCensusWithinOptions options input) then
+            fail "census-scope"
+        elif issues.RepositoryId <= 0L || issues.RepositoryId <> pullRequests.RepositoryId
            || not issues.Terminal || issues.PageCount < 1
            || not pullRequests.Terminal || issues.PullRequestCount <> pullRequests.PullRequests.Length
            || issues.PullRequestMarkerNumbers <> (pullRequests.PullRequests |> List.map _.Number |> List.sort) then
@@ -318,7 +338,7 @@ module MigrationNativeActivity =
                                                       PullRequestComments=pullRequestComments
                                                       PullRequestReviews=pullRequestReviews
                                                       PullRequestInlineComments=inlineComments }
-                                                reconcile input
+                                                reconcile options input
                                                 |> Result.map (fun snapshot -> { Input=input; Snapshot=snapshot }))))))))))
 
     let captureStable (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
