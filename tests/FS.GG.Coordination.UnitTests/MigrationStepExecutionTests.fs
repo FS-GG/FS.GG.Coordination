@@ -47,6 +47,8 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
     let mutable effect = MigrationEffectObservation.ProvenAbsent
     let mutable dispatches = 0
     let mutable journalWrites = 0
+    let mutable effectReads = 0
+    let mutable targetReads = 0
     let mutable dispatchResult = MigrationDispatchOutcome.Applied
 
     member _.Epoch with get() = epoch and set value = epoch <- value
@@ -57,13 +59,17 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
     member _.DispatchResult with get() = dispatchResult and set value = dispatchResult <- value
     member _.Dispatches = dispatches
     member _.JournalWrites = journalWrites
+    member _.EffectReads = effectReads
+    member _.TargetReads = targetReads
     member _.Journal = journal
     member _.InjectJournal value = journal <- value
 
     interface IMigrationStepRuntime with
         member _.ObserveEpoch() = Ok epoch
         member _.ObserveAuthorityFence() = Ok fence
-        member _.ObserveTarget _ = Ok target
+        member _.ObserveTarget _ =
+            targetReads <- targetReads + 1
+            Ok target
         member _.ObserveJournal _ = Ok journal
         member _.PersistIntent(expected, head, operation, seal) =
             if journal.IsSome || expected <> step.JournalGeneration || head <> step.JournalHead then
@@ -87,7 +93,9 @@ type private ControlledRuntime(step: MigrationExecutionStep) =
                 fenceAfterInFlight |> Option.iter (fun value -> fence <- value)
                 MigrationCasOutcome.Accepted authority
             | _ -> MigrationCasOutcome.Conflict
-        member _.ObserveEffect(_, _) = Ok effect
+        member _.ObserveEffect(_, _) =
+            effectReads <- effectReads + 1
+            Ok effect
         member _.Dispatch(_, generation, commit) =
             match journal with
             | Some current when current.Generation = generation && current.Commit = commit
@@ -142,6 +150,52 @@ let ``interruption after intent resumes once and after dispatch settles from rea
     Assert.Equal(MigrationAdvanceResult.Settled selected.DesiredTargetSha256,
                  advance selected MigrationAdvanceCut.NoCut lostResponse |> get)
     Assert.Equal(1, lostResponse.Dispatches)
+
+[<Fact>]
+let ``before intent cut leaves no durable or provider mutation and can resume`` () =
+    let selected = step ()
+    let runtime = ControlledRuntime(selected)
+    Assert.Equal(MigrationAdvanceResult.Interrupted "before-intent",
+                 advance selected MigrationAdvanceCut.StopBeforeIntent runtime |> get)
+    Assert.Equal(0, runtime.JournalWrites)
+    Assert.Equal(0, runtime.Dispatches)
+    Assert.Equal(None, runtime.Journal)
+    Assert.Equal(MigrationAdvanceResult.Settled selected.DesiredTargetSha256,
+                 advance selected MigrationAdvanceCut.NoCut runtime |> get)
+    Assert.Equal(1, runtime.Dispatches)
+
+[<Fact>]
+let ``after effect readback cut retains in flight intent and refuses changed target on restart`` () =
+    let selected = step ()
+    let runtime = ControlledRuntime(selected)
+    Assert.Equal(MigrationAdvanceResult.Interrupted "after-effect-readback-before-target-readback",
+                 advance selected MigrationAdvanceCut.StopAfterReadback runtime |> get)
+    Assert.Equal(1, runtime.Dispatches)
+    Assert.Equal(2, runtime.EffectReads)
+    Assert.Equal(3, runtime.TargetReads)
+    Assert.Equal(2, runtime.JournalWrites)
+    Assert.Equal(Some MigrationJournalStage.InFlight, runtime.Journal |> Option.map _.Stage)
+    runtime.Target <- { runtime.Target with Sha256=sha "foreign-target" }
+    Assert.Equal(Error [ MigrationExecutionFailure.ChangedTarget ],
+                 advance selected MigrationAdvanceCut.NoCut runtime)
+    Assert.Equal(1, runtime.Dispatches)
+    Assert.Equal(2, runtime.JournalWrites)
+
+[<Fact>]
+let ``before receipt cut follows target readback and restart settles without redispatch`` () =
+    let selected = step ()
+    let runtime = ControlledRuntime(selected)
+    Assert.Equal(MigrationAdvanceResult.Interrupted "after-target-readback-before-receipt",
+                 advance selected MigrationAdvanceCut.StopBeforeReceipt runtime |> get)
+    Assert.Equal(1, runtime.Dispatches)
+    Assert.Equal(2, runtime.EffectReads)
+    Assert.Equal(4, runtime.TargetReads)
+    Assert.Equal(2, runtime.JournalWrites)
+    Assert.Equal(Some MigrationJournalStage.InFlight, runtime.Journal |> Option.map _.Stage)
+    Assert.Equal(MigrationAdvanceResult.Settled selected.DesiredTargetSha256,
+                 advance selected MigrationAdvanceCut.NoCut runtime |> get)
+    Assert.Equal(1, runtime.Dispatches)
+    Assert.Equal(3, runtime.JournalWrites)
 
 [<Fact>]
 let ``restored in flight effect is recovery only even when a read reports absence`` () =
