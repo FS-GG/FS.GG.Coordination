@@ -206,6 +206,8 @@ class CompleteTargetPrestateAdapter:
                 or not _positive(proof["recordId"])
                 or not _positive(proof["runId"])
                 or not _positive(proof["runAttempt"])
+                or not _positive(proof["repositoryId"])
+                or not _positive(proof["installationId"])
                 or proof["runId"] != self.run_id
                 or proof["runAttempt"] != self.run_attempt
                 or any(proof[key] != selected[key] for key in

@@ -225,6 +225,30 @@ class PrestateTests(unittest.TestCase):
                 selected, 101, 1, NOW).observe_prestate()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_boolean_witness_numeric_id_alias_refuses(self):
+        for field in ("installationId", "repositoryId"):
+            with self.subTest(field=field):
+                selected, scope, emitted, witness = fixture()
+                selected[field] = 1
+                scope[field] = 1
+                witness[field] = True
+                if field == "repositoryId":
+                    for index in (0, 5, 8, 13):
+                        emitted[index][1]["id"] = 1
+                    transcript = [{"path": path, "status": 200, "link": "",
+                                   "bodySha256": sha(json.dumps(value).encode())}
+                                  for path, value in emitted[:8]]
+                    witness["transcriptSha256"] = sha(canonical(transcript))
+                digest_input = {key: value for key, value in selected.items()
+                                if key != "prestateSha256"}
+                digest_input.update(schema=prestate.SCHEMA, runId=101,
+                                    runAttempt=1,
+                                    transcriptSha256=witness["transcriptSha256"])
+                selected["prestateSha256"] = sha(canonical(digest_input))
+                witness["prestateSha256"] = selected["prestateSha256"]
+                self.refuses(selected=selected, scope=scope, emitted=emitted,
+                             witness=witness)
+
 
 if __name__ == "__main__":
     unittest.main()
