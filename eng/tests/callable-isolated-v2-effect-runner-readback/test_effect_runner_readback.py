@@ -167,6 +167,22 @@ class RunnerReadbackTests(unittest.TestCase):
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
         self.refuses(lambda p, _s, _r, _a: object.__setattr__(p, "live_effects", False))
 
+    def test_reused_runner_or_audit_scope_mutated_at_final_read_refuses(self):
+        for changed_port in ("runner", "audit"):
+            with self.subTest(changed_port=changed_port):
+                preflight, selection, runner, audit = fixture()
+                port = runner if changed_port == "runner" else audit
+                shared = copy.deepcopy(port.scopes[0])
+                reads = [0]
+                def scope():
+                    reads[0] += 1
+                    if reads[0] == 2:
+                        shared["credentialId"] = "4" * 64
+                    return shared
+                port.scope = scope
+                with self.assertRaises(readback.Refused):
+                    readback.qualify(preflight, runner, audit, selection, NOW)
+
 
 if __name__ == "__main__":
     unittest.main()
