@@ -59,6 +59,14 @@ module MigrationProtectedIssueCensusAttemptRecovery =
         && (value |> Seq.forall (fun ch ->
             (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
 
+    let validUtf8Atom (value: string) =
+        if String.IsNullOrWhiteSpace value then false
+        else
+            try
+                UTF8Encoding(false, true).GetBytes value |> ignore
+                true
+            with _ -> false
+
     let validSelectionShape (selection: ProtectedIssueCensusSelection) =
         let exactCommitSha (value: string) =
             not (isNull value) && value.Length = 40
@@ -72,22 +80,24 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                 && origin.GetLeftPart(UriPartial.Authority) = selection.ApiOrigin
             with _ -> false
         selection.RunId > 0L && selection.RunAttempt > 0
-        && not (String.IsNullOrWhiteSpace selection.RunNonce)
+        && validUtf8Atom selection.RunNonce
         && exactCommitSha selection.CandidateSha
         && exactCommitSha selection.WorkflowSha
-        && canonicalOrigin
-        && not (String.IsNullOrWhiteSpace selection.Owner)
-        && not (String.IsNullOrWhiteSpace selection.Repository)
+        && canonicalOrigin && validUtf8Atom selection.ApiOrigin
+        && validUtf8Atom selection.Owner
+        && validUtf8Atom selection.Repository
         && selection.RepositoryId > 0L
 
     let validMarkerChain (marker: ProtectedIssueCensusHandoffRequest) =
         if not (validSelectionShape marker.Selection)
-           || String.IsNullOrWhiteSpace marker.StoreResourceId
+           || not (validUtf8Atom marker.StoreResourceId)
            || marker.StoreGeneration < 1L
            || not (exactSha marker.ExpectedStoreHeadSha256)
-           || String.IsNullOrWhiteSpace marker.JournalResourceId
+           || not (validUtf8Atom marker.JournalResourceId)
            || marker.ExpectedJournalGeneration < 1L
            || not (exactSha marker.ExpectedJournalHeadSha256)
+           || not (validUtf8Atom marker.VaultResourceId)
+           || not (validUtf8Atom marker.ClockResourceId)
            || marker.SignedExpiresAtUtc.Offset <> TimeSpan.Zero then false
         else
             let claimId =
@@ -186,15 +196,15 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                 (handoffPort: IProtectedIssueCensusHandoffPort option)
                 (nativePort: IProtectedIssueCensusNativeAttemptPort option)
                 : Result<ProtectedIssueCensusNativeAttemptSnapshot * ProtectedIssueCensusRecoveryHold, string> =
-        if String.IsNullOrWhiteSpace handoffPins.HandoffResourceId
+        if not (validUtf8Atom handoffPins.HandoffResourceId)
            || not (exactSha handoffPins.HandoffArtifactSha256)
-           || String.IsNullOrWhiteSpace handoffPins.VaultResourceId
+           || not (validUtf8Atom handoffPins.VaultResourceId)
            || not (exactSha handoffPins.VaultArtifactSha256)
-           || String.IsNullOrWhiteSpace handoffPins.NativeAttemptNamespaceId
+           || not (validUtf8Atom handoffPins.NativeAttemptNamespaceId)
            || handoffPins.AppId < 1L || handoffPins.InstallationId < 1L
            || handoffPins.RepositoryId < 1L
            || not (exactSha handoffPins.PermissionSha256)
-           || String.IsNullOrWhiteSpace nativePins.AttemptResourceId
+           || not (validUtf8Atom nativePins.AttemptResourceId)
            || not (exactSha nativePins.AttemptArtifactSha256) then
             Error "protected-census-attempt-pins"
         else
