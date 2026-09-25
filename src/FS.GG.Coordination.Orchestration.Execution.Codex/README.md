@@ -70,6 +70,15 @@ status or an explicit gap; it never produces completed-turn usage. The read port
 authenticated, transactionally complete seal. No seal issuer, trusted recovery source, or durable
 store implementation is installed. A supplied JSON file cannot establish journal completeness.
 
+`CodexAppServerCurrentSubscription` links a prospective issued challenge to a future authenticated
+current-session App Server subscription. It reserves the challenge atomically before reading the
+native source, then checks the exact workspace/item, session, challenge, thread, selected adapter,
+transport and subscription time against a later trusted clock read. A confirmed reservation stays
+burned on a source or clock gap. This is a structural handoff only: no trusted native current-session
+source, issuer, clock, durable reservation store or transport implementation is installed. The
+source must later retain the first `turn/started` notification in the journal; this gate does not
+prove that a selected turn began after subscription or produce completed-turn usage.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
