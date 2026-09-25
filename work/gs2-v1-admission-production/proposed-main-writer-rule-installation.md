@@ -1,0 +1,27 @@
+# Proposed one-time `.github/main` writer-rule installation
+
+**Status: draft proposal, unapproved.** This document grants no repository administration, token use, source merge or ordinary admission authority. It is a separate prerequisite to the [service source installation proposal](proposed-service-bootstrap-decision.md). Every unset actor, payload, receipt or expiry field refuses the administration effect.
+
+## Observed prestate and proposed rule
+
+A read-only native check on 2026-09-25 found `.github` repository ID `1269292704` and `main` protected with `enforce_admins:true`, eight App-bound required checks, force push/deletion disabled and `restrictions:null`. The effective `GET /repos/FS-GG/.github/rules/branches/main` response was `[]`. Active repository branch ruleset `23535685` has no bypass actors and targets only `refs/heads/fsgg/pilot/o2-i4c-3421-generation10-artifact-binding-corrected-20260915`; tag ruleset `19899954` is separate. The observed main head was `ff425734d277fa54c3d71601da90fe7b22619c15`. These are expiring observations, not installation evidence; reread the full raw responses and current head before any decision.
+
+The candidate adds one active repository branch ruleset with target `refs/heads/main`, no exclusions and a single `update` rule. Its only bypass actor is the exact installed, Main-custodied dedicated ordinary GitHub App ID **[UNSET]**, actor type `Integration`, mode `pull_request`. No User, Team, OrganizationAdmin, RepositoryRole, other Integration, `always` or `exempt` bypass is allowed. The exact API payload, canonical SHA-256, desired ruleset name, App installation ID, permission scope and expiry are **[UNSET]**. Existing branch protection, required-check producer IDs, pilot ruleset and release-tag ruleset remain unchanged. The [GitHub rule reference](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-rulesets/available-rules-for-rulesets) describes `Restrict updates`; the [repository rules API](https://docs.github.com/en/rest/repos/rules) defines `Integration` and `pull_request` bypass. Isolated provider proof must establish their exact interaction before this proposal can become a decision.
+
+## Qualification and one-attempt authority
+
+Before an accountable owner considers the exact payload:
+
+- Use an isolated GitHub repository to prove that a normal user, repository administrator, organization owner and unrelated App cannot update or merge into the protected base; the dedicated App can merge only through a pull request and cannot push directly. Exercise changed base, changed PR head, direct push, bypass change, ruleset edit and ambiguous response. If any actor retains another route to write `main`, refuse this design rather than widening bypass.
+- Independently enumerate repository, organization and enterprise rulesets, classic protection, bypass actors and effective `main` rules with complete native reads. Bind the current main commit, rule state, dedicated App identity and installation/permission scope to the canonical candidate payload. A missing or partial administrator view refuses.
+- Review exact source, synthetic controls and hosted qualification for the admin installer. Name the accountable owner GitHub ID **[UNSET]**, independently verified admin caller ID **[UNSET]**, exact protected approval/run/attempt **[UNSET]**, approved payload digest/signature **[UNSET]**, one-attempt nonce **[UNSET]**, and expiry **[UNSET]** (proposed maximum 15 minutes after the final prestate read). A chat request or this document alone is not approval.
+
+The authorized installer may send only one create-ruleset request carrying the approved bytes. A response, timeout or exception is **unknown** until a separate native read proves exactly one active ruleset with the intended ID, source, target, rule, bypass actor/mode and complete effective `main` projection. Never retry from a timeout. An existing same-name/different-payload rule, multiple candidates, changed prestate, changed actor, absent readback or unexpected bypass stops the attempt. Retain raw request identity, response classification, native rule object, effective-rule census and independent readback digests.
+
+The App's `pull_request` bypass may bypass other branch rules. The future Main issuer must therefore verify required checks, source App IDs, reviews, conversations and target state independently before every merge; the new writer rule supplies exclusivity, not those eligibility facts.
+
+## After rule readback
+
+Refresh the [source installation packet](proposed-service-bootstrap-decision.md) from a new exact main head, full effective rule/bypass census and fresh OperatingV1 authority/claim reads. Obtain a **new** owner decision for its one staged source update; the admin approval cannot carry over. A separately qualified Main-local, one-shot source installer may use the sole App under that later exact decision. Keep the Actions service and ordinary runtime issuer path disabled until the source update, protected probe, Main issuer and provider readback separately qualify.
+
+If the rule installs but source qualification later fails, leave the more restrictive rule in place and keep the effect fence closed. Do not delete, disable or widen it as an automatic rollback. Any repair or actor rotation is another exact protected administration decision with independent readback.
