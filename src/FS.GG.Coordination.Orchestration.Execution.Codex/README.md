@@ -43,8 +43,16 @@ store or trusted clock implementation is installed.
 `CodexAppServerUsageProjection` is a read-only parser for the installed CLI 0.156.1 app-server v2
 `thread/tokenUsage/updated` notification shape. It preserves the notification's exact thread and
 turn IDs and its separate `last` and cumulative snapshots from independently authored fixture
-bytes. It never treats either snapshot as completed-turn usage. No authenticated subscription to
-this interactive thread, app-server source adapter, or event-continuity journal is installed.
+bytes. It never treats either snapshot as completed-turn usage.
+
+`CodexAppServerContinuity` is a dormant state reducer over an authenticated subscription binding
+and prospectively observed frames. It requires the exact assignment scope, turn and transport,
+then a contiguous local ordinal with `turn/started`, zero or more usage updates, and a terminal
+`turn/completed`. A missing start, sequence gap, changed source, duplicate or malformed frame, or
+disconnect before terminal permanently records a gap. The local ordinal is a proposed transport
+journal sidecar, not an App Server cursor, so it cannot establish upstream notification
+completeness. A terminal observation does not yield completed-turn usage. No authenticated
+subscription to this interactive thread or transport-journal implementation is installed.
 
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
