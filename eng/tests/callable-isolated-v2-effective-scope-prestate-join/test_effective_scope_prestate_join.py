@@ -31,6 +31,10 @@ def fixture():
     target_sha = hashlib.sha256(canonical(selected)).hexdigest()
     prestate_observation = {"schema": prestate.SCHEMA, "complete": True,
         "principalId": "prestate-reader", "credentialId": "1" * 64,
+        "witnessPrincipalId": "prestate-witness",
+        "witnessCredentialId": "9" * 64,
+        "witnessObservedAt": "2026-09-25T11:58:00Z",
+        "witnessExpiresAt": "2026-09-25T12:15:00Z",
         "recordId": 333, "runId": 101, "runAttempt": 1,
         "target": copy.deepcopy(selected),
         "transcriptSha256": "d" * 64,
@@ -117,6 +121,13 @@ class JoinTests(unittest.TestCase):
             ("transcriptSha256", "8" * 64),
             ("principalId", "effective-reader"),
             ("credentialId", "2" * 64),
+            ("witnessPrincipalId", "effective-reader"),
+            ("witnessPrincipalId", "prestate-reader"),
+            ("witnessCredentialId", "2" * 64),
+            ("witnessCredentialId", "1" * 64),
+            ("witnessObservedAt", "2026-09-25T11:00:00Z"),
+            ("witnessObservedAt", "2026-09-25T12:01:00Z"),
+            ("witnessExpiresAt", "2026-09-25T11:59:00Z"),
             ("observedAt", "2026-09-25T11:50:00Z")):
             with self.subTest(key=key):
                 proof = fixture()[1]
@@ -125,6 +136,12 @@ class JoinTests(unittest.TestCase):
         proof = fixture()[1]
         proof["target"]["repositoryId"] = 112
         self.refuses(prestate_value=proof)
+        for key in ("witnessPrincipalId", "witnessCredentialId",
+                    "witnessObservedAt", "witnessExpiresAt"):
+            with self.subTest(missing=key):
+                proof = fixture()[1]
+                del proof[key]
+                self.refuses(prestate_value=proof)
 
     def test_broad_foreign_or_stale_effective_record_refuses(self):
         for key, changed in (
