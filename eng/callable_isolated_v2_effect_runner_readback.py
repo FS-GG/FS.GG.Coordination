@@ -15,7 +15,7 @@ import callable_isolated_v2_effect_release_preflight as release
 
 PROBE_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-refusal/1"
 AUDIT_SCHEMA = "fsgg.coordination.callable-isolated-v2-no-effect-audit/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/2"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/3"
 REFUSAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-scaffold-refusal/1"
 IDENTITY = {"runId", "runAttempt", "coordinationRevision", "sourceTree",
             "artifactId", "manifestSha256", "archiveSha256", "installPath",
@@ -57,6 +57,8 @@ class ReadbackResult:
     source_record_id: int
     repository_id: int
     identity_event_id: int
+    approved_at: str
+    expires_at: str
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -171,6 +173,11 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
             or type(now) is not dt.datetime or now.tzinfo is None
             or now.utcoffset() != dt.timedelta(0)):
         raise Refused("readback-selection-invalid")
+    approved_at = _time(approval_witness.approved_at)
+    expires_at = _time(approval_witness.expires_at)
+    if (not now - dt.timedelta(minutes=30) <= approved_at <= now < expires_at
+            or expires_at > approved_at + dt.timedelta(minutes=30)):
+        raise Refused("readback-approval-time")
     runner_scope = _scope(runner_port, "read-installed-probe", now)
     audit_scope = _scope(audit_port, "read-effect-audit", now)
     if (runner_scope["principalId"] == audit_scope["principalId"]
@@ -255,7 +262,8 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
         raise Refused("readback-effect-access")
     observed = _time(probe["observedAt"])
     audited = _time(audit["observedAt"])
-    if not now - dt.timedelta(minutes=15) <= observed <= audited <= now:
+    if not (now - dt.timedelta(minutes=15) <= approved_at <= observed
+            <= audited <= now < expires_at):
         raise Refused("readback-time-binding")
     if (_scope(runner_port, "read-installed-probe", now) != runner_scope
             or _scope(audit_port, "read-effect-audit", now) != audit_scope):
@@ -265,4 +273,6 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
                           selection["runId"], selection["auditEventId"],
                           selection["auditActorId"], preflight.approval_event_id,
                           preflight.source_record_id, approval_witness.repository_id,
-                          approval_witness.identity_event_id)
+                          approval_witness.identity_event_id,
+                          approval_witness.approved_at,
+                          approval_witness.expires_at)

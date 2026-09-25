@@ -17,7 +17,7 @@ import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-reviewer-identity/1"
 EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/3"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/5"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/6"
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}\Z")
 
 
@@ -51,6 +51,8 @@ class ApprovalWitnessResult:
     producer_actor_id: int
     repository_id: int
     identity_event_id: int
+    approved_at: str
+    expires_at: str
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -283,4 +285,5 @@ def qualify(preflight: release.PreflightResult,
         source_record_id=preflight.source_record_id,
         producer_actor_id=preflight.producer_actor_id,
         repository_id=selection["repositoryId"],
-        identity_event_id=selection["identityEventId"])
+        identity_event_id=selection["identityEventId"],
+        approved_at=event["approvedAt"], expires_at=event["expiresAt"])

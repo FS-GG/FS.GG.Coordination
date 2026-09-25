@@ -98,7 +98,8 @@ def reviewed(preflight):
         preflight.artifact_id, preflight.reviewer_actor_id,
         preflight.approval_event_id, "a" * 64,
         preflight.manifest_sha256, "b" * 64,
-        preflight.source_record_id, preflight.producer_actor_id, 77, 808)
+        preflight.source_record_id, preflight.producer_actor_id, 77, 808,
+        "2026-09-25T11:57:30Z", "2026-09-25T12:10:00Z")
 
 
 class RunnerReadbackTests(unittest.TestCase):
@@ -124,6 +125,7 @@ class RunnerReadbackTests(unittest.TestCase):
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.audit_actor_id, 1001)
         self.assertEqual(result.approval_event_id, 505)
+        self.assertEqual(result.approved_at, "2026-09-25T11:57:30Z")
         self.assertFalse(hasattr(readback, "dispatch"))
 
     def test_installed_refusal_without_immutable_review_witness_refuses(self):
@@ -146,6 +148,17 @@ class RunnerReadbackTests(unittest.TestCase):
         with self.assertRaises(readback.Refused):
             readback.qualify(preflight, runner, audit, selection, NOW,
                              approval_witness=reviewed(preflight))
+
+    def test_probe_before_review_or_after_expiry_refuses(self):
+        for field, value in (("approved_at", "2026-09-25T11:58:30Z"),
+                             ("expires_at", "2026-09-25T11:59:30Z")):
+            with self.subTest(field=field):
+                preflight, selection, runner, audit = fixture()
+                checked = reviewed(preflight)
+                object.__setattr__(checked, field, value)
+                with self.assertRaises(readback.Refused):
+                    readback.qualify(preflight, runner, audit, selection, NOW,
+                                     approval_witness=checked)
 
     def test_selected_source_runtime_and_object_drift_refuse(self):
         for key, value in (("runId", 708), ("runAttempt", 2),
