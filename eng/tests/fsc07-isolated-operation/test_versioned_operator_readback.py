@@ -566,6 +566,55 @@ class VersionedReadbackTests(unittest.TestCase):
                     self.assert_unknown(runner(expected, Transport(), reserve))
                     self.assertEqual(calls, [])
 
+    def test_native_reader_refuses_repository_owner_name_conflict(self):
+        for kind in ("pull", "protection"):
+            for field, value in (("owner", {"login": "Foreign"}),
+                                 ("name", "foreign"),
+                                 ("owner", None)):
+                with self.subTest(kind=kind, field=field, value=value):
+                    expected = pull_expected() if kind == "pull" else protection_expected()
+                    events = (pull_read_events() if kind == "pull"
+                              else protection_read_events())
+                    for item in events:
+                        if (item["method"] == "GET"
+                                and item["path"] == "repos/FS-GG/disposable"):
+                            item["response"]["json"][field] = value
+                    reader = operator.NativeReadAdapter(
+                        operator.OfflineTranscriptTransport(events))
+                    with self.assertRaisesRegex(
+                            operator.Refused, "native-repository-mismatch"):
+                        if kind == "pull":
+                            reader.read_pull_census(expected)
+                        else:
+                            reader.read_protection(expected)
+            events = (pull_read_events() if kind == "pull"
+                      else protection_read_events())
+            for item in events:
+                if (item["method"] == "GET"
+                        and item["path"] == "repos/FS-GG/disposable"):
+                    item["response"]["json"].update({
+                        "owner": {"login": "FS-GG"}, "name": "disposable"})
+            reader = operator.NativeReadAdapter(
+                operator.OfflineTranscriptTransport(events))
+            observed = (reader.read_pull_census(pull_expected()) if kind == "pull"
+                        else reader.read_protection(protection_expected()))
+            self.assertEqual(observed.repository_id, 44)
+
+    def test_lost_response_foreign_repository_owner_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        for index in (0, 4):
+            post[index]["response"]["json"]["owner"] = {"login": "Foreign"}
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):

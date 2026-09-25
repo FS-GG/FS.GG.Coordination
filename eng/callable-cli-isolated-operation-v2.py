@@ -231,11 +231,18 @@ class NativeReadAdapter:
         return response.status, link, body
 
     def _repo(self, repository: str, repository_id: int) -> None:
+        if not _safe_repository(repository):
+            raise Refused("native-repository-mismatch")
+        owner, name = repository.split("/")
         status, _, body = self._get(f"repos/{repository}")
         if (status != 200 or type(body) is not dict
                 or type(body.get("id")) is not int
                 or body["id"] != repository_id
                 or body.get("full_name") != repository
+                or ("name" in body and body["name"] != name)
+                or ("owner" in body and
+                    (type(body["owner"]) is not dict
+                     or body["owner"].get("login") != owner))
                 or ("url" in body and
                     (type(body["url"]) is not str or body["url"] !=
                      f"https://api.github.com/repos/{repository}"))):
