@@ -66,6 +66,70 @@ module CodexAppServerSdkCapability =
         names node = Some(set [ "$ref" ])
         && property "$ref" node |> Option.bind stringValue = Some("#/definitions/" + name)
 
+    let private closedServerRoutes (definitions: JsonElement) =
+        let route (node: JsonElement) =
+            let fields = names node
+            let properties = property "properties" node
+            let methodSchema = properties |> Option.bind (property "method")
+            let paramsSchema = properties |> Option.bind (property "params")
+            match fields, property "type" node |> Option.bind stringValue,
+                  property "required" node |> Option.bind stringSet,
+                  properties |> Option.bind names,
+                  methodSchema, paramsSchema with
+            | Some fields, Some "object", Some required, Some propertyNames,
+              Some methodNode, Some paramsNode when
+                Set.isSubset fields (set [ "description"; "properties"; "required"; "title"; "type" ])
+                && required = set [ "method"; "params" ]
+                && propertyNames = set [ "method"; "params" ]
+                && (names methodNode
+                    |> Option.exists (fun methodFields ->
+                        Set.isSubset (set [ "enum"; "type" ]) methodFields
+                        && Set.isSubset methodFields (set [ "enum"; "title"; "type" ])))
+                && (property "type" methodNode |> Option.bind stringValue = Some "string")
+                && names paramsNode = Some(set [ "$ref" ]) ->
+                match property "enum" methodNode |> Option.bind stringSet,
+                      property "$ref" paramsNode |> Option.bind stringValue with
+                | Some methods, Some reference when
+                    methods.Count = 1 && reference.StartsWith("#/definitions/", StringComparison.Ordinal) ->
+                    let target = reference.Substring("#/definitions/".Length)
+                    if target.Length > 0 && property target definitions |> Option.isSome then
+                        Some(Set.minElement methods, target)
+                    else None
+                | _ -> None
+            | _ -> None
+
+        match property "ServerNotification" definitions with
+        | Some notification when
+            names notification
+            |> Option.exists (fun fields ->
+                Set.isSubset fields (set [ "$schema"; "description"; "oneOf"; "properties"; "title" ])) ->
+            let emitted =
+                property "properties" notification
+                |> Option.bind (property "emittedAtMs")
+            match property "properties" notification |> Option.bind names, emitted,
+                  property "oneOf" notification with
+            | Some properties, Some emittedAt, Some choices when
+                properties = set [ "emittedAtMs" ]
+                && (names emittedAt
+                    |> Option.exists (fun fields ->
+                        Set.isSubset (set [ "format"; "type" ]) fields
+                        && Set.isSubset fields (set [ "description"; "format"; "type" ])))
+                && (property "type" emittedAt |> Option.bind stringValue = Some "integer")
+                && (property "format" emittedAt |> Option.bind stringValue = Some "int64")
+                && choices.ValueKind = JsonValueKind.Array ->
+                let items = choices.EnumerateArray() |> Seq.toList
+                let routes = items |> List.choose route
+                if items.IsEmpty || items.Length > 256 || routes.Length <> items.Length then false
+                else
+                    let methods = routes |> List.map fst |> Set.ofList
+                    let routeMap = Map.ofList routes
+                    methods.Count = routes.Length
+                    && Map.tryFind "turn/completed" routeMap = Some "TurnCompletedNotification"
+                    && Map.tryFind "thread/tokenUsage/updated" routeMap
+                       = Some "ThreadTokenUsageUpdatedNotification"
+            | _ -> false
+        | _ -> false
+
     /// A changed shape requires review; this never grants direct-session attachment or usage authority.
     let inspect (cliVersion: string) (schemaBytes: byte array)
         : Result<CodexAppServerSdkCapability, string> =
@@ -80,6 +144,14 @@ module CodexAppServerSdkCapability =
                 else
                     match property "definitions" root with
                     | None -> Error "app-server-sdk-schema-invalid"
+                    | Some _ when
+                        names root <> Some(set [ "$schema"; "definitions"; "title"; "type" ])
+                        || (property "$schema" root |> Option.bind stringValue)
+                           <> Some "http://json-schema.org/draft-07/schema#"
+                        || (property "title" root |> Option.bind stringValue)
+                           <> Some "CodexAppServerProtocolV2"
+                        || (property "type" root |> Option.bind stringValue) <> Some "object" ->
+                        Error "app-server-sdk-schema-drift"
                     | Some defs ->
                         let definition name = property name defs
                         match definition "TurnCompletedNotification",
@@ -90,7 +162,8 @@ module CodexAppServerSdkCapability =
                               definition "ThreadResumeParams" with
                         | Some completed, Some turn, Some updated, Some usage,
                           Some rawResponse, Some resume when
-                            exactShape (set [ "threadId"; "turn" ])
+                            closedServerRoutes defs
+                            && exactShape (set [ "threadId"; "turn" ])
                                 (set [ "threadId"; "turn" ]) completed
                             && (property "properties" completed
                                 |> Option.bind (property "turn")
