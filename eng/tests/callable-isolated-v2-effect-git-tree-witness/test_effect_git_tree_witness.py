@@ -82,6 +82,29 @@ class FakeGit:
         return self.objects[oid]
 
 
+class FakeIdentity:
+    def __init__(self):
+        scope = {"principalId": "identity-reader", "credentialId": "3" * 64,
+            "repository": release.REPOSITORY, "repositoryId": 77,
+            "permissions": ["metadata:read"],
+            "expiresAt": "2026-09-25T12:10:00Z"}
+        self.scopes = [copy.deepcopy(scope), copy.deepcopy(scope)]
+        self.record = {"schema": "fsgg.coordination.callable-isolated-v2-repository-identity/1",
+            "complete": True,
+            "principalId": "identity-reader", "credentialId": "3" * 64,
+            "eventId": 808, "repository": release.REPOSITORY,
+            "repositoryId": 77, "objectFormat": "sha1",
+            "observedAt": "2026-09-25T11:58:00Z"}
+        self.reads = []
+
+    def scope(self):
+        return copy.deepcopy(self.scopes.pop(0))
+
+    def read_repository_identity(self, event_id):
+        self.reads.append(event_id)
+        return copy.deepcopy(self.record)
+
+
 def fixture(mode_override=None):
     with tempfile.TemporaryDirectory() as temporary:
         archive_path = pathlib.Path(temporary) / builder.ARCHIVE_NAME
@@ -110,47 +133,60 @@ def fixture(mode_override=None):
     result = release.PreflightResult(revision, tree,
         hashlib.sha256(blobs["manifest"]).hexdigest(), 404,
         hashlib.sha256(archive).hexdigest())
-    selection = {"repositoryId": 77, "sourceReaderPrincipalId": "source-reader",
+    selection = {"repositoryId": 77, "identityEventId": 808,
+        "sourceReaderPrincipalId": "source-reader",
         "sourceReaderCredentialId": "1" * 64}
-    return result, blobs, selection, FakeGit(objects)
+    return result, blobs, selection, FakeGit(objects), FakeIdentity()
 
 
 class GitTreeWitnessTests(unittest.TestCase):
     def observe(self, change=None, mode_override=None):
-        result, blobs, selection, port = fixture(mode_override)
+        result, blobs, selection, port, identity = fixture(mode_override)
         if change:
-            change(result, blobs, selection, port)
-        return witness.qualify(result, blobs, port, selection, NOW)
+            change(result, blobs, selection, port, identity)
+        return witness.qualify(result, blobs, port, identity, selection, NOW)
 
     def refuses(self, change=None, mode_override=None):
         with self.assertRaises(witness.Refused):
             self.observe(change, mode_override)
 
     def test_complete_git_objects_match_exact_scaffold_source_without_effect_ports(self):
-        preflight, blobs, selection, port = fixture()
+        preflight, blobs, selection, port, identity = fixture()
         with (mock.patch("builtins.open", side_effect=AssertionError("file")),
               mock.patch.object(os, "getenv", side_effect=AssertionError("token")),
               mock.patch.object(socket.socket, "connect", side_effect=AssertionError("post")),
               mock.patch("sqlite3.connect", side_effect=AssertionError("journal"))):
-            result = witness.qualify(preflight, blobs, port, selection, NOW)
+            result = witness.qualify(preflight, blobs, port, identity, selection, NOW)
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
+        self.assertEqual(result.identity_event_id, 808)
         self.assertEqual(len(result.source_files), 7)
         self.assertFalse(hasattr(witness, "dispatch"))
 
     def test_wrong_commit_tree_blob_and_path_mode_refuse(self):
-        self.refuses(lambda p, _b, _s, _g: object.__setattr__(p, "coordination_revision", "a" * 40))
-        self.refuses(lambda p, _b, _s, _g: object.__setattr__(p, "source_tree", "b" * 40))
-        self.refuses(lambda _p, b, _s, _g: b.__setitem__("builderSource", b"foreign"))
-        self.refuses(lambda _p, _b, _s, g: g.objects.__setitem__(
+        self.refuses(lambda p, _b, _s, _g, _i: object.__setattr__(p, "coordination_revision", "a" * 40))
+        self.refuses(lambda p, _b, _s, _g, _i: object.__setattr__(p, "source_tree", "b" * 40))
+        self.refuses(lambda _p, b, _s, _g, _i: b.__setitem__("builderSource", b"foreign"))
+        self.refuses(lambda _p, _b, _s, g, _i: g.objects.__setitem__(
             next(oid for kind, oid in git_objects_read_order(g) if kind == "blob"), b"foreign"))
         self.refuses(mode_override=(builder.WORKFLOW, "120000"))
 
     def test_scope_and_missing_object_refuse(self):
-        self.refuses(lambda _p, _b, _s, g: g.scopes[0].__setitem__("credentialId", "1" * 64))
-        self.refuses(lambda _p, _b, _s, g: g.scopes[1].__setitem__("repositoryId", 78))
-        self.refuses(lambda _p, _b, _s, g: g.objects.clear())
+        self.refuses(lambda _p, _b, _s, g, _i: g.scopes[0].__setitem__("credentialId", "1" * 64))
+        self.refuses(lambda _p, _b, _s, g, _i: g.scopes[1].__setitem__("repositoryId", 78))
+        self.refuses(lambda _p, _b, _s, g, _i: g.objects.clear())
+
+    def test_independent_repository_identity_and_object_format_refuse(self):
+        self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("objectFormat", "sha256"))
+        self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("repositoryId", 78))
+        self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("eventId", 809))
+        self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("observedAt", "2026-09-25T11:00:00Z"))
+        self.refuses(lambda _p, _b, _s, _g, i: i.scopes[0].__setitem__("credentialId", "2" * 64))
+        self.refuses(lambda _p, _b, _s, _g, i: i.scopes[1].__setitem__("principalId", "foreign"))
+        self.refuses(lambda _p, _b, _s, _g, i: i.record.pop("objectFormat"))
+        self.refuses(lambda _p, _b, _s, _g, i: i.scopes[0].__setitem__("permissions", ["metadata:write"]))
+        self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("principalId", "git-reader"))
 
 
 def git_objects_read_order(port):
