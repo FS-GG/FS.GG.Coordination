@@ -230,7 +230,7 @@ class NativeReadAdapter:
                                 "link": link, "bodySha256": _sha(response.body)})
         return response.status, link, body
 
-    def _repo(self, repository: str, repository_id: int) -> None:
+    def _repo(self, repository: str, repository_id: int) -> str | None:
         if not _safe_repository(repository):
             raise Refused("native-repository-mismatch")
         owner, name = repository.split("/")
@@ -247,6 +247,10 @@ class NativeReadAdapter:
                     (type(body["url"]) is not str or body["url"] !=
                      f"https://api.github.com/repos/{repository}"))):
             raise Refused("native-repository-mismatch")
+        node_id = body.get("node_id")
+        if "node_id" in body and (type(node_id) is not str or not node_id):
+            raise Refused("native-repository-node-invalid")
+        return node_id
 
     def _ref(self, repository: str, ref: str) -> str:
         branch = ref.removeprefix("refs/heads/")
@@ -338,7 +342,7 @@ class NativeReadAdapter:
             raise Refused("native-pull-identity-invalid")
         expected = dataclasses.replace(expected)
         self.transcript = []
-        self._repo(expected.repository, expected.repository_id)
+        repository_node = self._repo(expected.repository, expected.repository_id)
         source_sha = self._ref(expected.repository, expected.source_ref)
         base_sha = self._ref(expected.repository, expected.base_ref)
         listed = self._open_pulls(expected.repository)
@@ -386,7 +390,8 @@ class NativeReadAdapter:
                     raise Refused("native-pull-list-detail-repo-drift")
             if detail.get("body") == pull_request_body(expected)["body"]:
                 selected.append(detail)
-        self._repo(expected.repository, expected.repository_id)
+        if self._repo(expected.repository, expected.repository_id) != repository_node:
+            raise Refused("native-repository-terminal-node-drift")
         if (self._ref(expected.repository, expected.source_ref) != source_sha
                 or self._ref(expected.repository, expected.base_ref) != base_sha):
             raise Refused("native-pull-terminal-ref-drift")
@@ -398,7 +403,7 @@ class NativeReadAdapter:
             raise Refused("native-protection-identity-invalid")
         expected = dataclasses.replace(expected)
         self.transcript = []
-        self._repo(expected.repository, expected.repository_id)
+        repository_node = self._repo(expected.repository, expected.repository_id)
         branch = expected.branch
         sha = self._ref(expected.repository, f"refs/heads/{branch}")
         branch_path = f"repos/{expected.repository}/branches/{urllib.parse.quote(branch, safe='/')}"
@@ -418,7 +423,8 @@ class NativeReadAdapter:
             raise Refused("native-protection-status")
         if protected and not _protection_urls_match(policy, expected):
             raise Refused("native-protection-target")
-        self._repo(expected.repository, expected.repository_id)
+        if self._repo(expected.repository, expected.repository_id) != repository_node:
+            raise Refused("native-repository-terminal-node-drift")
         if self._ref(expected.repository, f"refs/heads/{branch}") != sha:
             raise Refused("native-protection-terminal-ref-drift")
         terminal_status, _, terminal_branch = self._get(branch_path)

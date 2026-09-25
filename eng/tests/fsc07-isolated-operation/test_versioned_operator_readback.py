@@ -1445,6 +1445,52 @@ class VersionedReadbackTests(unittest.TestCase):
                                                    reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_q6_terminal_repository_node_identity_drift_is_unknown(self):
+        pull = pull_observed().pulls[0]
+        post = pull_read_events((pull,))
+        post[0]["response"]["json"]["node_id"] = "R_44_A"
+        post[6]["response"]["json"]["node_id"] = "R_44_B"
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_native_repository_node_identity_requires_stable_shape(self):
+        pull = pull_observed().pulls[0]
+        for first, terminal, exact in (("R_44", "R_44", True),
+                                       ("R_44", None, False),
+                                       (True, True, False)):
+            with self.subTest(first=first, terminal=terminal):
+                events = pull_read_events((pull,))
+                events[0]["response"]["json"]["node_id"] = first
+                if terminal is not None:
+                    events[6]["response"]["json"]["node_id"] = terminal
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events))
+                if exact:
+                    self.assertTrue(reader.read_pull_census(pull_expected()).complete)
+                else:
+                    with self.assertRaises(operator.Refused):
+                        reader.read_pull_census(pull_expected())
+
+    def test_q6_terminal_protection_repository_node_drift_is_unknown(self):
+        policy = protection_observed().policy
+        post = protection_read_events(True, policy)
+        post[0]["response"]["json"]["node_id"] = "R_44_A"
+        post[4]["response"]["json"]["node_id"] = "R_44_B"
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            protection_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_q6_restart_replay_cli_and_v5_inspect_binding(self):
         root = SOURCE.parents[1]
         preflight_path = root / operator.HISTORICAL_PREFLIGHT
