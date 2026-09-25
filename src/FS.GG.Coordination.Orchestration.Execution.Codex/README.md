@@ -95,6 +95,15 @@ cumulative token snapshots do not provide completed-turn usage, so this result c
 telemetry mapper or prove a Host receipt. No trusted sealed reader or native capture path is
 installed.
 
+`CodexAppServerUsageTruth` emits a canonical workspace/item/session/thread/turn correlation with
+an explicit no-usage verdict. In the pinned App Server v2 0.156.1 schema, `turn/completed` carries
+turn status but no usage; `thread/tokenUsage/updated` carries `last` and cumulative snapshots. The
+schema's internal raw-response completion describes one upstream Responses API completion, not a
+turn aggregate. A matching `codex exec` child turn is a different session provenance. The policy
+keeps all three evidence classes out of completed-turn telemetry and refuses candidates with
+foreign IDs. A future native per-turn usage contract and trusted current-session source are still
+required before this correlation can yield usage or an applied Host receipt.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
