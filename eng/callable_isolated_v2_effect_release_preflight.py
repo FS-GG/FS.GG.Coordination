@@ -12,8 +12,8 @@ import callable_isolated_v2_effect_candidate as candidate
 import verify_callable_isolated_v2_effect_scaffold as bytes_check
 
 SOURCE_SCHEMA = "fsgg.coordination.callable-isolated-v2-integrated-source/1"
-APPROVAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-manifest-approval/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-release-preflight/1"
+APPROVAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-manifest-approval/2"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-release-preflight/2"
 REPOSITORY = "FS-GG/FS.GG.Coordination"
 
 
@@ -49,6 +49,7 @@ class PreflightResult:
     producer_actor_id: int
     reviewer_actor_id: int
     approval_event_id: int
+    source_record_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -94,6 +95,7 @@ def _scope(port: object, role: str, now: dt.datetime) -> dict[str, Any]:
 def qualify(source_port: IntegratedSourcePort,
             approval_port: ApprovedManifestPort,
             coordination_revision: str, source_tree: str,
+            source_record_id: int,
             producer_run_id: int, producer_run_attempt: int,
             producer_actor_id: int, artifact_id: int,
             reviewer_actor_id: int, approval_event_id: int,
@@ -103,6 +105,7 @@ def qualify(source_port: IntegratedSourcePort,
             or source_port is approval_port
             or not candidate._hex(coordination_revision, candidate.HEX40)
             or not candidate._hex(source_tree, candidate.HEX40)
+            or not _positive(source_record_id)
             or not all(_positive(value) for value in
                        (producer_run_id, producer_run_attempt,
                         producer_actor_id, artifact_id, reviewer_actor_id,
@@ -133,6 +136,7 @@ def qualify(source_port: IntegratedSourcePort,
                     "coordinationRevision",
                     "sourceTree", "producerRunId", "producerRunAttempt",
                     "producerActorId", "artifactId", "reviewerActorId",
+                    "sourceRecordId",
                     "manifestSha256", "reviewedAt", "expiresAt"},
                     "release-approval-shape")
     selected = {"coordinationRevision": coordination_revision,
@@ -145,7 +149,8 @@ def qualify(source_port: IntegratedSourcePort,
             or source["repository"] != REPOSITORY
             or source["principalId"] != source_scope["principalId"]
             or source["credentialId"] != source_scope["credentialId"]
-            or not _positive(source["recordId"])
+            or type(source["recordId"]) is not int
+            or source["recordId"] != source_record_id
             or any(type(source[key]) is not int for key in
                    ("producerRunId", "producerRunAttempt",
                     "producerActorId", "artifactId"))
@@ -160,6 +165,8 @@ def qualify(source_port: IntegratedSourcePort,
             or approval["credentialId"] != approval_scope["credentialId"]
             or not _positive(approval["eventId"])
             or approval["eventId"] != approval_event_id
+            or type(approval["sourceRecordId"]) is not int
+            or approval["sourceRecordId"] != source_record_id
             or not _positive(approval["reviewerActorId"])
             or approval["reviewerActorId"] != reviewer_actor_id
             or approval["manifestSha256"] != source["manifestSha256"]
@@ -199,4 +206,5 @@ def qualify(source_port: IntegratedSourcePort,
                            source["manifestSha256"], artifact_id,
                            source["archiveSha256"], producer_run_id,
                            producer_run_attempt, producer_actor_id,
-                           reviewer_actor_id, approval_event_id)
+                           reviewer_actor_id, approval_event_id,
+                           source_record_id=source_record_id)
