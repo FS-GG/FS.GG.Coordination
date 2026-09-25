@@ -120,6 +120,8 @@ class IssuerEnvelopeTests(unittest.TestCase):
         self.assertEqual(port.calls[0], (policy["keyId"], "Ed25519",
             canonical(payload), bytes(range(64))))
         self.assertEqual(result.envelope_sha256, hashlib.sha256(raw).hexdigest())
+        self.assertEqual(result.nonce, policy["nonce"])
+        self.assertEqual(result.verifier_reader_principal, "signature-reader")
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)

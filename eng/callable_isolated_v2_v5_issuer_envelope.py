@@ -51,6 +51,9 @@ class EnvelopeWitness:
     envelope_sha256: str
     key_id: str
     issuer_event_id: int
+    nonce: str
+    verifier_reader_principal: str
+    verifier_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -253,7 +256,9 @@ def qualify(selection: candidate.Selection, membership: tree.TreeWitness,
                                  approval, issued, policy)):
             raise Refused("v5-envelope-drift")
         return EnvelopeWitness(hashlib.sha256(raw).hexdigest(),
-                               policy["keyId"], issued.event_id)
+                               policy["keyId"], issued.event_id,
+                               policy["nonce"], scope["principalId"],
+                               scope["credentialId"])
     except Refused:
         raise
     except Exception:
