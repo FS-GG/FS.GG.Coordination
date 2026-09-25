@@ -188,6 +188,7 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
         raise Refused("readback-reader-custody")
     try:
         probe = runner_port.read_probe(selection["runId"], selection["runAttempt"])
+        probe = copy.deepcopy(probe)
         audit = audit_port.read_audit(selection["auditEventId"])
     except Exception:
         raise Refused("readback-unavailable") from None
