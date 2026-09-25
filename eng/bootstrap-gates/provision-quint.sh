@@ -16,11 +16,10 @@ if [[ ! -x "$quint_bin" ]]; then
   chmod +x "$quint_bin"
 fi
 printf '%s  %s\n' "$quint_sha" "$quint_bin" | sha256sum --check --status
-if [[ -n "${FSGG_QUINT_TOOLCHAIN_ARCHIVE:-}" ]]; then
-  evaluator="$quint_home/rust-evaluator-v0.6.0/quint_evaluator"
-  mkdir -p "$(dirname "$evaluator")"; tar -xOf "$FSGG_QUINT_TOOLCHAIN_ARCHIVE" home/.quint/rust-evaluator-v0.6.0/quint_evaluator > "$evaluator"
-  chmod +x "$evaluator"
-  printf '%s  %s\n' "$evaluator_sha" "$evaluator" | sha256sum --check --status
-  export FSGG_QUINT_HOME="$quint_home" QUINT_HOME="$quint_home"
-fi
-export PATH="$quint_root:$PATH"
+evaluator="$quint_home/rust-evaluator-v0.6.0/quint_evaluator"; mkdir -p "$(dirname "$evaluator")"; if [[ ! -x "$evaluator" ]]; then
+  if [[ -n "${FSGG_QUINT_TOOLCHAIN_ARCHIVE:-}" ]]; then tar -xOf "$FSGG_QUINT_TOOLCHAIN_ARCHIVE" home/.quint/rust-evaluator-v0.6.0/quint_evaluator > "$evaluator"
+  else curl --fail --location --retry 5 --retry-all-errors --silent --show-error "https://github.com/quint-co/quint/releases/download/evaluator/v0.6.0/quint_evaluator-x86_64-unknown-linux-gnu.tar.gz" | tar -xzOf - quint_evaluator > "$evaluator"
+  fi
+  chmod +x "$evaluator"; fi
+printf '%s  %s\n' "$evaluator_sha" "$evaluator" | sha256sum --check --status
+export FSGG_QUINT_HOME="$quint_home" QUINT_HOME="$quint_home" PATH="$quint_root:$PATH"
