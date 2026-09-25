@@ -271,6 +271,8 @@ module MigrationReviewDeliveryCapture =
     let private journal (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport)
                         (declaration: MigrationDeliveryJournalDeclaration) (mergeCommit: string option) =
         if not (validJournal declaration) then fail "invalid:journal-declaration"
+        if declaration.Repository <> $"{options.Owner}/{options.Repository}" then
+            fail "foreign:journal-repository"
         let names = declaration.Repository.Split('/')
         let repositoryPath = $"repos/{Uri.EscapeDataString names[0]}/{Uri.EscapeDataString names[1]}"
         let refPath =
@@ -451,6 +453,8 @@ module MigrationReviewDeliveryCapture =
                || (journals |> List.exists (fun j ->
                    not (expectedPullRequests |> List.exists (fun (number, _, _) -> number = j.PullRequestNumber)))) then
                 Error "invalid:declaration"
+            elif journals |> List.exists (fun j -> j.Repository <> $"{options.Owner}/{options.Repository}") then
+                Error "foreign:journal-repository"
             else
                 let first = readPass options expectedPullRequests journals transport
                 let second = readPass options expectedPullRequests journals transport

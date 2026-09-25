@@ -165,6 +165,16 @@ let ``invalid journal path refuses without dispatch`` () =
     Assert.Empty(transport.Requests)
 
 [<Fact>]
+let ``foreign protected journal repository refuses before any provider request`` () =
+    let declaration =
+        { Repository="FS-GG/foreign"; RefName="refs/heads/fsgg/v2/journal/operation/aa"
+          Path="ordinary/aa.json"; PullRequestNumber=2; OperationId="expected-operation" }
+    let transport = FakeTransport responseForPull
+    assertError "foreign:journal-repository"
+        (MigrationReviewDeliveryCapture.captureTwoPass options [ 2, "P_2", head ] [ declaration ] transport)
+    Assert.Empty(transport.Requests)
+
+[<Fact>]
 let ``published release without a terminal tag refuses`` () =
     let route request =
         match request with

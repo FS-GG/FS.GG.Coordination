@@ -2,8 +2,8 @@ namespace FS.GG.Coordination.Cli
 
 open FS.GG.Coordination.GitHub
 
-/// One declared protected journal object. The caller must independently establish
-/// that this list is exhaustive for the isolated copy.
+/// One declared protected journal object in the exact isolated copy repository.
+/// The caller must independently establish that this list is exhaustive.
 type MigrationDeliveryJournalDeclaration =
     { Repository: string
       RefName: string
