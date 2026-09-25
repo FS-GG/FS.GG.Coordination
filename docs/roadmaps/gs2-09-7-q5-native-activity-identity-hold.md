@@ -213,6 +213,9 @@ The native activity capture remains a precursor only. The
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
 inspect adapter continues to return `authority-adapter-unavailable`; the
 other missing nine-authority rows are not supplied by this change.
+The [protected census owner handoff](gs2-09-7-q5-protected-census-owner-handoff.md)
+names the installed scope and byte-custody facts still required after the
+source-only configured-scope check.
 
 Read-only GitHub status shows [FS-GG/.github #3690](https://github.com/FS-GG/.github/pull/3690)
 merged at `2026-09-25T05:35:26Z` as
