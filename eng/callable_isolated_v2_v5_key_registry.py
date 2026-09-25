@@ -172,7 +172,7 @@ def qualify(selection: candidate.Selection,
         signed_at = candidate._time(issued.issued_at)
         expires = candidate._time(record["expiresAt"])
         if not (now - dt.timedelta(minutes=30) <= prior_approval
-                <= approved <= observed <= signed_at <= now < expires
+                <= approved <= signed_at <= observed <= now < expires
                 <= approved + dt.timedelta(minutes=30)):
             raise Refused("v5-key-registry-time")
         if (registry_port.scope() != scope
