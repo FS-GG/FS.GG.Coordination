@@ -60,6 +60,17 @@ class Selection:
     source_tree: str
     producer_run_id: int
     review_event_id: int
+    repository_id: int
+    artifact_id: int
+    producer_actor_id: int
+    reviewer_actor_id: int
+    source_record_id: int
+    reviewed_at: str
+    expires_at: str
+    source_reader_principal: str
+    source_credential_id: str
+    review_reader_principal: str
+    review_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -192,7 +203,14 @@ def qualify(source_port, review_port, chosen, blobs, now):
             raise Refused("v5-selection-drift")
         return Selection(review["archiveSha256"], review["manifestSha256"],
                          selected["revision"], selected["sourceTree"],
-                         selected["runId"], selected["reviewEventId"])
+                         selected["runId"], selected["reviewEventId"],
+                         selected["repositoryId"], selected["artifactId"],
+                         selected["producerActorId"], selected["reviewerActorId"],
+                         selected["sourceRecordId"], review["reviewedAt"],
+                         review["expiresAt"], source_scope["principalId"],
+                         source_scope["credentialId"],
+                         review_scope["principalId"],
+                         review_scope["credentialId"])
     except Refused:
         raise
     except Exception:
