@@ -143,8 +143,16 @@ module MigrationReviewDeliveryCapture =
             if page > 1000 || Set.contains current.AbsoluteUri seen then fail "pagination:cycle-or-limit"
             if current.Scheme <> initial.Scheme || current.Authority <> initial.Authority
                || current.AbsolutePath <> initial.AbsolutePath then fail "pagination:escaped"
-            let expectedPrefix = $"per_page=100"
-            if not (current.Query.Contains(expectedPrefix, StringComparison.Ordinal)) then fail "pagination:page-size"
+            let query =
+                current.Query.TrimStart('?').Split('&')
+                |> Array.map (fun item ->
+                    let parts = item.Split('=', 2)
+                    if parts.Length <> 2 then fail "pagination:query"
+                    parts[0], parts[1]) |> Array.toList
+            let expectedQuery =
+                if page = 1 then [ "per_page", "100" ]
+                else [ "per_page", "100"; "page", string page ]
+            if List.sort query <> List.sort expectedQuery then fail "pagination:query"
             let response = send options transport current
             let newIds = parsePage response.Body
             let next = nextLink response.Headers
@@ -186,7 +194,16 @@ module MigrationReviewDeliveryCapture =
             let status = str "status" record
             if not (Set.contains status (set [ "queued"; "in_progress"; "completed"; "waiting"; "pending"; "requested" ])) then
                 fail "invalid:check-status"
-            ignore (prop "conclusion" record)
+            let conclusion = prop "conclusion" record
+            let validConclusion =
+                match conclusion.ValueKind with
+                | JsonValueKind.Null -> status <> "completed"
+                | JsonValueKind.String ->
+                    status = "completed"
+                    && Set.contains (conclusion.GetString())
+                        (set [ "action_required"; "cancelled"; "failure"; "neutral"; "skipped"; "stale"; "success"; "timed_out" ])
+                | _ -> false
+            if not validConclusion then fail "invalid:check-conclusion"
             string id)
         total, ids
 
@@ -198,7 +215,8 @@ module MigrationReviewDeliveryCapture =
             let observed = str "sha" record
             if observed <> head then fail "changed:status-head"
             ignore (str "context" record)
-            ignore (str "state" record)
+            if not (Set.contains (str "state" record) (set [ "error"; "failure"; "pending"; "success" ])) then
+                fail "invalid:status-state"
             string id)
 
     let private releaseRecords (body: string) =
@@ -290,8 +308,14 @@ module MigrationReviewDeliveryCapture =
         fieldsUnique record
         if str "operationId" record <> declaration.OperationId then fail "changed:journal-operation"
         if number "generation" record < 1L then fail "invalid:journal-generation"
-        ignore (str "schema" record)
+        if str "schema" record <> "fsgg.coordination.ordinary-delivery-journal/1" then
+            fail "invalid:journal-schema"
+        if not (hex 64 (str "planDigest" record)) then fail "invalid:journal-plan-digest"
+        let stage = str "stage" record
+        if not (Set.contains stage (set [ "intent-persisted"; "effect-pending"; "settled" ])) then
+            fail "invalid:journal-stage"
         let recordedCommit = optionalString "mergeCommit" record
+        if stage = "settled" && recordedCommit.IsNone then fail "invalid:settled-journal"
         if recordedCommit <> mergeCommit then fail "changed:journal-merge"
         if readRef () <> refHead then fail "changed:journal-ref-head"
         { Declaration=declaration; RefHead=refHead; RequestUri=requestUri.AbsoluteUri

@@ -145,7 +145,7 @@ let ``journal correspondence refuses a different operation identity`` () =
             ok Map.empty ($"""{{"ref":"{journal.RefName}","object":{{"sha":"{journalHead}"}}}}""")
         | Rest rest when rest.Uri.AbsolutePath.EndsWith("/contents/ordinary/aa.json", StringComparison.Ordinal) ->
             let bytes = Encoding.UTF8.GetBytes
-                            ($"""{{"schema":"fsgg.coordination.ordinary-delivery-journal/1","generation":1,"operationId":"foreign","mergeCommit":"{merge}"}}""")
+                            ($"""{{"schema":"fsgg.coordination.ordinary-delivery-journal/1","generation":1,"operationId":"foreign","planDigest":"{String.replicate 64 "d"}","stage":"settled","mergeCommit":"{merge}"}}""")
             let content = Convert.ToBase64String bytes
             let gitBlob = Array.concat [ Encoding.ASCII.GetBytes($"blob {bytes.Length}\u0000"); bytes ]
             let blob = SHA1.HashData gitBlob |> Convert.ToHexString |> _.ToLowerInvariant()
