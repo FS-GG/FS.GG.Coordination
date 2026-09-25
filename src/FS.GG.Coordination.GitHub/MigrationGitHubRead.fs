@@ -627,6 +627,29 @@ module MigrationGitHubRead =
             | Some(name, _) -> Error(MigrationReadFailure.DuplicateIdentity $"json-member:{name}")
             | None -> Ok()
 
+    let rec private uniqueJsonMembers (element: JsonElement) =
+        match element.ValueKind with
+        | JsonValueKind.Object ->
+            uniqueObjectMembers element
+            |> Result.bind (fun () ->
+                element.EnumerateObject()
+                |> Seq.fold (fun result property ->
+                    result |> Result.bind (fun () -> uniqueJsonMembers property.Value)) (Ok()))
+        | JsonValueKind.Array ->
+            element.EnumerateArray()
+            |> Seq.fold (fun result value ->
+                result |> Result.bind (fun () -> uniqueJsonMembers value)) (Ok())
+        | _ -> Ok()
+
+    let private parseUniqueRelationResponse body =
+        parse body
+        |> Result.bind (fun document ->
+            match uniqueJsonMembers document.RootElement with
+            | Ok () -> Ok document
+            | Error failure ->
+                document.Dispose()
+                Error failure)
+
     let private readRepository (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
         let uri = Uri(options.ApiBase, path)
@@ -2542,7 +2565,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueRelationResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2612,7 +2635,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueRelationResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
