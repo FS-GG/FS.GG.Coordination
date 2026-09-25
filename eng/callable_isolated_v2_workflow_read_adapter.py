@@ -8,6 +8,7 @@ provider write. Its output remains an observation, never dispatch authority.
 from __future__ import annotations
 
 import base64
+import copy
 import dataclasses
 import datetime as dt
 import hashlib
@@ -113,7 +114,7 @@ def _scope(transport: ScopedReadTransport, repository_id: int,
             raise Refused("workflow-scope-expired")
     except candidate.Refused:
         raise Refused("workflow-scope-expired") from None
-    return value
+    return copy.deepcopy(value)
 
 
 def _git_blob_sha(raw: bytes) -> str:
