@@ -34,6 +34,7 @@ type CodexAppServerRecoveryVerdict =
 [<RequireQualifiedAccess>]
 module CodexAppServerJournalRecovery =
     let private shaPattern = Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
+    let internal maxEntryCount = 10000
 
     let private boundedText (value: string) =
         not (String.IsNullOrWhiteSpace value)
@@ -109,7 +110,7 @@ module CodexAppServerJournalRecovery =
                     || isNull (box snapshot.Entries)
                     || snapshot.Seal.Binding <> binding
                     || snapshot.Seal.EntryCount < 1
-                    || snapshot.Seal.EntryCount > 10000
+                    || snapshot.Seal.EntryCount > maxEntryCount
                     || not (boundedText snapshot.Seal.HeadEntryId)
                     || not (boundedText snapshot.Seal.SealId) ->
                     Error "app-server-recovery-seal-invalid"

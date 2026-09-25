@@ -58,6 +58,7 @@ module CodexAppServerUsageTruth =
            || terminal.Binding.Scope <> terminal.Reservation.Request.Scope
            || not (DirectSessionTelemetryFacts.validScope terminal.Binding.Scope)
            || terminal.UsageUpdateCount < 0
+           || terminal.UsageUpdateCount > CodexAppServerJournalRecovery.maxEntryCount - 2
            || not (boundedText terminal.Reservation.Request.NativeSessionId)
            || isNull terminal.Reservation.Request.Challenge
            || not (digestPattern.IsMatch terminal.Reservation.Request.Challenge)
@@ -77,6 +78,7 @@ module CodexAppServerUsageTruth =
            || not (digestPattern.IsMatch terminal.Binding.SubscriptionDigest)
            || not (boundedText terminal.FirstEntryId)
            || not (boundedText terminal.SealedHeadEntryId)
+           || terminal.FirstEntryId = terminal.SealedHeadEntryId
            || not (Set.contains terminal.TerminalStatus (set [ "completed"; "failed"; "interrupted" ])) then
             Error "app-server-usage-correlation-invalid"
         else
