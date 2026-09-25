@@ -63,6 +63,135 @@ let private readIssues responses =
     | Ok population -> population, transport.Calls
     | Error failure -> failwithf "Expected issue population: %A" failure
 
+let private protectedCensusPins =
+    { ReaderResourceId="protected-reader:fixture"
+      ReaderArtifactSha256=String.replicate 64 "a"
+      CustodyStoreResourceId="protected-store:fixture" }
+
+let private protectedCensusSelection =
+    { RunId=101L; RunAttempt=2; RunNonce="nonce:fixture"
+      CandidateSha=String.replicate 40 "b"; WorkflowSha=String.replicate 40 "c"
+      ApiOrigin="https://api.github.test"; Owner="FS-GG"; Repository="copy"
+      RepositoryId=42L }
+
+let private protectedCensusFixture () =
+    let population, calls =
+        readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
+    let reads =
+        calls |> List.mapi (fun index (request, outcome) ->
+            match request, outcome with
+            | Rest request, Response response ->
+                { ReadOrdinal=int64 (index + 1); RequestUri=request.Uri.AbsoluteUri
+                  StatusCode=response.StatusCode; LinkHeader=Map.tryFind "link" response.Headers
+                  RawBody=response.Body; CustodyObjectId=$"object:{index + 1}" }
+            | _ -> failwith "Expected REST response")
+    let batch =
+        { Selection=protectedCensusSelection
+          CustodyStoreResourceId=protectedCensusPins.CustodyStoreResourceId
+          Complete=true; SealedPageCount=population.PageCount
+          Identity=reads.Head; Pages=reads.Tail }
+    population, batch
+
+let private protectedCensusPort descriptor batch =
+    { new IProtectedIssueCensusPort with
+        member _.Describe() = descriptor
+        member _.Read _ = batch }
+
+[<Fact>]
+let ``protected issue census binds retained raw bytes through exact selected fake port`` () =
+    let population, batch = protectedCensusFixture ()
+    let port = protectedCensusPort protectedCensusPins (Some batch)
+    match MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+              (Some port) options population with
+    | Error reason -> failwithf "Expected source-only protected census proof: %s" reason
+    | Ok proof ->
+        Assert.True(proof.Inspect.ScopeVerified)
+        Assert.True(proof.Inspect.SubjectsParsedFromRaw)
+        Assert.Equal([ "object:1"; "object:2" ], proof.CustodyObjectIds)
+        Assert.Equal(64, proof.CorpusSha256.Length)
+
+[<Fact>]
+let ``protected issue census refuses absent or drifted installation and read`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind pins selection port =
+        MigrationProtectedIssueCensus.bind pins selection port options population
+        |> Result.map ignore
+    Assert.Equal(Error "protected-census-pins",
+                 bind { protectedCensusPins with ReaderResourceId="" }
+                      protectedCensusSelection None)
+    Assert.Equal(Error "protected-census-port-unavailable",
+                 bind protectedCensusPins protectedCensusSelection None)
+    Assert.Equal(Error "protected-census-installation",
+                 bind protectedCensusPins protectedCensusSelection
+                      (Some (protectedCensusPort { protectedCensusPins with
+                                                    ReaderArtifactSha256=String.replicate 64 "d" }
+                                (Some batch))))
+    Assert.Equal(Error "protected-census-read-unavailable",
+                 bind protectedCensusPins protectedCensusSelection
+                      (Some (protectedCensusPort protectedCensusPins None)))
+
+[<Fact>]
+let ``protected issue census refuses foreign run and custody store`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+        |> Result.map ignore
+    Assert.Equal(Error "protected-census-selection",
+                 MigrationProtectedIssueCensus.bind protectedCensusPins
+                     { protectedCensusSelection with RepositoryId=43L }
+                     (Some (protectedCensusPort protectedCensusPins (Some batch))) options population
+                 |> Result.map ignore)
+    for changed in
+        [ { batch with Selection={ batch.Selection with RunNonce="stale" } }
+          { batch with Selection={ batch.Selection with RunAttempt=3 } }
+          { batch with CustodyStoreResourceId="candidate-store" } ] do
+        Assert.Equal(Error "protected-census-binding", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses partial seal and omitted page`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+        |> Result.map ignore
+    for changed in
+        [ { batch with Complete=false }
+          { batch with SealedPageCount=2 }
+          { batch with Pages=[] } ] do
+        Assert.Equal(Error "protected-census-incomplete", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses byte drift and duplicate or stale objects`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+        |> Result.map ignore
+    let page = batch.Pages.Head
+    for changed in
+        [ { batch with Pages=[ { page with RawBody=page.RawBody + " " } ] }
+          { batch with Pages=[ { page with CustodyObjectId=batch.Identity.CustodyObjectId } ] }
+          { batch with Pages=[ { page with ReadOrdinal=batch.Identity.ReadOrdinal } ] }
+          { batch with Pages=[ { page with ReadOrdinal=3L } ] }
+          { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\"" } ] } ] do
+        Assert.Equal(Error "protected-census-object-or-page", bind changed)
+
+[<Fact>]
+let ``protected issue census unknown fake-port result refuses without retry`` () =
+    let population, _ = protectedCensusFixture ()
+    let mutable reads = 0
+    let port =
+        { new IProtectedIssueCensusPort with
+            member _.Describe() = protectedCensusPins
+            member _.Read _ =
+                reads <- reads + 1
+                raise (InvalidOperationException "unknown protected read") }
+    Assert.Equal(Error "protected-census-read-unavailable",
+                 MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+                     (Some port) options population |> Result.map ignore)
+    Assert.Equal(1, reads)
+
 let private readProjectItems responses =
     let transport = FakeTransport responses
     match MigrationGitHubRead.readProjectItems options.Project transport with
