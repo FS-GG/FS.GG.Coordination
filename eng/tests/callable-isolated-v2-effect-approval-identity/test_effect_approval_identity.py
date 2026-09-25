@@ -133,6 +133,24 @@ class ApprovalIdentityTests(unittest.TestCase):
         self.refuses(lambda _p, _m, _s, i, _e: i.record.__setitem__("observedAt", "2026-09-25T11:59:00Z"))
         self.refuses(lambda p, _m, _s, _i, _e: object.__setattr__(p, "producer_run_attempt", True))
 
+    def test_later_event_read_cannot_activate_earlier_reviewer(self):
+        preflight, made, selection, identity, event = fixture()
+        shared_identity = copy.deepcopy(identity.record)
+        shared_identity["active"] = False
+        original_event_read = event.read_approval_event
+
+        def read_reviewer(actor_id):
+            return shared_identity
+
+        def read_event(event_id):
+            shared_identity["active"] = True
+            return original_event_read(event_id)
+
+        identity.read_reviewer = read_reviewer
+        event.read_approval_event = read_event
+        with self.assertRaises(approval.Refused):
+            approval.qualify(preflight, made, identity, event, selection, NOW)
+
     def test_event_bytes_head_artifact_and_time_refuse(self):
         for key, value in (("coordinationRevision", "f" * 40),
                            ("sourceTree", "f" * 40), ("producerRunAttempt", 2),

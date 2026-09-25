@@ -207,6 +207,7 @@ def qualify(preflight: release.PreflightResult,
         raise Refused("approval-reader-custody")
     try:
         identity = identity_port.read_reviewer(preflight.reviewer_actor_id)
+        identity = copy.deepcopy(identity)
         raw = event_port.read_approval_event(preflight.approval_event_id)
     except Exception:
         raise Refused("approval-read-unavailable") from None
