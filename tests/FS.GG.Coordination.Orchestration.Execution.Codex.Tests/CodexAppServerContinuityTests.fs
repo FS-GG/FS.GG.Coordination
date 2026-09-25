@@ -69,6 +69,9 @@ type CodexAppServerContinuityTests() =
     let completedWithMcpToolCall fields =
         completedWithItems
             ("[{\"id\":\"item-1\",\"type\":\"mcpToolCall\"" + fields + "}]")
+    let completedWithMcpMetadata fields =
+        completedWithMcpToolCall
+            (",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":\"completed\"" + fields)
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -482,6 +485,46 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool result requires object with content array``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"result\":[]"
+              ",\"result\":{}"
+              ",\"result\":{\"content\":null}"
+              ",\"result\":{\"content\":\"text\"}"
+              ",\"result\":{\"content\":[],\"content\":[]}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool error requires object with string message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"error\":false"
+              ",\"error\":{}"
+              ",\"error\":{\"message\":null}"
+              ",\"error\":{\"message\":17}"
+              ",\"error\":{\"message\":\"x\",\"message\":\"y\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool nullable and unconstrained result content retains terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"result\":null,\"error\":null"
+              ",\"result\":{\"content\":[]},\"error\":{\"message\":\"\"}"
+              ",\"result\":{\"content\":[null,17,{\"type\":\"text\"}],\"structuredContent\":false,\"_meta\":null},\"error\":{\"message\":\"x\"}" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
             )
 
     [<Fact>]
