@@ -176,6 +176,24 @@ class ClosedScaffoldTests(unittest.TestCase):
                                 hashlib.sha256(extended_raw).hexdigest(),
                                 builder_source, native_source)
 
+    def test_native_manifest_size_float_alias_refuses(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_path = pathlib.Path(temporary) / builder.ARCHIVE_NAME
+            builder.build(archive_path)
+            archive = archive_path.read_bytes()
+            workflow = (ROOT / builder.WORKFLOW).read_bytes()
+            builder_source = (ENG /
+                "build_callable_isolated_v2_effect_scaffold.py").read_bytes()
+            native_source = (ROOT / builder.NATIVE_SOURCE).read_bytes()
+            manifest = json.loads((ROOT / builder.MANIFEST).read_bytes())
+            manifest["nativeSource"]["size"] = float(len(native_source))
+            resealed = (json.dumps(manifest, sort_keys=True,
+                        separators=(",", ":")) + "\n").encode()
+            approved = hashlib.sha256(resealed).hexdigest()
+            with self.assertRaisesRegex(verifier.Refused, "effect-manifest-binding"):
+                verifier.verify(archive, workflow, resealed, approved,
+                                builder_source, native_source)
+
     def test_clean_installed_no_grant_is_zero_post_and_zero_journal_change(self):
         requests = []
 
