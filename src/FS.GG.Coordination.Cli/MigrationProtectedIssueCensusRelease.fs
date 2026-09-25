@@ -15,15 +15,24 @@ type ProtectedIssueCensusReleaseDescription =
       StoreArtifactSha256: string
       JournalResourceId: string
       JournalArtifactSha256: string
+      ClockResourceId: string
+      SignerPublicKeySha256: string
+      SignerArtifactSha256: string
       CandidateMayRead: bool
       CandidateMayWrite: bool
-      AtomicCompareAndConsume: bool }
+      AtomicCompareAndConsume: bool
+      AtomicExpiryCompare: bool }
 
 type ProtectedIssueCensusReleaseRequest =
     { ReservationId: string
       Selection: ProtectedIssueCensusSelection
       ClaimId: string
       AttestationPayloadSha256: string
+      ClockResourceId: string
+      SignerPublicKeySha256: string
+      SignerArtifactSha256: string
+      SignedIssuedAtUtc: DateTimeOffset
+      SignedExpiresAtUtc: DateTimeOffset
       StoreResourceId: string
       StoreGeneration: int64
       StoreCorpusSha256: string
@@ -105,8 +114,14 @@ module MigrationProtectedIssueCensusRelease =
                     || releaseDescription.StoreArtifactSha256 <> storePins.StoreArtifactSha256
                     || releaseDescription.JournalResourceId <> claimPins.JournalResourceId
                     || releaseDescription.JournalArtifactSha256 <> claimPins.JournalArtifactSha256
+                    || releaseDescription.ClockResourceId <> attestationPins.ClockResourceId
+                    || releaseDescription.SignerPublicKeySha256
+                       <> attestationPins.SignerPublicKeySha256
+                    || releaseDescription.SignerArtifactSha256
+                       <> attestationPins.SignerArtifactSha256
                     || releaseDescription.CandidateMayRead || releaseDescription.CandidateMayWrite
-                    || not releaseDescription.AtomicCompareAndConsume ->
+                    || not releaseDescription.AtomicCompareAndConsume
+                    || not releaseDescription.AtomicExpiryCompare ->
                     Error "protected-census-release-installation"
                 | Some _ ->
                     let storeHead, claimRecord, journalHead =
@@ -163,6 +178,11 @@ module MigrationProtectedIssueCensusRelease =
                                         { ReservationId=reservationId expectedId current
                                           Selection=selection; ClaimId=expectedId
                                           AttestationPayloadSha256=payloadSha
+                                          ClockResourceId=attestationPins.ClockResourceId
+                                          SignerPublicKeySha256=attestationPins.SignerPublicKeySha256
+                                          SignerArtifactSha256=attestationPins.SignerArtifactSha256
+                                          SignedIssuedAtUtc=seal.IssuedAtUtc
+                                          SignedExpiresAtUtc=seal.ExpiresAtUtc
                                           StoreResourceId=storePins.StoreResourceId
                                           StoreGeneration=head.Generation
                                           StoreCorpusSha256=proof.CorpusSha256

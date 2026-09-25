@@ -39,15 +39,18 @@ let private claimDescription =
       AtomicStoreHeadCompare=true
       CandidateMayRead=false; CandidateMayWrite=false; ImmutableJournal=true }
 
-let private releaseDescription =
+let private releaseDescription keySha =
     { ReleaseResourceId=releasePins.ReleaseResourceId
       ReleaseArtifactSha256=releasePins.ReleaseArtifactSha256
       StoreResourceId=storePins.StoreResourceId
       StoreArtifactSha256=storePins.StoreArtifactSha256
       JournalResourceId=claimPins.JournalResourceId
       JournalArtifactSha256=claimPins.JournalArtifactSha256
+      ClockResourceId="protected-clock:release-test"
+      SignerPublicKeySha256=keySha
+      SignerArtifactSha256=String.replicate 64 "f"
       CandidateMayRead=false; CandidateMayWrite=false
-      AtomicCompareAndConsume=true }
+      AtomicCompareAndConsume=true; AtomicExpiryCompare=true }
 
 type private Fixture =
     { Pins: ProtectedIssueCensusAttestationPins
@@ -138,7 +141,7 @@ let ``protected census release reservation is one use and exactly bound`` () =
     let mutable attempts = 0
     let release =
         { new IProtectedIssueCensusReleasePort with
-            member _.Describe() = releaseDescription
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
             member _.ReserveOnce request =
                 attempts <- attempts + 1
                 match stored with
@@ -154,6 +157,48 @@ let ``protected census release reservation is one use and exactly bound`` () =
     Assert.Equal(f.ClaimRecord.Request.ClaimId, stored.Value.ClaimId)
     Assert.Equal(f.StoreHead.HeadSha256, stored.Value.ExpectedStoreHeadSha256)
     Assert.Equal(f.JournalHead.SealSha256, stored.Value.ExpectedJournalHeadSha256)
+    Assert.Equal(f.Seal.ExpiresAtUtc, stored.Value.SignedExpiresAtUtc)
+    Assert.Equal(f.Pins.ClockResourceId, stored.Value.ClockResourceId)
+
+[<Fact>]
+let ``protected census release checks signed expiry inside reservation CAS`` () =
+    let f = fixture ()
+    let mutable stored: ProtectedIssueCensusReleaseRequest option = None
+    let release =
+        { new IProtectedIssueCensusReleasePort with
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
+            member _.ReserveOnce request =
+                // Protected clock has advanced after the source preflight.
+                if request.SignedExpiresAtUtc = f.Seal.ExpiresAtUtc
+                   && request.ClockResourceId = f.Pins.ClockResourceId then
+                    ReleaseConflict
+                else
+                    stored <- Some request
+                    ReleaseReserved
+            member _.ReadReservation _ = stored }
+    Assert.Equal(Error "protected-census-release-conflict",
+                 reserve f (Some (store f.StoreHead))
+                           (Some (journal f.ClaimRecord f.JournalHead)) (Some release))
+    Assert.True(stored.IsNone)
+
+[<Fact>]
+let ``protected census release refuses unpinned or non-atomic expiry authority`` () =
+    let f = fixture ()
+    let invoke description =
+        let release =
+            { new IProtectedIssueCensusReleasePort with
+                member _.Describe() = description
+                member _.ReserveOnce _ = failwith "must refuse before reservation"
+                member _.ReadReservation _ = None }
+        reserve f (Some (store f.StoreHead))
+                  (Some (journal f.ClaimRecord f.JournalHead)) (Some release)
+    let expected = releaseDescription f.Pins.SignerPublicKeySha256
+    Assert.Equal(Error "protected-census-release-installation",
+                 invoke { expected with AtomicExpiryCompare=false })
+    Assert.Equal(Error "protected-census-release-installation",
+                 invoke { expected with ClockResourceId="candidate-clock" })
+    Assert.Equal(Error "protected-census-release-installation",
+                 invoke { expected with SignerPublicKeySha256=String.replicate 64 "0" })
 
 [<Fact>]
 let ``protected census release refuses stale heads and forged claim before reservation`` () =
@@ -161,7 +206,7 @@ let ``protected census release refuses stale heads and forged claim before reser
     let mutable attempts = 0
     let release =
         { new IProtectedIssueCensusReleasePort with
-            member _.Describe() = releaseDescription
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
             member _.ReserveOnce _ = attempts <- attempts + 1; ReleaseReserved
             member _.ReadReservation _ = None }
     let expectedJournal = Some (journal f.ClaimRecord f.JournalHead)
@@ -193,7 +238,8 @@ let ``protected census release refuses absent atomic authority and unknown reser
                  reserve f storePort claimPort None)
     let noAtomic =
         { new IProtectedIssueCensusReleasePort with
-            member _.Describe() = { releaseDescription with AtomicCompareAndConsume=false }
+            member _.Describe() =
+                { releaseDescription f.Pins.SignerPublicKeySha256 with AtomicCompareAndConsume=false }
             member _.ReserveOnce _ = failwith "must refuse before reservation"
             member _.ReadReservation _ = None }
     Assert.Equal(Error "protected-census-release-installation",
@@ -201,7 +247,7 @@ let ``protected census release refuses absent atomic authority and unknown reser
     let mutable attempts = 0
     let unknown =
         { new IProtectedIssueCensusReleasePort with
-            member _.Describe() = releaseDescription
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
             member _.ReserveOnce _ = attempts <- attempts + 1; ReleaseUnknown
             member _.ReadReservation _ = failwith "must not recover by retry" }
     Assert.Equal(Error "protected-census-release-unknown",
@@ -215,14 +261,14 @@ let ``protected census release refuses concurrent head conflict and lost readbac
     let claimPort = Some (journal f.ClaimRecord f.JournalHead)
     let conflict =
         { new IProtectedIssueCensusReleasePort with
-            member _.Describe() = releaseDescription
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
             member _.ReserveOnce _ = ReleaseConflict
             member _.ReadReservation _ = failwith "conflict must not read success" }
     Assert.Equal(Error "protected-census-release-conflict",
                  reserve f storePort claimPort (Some conflict))
     let lost =
         { new IProtectedIssueCensusReleasePort with
-            member _.Describe() = releaseDescription
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
             member _.ReserveOnce _ = ReleaseReserved
             member _.ReadReservation _ = None }
     Assert.Equal(Error "protected-census-release-unknown",
