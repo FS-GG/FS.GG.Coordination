@@ -69,6 +69,9 @@ module MigrationNativeActivity =
         let pullRequests = input.PullRequests
         let issueNumbers = issues.Issues |> List.map _.Number |> Set.ofList
         let pullRequestNumbers = pullRequests.PullRequests |> List.map _.Number |> Set.ofList
+        let censusNodes =
+            (issues.Issues |> List.map _.NodeId)
+            @ (pullRequests.PullRequests |> List.map _.NodeId)
         let issueNodes = issues.Issues |> List.map (fun issue -> issue.Number, issue.NodeId) |> Map.ofList
         let pullRequestNodes = pullRequests.PullRequests |> List.map (fun pullRequest -> pullRequest.Number, pullRequest.NodeId) |> Map.ofList
         let matchingIssue number nodeId = Map.tryFind number issueNodes = Some nodeId
@@ -147,7 +150,9 @@ module MigrationNativeActivity =
             fail "census"
         elif issues.Issues.Length <> issueNumbers.Count
              || pullRequests.PullRequests.Length <> pullRequestNumbers.Count
-             || not (Set.isEmpty (Set.intersect issueNumbers pullRequestNumbers)) then
+             || not (Set.isEmpty (Set.intersect issueNumbers pullRequestNumbers))
+             || not (unique censusNodes)
+             || (censusNodes |> List.exists String.IsNullOrWhiteSpace) then
             fail "subject-identity"
         elif issues.Issues |> List.exists (fun issue -> not (payloadValid issue.PayloadJson issue.PayloadSha256))
              || pullRequests.PullRequests |> List.exists (fun pullRequest ->

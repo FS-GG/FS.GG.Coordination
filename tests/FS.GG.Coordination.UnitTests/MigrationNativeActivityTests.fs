@@ -81,6 +81,25 @@ let private requireOk result =
     | Ok value -> value
     | Error reason -> failwithf "Unexpected refusal: %A" reason
 
+[<Fact>]
+let ``native activity refuses an issue and pull request sharing one node identity`` () =
+    let input = sample ()
+    let issueNode = input.Issues.Issues.Head.NodeId
+    let duplicate =
+        { input with
+            PullRequests={ input.PullRequests with
+                            PullRequests=[ { input.PullRequests.PullRequests.Head with NodeId=issueNode } ] }
+            PullRequestComments=[ { input.PullRequestComments.Head with SubjectNodeId=issueNode } ]
+            PullRequestReviews=[ { input.PullRequestReviews.Head with PullRequestNodeId=issueNode } ]
+            PullRequestInlineComments=[ { input.PullRequestInlineComments.Head with PullRequestNodeId=issueNode } ] }
+    assertRefused "subject-identity" duplicate
+    let missing =
+        { input with
+            Issues={ input.Issues with Issues=[ { input.Issues.Issues.Head with NodeId="" } ] }
+            IssueComments=[ { input.IssueComments.Head with SubjectNodeId="" } ]
+            IssueEvents=[ { input.IssueEvents.Head with SubjectNodeId="" } ] }
+    assertRefused "subject-identity" missing
+
 let private options =
     { ApiBase=Uri "https://api.github.test/"
       GraphQLUri=Uri "https://api.github.test/graphql"
