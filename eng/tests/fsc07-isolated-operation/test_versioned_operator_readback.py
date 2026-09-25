@@ -213,6 +213,38 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assertIsInstance(value, operator.Unknown)
         self.assertNotIn(SENTINEL, repr(value))
 
+    def test_pull_repository_id_must_not_accept_boolean_alias(self):
+        expected = dataclasses.replace(pull_expected(), repository_id=1)
+        for side in ("head", "base"):
+            with self.subTest(side=side):
+                pull = copy.deepcopy(pull_observed().pulls[0])
+                pull["body"] = operator.pull_request_body(expected)["body"]
+                pull["head"]["repo"]["id"] = 1
+                pull["base"]["repo"]["id"] = 1
+                pull[side]["repo"]["id"] = True
+                observed = dataclasses.replace(
+                    pull_observed(), repository_id=1, pulls=(pull,))
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    expected, lambda: observed))
+
+        transport = operator.OfflineTranscriptTransport([
+            event("GET", "repos/FS-GG/disposable",
+                  value={"id": True, "full_name": "FS-GG/disposable"})])
+        with self.assertRaisesRegex(operator.Refused, "native-repository-mismatch"):
+            operator.NativeReadAdapter(transport)._repo("FS-GG/disposable", 1)
+
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["body"] = operator.pull_request_body(expected)["body"]
+        pull["head"]["repo"]["id"] = 1
+        pull["base"]["repo"]["id"] = 1
+        events = pull_read_events((pull,))
+        events[0]["response"]["json"]["id"] = 1
+        events[6]["response"]["json"]["id"] = 1
+        events[5]["response"]["json"]["head"]["repo"]["id"] = True
+        with self.assertRaisesRegex(operator.Refused, "native-pull-list-detail-repo-drift"):
+            operator.NativeReadAdapter(
+                operator.OfflineTranscriptTransport(events)).read_pull_census(expected)
+
     def test_pull_accepts_only_two_complete_exact_reads(self):
         reads = iter((pull_observed(), pull_observed()))
         result = operator.classify_pull_after_one_attempt(
