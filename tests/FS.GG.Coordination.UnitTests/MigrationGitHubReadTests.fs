@@ -1311,6 +1311,20 @@ let ``inline review comments refuse missing page duplicate and nonterminal PR ce
     Assert.Empty(noRequests.Requests)
 
 [<Fact>]
+let ``inline review comments refuse duplicate raw parent path and body members`` () =
+    let record = pullRequestReviewComment 701 "REVIEW_COMMENT_701" 3
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    check (record.Replace("\"pull_request_review_id\":601",
+                          "\"pull_request_review_id\":601,\"pull_request_review_id\":602")) "pull_request_review_id"
+    check (record.Replace("\"path\":\"src/Program.fs\"",
+                          "\"path\":\"src/Program.fs\",\"path\":\"other/Program.fs\"")) "path"
+    check (record.Replace("\"body\":\"please guard this\"",
+                          "\"body\":\"please guard this\",\"body\":\"looks good\"")) "body"
+
+[<Fact>]
 let ``issue comment stream binds a censused subject and terminal raw pages`` () =
     let next = "https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=2"
     let firstRecord = issueComment 301 "COMMENT_301" 1
