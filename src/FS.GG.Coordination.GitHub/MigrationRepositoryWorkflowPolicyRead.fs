@@ -18,6 +18,7 @@ type MigrationWorkflowAccessLevel =
     | AccessNone
     | AccessUser
     | AccessOrganization
+    | AccessEnterprise
 
 type MigrationPrivateForkWorkflowPolicy =
     { RunWorkflowsFromForkPullRequests: bool
@@ -152,6 +153,8 @@ module MigrationRepositoryWorkflowPolicyRead =
         match transport.Send request with
         | Response value when value.StatusCode <> 200 ->
             Error(MigrationReadFailure.HttpRefused value.StatusCode)
+        | Response value when isNull value.Body ->
+            failure "missing:response-body"
         | Response value when value.Headers
                               |> Map.exists (fun name _ -> name.Equals("link", StringComparison.OrdinalIgnoreCase)) ->
             Error(MigrationReadFailure.PaginationRefused "unexpected-singleton-link")
@@ -212,6 +215,7 @@ module MigrationRepositoryWorkflowPolicyRead =
                     | "none" -> Ok AccessNone
                     | "user" -> Ok AccessUser
                     | "organization" -> Ok AccessOrganization
+                    | "enterprise" -> Ok AccessEnterprise
                     | _ -> failure "unsupported:access-level")))
 
     let private pass options transport workflowUri forkUri accessUri =

@@ -85,6 +85,19 @@ let ``workflow policy source binds two private policy passes and three identitie
               "/repos/FS-GG/copy/actions/permissions/access"; "/repos/FS-GG/copy" ], paths)
 
 [<Fact>]
+let ``workflow policy source accepts documented enterprise access level`` () =
+    let enterprise = """{"access_level":"enterprise"}"""
+    let transport =
+        FakeTransport [ ok repository; ok workflow; ok fork; ok enterprise
+                        ok repository; ok workflow; ok fork; ok enterprise; ok repository ]
+    match MigrationRepositoryWorkflowPolicyRead.read options transport with
+    | Error failure -> failwithf "documented enterprise level refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(AccessEnterprise, observed.FirstPass.AccessLevel)
+        Assert.Equal(AccessEnterprise, observed.SecondPass.AccessLevel)
+        Assert.Equal(sha enterprise, observed.FirstPass.AccessEvidence.PayloadSha256)
+
+[<Fact>]
 let ``workflow policy source refuses drift between policy passes`` () =
     let changed = workflow.Replace("\"read\"", "\"write\"")
     let transport =
@@ -145,6 +158,18 @@ let ``workflow policy source refuses denied missing and linked singleton reads``
         let transport = FakeTransport(prefix @ [ linked ])
         Assert.Equal(Error(MigrationReadFailure.PaginationRefused "unexpected-singleton-link"),
                      MigrationRepositoryWorkflowPolicyRead.read options transport)
+
+[<Fact>]
+let ``workflow policy source refuses null successful response body`` () =
+    for prefix in
+        [ []
+          [ ok repository ]
+          [ ok repository; ok workflow ]
+          [ ok repository; ok workflow; ok fork ] ] do
+        let transport = FakeTransport(prefix @ [ reply 200 Map.empty null ])
+        Assert.Equal(Error(MigrationReadFailure.MalformedResponse "missing:response-body"),
+                     MigrationRepositoryWorkflowPolicyRead.read options transport)
+        Assert.Equal(prefix.Length + 1, transport.Requests.Length)
 
 [<Fact>]
 let ``workflow policy source refuses missing unknown and malformed policy fields`` () =

@@ -16,6 +16,7 @@ type MigrationWorkflowAccessLevel =
     | AccessNone
     | AccessUser
     | AccessOrganization
+    | AccessEnterprise
 
 type MigrationPrivateForkWorkflowPolicy =
     { RunWorkflowsFromForkPullRequests: bool
