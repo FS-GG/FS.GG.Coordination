@@ -61,6 +61,15 @@ module CodexAppServerUsageProjection =
             | true, count when count >= 0L -> Ok count
             | _ -> Error code
 
+    let private validOptionalEmittedAt (root: JsonElement) =
+        match root.TryGetProperty "emittedAtMs" with
+        | false, _ -> true
+        | true, value when value.ValueKind = JsonValueKind.Number ->
+            match value.TryGetInt64() with
+            | true, _ -> true
+            | _ -> false
+        | _ -> false
+
     let internal validCounts (value: CodexAppServerTokenCounts) =
         not (isNull (box value))
         && value.Input >= 0L
@@ -127,8 +136,11 @@ module CodexAppServerUsageProjection =
                 use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
                 let root = document.RootElement
                 match objectFields "app-server-usage-frame-invalid"
-                        (set [ "method"; "params" ]) (set [ "method"; "params" ]) root with
+                        (set [ "method"; "params" ])
+                        (set [ "method"; "params"; "emittedAtMs" ]) root with
                 | Error error -> Error error
+                | Ok () when not (validOptionalEmittedAt root) ->
+                    Error "app-server-usage-emitted-at-invalid"
                 | Ok () ->
                     match readText "app-server-usage-method-invalid" root "method" with
                     | Error error -> Error error

@@ -118,6 +118,15 @@ module CodexAppServerContinuity =
             | _ -> None
         | _ -> None
 
+    let private validOptionalEmittedAt (root: JsonElement) =
+        match root.TryGetProperty "emittedAtMs" with
+        | false, _ -> true
+        | true, value when value.ValueKind = JsonValueKind.Number ->
+            match value.TryGetInt64() with
+            | true, _ -> true
+            | _ -> false
+        | _ -> false
+
     let private terminalTimeRegressed (turn: JsonElement) =
         let durationNegative =
             optionalInt64Value turn "durationMs"
@@ -623,8 +632,11 @@ module CodexAppServerContinuity =
                 use document = JsonDocument.Parse(ReadOnlyMemory<byte>(bytes))
                 let root = document.RootElement
                 match fields "app-server-continuity-frame-invalid"
-                        (set [ "method"; "params" ]) (set [ "method"; "params" ]) root with
+                        (set [ "method"; "params" ])
+                        (set [ "method"; "params"; "emittedAtMs" ]) root with
                 | Error error -> Error error
+                | Ok () when not (validOptionalEmittedAt root) ->
+                    Error "app-server-continuity-emitted-at-invalid"
                 | Ok () ->
                     match readText "app-server-continuity-method-invalid" root "method" with
                     | Error error -> Error error
