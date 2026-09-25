@@ -28,6 +28,7 @@ type MigrationNativeActivityCapture =
 [<RequireQualifiedAccess>]
 module MigrationNativeActivity =
     val reconcile:
+        options:MigrationGitHubReadOptions ->
         input:MigrationNativeActivityInput ->
             Result<MigrationNativeActivitySnapshot, MigrationReadFailure>
 

@@ -199,6 +199,15 @@ typed population was supplied. It was red before the repair. The binder now
 requires distinct, nonblank item IDs across every captured project page.
 This remains partial project census evidence without protected native capture.
 
+A twenty-eighth independent control found a complete, self-consistent typed
+native activity input could relocate every page to another repository and
+still pass reconciliation. It was red before the repair. Reconciliation now
+requires configured API origin, owner, repository and repository ID for the
+initial issue census; all later pages remain tied to that first page. This
+source check depends on its caller supplying protected, admitted options.
+It does not establish the initial sandbox identity, provider byte custody or
+the missing journal and receipt authorities.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
