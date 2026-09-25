@@ -1,5 +1,7 @@
 namespace FS.GG.Coordination.Cli
 
+open System
+
 type ProtectedIssueCensusReleasePins =
     { ReleaseResourceId: string
       ReleaseArtifactSha256: string }
@@ -11,15 +13,24 @@ type ProtectedIssueCensusReleaseDescription =
       StoreArtifactSha256: string
       JournalResourceId: string
       JournalArtifactSha256: string
+      ClockResourceId: string
+      SignerPublicKeySha256: string
+      SignerArtifactSha256: string
       CandidateMayRead: bool
       CandidateMayWrite: bool
-      AtomicCompareAndConsume: bool }
+      AtomicCompareAndConsume: bool
+      AtomicExpiryCompare: bool }
 
 type ProtectedIssueCensusReleaseRequest =
     { ReservationId: string
       Selection: ProtectedIssueCensusSelection
       ClaimId: string
       AttestationPayloadSha256: string
+      ClockResourceId: string
+      SignerPublicKeySha256: string
+      SignerArtifactSha256: string
+      SignedIssuedAtUtc: DateTimeOffset
+      SignedExpiresAtUtc: DateTimeOffset
       StoreResourceId: string
       StoreGeneration: int64
       StoreCorpusSha256: string
@@ -35,7 +46,8 @@ type ProtectedIssueCensusReleaseOutcome =
     | ReleaseUnknown
 
 /// A protected installation must compare both heads and consume the claim in one
-/// durable transaction. This source contract contains no token or provider adapter.
+/// durable transaction, checking the signed expiry with its protected clock there.
+/// This source contract contains no token or provider adapter.
 type IProtectedIssueCensusReleasePort =
     abstract Describe: unit -> ProtectedIssueCensusReleaseDescription
     abstract ReserveOnce: ProtectedIssueCensusReleaseRequest -> ProtectedIssueCensusReleaseOutcome
