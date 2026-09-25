@@ -171,6 +171,12 @@ type DirectSessionProspectiveWindowGateTests() =
                 (Ok observation))
 
     [<Fact>]
+    member _.``observation tied with challenge issuance cannot prove prospective order``() =
+        let tied = { observation with ObservedAt = issuedAt }
+        refused "direct-session-window-observation-outside"
+            (evaluate DirectSessionWindowLedger.empty (Ok issued) (Ok tied))
+
+    [<Fact>]
     member _.``failed correlation leaves challenge available for one valid attempt``() =
         let mismatchedTurn =
             { observation.CurrentTurn with WindowChallenge = String.replicate 64 "e" }
