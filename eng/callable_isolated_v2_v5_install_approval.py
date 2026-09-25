@@ -42,6 +42,8 @@ class Approval:
     reviewer_actor_id: int
     approved_at: str
     expires_at: str
+    reader_principal: str
+    reader_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -203,7 +205,8 @@ def qualify(selection: candidate.Selection, membership: tree.TreeWitness,
             raise Refused("v5-install-approval-drift")
         return Approval(selection.revision, selection.artifact_id,
                         selected["eventId"], selected["reviewerActorId"],
-                        event["reviewedAt"], event["expiresAt"])
+                        event["reviewedAt"], event["expiresAt"],
+                        scope["principalId"], scope["credentialId"])
     except Refused:
         raise
     except Exception:

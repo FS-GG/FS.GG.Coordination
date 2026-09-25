@@ -45,6 +45,7 @@ class Readback:
     revision: str
     artifact_id: int
     run_id: int
+    run_attempt: int
     audit_event_id: int
     source_tree: str
     repository_id: int
@@ -269,7 +270,8 @@ def qualify(selection: candidate.Selection, chosen: dict, probe_port,
             raise Refused("v5-installed-scope-drift")
         return Readback(selection.archive_sha256, selection.manifest_sha256,
                         selection.revision, selection.artifact_id,
-                        selected["runId"], selected["auditEventId"],
+                        selected["runId"], selected["runAttempt"],
+                        selected["auditEventId"],
                         selection.source_tree, selection.repository_id,
                         selected["runnerActorId"], selected["auditActorId"],
                         selected["imageDigest"],

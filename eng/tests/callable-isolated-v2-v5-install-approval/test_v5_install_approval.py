@@ -53,7 +53,7 @@ def fixture():
         "identity-reader", "f" * 64)
     readback = installed.Readback(selection.archive_sha256,
         selection.manifest_sha256, selection.revision, selection.artifact_id,
-        700, 702, selection.source_tree, selection.repository_id, 701, 703,
+        700, 1, 702, selection.source_tree, selection.repository_id, 701, 703,
         "3" * 64, "4" * 64, "5" * 64, PATH,
         "2026-09-25T11:58:00Z", "2026-09-25T11:58:01Z",
         "probe-reader", "6" * 64,
