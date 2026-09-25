@@ -42,7 +42,11 @@ type ProtectedIssueCensusHandoffRequest =
       RepositoryId: int64
       PermissionSha256: string
       VaultResourceId: string
+      StoreResourceId: string
+      StoreGeneration: int64
       ExpectedStoreHeadSha256: string
+      JournalResourceId: string
+      ExpectedJournalGeneration: int64
       ExpectedJournalHeadSha256: string
       ClockResourceId: string
       ClockArtifactSha256: string

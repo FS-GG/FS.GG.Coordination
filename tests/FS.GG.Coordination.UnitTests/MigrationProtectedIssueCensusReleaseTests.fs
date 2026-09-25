@@ -596,3 +596,33 @@ let ``protected native attempt recovery refuses marker lost or replaced during s
     Assert.Equal((Error "protected-census-attempt-unknown", 2), inspect None)
     let foreign = { marker with ClaimId=String.replicate 64 "0" }
     Assert.Equal((Error "protected-census-attempt-binding", 2), inspect (Some foreign))
+
+[<Fact>]
+let ``protected native attempt recovery refuses claim substituted under one reservation`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let foreign = { marker with ClaimId=String.replicate 64 "0" }
+    let record =
+        { Request=foreign; ProviderAttemptId=foreign.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectAttempt foreign (Some (markerPort (Some foreign)))
+                     (Some (nativePort nativeDescription foreign (Some [record]))))
+
+[<Fact>]
+let ``protected native attempt recovery refuses reservation substituted under one claim`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let reservation = String.replicate 64 "0"
+    let foreign =
+        { marker with ReservationId=reservation
+                      NativeAttemptId=MigrationProtectedIssueCensusHandoff.attemptId
+                                          reservation handoffPins }
+    let record =
+        { Request=foreign; ProviderAttemptId=foreign.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectAttempt foreign (Some (markerPort (Some foreign)))
+                     (Some (nativePort nativeDescription foreign (Some [record]))))

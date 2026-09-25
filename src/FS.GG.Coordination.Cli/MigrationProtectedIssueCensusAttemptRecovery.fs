@@ -80,6 +80,26 @@ module MigrationProtectedIssueCensusAttemptRecovery =
         && not (String.IsNullOrWhiteSpace selection.Repository)
         && selection.RepositoryId > 0L
 
+    let validMarkerChain (marker: ProtectedIssueCensusHandoffRequest) =
+        if not (validSelectionShape marker.Selection)
+           || String.IsNullOrWhiteSpace marker.StoreResourceId
+           || marker.StoreGeneration < 1L
+           || not (exactSha marker.ExpectedStoreHeadSha256)
+           || String.IsNullOrWhiteSpace marker.JournalResourceId
+           || marker.ExpectedJournalGeneration < 1L
+           || not (exactSha marker.ExpectedJournalHeadSha256) then false
+        else
+            let claimId =
+                MigrationProtectedIssueCensusClaim.claimId
+                    marker.Selection marker.StoreResourceId marker.StoreGeneration
+            let journalHead =
+                { JournalResourceId=marker.JournalResourceId
+                  Generation=marker.ExpectedJournalGeneration
+                  SealSha256=marker.ExpectedJournalHeadSha256 }
+            marker.ClaimId = claimId
+            && marker.ReservationId =
+                MigrationProtectedIssueCensusRelease.reservationId claimId journalHead
+
     let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
     let expectedSnapshotSealSha256 (snapshot: ProtectedIssueCensusNativeAttemptSnapshot) =
@@ -99,13 +119,16 @@ module MigrationProtectedIssueCensusAttemptRecovery =
               selection.Owner; selection.Repository; string selection.RepositoryId
               string request.AppId; string request.InstallationId; string request.RepositoryId
               request.PermissionSha256; request.VaultResourceId
-              request.ExpectedStoreHeadSha256; request.ExpectedJournalHeadSha256
+              request.StoreResourceId; string request.StoreGeneration
+              request.ExpectedStoreHeadSha256
+              request.JournalResourceId; string request.ExpectedJournalGeneration
+              request.ExpectedJournalHeadSha256
               request.ClockResourceId; request.ClockArtifactSha256
               request.SignedExpiresAtUtc.ToUniversalTime().ToString("O")
               record.ProviderAttemptId; record.VaultResourceId; phase record.Phase ]
             @ optional record.TokenFingerprintSha256
             @ optional record.RevocationReceiptSha256
-        [ "fsgg.gs2-09.7.protected-native-attempt-snapshot/v1"
+        [ "fsgg.gs2-09.7.protected-native-attempt-snapshot/v2"
           snapshot.Head.AttemptResourceId; string snapshot.Head.Generation
           snapshot.AttemptId; string snapshot.Complete; string snapshot.Records.Length ]
         @ (snapshot.Records |> List.collect recordValues)
@@ -202,7 +225,7 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                     if expectedMarker.NativeAttemptId
                        <> MigrationProtectedIssueCensusHandoff.attemptId
                               expectedMarker.ReservationId handoffPins
-                       || not (validSelectionShape expectedMarker.Selection)
+                       || not (validMarkerChain expectedMarker)
                        || expectedMarker.AppId <> handoffPins.AppId
                        || expectedMarker.InstallationId <> handoffPins.InstallationId
                        || expectedMarker.RepositoryId <> handoffPins.RepositoryId
