@@ -187,6 +187,12 @@ def verify_candidate(raw: bytes, payload_sha256: str, expected: dict[str, Any],
             or type(operation["maxProviderWrites"]) is not int
             or operation["maxProviderWrites"] != 1):
         raise Refused("candidate-operation")
-    if type(expected) is not dict or packet != expected:
+    try:
+        expected_raw = (json.dumps(expected, sort_keys=True, separators=(",", ":"),
+                                   ensure_ascii=True, allow_nan=False).encode("ascii")
+                        if type(expected) is dict else None)
+    except (TypeError, ValueError, OverflowError):
+        expected_raw = None
+    if expected_raw != raw:
         raise Refused("candidate-observed-binding")
     return CandidateCheck(payload_sha256)
