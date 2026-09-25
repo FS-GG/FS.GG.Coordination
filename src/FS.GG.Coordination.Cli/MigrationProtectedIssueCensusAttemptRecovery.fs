@@ -123,15 +123,15 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                     with _ -> None
                 match after with
                 | None -> Error "protected-census-attempt-unknown"
-                | Some current when current = head -> Ok observed.Records
+                | Some current when current = head -> Ok observed
                 | Some _ -> Error "protected-census-attempt-head"
 
-    let inspect (handoffPins: ProtectedIssueCensusHandoffPins)
+    let inspectWithSnapshot (handoffPins: ProtectedIssueCensusHandoffPins)
                 (nativePins: ProtectedIssueCensusNativeAttemptPins)
                 (expectedMarker: ProtectedIssueCensusHandoffRequest)
                 (handoffPort: IProtectedIssueCensusHandoffPort option)
                 (nativePort: IProtectedIssueCensusNativeAttemptPort option)
-                : Result<ProtectedIssueCensusRecoveryHold, string> =
+                : Result<ProtectedIssueCensusNativeAttemptSnapshot * ProtectedIssueCensusRecoveryHold, string> =
         if String.IsNullOrWhiteSpace handoffPins.HandoffResourceId
            || not (exactSha handoffPins.HandoffArtifactSha256)
            || String.IsNullOrWhiteSpace handoffPins.VaultResourceId
@@ -201,22 +201,29 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                             match readStableSnapshot native nativePins
                                                      expectedMarker.NativeAttemptId with
                             | Error reason -> Error reason
-                            | Ok [] -> Error "protected-census-attempt-unknown"
-                            | Ok [attempt] when attempt.Request <> expectedMarker
-                                                || attempt.ProviderAttemptId
-                                                   <> expectedMarker.NativeAttemptId
-                                                || attempt.VaultResourceId
-                                                   <> handoffPins.VaultResourceId ->
-                                Error "protected-census-attempt-binding"
-                            | Ok [attempt] ->
-                                match attempt.Phase, attempt.TokenFingerprintSha256,
-                                      attempt.RevocationReceiptSha256 with
-                                | InvocationUnknown, None, None -> Ok NativeResultUnknown
-                                | TokenVaulted, Some tokenHash, None when exactSha tokenHash ->
-                                    Ok NativeRevocationRequired
-                                | NativeRevoked, Some tokenHash, Some receiptHash
-                                    when exactSha tokenHash && exactSha receiptHash ->
-                                    Ok ProtectedReceiptRequired
-                                | _ -> Error "protected-census-attempt-phase"
-                            | Ok _ -> Error "protected-census-attempt-duplicate"
+                            | Ok snapshot ->
+                                match snapshot.Records with
+                                | [] -> Error "protected-census-attempt-unknown"
+                                | [attempt] when attempt.Request <> expectedMarker
+                                                 || attempt.ProviderAttemptId
+                                                    <> expectedMarker.NativeAttemptId
+                                                 || attempt.VaultResourceId
+                                                    <> handoffPins.VaultResourceId ->
+                                    Error "protected-census-attempt-binding"
+                                | [attempt] ->
+                                    match attempt.Phase, attempt.TokenFingerprintSha256,
+                                          attempt.RevocationReceiptSha256 with
+                                    | InvocationUnknown, None, None ->
+                                        Ok (snapshot, NativeResultUnknown)
+                                    | TokenVaulted, Some tokenHash, None when exactSha tokenHash ->
+                                        Ok (snapshot, NativeRevocationRequired)
+                                    | NativeRevoked, Some tokenHash, Some receiptHash
+                                        when exactSha tokenHash && exactSha receiptHash ->
+                                        Ok (snapshot, ProtectedReceiptRequired)
+                                    | _ -> Error "protected-census-attempt-phase"
+                                | _ -> Error "protected-census-attempt-duplicate"
             | _ -> Error "protected-census-attempt-unavailable"
+
+    let inspect handoffPins nativePins expectedMarker handoffPort nativePort =
+        inspectWithSnapshot handoffPins nativePins expectedMarker handoffPort nativePort
+        |> Result.map snd

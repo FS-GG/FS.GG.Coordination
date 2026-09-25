@@ -57,6 +57,16 @@ module MigrationProtectedIssueCensusAttemptRecovery =
     val expectedSnapshotSealSha256:
         snapshot:ProtectedIssueCensusNativeAttemptSnapshot -> string
 
+    /// Returns the exact stable snapshot used for this hold classification;
+    /// the caller must authenticate that same value before any signed qualification.
+    val inspectWithSnapshot:
+        handoffPins:ProtectedIssueCensusHandoffPins ->
+        nativePins:ProtectedIssueCensusNativeAttemptPins ->
+        expectedMarker:ProtectedIssueCensusHandoffRequest ->
+        handoffPort:IProtectedIssueCensusHandoffPort option ->
+        nativePort:IProtectedIssueCensusNativeAttemptPort option ->
+        Result<ProtectedIssueCensusNativeAttemptSnapshot * ProtectedIssueCensusRecoveryHold, string>
+
     /// Every successful classification is still a hold; no provider retry or token action.
     val inspect:
         handoffPins:ProtectedIssueCensusHandoffPins ->
