@@ -143,6 +143,28 @@ class JoinTests(unittest.TestCase):
                 del proof[key]
                 self.refuses(prestate_value=proof)
 
+    def test_metadata_read_cannot_replace_earlier_prestate_transcript(self):
+        selected, proof, scope, record = fixture()
+        proof["transcriptSha256"] = "8" * 64
+        metadata = FakeMetadata(scope, canonical(record))
+        prestate_port = FakePrestate(proof)
+        shared_proof = copy.deepcopy(proof)
+        original_metadata_read = metadata.read_effective_metadata
+
+        def observe_prestate():
+            return shared_proof
+
+        def read_metadata(credential_id):
+            shared_proof["transcriptSha256"] = "d" * 64
+            return original_metadata_read(credential_id)
+
+        prestate_port.observe_prestate = observe_prestate
+        metadata.read_effective_metadata = read_metadata
+        with self.assertRaises(joined.Refused):
+            joined.EffectiveScopePrestateJoin(
+                metadata, prestate_port, selected, 700, 101, 1, NOW
+            ).read_effective_scope("6" * 64, "7" * 64)
+
     def test_broad_foreign_or_stale_effective_record_refuses(self):
         for key, changed in (
             ("complete", False), ("recordId", 0),
