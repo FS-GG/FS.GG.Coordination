@@ -16,8 +16,8 @@ import callable_isolated_v2_effect_release_preflight as release
 import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-reviewer-identity/1"
-EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/2"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/4"
+EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/3"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/5"
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}\Z")
 
 
@@ -50,6 +50,7 @@ class ApprovalWitnessResult:
     source_record_id: int
     producer_actor_id: int
     repository_id: int
+    identity_event_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -127,7 +128,8 @@ def _event(raw: bytes, selected_digest: str) -> dict[str, Any]:
         "producerRunAttempt", "producerActorId", "artifactId",
         "bundleSha256", "workflowSha256", "workflowBlobOid",
         "manifestSha256", "reviewerActorId", "identityRecordId",
-        "approvalEventId", "sourceRecordId", "decision", "approvedAt", "expiresAt"},
+        "approvalEventId", "sourceRecordId", "identityEventId",
+        "decision", "approvedAt", "expiresAt"},
         "approval-event-shape")
 
 
@@ -137,7 +139,7 @@ def qualify(preflight: release.PreflightResult,
             event_port: ApprovalEventPort,
             selection: dict[str, Any], now: dt.datetime) -> ApprovalWitnessResult:
     """Compare two independent fake readers; never approve an operation."""
-    selection = _exact(selection, {"repositoryId", "organizationId",
+    selection = _exact(selection, {"repositoryId", "identityEventId", "organizationId",
         "reviewerLogin", "identityRecordId", "approvalEventSha256"},
         "approval-selection-shape")
     if (type(preflight) is not release.PreflightResult
@@ -155,7 +157,8 @@ def qualify(preflight: release.PreflightResult,
             or identity_port is None or event_port is None
             or identity_port is event_port
             or not all(_positive(selection[key]) for key in
-                       ("repositoryId", "organizationId", "identityRecordId"))
+                       ("repositoryId", "identityEventId", "organizationId",
+                        "identityRecordId"))
             or type(selection["reviewerLogin"]) is not str
             or LOGIN.fullmatch(selection["reviewerLogin"]) is None
             or not candidate._hex(selection["approvalEventSha256"],
@@ -177,6 +180,8 @@ def qualify(preflight: release.PreflightResult,
             or produced.source_record_id != preflight.source_record_id
             or type(produced.repository_id) is not int
             or produced.repository_id != selection["repositoryId"]
+            or type(produced.identity_event_id) is not int
+            or produced.identity_event_id != selection["identityEventId"]
             or (produced.producer_run_id, produced.producer_run_attempt,
                 produced.artifact_id) !=
                (preflight.producer_run_id, preflight.producer_run_attempt,
@@ -247,6 +252,7 @@ def qualify(preflight: release.PreflightResult,
         "identityRecordId": selection["identityRecordId"],
         "approvalEventId": preflight.approval_event_id,
         "sourceRecordId": preflight.source_record_id,
+        "identityEventId": selection["identityEventId"],
         "repositoryId": selection["repositoryId"]}
     if (event["schema"] != EVENT_SCHEMA or event["immutable"] is not True
             or event["repository"] != release.REPOSITORY
@@ -254,7 +260,7 @@ def qualify(preflight: release.PreflightResult,
             or any(type(event[key]) is not int for key in
                    ("repositoryId", "producerRunId", "producerRunAttempt",
                     "producerActorId", "artifactId", "reviewerActorId",
-                    "identityRecordId", "approvalEventId"))
+                    "identityRecordId", "approvalEventId", "identityEventId"))
             or type(event["sourceRecordId"]) is not int
             or any(event[key] != value for key, value in expected.items())):
         raise Refused("approval-event-binding")
@@ -276,4 +282,5 @@ def qualify(preflight: release.PreflightResult,
         produced.bundle_sha256,
         source_record_id=preflight.source_record_id,
         producer_actor_id=preflight.producer_actor_id,
-        repository_id=selection["repositoryId"])
+        repository_id=selection["repositoryId"],
+        identity_event_id=selection["identityEventId"])
