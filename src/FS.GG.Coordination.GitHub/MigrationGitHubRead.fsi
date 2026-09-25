@@ -32,7 +32,8 @@ type MigrationIssuePopulation =
       Terminal: bool
       Pages: MigrationRestPageEvidence list
       Issues: MigrationIssueRecord list
-      PullRequestCount: int }
+      PullRequestCount: int
+      PullRequestMarkerNumbers: int list }
 
 /// One explicitly partial repository-settings surface, bound to the raw provider response.
 type MigrationRepositoryCoreSettings =
