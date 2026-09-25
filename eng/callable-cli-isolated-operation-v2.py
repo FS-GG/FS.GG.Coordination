@@ -392,6 +392,7 @@ class NativeReadAdapter:
         if (status != 200 or type(branch_body) is not dict
                 or branch_body.get("name") != branch
                 or type(commit) is not dict or commit.get("sha") != sha
+                or not _branch_commit_url_matches(commit, expected.repository, sha)
                 or type(branch_body.get("protected")) is not bool
                 or not _branch_protection_url_matches(branch_body, expected)):
             raise Refused("native-branch-identity")
@@ -411,6 +412,8 @@ class NativeReadAdapter:
                 or terminal_branch.get("name") != branch
                 or type(terminal_commit) is not dict
                 or terminal_commit.get("sha") != sha
+                or not _branch_commit_url_matches(
+                    terminal_commit, expected.repository, sha)
                 or terminal_branch.get("protected") is not protected
                 or not _branch_protection_url_matches(terminal_branch, expected)):
             raise Refused("native-protection-terminal-branch-drift")
@@ -696,6 +699,12 @@ def _protection_url(expected: ExpectedProtection) -> str:
     branch = urllib.parse.quote(expected.branch, safe="/")
     return (f"https://api.github.com/repos/{expected.repository}/"
             f"branches/{branch}/protection")
+
+
+def _branch_commit_url_matches(commit: dict, repository: str, sha: str) -> bool:
+    return ("url" not in commit or
+            (type(commit["url"]) is str and commit["url"] ==
+             f"https://api.github.com/repos/{repository}/commits/{sha}"))
 
 
 def _branch_protection_url_matches(branch: object, expected: ExpectedProtection) -> bool:
