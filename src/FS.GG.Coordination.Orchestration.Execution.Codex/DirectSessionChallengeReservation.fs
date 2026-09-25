@@ -110,6 +110,12 @@ module DirectSessionChallengeReservation =
                                 match read clock.ReadUtcNow with
                                 | Error _ ->
                                     Error(ReservedGap(receipt, "direct-session-window-clock-unavailable"))
+                                | Ok observedNow when observedNow < reservationNow ->
+                                    Error(ReservedGap(receipt, "direct-session-reservation-clock-regressed"))
+                                | Ok _ when
+                                    not (isNull (box observation))
+                                    && observation.ObservedAt <= reservationNow ->
+                                    Error(ReservedGap(receipt, "direct-session-reservation-observation-not-prospective"))
                                 | Ok observedNow ->
                                     let issuerReadback =
                                         { new IDirectSessionProspectiveWindowIssuer with
