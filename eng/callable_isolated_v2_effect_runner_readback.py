@@ -14,8 +14,8 @@ import callable_isolated_v2_effect_approval_identity as approval
 import callable_isolated_v2_effect_release_preflight as release
 
 PROBE_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-refusal/2"
-AUDIT_SCHEMA = "fsgg.coordination.callable-isolated-v2-no-effect-audit/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/4"
+AUDIT_SCHEMA = "fsgg.coordination.callable-isolated-v2-no-effect-audit/2"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/5"
 REFUSAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-scaffold-refusal/1"
 IDENTITY = {"runId", "runAttempt", "coordinationRevision", "sourceTree",
             "artifactId", "manifestSha256", "archiveSha256", "installPath",
@@ -198,7 +198,8 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
         "commandCompletedAt", "observedAt"}, "readback-probe-shape")
     audit = _exact(audit, IDENTITY | {"schema", "complete", "principalId",
         "credentialId", "repository", "eventId", "auditActorId",
-        "runnerActorId", "object", "counts", "observedAt"},
+        "runnerActorId", "object", "counts", "commandStartedAt",
+        "commandCompletedAt", "observedAt"},
         "readback-audit-shape")
     shared = {"runId": selection["runId"],
               "runAttempt": selection["runAttempt"],
@@ -263,6 +264,9 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
     counts = _exact(audit["counts"], COUNTS, "readback-counts-shape")
     if any(type(value) is not int or value != 0 for value in counts.values()):
         raise Refused("readback-effect-access")
+    if (audit["commandStartedAt"] != probe["commandStartedAt"]
+            or audit["commandCompletedAt"] != probe["commandCompletedAt"]):
+        raise Refused("readback-command-interval-binding")
     started = _time(probe["commandStartedAt"])
     completed = _time(probe["commandCompletedAt"])
     observed = _time(probe["observedAt"])
