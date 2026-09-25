@@ -205,3 +205,24 @@ type CodexAppServerFirstStartTests() =
             CodexAppServerFirstStart.bind scope sourceId binding.TransportIdentity
                 expiredClock issuer source store (firstSource (Ok first))
         Assert.Equal("app-server-first-start-outside-window", gapCode result)
+
+    [<Fact>]
+    member _.``first-start clock cannot regress below validated subscription time``() =
+        let times =
+            ConcurrentQueue<Result<DateTimeOffset, string>>
+                ([ Ok(issuedAt.AddSeconds 60.)
+                   Ok(issuedAt.AddSeconds 90.)
+                   Ok(issuedAt.AddSeconds 85.) ])
+        let regressedClock =
+            { new IDirectSessionWindowClock with
+                member _.ReadUtcNow() =
+                    match times.TryDequeue() with
+                    | true, time -> time
+                    | _ -> Error "clock-exhausted" }
+        let retainedBeforeValidation = { first with ObservedAt = issuedAt.AddSeconds 82. }
+        let store = FirstStartChallengeFake() :> IDirectSessionChallengeReservationStore
+        let result =
+            CodexAppServerFirstStart.bind scope sourceId binding.TransportIdentity
+                regressedClock issuer source store (firstSource (Ok retainedBeforeValidation))
+        Assert.Equal("app-server-first-start-clock-regressed", gapCode result)
+        Assert.Equal(Error AlreadyReserved, bind (Ok first) store)

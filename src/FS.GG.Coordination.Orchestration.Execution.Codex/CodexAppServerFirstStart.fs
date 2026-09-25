@@ -91,6 +91,8 @@ module CodexAppServerFirstStart =
                 | Ok observed ->
                     match read clock.ReadUtcNow with
                     | Error _ -> gap "app-server-first-start-clock-unavailable"
+                    | Ok now when now < subscription.ValidatedAt ->
+                        gap "app-server-first-start-clock-regressed"
                     | Ok now when
                         now.Offset <> TimeSpan.Zero
                         || observed.ObservedAt.Offset <> TimeSpan.Zero
