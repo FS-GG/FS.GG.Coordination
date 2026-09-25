@@ -6,7 +6,7 @@ an execution grant. The module is deliberately outside the installed archive.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Protocol
 
 RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-v5-port-proposal/1"
@@ -209,11 +209,11 @@ class ProposedPorts:
 @dataclass(frozen=True)
 class ClosedV5Decision:
     reason: str
-    schema: str = RESULT_SCHEMA
-    authorized: bool = False
-    can_dispatch: bool = False
-    live_effects: int = 0
-    exit_code: int = 78
+    schema: str = field(init=False, default=RESULT_SCHEMA)
+    authorized: bool = field(init=False, default=False)
+    can_dispatch: bool = field(init=False, default=False)
+    live_effects: int = field(init=False, default=0)
+    exit_code: int = field(init=False, default=78)
 
 
 def inspect_closed(_release: ReleaseCoordinates | None,
