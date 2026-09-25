@@ -170,6 +170,44 @@ class ObserverTests(unittest.TestCase):
                 values[0]["envelope"]["facts"][key] = 999
                 self.assert_refused(values)
 
+    def test_later_port_cannot_rewrite_earlier_source_actor(self):
+        _, raw, digest, values = fixture()
+        shared_source = copy.deepcopy(values[0])
+        shared_source["envelope"]["facts"]["producerActorId"] = 999
+
+        class SharedSource:
+            def observe_source_release(self):
+                return shared_source
+
+        class MutatingWorkflow:
+            def observe_workflow(self):
+                shared_source["envelope"]["facts"]["producerActorId"] = 102
+                return copy.deepcopy(values[1])
+
+        with self.assertRaises(observed.Refused):
+            observed.verify_observed_candidate(
+                raw, digest, SharedSource(), MutatingWorkflow(),
+                Port(values[2]), Port(values[3]), Port(values[4]), NOW)
+
+    def test_later_port_cannot_rewrite_earlier_artifact_bytes(self):
+        _, raw, digest, values = fixture()
+        shared_source = copy.deepcopy(values[0])
+        shared_source["blobs"]["archive"] = b"foreign-archive"
+
+        class SharedSource:
+            def observe_source_release(self):
+                return shared_source
+
+        class MutatingWorkflow:
+            def observe_workflow(self):
+                shared_source["blobs"]["archive"] = BLOBS["archive"]
+                return copy.deepcopy(values[1])
+
+        with self.assertRaises(observed.Refused):
+            observed.verify_observed_candidate(
+                raw, digest, SharedSource(), MutatingWorkflow(),
+                Port(values[2]), Port(values[3]), Port(values[4]), NOW)
+
     def test_foreign_scope_stale_review_and_observer_custody_refuse(self):
         for role, field, value in (
                 (0, "credentialId", "f" * 64),
