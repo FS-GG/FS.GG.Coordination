@@ -121,14 +121,32 @@ def qualify(selection: candidate.Selection, membership: tree.TreeWitness,
             raise Refused("v5-install-approval-selection")
         scope = copy.deepcopy(approval_port.scope())
         _shape(scope, SCOPE)
+        principals = (selection.source_reader_principal,
+            selection.review_reader_principal,
+            membership.artifact_reader_principal,
+            membership.workflow_reader_principal,
+            membership.git_reader_principal,
+            membership.identity_reader_principal,
+            readback.probe_reader_principal,
+            readback.audit_reader_principal,
+            scope["principalId"])
+        credentials = (selection.source_credential_id,
+            selection.review_credential_id,
+            membership.artifact_credential_id,
+            membership.workflow_credential_id,
+            membership.git_credential_id,
+            membership.identity_credential_id,
+            readback.probe_credential_id,
+            readback.audit_credential_id,
+            scope["credentialId"])
         if (type(scope["principalId"]) is not str or not scope["principalId"]
-                or scope["principalId"] in
-                   (selection.source_reader_principal,
-                    selection.review_reader_principal)
                 or not candidate._hex(scope["credentialId"], candidate.HEX64)
-                or scope["credentialId"] in
-                   (selection.source_credential_id,
-                    selection.review_credential_id)
+                or any(type(value) is not str or not value
+                       for value in principals)
+                or any(not candidate._hex(value, candidate.HEX64)
+                       for value in credentials)
+                or len(set(principals)) != len(principals)
+                or len(set(credentials)) != len(credentials)
                 or scope["repository"] != candidate.REPOSITORY
                 or type(scope["repositoryId"]) is not int
                 or scope["repositoryId"] != selection.repository_id
