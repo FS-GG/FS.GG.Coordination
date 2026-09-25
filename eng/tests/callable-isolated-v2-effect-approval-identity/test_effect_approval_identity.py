@@ -54,7 +54,7 @@ def fixture():
     preflight = release.PreflightResult(REV, TREE, MANIFEST, 404, ARCHIVE,
         202, 1, 303, 606, 505, source_record_id=101)
     producer_result = producer.ProducerWitnessResult(REV, TREE, 202, 1, 404,
-        ARCHIVE, BUNDLE, WORKFLOW, BLOB, "2026-09-25T11:57:00Z", 303, 101)
+        ARCHIVE, BUNDLE, WORKFLOW, BLOB, "2026-09-25T11:57:00Z", 303, 101, 77)
     identity_scope = {"principalId": "identity-reader", "credentialId": "2" * 64,
         "repository": release.REPOSITORY, "repositoryId": 77,
         "permissions": ["members:read", "metadata:read"],
@@ -117,6 +117,7 @@ class ApprovalIdentityTests(unittest.TestCase):
                          selection["approvalEventSha256"])
         self.assertEqual(result.source_record_id, 101)
         self.assertEqual(result.producer_actor_id, 303)
+        self.assertEqual(result.repository_id, 77)
         self.assertEqual(identity.reads, [606])
         self.assertEqual(event.reads, [505])
 
@@ -210,6 +211,20 @@ class ApprovalIdentityTests(unittest.TestCase):
                 with self.assertRaises(approval.Refused):
                     approval.qualify(preflight, made, identity, event,
                                      selection, NOW)
+
+    def test_coherent_foreign_review_repository_cannot_reuse_producer(self):
+        preflight, made, selection, identity, event = fixture()
+        selection["repositoryId"] = 78
+        for port in (identity, event):
+            for scope in port.scopes:
+                scope["repositoryId"] = 78
+        identity.record["repositoryId"] = 78
+        claim = json.loads(event.record)
+        claim["repositoryId"] = 78
+        event.record = canonical(claim)
+        selection["approvalEventSha256"] = hashlib.sha256(event.record).hexdigest()
+        with self.assertRaises(approval.Refused):
+            approval.qualify(preflight, made, identity, event, selection, NOW)
         preflight, made, selection, identity, event = fixture()
         claim = json.loads(event.record)
         claim["sourceRecordId"] = 102
