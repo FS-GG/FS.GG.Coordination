@@ -677,6 +677,47 @@ def _response_allows_readback(value: object) -> bool:
             or (type(status) is str and status in {"unknown", "lost"}))
 
 
+def _pull_success_response_matches(value: object, expected: ExpectedPull,
+                                   pull: dict) -> bool:
+    """A successful POST must identify the same PR as the native readback."""
+    if value is None:
+        return True
+    if type(value) is HttpResponse:
+        if not 200 <= value.status < 300:
+            return True
+        try:
+            body = _strict_json(value.body)
+        except (UnicodeError, ValueError, Refused):
+            return False
+    elif type(value) is dict:
+        if type(value.get("status")) is not int or not 200 <= value["status"] < 300:
+            return True
+        body = value.get("body")
+    else:
+        return False
+    if type(body) is not dict:
+        return False
+    head = body.get("head")
+    base = body.get("base")
+    return (type(body.get("number")) is int
+            and body["number"] == pull["number"]
+            and type(body.get("node_id")) is str
+            and body["node_id"] == pull["node_id"]
+            and type(body.get("url")) is str
+            and body["url"] == _pull_url(expected.repository, pull["number"])
+            and body.get("state") == "open"
+            and body.get("draft") is False
+            and body.get("title") == PULL_TITLE
+            and body.get("body") == pull_request_body(expected)["body"]
+            and type(head) is dict and type(base) is dict
+            and head.get("ref") == expected.source_ref.removeprefix("refs/heads/")
+            and head.get("sha") == expected.source_sha
+            and _same_repo(head.get("repo"), expected)
+            and base.get("ref") == expected.base_ref.removeprefix("refs/heads/")
+            and base.get("sha") == expected.base_sha
+            and _same_repo(base.get("repo"), expected))
+
+
 def classify_pull_after_one_attempt(
         expected: ExpectedPull,
         read: Callable[[], PullCensus],
@@ -722,6 +763,8 @@ def classify_pull_after_one_attempt(
                 or base.get("sha") != expected.base_sha
                 or not _same_repo(base.get("repo"), expected)):
             return Unknown("pull-request-readback-mismatch")
+        if not _pull_success_response_matches(provider_response, expected, pull):
+            return Unknown("pull-request-provider-response-mismatch")
         return ExactPull(pull["number"], pull["node_id"], observed.transcript_sha256)
     except Exception:
         return Unknown("pull-request-readback-unavailable")
@@ -857,6 +900,7 @@ def run_pull_once(expected: ExpectedPull, transport: object,
                        "baseSha": expected.base_sha})
         if reserve_once(key) is not True:
             return Unknown("pull-request-attempt-not-reserved")
+        response = None
         try:
             response = transport.request("POST", f"repos/{expected.repository}/pulls", body)
             if (type(response) is not HttpResponse or type(response.status) is not int
@@ -871,7 +915,7 @@ def run_pull_once(expected: ExpectedPull, transport: object,
             # A lost response may conceal an applied write. Never send again.
             pass
         return classify_pull_after_one_attempt(
-            expected, lambda: reader.read_pull_census(expected))
+            expected, lambda: reader.read_pull_census(expected), response)
     except Exception:
         return Unknown("pull-request-runtime-unavailable")
 
