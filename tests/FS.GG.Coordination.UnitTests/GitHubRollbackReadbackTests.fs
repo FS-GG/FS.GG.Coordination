@@ -7,6 +7,7 @@ open Xunit
 open FS.GG.Coordination.Qualification.Contracts
 open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackPlanQualification
 open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackReadbackQualification
+open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackReadbackProvenance
 
 let private sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 let private digest character = String.replicate 64 character
@@ -98,3 +99,66 @@ let ``changed state forged receipt and untrusted or stale epoch refuse`` () =
                  verifyClaims selected.Seal selected completed proof { epoch selected.Seal with Phase="OpenV2" })
     Assert.Equal(Error [ TerminalEpochMismatch ],
                  verifyClaims selected.Seal selected completed proof { epoch selected.Seal with PlanSeal=sha "foreign-plan" })
+
+let private binding seal : GitHubRollbackExpectedReadbackBinding =
+    { PlanSeal=seal; RunNonce="run-812-attempt-1"; Challenge=sha "protected-read-challenge"
+      ObserverResourceId="observer:registered-sandbox" }
+
+let private provenance (selected: GitHubRollbackPlan) (completed: GitHubRollbackReceipt list) =
+    List.map2 (fun (claim: GitHubRollbackReadbackClaim) (receipt: GitHubRollbackReceipt) ->
+        { Readback=claim; PlanSeal=selected.Seal; RunNonce="run-812-attempt-1"
+          Challenge=sha "protected-read-challenge"; ObserverResourceId="observer:registered-sandbox"
+          AfterReceiptSha256=receipt.ReceiptSha256; NativeRevision=$"revision:{claim.Order}" })
+        (readbacks selected) completed
+
+let private terminal seal (completed: GitHubRollbackReceipt list) : GitHubRollbackEpochProvenanceClaim =
+    { Epoch=epoch seal; RunNonce="run-812-attempt-1"; Challenge=sha "protected-read-challenge"
+      ObserverResourceId="observer:registered-sandbox"
+      AfterReceiptSha256=(List.last completed).ReceiptSha256; NativeRevision="epoch-revision:9" }
+
+[<Fact>]
+let ``Q6 provenance claims bind every restored target to its own receipt and terminal epoch`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    Assert.Equal(Ok(), verifyProvenance (binding selected.Seal) selected completed
+                     (provenance selected completed) (terminal selected.Seal completed))
+
+[<Fact>]
+let ``stale or foreign receipt and observer claims refuse despite matching state digests`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let stale = { claims[2] with AfterReceiptSha256=completed[1].ReceiptSha256 }
+    Assert.Contains(StepProvenanceMismatch selected.Steps[2].StepId,
+                    verifyProvenance (binding selected.Seal) selected completed
+                        (claims |> List.updateAt 2 stale) (terminal selected.Seal completed) |> refusal)
+    let foreign = { claims[3] with ObserverResourceId="observer:foreign" }
+    Assert.Contains(StepProvenanceMismatch selected.Steps[3].StepId,
+                    verifyProvenance (binding selected.Seal) selected completed
+                        (claims |> List.updateAt 3 foreign) (terminal selected.Seal completed) |> refusal)
+    let wrongChallenge = { claims[0] with Challenge=sha "old-challenge" }
+    Assert.Contains(StepProvenanceMismatch selected.Steps[0].StepId,
+                    verifyProvenance (binding selected.Seal) selected completed
+                        (claims |> List.updateAt 0 wrongChallenge) (terminal selected.Seal completed) |> refusal)
+    let missingRevision = { claims[1] with NativeRevision="" }
+    Assert.Contains(StepProvenanceMismatch selected.Steps[1].StepId,
+                    verifyProvenance (binding selected.Seal) selected completed
+                        (claims |> List.updateAt 1 missingRevision) (terminal selected.Seal completed) |> refusal)
+
+[<Fact>]
+let ``terminal epoch provenance and protected binding omissions refuse`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let staleEpoch = { terminal selected.Seal completed with AfterReceiptSha256=completed[3].ReceiptSha256 }
+    Assert.Equal(Error [ EpochProvenanceMismatch ],
+                 verifyProvenance (binding selected.Seal) selected completed claims staleEpoch)
+    let foreignRun = { terminal selected.Seal completed with RunNonce="foreign-run" }
+    Assert.Equal(Error [ EpochProvenanceMismatch ],
+                 verifyProvenance (binding selected.Seal) selected completed claims foreignRun)
+    let missingResource = { binding selected.Seal with ObserverResourceId="" }
+    Assert.Equal(Error [ InvalidExpectedReadbackBinding ],
+                 verifyProvenance missingResource selected completed claims (terminal selected.Seal completed))
+    let missingEpochRevision = { terminal selected.Seal completed with NativeRevision="" }
+    Assert.Equal(Error [ EpochProvenanceMismatch ],
+                 verifyProvenance (binding selected.Seal) selected completed claims missingEpochRevision)

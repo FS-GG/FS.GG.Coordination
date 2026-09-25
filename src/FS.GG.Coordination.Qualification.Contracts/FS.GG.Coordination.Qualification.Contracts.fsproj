@@ -119,6 +119,8 @@
     <Compile Include="GitHubRollbackPlanQualification.fs" />
     <Compile Include="GitHubRollbackReadbackQualification.fsi" />
     <Compile Include="GitHubRollbackReadbackQualification.fs" />
+    <Compile Include="GitHubRollbackReadbackProvenance.fsi" />
+    <Compile Include="GitHubRollbackReadbackProvenance.fs" />
   </ItemGroup>
 
   <ItemGroup>
