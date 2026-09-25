@@ -36,6 +36,14 @@ class Refused(ValueError):
 @dataclasses.dataclass(frozen=True)
 class IntentReadback:
     operation_id: str
+    request_sha256: str
+    grant_sha256: str
+    target_sha256: str
+    repository: str
+    ref: str
+    path: str
+    prior_generation: int
+    prior_head: str
     committed_generation: int
     committed_head: str
     state: str = dataclasses.field(init=False, default="consistent-but-unadmitted")
@@ -163,6 +171,10 @@ def observe(verified: VerifiedRequest, selection: dict[str, Any],
             or original != selected
             or dataclasses.asdict(writer_ack) != ack_values):
         raise Refused("journal-reader-or-intent-drift")
-    return IntentReadback(verified.operation_id,
+    return IntentReadback(verified.operation_id, verified.request_sha256,
+                          selected["grantSha256"], selected["targetSha256"],
+                          selected["repository"], selected["ref"],
+                          selected["path"], selected["priorGeneration"],
+                          selected["priorHead"],
                           selected["committedGeneration"],
                           selected["committedHead"])
