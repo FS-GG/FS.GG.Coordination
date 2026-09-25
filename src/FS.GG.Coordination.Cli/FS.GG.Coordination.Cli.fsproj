@@ -29,6 +29,8 @@
     <Compile Include="MigrationInspectProviderAdapter.fs" />
     <Compile Include="MigrationProtectedIssueCensus.fsi" />
     <Compile Include="MigrationProtectedIssueCensus.fs" />
+    <Compile Include="MigrationProtectedIssueCensusAttestation.fsi" />
+    <Compile Include="MigrationProtectedIssueCensusAttestation.fs" />
     <Compile Include="MigrationReceiverCapture.fsi" />
     <Compile Include="MigrationReceiverCapture.fs" />
     <Compile Include="MigrationRollbackReceiverReadback.fsi" />
