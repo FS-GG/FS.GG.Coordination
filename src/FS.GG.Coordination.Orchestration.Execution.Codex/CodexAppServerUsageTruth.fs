@@ -143,7 +143,7 @@ module CodexAppServerUsageTruth =
         | Ok _ when isNull (box candidates) || List.length candidates > 10000 ->
             Error "app-server-usage-candidates-invalid"
         | Ok correlation ->
-            let rec collect remaining classes snapshotCount =
+            let rec collect remaining classes seenSnapshotDigests snapshotCount =
                 match remaining with
                 | [] ->
                     Ok
@@ -159,7 +159,11 @@ module CodexAppServerUsageTruth =
                         match candidate with
                         | ThreadSnapshot _ when snapshotCount >= terminal.UsageUpdateCount ->
                             Error "app-server-usage-snapshot-count-mismatch"
-                        | ThreadSnapshot _ ->
-                            collect tail (Set.add evidence classes) (snapshotCount + 1)
-                        | _ -> collect tail (Set.add evidence classes) snapshotCount
-            collect candidates Set.empty 0
+                        | ThreadSnapshot snapshot when
+                            Set.contains snapshot.WireSha256 seenSnapshotDigests ->
+                            Error "app-server-usage-snapshot-duplicate"
+                        | ThreadSnapshot snapshot ->
+                            collect tail (Set.add evidence classes)
+                                (Set.add snapshot.WireSha256 seenSnapshotDigests) (snapshotCount + 1)
+                        | _ -> collect tail (Set.add evidence classes) seenSnapshotDigests snapshotCount
+            collect candidates Set.empty Set.empty 0
