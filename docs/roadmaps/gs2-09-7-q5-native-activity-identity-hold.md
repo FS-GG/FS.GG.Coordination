@@ -72,6 +72,12 @@ duplicate members at the root and in the consumed `head`, `base` and
 `base.repo` objects before producing typed PR evidence. This prevents a
 single raw PR from presenting two revisions or two base repository IDs.
 
+A ninth independent control found the PR review reader could accept duplicate
+raw `state`, `commit_id` or `user.login` members and still produce typed
+review evidence. It was red before the repair. `readPullRequestReviews` now
+refuses duplicate members at the review root and in the consumed `user`
+object before parsing a review. This is a partial raw parser control only.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
