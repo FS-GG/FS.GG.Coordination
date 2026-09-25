@@ -28,3 +28,16 @@ revision/order authority is still required to close that ABA window. Native
 response custody, journal, signer and terminal epoch are also absent. #3690
 remains unadmitted, Q5/Q6 remain open, and accepted GS2-09.6 command bytes
 and live pins remain unchanged.
+
+## #3690 post-merge hold
+
+Read-only GitHub PR status on 2026-09-25 shows [FS-GG/.github #3690](https://github.com/FS-GG/.github/pull/3690)
+as `MERGED` at `2026-09-25T05:35:26Z`, with head
+`1b8b4cd5b7bd11c8cb0697b3b3d17d96c4a1862f` and merge commit
+`ff425734d277fa54c3d71601da90fe7b22619c15`. The sandbox-route owner
+reported a native merge before the OperatingV1 effect-admission stop. That is
+an observed process violation for owner adjudication, not a protected
+OperatingV1 admission or Q5/Q6 result. No sandbox run or provider readback is
+inferred from the merge. The installed workflow, admission record and any
+effect exposure require separate protected-owner reconciliation before route
+use; this source-only draft does not perform that action.
