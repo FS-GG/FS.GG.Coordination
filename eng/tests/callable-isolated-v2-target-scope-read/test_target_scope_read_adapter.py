@@ -206,6 +206,16 @@ class TargetScopeTests(unittest.TestCase):
             target.TargetScopeReadAdapter(transport, FakeAttestor(attested),
                 wanted, "f" * 64, NOW).observe_target_scope()
 
+    def test_selected_target_mutated_after_construction_refuses(self):
+        wanted, scope, reads, attested = fixture()
+        attested["prestateSha256"] = "0" * 64
+        reader = target.TargetScopeReadAdapter(
+            FakeTransport(scope, reads), FakeAttestor(attested),
+            wanted, "f" * 64, NOW)
+        wanted["prestateSha256"] = "0" * 64
+        with self.assertRaises(target.Refused):
+            reader.observe_target_scope()
+
 
 if __name__ == "__main__":
     unittest.main()
