@@ -22,6 +22,7 @@ let requireContains relative (values: string list) =
 
 let run executable values =
     let info = ProcessStartInfo(executable, WorkingDirectory = root, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true)
+    if executable = "python3" then info.Environment["PYTHONDONTWRITEBYTECODE"] <- "1"
     for value in values do info.ArgumentList.Add value
     use child = Process.Start info
     let output = child.StandardOutput.ReadToEndAsync()
