@@ -227,7 +227,10 @@ class NativeReadAdapter:
         if (status != 200 or type(body) is not dict
                 or type(body.get("id")) is not int
                 or body["id"] != repository_id
-                or body.get("full_name") != repository):
+                or body.get("full_name") != repository
+                or ("url" in body and
+                    (type(body["url"]) is not str or body["url"] !=
+                     f"https://api.github.com/repos/{repository}"))):
             raise Refused("native-repository-mismatch")
 
     def _ref(self, repository: str, ref: str) -> str:

@@ -302,6 +302,34 @@ class VersionedReadbackTests(unittest.TestCase):
                             else reader.read_protection(expected))
                 self.assertEqual(observed.repository_id, 44)
 
+    def test_native_reader_refuses_foreign_repository_url(self):
+        root = "https://api.github.com/repos/FS-GG/disposable"
+        for kind in ("pull", "protection"):
+            for url in ("https://api.github.com/repos/FS-GG/foreign",
+                        root + "?alias=1", root.replace(".com/", ".com:443/"),
+                        None, root):
+                with self.subTest(kind=kind, url=url):
+                    expected = pull_expected() if kind == "pull" else protection_expected()
+                    events = (pull_read_events() if kind == "pull"
+                              else protection_read_events())
+                    for item in events:
+                        if (item["method"] == "GET"
+                                and item["path"] == "repos/FS-GG/disposable"):
+                            item["response"]["json"]["url"] = url
+                    reader = operator.NativeReadAdapter(
+                        operator.OfflineTranscriptTransport(events))
+                    if url == root:
+                        observed = (reader.read_pull_census(expected) if kind == "pull"
+                                    else reader.read_protection(expected))
+                        self.assertEqual(observed.repository_id, 44)
+                    else:
+                        with self.assertRaisesRegex(
+                                operator.Refused, "native-repository-mismatch"):
+                            if kind == "pull":
+                                reader.read_pull_census(expected)
+                            else:
+                                reader.read_protection(expected)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
