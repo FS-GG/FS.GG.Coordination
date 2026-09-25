@@ -89,9 +89,29 @@ type CodexAppServerUsageTruthTests() =
     member _.``last and cumulative snapshots never become completed-turn usage``() =
         let exactLooking =
             { snapshot with Last = snapshot.Cumulative }
-        let result = noVerdict (assess [ ThreadSnapshot snapshot; ThreadSnapshot exactLooking ])
+        let result = noVerdict (assess [ ThreadSnapshot exactLooking ])
         Assert.Equal([ "thread-last-total-snapshot" ], result.ObservedEvidenceClasses)
         Assert.Equal(binding.TurnId, result.Correlation.NativeTurnId)
+
+    [<Fact>]
+    member _.``thread snapshot evidence cannot outnumber sealed usage updates``() =
+        let noUpdates = { terminal with UsageUpdateCount = 0 }
+        Assert.Equal(
+            Error "app-server-usage-snapshot-count-mismatch",
+            CodexAppServerUsageTruth.assess noUpdates [ ThreadSnapshot snapshot ]
+        )
+        let bytes =
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
+            |> File.ReadAllBytes
+        let secondSnapshot =
+            match CodexAppServerUsageProjection.parse scope.ThreadId binding.TurnId
+                      (Array.append bytes [| byte '\n' |]) with
+            | Ok update -> update
+            | Error code -> failwithf "copied-live whitespace variant refused: %s" code
+        Assert.Equal(
+            Error "app-server-usage-snapshot-count-mismatch",
+            assess [ ThreadSnapshot snapshot; ThreadSnapshot secondSnapshot ]
+        )
 
     [<Fact>]
     member _.``exec child completed frame with matching IDs remains a different provenance``() =
