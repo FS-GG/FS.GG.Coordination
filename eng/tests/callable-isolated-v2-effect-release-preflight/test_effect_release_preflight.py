@@ -183,6 +183,25 @@ class ReleasePreflightTests(unittest.TestCase):
                 202, 1, 303, 404, 606, 505, NOW)
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_source_or_approval_scope_mutated_at_final_read_refuses(self):
+        for changed_port in ("source", "approval"):
+            with self.subTest(changed_port=changed_port):
+                source_claim, approval_claim, source_record, approval_event = fixture()
+                left = FakePort(source_claim, source_record)
+                right = FakePort(approval_claim, approval_event)
+                port = left if changed_port == "source" else right
+                shared = copy.deepcopy(port.scopes[0])
+                reads = [0]
+                def scope():
+                    reads[0] += 1
+                    if reads[0] == 2:
+                        shared["credentialId"] = "8" * 64
+                    return shared
+                port.scope = scope
+                with self.assertRaises(preflight.Refused):
+                    preflight.qualify(left, right, REVISION, TREE, 202, 1,
+                                      303, 404, 606, 505, NOW)
+
 
 if __name__ == "__main__":
     unittest.main()

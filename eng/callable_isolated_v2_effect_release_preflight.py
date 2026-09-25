@@ -5,6 +5,7 @@ from __future__ import annotations
 import dataclasses
 import datetime as dt
 import hashlib
+import copy
 from typing import Any, Protocol
 
 import callable_isolated_v2_effect_candidate as candidate
@@ -87,7 +88,7 @@ def _scope(port: object, role: str, now: dt.datetime) -> dict[str, Any]:
             or value["permissions"] != permissions
             or _time(value["expiresAt"]) <= now):
         raise Refused("release-scope-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 def qualify(source_port: IntegratedSourcePort,
