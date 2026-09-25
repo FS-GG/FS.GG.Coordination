@@ -193,6 +193,31 @@ type CodexAppServerContinuityTests() =
             )
 
     [<Fact>]
+    member _.``terminal with conflicting native start timestamp cannot close same turn``() =
+        let observedStart = withTurnFields started ",\"startedAt\":200"
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L observedStart)
+        Assert.Equal(InTurn 0, status first)
+        let conflictingTerminal =
+            withTurnFields completed ",\"startedAt\":201,\"completedAt\":202"
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-start-time-mismatch",
+            status (CodexAppServerContinuity.apply first (frame 2L conflictingTerminal))
+        )
+
+    [<Fact>]
+    member _.``matching or unavailable native start timestamp retains terminal status``() =
+        let observedStart = withTurnFields started ",\"startedAt\":200"
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L observedStart)
+        for fields in
+            [ ",\"startedAt\":200,\"completedAt\":202"
+              ",\"startedAt\":null,\"completedAt\":202"
+              ",\"completedAt\":202" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed fields)))
+            )
+
+    [<Fact>]
     member _.``failed native turn error requires object string message``() =
         let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
         let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""

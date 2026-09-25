@@ -41,14 +41,15 @@ type CodexAppServerContinuityState =
             Binding: CodexAppServerSubscriptionBinding
             NextOrdinal: int64
             Status: CodexAppServerContinuityStatus
+            StartAt: int64 option
             LastUsage: CodexAppServerUsageUpdate option
             UsageHashes: Set<string>
         }
 
 type private CodexAppServerNativeEvent =
-    | NativeTurnStarted
+    | NativeTurnStarted of startedAt: int64 option
     | NativeUsageUpdated of CodexAppServerUsageUpdate
-    | NativeTurnTerminal of string
+    | NativeTurnTerminal of status: string * startedAt: int64 option
 
 [<RequireQualifiedAccess>]
 module CodexAppServerContinuity =
@@ -606,11 +607,11 @@ module CodexAppServerContinuity =
                             && hasPopulatedTurnError turn ->
                             Error "app-server-turn-error-status-mismatch"
                         | Ok _, Ok "inProgress" when methodName = "turn/started" ->
-                            Ok NativeTurnStarted
+                            Ok(NativeTurnStarted(optionalInt64Value turn "startedAt"))
                         | Ok _, Ok status when
                             methodName = "turn/completed"
                             && Set.contains status (set [ "completed"; "failed"; "interrupted" ]) ->
-                            Ok(NativeTurnTerminal status)
+                            Ok(NativeTurnTerminal(status, optionalInt64Value turn "startedAt"))
                         | Ok _, Ok _ -> Error "app-server-turn-status-invalid"
                         | Error error, _ | _, Error error -> Error error
 
@@ -683,6 +684,7 @@ module CodexAppServerContinuity =
                     { Binding = binding
                       NextOrdinal = 1L
                       Status = AwaitingStart
+                      StartAt = None
                       LastUsage = None
                       UsageHashes = Set.empty }
 
@@ -708,10 +710,13 @@ module CodexAppServerContinuity =
             | Error code -> gap code state
             | Ok event ->
                 match state.Status, event with
-                | AwaitingStart, NativeTurnStarted ->
-                    { state with Status = InTurn 0; NextOrdinal = state.NextOrdinal + 1L }
+                | AwaitingStart, NativeTurnStarted startedAt ->
+                    { state with
+                        Status = InTurn 0
+                        StartAt = startedAt
+                        NextOrdinal = state.NextOrdinal + 1L }
                 | AwaitingStart, _ -> gap "app-server-continuity-start-missing" state
-                | InTurn _, NativeTurnStarted -> gap "app-server-continuity-start-duplicate" state
+                | InTurn _, NativeTurnStarted _ -> gap "app-server-continuity-start-duplicate" state
                 | InTurn count, NativeUsageUpdated usage when
                     Set.contains usage.WireSha256 state.UsageHashes ->
                     gap "app-server-continuity-usage-duplicate" state
@@ -730,7 +735,10 @@ module CodexAppServerContinuity =
                         NextOrdinal = state.NextOrdinal + 1L
                         LastUsage = Some usage
                         UsageHashes = Set.add usage.WireSha256 state.UsageHashes }
-                | InTurn count, NativeTurnTerminal terminal ->
+                | InTurn _, NativeTurnTerminal(_, startedAt) when
+                    state.StartAt.IsSome && startedAt.IsSome && state.StartAt <> startedAt ->
+                    gap "app-server-continuity-start-time-mismatch" state
+                | InTurn count, NativeTurnTerminal(terminal, _) ->
                     { state with
                         Status = TerminalObserved(terminal, count)
                         NextOrdinal = state.NextOrdinal + 1L }
