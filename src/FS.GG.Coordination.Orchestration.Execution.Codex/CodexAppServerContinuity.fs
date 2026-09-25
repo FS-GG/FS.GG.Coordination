@@ -166,6 +166,32 @@ module CodexAppServerContinuity =
                         | _ -> false
                 | _ -> false
 
+    let private validOptionalMcpResult (item: JsonElement) =
+        match item.TryGetProperty "result" with
+        | false, _ -> true
+        | true, result when result.ValueKind = JsonValueKind.Null -> true
+        | true, result when result.ValueKind = JsonValueKind.Object ->
+            let names = result.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match result.TryGetProperty "content" with
+                | true, content -> content.ValueKind = JsonValueKind.Array
+                | _ -> false
+        | _ -> false
+
+    let private validOptionalMcpError (item: JsonElement) =
+        match item.TryGetProperty "error" with
+        | false, _ -> true
+        | true, error when error.ValueKind = JsonValueKind.Null -> true
+        | true, error when error.ValueKind = JsonValueKind.Object ->
+            let names = error.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match error.TryGetProperty "message" with
+                | true, message -> message.ValueKind = JsonValueKind.String
+                | _ -> false
+        | _ -> false
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -220,6 +246,8 @@ module CodexAppServerContinuity =
                                 && status.ValueKind = JsonValueKind.String
                                 && Set.contains (status.GetString())
                                     (set [ "inProgress"; "completed"; "failed" ])
+                                && validOptionalMcpResult item
+                                && validOptionalMcpError item
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
