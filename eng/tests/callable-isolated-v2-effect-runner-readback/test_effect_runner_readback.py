@@ -89,6 +89,8 @@ def fixture():
         "object": copy.deepcopy(obj), "counts": {
             "tokenReads": 0, "journalReads": 0, "journalWrites": 0,
             "casWrites": 0, "providerPosts": 0, "cleanupAttempts": 0},
+        "commandStartedAt": "2026-09-25T11:57:45Z",
+        "commandCompletedAt": "2026-09-25T11:57:50Z",
         "observedAt": "2026-09-25T11:59:00Z"}
     return result, selected, Port(runner_scope, probe), Port(audit_scope, audit)
 
@@ -189,6 +191,21 @@ class RunnerReadbackTests(unittest.TestCase):
         with self.assertRaises(readback.Refused):
             readback.qualify(preflight, runner, audit, selection, NOW,
                              approval_witness=reviewed(preflight))
+
+    def test_audit_without_matching_command_interval_refuses(self):
+        preflight, selection, runner, audit = fixture()
+        audit.record.pop("commandStartedAt")
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+        for key, value in (("commandStartedAt", "2026-09-25T11:57:44Z"),
+                           ("commandCompletedAt", "2026-09-25T11:57:51Z")):
+            with self.subTest(key=key):
+                preflight, selection, runner, audit = fixture()
+                audit.record[key] = value
+                with self.assertRaises(readback.Refused):
+                    readback.qualify(preflight, runner, audit, selection, NOW,
+                                     approval_witness=reviewed(preflight))
 
     def test_selected_source_runtime_and_object_drift_refuse(self):
         for key, value in (("runId", 708), ("runAttempt", 2),
