@@ -3,7 +3,8 @@
 
 The fixed Main caller supplies installed policy, not request-selected rules.
 This reader requires an exclusive writer ruleset, exact required check App IDs,
-current head and test-merge checks, and fresh review history. It refuses a
+current head checks and test-merge checks when the test merge has any check or
+status evidence, and fresh review history. It refuses a
 conversation-resolution requirement until a qualified complete thread reader
 exists. Inherited rulesets with repository selectors also refuse until a
 qualified selector interpreter proves their exact application. A positive
@@ -207,13 +208,18 @@ def _policy_evidence(read_json, transcript: list,
 
 
 def _check_commit(read_json, transcript: list, commit_sha: str,
-                  policy: InstalledTargetPolicy, after: int, now: int) -> None:
+                  policy: InstalledTargetPolicy, after: int, now: int,
+                  allow_empty: bool = False) -> bool:
     checks = TARGET.complete_check_runs(
         lambda path: _recorded(read_json, transcript, path), commit_sha)
     statuses = _pages(read_json, transcript,
                       f"{PREFIX}/commits/{commit_sha}/statuses?per_page=100")
     require(all(isinstance(item, dict) for item in checks + statuses),
             "eligibility-check-census")
+    if allow_empty and not checks and not statuses:
+        # GitHub evaluates the head's checks when its synthetic test merge has
+        # no check or status evidence. Complete suite/status reads prove empty.
+        return False
     for context, app_id in policy.required_checks:
         matching = [item for item in checks if item.get("name") == context]
         require(len(matching) > 0 and all(type(item.get("id")) is int
@@ -234,6 +240,7 @@ def _check_commit(read_json, transcript: list, commit_sha: str,
         # both. Until its producer identity is independently pinned, refuse.
         require(not any(item.get("context") == context for item in statuses),
                 "eligibility-overlapping-status")
+    return True
 
 
 def _reviews(read_json, transcript: list, policy: InstalledTargetPolicy,
@@ -327,7 +334,9 @@ def collect_once(read_json, policy: InstalledTargetPolicy,
     require(head_time <= now, "eligibility-head-time")
     _policy_evidence(read_json, transcript, policy)
     _check_commit(read_json, transcript, head_sha, policy, head_time, now)
-    _check_commit(read_json, transcript, test_merge_sha, policy, head_time, now)
+    test_merge_has_checks = _check_commit(
+        read_json, transcript, test_merge_sha, policy, head_time, now,
+        allow_empty=True)
     _reviews(read_json, transcript, policy, pr_number, head_sha,
              pr["user"]["id"], head_time, now)
     return {
@@ -338,6 +347,7 @@ def collect_once(read_json, policy: InstalledTargetPolicy,
         "base_sha": base_sha,
         "head_sha": head_sha,
         "test_merge_sha": test_merge_sha,
+        "check_target": "test_merge" if test_merge_has_checks else "head",
         "protection_sha256": policy.protection_sha256,
         "rules_sha256": policy.rules_sha256,
         "complete_census_sha256": _digest(transcript),

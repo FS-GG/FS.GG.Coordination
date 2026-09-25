@@ -58,6 +58,7 @@ class FakeGitHub:
                           "conclusion": "success", "completed_at": "2026-09-25T01:10:00Z"}],
         }
         self.statuses = {HEAD: [], TEST_MERGE: []}
+        self.test_has_suite = True
         self.reviews = [{"id": 101, "user": {"id": 42}, "state": "APPROVED",
                          "commit_id": HEAD, "submitted_at": "2026-09-25T01:20:00Z"}]
         self.parents = [BASE, HEAD]
@@ -119,8 +120,9 @@ class FakeGitHub:
                 )
                 status_path = f"{P}/commits/{commit}/statuses?per_page=100&page="
                 if path == suite_path:
-                    body = {"total_count": 1,
-                            "check_suites": [{"id": suite_id, "head_sha": commit}]}
+                    suites = ([{"id": suite_id, "head_sha": commit}]
+                              if commit == HEAD or self.test_has_suite else [])
+                    body = {"total_count": len(suites), "check_suites": suites}
                 elif path == check_path:
                     body = {"total_count": len(self.checks[commit]),
                             "check_runs": self.checks[commit]}
@@ -141,7 +143,20 @@ class TargetEligibilityTests(unittest.TestCase):
         result = gate.collect_two(self.fake.read, self.fake.policy(), 3695, NOW)
         self.assertEqual(result["head_sha"], HEAD)
         self.assertEqual(result["test_merge_sha"], TEST_MERGE)
+        self.assertEqual(result["check_target"], "test_merge")
         self.assertEqual(len([x for x in self.fake.calls if x.endswith("/pulls/3695")]), 2)
+
+    def test_complete_empty_test_merge_uses_head_checks(self):
+        self.fake.test_has_suite = False
+        self.fake.checks[TEST_MERGE] = []
+        result = gate.collect_two(self.fake.read, self.fake.policy(), 3695, NOW)
+        self.assertEqual(result["check_target"], "head")
+        self.assertFalse(any("check-suites/22/check-runs" in path
+                             for path in self.fake.calls))
+        self.fake = FakeGitHub()
+        self.fake.checks[TEST_MERGE][0]["name"] = "unrelated"
+        with self.assertRaisesRegex(gate.Refused, "eligibility-check-shape"):
+            gate.collect_once(self.fake.read, self.fake.policy(), 3695, NOW)
 
     def test_foreign_or_failed_required_check_refuses(self):
         for change in (lambda: self.fake.checks[HEAD][0]["app"].update(id=999),
