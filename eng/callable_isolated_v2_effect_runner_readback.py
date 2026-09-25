@@ -6,6 +6,7 @@ import dataclasses
 import datetime as dt
 import hashlib
 import json
+import copy
 from typing import Any, Protocol
 
 import callable_isolated_v2_effect_candidate as candidate
@@ -85,7 +86,7 @@ def _scope(port: object, permission: str, now: dt.datetime) -> dict[str, Any]:
             or value["permissions"] != [permission]
             or _time(value["expiresAt"]) <= now):
         raise Refused("readback-scope-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 def _path(value: Any) -> bool:
