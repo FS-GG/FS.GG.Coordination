@@ -109,3 +109,85 @@ let ``protected census seal verifier refuses unknown clock once`` () =
     Assert.Equal(Error "protected-census-attestation-unavailable",
                  verify pins proof (Some attestation) (Some unknown))
     Assert.Equal(1, calls)
+
+let private claimPins =
+    { JournalResourceId="protected-claim-journal:fixture"
+      JournalArtifactSha256=String.replicate 64 "e" }
+
+let private claimDescription =
+    { JournalResourceId=claimPins.JournalResourceId
+      JournalArtifactSha256=claimPins.JournalArtifactSha256
+      CandidateMayRead=false; CandidateMayWrite=false; ImmutableJournal=true }
+
+let private verifyAndClaim pins proof attestation now port =
+    MigrationProtectedIssueCensusClaim.verifyAndClaim
+        pins claimPins selection "protected-store:fixture" proof 7L
+        (Some attestation) (Some (clock pins.ClockResourceId now)) port
+
+[<Fact>]
+let ``protected census attestation claim refuses duplicate signed handoff`` () =
+    let pins, proof, attestation, now = fixture ()
+    let mutable attempts = 0
+    let mutable stored: ProtectedIssueCensusClaimRequest option = None
+    let journal =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ClaimOnce request =
+                attempts <- attempts + 1
+                match stored with
+                | Some _ -> ClaimDuplicate
+                | None -> stored <- Some request; ClaimCommitted
+            member _.ReadClaim _ =
+                stored |> Option.map (fun request ->
+                    { Request=request; CommitGeneration=1L }) }
+    Assert.Equal(Ok (), verifyAndClaim pins proof attestation now (Some journal))
+    Assert.Equal(Error "protected-census-claim-duplicate",
+                 verifyAndClaim pins proof attestation now (Some journal))
+    Assert.Equal(2, attempts)
+
+[<Fact>]
+let ``protected census attestation claim refuses absent unknown and forged journal`` () =
+    let pins, proof, attestation, now = fixture ()
+    Assert.Equal(Error "protected-census-claim-unavailable",
+                 verifyAndClaim pins proof attestation now None)
+    let mutable attempts = 0
+    let unknown =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ClaimOnce _ =
+                attempts <- attempts + 1
+                ClaimUnknown
+            member _.ReadClaim _ = failwith "unknown CAS must not be retried or read" }
+    Assert.Equal(Error "protected-census-claim-unknown",
+                 verifyAndClaim pins proof attestation now (Some unknown))
+    Assert.Equal(1, attempts)
+    let mutable readbacks = 0
+    let lost =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ClaimOnce _ = ClaimCommitted
+            member _.ReadClaim _ =
+                readbacks <- readbacks + 1
+                None }
+    Assert.Equal(Error "protected-census-claim-unknown",
+                 verifyAndClaim pins proof attestation now (Some lost))
+    Assert.Equal(1, readbacks)
+    let candidateWritable =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = { claimDescription with CandidateMayWrite=true }
+            member _.ClaimOnce _ = failwith "installation must refuse before claim"
+            member _.ReadClaim _ = None }
+    Assert.Equal(Error "protected-census-claim-installation",
+                 verifyAndClaim pins proof attestation now (Some candidateWritable))
+    let forgedReadback =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ClaimOnce _ = ClaimCommitted
+            member _.ReadClaim _ =
+                Some { Request={ ClaimId=String.replicate 64 "f"
+                                 AttestationPayloadSha256=proof.CorpusSha256
+                                 Selection=selection; CustodyStoreResourceId="protected-store:fixture"
+                                 StoreGeneration=7L; JournalResourceId=claimPins.JournalResourceId }
+                       CommitGeneration=1L } }
+    Assert.Equal(Error "protected-census-claim-binding",
+                 verifyAndClaim pins proof attestation now (Some forgedReadback))
