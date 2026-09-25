@@ -19,7 +19,7 @@ import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 RUN_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-run/1"
 ARTIFACT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-artifact/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-witness/3"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-witness/4"
 WORKFLOW = ".github/workflows/callable-isolated-v2-effect-release.yml"
 API = "https://api.github.com"
 MAX_BUNDLE = 2_000_000
@@ -59,6 +59,7 @@ class ProducerWitnessResult:
     producer_actor_id: int
     source_record_id: int
     repository_id: int
+    identity_event_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -288,4 +289,5 @@ def qualify(preflight: release.PreflightResult,
         preflight.archive_sha256, hashlib.sha256(bundle).hexdigest(),
         selection["workflowSha256"], workflow_source.workflow_blob_oid,
         artifact["createdAt"], selection["producerActorId"],
-        preflight.source_record_id, selection["repositoryId"])
+        preflight.source_record_id, selection["repositoryId"],
+        selection["identityEventId"])
