@@ -96,6 +96,10 @@ def controls_fixture(selected: dict) -> dict:
         "schema": readback.CONTROLS_SCHEMA, "complete": True,
         "runId": selected["runId"], "runAttempt": selected["runAttempt"],
         "sourceRevision": selected["sourceRevision"],
+        "sourceTree": selected["sourceTree"],
+        "actorId": selected["actorId"],
+        "producerRunId": selected["producerRunId"],
+        "artifactId": selected["artifactId"],
         "workflowSha256": selected["workflowSha256"],
         "archiveSha256": selected["archiveSha256"],
         "interpreterSha256": selected["interpreterSha256"],
@@ -164,6 +168,19 @@ class SelectedReadbackTests(unittest.TestCase):
         self.assertFalse(evidence.can_dispatch)
         self.assertEqual(0, evidence.live_effects)
 
+    def test_candidate_revision_claim_remains_only_non_authorizing_consistency(self):
+        packet = packet_fixture()
+        candidate_head = "374c49175b1031b30a379220f353a6f272e75f57"
+        packet["source"]["revision"] = candidate_head
+        packet["workflow"]["revision"] = candidate_head
+        packet["artifact"]["sourceRevision"] = candidate_head
+        packet["run"]["revision"] = candidate_head
+        evidence = verify(packet)
+        self.assertEqual(candidate_head, evidence.source_revision)
+        self.assertFalse(evidence.authorized)
+        self.assertFalse(evidence.can_dispatch)
+        self.assertEqual(0, evidence.live_effects)
+
     def test_wrong_draft_head_held_workflow_mutable_runner_and_wrong_pin_refuse(self):
         packet = packet_fixture()
         mutations = {
@@ -224,7 +241,7 @@ class SelectedReadbackTests(unittest.TestCase):
                 selected_copy = copy.deepcopy(selected)
                 del selected_copy[key]
                 with self.assertRaisesRegex(readback.Refused, "selection-shape"):
-                    verify(baseline, selected_copy)
+                    verify(baseline, selected_copy, controls_fixture(selected))
             with self.subTest(boolean_selected=key):
                 selected_copy = copy.deepcopy(selected)
                 selected_copy[key] = True
@@ -290,6 +307,23 @@ class SelectedReadbackTests(unittest.TestCase):
                 controls = copy.deepcopy(baseline)
                 controls[command]["stderrSha256"] = "0" * 64
                 with self.assertRaisesRegex(readback.Refused, "control-refusal"):
+                    verify(packet, selected, controls)
+
+    def test_installed_controls_bind_tree_actor_and_producer_identity(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        baseline = controls_fixture(selected)
+        for key in ("sourceRevision", "sourceTree", "actorId", "producerRunId",
+                    "artifactId"):
+            with self.subTest(missing=key):
+                controls = copy.deepcopy(baseline)
+                del controls[key]
+                with self.assertRaisesRegex(readback.Refused, "controls-shape"):
+                    verify(packet, selected, controls)
+            with self.subTest(swapped=key):
+                controls = copy.deepcopy(baseline)
+                controls[key] = "f" * 40 if key.startswith("source") else 999
+                with self.assertRaisesRegex(readback.Refused, "controls-incomplete"):
                     verify(packet, selected, controls)
 
     def test_selection_digest_duplicate_foreign_and_custody_refuse(self):

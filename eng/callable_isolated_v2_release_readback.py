@@ -30,8 +30,9 @@ SELECTION_KEYS = frozenset({
     "reviewerId",
 })
 CONTROL_KEYS = frozenset({
-    "schema", "complete", "runId", "runAttempt", "sourceRevision",
-    "workflowSha256", "archiveSha256", "interpreterSha256",
+    "schema", "complete", "runId", "runAttempt", "sourceRevision", "sourceTree",
+    "actorId", "producerRunId", "artifactId", "workflowSha256", "archiveSha256",
+    "interpreterSha256",
     "closureManifestSha256", "installedArchivePostSha256",
     "interpreterPostSha256", "closurePostSha256", "noGrant", "unknownCommand",
     "executionTokenPresent", "providerRequestCount", "journalWriteCount",
@@ -147,6 +148,10 @@ def _controls(value: Any, selected: dict[str, Any]) -> None:
                    or value[key] != selected[other] for key, other in
                    (("runId", "runId"), ("runAttempt", "runAttempt"),
                     ("sourceRevision", "sourceRevision"),
+                    ("sourceTree", "sourceTree"),
+                    ("actorId", "actorId"),
+                    ("producerRunId", "producerRunId"),
+                    ("artifactId", "artifactId"),
                     ("workflowSha256", "workflowSha256"),
                     ("archiveSha256", "archiveSha256"),
                     ("interpreterSha256", "interpreterSha256"),
