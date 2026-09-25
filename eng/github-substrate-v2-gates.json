@@ -374,6 +374,12 @@
       "args": ["fsi", "eng/validate-github-callable-isolated-operation.fsx", "--", "--root", "."]
     },
     {
+      "id": "github-callable-protected-operation-acceptance",
+      "qGate": "Q6",
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-callable-protected-acceptance.fsx", "--", "--root", "."]
+    },
+    {
       "id": "github-complete-discovery-contract",
       "qGate": "Q5",
       "executable": "dotnet",

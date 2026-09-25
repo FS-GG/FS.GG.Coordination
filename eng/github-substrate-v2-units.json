@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "15734f4cb71506d76814e054d0e846babf6909aa",
+    "revision": "15de6f92e501a4416e782c0d9c111351d697c3a1",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "2fa36a416bdfce54cf84688426dd2d8754f425383e5fb47372bb40eb288707eb"
+    "sha256": "9e9e91383d81b9aa49fb8324a6a621bfc318e41ce5e4b3bb909c18d1e7f403d8"
   },
   "units": [
     {
@@ -1291,10 +1291,10 @@
         "GS2-08.9"
       ],
       "permissionCeiling": [
-        "repository-local source, deterministic plans, controlled provider responses, internal journal composition and read-only verification of the exact previously published and adopted package only",
-        "no new package publication or receiver adoption, production writer enablement, release, administration, credential, migration cutover, live provider mutation, external acceptance or Q4 claim"
+        "repository-local source, deterministic plans, controlled provider responses, internal journal composition, read-only verification of the exact previously published and adopted package, immutable protected isolated-operation archives, historical native readback and callable discovery handoff",
+        "revalidation only; no new package publication or receiver adoption, production writer enablement, release, administration, credential, migration cutover, live provider mutation, new external acceptance, Q4, OpenV2 or production-default claim"
       ],
-      "exitGate": "Q3 binds complete native observation and canonical sealed plan bytes to immutable repository, pull request, base, source, policy, selected checks, epoch and journal generation with zero-mutation inspect/plan controls, executes the production runtime boundary against controlled GitHub responses, and validates a digest-bound two-phase isolated-operation source whose checked-in proposal remains prepared-not-authorized until separate protected grants and fresh target, reviewer, credential and capability observations exist; Q6 binds persisted-before-effect advancement, CAS fencing, authoritative re-observation, lost-response reconciliation, interruption recovery, native completion, settled replay and ordinary-operation permission refusal, including a clean-process installation of the exact public 0.1.0 package with retained source, receiver, package, request and journal hashes, without Host, PostgreSQL, model execution, live provider mutation, external acceptance or Q4 evidence",
+      "exitGate": "Q3 binds complete native observation and canonical sealed plan bytes to immutable repository, pull request, base, source, policy, selected checks, epoch and journal generation with zero-mutation inspect/plan controls, executes the production runtime boundary against controlled GitHub responses, and validates the prepared isolated-operation source; Q6 binds persisted-before-effect advancement, CAS fencing, authoritative re-observation, lost-response reconciliation, interruption recovery, native completion, settled replay and ordinary-operation permission refusal, then independently revalidates the exact historical protected V2-CALL-01.4c isolated native operation archives and run, installed public 0.1.1 package, receiver, readiness packet and V2-CALL-01.5b discovery handoff with changed-archive refusal; the historical operation remains one synthetic isolated subject and revalidation causes zero new provider mutation, no migration, Q4, OpenV2 or production default",
       "qGates": [
         "Q3",
         "Q6"
@@ -1302,7 +1302,8 @@
       "gateCommands": [
         "github-callable-ordinary-delivery-contract",
         "github-callable-ordinary-delivery-recovery-contract",
-        "github-callable-isolated-operation-preparation-contract"
+        "github-callable-isolated-operation-preparation-contract",
+        "github-callable-protected-operation-acceptance"
       ],
       "gateContracts": [
         {
@@ -1319,9 +1320,14 @@
           "id": "github-callable-isolated-operation-preparation-contract",
           "qGate": "Q3",
           "commandSha256": "86638e8f2a358503723a24a469553a8127642c275e9fd15aa24e8188fbe9c7c3"
+        },
+        {
+          "id": "github-callable-protected-operation-acceptance",
+          "qGate": "Q6",
+          "commandSha256": "5d4ccf0e6c28fa19dfa188c2a03a8efb2f90d18187eb1265fa6d4f5e065b9451"
         }
       ],
-      "contractSha256": "7c247e89200b7307a3281c0a8800f796219b22328a912c6f6bdd937a4cda8bf0"
+      "contractSha256": "866b227dc10f051b2f9b55832e9c61989e355947b11b4eb82f7720182a2bdeff"
     }
   ]
 }

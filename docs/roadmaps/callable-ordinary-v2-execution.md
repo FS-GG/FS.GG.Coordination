@@ -49,6 +49,18 @@ immediately before GS2-09.7 representative rehearsal, not work waiting after GS2
 registers exact Q3 contract and Q6 recovery command identities. Synthetic dummy unit IDs and synthetic receipts
 are never acceptance evidence.
 
+The GS2-09.9 unit receipt is a separate acceptance obligation. The original Q3/Q6 source gates
+qualified a controlled provider and installed recovery interface; their source ceiling did not
+authorize a live effect. The later protected V2-CALL-01.4c run accepted exactly one isolated
+synthetic native operation with installed 0.1.1, and V2-CALL-01.5b handed its bound readiness
+packet to discovery. Those immutable facts satisfy the roadmap's callable scope only after a
+current exact candidate independently revalidates the retained native archives, protected run,
+installed package and receiver identities, handoff bytes, and all source gates. A new custom
+GS2-09.9 receipt must bind the current unit contract, gate results and protected merges before
+this unit can be a typed prerequisite of GS2-09.7. The historical handoff alone is discovery
+input, not that receipt. None of these facts accepts fleet migration, Q4, OpenV2, or production
+writer enablement.
+
 ## Prior sources and reusable evidence
 
 - `ShardedJournalAdapter` and the accepted [GS2-04.9 receipt](../../evidence/github-substrate-v2/accepted/GS2-04.9.json)
@@ -134,9 +146,10 @@ are never acceptance evidence.
     public-feed installed-harness result, and still-unauthorized `.4b` operation proposal under
     `evidence/github-substrate-v2/gs2-09-9/` and `eng/`. The installed 0.1.0 bytes passed; no replacement version
     or product repair was required.
-  - [x] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** GS2-09.9's
-    current permission ceiling excludes provider mutation and external acceptance, so a later operation packet
-    must bind the exact target, actor/credential authority, package and receiver revisions, source/base/check,
+  - [x] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** At that
+    source-only window, GS2-09.9's permission ceiling excluded provider mutation and external acceptance. The
+    separate operation packet therefore had to bind the exact target, actor/credential authority, package and
+    receiver revisions, source/base/check,
     epoch/policy/journal identities, allowed mutation, recovery and cleanup. Prefer a fresh intentionally public,
     synthetic-only disposable target, or use an entitled private target. The registered private sandbox's
     `required_status_checks` endpoint currently returns `403` because the required entitlement is absent; do not
