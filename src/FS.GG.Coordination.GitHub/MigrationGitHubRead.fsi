@@ -112,6 +112,19 @@ type MigrationRepositoryActionsPolicy =
       VerifiedAllowed: bool option
       PatternsAllowed: string list option }
 
+/// Repository GITHUB_TOKEN defaults only; organization inheritance and other Actions policy remain unobserved.
+type MigrationRepositoryWorkflowPermissions =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PermissionsUri: string
+      PermissionsPayloadJson: string
+      PermissionsPayloadSha256: string
+      DefaultWorkflowPermissions: string
+      CanApprovePullRequestReviews: bool }
+
 /// One exact receiver ref/commit/recursive-tree observation. Blob pin bytes are not read here.
 type MigrationReceiverObjectEvidence =
     { RequestUri: string
@@ -474,6 +487,11 @@ module MigrationGitHubRead =
     val readRepositoryActionsPolicy:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryActionsPolicy, MigrationReadFailure>
+
+    /// Read-only repository GITHUB_TOKEN defaults, closed by a second exact identity read.
+    val readRepositoryWorkflowPermissions:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryWorkflowPermissions, MigrationReadFailure>
 
     /// Exact branch ref, commit and complete recursive-tree read, closed by a second ref read.
     val readReceiverSnapshot:

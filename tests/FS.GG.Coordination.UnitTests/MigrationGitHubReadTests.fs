@@ -1863,3 +1863,94 @@ let ``Project snapshot reconciles exact membership revisions declarations and by
         { items with Items=[ { items.Items.Head with PayloadJson="{}" } ] }
     Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "payload-digest"),
                  MigrationGitHubRead.reconcileProject altered fields values)
+
+[<Fact>]
+let ``workflow token defaults read exact repository identity and refuse incomplete or drifting policy`` () =
+    let policy = """{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}"""
+    let transport = FakeTransport [ repo; ok Map.empty policy; repo ]
+    match MigrationGitHubRead.readRepositoryWorkflowPermissions options transport with
+    | Error failure -> failwithf "workflow permissions refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.Equal("read", observed.DefaultWorkflowPermissions)
+        Assert.False(observed.CanApprovePullRequestReviews)
+        Assert.Equal(policy, observed.PermissionsPayloadJson)
+        Assert.Equal(3, transport.Requests.Length)
+        let uris =
+            transport.Requests |> List.map (function
+                | Rest request ->
+                    Assert.Equal(Get, request.Method)
+                    Assert.True(request.Body.IsNone)
+                    request.Uri.AbsoluteUri
+                | _ -> failwith "workflow permission reader issued GraphQL")
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/copy"
+              "https://api.github.test/repos/FS-GG/copy/actions/permissions/workflow"
+              "https://api.github.test/repos/FS-GG/copy" ], uris)
+    for malformed in
+        [ policy.Replace("\"read\"", "\"admin\"")
+          """{"default_workflow_permissions":"read"}"""
+          policy.Replace("false", "null")
+          """{"default_workflow_permissions":"read","default_workflow_permissions":"write","can_approve_pull_request_reviews":false}""" ] do
+        let refused = FakeTransport [ repo; ok Map.empty malformed ]
+        match MigrationGitHubRead.readRepositoryWorkflowPermissions options refused with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete or duplicated workflow policy accepted"
+        Assert.Equal(2, refused.Requests.Length)
+    let drift = FakeTransport [ repo; ok Map.empty policy; ok Map.empty """{"id":43,"full_name":"FS-GG/copy"}""" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readRepositoryWorkflowPermissions options drift)
+    let rawDrift = FakeTransport [ repo; ok Map.empty policy; ok Map.empty """{ "id":42,"full_name":"FS-GG/copy" }""" ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "workflow-permissions-identity"),
+                 MigrationGitHubRead.readRepositoryWorkflowPermissions options rawDrift)
+    let link = FakeTransport [ repo; ok (Map.ofList [ "Link", "<https://api.github.test/next>; rel=\"next\"" ]) policy ]
+    match MigrationGitHubRead.readRepositoryWorkflowPermissions options link with
+    | Error(MigrationReadFailure.PaginationRefused _) -> ()
+    | other -> failwithf "workflow policy pagination was not refused: %A" other
+
+[<Fact>]
+let ``rollback workflow token defaults are raw bound and settings remain partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let policy = """{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}"""
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expected =
+        [ "fsgg.gs2-09.7.workflow-permissions-raw/v1"
+          "42"; "FS-GG/copy"
+          "https://api.github.test/repos/FS-GG/copy/actions/permissions/workflow"
+          hash """{"id":42,"full_name":"FS-GG/copy"}"""
+          hash policy ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty policy; repo
+          repo; ok Map.empty policy; repo
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expected options transport with
+    | Error failure -> failwithf "workflow permissions readback refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(expected, proof.WorkflowPermissionsSha256)
+        Assert.Equal(9, transport.Requests.Length)
+    let changed = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 6 then ok Map.empty (policy.Replace("false", "true")) else response))
+    Assert.Equal(Error "changed:workflow-permissions-raw",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changed)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changedCore)
+    Assert.Equal(Error "changed:workflow-permissions-state",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responses))
+    let foreign = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expected options foreign)
+    Assert.Empty(foreign.Requests)

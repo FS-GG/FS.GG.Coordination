@@ -113,6 +113,18 @@ type MigrationRepositoryActionsPolicy =
       VerifiedAllowed: bool option
       PatternsAllowed: string list option }
 
+type MigrationRepositoryWorkflowPermissions =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PermissionsUri: string
+      PermissionsPayloadJson: string
+      PermissionsPayloadSha256: string
+      DefaultWorkflowPermissions: string
+      CanApprovePullRequestReviews: bool }
+
 type MigrationReceiverObjectEvidence =
     { RequestUri: string
       RawBody: string
@@ -990,6 +1002,69 @@ module MigrationGitHubRead =
                                 Error(MigrationReadFailure.MalformedResponse "invalid:allowed-actions")
                             | Error failure, _, _, _ | _, Error failure, _, _
                             | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))))
+
+    let readRepositoryWorkflowPermissions (options: MigrationGitHubReadOptions)
+                                          (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let identityUri = Uri(options.ApiBase, repositoryPath)
+            let permissionsUri = Uri(options.ApiBase, $"{repositoryPath}/actions/permissions/workflow")
+            let get (uri: Uri) =
+                response transport
+                    (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                            ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers
+                         |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:workflow-permissions-link")
+                    else Ok result.Body)
+            let readIdentity () =
+                get identityUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredInt64 "id" document.RootElement,
+                                  requiredString "full_name" document.RootElement with
+                            | Ok id, Ok name when id = options.ExpectedRepositoryId
+                                                  && name = $"{options.Owner}/{options.Repository}" -> Ok body
+                            | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                            | Error failure, _ | _, Error failure -> Error failure)))
+            readIdentity ()
+            |> Result.bind (fun firstIdentity ->
+                get permissionsUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredString "default_workflow_permissions" document.RootElement,
+                                  requiredBool "can_approve_pull_request_reviews" document.RootElement with
+                            | Ok permission, Ok canApprove when
+                                permission = "read" || permission = "write" ->
+                                readIdentity ()
+                                |> Result.bind (fun finalIdentity ->
+                                    if finalIdentity <> firstIdentity then
+                                        Error(MigrationReadFailure.SnapshotMismatch "workflow-permissions-identity")
+                                    else
+                                        Ok { RepositoryId=options.ExpectedRepositoryId
+                                             RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                             IdentityUri=identityUri.AbsoluteUri
+                                             IdentityPayloadJson=firstIdentity
+                                             IdentityPayloadSha256=sha firstIdentity
+                                             PermissionsUri=permissionsUri.AbsoluteUri
+                                             PermissionsPayloadJson=body
+                                             PermissionsPayloadSha256=sha body
+                                             DefaultWorkflowPermissions=permission
+                                             CanApprovePullRequestReviews=canApprove })
+                            | Ok _, Ok _ ->
+                                Error(MigrationReadFailure.MalformedResponse "invalid:workflow-permissions")
+                            | Error failure, _ | _, Error failure -> Error failure))))
 
     let readReceiverSnapshot (options: MigrationGitHubReadOptions) receiverName expectedNodeId refName expectedHead
                              (transport: IMigrationGitHubReadTransport) =
