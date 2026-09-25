@@ -53,6 +53,7 @@ class ProducerWitnessResult:
     bundle_sha256: str
     workflow_sha256: str
     workflow_blob_oid: str
+    artifact_created_at: str
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -278,4 +279,5 @@ def qualify(preflight: release.PreflightResult,
         preflight.source_tree, selection["producerRunId"],
         selection["producerRunAttempt"], selection["artifactId"],
         preflight.archive_sha256, hashlib.sha256(bundle).hexdigest(),
-        selection["workflowSha256"], workflow_source.workflow_blob_oid)
+        selection["workflowSha256"], workflow_source.workflow_blob_oid,
+        artifact["createdAt"])
