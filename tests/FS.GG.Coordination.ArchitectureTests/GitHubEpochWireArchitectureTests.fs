@@ -56,10 +56,10 @@ let ``native unit binds the exact landed roadmap prerequisite and Q3 command`` (
     use index = JsonDocument.Parse(read "eng/github-substrate-v2-units.json")
     use catalog = JsonDocument.Parse(read "eng/github-substrate-v2-gates.json")
     let roadmap = index.RootElement.GetProperty("roadmap")
-    Assert.Equal("15de6f92e501a4416e782c0d9c111351d697c3a1", roadmap.GetProperty("revision").GetString())
+    Assert.Equal("2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4", roadmap.GetProperty("revision").GetString())
 
     Assert.Equal(
-        "9e9e91383d81b9aa49fb8324a6a621bfc318e41ce5e4b3bb909c18d1e7f403d8",
+        "ada495e10996a37067ef0f28991ff72781fc17ce4e5c7020db089b0c99de329c",
         roadmap.GetProperty("sha256").GetString()
     )
 
