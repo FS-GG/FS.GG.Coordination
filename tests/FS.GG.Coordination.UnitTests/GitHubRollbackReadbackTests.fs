@@ -396,3 +396,103 @@ let ``native custody refuses missing duplicate foreign revision and unmatching c
                  prove { native with Steps=native.Steps |> List.updateAt 0 emptyRaw })
     let wrongEpoch = { native.Terminal with CanonicalEpoch=Encoding.UTF8.GetBytes("OpenV2") }
     Assert.Equal(Error [ RawEvidenceMismatch ], prove { native with Terminal=wrongEpoch })
+
+let private custodyPins : GitHubRollbackProtectedNativePins =
+    { ReaderResourceId="reader:protected-q6"; CanonicalizerSha256=sha "installed-q6-canonicalizer"
+      CustodyStoreResourceId="vault:protected-q6" }
+
+let private custodyFixture (selected: GitHubRollbackPlan) (completed: GitHubRollbackReceipt list)
+    (claims: GitHubRollbackStepProvenanceClaim list) (witness: GitHubRollbackNativeOrderWitness) =
+    let native = nativeBytes selected claims witness
+    let stepRecords =
+        (List.zip3 selected.Steps completed native.Steps)
+        |> List.map (fun (step, receipt, bytes) ->
+            let lookup =
+                { RunNonce="run-812-attempt-1"; PlanSeal=selected.Seal
+                  SandboxResourceId=orderBinding.SandboxResourceId
+                  WitnessGeneration=orderBinding.WitnessGeneration
+                  Subject=RollbackStep step.StepId; ReceiptSha256=receipt.ReceiptSha256 }
+            lookup,
+            { Lookup=lookup; CustodyStoreResourceId=custodyPins.CustodyStoreResourceId
+              CustodyObjectId=$"object:{step.StepId}"; Step=Some bytes; Terminal=None })
+    let terminalLookup =
+        { RunNonce="run-812-attempt-1"; PlanSeal=selected.Seal
+          SandboxResourceId=orderBinding.SandboxResourceId
+          WitnessGeneration=orderBinding.WitnessGeneration
+          Subject=TerminalEpoch; ReceiptSha256=(List.last completed).ReceiptSha256 }
+    let terminalRecord =
+        { Lookup=terminalLookup; CustodyStoreResourceId=custodyPins.CustodyStoreResourceId
+          CustodyObjectId="object:terminal"; Step=None; Terminal=Some native.Terminal }
+    (stepRecords @ [ terminalLookup, terminalRecord ]) |> Map.ofList
+
+let private fakeCustodyPort installation records =
+    { new IProtectedNativeCustodyPort with
+        member _.Describe() = installation
+        member _.Read lookup = records |> Map.tryFind lookup }
+
+[<Fact>]
+let ``protected custody port binds pinned installation and retained signed batch`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    let witness = orderWitness selected completed
+    let retained = custodyFixture selected completed claims witness
+    let installation : GitHubRollbackNativeInstallation =
+        { ReaderResourceId=custodyPins.ReaderResourceId
+          CanonicalizerSha256=custodyPins.CanonicalizerSha256
+          CustodyStoreResourceId=custodyPins.CustodyStoreResourceId }
+    let port = fakeCustodyPort installation retained
+    use signer = RSA.Create()
+    signer.KeySize <- 3072
+    let publicKey = signer.ExportSubjectPublicKeyInfo()
+    let pin = publicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let payload = payloadForProtectedCustodySigning custodyPins (Some port) orderBinding witness
+                    expected selected completed claims finalEpoch |> get
+    let signature = signer.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+    Assert.Equal(Ok(), verifySignedProtectedCustody pin publicKey signature custodyPins (Some port)
+                         orderBinding witness expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ ProtectedNativePortUnavailable ],
+                 verifySignedProtectedCustody pin publicKey signature custodyPins None
+                     orderBinding witness expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ MissingProtectedNativePins ],
+                 verifySignedProtectedCustody pin publicKey signature
+                     { custodyPins with ReaderResourceId="" } (Some port)
+                     orderBinding witness expected selected completed claims finalEpoch)
+
+[<Fact>]
+let ``protected custody port refuses drift missing evidence duplicate objects and cross-run lookup`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    let witness = orderWitness selected completed
+    let retained = custodyFixture selected completed claims witness
+    let installation : GitHubRollbackNativeInstallation =
+        { ReaderResourceId=custodyPins.ReaderResourceId
+          CanonicalizerSha256=custodyPins.CanonicalizerSha256
+          CustodyStoreResourceId=custodyPins.CustodyStoreResourceId }
+    let prove port =
+        payloadForProtectedCustodySigning custodyPins (Some port) orderBinding witness
+            expected selected completed claims finalEpoch
+    let drift = fakeCustodyPort { installation with CanonicalizerSha256=sha "other-parser" } retained
+    Assert.Equal(Error [ ProtectedNativeInstallationMismatch ], prove drift)
+    let firstKey, firstRecord = retained |> Map.toList |> List.head
+    let missing = fakeCustodyPort installation (retained |> Map.remove firstKey)
+    Assert.Equal(Error [ NativeCustodyReadUnavailable ], prove missing)
+    let unknownRead =
+        { new IProtectedNativeCustodyPort with
+            member _.Describe() = installation
+            member _.Read _ = failwith "simulated protected store outage" }
+    Assert.Equal(Error [ NativeCustodyReadUnavailable ], prove unknownRead)
+    let foreign = fakeCustodyPort installation
+                    (retained |> Map.add firstKey
+                        { firstRecord with Lookup={ firstRecord.Lookup with RunNonce="foreign-run" } })
+    Assert.Equal(Error [ NativeCustodyObjectMismatch ], prove foreign)
+    let secondKey, secondRecord = retained |> Map.toList |> List.item 1
+    let duplicate = fakeCustodyPort installation
+                        (retained |> Map.add secondKey
+                            { secondRecord with CustodyObjectId=firstRecord.CustodyObjectId })
+    Assert.Equal(Error [ NativeCustodyObjectMismatch ], prove duplicate)

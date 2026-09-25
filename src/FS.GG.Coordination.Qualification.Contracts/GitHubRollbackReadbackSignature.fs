@@ -16,6 +16,11 @@ type GitHubRollbackSignatureFailure =
     | InvalidObservationOrder
     | InvalidRawEvidence
     | RawEvidenceMismatch
+    | MissingProtectedNativePins
+    | ProtectedNativePortUnavailable
+    | ProtectedNativeInstallationMismatch
+    | NativeCustodyReadUnavailable
+    | NativeCustodyObjectMismatch
 
 type GitHubRollbackExpectedOrderBinding =
     { SandboxResourceId: string
@@ -63,6 +68,39 @@ type GitHubRollbackTerminalNativeBytes =
 type GitHubRollbackNativeByteBatch =
     { Steps: GitHubRollbackStepNativeBytes list
       Terminal: GitHubRollbackTerminalNativeBytes }
+
+type GitHubRollbackProtectedNativePins =
+    { ReaderResourceId: string
+      CanonicalizerSha256: string
+      CustodyStoreResourceId: string }
+
+type GitHubRollbackNativeInstallation =
+    { ReaderResourceId: string
+      CanonicalizerSha256: string
+      CustodyStoreResourceId: string }
+
+type GitHubRollbackCustodySubject =
+    | RollbackStep of stepId:string
+    | TerminalEpoch
+
+type GitHubRollbackNativeCustodyLookup =
+    { RunNonce: string
+      PlanSeal: string
+      SandboxResourceId: string
+      WitnessGeneration: int64
+      Subject: GitHubRollbackCustodySubject
+      ReceiptSha256: string }
+
+type GitHubRollbackRetainedNativeBytes =
+    { Lookup: GitHubRollbackNativeCustodyLookup
+      CustodyStoreResourceId: string
+      CustodyObjectId: string
+      Step: GitHubRollbackStepNativeBytes option
+      Terminal: GitHubRollbackTerminalNativeBytes option }
+
+type IProtectedNativeCustodyPort =
+    abstract Describe: unit -> GitHubRollbackNativeInstallation
+    abstract Read: GitHubRollbackNativeCustodyLookup -> GitHubRollbackRetainedNativeBytes option
 
 module GitHubRollbackReadbackSignature =
     let private exactAtom (value: string) =
@@ -311,3 +349,105 @@ module GitHubRollbackReadbackSignature =
         (claims: GitHubRollbackStepProvenanceClaim list) (terminal: GitHubRollbackEpochProvenanceClaim) =
         verifyPinnedPayload pinnedSpkiSha256 publicKeySpki signature
             (fun () -> payloadForCustodySigning expectedOrder witness native expected plan receipts claims terminal)
+
+    let private exactSha (value: string) =
+        not (isNull value) && Regex.IsMatch(value, "^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
+
+    let private custodyLookup (expected: GitHubRollbackExpectedReadbackBinding)
+        (expectedOrder: GitHubRollbackExpectedOrderBinding) subject receiptSha =
+        { RunNonce=expected.RunNonce; PlanSeal=expected.PlanSeal
+          SandboxResourceId=expectedOrder.SandboxResourceId
+          WitnessGeneration=expectedOrder.WitnessGeneration
+          Subject=subject; ReceiptSha256=receiptSha }
+
+    let private writeLookup (writer: BinaryWriter) (lookup: GitHubRollbackNativeCustodyLookup) =
+        atom writer lookup.RunNonce
+        atom writer lookup.PlanSeal
+        atom writer lookup.SandboxResourceId
+        writer.Write(lookup.WitnessGeneration)
+        match lookup.Subject with
+        | RollbackStep stepId -> atom writer "step"; atom writer stepId
+        | TerminalEpoch -> atom writer "terminal"
+        atom writer lookup.ReceiptSha256
+
+    let payloadForProtectedCustodySigning (pins: GitHubRollbackProtectedNativePins)
+        (port: IProtectedNativeCustodyPort option) (expectedOrder: GitHubRollbackExpectedOrderBinding)
+        (witness: GitHubRollbackNativeOrderWitness) (expected: GitHubRollbackExpectedReadbackBinding)
+        (plan: GitHubRollbackPlan) (receipts: GitHubRollbackReceipt list)
+        (claims: GitHubRollbackStepProvenanceClaim list) (terminal: GitHubRollbackEpochProvenanceClaim) =
+        if not (exactAtom pins.ReaderResourceId && exactSha pins.CanonicalizerSha256
+                && exactAtom pins.CustodyStoreResourceId) then
+            Error [ MissingProtectedNativePins ]
+        else
+            match payloadForOrderedSigning expectedOrder witness expected plan receipts claims terminal with
+            | Error failures -> Error failures
+            | Ok _ ->
+                match port with
+                | None -> Error [ ProtectedNativePortUnavailable ]
+                | Some protectedPort ->
+                    try
+                        let installed = protectedPort.Describe()
+                        if installed.ReaderResourceId <> pins.ReaderResourceId
+                           || installed.CanonicalizerSha256 <> pins.CanonicalizerSha256
+                           || installed.CustodyStoreResourceId <> pins.CustodyStoreResourceId then
+                            Error [ ProtectedNativeInstallationMismatch ]
+                        else
+                            let lookups =
+                                (plan.Steps, receipts)
+                                ||> List.map2 (fun step receipt ->
+                                    custodyLookup expected expectedOrder (RollbackStep step.StepId) receipt.ReceiptSha256)
+                                |> fun steps ->
+                                    steps @ [ custodyLookup expected expectedOrder TerminalEpoch
+                                                  (List.last receipts).ReceiptSha256 ]
+                            let retained = lookups |> List.map protectedPort.Read
+                            if retained |> List.exists Option.isNone then
+                                Error [ NativeCustodyReadUnavailable ]
+                            else
+                                let records = retained |> List.choose id
+                                let objects = records |> List.map _.CustodyObjectId
+                                if (List.zip lookups records
+                                    |> List.exists (fun (lookup, record) ->
+                                        record.Lookup <> lookup
+                                        || record.CustodyStoreResourceId <> pins.CustodyStoreResourceId
+                                        || not (exactAtom record.CustodyObjectId)))
+                                   || (objects |> List.distinct |> List.length) <> objects.Length then
+                                    Error [ NativeCustodyObjectMismatch ]
+                                else
+                                    let stepRecords = records |> List.take plan.Steps.Length
+                                    let lastRecord = records |> List.last
+                                    if stepRecords |> List.exists (fun record -> record.Step.IsNone || record.Terminal.IsSome)
+                                       || lastRecord.Step.IsSome || lastRecord.Terminal.IsNone then
+                                        Error [ NativeCustodyObjectMismatch ]
+                                    else
+                                        let native =
+                                            { Steps=stepRecords |> List.choose _.Step
+                                              Terminal=lastRecord.Terminal.Value }
+                                        match payloadForCustodySigning expectedOrder witness native expected plan receipts claims terminal with
+                                        | Error failures -> Error failures
+                                        | Ok custodyPayload ->
+                                            use stream = new MemoryStream()
+                                            use writer = new BinaryWriter(stream, Encoding.UTF8, true)
+                                            atom writer "fsgg.gs2-09.7.q6-protected-custody-port/v1"
+                                            writer.Write(custodyPayload.Length)
+                                            writer.Write(custodyPayload)
+                                            atom writer pins.ReaderResourceId
+                                            atom writer pins.CanonicalizerSha256
+                                            atom writer pins.CustodyStoreResourceId
+                                            integer writer records.Length
+                                            for record in records do
+                                                writeLookup writer record.Lookup
+                                                atom writer record.CustodyStoreResourceId
+                                                atom writer record.CustodyObjectId
+                                            writer.Flush()
+                                            Ok(stream.ToArray())
+                    with _ -> Error [ NativeCustodyReadUnavailable ]
+
+    let verifySignedProtectedCustody pinnedSpkiSha256 (publicKeySpki: byte[]) (signature: byte[])
+        (pins: GitHubRollbackProtectedNativePins) (port: IProtectedNativeCustodyPort option)
+        (expectedOrder: GitHubRollbackExpectedOrderBinding) (witness: GitHubRollbackNativeOrderWitness)
+        (expected: GitHubRollbackExpectedReadbackBinding) (plan: GitHubRollbackPlan)
+        (receipts: GitHubRollbackReceipt list) (claims: GitHubRollbackStepProvenanceClaim list)
+        (terminal: GitHubRollbackEpochProvenanceClaim) =
+        verifyPinnedPayload pinnedSpkiSha256 publicKeySpki signature
+            (fun () -> payloadForProtectedCustodySigning pins port expectedOrder witness
+                            expected plan receipts claims terminal)
