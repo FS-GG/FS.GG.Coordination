@@ -54,6 +54,8 @@ module DirectSessionCorrelationHandoff =
            || isNull (box assignmentAuthenticator)
            || isNull (box currentTurnSource) then
             Error "direct-session-adapter-missing"
+        elif not (DirectSessionTelemetryFacts.validScope expectedScope) then
+            Error "direct-session-assignment-scope-invalid"
         else
             match read "direct-session-assignment-unavailable" assignmentAuthenticator.ReadAuthorizedAssignment with
             | Error _ -> Error "direct-session-assignment-unavailable"

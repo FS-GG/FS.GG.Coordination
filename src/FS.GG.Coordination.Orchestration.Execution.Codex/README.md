@@ -28,6 +28,7 @@ describes those remaining requirements.
 requires two independently supplied records to agree on the exact assignment, native session,
 prospective window challenge and thread before calling the mapper. No trusted implementation of
 either interface is installed, so its successful structural result is not capture evidence.
+The expected scope must pass the mapper's grammar before either source interface is read.
 
 `DirectSessionProspectiveWindowGate` models the next source boundary: an issued challenge is valid
 for at most five minutes, may prepare one turn, and must match the selected current-session source.
