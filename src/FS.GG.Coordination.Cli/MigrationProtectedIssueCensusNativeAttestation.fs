@@ -67,7 +67,27 @@ module MigrationProtectedIssueCensusNativeAttestation =
           attestation.ExpiresAtUtc.ToUniversalTime().ToString("O") ]
         |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes
 
+    let private validHandoffIdentity (pins: ProtectedIssueCensusHandoffPins)
+                                     (marker: ProtectedIssueCensusHandoffRequest) =
+        not (String.IsNullOrWhiteSpace pins.HandoffResourceId)
+        && exactSha pins.HandoffArtifactSha256
+        && not (String.IsNullOrWhiteSpace pins.VaultResourceId)
+        && exactSha pins.VaultArtifactSha256
+        && not (String.IsNullOrWhiteSpace pins.NativeAttemptNamespaceId)
+        && pins.AppId > 0L && pins.InstallationId > 0L && pins.RepositoryId > 0L
+        && exactSha pins.PermissionSha256
+        && MigrationProtectedIssueCensusAttemptRecovery.validMarkerChain marker
+        && marker.NativeAttemptId =
+            MigrationProtectedIssueCensusHandoff.attemptId marker.ReservationId pins
+        && marker.AppId = pins.AppId
+        && marker.InstallationId = pins.InstallationId
+        && marker.RepositoryId = pins.RepositoryId
+        && marker.Selection.RepositoryId = pins.RepositoryId
+        && marker.PermissionSha256 = pins.PermissionSha256
+        && marker.VaultResourceId = pins.VaultResourceId
+
     let verify (pins: ProtectedIssueCensusNativeAttestationPins)
+               (handoffPins: ProtectedIssueCensusHandoffPins)
                (expectedMarker: ProtectedIssueCensusHandoffRequest)
                (snapshot: ProtectedIssueCensusNativeAttemptSnapshot)
                (attestation: ProtectedIssueCensusNativeSnapshotAttestation option)
@@ -75,8 +95,7 @@ module MigrationProtectedIssueCensusNativeAttestation =
         match publicKey pins with
         | None -> Error "protected-native-attestation-pins"
         | Some publicBytes ->
-            if not (MigrationProtectedIssueCensusAttemptRecovery.validMarkerChain
-                        expectedMarker)
+            if not (validHandoffIdentity handoffPins expectedMarker)
                || expectedMarker.ClockResourceId <> pins.ClockResourceId
                || expectedMarker.ClockArtifactSha256 <> pins.ClockArtifactSha256 then
                 Error "protected-native-attestation-binding"

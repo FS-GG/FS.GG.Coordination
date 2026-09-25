@@ -24,7 +24,7 @@ let private handoffPins =
       AppId=101L; InstallationId=202L; RepositoryId=42L
       PermissionSha256=String.replicate 64 "4" }
 
-let private fixtureWithSelectionAndMarkerClock select markerClockResource markerClockArtifact =
+let private fixtureWithSelectionMarkerAndClock select alterMarker markerClockResource markerClockArtifact =
     use signer = ECDsa.Create(ECCurve.NamedCurves.nistP256)
     let publicBytes = signer.ExportSubjectPublicKeyInfo()
     let pins =
@@ -72,6 +72,7 @@ let private fixtureWithSelectionAndMarkerClock select markerClockResource marker
           ClockResourceId=markerClockResource
           ClockArtifactSha256=markerClockArtifact
           SignedExpiresAtUtc=issued.AddSeconds 60 }
+        |> alterMarker
     let record =
         { Request=marker; ProviderAttemptId=marker.NativeAttemptId
           VaultResourceId=marker.VaultResourceId; Phase=TokenVaulted
@@ -103,6 +104,9 @@ let private fixtureWithSelectionAndMarkerClock select markerClockResource marker
         { unsignedAttestation with SignatureBase64=Convert.ToBase64String signature }
     pins, marker, snapshot, signed, issued.AddSeconds 10
 
+let private fixtureWithSelectionAndMarkerClock select markerClockResource markerClockArtifact =
+    fixtureWithSelectionMarkerAndClock select id markerClockResource markerClockArtifact
+
 let private fixtureWithMarkerClock markerClockResource markerClockArtifact =
     fixtureWithSelectionAndMarkerClock id markerClockResource markerClockArtifact
 
@@ -111,7 +115,7 @@ let private fixture () =
 
 let private verify pins marker snapshot attestation now =
     MigrationProtectedIssueCensusNativeAttestation.verify
-        pins marker snapshot attestation
+        pins handoffPins marker snapshot attestation
         (Some (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
 
 let private inspectSignedWithHandoffClock (pins: ProtectedIssueCensusNativeAttestationPins)
@@ -206,7 +210,7 @@ let ``native snapshot verifier refuses candidate clock and missing native pin`` 
             member _.ReadNow() = Some now }
     Assert.Equal(Error "protected-native-clock-installation",
                  MigrationProtectedIssueCensusNativeAttestation.verify
-                     pins marker snapshot (Some attestation) (Some candidateClock))
+                     pins handoffPins marker snapshot (Some attestation) (Some candidateClock))
     Assert.Equal(Error "protected-native-attestation-pins",
                  verify { pins with NativeAttemptArtifactSha256="" }
                      marker snapshot (Some attestation) now)
@@ -271,6 +275,24 @@ let ``signed recovery refuses malformed durable selection despite valid snapshot
     for select in invalid do
         let pins, marker, snapshot, attestation, now =
             fixtureWithSelectionAndMarkerClock select
+                "protected-clock:native-test" (String.replicate 64 "b")
+        Assert.Equal(Error "protected-native-attestation-binding",
+                     verify pins marker snapshot (Some attestation) now)
+        Assert.Equal(Error "protected-census-attempt-binding",
+                     inspectSigned pins marker snapshot (Some attestation) now)
+
+[<Fact>]
+let ``direct native attestation refuses foreign handoff identity despite valid signature`` () =
+    let invalid =
+        [ (fun marker -> { marker with NativeAttemptId=String.replicate 64 "0" })
+          (fun marker -> { marker with AppId=999L })
+          (fun marker -> { marker with InstallationId=999L })
+          (fun marker -> { marker with RepositoryId=999L })
+          (fun marker -> { marker with PermissionSha256=String.replicate 64 "0" })
+          (fun marker -> { marker with VaultResourceId="protected-vault:foreign" }) ]
+    for alterMarker in invalid do
+        let pins, marker, snapshot, attestation, now =
+            fixtureWithSelectionMarkerAndClock id alterMarker
                 "protected-clock:native-test" (String.replicate 64 "b")
         Assert.Equal(Error "protected-native-attestation-binding",
                      verify pins marker snapshot (Some attestation) now)
