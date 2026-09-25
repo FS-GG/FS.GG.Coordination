@@ -122,6 +122,13 @@ typed schema evidence. It was red before the repair. `readProjectFields` now
 checks recursive member uniqueness before interpreting fields, options or
 pagination. This remains partial project authority evidence.
 
+A seventeenth independent control found the project value GraphQL reader
+could accept duplicate raw field IDs, selected `optionId` or nested
+`hasNextPage` members into typed values. It was red before the repair.
+`readProjectValues` now checks recursive member uniqueness before
+interpreting field identity, value content or nested pagination. Protected
+native readback and complete project authority remain outstanding.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
