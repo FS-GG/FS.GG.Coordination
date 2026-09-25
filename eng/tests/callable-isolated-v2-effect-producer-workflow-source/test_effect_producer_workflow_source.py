@@ -78,6 +78,20 @@ class ProducerWorkflowSourceTests(unittest.TestCase):
         self.refuses(lambda _t, g, _s: g.scopes[1].__setitem__("credentialId", "3" * 64))
         self.refuses(lambda _t, g, _s: g.scopes[0].__setitem__("permissions", ["contents:write"]))
 
+    def test_same_scope_object_mutated_during_workflow_read_refuses(self):
+        source_tree, port, selection = fixture()
+        shared = dict(port.scopes[0])
+        shared["permissions"] = list(shared["permissions"])
+        port.scope = lambda: shared
+        original_read = port.read_commit
+        def drift(oid):
+            raw = original_read(oid)
+            shared["credentialId"] = "f" * 64
+            return raw
+        port.read_commit = drift
+        with self.assertRaises(workflow.Refused):
+            workflow.qualify(source_tree, port, selection, NOW)
+
 
 if __name__ == "__main__":
     unittest.main()

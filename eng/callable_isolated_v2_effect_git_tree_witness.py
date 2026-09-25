@@ -6,6 +6,7 @@ import dataclasses
 import datetime as dt
 import hashlib
 import io
+import copy
 import zipfile
 from typing import Any, Protocol
 
@@ -102,7 +103,7 @@ def _scope(port: GitObjectPort | RepositoryIdentityPort,
             or scope["permissions"] != permissions
             or expires <= now):
         raise Refused("git-scope-binding")
-    return scope
+    return copy.deepcopy(scope)
 
 
 def _identity(port: RepositoryIdentityPort, event_id: int,
