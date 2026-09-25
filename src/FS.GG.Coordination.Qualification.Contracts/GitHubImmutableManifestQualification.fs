@@ -298,7 +298,10 @@ module GitHubImmutableManifestQualification =
             findings.Add(GitHubImmutableManifestFinding.InvalidManifestPopulation "subjects")
 
         let oldGlobalIds = manifest.Subjects |> List.map _.Old.GlobalId
+        let resultIdentities = manifest.Subjects |> List.map _.Result.Identity
         let resultGlobalIds = manifest.Subjects |> List.map _.Result.GlobalId
+        if not (unique resultIdentities) then
+            findings.Add(GitHubImmutableManifestFinding.InvalidManifestPopulation "resultIdentities")
         if not (unique oldGlobalIds && unique resultGlobalIds) then
             findings.Add(GitHubImmutableManifestFinding.InvalidManifestPopulation "globalIds")
 

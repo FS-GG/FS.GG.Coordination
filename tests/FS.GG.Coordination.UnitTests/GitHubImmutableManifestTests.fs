@@ -49,7 +49,7 @@ let private rollbackInputs =
         { Identity = "rollback-settings"; Kind = "repository-settings"; Revision = revision "2"; PayloadSha256 = sha "settings" }
     ]
 
-let private qualifyBaseline () =
+let private qualifyWithSubjects subjectRows =
     qualify
         "manifest-gs2-09-2-fixture"
         (revision "a")
@@ -63,7 +63,7 @@ let private qualifyBaseline () =
         (fingerprint "github-v1-model" "1" "old-model")
         (fingerprint "github-v2-model" "2" "new-model")
         [ fingerprint "migration-cli" "0.90.0" "cli"; fingerprint "verifier" "1.0.0" "verifier" ]
-        subjects
+        subjectRows
         [ { Identity = "operation:1"; Generation = 3L; Kind = "queued-write"; Target = "FS-GG/repo#1"; State = "observed"; PayloadSha256 = sha "operation" } ]
         [ { Receiver = "FS-GG/.github"; RepositoryId = "R_1"; CommitSha = revision "3"; TreeSha = revision "4"; PinsSha256 = sha "pins" } ]
         [ { Repository = "FS-GG/.github"; PrestateSha256 = sha "prestate"; DesiredSha256 = sha "desired"; PlanSha256 = sha "settings-plan" } ]
@@ -87,6 +87,8 @@ let private qualifyBaseline () =
         ]
         rollbackInputs
         (DateTimeOffset.Parse "2026-09-22T22:00:00Z")
+
+let private qualifyBaseline () = qualifyWithSubjects subjects
 
 let private get =
     function
@@ -125,6 +127,17 @@ let ``omitted discovered subject and duplicate global id refuse`` () =
     Assert.Contains(GitHubImmutableManifestFinding.InvalidManifestPopulation "globalIds", verify discovered baseline.Seal duplicate |> refusal)
 
 [<Fact>]
+let ``two discovered subjects cannot collapse onto one v2 result identity`` () =
+    let target = subjects.Head.Result.Identity
+    let collapsed =
+        subjects
+        |> List.mapi (fun index subject ->
+            if index = 1 then { subject with Result={ subject.Result with Identity=target } }
+            else subject)
+    Assert.Contains(GitHubImmutableManifestFinding.InvalidManifestPopulation "resultIdentities",
+                    qualifyWithSubjects collapsed |> refusal)
+
+[<Fact>]
 let ``fresh unknown subject refuses an otherwise sealed manifest`` () =
     let baseline = qualifyBaseline () |> get
     let freshDiscovery = discovered @ [ "workflow-pins:unexpected" ] |> List.sort
@@ -144,6 +157,21 @@ let ``exact manifest requalification is stable and changes no planned result`` (
     Assert.Equal(first.NormalizedDigest, replay.NormalizedDigest)
     Assert.True(first.Subjects = replay.Subjects)
     Assert.True(first.PhasePlans = replay.PhasePlans)
+
+[<Fact>]
+let ``changed result identity creates a distinct manifest and cannot reuse the old seal`` () =
+    let baseline = qualifyBaseline () |> get
+    let changedSubjects =
+        subjects
+        |> List.mapi (fun index subject ->
+            if index = 1 then
+                { subject with Result = { subject.Result with Identity = "v2:project-items:replacement" } }
+            else subject)
+    let changed = qualifyWithSubjects changedSubjects |> get
+
+    Assert.NotEqual(baseline.NormalizedDigest, changed.NormalizedDigest)
+    Assert.NotEqual(baseline.Seal, changed.Seal)
+    Assert.Equal(Error [ GitHubImmutableManifestFinding.AlteredManifestSeal ], verify discovered baseline.Seal changed)
 
 [<Fact>]
 let ``reordered artifacts and incomplete archives refuse`` () =
