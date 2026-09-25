@@ -1,0 +1,52 @@
+# GS2-09.9 native v2 custody decision before an installed provider run
+
+Status: read-only owner packet, 2026-09-25. This is a proposed qualification boundary, not a protected approval, grant, installation, native receipt or GS2-09.9 acceptance. The current typed ceiling excludes a new provider mutation. No selected target, v2 execution credential, protected journal backend or one-POST authority exists in this packet.
+
+## Exact source and installed boundary
+
+| Evidence | Current fact | Limit |
+| --- | --- | --- |
+| [Native reader](../../eng/callable-cli-isolated-operation-v2.py) and [controls](../../eng/tests/fsc07-isolated-operation/test_versioned_operator_readback.py) | Draft [#582](https://github.com/FS-GG/FS.GG.Coordination/pull/582) is `07c995098306b6ddf2efcceb60d354b40289357d`; source SHA-256 `095b465abd509127b4363f101be90ce76dde661a8abeb6aadb066041327b0ab2`, controls SHA-256 `3ca7f03680e0910632c79d393036ded4564dbbe227918a41c57e326f876a9423`. The injected reader and one-attempt runtime have no selected-repository token or protected CAS adapter. | The loopback and transcript tests cannot prove installed-provider custody or a live effect. Each source edit requires fresh exact-byte qualification. |
+| [Grant parser #554](https://github.com/FS-GG/FS.GG.Coordination/pull/554) and [authority ports #559](https://github.com/FS-GG/FS.GG.Coordination/pull/559) | #559 head `256a8ff7e46e20467256a63f396ebe4b8ef830cf`: a canonical grant can be parsed against caller-supplied observations; issuer, authority, replay and journal interfaces remain unimplemented protected ports. Even matching synthetic data returns `authorized:false`, `can_dispatch:false`. | A matching object, distinct Python instances, or local journal is not an authenticated observer, atomic reservation or grant. |
+| [Inspect-only zipapp #555](https://github.com/FS-GG/FS.GG.Coordination/pull/555) and [release chain through #573](https://github.com/FS-GG/FS.GG.Coordination/pull/573) | #555 head `70cb2fa6e8d7fa49d716e4febc2c07d88160c058`; #573 head `e457a3ffd2b3a3c682e8b22ffa08ba9f9d75cf44`. The proposed archive SHA-256 is `003f63ac1b0f895642a7000954607b0980f8e9f1dbb058576e66b40ed79cbfb7`. Its entry has `inspect-grant` only; the [#563 workflow](https://github.com/FS-GG/FS.GG.Coordination/pull/563) has `if: ${{ false }}` and placeholder source/image/packet pins. | Neither draft release bytes nor a later inspect-only installed refusal qualify an `execute-native-pull` artifact. The latter needs a different reviewed artifact, workflow and grant boundary. |
+| [One-operation plan #550](https://github.com/FS-GG/FS.GG.Coordination/pull/550) | Head `19323acc60f6f1314b9c92030c203bf2789e21ad` proposes one canonical `POST /repos/{selected owner}/{selected repo}/pulls` after separate setup and durable intent, with lost-response native reconciliation and no repeat. | The amendment is still `prepared-not-authorized`; no target, reviewer, setup receipt, journal or grant is selected. |
+
+Protected Coordination `main` read back as `b8225f6b63f764f58ec20735d3cf849b37c57276` at this checkpoint. The heads above are drafts, not installed source. The historical v1 operation and its receiver/credential do not transfer to this revision.
+
+## Principal and evidence custody to select
+
+Each protected observation must identify its principal, credential scope, source API or journal, observed run/attempt, immutable evidence ID and digest, and observation time. The dispatch actor cannot provide its own reviewer or membership proof. The grant issuer must differ from the dispatch actor and reviewer; readback credentials must not inherit the execution writer's `pull_requests:write` scope.
+
+| Custodian | Independent fact required before one POST | Still missing |
+| --- | --- | --- |
+| Release producer and separate release observers | Protected Coordination commit/tree, runnable workflow commit and byte digest, producer run/artifact IDs, exact installed effect archive/source/controls, immutable runner image and interpreter closure, four separately sourced release/review/installed observations. | No protected runnable v2 release, producer/artifact IDs, approved image or installed effect archive. The disabled inspect-only workflow is not an execution workflow. |
+| Protected authority, membership and grant issuer | Protected `.github` workflow and environment revision, exact run ID/attempt, dispatch actor ID, distinct active reviewer and approval event, separately identified issuer and single canonical grant artifact bound to that event. | No selected actor, reviewer, approval event, issuer event or protected effect workflow. |
+| Target observer and execution App custodian | Fresh disposable synthetic repository name, numeric/node ID, installation ID and exact selected-repository set; source/base refs and SHAs, complete absent marker census, policy and cleanup capability; token issue/expiry and effective `metadata:read`, `contents:read`, `pull_requests:write` only. | No target or selected App role. A broad actor repository flag or GS2-09.7 sandbox grant cannot substitute. |
+| Protected journal writer and independent replay reader | Named `.github` repository/ref/backend, prior generation/head, exact operation/request/target/grant digest, accepted CAS marker `attempt-may-have-started`, committed generation/head and independent durable readback across fresh processes. | No protected v2 CAS implementation, credential, generation, or restart proof. The local SQLite fence is test-only. |
+| Native result observer | Exactly one counted POST from the selected credential, sanitized response/exception hashes, two complete repository/ref/PR list/detail readbacks from the selected target, stable terminal identities, and a fresh-process zero-repeat result bound to the same journal generation. | No installed provider transport or native v2 run. A 2xx response alone is not acceptance; 3xx/4xx remains Unknown. |
+
+Setup and cleanup each require their own grant, credential and receipt. Neither may be hidden in the one-POST count. The execution job must have no cleanup token.
+
+## Independent negative controls for the protected candidate
+
+These are **unrun acceptance tests** for the future installed effect command and observer implementations. Their inputs must be independently prepared; a candidate's own sealed JSON cannot prove its provenance.
+
+| Inversion | Required observable outcome |
+| --- | --- |
+| Omit the grant; substitute a draft or inspect-only archive; change source tree, workflow, producer run/artifact, image or interpreter closure. | Refuse before token read, CAS or POST. Retain exact installed archive and post-probe hashes. |
+| Reuse the dispatch actor as reviewer or issuer; omit active membership or approval event; change run attempt; let the candidate supply its own selection digest. | No grant issuance or execution token. Independent authority/review observations identify the mismatch. |
+| Select a foreign target, extra repository, broad or unknown App permission, expired token, or changed branch/PR prestate. | No execution-token use or POST; record the effective installation selection without retaining the secret. |
+| Lose CAS acknowledgment, change parent generation/head, or provide only the writer's own readback. | Zero POST. A fresh process rereads the same protected generation and treats an uncertain attempt as spent. |
+| Lose the POST response or receive 500; then change PR head/base, pagination, repository/ref identity or terminal state. | At most one POST across processes; classify Unknown unless both complete native reads prove the exact single poststate. |
+| Return explicit 302/401 while a synthetic exact PR appears; replay the grant or attempt marker. | Unknown and zero repeat POST. No redirect following, automatic compensation, native receipt or cleanup grant. |
+| Put a secret sentinel in URL, response body or exception. | No sentinel in public output, exception chain, traceback or retained sanitized evidence. |
+
+The protected test harness must count token mint/read, CAS writes, POSTs and cleanup attempts at the installed entry. A local injected transport or a matching parser fixture cannot satisfy those counts.
+
+## Decision and first authorized step
+
+The first source decision is a **separate reviewed effect artifact and protected workflow design**, pinned to an immutable integrated Coordination revision. It must implement authenticated authority/issuer/replay observers, selected-repository transport, protected journal CAS and the no-grant installed refusal path without making provider dispatch available by default. The release owner must separately select and read back the inspect-only release principals and immutable artifact/image/runtime pins before enabling that workflow; its success is not native authorization.
+
+After the effect artifact and workflow pass the installed no-effect negatives, a separate owner amendment may authorize target setup and protected journal preparation. The operation reviewer can be asked to approve only the exact run/attempt after the selected target, effective credential scope, complete prestate, source/workflow bytes and committed journal generation are independently read back. That approval plus one-use grant issuance is the final authorization point before a single POST. Any absent coordinate keeps the request pending; #550's proposed text and these drafts issue no grant.
+
+Gate catalog, typed index, #545 disputed receipt, #563 disabled workflow, receiver pin and cutover remain held. Native acceptance needs its own independent result and protected receipt after the one-attempt replay proof.
