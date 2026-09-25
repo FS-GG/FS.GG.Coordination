@@ -61,6 +61,7 @@
     <Compile Include="GitHubRollbackPlanTests.fs" />
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
+    <Compile Include="MigrationReviewDeliveryCaptureTests.fs" />
     <Compile Include="MigrationNativeActivityTests.fs" />
     <Compile Include="MigrationInspectProviderAdapterTests.fs" />
     <Compile Include="MigrationSandboxFixtureSeedTests.fs" />
