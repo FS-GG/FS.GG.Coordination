@@ -12,6 +12,7 @@ from typing import Any, Protocol
 import build_callable_isolated_v2_effect_scaffold as builder
 import callable_isolated_v2_effect_candidate as candidate
 import callable_isolated_v2_effect_git_tree_witness as git_tree
+import callable_isolated_v2_effect_producer_workflow_source as workflow_source_check
 import callable_isolated_v2_effect_release_preflight as release
 
 RUN_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-run/1"
@@ -51,6 +52,7 @@ class ProducerWitnessResult:
     archive_sha256: str
     bundle_sha256: str
     workflow_sha256: str
+    workflow_blob_oid: str
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -98,7 +100,9 @@ def _scope(port: object, repository_id: int, permissions: list[str],
 def qualify(preflight: release.PreflightResult,
             source_tree: git_tree.TreeWitnessResult,
             producer_port: ProducerPort, bundle_port: ArtifactBundlePort,
-            selection: dict[str, Any], now: dt.datetime) -> ProducerWitnessResult:
+            selection: dict[str, Any], now: dt.datetime,
+            workflow_source: workflow_source_check.WorkflowSourceResult | None = None
+            ) -> ProducerWitnessResult:
     """Compare exact fake producer objects; never install or dispatch."""
     selection = _exact(selection, {"repositoryId", "identityEventId",
         "producerRunId", "producerRunAttempt", "producerActorId",
@@ -106,8 +110,10 @@ def qualify(preflight: release.PreflightResult,
         "producer-selection-shape")
     if (type(preflight) is not release.PreflightResult
             or type(source_tree) is not git_tree.TreeWitnessResult
+            or type(workflow_source) is not workflow_source_check.WorkflowSourceResult
             or preflight.schema != release.RESULT_SCHEMA
             or source_tree.schema != git_tree.RESULT_SCHEMA
+            or workflow_source.schema != workflow_source_check.RESULT_SCHEMA
             or preflight.authorized is not False
             or preflight.can_dispatch is not False
             or type(preflight.live_effects) is not int
@@ -116,6 +122,10 @@ def qualify(preflight: release.PreflightResult,
             or source_tree.can_dispatch is not False
             or type(source_tree.live_effects) is not int
             or source_tree.live_effects != 0
+            or workflow_source.authorized is not False
+            or workflow_source.can_dispatch is not False
+            or type(workflow_source.live_effects) is not int
+            or workflow_source.live_effects != 0
             or producer_port is None or bundle_port is None
             or producer_port is bundle_port
             or not all(_positive(selection[key]) for key in
@@ -150,6 +160,17 @@ def qualify(preflight: release.PreflightResult,
             or tuple(sorted(source_tree.source_files)) != source_tree.source_files
             or type(source_tree.identity_event_id) is not int
             or source_tree.identity_event_id != selection["identityEventId"]
+            or workflow_source.coordination_revision !=
+               preflight.coordination_revision
+            or workflow_source.source_tree != preflight.source_tree
+            or type(workflow_source.repository_id) is not int
+            or workflow_source.repository_id != selection["repositoryId"]
+            or type(workflow_source.identity_event_id) is not int
+            or workflow_source.identity_event_id != selection["identityEventId"]
+            or workflow_source.workflow_path != WORKFLOW
+            or workflow_source.workflow_sha256 != selection["workflowSha256"]
+            or not candidate._hex(workflow_source.workflow_blob_oid,
+                                  candidate.HEX40)
             or type(now) is not dt.datetime or now.tzinfo is None
             or now.utcoffset() != dt.timedelta(0)):
         raise Refused("producer-selection-invalid")
@@ -257,4 +278,4 @@ def qualify(preflight: release.PreflightResult,
         preflight.source_tree, selection["producerRunId"],
         selection["producerRunAttempt"], selection["artifactId"],
         preflight.archive_sha256, hashlib.sha256(bundle).hexdigest(),
-        selection["workflowSha256"])
+        selection["workflowSha256"], workflow_source.workflow_blob_oid)

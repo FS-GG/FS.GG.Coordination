@@ -19,6 +19,7 @@ import build_callable_isolated_v2_effect_scaffold as builder
 import callable_isolated_v2_effect_release_preflight as release
 import callable_isolated_v2_effect_git_tree_witness as tree_witness
 import callable_isolated_v2_effect_producer_artifact as producer
+import callable_isolated_v2_effect_producer_workflow_source as workflow_source
 
 NOW = dt.datetime(2026, 9, 25, 12, tzinfo=dt.timezone.utc)
 REV = "a" * 40
@@ -103,13 +104,27 @@ def fixture():
         Port(run_scope, run, artifact), Port(bundle_scope, bundle=bundle))
 
 
+def source_result(preflight, selected):
+    return workflow_source.WorkflowSourceResult(
+        preflight.coordination_revision, preflight.source_tree,
+        selected["repositoryId"], selected["identityEventId"],
+        selected["workflowPath"], selected["workflowSha256"], "f" * 40)
+
+
 class ProducerArtifactTests(unittest.TestCase):
+    def test_missing_workflow_source_was_a_false_green(self):
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW)
+
     def observe(self, change=None):
         preflight, tree, selected, run_port, bundle_port = fixture()
         if change:
             change(preflight, tree, selected, run_port, bundle_port)
         return producer.qualify(preflight, tree, run_port, bundle_port,
-                                selected, NOW)
+                                selected, NOW,
+                                workflow_source=source_result(preflight, selected))
 
     def refuses(self, change):
         with self.assertRaises(producer.Refused):
@@ -122,11 +137,13 @@ class ProducerArtifactTests(unittest.TestCase):
               mock.patch.object(socket.socket, "connect", side_effect=AssertionError("post")),
               mock.patch("sqlite3.connect", side_effect=AssertionError("journal"))):
             result = producer.qualify(preflight, tree, run_port, bundle_port,
-                                      selected, NOW)
+                                      selected, NOW,
+                                      workflow_source=source_result(preflight, selected))
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.archive_sha256, preflight.archive_sha256)
+        self.assertEqual(result.workflow_blob_oid, "f" * 40)
         self.assertEqual(len(run_port.reads), 2)
         self.assertEqual(len(bundle_port.reads), 1)
 
@@ -170,7 +187,21 @@ class ProducerArtifactTests(unittest.TestCase):
         run_port.artifact["digest"] = "sha256:" + ARCHIVE_SHA(bundle_port.bundle)
         with self.assertRaises(producer.Refused):
             producer.qualify(preflight, tree, run_port, bundle_port,
-                             selected, NOW)
+                             selected, NOW,
+                             workflow_source=source_result(preflight, selected))
+
+    def test_workflow_source_foreign_revision_or_digest_refuses(self):
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        selected_source = source_result(preflight, selected)
+        object.__setattr__(selected_source, "coordination_revision", "f" * 40)
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW, workflow_source=selected_source)
+        selected_source = source_result(preflight, selected)
+        object.__setattr__(selected_source, "workflow_sha256", "f" * 64)
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW, workflow_source=selected_source)
 
 
 if __name__ == "__main__":
