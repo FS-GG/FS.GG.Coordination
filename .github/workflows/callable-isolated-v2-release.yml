@@ -1,0 +1,49 @@
+name: callable-isolated-v2-release-proposal
+
+# Source-only proposal. This workflow cannot schedule a job until a protected
+# owner replaces the hold with reviewed source, image and packet decisions.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: callable-isolated-v2-release-proposal
+  cancel-in-progress: false
+
+jobs:
+  inspect-release:
+    if: ${{ false }}
+    runs-on: [self-hosted, linux, x64, isolated-v2-release-unselected]
+    environment: callable-isolated-v2-release
+    permissions: {}
+    timeout-minutes: 5
+    container:
+      image: ghcr.io/fs-gg/isolated-v2-release-unselected@sha256:0000000000000000000000000000000000000000000000000000000000000000
+    env:
+      RELEASE_STATE: unselected
+      CANDIDATE_PARENT_HEAD: 5ffa942bb089ba3f376c13432730c9976aa72895
+      EXPECTED_PROTECTED_SOURCE_REVISION: '0000000000000000000000000000000000000000'
+      EXPECTED_PROTECTED_WORKFLOW_SHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+      EXPECTED_APPROVED_PACKET_SHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+      EXPECTED_RUNNER_ATTESTATION_SHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+      EXPECTED_PROTECTED_CLOSURE_SHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+      DISALLOWED_LOCAL_CLOSURE_SHA256: 6783d094396af466461f3dfc8e8d0e41dada34b177e1c06dd784806c79979162
+      ARCHIVE_SHA256: 003f63ac1b0f895642a7000954607b0980f8e9f1dbb058576e66b40ed79cbfb7
+      ZIPAPP_MANIFEST_SHA256: 9cf485b238a458c3234adafb6f3964b7e105507a8d8cfbeb01a1d067b2545fd3
+      BUILDER_SOURCE_SHA256: 2c581bed909f835ae24de9b79ab1e2a1d4b144dd5dcf3b8b3285872c4af6ed6b
+      ENTRY_SOURCE_SHA256: 03b0f43fffb265e1895e32ef76239e5076bbd22d4da690383b7479f915ab9adc
+      GRANT_SOURCE_SHA256: f37feb7dd835f3327fb1aac0987d3397ea19314cdfcf42099a0c490b48220da4
+      AUTHORITY_SOURCE_SHA256: 9a806bb78de25be887db0a0b9499f242d7989d33860e598e23e2ceff80172a26
+      INSTALL_VERIFIER_SHA256: 0a581ccfef5cde4f360635e4ef352a85c648ea72b185e088f125c9d86e048237
+      CLOSURE_VERIFIER_SHA256: 938b71a2f35e3690e32bf81b788c23f95b2e188bc648835a2053eeffec9d6765
+      PACKET_VERIFIER_SHA256: b83a08cd9ae2650796afb0b4c90f759f3b0c6922e852de69fd3ec802cbfe0c51
+    steps:
+      - name: Refuse while independent protected pins are unselected
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$RELEASE_STATE" = selected
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_SHA" = "$EXPECTED_PROTECTED_SOURCE_REVISION"
+          exit 78
