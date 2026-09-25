@@ -468,6 +468,25 @@ module CodexAppServerContinuity =
                     && variantValid
                 | _ -> false
 
+    let private validOptionalTurnError (turn: JsonElement) =
+        match turn.TryGetProperty "error" with
+        | false, _ -> true
+        | true, error when error.ValueKind = JsonValueKind.Null -> true
+        | true, error when error.ValueKind = JsonValueKind.Object ->
+            let names = error.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match error.TryGetProperty "message" with
+                | true, message when message.ValueKind = JsonValueKind.String ->
+                    optionalNullableString error "additionalDetails"
+                | _ -> false
+        | _ -> false
+
+    let private hasPopulatedTurnError (turn: JsonElement) =
+        match turn.TryGetProperty "error" with
+        | true, error -> error.ValueKind <> JsonValueKind.Null
+        | _ -> false
+
     let private parseTurn expectedThread expectedTurn methodName (parameters: JsonElement) =
         match fields "app-server-turn-params-invalid"
                 (set [ "threadId"; "turn" ]) (set [ "threadId"; "turn" ]) parameters with
@@ -497,6 +516,8 @@ module CodexAppServerContinuity =
                     Error "app-server-turn-time-invalid"
                 | Ok () when methodName = "turn/completed" && terminalTimeRegressed turn ->
                     Error "app-server-turn-time-regressed"
+                | Ok () when not (validOptionalTurnError turn) ->
+                    Error "app-server-turn-error-invalid"
                 | Ok () ->
                     match turn.TryGetProperty "itemsView" with
                     | true, view when view.ValueKind <> JsonValueKind.String ->
@@ -513,6 +534,11 @@ module CodexAppServerContinuity =
                         with
                         | Ok turnId, _ when turnId <> expectedTurn ->
                             Error "app-server-turn-identity-mismatch"
+                        | Ok _, Ok status when
+                            status <> "failed"
+                            && Set.contains status (set [ "inProgress"; "completed"; "interrupted" ])
+                            && hasPopulatedTurnError turn ->
+                            Error "app-server-turn-error-status-mismatch"
                         | Ok _, Ok "inProgress" when methodName = "turn/started" ->
                             Ok NativeTurnStarted
                         | Ok _, Ok status when

@@ -187,6 +187,55 @@ type CodexAppServerContinuityTests() =
             )
 
     [<Fact>]
+    member _.``failed native turn error requires object string message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        for error in
+            [ "\"failed\""
+              "{}"
+              "{\"message\":null}"
+              "{\"message\":17}"
+              "{\"message\":\"x\",\"additionalDetails\":17}"
+              "{\"message\":\"x\",\"message\":\"y\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields failed (",\"error\":" + error))))
+            )
+
+    [<Fact>]
+    member _.``nonfailed native turn cannot carry populated error``() =
+        let startedWithError = withTurnFields started ",\"error\":{\"message\":\"x\"}"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-error-status-mismatch",
+            status (CodexAppServerContinuity.apply (beginBound ()) (frame 1L startedWithError))
+        )
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for terminal in
+            [ completed
+              replace completed "\"status\":\"completed\"" "\"status\":\"interrupted\"" ] do
+            let withError = withTurnFields terminal ",\"error\":{\"message\":\"x\"}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-status-mismatch",
+                status (CodexAppServerContinuity.apply first (frame 2L withError))
+            )
+
+    [<Fact>]
+    member _.``failed error and nullable nonfailed error retain terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        for fields in
+            [ ",\"error\":{\"message\":\"\",\"additionalDetails\":null}"
+              ",\"error\":{\"message\":\"x\",\"additionalDetails\":\"detail\",\"codexErrorInfo\":\"other\",\"misalignment\":null}" ] do
+            Assert.Equal(
+                TerminalObserved("failed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields failed fields)))
+            )
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed ",\"error\":null")))
+        )
+
+    [<Fact>]
     member _.``subscription refuses wrong workspace item turn and transport``() =
         for wrong in
             [ { binding with Scope = { scope with WorkspaceId = "other-workspace" } }
