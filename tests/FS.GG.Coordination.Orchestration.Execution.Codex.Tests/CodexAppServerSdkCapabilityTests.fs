@@ -70,12 +70,67 @@ type CodexAppServerSdkCapabilityTests() =
 
     [<Fact>]
     member _.``renamed snapshot counters or changed raw-response scope requires review``() =
-        let changedSnapshot = replace "\"last\":{},\"modelContextWindow\""
-                                      "\"latestTurn\":{},\"modelContextWindow\""
+        let changedSchema = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let definitions = changedSchema["definitions"]
+        let usageDefinition = definitions["ThreadTokenUsage"]
+        let usage = usageDefinition["properties"].AsObject()
+        let last = usage["last"].DeepClone()
+        usage.Remove("last") |> ignore
+        usage["latestTurn"] <- last
+        let changedSnapshot = Encoding.UTF8.GetBytes(changedSchema.ToJsonString())
         Assert.Equal(Error "app-server-sdk-schema-drift", inspect changedSnapshot)
         let changedRaw = replace "Internal-only notification containing the exact usage from one upstream Responses API completion."
                                  "Public completed-turn usage notification."
         Assert.Equal(Error "app-server-sdk-schema-drift", inspect changedRaw)
+
+    [<Fact>]
+    member _.``snapshot counters cannot become non-usage values``() =
+        let schema = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        for counter in [ "last"; "total" ] do
+            let changed = JsonNode.Parse(schema.ToJsonString())
+            let definitions = changed["definitions"]
+            let usage = definitions["ThreadTokenUsage"]
+            let fields = usage["properties"].AsObject()
+            fields[counter] <- JsonNode.Parse("""{"type":"string"}""")
+            Assert.Equal(
+                Error "app-server-sdk-schema-drift",
+                inspect (Encoding.UTF8.GetBytes(changed.ToJsonString()))
+            )
+
+    [<Fact>]
+    member _.``snapshot breakdown target and numeric counters require review``() =
+        let schema = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let definitions = schema["definitions"].AsObject()
+        definitions.Remove("TokenUsageBreakdown") |> ignore
+        Assert.Equal(
+            Error "app-server-sdk-schema-drift",
+            inspect (Encoding.UTF8.GetBytes(schema.ToJsonString()))
+        )
+        let untyped = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let untypedDefinitions = untyped["definitions"]
+        let untypedTarget = untypedDefinitions["TokenUsageBreakdown"].AsObject()
+        untypedTarget.Remove("type") |> ignore
+        Assert.Equal(
+            Error "app-server-sdk-schema-drift",
+            inspect (Encoding.UTF8.GetBytes(untyped.ToJsonString()))
+        )
+        let changed = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let target = changed["definitions"]["TokenUsageBreakdown"]
+        let properties = target["properties"].AsObject()
+        properties["totalTokens"] <- JsonNode.Parse("""{"type":"string","format":"int64"}""")
+        Assert.Equal(
+            Error "app-server-sdk-schema-drift",
+            inspect (Encoding.UTF8.GetBytes(changed.ToJsonString()))
+        )
+        let oversized = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let oversizedTarget = oversized["definitions"]["TokenUsageBreakdown"]
+        let oversizedProperties = oversizedTarget["properties"]
+        let cacheWrites = oversizedProperties["cacheWriteInputTokens"].AsObject()
+        cacheWrites["default"] <- JsonNode.Parse("18446744073709551616")
+        Assert.Equal(
+            Error "app-server-sdk-schema-drift",
+            inspect (Encoding.UTF8.GetBytes(oversized.ToJsonString()))
+        )
 
     [<Fact>]
     member _.``running-thread resume description alone never authenticates this session``() =
