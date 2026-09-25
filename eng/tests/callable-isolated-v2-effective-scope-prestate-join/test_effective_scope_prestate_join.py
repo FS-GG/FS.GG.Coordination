@@ -198,6 +198,22 @@ class JoinTests(unittest.TestCase):
             ).read_effective_scope("6" * 64, "7" * 64)
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_scope_mutated_at_final_read_refuses(self):
+        selected, proof, scope, record = fixture()
+        port = FakeMetadata(scope, canonical(record))
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "8" * 64
+            return shared
+        port.scope = reused_scope
+        with self.assertRaises(joined.Refused):
+            joined.EffectiveScopePrestateJoin(
+                port, FakePrestate(proof), selected, 700, 101, 1, NOW
+            ).read_effective_scope("6" * 64, "7" * 64)
+
     def test_boolean_repository_id_alias_refuses(self):
         selected, proof, _, record = fixture()
         selected["repositoryId"] = 1

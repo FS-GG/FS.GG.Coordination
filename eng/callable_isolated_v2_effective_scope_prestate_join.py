@@ -73,7 +73,7 @@ def _scope(port: EffectiveScopeMetadataPort, now: dt.datetime) -> dict[str, Any]
             or value["permissions"] != ["read-effective-metadata"]
             or _time(value["expiresAt"]) <= now):
         raise Refused("effective-reader-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 class EffectiveScopePrestateJoin:
