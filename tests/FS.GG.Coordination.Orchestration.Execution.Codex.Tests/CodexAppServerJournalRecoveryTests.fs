@@ -60,7 +60,13 @@ type CodexAppServerJournalRecoveryTests() =
     [<Fact>]
     member _.``sealed authored start usage terminal chain yields only provisional status``() =
         let digest = SHA256.HashData usage |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
-        Assert.Equal(Ok(ProvisionalTerminal("completed", 1, [ digest ])), recover (snapshot [ first; second; third ]))
+        let parsed =
+            match CodexAppServerUsageProjection.parse scope.ThreadId binding.TurnId usage with
+            | Ok update -> update
+            | Error code -> failwithf "copied-live usage refused: %s" code
+        Assert.Equal(
+            Ok(ProvisionalTerminal("completed", 1, [ digest ], [ parsed ])),
+            recover (snapshot [ first; second; third ]))
 
     [<Fact>]
     member _.``omitted tail and missing terminal refuse``() =

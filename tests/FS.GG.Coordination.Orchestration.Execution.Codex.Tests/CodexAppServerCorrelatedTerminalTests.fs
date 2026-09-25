@@ -124,6 +124,12 @@ type CodexAppServerCorrelatedTerminalTests() =
                 |> Convert.ToHexString
                 |> fun value -> value.ToLowerInvariant()
             Assert.Equal([ usageDigest ], result.UsageWireSha256s)
+            let parsed =
+                match CodexAppServerUsageProjection.parse scope.ThreadId binding.TurnId
+                          (fixture "usage-updated.json") with
+                | Ok update -> update
+                | Error code -> failwithf "copied-live usage refused: %s" code
+            Assert.Equal<CodexAppServerUsageUpdate list>([ parsed ], result.UsageSnapshots)
         | other -> failwithf "unexpected correlation refusal %A" other
 
     [<Fact>]

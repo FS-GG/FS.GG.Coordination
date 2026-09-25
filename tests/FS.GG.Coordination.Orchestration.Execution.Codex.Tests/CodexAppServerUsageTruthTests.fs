@@ -2,7 +2,6 @@ namespace FS.GG.Coordination.Orchestration.Execution.Codex.Tests
 
 open System
 open System.IO
-open System.Security.Cryptography
 open FS.GG.Coordination.Orchestration.Execution.Codex
 open Xunit
 
@@ -33,20 +32,6 @@ type CodexAppServerUsageTruthTests() =
           ConnectionId = "connection-1"
           SubscriptionDigest = String.replicate 64 "e"
           ProtocolVersion = "codex-app-server-v2/0.156.1" }
-    let usageWireDigest =
-        Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
-        |> File.ReadAllBytes
-        |> SHA256.HashData
-        |> Convert.ToHexString
-        |> fun value -> value.ToLowerInvariant()
-    let terminal =
-        { Reservation = { Request = request; ReservationId = "reservation-1" }
-          Binding = binding
-          FirstEntryId = "entry-1"
-          SealedHeadEntryId = "entry-3"
-          TerminalStatus = "completed"
-          UsageUpdateCount = 1
-          UsageWireSha256s = [ usageWireDigest ] }
     let snapshot =
         let bytes =
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
@@ -54,6 +39,15 @@ type CodexAppServerUsageTruthTests() =
         match CodexAppServerUsageProjection.parse scope.ThreadId binding.TurnId bytes with
         | Ok update -> update
         | Error code -> failwithf "fixture refused: %s" code
+    let terminal =
+        { Reservation = { Request = request; ReservationId = "reservation-1" }
+          Binding = binding
+          FirstEntryId = "entry-1"
+          SealedHeadEntryId = "entry-3"
+          TerminalStatus = "completed"
+          UsageUpdateCount = 1
+          UsageWireSha256s = [ snapshot.WireSha256 ]
+          UsageSnapshots = [ snapshot ] }
     let execChild: CodexTurnUsage =
         { ThreadId = scope.ThreadId
           TurnId = Some binding.TurnId
@@ -97,13 +91,17 @@ type CodexAppServerUsageTruthTests() =
     member _.``last and cumulative snapshots never become completed-turn usage``() =
         let exactLooking =
             { snapshot with Last = snapshot.Cumulative }
-        let result = noVerdict (assess [ ThreadSnapshot exactLooking ])
+        let structurallyMatched = { terminal with UsageSnapshots = [ exactLooking ] }
+        let result =
+            CodexAppServerUsageTruth.assess structurallyMatched [ ThreadSnapshot exactLooking ]
+            |> noVerdict
         Assert.Equal([ "thread-last-total-snapshot" ], result.ObservedEvidenceClasses)
         Assert.Equal(binding.TurnId, result.Correlation.NativeTurnId)
 
     [<Fact>]
     member _.``thread snapshot evidence cannot outnumber sealed usage updates``() =
-        let noUpdates = { terminal with UsageUpdateCount = 0; UsageWireSha256s = [] }
+        let noUpdates =
+            { terminal with UsageUpdateCount = 0; UsageWireSha256s = []; UsageSnapshots = [] }
         Assert.Equal(
             Error "app-server-usage-snapshot-count-mismatch",
             CodexAppServerUsageTruth.assess noUpdates [ ThreadSnapshot snapshot ]
@@ -128,7 +126,8 @@ type CodexAppServerUsageTruthTests() =
         let twoUpdates =
             { terminal with
                 UsageUpdateCount = 2
-                UsageWireSha256s = [ snapshot.WireSha256; String.replicate 64 "e" ] }
+                UsageWireSha256s = [ snapshot.WireSha256; String.replicate 64 "e" ]
+                UsageSnapshots = [ snapshot; { snapshot with WireSha256 = String.replicate 64 "e" } ] }
         for second in [ snapshot; { snapshot with Last = snapshot.Cumulative } ] do
             Assert.Equal(
                 Error "app-server-usage-snapshot-duplicate",
@@ -147,7 +146,10 @@ type CodexAppServerUsageTruthTests() =
             | Ok update -> update
             | Error code -> failwithf "copied-live whitespace variant refused: %s" code
         let twoUpdates = { terminal with UsageUpdateCount = 2 }
-        let twoUpdates = { twoUpdates with UsageWireSha256s = [ snapshot.WireSha256; second.WireSha256 ] }
+        let twoUpdates =
+            { twoUpdates with
+                UsageWireSha256s = [ snapshot.WireSha256; second.WireSha256 ]
+                UsageSnapshots = [ snapshot; second ] }
         let result =
             CodexAppServerUsageTruth.assess twoUpdates
                 [ ThreadSnapshot snapshot; ThreadSnapshot second ]
@@ -160,6 +162,19 @@ type CodexAppServerUsageTruthTests() =
         Assert.Equal(
             Error "app-server-usage-snapshot-journal-mismatch",
             assess [ ThreadSnapshot foreign ]
+        )
+
+    [<Fact>]
+    member _.``copied-live wire identity cannot hide changed valid counters``() =
+        let changed =
+            { snapshot with
+                Last =
+                    { snapshot.Last with
+                        Input = snapshot.Last.Input + 1L
+                        Total = snapshot.Last.Total + 1L } }
+        Assert.Equal(
+            Error "app-server-usage-snapshot-counters-mismatch",
+            assess [ ThreadSnapshot changed ]
         )
 
     [<Fact>]
