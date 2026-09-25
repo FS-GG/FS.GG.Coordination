@@ -64,6 +64,7 @@
     <Compile Include="MigrationNativeActivityTests.fs" />
     <Compile Include="MigrationInspectProviderAdapterTests.fs" />
     <Compile Include="MigrationSandboxFixtureSeedTests.fs" />
+    <Compile Include="MigrationSandboxProviderObservationTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
