@@ -1890,6 +1890,20 @@ let ``Project field census refuses unsupported kind duplicate option and populat
                  MigrationGitHubRead.readProjectFields projectOptions
                      (FakeTransport [ ok Map.empty first; ok Map.empty changed ]))
 
+[<Fact>]
+let ``Project field census refuses duplicate raw type option and page members`` () =
+    let field =
+        """{"__typename":"ProjectV2SingleSelectField","id":"FIELD_1","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"OPT_1","name":"Ready"}]}"""
+    let page = fieldPage 1 "false" "null" $"[{field}]"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readProjectFields projectOptions
+                         (FakeTransport [ ok Map.empty duplicate ]))
+    check (page.Replace("\"dataType\":\"SINGLE_SELECT\"",
+                        "\"dataType\":\"SINGLE_SELECT\",\"dataType\":\"TEXT\"")) "dataType"
+    check (page.Replace("\"name\":\"Ready\"", "\"name\":\"Ready\",\"name\":\"Done\"")) "name"
+    check (page.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")) "hasNextPage"
+
 let private valuePage total hasNext cursor nodes =
     sprintf """{"data":{"organization":{"projectV2":{"id":"PROJECT_1","number":1,"items":{"totalCount":%d,"nodes":%s,"pageInfo":{"hasNextPage":%s,"endCursor":%s}}}}}}"""
         total nodes hasNext cursor
