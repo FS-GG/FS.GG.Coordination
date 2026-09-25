@@ -13,6 +13,9 @@ module MigrationProtectedIssueCensusSignedRecovery =
         if attestationPins.NativeAttemptResourceId <> nativePins.AttemptResourceId
            || attestationPins.NativeAttemptArtifactSha256 <> nativePins.AttemptArtifactSha256 then
             Error "protected-native-attestation-pins"
+        elif expectedMarker.ClockResourceId <> attestationPins.ClockResourceId
+             || expectedMarker.ClockArtifactSha256 <> attestationPins.ClockArtifactSha256 then
+            Error "protected-native-attestation-binding"
         else
             match MigrationProtectedIssueCensusAttemptRecovery.inspectWithSnapshot
                       handoffPins nativePins expectedMarker handoffPort nativePort with
