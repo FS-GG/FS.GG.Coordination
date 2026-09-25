@@ -59,6 +59,27 @@ module MigrationProtectedIssueCensusAttemptRecovery =
         && (value |> Seq.forall (fun ch ->
             (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
 
+    let validSelectionShape (selection: ProtectedIssueCensusSelection) =
+        let exactCommitSha (value: string) =
+            not (isNull value) && value.Length = 40
+            && (value |> Seq.forall (fun ch ->
+                (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
+        let canonicalOrigin =
+            try
+                let origin = Uri(selection.ApiOrigin, UriKind.Absolute)
+                origin.Scheme = Uri.UriSchemeHttps
+                && String.IsNullOrEmpty origin.UserInfo
+                && origin.GetLeftPart(UriPartial.Authority) = selection.ApiOrigin
+            with _ -> false
+        selection.RunId > 0L && selection.RunAttempt > 0
+        && not (String.IsNullOrWhiteSpace selection.RunNonce)
+        && exactCommitSha selection.CandidateSha
+        && exactCommitSha selection.WorkflowSha
+        && canonicalOrigin
+        && not (String.IsNullOrWhiteSpace selection.Owner)
+        && not (String.IsNullOrWhiteSpace selection.Repository)
+        && selection.RepositoryId > 0L
+
     let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
     let expectedSnapshotSealSha256 (snapshot: ProtectedIssueCensusNativeAttemptSnapshot) =
@@ -181,6 +202,7 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                     if expectedMarker.NativeAttemptId
                        <> MigrationProtectedIssueCensusHandoff.attemptId
                               expectedMarker.ReservationId handoffPins
+                       || not (validSelectionShape expectedMarker.Selection)
                        || expectedMarker.AppId <> handoffPins.AppId
                        || expectedMarker.InstallationId <> handoffPins.InstallationId
                        || expectedMarker.RepositoryId <> handoffPins.RepositoryId

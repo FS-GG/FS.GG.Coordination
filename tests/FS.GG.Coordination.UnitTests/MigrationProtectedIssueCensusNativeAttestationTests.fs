@@ -24,7 +24,7 @@ let private handoffPins =
       AppId=101L; InstallationId=202L; RepositoryId=42L
       PermissionSha256=String.replicate 64 "4" }
 
-let private fixtureWithMarkerClock markerClockResource markerClockArtifact =
+let private fixtureWithSelectionAndMarkerClock select markerClockResource markerClockArtifact =
     use signer = ECDsa.Create(ECCurve.NamedCurves.nistP256)
     let publicBytes = signer.ExportSubjectPublicKeyInfo()
     let pins =
@@ -42,6 +42,7 @@ let private fixtureWithMarkerClock markerClockResource markerClockArtifact =
           CandidateSha=String.replicate 40 "d"; WorkflowSha=String.replicate 40 "e"
           ApiOrigin="https://api.github.test"; Owner="FS-GG"; Repository="copy"
           RepositoryId=42L }
+        |> select
     let marker =
         { NativeAttemptId=MigrationProtectedIssueCensusHandoff.attemptId
                             (String.replicate 64 "2") handoffPins
@@ -87,6 +88,9 @@ let private fixtureWithMarkerClock markerClockResource markerClockArtifact =
     let signed =
         { unsignedAttestation with SignatureBase64=Convert.ToBase64String signature }
     pins, marker, snapshot, signed, issued.AddSeconds 10
+
+let private fixtureWithMarkerClock markerClockResource markerClockArtifact =
+    fixtureWithSelectionAndMarkerClock id markerClockResource markerClockArtifact
 
 let private fixture () =
     fixtureWithMarkerClock "protected-clock:native-test" (String.replicate 64 "b")
@@ -238,3 +242,23 @@ let ``signed recovery refuses drifted handoff clock description`` () =
     Assert.Equal(Error "protected-census-attempt-installation",
                  inspectSignedWithHandoffClock pins marker snapshot (Some attestation) now
                      pins.ClockResourceId (String.replicate 64 "0"))
+
+[<Fact>]
+let ``signed recovery refuses malformed durable selection despite valid snapshot signature`` () =
+    let invalid =
+        [ (fun selection -> { selection with RunId=0L })
+          (fun selection -> { selection with RunAttempt=0 })
+          (fun selection -> { selection with RunNonce="" })
+          (fun selection -> { selection with CandidateSha="" })
+          (fun selection -> { selection with WorkflowSha="" })
+          (fun selection -> { selection with ApiOrigin="http://api.github.test" })
+          (fun selection -> { selection with Owner="" })
+          (fun selection -> { selection with Repository="" }) ]
+    for select in invalid do
+        let pins, marker, snapshot, attestation, now =
+            fixtureWithSelectionAndMarkerClock select
+                "protected-clock:native-test" (String.replicate 64 "b")
+        Assert.Equal(Error "protected-native-attestation-binding",
+                     verify pins marker snapshot (Some attestation) now)
+        Assert.Equal(Error "protected-census-attempt-binding",
+                     inspectSigned pins marker snapshot (Some attestation) now)
