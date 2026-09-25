@@ -84,6 +84,13 @@ typed event evidence. It was red before the repair. `readIssueEvents` now
 refuses duplicate members at the event root and in the consumed `actor`
 object before parsing an event. This remains partial native activity evidence.
 
+An eleventh independent control found the shared issue/PR comment reader
+could accept duplicate raw `issue_url`, `body` or `user.login` members and
+produce typed comment evidence. It was red before the repair.
+`readSubjectComments` now refuses duplicate members at the comment root and
+in the consumed `user` object before parsing a comment. Claim text remains
+partial evidence until the protected journal and custom receipts are read.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

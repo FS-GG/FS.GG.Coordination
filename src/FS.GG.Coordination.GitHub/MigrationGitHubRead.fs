@@ -2041,9 +2041,15 @@ module MigrationGitHubRead =
                         if document.RootElement.ValueKind <> JsonValueKind.Array then
                             Error(MigrationReadFailure.MalformedResponse "comments-not-array")
                         else
+                            let parseUniqueComment value =
+                                uniqueObjectMembers value
+                                |> Result.bind (fun () ->
+                                    property "user" value |> Result.bind uniqueObjectMembers)
+                                |> Result.bind (fun () ->
+                                    parseIssueComment expectedIssueUrl subjectNumber value)
                             let parsed =
                                 document.RootElement.EnumerateArray()
-                                |> Seq.map (parseIssueComment expectedIssueUrl subjectNumber) |> Seq.toList
+                                |> Seq.map parseUniqueComment |> Seq.toList
                             match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                             | Some failure -> Error failure
                             | None ->
