@@ -1,0 +1,1 @@
+{"method":"thread/tokenUsage/updated","params":{"threadId":"native-thread","turnId":"native-turn","tokenUsage":{"last":{"inputTokens":17,"cachedInputTokens":4,"outputTokens":9,"reasoningOutputTokens":3,"totalTokens":26},"total":{"inputTokens":100,"cachedInputTokens":20,"outputTokens":40,"reasoningOutputTokens":12,"totalTokens":140},"modelContextWindow":128000}}}

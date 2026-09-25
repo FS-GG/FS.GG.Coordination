@@ -40,6 +40,12 @@ error has an unknown effect and must not be retried blindly; a source or clock g
 reservation burns the challenge. Concurrent fake-store tests exercise this contract, but no durable
 store or trusted clock implementation is installed.
 
+`CodexAppServerUsageProjection` is a read-only parser for the installed CLI 0.156.1 app-server v2
+`thread/tokenUsage/updated` notification shape. It preserves the notification's exact thread and
+turn IDs and its separate `last` and cumulative snapshots from independently authored fixture
+bytes. It never treats either snapshot as completed-turn usage. No authenticated subscription to
+this interactive thread, app-server source adapter, or event-continuity journal is installed.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
