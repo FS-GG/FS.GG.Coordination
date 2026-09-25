@@ -70,7 +70,7 @@ def fixture():
         "status": "active", "revokedAt": None,
         "reviewerActorId": 1200,
         "approvedAt": "2026-09-25T11:57:35Z",
-        "observedAt": "2026-09-25T11:57:37Z",
+        "observedAt": "2026-09-25T11:57:41Z",
         "expiresAt": "2026-09-25T12:10:00Z"}
     return selection, approval, issued, checked, selected, Port(scope, record)
 
@@ -106,7 +106,8 @@ class KeyRegistryTests(unittest.TestCase):
         for key, value in (("status", "revoked"),
                            ("revokedAt", "2026-09-25T11:58:00Z"),
                            ("expiresAt", "2026-09-25T11:59:00Z"),
-                           ("observedAt", "2026-09-25T11:59:00Z")):
+                           ("observedAt", "2026-09-25T12:00:01Z"),
+                           ("approvedAt", "2026-09-25T11:57:50Z")):
             with self.subTest(key=key):
                 with self.assertRaises(registry.Refused):
                     self.observe(lambda _s, _a, _i, _e, _c, p:
@@ -115,6 +116,13 @@ class KeyRegistryTests(unittest.TestCase):
             self.observe(lambda _s, _a, i, _e, c, p:
                          (c.update(reviewerActorId=i.issuer_actor_id),
                           p.record.update(reviewerActorId=i.issuer_actor_id)))
+
+    def test_envelope_bound_registry_observation_must_follow_signing(self):
+        # The record contains the completed envelope hash, which cannot be
+        # independently observed before the issuer signs that envelope.
+        with self.assertRaises(registry.Refused):
+            self.observe(lambda _s, _a, _i, _e, _c, p:
+                         p.record.update(observedAt="2026-09-25T11:57:37Z"))
 
     def test_reused_reader_or_broad_scope_refuses(self):
         with self.assertRaises(registry.Refused):
