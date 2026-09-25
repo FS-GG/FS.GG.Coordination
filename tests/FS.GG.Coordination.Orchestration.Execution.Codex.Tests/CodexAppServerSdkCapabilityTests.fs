@@ -27,6 +27,12 @@ type CodexAppServerSdkCapabilityTests() =
                     methodName target)
         routes.Add route
         Encoding.UTF8.GetBytes(schema.ToJsonString())
+    let withDefinitionType (name: string) (kind: string) =
+        let schema = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let definitions = schema["definitions"]
+        let definition = (definitions[name]).AsObject()
+        definition["type"] <- JsonValue.Create(kind)
+        Encoding.UTF8.GetBytes(schema.ToJsonString())
 
     [<Fact>]
     member _.``pinned authored schema yields no native usage or direct attachment authority``() =
@@ -40,6 +46,21 @@ type CodexAppServerSdkCapabilityTests() =
             Assert.Equal("not-authenticated-by-schema", report.CurrentDirectSessionAttachment)
             Assert.Equal("not-established", report.NativeCompletedTurnUsageVerdict)
         | Error code -> failwithf "unexpected schema refusal %s" code
+
+    [<Fact>]
+    member _.``foreign object kind in usage-relevant definition requires review``() =
+        for definition in [ "TurnCompletedNotification"; "ThreadTokenUsage" ] do
+            Assert.Equal(
+                Error "app-server-sdk-schema-drift",
+                inspect (withDefinitionType definition "array")
+            )
+
+    [<Fact>]
+    member _.``explicit object kind preserves pinned diagnostic``() =
+        for definition in [ "TurnCompletedNotification"; "ThreadTokenUsage" ] do
+            match inspect (withDefinitionType definition "object") with
+            | Ok report -> Assert.Equal("not-established", report.NativeCompletedTurnUsageVerdict)
+            | Error code -> failwithf "object definition refused: %s" code
 
     [<Fact>]
     member _.``new usage field on turn completed requires review instead of acceptance``() =
