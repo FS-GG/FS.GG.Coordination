@@ -122,6 +122,31 @@ type CodexAppServerContinuityTests() =
         Assert.Equal(TerminalObserved("completed", 1), status third)
 
     [<Fact>]
+    member _.``regressing native emission timestamp latches a continuity gap``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started "1000"))
+        let usageRegressed =
+            CodexAppServerContinuity.apply first (frame 2L (withEmission usage "999"))
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-emission-time-regressed",
+            status usageRegressed
+        )
+        let second = CodexAppServerContinuity.apply first (frame 2L (withEmission usage "1001"))
+        let terminalRegressed =
+            CodexAppServerContinuity.apply second (frame 3L (withEmission completed "1000"))
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-emission-time-regressed",
+            status terminalRegressed
+        )
+
+    [<Fact>]
+    member _.``missing and equal emission timestamps do not invent a gap``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started "1000"))
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        Assert.Equal(InTurn 1, status second)
+        let third = CodexAppServerContinuity.apply second (frame 3L (withEmission completed "1000"))
+        Assert.Equal(TerminalObserved("completed", 1), status third)
+
+    [<Fact>]
     member _.``malformed native emitted timestamp refuses start usage and terminal``() =
         for value in [ "null"; "\"1000\""; "1.5"; "9223372036854775808" ] do
             let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
