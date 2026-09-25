@@ -95,6 +95,16 @@ atomic replay ledger; resetting the test state would permit reuse. Those custody
 components must be independently established before any live producer uses this
 gate, and success here remains a structural result rather than capture evidence.
 
+The dormant [`DirectSessionChallengeReservation`](../../src/FS.GG.Coordination.Orchestration.Execution.Codex/DirectSessionChallengeReservation.fs)
+adds a typed durable compare-and-set port, keyed globally by challenge. It checks
+the issued window with a trusted-clock read, reserves once, then reads the native
+source and clock again before preparing a fact. A confirmed reservation survives
+a later source or clock gap; an unknown store outcome cannot be retried as if it
+were absent. The concurrent fake store proves the caller handles one winner and
+replay, but is neither persistent nor an authenticated custody implementation.
+No actual issuer, clock, current-session source or durable reservation store is
+installed, and the prepared fact is never submitted by this module.
+
 ## Capability and evidence handoff
 
 The missing interface is a supported, authenticated event stream for the

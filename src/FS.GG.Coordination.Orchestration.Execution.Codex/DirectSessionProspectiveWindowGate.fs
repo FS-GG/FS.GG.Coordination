@@ -56,6 +56,33 @@ module DirectSessionProspectiveWindowGate =
 
     let private utc (value: DateTimeOffset) = value.Offset = TimeSpan.Zero
 
+    /// Shared pre-source validation for both the immutable model and a future CAS boundary.
+    let internal validateIssue expectedScope expectedSourceAdapterId now issued =
+        if isNull (box expectedScope)
+           || not (boundedText 128 expectedSourceAdapterId)
+           || not (utc now) then
+            Error "direct-session-window-input-invalid"
+        elif isNull (box issued)
+             || isNull (box issued.Assignment)
+             || isNull (box issued.Assignment.Scope) then
+            Error "direct-session-window-issue-invalid"
+        elif issued.Assignment.Scope <> expectedScope then
+            Error "direct-session-window-foreign-assignment"
+        elif issued.AuthorizedSourceAdapterId <> expectedSourceAdapterId then
+            Error "direct-session-window-foreign-source"
+        elif isNull issued.Assignment.WindowChallenge
+             || not (challengePattern.IsMatch issued.Assignment.WindowChallenge)
+             || not (boundedText 256 issued.Assignment.NativeSessionId)
+             || not (utc issued.IssuedAt)
+             || not (utc issued.ExpiresAt)
+             || issued.ExpiresAt <= issued.IssuedAt
+             || issued.ExpiresAt - issued.IssuedAt > maxWindow then
+            Error "direct-session-window-issue-invalid"
+        elif now < issued.IssuedAt || now >= issued.ExpiresAt then
+            Error "direct-session-window-stale"
+        else
+            Ok issued.Assignment.WindowChallenge
+
     /// Return prepared bytes and a consumed challenge only after independent records agree.
     /// This function does not persist the ledger, authenticate adapters or submit telemetry.
     let evaluate
@@ -76,54 +103,33 @@ module DirectSessionProspectiveWindowGate =
         else
             match read issuer.ReadIssuedWindow with
             | Error _ -> Error "direct-session-window-issuer-unavailable"
-            | Ok issued when
-                isNull (box issued)
-                || isNull (box issued.Assignment)
-                || isNull (box issued.Assignment.Scope)
-                ->
-                Error "direct-session-window-issue-invalid"
-            | Ok issued when issued.Assignment.Scope <> expectedScope ->
-                Error "direct-session-window-foreign-assignment"
-            | Ok issued when issued.AuthorizedSourceAdapterId <> expectedSourceAdapterId ->
-                Error "direct-session-window-foreign-source"
-            | Ok issued when
-                isNull issued.Assignment.WindowChallenge
-                || not (challengePattern.IsMatch issued.Assignment.WindowChallenge)
-                || not (boundedText 256 issued.Assignment.NativeSessionId)
-                || not (utc issued.IssuedAt)
-                || not (utc issued.ExpiresAt)
-                || issued.ExpiresAt <= issued.IssuedAt
-                || issued.ExpiresAt - issued.IssuedAt > maxWindow
-                ->
-                Error "direct-session-window-issue-invalid"
-            | Ok issued when now < issued.IssuedAt || now >= issued.ExpiresAt ->
-                Error "direct-session-window-stale"
-            | Ok issued when
-                DirectSessionWindowLedger.contains issued.Assignment.WindowChallenge ledger
-                ->
-                Error "direct-session-window-replayed"
             | Ok issued ->
-                match read source.ReadCurrentWindowTurn with
-                | Error _ -> Error "direct-session-window-source-unavailable"
-                | Ok observation when isNull (box observation) || isNull (box observation.CurrentTurn) ->
-                    Error "direct-session-window-observation-invalid"
-                | Ok observation when observation.SourceAdapterId <> expectedSourceAdapterId ->
-                    Error "direct-session-window-source-substitution"
-                | Ok observation when
-                    not (utc observation.ObservedAt)
-                    || observation.ObservedAt < issued.IssuedAt
-                    || observation.ObservedAt > now
-                    || observation.ObservedAt >= issued.ExpiresAt
-                    ->
-                    Error "direct-session-window-observation-outside"
-                | Ok observation ->
-                    let assignmentAdapter =
-                        { new IDirectSessionAssignmentAuthenticator with
-                            member _.ReadAuthorizedAssignment() = Ok issued.Assignment }
-                    let sourceAdapter =
-                        { new IDirectSessionCurrentTurnSource with
-                            member _.ReadCurrentTurn() = Ok observation.CurrentTurn }
-                    DirectSessionCorrelationHandoff.prepare expectedScope assignmentAdapter sourceAdapter
-                    |> Result.map (fun prepared ->
-                        DirectSessionWindowLedger.consume issued.Assignment.WindowChallenge ledger,
-                        prepared)
+                match validateIssue expectedScope expectedSourceAdapterId now issued with
+                | Error code -> Error code
+                | Ok challenge when DirectSessionWindowLedger.contains challenge ledger ->
+                    Error "direct-session-window-replayed"
+                | Ok challenge ->
+                    match read source.ReadCurrentWindowTurn with
+                    | Error _ -> Error "direct-session-window-source-unavailable"
+                    | Ok observation when isNull (box observation) || isNull (box observation.CurrentTurn) ->
+                        Error "direct-session-window-observation-invalid"
+                    | Ok observation when observation.SourceAdapterId <> expectedSourceAdapterId ->
+                        Error "direct-session-window-source-substitution"
+                    | Ok observation when
+                        not (utc observation.ObservedAt)
+                        || observation.ObservedAt < issued.IssuedAt
+                        || observation.ObservedAt > now
+                        || observation.ObservedAt >= issued.ExpiresAt
+                        ->
+                        Error "direct-session-window-observation-outside"
+                    | Ok observation ->
+                        let assignmentAdapter =
+                            { new IDirectSessionAssignmentAuthenticator with
+                                member _.ReadAuthorizedAssignment() = Ok issued.Assignment }
+                        let sourceAdapter =
+                            { new IDirectSessionCurrentTurnSource with
+                                member _.ReadCurrentTurn() = Ok observation.CurrentTurn }
+                        DirectSessionCorrelationHandoff.prepare expectedScope assignmentAdapter sourceAdapter
+                        |> Result.map (fun prepared ->
+                            DirectSessionWindowLedger.consume challenge ledger,
+                            prepared)
