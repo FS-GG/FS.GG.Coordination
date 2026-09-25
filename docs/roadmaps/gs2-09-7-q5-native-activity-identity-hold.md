@@ -129,6 +129,12 @@ could accept duplicate raw field IDs, selected `optionId` or nested
 interpreting field identity, value content or nested pagination. Protected
 native readback and complete project authority remain outstanding.
 
+An eighteenth independent control found the shared repository identity read
+could accept duplicate raw `id` members, while the core settings read could
+accept duplicate `default_branch` members. It was red before the repair.
+Both reads now refuse duplicate root members before accepting repository
+scope or core settings. This does not establish protected native provenance.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
