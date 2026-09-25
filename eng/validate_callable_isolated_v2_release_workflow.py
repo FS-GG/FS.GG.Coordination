@@ -12,7 +12,7 @@ import hashlib
 import re
 from typing import Any
 
-WORKFLOW_SHA256 = "1aac83c07ad0c798bd946dfecc87d16924a94455c05b566d43b44eb70aa445b9"
+WORKFLOW_SHA256 = "c486fe746ee88536897c277fc1cbcc320813c08d4b876dacb01adb78da759e93"
 WORKFLOW_PATH = ".github/workflows/callable-isolated-v2-release.yml"
 ZERO40 = "0" * 40
 ZERO64 = "0" * 64
@@ -24,7 +24,7 @@ SOURCE_HASHES = {
     "eng/callable_isolated_v2_authority.py": "9a806bb78de25be887db0a0b9499f242d7989d33860e598e23e2ceff80172a26",
     "eng/verify_callable_isolated_v2_install.py": "0a581ccfef5cde4f360635e4ef352a85c648ea72b185e088f125c9d86e048237",
     "eng/callable_isolated_v2_runtime_closure.py": "938b71a2f35e3690e32bf81b788c23f95b2e188bc648835a2053eeffec9d6765",
-    "eng/callable_isolated_v2_release_provenance.py": "b83a08cd9ae2650796afb0b4c90f759f3b0c6922e852de69fd3ec802cbfe0c51",
+    "eng/callable_isolated_v2_release_provenance.py": "caa51b61d3166060d31d25ec02082ba99cdb232af6a4b72ca45274f6aaec6515",
     "work/gs2-09-9-isolated-operator-rotation/zipapp-manifest.json": "9cf485b238a458c3234adafb6f3964b7e105507a8d8cfbeb01a1d067b2545fd3",
 }
 EMBEDDED = {

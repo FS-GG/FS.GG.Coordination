@@ -140,6 +140,29 @@ class ReleaseProvenanceTests(unittest.TestCase):
         with self.assertRaisesRegex(release.Refused, "permissions"):
             verify(value)
 
+    def test_zero_placeholder_source_runner_and_closure_pins_refuse(self):
+        changes = [
+            ("source", "revision", "0" * 40),
+            ("source", "tree", "0" * 40),
+            ("source", "releaseVerifierSha256", "0" * 64),
+            ("workflow", "sha256", "0" * 64),
+            ("runner", "image", "ghcr.io/fs-gg/isolated-v2-fixture@sha256:" + "0" * 64),
+            ("runner", "imageAttestationSha256", "0" * 64),
+            ("runtime", "interpreterSha256", "0" * 64),
+            ("runtime", "closureManifestSha256", "0" * 64),
+            ("runtime", "stdlibTreeSha256", "0" * 64),
+        ]
+        for section, key, replacement in changes:
+            with self.subTest(section=section, key=key):
+                value = fixture()
+                value[section][key] = replacement
+                if section == "source" and key == "revision":
+                    value["workflow"]["revision"] = replacement
+                    value["artifact"]["sourceRevision"] = replacement
+                    value["run"]["revision"] = replacement
+                with self.assertRaises(release.Refused):
+                    verify(value)
+
     def test_missing_extra_duplicate_noncanonical_and_digest_refuse(self):
         for section, key in [((), "workflow"), (("source",), "tree"),
                              (("artifact",), "artifactId"), (("runner",), "image"),

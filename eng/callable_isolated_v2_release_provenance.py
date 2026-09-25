@@ -98,6 +98,10 @@ def _hex(value: Any, pattern: re.Pattern[str]) -> bool:
     return type(value) is str and pattern.fullmatch(value) is not None
 
 
+def _nonzero_hex(value: Any, pattern: re.Pattern[str]) -> bool:
+    return _hex(value, pattern) and value != "0" * len(value)
+
+
 def _time(value: Any) -> dt.datetime:
     if type(value) is not str or UTC.fullmatch(value) is None:
         raise Refused("release-approval-time")
@@ -115,15 +119,16 @@ def _shape(value: dict[str, Any], now: dt.datetime) -> None:
     source = _exact(value["source"], {"repository", "revision", "tree", "protectedMain",
                                        "files", "releaseVerifierSha256"}, "release-source-shape")
     if (source["repository"] != "FS-GG/FS.GG.Coordination"
-            or not _hex(source["revision"], HEX40) or not _hex(source["tree"], HEX40)
+            or not _nonzero_hex(source["revision"], HEX40)
+            or not _nonzero_hex(source["tree"], HEX40)
             or source["protectedMain"] is not True or source["files"] != PINNED_SOURCE
-            or not _hex(source["releaseVerifierSha256"], HEX64)):
+            or not _nonzero_hex(source["releaseVerifierSha256"], HEX64)):
         raise Refused("release-source")
     workflow = _exact(value["workflow"], {"repository", "path", "revision", "sha256"},
                       "release-workflow-shape")
     if (workflow["repository"] != source["repository"] or workflow["path"] != WORKFLOW
             or workflow["revision"] != source["revision"]
-            or not _hex(workflow["sha256"], HEX64)):
+            or not _nonzero_hex(workflow["sha256"], HEX64)):
         raise Refused("release-workflow")
     artifact = _exact(value["artifact"], {"name", "archiveSha256", "manifestSha256",
                                            "producerRunId", "artifactId", "sourceRevision",
@@ -137,10 +142,11 @@ def _shape(value: dict[str, Any], now: dt.datetime) -> None:
     runner = _exact(value["runner"], {"image", "platform", "imageAttestationSha256",
                                        "ephemeral", "readOnlyRoot"}, "release-runner-shape")
     if (type(runner["image"]) is not str or OCI.fullmatch(runner["image"]) is None
+            or runner["image"].endswith("0" * 64)
             or any(segment in {"", ".", ".."} for segment in
                    runner["image"].split("@", 1)[0].split("/")[1:])
             or runner["platform"] != "linux/amd64"
-            or not _hex(runner["imageAttestationSha256"], HEX64)
+            or not _nonzero_hex(runner["imageAttestationSha256"], HEX64)
             or runner["ephemeral"] is not True or runner["readOnlyRoot"] is not True):
         raise Refused("release-runner")
     runtime = _exact(value["runtime"], {"interpreterPath", "interpreterSha256",
@@ -150,13 +156,13 @@ def _shape(value: dict[str, Any], now: dt.datetime) -> None:
     path = runtime["interpreterPath"]
     if (type(path) is not str or not path.startswith("/")
             or any(part in {"", ".", ".."} for part in path.split("/")[1:])
-            or not _hex(runtime["interpreterSha256"], HEX64)
+            or not _nonzero_hex(runtime["interpreterSha256"], HEX64)
             or type(runtime["interpreterVersion"]) is not str
             or VERSION.fullmatch(runtime["interpreterVersion"]) is None
             or runtime["flags"] != ["-I", "-S"]
-            or not _hex(runtime["closureManifestSha256"], HEX64)
+            or not _nonzero_hex(runtime["closureManifestSha256"], HEX64)
             or runtime["closureManifestSha256"] == LOCAL_CLOSURE_SHA256
-            or not _hex(runtime["stdlibTreeSha256"], HEX64)
+            or not _nonzero_hex(runtime["stdlibTreeSha256"], HEX64)
             or not _positive(runtime["mappedFileCount"])
             or runtime["mappedFileCount"] > 128):
         raise Refused("release-runtime")
