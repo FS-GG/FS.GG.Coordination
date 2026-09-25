@@ -69,8 +69,17 @@ type ProtectedIssueCensusStoreDescription =
       CandidateMayWrite: bool
       ImmutableObjects: bool }
 
+type ProtectedIssueCensusStoreInventory =
+    { Selection: ProtectedIssueCensusSelection
+      CustodyStoreResourceId: string
+      Complete: bool
+      HighWaterOrdinal: int64
+      SealSha256: string
+      ObjectIds: string list }
+
 type IProtectedIssueCensusStorePort =
     abstract Describe: unit -> ProtectedIssueCensusStoreDescription
+    abstract ReadInventory: ProtectedIssueCensusSelection -> ProtectedIssueCensusStoreInventory option
     abstract ReadObject: ProtectedIssueCensusSelection * string -> ProtectedIssueCensusStoredRead option
 
 type ProtectedIssueCensusProof =
@@ -186,6 +195,17 @@ module MigrationProtectedIssueCensus =
         Rest { Method=Get; Uri=Uri read.RequestUri; Headers=Map.empty; Body=None
                ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }, response read
 
+    let private validInventory (pins: ProtectedIssueCensusPins)
+                               (selection: ProtectedIssueCensusSelection)
+                               (reads: ProtectedIssueCensusRead list)
+                               (inventory: ProtectedIssueCensusStoreInventory) =
+        inventory.Selection = selection
+        && inventory.CustodyStoreResourceId = pins.CustodyStoreResourceId
+        && inventory.Complete
+        && inventory.HighWaterOrdinal = int64 reads.Length
+        && exactSha 64 inventory.SealSha256
+        && inventory.ObjectIds = (reads |> List.map _.CustodyObjectId)
+
     let private verifyStoredReads (pins: ProtectedIssueCensusPins)
                                   (selection: ProtectedIssueCensusSelection)
                                   (store: IProtectedIssueCensusStorePort option)
@@ -197,18 +217,29 @@ module MigrationProtectedIssueCensus =
                 if not (validStoreDescription pins (protectedStore.Describe())) then
                     Error "protected-census-store-installation"
                 else
-                    let rec verify remaining =
-                        match remaining with
-                        | [] -> Ok ()
-                        | read :: rest ->
-                            match protectedStore.ReadObject(selection, read.CustodyObjectId) with
+                    match protectedStore.ReadInventory selection with
+                    | None -> Error "protected-census-store-unavailable"
+                    | Some before when not (validInventory pins selection reads before) ->
+                        Error "protected-census-store-inventory"
+                    | Some before ->
+                        let rec verify remaining =
+                            match remaining with
+                            | [] -> Ok ()
+                            | read :: rest ->
+                                match protectedStore.ReadObject(selection, read.CustodyObjectId) with
+                                | None -> Error "protected-census-store-unavailable"
+                                | Some stored when stored.Selection <> selection
+                                                   || stored.CustodyStoreResourceId <> pins.CustodyStoreResourceId
+                                                   || stored.Read <> read ->
+                                    Error "protected-census-store-binding"
+                                | Some _ -> verify rest
+                        match verify reads with
+                        | Error reason -> Error reason
+                        | Ok () ->
+                            match protectedStore.ReadInventory selection with
                             | None -> Error "protected-census-store-unavailable"
-                            | Some stored when stored.Selection <> selection
-                                               || stored.CustodyStoreResourceId <> pins.CustodyStoreResourceId
-                                               || stored.Read <> read ->
-                                Error "protected-census-store-binding"
-                            | Some _ -> verify rest
-                    verify reads
+                            | Some after when after <> before -> Error "protected-census-store-inventory"
+                            | Some _ -> Ok before.SealSha256
             with _ -> Error "protected-census-store-unavailable"
 
     let bind (pins: ProtectedIssueCensusPins) (selection: ProtectedIssueCensusSelection)
@@ -277,13 +308,13 @@ module MigrationProtectedIssueCensus =
                             else
                                 match verifyStoredReads pins selection store reads with
                                 | Error reason -> Error reason
-                                | Ok () ->
+                                | Ok inventorySeal ->
                                     let captures = reads |> List.map capture
                                     MigrationInspectProviderAdapter.bindIssues options population captures
                                     |> Result.mapError (fun reason -> $"protected-census-raw-typed:{reason}")
                                     |> Result.map (fun inspect ->
                                         let parts =
-                                            [ "fsgg.gs2-09.7.protected-issue-census/v4"
+                                            [ "fsgg.gs2-09.7.protected-issue-census/v5"
                                               string selection.RunId; string selection.RunAttempt
                                               selection.RunNonce; selection.CandidateSha; selection.WorkflowSha
                                               selection.ApiOrigin; selection.Owner; selection.Repository
@@ -295,7 +326,8 @@ module MigrationProtectedIssueCensus =
                                               pins.CustodyReaderPrincipalId
                                               pins.CustodyWriterPrincipalId
                                               pins.CandidatePrincipalId
-                                              string batch.SealedPageCount ]
+                                              string batch.SealedPageCount
+                                              inventorySeal ]
                                             @ (reads |> List.collect (fun read ->
                                                 [ string read.ReadOrdinal; read.CustodyObjectId
                                                   read.RequestMethod; read.RequestUri; read.ResponseUri

@@ -118,6 +118,12 @@ let private protectedCensusPort descriptor batch =
         member _.Describe() = descriptor
         member _.Read _ = batch }
 
+let private protectedCensusInventory (batch: ProtectedIssueCensusBatch) =
+    let objectIds = batch.Identity :: batch.Pages |> List.map _.CustodyObjectId
+    { Selection=batch.Selection; CustodyStoreResourceId=batch.CustodyStoreResourceId
+      Complete=true; HighWaterOrdinal=int64 objectIds.Length
+      SealSha256=String.replicate 64 "f"; ObjectIds=objectIds }
+
 let private protectedCensusStore (batch: ProtectedIssueCensusBatch) =
     let objects =
         batch.Identity :: batch.Pages
@@ -128,6 +134,7 @@ let private protectedCensusStore (batch: ProtectedIssueCensusBatch) =
         |> Map.ofList
     { new IProtectedIssueCensusStorePort with
         member _.Describe() = protectedCensusStoreDescription
+        member _.ReadInventory _ = Some (protectedCensusInventory batch)
         member _.ReadObject(_, objectId) = Map.tryFind objectId objects }
 
 [<Fact>]
@@ -307,11 +314,13 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     let missing =
         { new IProtectedIssueCensusStorePort with
             member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
             member _.ReadObject(_, _) = None }
     Assert.Equal(Error "protected-census-store-unavailable", bind (Some missing))
     let foreign =
         { new IProtectedIssueCensusStorePort with
             member _.Describe() = { protectedCensusStoreDescription with ResourceId="candidate-writable-store" }
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
             member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
     Assert.Equal(Error "protected-census-store-installation", bind (Some foreign))
     let bindCounted description =
@@ -319,6 +328,7 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
         let driftedStore =
             { new IProtectedIssueCensusStorePort with
                 member _.Describe() = description
+                member _.ReadInventory _ = Some (protectedCensusInventory batch)
                 member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
         let result =
             MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
@@ -342,6 +352,7 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
                 describes <- describes + 1
                 if describes = 1 then protectedCensusStoreDescription
                 else { protectedCensusStoreDescription with CandidateMayWrite=true }
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
             member _.ReadObject(_, _) =
                 objectReads <- objectReads + 1
                 None }
@@ -351,6 +362,7 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     let changed =
         { new IProtectedIssueCensusStorePort with
             member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
             member _.ReadObject(selection, objectId) =
                 stored.ReadObject(selection, objectId)
                 |> Option.map (fun value ->
@@ -361,6 +373,7 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     let stale =
         { new IProtectedIssueCensusStorePort with
             member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
             member _.ReadObject(selection, objectId) =
                 stored.ReadObject(selection, objectId)
                 |> Option.map (fun value ->
@@ -370,11 +383,50 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     let unknown =
         { new IProtectedIssueCensusStorePort with
             member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
             member _.ReadObject(_, _) =
                 attempts <- attempts + 1
                 raise (InvalidOperationException "unknown protected store read") }
     Assert.Equal(Error "protected-census-store-unavailable", bind (Some unknown))
     Assert.Equal(1, attempts)
+
+[<Fact>]
+let ``protected issue census refuses omitted extra duplicate or drifting store inventory`` () =
+    let population, batch = protectedCensusFixture ()
+    let reader = protectedCensusPort protectedCensusPins (Some batch)
+    let stored = protectedCensusStore batch
+    let inventory = protectedCensusInventory batch
+    let bind inventoryRead =
+        let store =
+            { new IProtectedIssueCensusStorePort with
+                member _.Describe() = protectedCensusStoreDescription
+                member _.ReadInventory _ = inventoryRead ()
+                member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some reader) (Some store) options population |> Result.map ignore
+    for changed in
+        [ { inventory with ObjectIds=[ "object:1" ] }
+          { inventory with ObjectIds=inventory.ObjectIds @ [ "object:3" ] }
+          { inventory with ObjectIds=[ "object:1"; "object:1" ] }
+          { inventory with Complete=false }
+          { inventory with HighWaterOrdinal=3L }
+          { inventory with SealSha256="unsealed" }
+          { inventory with Selection={ inventory.Selection with RunNonce="stale" } } ] do
+        Assert.Equal(Error "protected-census-store-inventory",
+                     bind (fun () -> Some changed))
+    let mutable inventoryReads = 0
+    Assert.Equal(Error "protected-census-store-inventory",
+                 bind (fun () ->
+                     inventoryReads <- inventoryReads + 1
+                     if inventoryReads = 1 then Some inventory
+                     else Some { inventory with SealSha256=String.replicate 64 "a" }))
+    Assert.Equal(2, inventoryReads)
+    inventoryReads <- 0
+    Assert.Equal(Error "protected-census-store-unavailable",
+                 bind (fun () ->
+                     inventoryReads <- inventoryReads + 1
+                     if inventoryReads = 1 then Some inventory else None))
+    Assert.Equal(2, inventoryReads)
 
 let private readProjectItems responses =
     let transport = FakeTransport responses
