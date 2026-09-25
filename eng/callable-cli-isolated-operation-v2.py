@@ -394,6 +394,10 @@ class NativeReadAdapter:
                             (type(listed_repo["url"]) is not str
                              or listed_repo["url"] != detail_repo["url"]))):
                     raise Refused("native-pull-list-detail-repo-drift")
+                if (side == "base"
+                        and (not _same_repo(listed_repo, expected)
+                             or not _same_repo(detail_repo, expected))):
+                    raise Refused("native-pull-list-base-target")
             if detail.get("body") == pull_request_body(expected)["body"]:
                 selected.append(detail)
         if self._repo(expected.repository, expected.repository_id) != repository_node:
