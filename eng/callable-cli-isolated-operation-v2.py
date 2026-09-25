@@ -685,6 +685,7 @@ def _pull_success_response_matches(value: object, expected: ExpectedPull,
     if type(value) is HttpResponse:
         if not 200 <= value.status < 300:
             return True
+        headers = value.headers
         try:
             body = _strict_json(value.body)
         except (UnicodeError, ValueError, Refused):
@@ -692,8 +693,18 @@ def _pull_success_response_matches(value: object, expected: ExpectedPull,
     elif type(value) is dict:
         if type(value.get("status")) is not int or not 200 <= value["status"] < 300:
             return True
+        headers = value.get("headers", ())
         body = value.get("body")
     else:
+        return False
+    if type(headers) is not tuple or any(
+            type(pair) is not tuple or len(pair) != 2
+            or type(pair[0]) is not str or type(pair[1]) is not str
+            for pair in headers):
+        return False
+    locations = [part for name, part in headers if name.lower() == "location"]
+    if len(locations) > 1 or (locations and locations[0] !=
+                              _pull_url(expected.repository, pull["number"])):
         return False
     if type(body) is not dict:
         return False
