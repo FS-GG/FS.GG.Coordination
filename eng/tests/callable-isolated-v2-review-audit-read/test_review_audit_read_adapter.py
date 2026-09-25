@@ -159,6 +159,22 @@ class AuditReadTests(unittest.TestCase):
                 88, 123, "reviewer", NOW).read_review_event(101, 1, 500, 203,
                                                                "c" * 64)
 
+    def test_reused_audit_reader_scope_mutated_at_final_read_refuses(self):
+        scope, event, joint = fixture()
+        log = FakeAuditLog(scope, json.dumps(event).encode())
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "d" * 64
+            return shared
+        log.scope = reused_scope
+        with self.assertRaises(audit.Refused):
+            audit.ReviewAuditReadAdapter(log, FakeJoint(joint), DOC, 600,
+                88, 123, "reviewer", NOW).read_review_event(101, 1, 500, 203,
+                                                               "c" * 64)
+
     def test_secret_exception_is_sanitized(self):
         scope, event, joint = fixture()
         class Broken(FakeAuditLog):

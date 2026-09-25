@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -69,7 +70,7 @@ def _scope(port: ProtectedAuditLogPort, now: dt.datetime) -> dict[str, Any]:
             or type(value["permissions"]) is not list
             or _time(value["expiresAt"]) <= now):
         raise Refused("audit-reader-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 class ReviewAuditReadAdapter:
