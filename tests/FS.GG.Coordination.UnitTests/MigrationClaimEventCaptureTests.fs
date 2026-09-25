@@ -139,6 +139,21 @@ let ``malformed claim marker and foreign claim aggregate refuse`` () =
     | result -> failwithf "Expected incomplete journal, got %A" result
 
 [<Fact>]
+let ``raw provider comment cannot disagree with typed marker`` () =
+    let captured = native claimBody
+    let stream = captured.Input.IssueComments.Head
+    let original = stream.Comments.Head
+    let alteredRaw = original.PayloadJson.Replace("FS-GG/copy", "FS-GG/foreign")
+    let changed = { original with PayloadJson=alteredRaw; PayloadSha256=sha alteredRaw }
+    let input =
+        { captured.Input with IssueComments=[ { stream with Comments=[ changed ] } ] }
+    let native =
+        { Input=input
+          Snapshot=MigrationNativeActivity.reconcile input |> Result.defaultWith (fun e -> failwithf "%A" e) }
+    Assert.Equal(Error(InvalidMarker "IC_201"),
+        MigrationClaimEventCapture.reconcile declaration native [ target, goodJournal ])
+
+[<Fact>]
 let ``changed native census and extra legacy journal event refuse`` () =
     let captured = native claimBody
     let changed = { captured with Snapshot={ captured.Snapshot with NormalizedSha256=sha "altered" } }
