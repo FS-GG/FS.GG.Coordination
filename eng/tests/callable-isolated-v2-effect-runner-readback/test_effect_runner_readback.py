@@ -233,6 +233,25 @@ class RunnerReadbackTests(unittest.TestCase):
                 self.refuses(lambda _p, _s, r, _a: r.record.__setitem__(key, value))
         self.refuses(lambda _p, _s, r, _a: r.record["after"].__setitem__("inode", 13))
 
+    def test_audit_read_cannot_replace_earlier_probe_refusal(self):
+        preflight, selection, runner, audit = fixture()
+        shared_probe = copy.deepcopy(runner.record)
+        shared_probe["stdout"] = b"foreign-output\n"
+        original_audit_read = audit.read_audit
+
+        def read_probe(run_id, attempt):
+            return shared_probe
+
+        def read_audit(event_id):
+            shared_probe["stdout"] = REFUSAL
+            return original_audit_read(event_id)
+
+        runner.read_probe = read_probe
+        audit.read_audit = read_audit
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+
     def test_refusal_audit_and_reader_custody_negatives(self):
         self.refuses(lambda _p, _s, r, _a: r.record.__setitem__("exitCode", 0))
         self.refuses(lambda _p, _s, r, _a: r.record.__setitem__("stdout", b"{}\n"))
