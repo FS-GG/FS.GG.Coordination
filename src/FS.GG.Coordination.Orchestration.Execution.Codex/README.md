@@ -31,6 +31,8 @@ either interface is installed, so its successful structural result is not captur
 
 `DirectSessionProspectiveWindowGate` models the next source boundary: an issued challenge is valid
 for at most five minutes, may prepare one turn, and must match the selected current-session source.
+The shared issue check refuses malformed expected scopes before a reservation CAS or source read,
+even if an issued assignment echoes the same malformed scope.
 Its ledger is immutable test state, not durable atomic replay custody. The issuer, trusted clock,
 source authentication and persistent one-use store have no installed implementation.
 
