@@ -227,6 +227,50 @@ type CodexAppServerContinuityTests() =
         )
 
     [<Fact>]
+    member _.``command item missing or malformed action collection cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for item in
+            [ "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"cwd\":\"/tmp\",\"status\":\"completed\"}"
+              "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":null,\"cwd\":\"/tmp\",\"status\":\"completed\"}" ] do
+            let terminal = completedWithItems ("[" + item + "]")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``command item wrong primitive fields cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for item in
+            [ "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":7,\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\"}"
+              "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":null,\"status\":\"completed\"}" ] do
+            let terminal = completedWithItems ("[" + item + "]")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``command item foreign status cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"foreign\"}]"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-item-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``command item with required payload retains terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
     member _.``cumulative usage regression and duplicate wire bytes refuse``() =
         let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
         let second = CodexAppServerContinuity.apply first (frame 2L usage)

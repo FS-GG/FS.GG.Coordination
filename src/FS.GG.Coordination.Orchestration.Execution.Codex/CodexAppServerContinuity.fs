@@ -100,6 +100,17 @@ module CodexAppServerContinuity =
                             match item.TryGetProperty "text" with
                             | true, text -> text.ValueKind = JsonValueKind.String
                             | _ -> false
+                        | "commandExecution" ->
+                            match item.TryGetProperty "command", item.TryGetProperty "commandActions",
+                                  item.TryGetProperty "cwd", item.TryGetProperty "status" with
+                            | (true, command), (true, actions), (true, cwd), (true, status) ->
+                                command.ValueKind = JsonValueKind.String
+                                && actions.ValueKind = JsonValueKind.Array
+                                && cwd.ValueKind = JsonValueKind.String
+                                && status.ValueKind = JsonValueKind.String
+                                && Set.contains (status.GetString())
+                                    (set [ "inProgress"; "completed"; "failed"; "declined" ])
+                            | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
                     && Set.contains typeName supportedItemTypes
