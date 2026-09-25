@@ -1838,11 +1838,13 @@ module MigrationGitHubRead =
                                             if item.ValueKind <> JsonValueKind.Object then
                                                 Error(MigrationReadFailure.MalformedResponse "invalid:issue-item")
                                             else
-                                                let mutable marker = Unchecked.defaultof<JsonElement>
-                                                if item.TryGetProperty("pull_request", &marker) then
-                                                    if marker.ValueKind = JsonValueKind.Object then Ok None
-                                                    else Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-marker")
-                                                else parseIssue item |> Result.map Some)
+                                                uniqueObjectMembers item
+                                                |> Result.bind (fun () ->
+                                                    let mutable marker = Unchecked.defaultof<JsonElement>
+                                                    if item.TryGetProperty("pull_request", &marker) then
+                                                        if marker.ValueKind = JsonValueKind.Object then Ok None
+                                                        else Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-marker")
+                                                    else parseIssue item |> Result.map Some))
                                     let firstError = classified |> List.tryPick (function Error error -> Some error | _ -> None)
                                     match firstError with
                                     | Some error -> Error error

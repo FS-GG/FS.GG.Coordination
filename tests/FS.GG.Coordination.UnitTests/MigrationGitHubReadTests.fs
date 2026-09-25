@@ -1625,6 +1625,18 @@ let ``issue census refuses unknown native state before subject evidence`` () =
     Assert.Equal(2, transport.Requests.Length)
 
 [<Fact>]
+let ``issue census refuses duplicate raw members before issue or PR classification`` () =
+    let ambiguousState =
+        (issue 1 "ISSUE_1").Replace("\"state\":\"open\"", "\"state\":\"open\",\"state\":\"closed\"")
+    let issueTransport = FakeTransport [ repo; ok Map.empty $"[{ambiguousState}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:state"),
+                 MigrationGitHubRead.readIssues options issueTransport)
+    let ambiguousMarker = """{"number":2,"pull_request":null,"pull_request":{}}"""
+    let prTransport = FakeTransport [ repo; ok Map.empty $"[{ambiguousMarker}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:pull_request"),
+                 MigrationGitHubRead.readIssues options prTransport)
+
+[<Fact>]
 let ``GraphQL partial data with an authorization error is never a complete type census`` () =
     let partial =
         """{"data":{"repository":{"databaseId":42,"issueTypes":{"nodes":[{"id":"IT_1","name":"Task"}],"pageInfo":{"hasNextPage":false,"endCursor":"NA"}}}},"errors":[{"type":"FORBIDDEN","message":"not accessible"}]}"""

@@ -57,6 +57,14 @@ before it creates subject evidence. This is one provider-parser field check;
 the complete nine-authority raw-to-typed inspect adapter and protected
 claim/receipt correspondence remain absent.
 
+A seventh independent raw-parser control showed that an issue-list object
+with duplicate `state` or `pull_request` members could still be classified
+using one value while retaining ambiguous raw bytes. It was red before the
+repair. `readIssues` now refuses duplicate members on every raw list item
+before parsing an issue or counting a PR marker. This prevents ambiguous
+raw JSON from contributing to the issue/PR census; it does not supply the
+missing complete raw-to-typed inspect authority.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
