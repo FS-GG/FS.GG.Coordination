@@ -506,6 +506,12 @@ class VersionedReadbackTests(unittest.TestCase):
             self.assertEqual(replay_result["classification"], "Unknown")
             self.assertEqual(replay_result["reason"], "pull-request-attempt-not-reserved")
             self.assertEqual(replay_result["writeAttempts"], 0)
+            proposal_path.write_text('{"schema":"x","schema":"y"}')
+            duplicate = subprocess.run(command, capture_output=True,
+                                       text=True, check=False)
+            self.assertEqual(duplicate.returncode, 2)
+            self.assertEqual(duplicate.stderr.strip(), "json-duplicate-member")
+            proposal_path.write_text(json.dumps(proposal))
             contract["source"]["operationSourceSha256"] = "0" * 64
             contract["contractSha256"] = operator._digest({
                 key: value for key, value in contract.items() if key != "contractSha256"})

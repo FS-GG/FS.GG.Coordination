@@ -42,6 +42,24 @@ class OfflineMismatch(Exception):
     """A controlled transcript did not match the requested operation."""
 
 
+def _unique_object(pairs: list[tuple[str, object]]) -> dict:
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise Refused("json-duplicate-member")
+        result[key] = value
+    return result
+
+
+def _finite_constant(_value: str):
+    raise Refused("json-nonfinite")
+
+
+def _strict_json(raw: bytes):
+    return json.loads(raw, object_pairs_hook=_unique_object,
+                      parse_constant=_finite_constant)
+
+
 @dataclasses.dataclass(frozen=True)
 class ExpectedPull:
     operation_identity: str
@@ -122,19 +140,6 @@ class NativeReadAdapter:
         self.transport = transport
         self.transcript: list[dict] = []
 
-    @staticmethod
-    def _unique_object(pairs: list[tuple[str, object]]) -> dict:
-        result = {}
-        for key, value in pairs:
-            if key in result:
-                raise Refused("native-json-duplicate-member")
-            result[key] = value
-        return result
-
-    @staticmethod
-    def _finite_constant(_value: str):
-        raise Refused("native-json-nonfinite")
-
     def _get(self, path: str, paginated: bool = False) -> tuple[int, str, object]:
         response = self.transport.request("GET", path, None)
         if (type(response) is not HttpResponse or type(response.status) is not int
@@ -153,9 +158,7 @@ class NativeReadAdapter:
         if link and not paginated:
             raise Refused("native-singleton-pagination")
         try:
-            body = json.loads(response.body,
-                              object_pairs_hook=self._unique_object,
-                              parse_constant=self._finite_constant)
+            body = _strict_json(response.body)
         except (UnicodeError, ValueError):
             raise Refused("native-json-invalid") from None
         self.transcript.append({"path": path, "status": response.status,
@@ -398,7 +401,7 @@ def _sha(raw: bytes) -> str:
 def _read_object(path: str) -> tuple[dict, bytes]:
     try:
         raw = pathlib.Path(path).read_bytes()
-        value = json.loads(raw)
+        value = _strict_json(raw)
     except (OSError, UnicodeError, ValueError):
         raise Refused("inspect-input-unavailable") from None
     if type(value) is not dict:
