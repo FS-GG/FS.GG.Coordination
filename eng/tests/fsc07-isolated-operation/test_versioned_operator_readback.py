@@ -1340,6 +1340,7 @@ class VersionedReadbackTests(unittest.TestCase):
         transport = operator.OfflineTranscriptTransport(events)
         self.assert_unknown(operator.run_pull_once(
             pull_expected(), transport, reserve_once_factory()))
+
         self.assertEqual(transport.writes, 0)
         events = protection_read_events()
         events[6]["response"]["json"]["protected"] = True
@@ -1376,6 +1377,48 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
                                                    reserve_once_factory()))
         self.assertEqual(transport.writes, 0)
+
+    def test_lost_response_foreign_nested_repository_owner_stays_unknown(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["head"]["repo"]["owner"] = {"login": "Foreign"}
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_nested_repository_owner_and_name_bind_selected_full_name(self):
+        for side, key, value in (("head", "owner", {"login": "Foreign"}),
+                                 ("base", "owner", {"login": "Foreign"}),
+                                 ("head", "name", "foreign"),
+                                 ("base", "name", "foreign")):
+            with self.subTest(side=side, key=key):
+                pull = copy.deepcopy(pull_observed().pulls[0])
+                pull[side]["repo"][key] = value
+                observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(), lambda: observed))
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        for side in ("head", "base"):
+            pull[side]["repo"]["owner"] = {"login": "FS-GG"}
+            pull[side]["repo"]["name"] = "disposable"
+        observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+        self.assertIsInstance(operator.classify_pull_after_one_attempt(
+            pull_expected(), lambda: observed), operator.ExactPull)
+
+    def test_unselected_pull_nested_repository_identity_is_still_checked(self):
+        unrelated = copy.deepcopy(pull_observed().pulls[0])
+        unrelated["body"] = "unrelated"
+        unrelated["base"]["repo"]["name"] = "foreign"
+        reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((unrelated,))))
+        with self.assertRaisesRegex(operator.Refused,
+                                    "native-pull-list-detail-repo-drift"):
+            reader.read_pull_census(pull_expected())
 
     def test_q6_controlled_exception_sentinel_not_surfaced(self):
         events = pull_read_events() * 2 + [
