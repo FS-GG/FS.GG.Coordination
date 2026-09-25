@@ -963,6 +963,32 @@ let ``raw Git collector evidence decodes and verifies an OperatingV1 genesis pla
     let read = V1AdmissionGenesisGitRead.decode(encoded ()) |> Result.defaultWith (String.concat "," >> failwith)
     let plan = V1AdmissionGenesisGitRead.verifyPlan now "protected-genesis" read |> Result.defaultWith (String.concat "," >> failwith)
     Assert.Equal(commit, Registry.genesisAuthorityCommit plan)
+    let operating = JsonNode.Parse(raw.ToJsonString())
+    let installed = Registry.genesisObjects plan |> _.CommitObjectId |> value
+    operating["schema"] <- JsonValue.Create("fsgg.v1-admission-operating-git-read/1")
+    operating["operation"]["firstHead"] <- JsonValue.Create(installed)
+    operating["operation"]["secondHead"] <- JsonValue.Create(installed)
+    operating["operation"]["observation"] <- JsonValue.Create("present")
+    let operatingBytes () = Encoding.UTF8.GetBytes(operating.ToJsonString())
+    let decoded =
+        V1AdmissionGenesisGitRead.decodeOperating now (ReadOnlyMemory(operatingBytes ()))
+        |> Result.defaultWith (String.concat "," >> failwith)
+    let _, operatingHead, operationHead = decoded
+    Assert.Equal(commit, operatingHead)
+    Assert.Equal(installed, value operationHead)
+    let mutable reads = 0
+    let port =
+        V1AdmissionGenesisGitRead.createOperatingPort
+            (fun () -> now)
+            (fun () -> reads <- reads + 1; Ok(operatingBytes ()))
+    Assert.True(Registry.readVerified port |> Result.isOk)
+    Assert.Equal(2, reads)
+    Assert.True(V1AdmissionGenesisGitRead.decodeOperating (now.AddMinutes 3.) (ReadOnlyMemory(operatingBytes ())) |> Result.isError)
+    operating["cutover"]["claimRefs"] <- JsonArray(JsonValue.Create("refs/heads/fsgg/v2/journal/claim/one"))
+    Assert.True(V1AdmissionGenesisGitRead.decodeOperating now (ReadOnlyMemory(operatingBytes ())) |> Result.isError)
+    operating["cutover"]["claimRefs"] <- JsonArray()
+    operating["operation"]["secondHead"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(V1AdmissionGenesisGitRead.decodeOperating now (ReadOnlyMemory(operatingBytes ())) |> Result.isError)
     Assert.True(V1AdmissionGenesisGitRead.verifyPlan (now.AddMinutes 3.) "protected-genesis" read |> Result.isError)
     Assert.True(V1AdmissionGenesisGitRead.verifyPlan (now.AddSeconds(-1.)) "protected-genesis" read |> Result.isError)
     Assert.True(V1AdmissionGenesisGitRead.decode(ReadOnlyMemory(Array.zeroCreate 32769)) |> Result.isError)

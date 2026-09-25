@@ -131,6 +131,36 @@ class AuthorityGitReadTests(unittest.TestCase):
             self.assertEqual(event, base64.b64decode(result["operation"]["eventBytesBase64"]))
             self.assertEqual(head, base64.b64decode(result["operation"]["headBytesBase64"]))
 
+    def test_operating_authority_requires_stable_installed_operation_and_no_claims(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store, cutover, _, _ = fixture(pathlib.Path(directory))
+            with self.assertRaisesRegex(reader.Refused, "operation-census-not-installed"):
+                reader.collect_operating(str(store), lambda: reader.REPOSITORY_ID)
+            operation, _, _ = install_genesis(store)
+            result = reader.collect_operating(str(store), lambda: reader.REPOSITORY_ID,
+                                              reader.refs, "2026-09-23T14:00:00Z")
+            self.assertEqual("fsgg.v1-admission-operating-git-read/1", result["schema"])
+            self.assertEqual(cutover, result["cutover"]["firstHead"])
+            self.assertEqual({"ref": reader.OPERATION_REF, "firstHead": operation,
+                              "secondHead": operation, "observation": "present"},
+                             result["operation"])
+            git(store, "update-ref", reader.CLAIM_PREFIX + "one", operation)
+            with self.assertRaisesRegex(reader.Refused, "claim-census-not-empty"):
+                reader.collect_operating(str(store), lambda: reader.REPOSITORY_ID)
+            git(store, "update-ref", "-d", reader.CLAIM_PREFIX + "one")
+            reads = 0
+
+            def moving(remote):
+                nonlocal reads
+                reads += 1
+                observed = reader.refs(remote)
+                if reads == 2:
+                    observed[reader.OPERATION_REF] = cutover
+                return observed
+
+            with self.assertRaisesRegex(reader.Refused, "ref-census-moved"):
+                reader.collect_operating(str(store), lambda: reader.REPOSITORY_ID, moving)
+
     def test_installed_genesis_ref_parent_and_census_drift_refuse(self):
         with tempfile.TemporaryDirectory() as directory:
             store, cutover, _, _ = fixture(pathlib.Path(directory))

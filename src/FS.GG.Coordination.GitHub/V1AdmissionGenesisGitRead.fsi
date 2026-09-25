@@ -12,6 +12,16 @@ module V1AdmissionGenesisGitRead =
     val observedAt: GenesisGitRead -> DateTimeOffset
     val authorityPort: GenesisGitRead -> AuthorityGitPort
     val registryRead: GenesisGitRead -> RegistryJournalRead
+    /// Decode a fresh post-genesis OperatingV1 authority census. The operation
+    /// ref must be installed and stable; unverified claim refs are refused.
+    val decodeOperating:
+        asOf: DateTimeOffset -> raw: ReadOnlyMemory<byte> ->
+            Result<AuthorityGitObjects * GitObjectId * GitObjectId, string list>
+    /// Collect native evidence for each authority read and reread. No decoded
+    /// snapshot is cached across service preflight and final authority check.
+    val createOperatingPort:
+        now: (unit -> DateTimeOffset) ->
+        readRaw: (unit -> Result<byte array, string>) -> AuthorityGitPort
     val verifyPlan:
         asOf: DateTimeOffset -> operationId: string -> GenesisGitRead -> Result<RegistryGenesisPlan, string list>
 
