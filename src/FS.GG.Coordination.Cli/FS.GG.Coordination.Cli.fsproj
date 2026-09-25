@@ -27,6 +27,8 @@
     <Compile Include="InstalledOrdinarySettlementProvider.fs" />
     <Compile Include="MigrationInspectProviderAdapter.fsi" />
     <Compile Include="MigrationInspectProviderAdapter.fs" />
+    <Compile Include="MigrationProtectedIssueCensus.fsi" />
+    <Compile Include="MigrationProtectedIssueCensus.fs" />
     <Compile Include="MigrationReceiverCapture.fsi" />
     <Compile Include="MigrationReceiverCapture.fs" />
     <Compile Include="MigrationRollbackReceiverReadback.fsi" />
