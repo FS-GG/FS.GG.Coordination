@@ -1303,6 +1303,26 @@ let ``missing terminal page and off-scope continuation refuse`` () =
     Assert.Equal(2, escaped.Requests.Length)
 
 [<Fact>]
+let ``mixed-case Link cannot hide a missing issue continuation page`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/issues?state=all&per_page=100&page=2"
+    let firstBody = "[" + issue 1 "ISSUE_1" + "]"
+    let first = ok (Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ]) firstBody
+    let missing = FakeTransport [ repo; first ]
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readIssues options missing)
+    Assert.Equal(3, missing.Requests.Length)
+
+[<Fact>]
+let ``split mixed-case Link fields cannot hide a continuation`` () =
+    let next = "https://api.github.test/repos/FS-GG/copy/issues?state=all&per_page=100&page=2"
+    let headers = Map.ofList [ "Link", "<https://api.github.test/previous>; rel=\"prev\""
+                               "link", $"<{next}>; rel=\"next\"" ]
+    let missing = FakeTransport [ repo; ok headers "[]" ]
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readIssues options missing)
+    Assert.Equal(3, missing.Requests.Length)
+
+[<Fact>]
 let ``issue pagination refuses a skipped or substituted page`` () =
     let skipped =
         FakeTransport [ repo

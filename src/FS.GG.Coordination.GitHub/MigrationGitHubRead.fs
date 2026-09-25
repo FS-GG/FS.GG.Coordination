@@ -528,6 +528,14 @@ module MigrationGitHubRead =
           if text token then "authorization", $"Bearer {token}" ]
         |> Map.ofList
 
+    let private linkHeader (headers: Map<string, string>) =
+        headers
+        |> Map.toSeq
+        |> Seq.choose (fun (name, value) ->
+            if String.Equals(name, "link", StringComparison.OrdinalIgnoreCase) then Some value
+            else None)
+        |> String.concat ","
+
     let private response (transport: IMigrationGitHubReadTransport) (request: GitHubRequest) =
         match transport.Send request with
         | Response value when value.StatusCode >= 200 && value.StatusCode < 300 -> Ok value
@@ -1687,7 +1695,7 @@ module MigrationGitHubRead =
                                     | Some error -> Error error
                                     | None ->
                                         let records = classified |> List.choose (function Ok(Some value) -> Some value | _ -> None)
-                                        let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                        let link = linkHeader result.Headers
                                         match Transport.tryNextLink link with
                                         | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                         | Ok next ->
@@ -1773,7 +1781,7 @@ module MigrationGitHubRead =
                                 | Some failure -> Error failure
                                 | None ->
                                     let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
-                                    let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                    let link = linkHeader result.Headers
                                     match Transport.tryNextLink link with
                                     | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                     | Ok next ->
@@ -1873,7 +1881,7 @@ module MigrationGitHubRead =
                             | Some failure -> Error failure
                             | None ->
                                 let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
-                                let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                let link = linkHeader result.Headers
                                 match Transport.tryNextLink link with
                                 | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                 | Ok next ->
@@ -1992,7 +2000,7 @@ module MigrationGitHubRead =
                                     | Some failure -> Error failure
                                     | None ->
                                         let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
-                                        let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                        let link = linkHeader result.Headers
                                         match Transport.tryNextLink link with
                                         | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                         | Ok next ->
@@ -2089,7 +2097,7 @@ module MigrationGitHubRead =
                                     | Some failure -> Error failure
                                     | None ->
                                         let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
-                                        let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                        let link = linkHeader result.Headers
                                         match Transport.tryNextLink link with
                                         | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                         | Ok next ->
@@ -2169,7 +2177,7 @@ module MigrationGitHubRead =
                                     | Some failure -> Error failure
                                     | None ->
                                         let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
-                                        let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
+                                        let link = linkHeader result.Headers
                                         match Transport.tryNextLink link with
                                         | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                         | Ok next ->
