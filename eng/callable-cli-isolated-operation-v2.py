@@ -232,12 +232,18 @@ class NativeReadAdapter:
 
     def _ref(self, repository: str, ref: str) -> str:
         branch = ref.removeprefix("refs/heads/")
-        path = f"repos/{repository}/git/ref/heads/{urllib.parse.quote(branch, safe='/')}"
+        encoded = urllib.parse.quote(branch, safe="/")
+        path = f"repos/{repository}/git/ref/heads/{encoded}"
         status, _, body = self._get(path)
         obj = body.get("object") if type(body) is dict else None
         sha = obj.get("sha") if type(obj) is dict else None
         if (status != 200 or type(body) is not dict or body.get("ref") != ref
-                or not _oid(sha)):
+                or not _oid(sha)
+                or body.get("url") !=
+                f"https://api.github.com/repos/{repository}/git/refs/heads/{encoded}"
+                or obj.get("type") != "commit"
+                or obj.get("url") !=
+                f"https://api.github.com/repos/{repository}/git/commits/{sha}"):
             raise Refused("native-ref-mismatch")
         return sha
 
