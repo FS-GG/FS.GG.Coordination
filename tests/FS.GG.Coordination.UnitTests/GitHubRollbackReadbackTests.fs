@@ -8,6 +8,7 @@ open FS.GG.Coordination.Qualification.Contracts
 open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackPlanQualification
 open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackReadbackQualification
 open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackReadbackProvenance
+open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackReadbackSignature
 
 let private sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 let private digest character = String.replicate 64 character
@@ -162,3 +163,59 @@ let ``terminal epoch provenance and protected binding omissions refuse`` () =
     let missingEpochRevision = { terminal selected.Seal completed with NativeRevision="" }
     Assert.Equal(Error [ EpochProvenanceMismatch ],
                  verifyProvenance (binding selected.Seal) selected completed claims missingEpochRevision)
+
+[<Fact>]
+let ``signed Q6 readback batch requires the independently pinned observer key`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    use signer = RSA.Create()
+    signer.KeySize <- 3072
+    let publicKey = signer.ExportSubjectPublicKeyInfo()
+    let pin = publicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let payload = payloadForSigning expected selected completed claims finalEpoch |> get
+    let signature = signer.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+    Assert.Equal(Ok(), verifySigned pin publicKey signature expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ MissingOrInvalidObserverPin ],
+                 verifySigned "" publicKey signature expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ ObserverFingerprintMismatch ],
+                 verifySigned (sha "foreign-key") publicKey signature expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ MissingOrInvalidObserverPin ],
+                 verifySigned (pin.ToUpperInvariant()) publicKey signature expected selected completed claims finalEpoch)
+    let replayedRun = { expected with RunNonce="run-812-attempt-2" }
+    Assert.Equal(Error [ ProvenanceInvalid [ StepProvenanceMismatch selected.Steps[0].StepId
+                                             StepProvenanceMismatch selected.Steps[1].StepId
+                                             StepProvenanceMismatch selected.Steps[2].StepId
+                                             StepProvenanceMismatch selected.Steps[3].StepId
+                                             StepProvenanceMismatch selected.Steps[4].StepId
+                                             EpochProvenanceMismatch ] ],
+                 verifySigned pin publicKey signature replayedRun selected completed claims finalEpoch)
+
+[<Fact>]
+let ``signed Q6 readback refuses altered native revision and foreign signer`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    use signer = RSA.Create()
+    signer.KeySize <- 3072
+    let publicKey = signer.ExportSubjectPublicKeyInfo()
+    let pin = publicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let payload = payloadForSigning expected selected completed claims finalEpoch |> get
+    let signature = signer.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+    let changed = { claims[2] with NativeRevision="revision:foreign" }
+    Assert.Equal(Error [ InvalidObserverSignature ],
+                 verifySigned pin publicKey signature expected selected completed
+                     (claims |> List.updateAt 2 changed) finalEpoch)
+    let changedEpoch = { finalEpoch with NativeRevision="epoch-revision:foreign" }
+    Assert.Equal(Error [ InvalidObserverSignature ],
+                 verifySigned pin publicKey signature expected selected completed claims changedEpoch)
+    use foreign = RSA.Create()
+    foreign.KeySize <- 3072
+    let foreignPublicKey = foreign.ExportSubjectPublicKeyInfo()
+    let foreignPin = foreignPublicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    Assert.Equal(Error [ InvalidObserverSignature ],
+                 verifySigned foreignPin foreignPublicKey signature expected selected completed claims finalEpoch)
