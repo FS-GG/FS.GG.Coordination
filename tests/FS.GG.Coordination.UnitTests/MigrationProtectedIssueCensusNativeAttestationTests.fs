@@ -24,7 +24,8 @@ let private handoffPins =
       AppId=101L; InstallationId=202L; RepositoryId=42L
       PermissionSha256=String.replicate 64 "4" }
 
-let private fixtureWithSelectionMarkerAndClock select alterMarker markerClockResource markerClockArtifact =
+let private fixtureWithSelectionMarkerRecordAndClock
+    select alterMarker alterRecord markerClockResource markerClockArtifact =
     use signer = ECDsa.Create(ECCurve.NamedCurves.nistP256)
     let publicBytes = signer.ExportSubjectPublicKeyInfo()
     let pins =
@@ -78,6 +79,7 @@ let private fixtureWithSelectionMarkerAndClock select alterMarker markerClockRes
           VaultResourceId=marker.VaultResourceId; Phase=TokenVaulted
           TokenFingerprintSha256=Some (String.replicate 64 "7")
           RevocationReceiptSha256=None }
+        |> alterRecord
     let unsignedSnapshot =
         { Head={ AttemptResourceId=pins.NativeAttemptResourceId
                  Generation=7L; SealSha256="" }
@@ -103,6 +105,10 @@ let private fixtureWithSelectionMarkerAndClock select alterMarker markerClockRes
     let signed =
         { unsignedAttestation with SignatureBase64=Convert.ToBase64String signature }
     pins, marker, snapshot, signed, issued.AddSeconds 10
+
+let private fixtureWithSelectionMarkerAndClock select alterMarker markerClockResource markerClockArtifact =
+    fixtureWithSelectionMarkerRecordAndClock
+        select alterMarker id markerClockResource markerClockArtifact
 
 let private fixtureWithSelectionAndMarkerClock select markerClockResource markerClockArtifact =
     fixtureWithSelectionMarkerAndClock select id markerClockResource markerClockArtifact
@@ -324,3 +330,22 @@ let ``native recovery refuses offset-only record rewrite under same seal`` () =
                  verify pins marker rewritten (Some attestation) now)
     Assert.Equal(Error "protected-census-attempt-binding",
                  inspectSigned pins marker rewritten (Some attestation) now)
+
+[<Fact>]
+let ``direct native attestation refuses impossible phase under valid signature`` () =
+    let invalid =
+        [ (fun record -> { record with Phase=InvocationUnknown })
+          (fun record -> { record with TokenFingerprintSha256=None })
+          (fun record -> { record with TokenFingerprintSha256=Some "bad" })
+          (fun record -> { record with RevocationReceiptSha256=Some (String.replicate 64 "8") })
+          (fun record -> { record with Phase=NativeRevoked })
+          (fun record -> { record with Phase=NativeRevoked
+                                       RevocationReceiptSha256=Some "bad" }) ]
+    for alterRecord in invalid do
+        let pins, marker, snapshot, attestation, now =
+            fixtureWithSelectionMarkerRecordAndClock id id alterRecord
+                "protected-clock:native-test" (String.replicate 64 "b")
+        Assert.Equal(Error "protected-native-attestation-snapshot",
+                     verify pins marker snapshot (Some attestation) now)
+        Assert.Equal(Error "protected-census-attempt-phase",
+                     inspectSigned pins marker snapshot (Some attestation) now)
