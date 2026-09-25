@@ -26,7 +26,7 @@ MEMBERS = {
 PINNED_MEMBERS = {
     "__main__.py": "4b3ef835e4b998e374cfe61b886e07981aeab94cb0ff4262ee549c3ce693e0e7",
     "callable_isolated_v2_effect_candidate.py":
-        "9d156f8447bda006829be5b524d21e721c173f60f39d9bdee7a7749e82185a91",
+        "71fbe3e75c3e4185f74fa7284f26047dbfb5719fa309d4c2c0f5d5eb61558b87",
     "callable_isolated_v2_effect_closed.py":
         "fc32d5525b0af8dcfe84e38a28eff26dcbf62f6586c6ea19a4525c21c58b5c42",
 }

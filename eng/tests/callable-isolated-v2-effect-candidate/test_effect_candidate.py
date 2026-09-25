@@ -124,6 +124,19 @@ class EffectCandidateTests(unittest.TestCase):
                 value[section][key] = replacement
                 self.assert_refused(value, expected)
 
+    def test_selected_expected_number_type_aliases_refuse(self):
+        value = packet()
+        for section, key, alias in (
+            ("source", "producerRunId", 99.0),
+            ("review", "runAttempt", True),
+            ("target", "repositoryId", 106.0),
+            ("operation", "maxProviderWrites", True),
+        ):
+            with self.subTest(section=section, key=key):
+                expected = copy.deepcopy(value)
+                expected[section][key] = alias
+                self.assert_refused(value, expected)
+
     def test_stale_self_review_and_wrong_effect_refuse_even_if_resealed(self):
         for section, key, replacement in (
             ("review", "reviewerId", 103),
