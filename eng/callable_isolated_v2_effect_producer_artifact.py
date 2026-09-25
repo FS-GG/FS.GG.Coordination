@@ -19,7 +19,7 @@ import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 RUN_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-run/1"
 ARTIFACT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-artifact/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-witness/1"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-witness/2"
 WORKFLOW = ".github/workflows/callable-isolated-v2-effect-release.yml"
 API = "https://api.github.com"
 MAX_BUNDLE = 2_000_000
@@ -56,6 +56,8 @@ class ProducerWitnessResult:
     workflow_sha256: str
     workflow_blob_oid: str
     artifact_created_at: str
+    producer_actor_id: int
+    source_record_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -143,6 +145,7 @@ def qualify(preflight: release.PreflightResult,
             or not candidate._hex(preflight.archive_sha256, candidate.HEX64)
             or not _positive(preflight.reviewer_actor_id)
             or not _positive(preflight.approval_event_id)
+            or not _positive(preflight.source_record_id)
             or preflight.reviewer_actor_id == selection["producerActorId"]
             or any(not _positive(value) for value in
                    (preflight.producer_run_id, preflight.producer_run_attempt,
@@ -283,4 +286,5 @@ def qualify(preflight: release.PreflightResult,
         selection["producerRunAttempt"], selection["artifactId"],
         preflight.archive_sha256, hashlib.sha256(bundle).hexdigest(),
         selection["workflowSha256"], workflow_source.workflow_blob_oid,
-        artifact["createdAt"])
+        artifact["createdAt"], selection["producerActorId"],
+        preflight.source_record_id)
