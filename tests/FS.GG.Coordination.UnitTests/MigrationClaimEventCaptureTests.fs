@@ -154,6 +154,61 @@ let ``raw provider comment cannot disagree with typed marker`` () =
         MigrationClaimEventCapture.reconcile declaration native [ target, goodJournal ])
 
 [<Fact>]
+let ``null native payloads refuse before the native hash and journal validation`` () =
+    let captured = native claimBody
+    let stream = captured.Input.IssueComments.Head
+    let nullComment = { stream.Comments.Head with PayloadJson=null }
+    let commentInput =
+        { captured.Input with IssueComments=[ { stream with Comments=[ nullComment ] } ] }
+    let eventStream = captured.Input.IssueEvents.Head
+    let nullEvent =
+        { DatabaseId=202L; NodeId="IE_202"; SubjectNumber=1; EventKind="assigned"
+          ActorLogin=None; CreatedAt=stamp; PayloadJson=null; PayloadSha256=sha raw }
+    let eventInput =
+        { captured.Input with IssueEvents=[ { eventStream with Events=[ nullEvent ] } ] }
+    let nullReview =
+        { DatabaseId=203L; NodeId="R_203"; PullRequestNumber=2; State="APPROVED"
+          ActorLogin=Some "reviewer"; CommitSha=None; SubmittedAt=Some stamp
+          PayloadJson=null; PayloadSha256=sha raw }
+    let reviewInput =
+        { captured.Input with
+            PullRequestReviews=[ { RepositoryId=42L; PullRequestNumber=2; PullRequestNodeId="P_2"
+                                   PageCount=1; Terminal=true; Pages=[ page "reviews" ]; Reviews=[ nullReview ] } ] }
+    for input in [ commentInput; eventInput; reviewInput ] do
+        let malformed = { captured with Input=input }
+        Assert.Equal(Error(NativeFailure(MigrationReadFailure.SnapshotMismatch "native-null-payload")),
+            MigrationClaimEventCapture.reconcile declaration malformed
+                [ target, JournalUnreadable "journal must not be examined" ])
+
+[<Fact>]
+let ``null legacy marker body refuses before regex or journal validation`` () =
+    let captured = native claimBody
+    let stream = captured.Input.IssueComments.Head
+    let nullBody = { stream.Comments.Head with Body=null }
+    let input = { captured.Input with IssueComments=[ { stream with Comments=[ nullBody ] } ] }
+    let malformed = { captured with Input=input }
+    Assert.Equal(Error(InvalidMarker "IC_201"),
+        MigrationClaimEventCapture.reconcile declaration malformed
+            [ target, JournalUnreadable "journal must not be examined" ])
+
+[<Fact>]
+let ``provider null body refuses without journal read or write request`` () =
+    let repository = response """{"id":42,"full_name":"FS-GG/copy"}"""
+    let issue =
+        response """[{"number":1,"id":101,"node_id":"I_1","state":"open","updated_at":"2026-09-24T10:00:00Z"}]"""
+    let nullComment =
+        response """[{"id":201,"node_id":"IC_201","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/1","body":null,"created_at":"2026-09-24T10:00:00Z","updated_at":"2026-09-24T10:00:00Z","user":{"login":"worker-1"}}]"""
+    let transport = FakeNativeTransport [ repository; issue; repository; response "[]"; repository; nullComment ]
+    match MigrationClaimEventCapture.captureStable readOptions transport declaration (NoJournalRead()) with
+    | Error(NativeFailure _) -> ()
+    | other -> failwithf "Expected native refusal before journal read, got %A" other
+    Assert.Equal(6, transport.Requests.Length)
+    Assert.All(transport.Requests, fun request ->
+        match request with
+        | Rest rest -> Assert.Equal(Get, rest.Method)
+        | GraphQL _ -> failwith "Unexpected GraphQL request")
+
+[<Fact>]
 let ``changed native census and extra legacy journal event refuse`` () =
     let captured = native claimBody
     let changed = { captured with Snapshot={ captured.Snapshot with NormalizedSha256=sha "altered" } }

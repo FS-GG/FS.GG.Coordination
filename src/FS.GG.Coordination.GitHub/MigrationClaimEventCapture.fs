@@ -98,38 +98,40 @@ module MigrationClaimEventCapture =
 
     let private markerFor repositoryFullName subjectNodeId (comment: MigrationIssueCommentRecord) =
         let body = comment.Body
-        let matchResult = markerRegex.Match body
-        let startsFsgg = Regex.IsMatch(body, @"\A<!--\s*fsgg:", RegexOptions.CultureInvariant)
-        if not matchResult.Success then
-            if startsFsgg then Error(InvalidMarker comment.NodeId) else Ok None
+        if isNull body then Error(InvalidMarker comment.NodeId)
         else
-            let kind = matchResult.Groups.["tag"].Value
-            if kind <> "claim" && not (kind.Contains("receipt", StringComparison.Ordinal)) then Ok None
+            let matchResult = markerRegex.Match body
+            let startsFsgg = Regex.IsMatch(body, @"\A<!--\s*fsgg:", RegexOptions.CultureInvariant)
+            if not matchResult.Success then
+                if startsFsgg then Error(InvalidMarker comment.NodeId) else Ok None
             else
-                let fields = matchResult.Groups.["fields"].Value
-                let parsed = fieldRegex.Matches fields |> Seq.cast<Match> |> Seq.toList
-                let keys = parsed |> List.map (fun item -> item.Groups.["key"].Value)
-                let residue = fieldRegex.Replace(fields, "").Trim()
-                let values = parsed |> List.map (fun item -> item.Groups.["key"].Value, item.Groups.["value"].Value) |> Map.ofList
-                let claimValid =
-                    if kind <> "claim" then true
-                    else
-                        match Map.tryFind "worker" values, Map.tryFind "lease" values with
-                        | Some worker, Some lease ->
-                            let mutable minutes = 0
-                            not (String.IsNullOrWhiteSpace worker)
-                            && Int32.TryParse(lease, &minutes) && minutes > 0
-                        | _ -> false
-                if residue <> "" || not (distinct keys) || not claimValid
-                   || not (rawCommentMatches repositoryFullName comment) then
-                    Error(InvalidMarker comment.NodeId)
+                let kind = matchResult.Groups.["tag"].Value
+                if kind <> "claim" && not (kind.Contains("receipt", StringComparison.Ordinal)) then Ok None
                 else
-                    Ok(Some
-                        { CommentNodeId=comment.NodeId
-                          SubjectNumber=comment.SubjectNumber
-                          SubjectNodeId=subjectNodeId
-                          Kind=kind
-                          BodySha256=shaText body })
+                    let fields = matchResult.Groups.["fields"].Value
+                    let parsed = fieldRegex.Matches fields |> Seq.cast<Match> |> Seq.toList
+                    let keys = parsed |> List.map (fun item -> item.Groups.["key"].Value)
+                    let residue = fieldRegex.Replace(fields, "").Trim()
+                    let values = parsed |> List.map (fun item -> item.Groups.["key"].Value, item.Groups.["value"].Value) |> Map.ofList
+                    let claimValid =
+                        if kind <> "claim" then true
+                        else
+                            match Map.tryFind "worker" values, Map.tryFind "lease" values with
+                            | Some worker, Some lease ->
+                                let mutable minutes = 0
+                                not (String.IsNullOrWhiteSpace worker)
+                                && Int32.TryParse(lease, &minutes) && minutes > 0
+                            | _ -> false
+                    if residue <> "" || not (distinct keys) || not claimValid
+                       || not (rawCommentMatches repositoryFullName comment) then
+                        Error(InvalidMarker comment.NodeId)
+                    else
+                        Ok(Some
+                            { CommentNodeId=comment.NodeId
+                              SubjectNumber=comment.SubjectNumber
+                              SubjectNodeId=subjectNodeId
+                              Kind=kind
+                              BodySha256=shaText body })
 
     let private markers repositoryFullName (native: MigrationNativeActivityCapture) =
         let issueRows =
@@ -144,6 +146,29 @@ module MigrationClaimEventCapture =
                 markerFor repositoryFullName nodeId comment
                 |> Result.map (function Some marker -> marker :: found | None -> found))) (Ok [])
         |> Result.map List.rev
+
+    // The merged native reconciler hashes PayloadJson directly. Refuse malformed
+    // caller-supplied records before that call so this exported Result cannot throw.
+    let private hasNullPayload (input: MigrationNativeActivityInput) =
+        (input.Issues.Issues |> List.exists (fun row -> isNull row.PayloadJson))
+        || (input.PullRequests.PullRequests |> List.exists (fun row -> isNull row.PayloadJson))
+        || (input.IssueComments |> List.exists (fun stream ->
+            stream.Comments |> List.exists (fun row -> isNull row.PayloadJson)))
+        || (input.IssueEvents |> List.exists (fun stream ->
+            stream.Events |> List.exists (fun row -> isNull row.PayloadJson)))
+        || (input.PullRequestComments |> List.exists (fun stream ->
+            stream.Comments |> List.exists (fun row -> isNull row.PayloadJson)))
+        || (input.PullRequestReviews |> List.exists (fun stream ->
+            stream.Reviews |> List.exists (fun row -> isNull row.PayloadJson)))
+        || (input.PullRequestInlineComments |> List.exists (fun stream ->
+            stream.Comments |> List.exists (fun row -> isNull row.PayloadJson)))
+
+    let private firstNullBody (input: MigrationNativeActivityInput) =
+        [ yield! input.IssueComments |> List.collect (fun stream ->
+              stream.Comments |> List.choose (fun row -> if isNull row.Body then Some row.NodeId else None))
+          yield! input.PullRequestComments |> List.collect (fun stream ->
+              stream.Comments |> List.choose (fun row -> if isNull row.Body then Some row.NodeId else None)) ]
+        |> List.tryHead
 
     let private jsonInt64 (root: JsonElement) (name: string) =
         let mutable property = Unchecked.defaultof<JsonElement>
@@ -177,6 +202,7 @@ module MigrationClaimEventCapture =
         let fail reason = Error reason
         let targets = declaration.Targets
         let links = declaration.Links
+        let nullBody = firstNullBody native.Input
         if not declaration.InventoryComplete then fail MissingInventory
         elif declaration.RepositoryId <= 0L
              || String.IsNullOrWhiteSpace declaration.RepositoryFullName
@@ -187,6 +213,10 @@ module MigrationClaimEventCapture =
              || not (distinct (links |> List.map _.CommentNodeId))
              || not (distinct (links |> List.map (fun link -> link.Target, link.Generation))) then
             fail (InvalidDeclaration "inventory")
+        elif hasNullPayload native.Input then
+            fail (NativeFailure(MigrationReadFailure.SnapshotMismatch "native-null-payload"))
+        elif nullBody.IsSome then
+            fail (InvalidMarker nullBody.Value)
         elif native.Snapshot.RepositoryId <> declaration.RepositoryId then
             fail (ForeignCorrespondence "repository")
         else
