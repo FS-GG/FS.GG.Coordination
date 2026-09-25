@@ -121,7 +121,7 @@ def no_duplicate_pairs(pairs):
     return value
 
 
-def claim_history(store: pathlib.Path, remote: str, ref: str, head: str) -> dict:
+def claim_history(store: pathlib.Path, remote: str, ref: str, head: str) -> tuple[dict, int]:
     """Read every raw object of one claim ref before the final stable census."""
     git([f"--git-dir={store}", "fetch", "--no-tags", remote, ref])
     fetched = git([f"--git-dir={store}", "rev-parse", "FETCH_HEAD"]).decode().strip()
@@ -151,8 +151,8 @@ def claim_history(store: pathlib.Path, remote: str, ref: str, head: str) -> dict
                         "eventBytesBase64": base64.b64encode(event).decode(),
                         "headBytesBase64": base64.b64encode(journal_head).decode()})
         current = parent
-    return {"ref": ref, "firstHead": head, "secondHead": head,
-            "commits": list(reversed(commits))}
+    return ({"ref": ref, "firstHead": head, "secondHead": head,
+             "commits": list(reversed(commits))}, total)
 
 
 def _collect(remote: str, read_repository_id, read_refs,
@@ -215,7 +215,13 @@ def _collect(remote: str, read_repository_id, read_refs,
         expected_tag = TAG_PREFIX + manifest[:16]
         require(tags == {expected_tag: head}, "authority-genesis-tag-binding")
 
-        claims = [claim_history(store, remote, ref, before[ref]) for ref in claim_refs]
+        claims = []
+        claim_total = 0
+        for ref in claim_refs:
+            history, size = claim_history(store, remote, ref, before[ref])
+            claim_total += size
+            require(claim_total <= 32_000_000, "authority-claim-census-size")
+            claims.append(history)
 
     after = read_refs(remote)
     require(after == before, "authority-ref-census-moved")

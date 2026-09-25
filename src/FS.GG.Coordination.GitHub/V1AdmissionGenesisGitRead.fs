@@ -170,6 +170,7 @@ module V1AdmissionGenesisGitRead =
     let private claimTree (raw: byte array) =
         let mutable offset = 0
         let mutable entries = Map.empty
+        let names = ResizeArray<string>()
         while offset < raw.Length do
             let nul = Array.IndexOf(raw, 0uy, offset)
             if nul < offset || nul + 21 > raw.Length then invalidOp "operating-claim-tree-entry"
@@ -180,8 +181,10 @@ module V1AdmissionGenesisGitRead =
                || Map.containsKey name entries then invalidOp "operating-claim-tree-entry"
             let objectId = raw[(nul + 1) .. (nul + 20)] |> Convert.ToHexString |> _.ToLowerInvariant()
             entries <- Map.add name objectId entries
+            names.Add name
             offset <- nul + 21
-        if entries.Count <> 2 then invalidOp "operating-claim-tree-shape"
+        if List.ofSeq names <> [ "event.json"; "head.json" ] then
+            invalidOp "operating-claim-tree-shape"
         entries
 
     let private claimCommit (raw: byte array) =
@@ -300,7 +303,7 @@ module V1AdmissionGenesisGitRead =
 
     let decodeOperating (asOf: DateTimeOffset) (raw: ReadOnlyMemory<byte>) =
         try
-            if raw.Length = 0 || raw.Length > 32768 then
+            if raw.Length = 0 || raw.Length > 48_000_000 then
                 Error [ "operating-git-evidence-size" ]
             else
                 use document = JsonDocument.Parse raw
