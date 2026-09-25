@@ -10,6 +10,11 @@ type GitHubRollbackSignatureFailure =
     | InvalidObservationOrder
     | InvalidRawEvidence
     | RawEvidenceMismatch
+    | MissingProtectedNativePins
+    | ProtectedNativePortUnavailable
+    | ProtectedNativeInstallationMismatch
+    | NativeCustodyReadUnavailable
+    | NativeCustodyObjectMismatch
 
 type GitHubRollbackExpectedOrderBinding =
     { SandboxResourceId: string
@@ -58,6 +63,39 @@ type GitHubRollbackNativeByteBatch =
     { Steps: GitHubRollbackStepNativeBytes list
       Terminal: GitHubRollbackTerminalNativeBytes }
 
+type GitHubRollbackProtectedNativePins =
+    { ReaderResourceId: string
+      CanonicalizerSha256: string
+      CustodyStoreResourceId: string }
+
+type GitHubRollbackNativeInstallation =
+    { ReaderResourceId: string
+      CanonicalizerSha256: string
+      CustodyStoreResourceId: string }
+
+type GitHubRollbackCustodySubject =
+    | RollbackStep of stepId:string
+    | TerminalEpoch
+
+type GitHubRollbackNativeCustodyLookup =
+    { RunNonce: string
+      PlanSeal: string
+      SandboxResourceId: string
+      WitnessGeneration: int64
+      Subject: GitHubRollbackCustodySubject
+      ReceiptSha256: string }
+
+type GitHubRollbackRetainedNativeBytes =
+    { Lookup: GitHubRollbackNativeCustodyLookup
+      CustodyStoreResourceId: string
+      CustodyObjectId: string
+      Step: GitHubRollbackStepNativeBytes option
+      Terminal: GitHubRollbackTerminalNativeBytes option }
+
+type IProtectedNativeCustodyPort =
+    abstract Describe: unit -> GitHubRollbackNativeInstallation
+    abstract Read: GitHubRollbackNativeCustodyLookup -> GitHubRollbackRetainedNativeBytes option
+
 module GitHubRollbackReadbackSignature =
     val payloadForSigning:
         expected:GitHubRollbackExpectedReadbackBinding -> plan:GitHubRollbackPlan ->
@@ -92,3 +130,16 @@ module GitHubRollbackReadbackSignature =
         plan:GitHubRollbackPlan -> receipts:GitHubRollbackReceipt list ->
         claims:GitHubRollbackStepProvenanceClaim list -> terminal:GitHubRollbackEpochProvenanceClaim ->
         Result<unit, GitHubRollbackSignatureFailure list>
+    val payloadForProtectedCustodySigning:
+        pins:GitHubRollbackProtectedNativePins -> port:IProtectedNativeCustodyPort option ->
+        expectedOrder:GitHubRollbackExpectedOrderBinding -> witness:GitHubRollbackNativeOrderWitness ->
+        expected:GitHubRollbackExpectedReadbackBinding -> plan:GitHubRollbackPlan ->
+        receipts:GitHubRollbackReceipt list -> claims:GitHubRollbackStepProvenanceClaim list ->
+        terminal:GitHubRollbackEpochProvenanceClaim -> Result<byte[], GitHubRollbackSignatureFailure list>
+    val verifySignedProtectedCustody:
+        pinnedSpkiSha256:string -> publicKeySpki:byte[] -> signature:byte[] ->
+        pins:GitHubRollbackProtectedNativePins -> port:IProtectedNativeCustodyPort option ->
+        expectedOrder:GitHubRollbackExpectedOrderBinding -> witness:GitHubRollbackNativeOrderWitness ->
+        expected:GitHubRollbackExpectedReadbackBinding -> plan:GitHubRollbackPlan ->
+        receipts:GitHubRollbackReceipt list -> claims:GitHubRollbackStepProvenanceClaim list ->
+        terminal:GitHubRollbackEpochProvenanceClaim -> Result<unit, GitHubRollbackSignatureFailure list>
