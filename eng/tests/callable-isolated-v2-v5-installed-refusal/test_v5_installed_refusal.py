@@ -112,6 +112,7 @@ class InstalledRefusalTests(unittest.TestCase):
         self.assertEqual(result.image_digest, "3" * 64)
         self.assertEqual(result.install_path, PATH)
         self.assertEqual(result.runner_actor_id, 701)
+        self.assertEqual(result.run_attempt, 1)
         self.assertEqual(result.command_started_at, "2026-09-25T11:58:00Z")
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
