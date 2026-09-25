@@ -204,6 +204,29 @@ type CodexAppServerContinuityTests() =
         )
 
     [<Fact>]
+    member _.``agent message item without string text cannot mark a native terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for item in
+            [ "{\"id\":\"item-1\",\"type\":\"agentMessage\"}"
+              "{\"id\":\"item-1\",\"type\":\"agentMessage\",\"text\":null}"
+              "{\"id\":\"item-1\",\"type\":\"agentMessage\",\"text\":42}" ] do
+            let terminal = completedWithItems ("[" + item + "]")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``agent message item with schema string text retains terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"type\":\"agentMessage\",\"text\":\"\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
     member _.``cumulative usage regression and duplicate wire bytes refuse``() =
         let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
         let second = CodexAppServerContinuity.apply first (frame 2L usage)
