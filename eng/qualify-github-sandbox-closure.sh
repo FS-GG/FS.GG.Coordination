@@ -14,7 +14,7 @@ if [[ ! "$candidate" =~ ^[0-9a-f]{40,64}$ ]]; then
 fi
 
 if [[ "$mode" == "live" ]]; then
-  required=(FSGG_SANDBOX_TOKEN FSGG_SANDBOX_ACTOR FSGG_SANDBOX_ACTOR_ID FSGG_SANDBOX_OWNER FSGG_SANDBOX_REPOSITORY FSGG_SANDBOX_REPOSITORY_NODE_ID FSGG_SANDBOX_PROJECT_NODE_ID FSGG_SANDBOX_PURPOSE)
+  required=(FSGG_SANDBOX_TOKEN FSGG_SANDBOX_MINT_PROOF FSGG_SANDBOX_ACTOR FSGG_SANDBOX_ACTOR_ID FSGG_SANDBOX_OWNER FSGG_SANDBOX_REPOSITORY FSGG_SANDBOX_REPOSITORY_NODE_ID FSGG_SANDBOX_PROJECT_NODE_ID FSGG_SANDBOX_PURPOSE)
   for name in "${required[@]}"; do
     if [[ -z "${!name:-}" ]]; then
       echo "GSQ-LIVE-AUTHORITY: $name is required before any write" >&2
@@ -25,6 +25,7 @@ if [[ "$mode" == "live" ]]; then
     echo "GSQ-LIVE-AUTHORITY: production-capable or unmarked authority refused before any write" >&2
     exit 1
   fi
+  python3 "$root/eng/validate-github-sandbox-mint-proof.py"
   phase="${FSGG_SANDBOX_PHASE:-execute}"
   if [[ "$phase" == cleanup ]]; then
     exec bash "$root/eng/execute-github-sandbox-live.sh" cleanup

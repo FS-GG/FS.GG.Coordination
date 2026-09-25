@@ -24,6 +24,7 @@ mkdir -p "$evidence"
 [[ "$purpose" == fsgg-sandbox-gs2-04-9 ]] || { echo 'GSQ-LIVE-TARGET: purpose mismatch' >&2; exit 1; }
 [[ "$actor" == 'fs-gg-cross-repo-dispatch[bot]' && "$actor_id" == 297630107 ]] || { echo 'GSQ-LIVE-AUTHORITY: App identity mismatch' >&2; exit 1; }
 [[ -n "${FSGG_SANDBOX_TOKEN:-}" ]] || { echo 'GSQ-LIVE-AUTHORITY: non-production token is missing' >&2; exit 1; }
+python3 "$(dirname "${BASH_SOURCE[0]}")/validate-github-sandbox-mint-proof.py"
 export GH_TOKEN="$FSGG_SANDBOX_TOKEN"
 
 sha256_text() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
