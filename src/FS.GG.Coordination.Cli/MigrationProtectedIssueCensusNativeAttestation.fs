@@ -43,8 +43,10 @@ module MigrationProtectedIssueCensusNativeAttestation =
            || not (exactSha pins.SignerArtifactSha256)
            || not (exactSha pins.ClockArtifactSha256)
            || not (exactSha pins.NativeAttemptArtifactSha256)
-           || String.IsNullOrWhiteSpace pins.ClockResourceId
-           || String.IsNullOrWhiteSpace pins.NativeAttemptResourceId
+           || not (MigrationProtectedIssueCensusAttemptRecovery.validUtf8Atom
+                       pins.ClockResourceId)
+           || not (MigrationProtectedIssueCensusAttemptRecovery.validUtf8Atom
+                       pins.NativeAttemptResourceId)
            || pins.MaximumAgeSeconds < 1 || pins.MaximumAgeSeconds > 300 then None
         else
             match canonicalBase64 pins.SignerPublicKeySpkiBase64 with
@@ -69,11 +71,12 @@ module MigrationProtectedIssueCensusNativeAttestation =
 
     let private validHandoffIdentity (pins: ProtectedIssueCensusHandoffPins)
                                      (marker: ProtectedIssueCensusHandoffRequest) =
-        not (String.IsNullOrWhiteSpace pins.HandoffResourceId)
+        MigrationProtectedIssueCensusAttemptRecovery.validUtf8Atom pins.HandoffResourceId
         && exactSha pins.HandoffArtifactSha256
-        && not (String.IsNullOrWhiteSpace pins.VaultResourceId)
+        && MigrationProtectedIssueCensusAttemptRecovery.validUtf8Atom pins.VaultResourceId
         && exactSha pins.VaultArtifactSha256
-        && not (String.IsNullOrWhiteSpace pins.NativeAttemptNamespaceId)
+        && MigrationProtectedIssueCensusAttemptRecovery.validUtf8Atom
+               pins.NativeAttemptNamespaceId
         && pins.AppId > 0L && pins.InstallationId > 0L && pins.RepositoryId > 0L
         && exactSha pins.PermissionSha256
         && MigrationProtectedIssueCensusAttemptRecovery.validMarkerChain marker

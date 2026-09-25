@@ -53,6 +53,10 @@ type IProtectedIssueCensusNativeAttemptPort =
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusAttemptRecovery =
+    /// Refuse malformed UTF-16 before default UTF-8 replacement can alias identities.
+    val validUtf8Atom:
+        value:string -> bool
+
     /// Structural readback check only; the protected owner must authenticate the selection.
     val validSelectionShape:
         selection:ProtectedIssueCensusSelection -> bool

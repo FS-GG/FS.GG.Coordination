@@ -349,3 +349,45 @@ let ``direct native attestation refuses impossible phase under valid signature``
                      verify pins marker snapshot (Some attestation) now)
         Assert.Equal(Error "protected-census-attempt-phase",
                      inspectSigned pins marker snapshot (Some attestation) now)
+
+[<Fact>]
+let ``native recovery refuses UTF-8 replacement collision in run nonce`` () =
+    let highSurrogate = String([| char 0xD800 |])
+    let lowSurrogate = String([| char 0xDC00 |])
+    let fixtureWithNonce nonce =
+        fixtureWithSelectionAndMarkerClock
+            (fun selection -> { selection with RunNonce=nonce })
+            "protected-clock:native-test" (String.replicate 64 "b")
+    let pins, marker, snapshot, attestation, now = fixtureWithNonce highSurrogate
+    let _, otherMarker, _, _, _ = fixtureWithNonce lowSurrogate
+    Assert.NotEqual(marker.Selection.RunNonce, otherMarker.Selection.RunNonce)
+    Assert.Equal(marker.ClaimId, otherMarker.ClaimId)
+    Assert.Equal(marker.ReservationId, otherMarker.ReservationId)
+    Assert.Equal(marker.NativeAttemptId, otherMarker.NativeAttemptId)
+    Assert.Equal(Error "protected-native-attestation-binding",
+                 verify pins marker snapshot (Some attestation) now)
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectSigned pins marker snapshot (Some attestation) now)
+
+[<Fact>]
+let ``native recovery refuses UTF-8 replacement collision in store identity`` () =
+    let highSurrogate = String([| char 0xD800 |])
+    let lowSurrogate = String([| char 0xDC00 |])
+    let _, marker, _, _, _ = fixture ()
+    let claimFor store =
+        MigrationProtectedIssueCensusClaim.claimId
+            marker.Selection store marker.StoreGeneration
+    Assert.Equal(claimFor highSurrogate, claimFor lowSurrogate)
+    let claimId = claimFor highSurrogate
+    let journalHead: ProtectedIssueCensusClaimHead =
+        { JournalResourceId=marker.JournalResourceId
+          Generation=marker.ExpectedJournalGeneration
+          SealSha256=marker.ExpectedJournalHeadSha256 }
+    let reservationId =
+        MigrationProtectedIssueCensusRelease.reservationId claimId journalHead
+    let malformed =
+        { marker with StoreResourceId=highSurrogate
+                      ClaimId=claimId; ReservationId=reservationId
+                      NativeAttemptId=MigrationProtectedIssueCensusHandoff.attemptId
+                                          reservationId handoffPins }
+    Assert.False(MigrationProtectedIssueCensusAttemptRecovery.validMarkerChain malformed)
