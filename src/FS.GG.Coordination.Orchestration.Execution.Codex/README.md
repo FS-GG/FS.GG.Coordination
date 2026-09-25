@@ -109,8 +109,10 @@ Both the ordinary and experimental schema bundles show a `turn/completed` object
 separate thread `last`/cumulative snapshots, and an internal notification scoped to one upstream
 response. The `thread/resume` schema describes rejoining a running app-server thread, but a schema
 cannot authenticate attachment to this direct CLI process or prove notification custody. The
-probe reports those limits separately and refuses version or shape drift; it never enables usage
-mapping or live capture.
+probe binds the closed server-notification route map to its selected definitions, so an
+alternate `turn/completed` route cannot inherit an unchanged unused definition's no-usage
+classification. It reports the limits separately and refuses version or shape drift;
+it never enables usage mapping or live capture.
 
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,

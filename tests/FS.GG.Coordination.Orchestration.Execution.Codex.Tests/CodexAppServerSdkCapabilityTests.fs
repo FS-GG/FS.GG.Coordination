@@ -79,3 +79,26 @@ type CodexAppServerSdkCapabilityTests() =
         let repeatedRequired = replace "\"required\":[\"id\",\"items\",\"status\"]"
                                        "\"required\":[\"id\",\"items\",\"status\",\"status\"]"
         Assert.Equal(Error "app-server-sdk-schema-drift", inspect repeatedRequired)
+
+    [<Fact>]
+    member _.``notification route cannot redirect turn completed to a usage-bearing definition``() =
+        let redirected =
+            replace "#/definitions/TurnCompletedNotification"
+                    "#/definitions/UsageBearingTurnCompletedNotification"
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect redirected)
+
+    [<Fact>]
+    member _.``notification method aliases and compositional routing require review``() =
+        let alias =
+            replace "\"thread/tokenUsage/updated\"" "\"turn/completed\""
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect alias)
+        let composed =
+            replace "\"ServerNotification\":{\"properties\""
+                    "\"ServerNotification\":{\"allOf\":[{}],\"properties\""
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect composed)
+
+    [<Fact>]
+    member _.``foreign protocol root cannot inherit selected definitions``() =
+        let changed = replace "\"title\":\"CodexAppServerProtocolV2\""
+                              "\"title\":\"ForeignProtocol\""
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect changed)
