@@ -192,6 +192,7 @@ module MigrationInspectProviderAdapter =
                     | Ok body ->
                         try
                             use document = JsonDocument.Parse body
+                            requireUniqueMembers document.RootElement
                             document.RootElement.GetProperty("id").GetInt64() = options.Repository.ExpectedRepositoryId
                             && document.RootElement.GetProperty("full_name").GetString()
                                = $"{options.Repository.Owner}/{options.Repository.Repository}"
