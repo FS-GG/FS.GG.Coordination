@@ -82,7 +82,7 @@ let private receiverRef =
 let private receiverCommit =
     ok Map.empty $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
 let private receiverTreeResponse =
-    ok Map.empty $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}"}}]}}"""
+    ok Map.empty $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
 let private receiverResponses =
     [ receiverIdentity; receiverRef; receiverCommit; receiverTreeResponse; receiverRef ]
 
@@ -143,7 +143,7 @@ let ``receiver snapshot refuses missing tree proof and response links`` () =
 let ``receiver tree normalizes provider order and refuses duplicate paths`` () =
     let alternate = String.replicate 40 "d"
     let treeBody =
-        $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"z.txt","mode":"100644","type":"blob","sha":"{alternate}"}},{{"path":"a.txt","mode":"100644","type":"blob","sha":"{receiverBlob}"}}]}}"""
+        $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"z.txt","mode":"100644","type":"blob","sha":"{alternate}","size":1}},{{"path":"a.txt","mode":"100644","type":"blob","sha":"{receiverBlob}","size":1}}]}}"""
     let responses = receiverResponses |> List.mapi (fun i item -> if i = 3 then ok Map.empty treeBody else item)
     let transport = FakeTransport responses
     match MigrationGitHubRead.readReceiverSnapshot options "receiver-a" "REPO_42" "refs/heads/main" receiverHead transport with
@@ -195,6 +195,142 @@ let ``receiver cohort reads every declared snapshot twice and refuses raw drift`
     let noCalls = FakeTransport []
     Assert.Equal(Error "invalid:receiver-cohort",
                  MigrationReceiverCapture.captureTwoPass invalid options noCalls)
+    Assert.Empty(noCalls.Requests)
+
+let private pinBytes = Encoding.UTF8.GetBytes "name: controlled\n"
+let private pinSha =
+    let header = Encoding.ASCII.GetBytes($"blob {pinBytes.LongLength}\u0000")
+    Array.append header pinBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private pinPath = ".github/workflows/check.yml"
+let private pinTree =
+    $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"{pinPath}","mode":"100644","type":"blob","sha":"{pinSha}","size":{pinBytes.Length}}}]}}"""
+let private pinUri = $"https://api.github.test/repos/FS-GG/copy/git/blobs/{pinSha}"
+let private pinBody =
+    $"""{{"sha":"{pinSha}","url":"{pinUri}","encoding":"base64","content":"{Convert.ToBase64String pinBytes}","size":{pinBytes.Length}}}"""
+let private pinResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; ok Map.empty pinTree; receiverRef;
+      ok Map.empty pinBody; receiverRef ]
+let private pinDeclaration = [ { EntryPath=pinPath; PinKind="workflow" } ]
+
+[<Fact>]
+let ``receiver pin reader binds exact decoded bytes to tree and closes ref`` () =
+    let transport = FakeTransport pinResponses
+    match MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42" "refs/heads/main"
+              receiverHead pinDeclaration transport with
+    | Error failure -> failwithf "pin bytes refused: %A" failure
+    | Ok proof ->
+        let pin = Assert.Single(proof.Pins)
+        Assert.Equal(pinBytes, pin.Bytes)
+        Assert.Equal(pinSha, pin.EntrySha)
+        Assert.Equal<int64>(int64 pinBytes.Length, pin.EntrySize)
+        Assert.Equal(pinUri, pin.RequestUri)
+        let requestDigest = $"GET\n{pinUri}" |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                            |> Convert.ToHexString |> _.ToLowerInvariant()
+        Assert.Equal(requestDigest, pin.RequestSha256)
+        Assert.Equal(7, transport.Requests.Length)
+        Assert.Equal(false, proof.PinSnapshotSha256 = proof.Receiver.SnapshotSha256)
+        for request in transport.Requests do
+            match request with
+            | Rest value -> Assert.Equal(Get, value.Method); Assert.True(value.Body.IsNone)
+            | _ -> failwith "receiver pin emitted GraphQL"
+
+[<Fact>]
+let ``receiver pin reader refuses missing extra or unsafe relevant tree paths`` () =
+    let missing = FakeTransport pinResponses
+    let wrong = [ { EntryPath=".github/workflows/missing.yml"; PinKind="workflow" } ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "receiver-pin-path-census"),
+                 MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+                     "refs/heads/main" receiverHead wrong missing)
+    Assert.Equal(5, missing.Requests.Length)
+    let extraTree = pinTree.Replace("]}", $"}},{{\"path\":\"package-lock.json\",\"mode\":\"100644\",\"type\":\"blob\",\"sha\":\"{pinSha}\",\"size\":{pinBytes.Length}}}]}}")
+    let extra = FakeTransport (pinResponses |> List.mapi (fun i item -> if i = 3 then ok Map.empty extraTree else item))
+    match MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42" "refs/heads/main"
+              receiverHead pinDeclaration extra with
+    | Error _ -> ()
+    | Ok _ -> failwith "extra package pin was accepted"
+    let symlink = pinTree.Replace("100644", "120000")
+    let unsafeTree = FakeTransport (pinResponses |> List.mapi (fun i item -> if i = 3 then ok Map.empty symlink else item))
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:receiver-pin-tree-entry"),
+                 MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+                     "refs/heads/main" receiverHead pinDeclaration unsafeTree)
+    let invalid = FakeTransport []
+    Assert.Equal(Error MigrationReadFailure.InvalidOptions,
+                 MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+                     "refs/heads/main" receiverHead [ { EntryPath="not/a/pin"; PinKind="package" } ] invalid)
+    Assert.Empty(invalid.Requests)
+
+[<Fact>]
+let ``receiver pin reader refuses malformed foreign partial and drifting blob evidence`` () =
+    let at index replacement =
+        FakeTransport (pinResponses |> List.mapi (fun i item -> if i = index then replacement else item))
+    let cases =
+        [ 3, ok Map.empty (pinTree.Replace("\"truncated\":false", "\"truncated\":true"))
+          3, ok Map.empty (pinTree.Replace($",\"size\":{pinBytes.Length}", ""))
+          3, ok Map.empty (pinTree.Replace("\"tree\"", "\"errors\":[],\"tree\""))
+          5, ok Map.empty (pinBody.Replace(pinSha, receiverBlob))
+          5, ok Map.empty (pinBody.Replace("base64", "utf-8"))
+          5, ok Map.empty (pinBody.Replace(Convert.ToBase64String pinBytes, "%%%"))
+          5, ok Map.empty (pinBody.Replace(Convert.ToBase64String pinBytes, Convert.ToBase64String(Encoding.UTF8.GetBytes "name: contrOlled\n")))
+          5, ok Map.empty (pinBody.Replace("\"size\":17", "\"size\":18"))
+          5, ok Map.empty (pinBody.Replace("\"encoding\"", "\"errors\":[],\"encoding\""))
+          5, ok (Map [ "Link", "<https://api.github.test/next>; rel=next" ]) pinBody
+          5, Response { StatusCode=403; Headers=Map.empty; Body="forbidden"; ETag=None
+                        RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+          6, ok Map.empty $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverBlob}"}}}}""" ]
+    for index, replacement in cases do
+        let transport = at index replacement
+        match MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+                  "refs/heads/main" receiverHead pinDeclaration transport with
+        | Error _ -> ()
+        | Ok _ -> failwithf "malformed or drifting pin evidence at %d passed" index
+    let unavailable = FakeTransport (pinResponses |> List.take 5)
+    Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
+                 MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+                     "refs/heads/main" receiverHead pinDeclaration unavailable)
+    let changedRefRaw = ok Map.empty $""" {{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
+    let mutableRef = FakeTransport (pinResponses |> List.mapi (fun i item -> if i = 6 then changedRefRaw else item))
+    Assert.Equal(Error(MigrationReadFailure.IdentityDrift),
+                 MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+                     "refs/heads/main" receiverHead pinDeclaration mutableRef)
+
+[<Fact>]
+let ``receiver pin reader retains an exact empty blob`` () =
+    let emptySha = Encoding.ASCII.GetBytes("blob 0\u0000") |> SHA1.HashData
+                   |> Convert.ToHexString |> _.ToLowerInvariant()
+    let tree = pinTree.Replace(pinSha, emptySha).Replace($"\"size\":{pinBytes.Length}", "\"size\":0")
+    let blobUri = $"https://api.github.test/repos/FS-GG/copy/git/blobs/{emptySha}"
+    let blob = $"""{{"sha":"{emptySha}","url":"{blobUri}","encoding":"base64","content":"","size":0}}"""
+    let transport = FakeTransport (pinResponses |> List.mapi (fun i item ->
+        if i = 3 then ok Map.empty tree elif i = 5 then ok Map.empty blob else item))
+    match MigrationGitHubRead.readReceiverPinSnapshot options "receiver-a" "REPO_42"
+              "refs/heads/main" receiverHead pinDeclaration transport with
+    | Error failure -> failwithf "empty pin refused: %A" failure
+    | Ok proof -> Assert.Empty(proof.Pins.Head.Bytes)
+
+[<Fact>]
+let ``receiver pin two pass remains preparatory and refuses raw drift`` () =
+    let cohort: GitHubMigrationCopyCohort =
+        { Repositories=[ { Id=42L; NodeId="REPO_42"; FullName="FS-GG/copy"
+                           SourceHead=String.replicate 40 "d"; TargetHead=receiverHead } ]
+          Receivers=[ { Receiver="receiver-a"; RepositoryId=42L
+                        RefName="refs/heads/main"; ExpectedHead=receiverHead } ]
+          ProjectOrganization="FS-GG"; ProjectNumber=1; ProjectNodeId="PROJECT_1"
+          SourceRevision=String.replicate 40 "e"; Isolated=true }
+    let declarations = Map [ "receiver-a", pinDeclaration ]
+    let stable = FakeTransport (pinResponses @ pinResponses)
+    match MigrationReceiverCapture.capturePinBytesTwoPass cohort declarations options stable with
+    | Error failure -> failwithf "two-pass pin bytes refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.InventoryBound)
+        Assert.Equal(proof.First.Head.PinSnapshotSha256, proof.Second.Head.PinSnapshotSha256)
+        Assert.Equal(14, stable.Requests.Length)
+    let changed = ok Map.empty (pinBody.Replace("\"sha\"", " \"sha\""))
+    let drifting = FakeTransport (pinResponses @ (pinResponses |> List.mapi (fun i item -> if i = 5 then changed else item)))
+    Assert.Equal(Error "changed:receiver-pin-snapshot",
+                 MigrationReceiverCapture.capturePinBytesTwoPass cohort declarations options drifting)
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:receiver-pin-declaration",
+                 MigrationReceiverCapture.capturePinBytesTwoPass cohort Map.empty options noCalls)
     Assert.Empty(noCalls.Requests)
 
 type private RedirectedHandler() =

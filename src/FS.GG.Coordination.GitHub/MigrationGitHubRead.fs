@@ -122,7 +122,8 @@ type MigrationReceiverTreeEntry =
     { EntryPath: string
       EntryMode: string
       EntryKind: string
-      EntrySha: string }
+      EntrySha: string
+      EntrySize: int64 option }
 
 type MigrationReceiverSnapshot =
     { ReceiverName: string
@@ -139,6 +140,29 @@ type MigrationReceiverSnapshot =
       TerminalRefEvidence: MigrationReceiverObjectEvidence
       TreeEntries: MigrationReceiverTreeEntry list
       SnapshotSha256: string }
+
+type MigrationReceiverPinDeclaration =
+    { EntryPath: string
+      PinKind: string }
+
+type MigrationReceiverPinBlob =
+    { EntryPath: string
+      PinKind: string
+      EntryMode: string
+      EntrySha: string
+      EntrySize: int64
+      RequestUri: string
+      RequestSha256: string
+      RawBody: string
+      RawSha256: string
+      Bytes: byte array
+      BytesSha256: string }
+
+type MigrationReceiverPinSnapshot =
+    { Receiver: MigrationReceiverSnapshot
+      Pins: MigrationReceiverPinBlob list
+      TerminalRefEvidence: MigrationReceiverObjectEvidence
+      PinSnapshotSha256: string }
 
 type MigrationRulesetListPage =
     { ListRequestedUri: string
@@ -539,6 +563,13 @@ module MigrationGitHubRead =
             if item.ValueKind = JsonValueKind.Number && item.TryGetInt32(&parsed) && parsed > 0 then Ok parsed
             else Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
 
+    let private requiredNonnegativeInt64 name value =
+        property name value
+        |> Result.bind (fun item ->
+            let mutable parsed = 0L
+            if item.ValueKind = JsonValueKind.Number && item.TryGetInt64(&parsed) && parsed >= 0L then Ok parsed
+            else Error(MigrationReadFailure.MalformedResponse $"invalid:{name}"))
+
     let private requiredBool name value =
         property name value
         |> Result.bind (fun item ->
@@ -549,6 +580,9 @@ module MigrationGitHubRead =
 
     let private sha (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private bytesSha (value: byte array) =
+        value |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let private collectUnique (key: 'a -> string) (values: 'a list) =
         let seen = HashSet<string>(StringComparer.Ordinal)
@@ -989,8 +1023,16 @@ module MigrationGitHubRead =
                     if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
                     elif result.Headers |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
                         Error(MigrationReadFailure.PaginationRefused "unexpected:receiver-link")
-                    else Ok { RequestUri=uri.AbsoluteUri; RawBody=result.Body; RawSha256=sha result.Body })
-            let parseEvidence evidence f =
+                    else
+                        parse result.Body
+                        |> Result.bind (fun document ->
+                            use document = document
+                            let mutable errors = Unchecked.defaultof<JsonElement>
+                            if document.RootElement.ValueKind = JsonValueKind.Object
+                               && document.RootElement.TryGetProperty("errors", &errors) then
+                                Error(MigrationReadFailure.MalformedResponse "receiver-provider-errors")
+                            else Ok { RequestUri=uri.AbsoluteUri; RawBody=result.Body; RawSha256=sha result.Body }))
+            let parseEvidence (evidence: MigrationReceiverObjectEvidence) f =
                 parse evidence.RawBody
                 |> Result.bind (fun document ->
                     use document = document
@@ -1057,7 +1099,17 @@ module MigrationGitHubRead =
                                     && Set.contains kind (set [ "blob"; "tree" ])
                                     && (kind = "blob" && Set.contains mode (set [ "100644"; "100755"; "120000" ])
                                         || kind = "tree" && mode = "040000") ->
-                                    Ok { EntryPath=path; EntryMode=mode; EntryKind=kind; EntrySha=hash }
+                                    let mutable size = Unchecked.defaultof<JsonElement>
+                                    let hasSize = entry.TryGetProperty("size", &size)
+                                    let mutable parsed = 0L
+                                    if kind = "blob" && (not hasSize || size.ValueKind <> JsonValueKind.Number
+                                                          || not (size.TryGetInt64(&parsed)) || parsed < 0L) then
+                                        Error(MigrationReadFailure.MalformedResponse "invalid:tree-blob-size")
+                                    elif kind = "tree" && hasSize && size.ValueKind <> JsonValueKind.Null then
+                                        Error(MigrationReadFailure.MalformedResponse "invalid:tree-entry-size")
+                                    else
+                                        Ok { EntryPath=path; EntryMode=mode; EntryKind=kind; EntrySha=hash
+                                             EntrySize=if kind = "blob" then Some parsed else None }
                                 | Ok _, Ok _, Ok _, Ok _ ->
                                     Error(MigrationReadFailure.MalformedResponse "invalid:tree-entry")
                                 | Error failure, _, _, _ | _, Error failure, _, _
@@ -1106,7 +1158,8 @@ module MigrationGitHubRead =
                                                               yield item.EntryPath
                                                               yield item.EntryMode
                                                               yield item.EntryKind
-                                                              yield item.EntrySha ]
+                                                              yield item.EntrySha
+                                                              yield item.EntrySize |> Option.map string |> Option.defaultValue "" ]
                                                         |> List.map frame |> String.concat "" |> sha
                                                     { ReceiverName=receiverName; RepositoryId=options.ExpectedRepositoryId
                                                       RepositoryNodeId=expectedNodeId
@@ -1116,6 +1169,149 @@ module MigrationGitHubRead =
                                                       CommitEvidence=commitEvidence; TreeEvidence=treeEvidence
                                                       TerminalRefEvidence=terminalRef; TreeEntries=entries
                                                       SnapshotSha256=digest }))))))))))
+
+    let readReceiverPinSnapshot (options: MigrationGitHubReadOptions) receiverName expectedNodeId refName expectedHead
+                                (pins: MigrationReceiverPinDeclaration list) (transport: IMigrationGitHubReadTransport) =
+        let isWorkflow (path: string) =
+            path.StartsWith(".github/workflows/", StringComparison.Ordinal)
+        let packageNames =
+            set [ "global.json"; "Directory.Packages.props"; "packages.lock.json"; "package.json"
+                  "package-lock.json"; "pnpm-lock.yaml"; "yarn.lock"; "nuget.config" ]
+        let isPackage (path: string) =
+            path.Split('/') |> Array.last |> packageNames.Contains
+        let relevant path = isWorkflow path || isPackage path
+        let validPin (pin: MigrationReceiverPinDeclaration) =
+            not (isNull pin.EntryPath) && pin.EntryPath <> ""
+            && (pin.PinKind = "workflow" && isWorkflow pin.EntryPath
+                || pin.PinKind = "package" && isPackage pin.EntryPath && not (isWorkflow pin.EntryPath))
+        if isNull (box pins) || pins.IsEmpty || pins |> List.exists (validPin >> not)
+           || (pins |> List.map _.EntryPath |> Set.ofList |> Set.count) <> pins.Length then
+            Error MigrationReadFailure.InvalidOptions
+        else
+            readReceiverSnapshot options receiverName expectedNodeId refName expectedHead transport
+            |> Result.bind (fun snapshot ->
+                let actual =
+                    snapshot.TreeEntries |> List.filter (fun entry -> relevant entry.EntryPath)
+                    |> List.map _.EntryPath |> Set.ofList
+                let declared = pins |> List.map _.EntryPath |> Set.ofList
+                if snapshot.InitialRefEvidence.RawSha256 <> snapshot.TerminalRefEvidence.RawSha256 then
+                    Error(MigrationReadFailure.SnapshotMismatch "receiver-ref-changed")
+                elif actual <> declared then
+                    Error(MigrationReadFailure.SnapshotMismatch "receiver-pin-path-census")
+                else
+                    let entries = snapshot.TreeEntries |> List.map (fun entry -> entry.EntryPath, entry) |> Map.ofList
+                    let repoPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+                    let readBlob (pin: MigrationReceiverPinDeclaration) =
+                        let entry = entries.[pin.EntryPath]
+                        match entry.EntryKind, entry.EntryMode, entry.EntrySize with
+                        | "blob", ("100644" | "100755"), Some treeSize ->
+                            let uri = Uri(options.ApiBase, $"{repoPath}/git/blobs/{entry.EntrySha}")
+                            let request =
+                                Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                                       ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                            response transport request
+                            |> Result.bind (fun value ->
+                                if value.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused value.StatusCode)
+                                elif value.Headers |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                                    Error(MigrationReadFailure.PaginationRefused "unexpected:receiver-blob-link")
+                                else
+                                    parse value.Body
+                                    |> Result.bind (fun document ->
+                                        use document = document
+                                        let root = document.RootElement
+                                        uniqueObjectMembers root
+                                        |> Result.bind (fun () ->
+                                            let content =
+                                                property "content" root
+                                                |> Result.bind (fun item ->
+                                                    if item.ValueKind = JsonValueKind.String then Ok(item.GetString())
+                                                    else Error(MigrationReadFailure.MalformedResponse "invalid:content"))
+                                            let mutable errors = Unchecked.defaultof<JsonElement>
+                                            if root.TryGetProperty("errors", &errors) then
+                                                Error(MigrationReadFailure.MalformedResponse "receiver-provider-errors")
+                                            else
+                                                match requiredString "sha" root, requiredString "encoding" root,
+                                                      content, requiredNonnegativeInt64 "size" root with
+                                                | Ok actualSha, Ok "base64", Ok content, Ok bodySize when
+                                                    actualSha = entry.EntrySha && bodySize = treeSize ->
+                                                    let mutable url = Unchecked.defaultof<JsonElement>
+                                                    if not (root.TryGetProperty("url", &url))
+                                                       || url.ValueKind <> JsonValueKind.String || url.GetString() <> uri.AbsoluteUri then
+                                                        Error MigrationReadFailure.IdentityDrift
+                                                    else
+                                                        try
+                                                            let encoded = content.Replace("\r", "").Replace("\n", "")
+                                                            if encoded |> Seq.exists (fun c ->
+                                                                not (Char.IsAsciiLetterOrDigit c || c = '+' || c = '/' || c = '=')) then
+                                                                raise (FormatException "invalid-base64-character")
+                                                            let decoded = Convert.FromBase64String encoded
+                                                            let header = Encoding.ASCII.GetBytes($"blob {decoded.LongLength}\u0000")
+                                                            let objectBytes = Array.append header decoded
+                                                            let gitSha = objectBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                                                            if decoded.LongLength <> treeSize || gitSha <> entry.EntrySha then
+                                                                Error(MigrationReadFailure.SnapshotMismatch "receiver-blob-bytes")
+                                                            else
+                                                                Ok { EntryPath=pin.EntryPath; PinKind=pin.PinKind
+                                                                     EntryMode=entry.EntryMode; EntrySha=entry.EntrySha
+                                                                     EntrySize=treeSize; RequestUri=uri.AbsoluteUri
+                                                                     RequestSha256=sha $"GET\n{uri.AbsoluteUri}"
+                                                                     RawBody=value.Body; RawSha256=sha value.Body
+                                                                     Bytes=decoded; BytesSha256=bytesSha decoded }
+                                                        with :? FormatException ->
+                                                            Error(MigrationReadFailure.MalformedResponse "invalid:receiver-blob-base64")
+                                                | Ok _, Ok _, Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                                                | Error failure, _, _, _ | _, Error failure, _, _
+                                                | _, _, Error failure, _ | _, _, _, Error failure -> Error failure)))
+                        | _ -> Error(MigrationReadFailure.MalformedResponse "invalid:receiver-pin-tree-entry")
+                    let ordered = pins |> List.sortBy _.EntryPath
+                    let rec readAll remaining previous =
+                        match remaining with
+                        | [] -> Ok(List.rev previous)
+                        | pin :: tail -> readBlob pin |> Result.bind (fun item -> readAll tail (item :: previous))
+                    readAll ordered []
+                    |> Result.bind (fun blobs ->
+                        let uri = Uri(options.ApiBase, $"{repoPath}/git/ref/{refName.Substring(5)}")
+                        response transport
+                            (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                        |> Result.bind (fun value ->
+                            if value.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused value.StatusCode)
+                            elif value.Headers |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                                Error(MigrationReadFailure.PaginationRefused "unexpected:receiver-terminal-link")
+                            else
+                                parse value.Body
+                                |> Result.bind (fun document ->
+                                    use document = document
+                                    let root = document.RootElement
+                                    uniqueObjectMembers root
+                                    |> Result.bind (fun () ->
+                                        let mutable errors = Unchecked.defaultof<JsonElement>
+                                        if root.TryGetProperty("errors", &errors) then
+                                            Error(MigrationReadFailure.MalformedResponse "receiver-provider-errors")
+                                        else
+                                        match requiredString "ref" root, property "object" root with
+                                        | Ok actualRef, Ok objectValue ->
+                                            uniqueObjectMembers objectValue
+                                            |> Result.bind (fun () ->
+                                                match requiredString "type" objectValue, requiredString "sha" objectValue with
+                                                | Ok "commit", Ok head when actualRef = refName && head = expectedHead
+                                                                            && sha value.Body = snapshot.TerminalRefEvidence.RawSha256 ->
+                                                    let terminal = { RequestUri=uri.AbsoluteUri; RawBody=value.Body; RawSha256=sha value.Body }
+                                                    let frame (item: string) = $"{Encoding.UTF8.GetByteCount item}:{item}"
+                                                    let digest =
+                                                        [ yield snapshot.SnapshotSha256
+                                                          for blob in blobs do
+                                                              yield blob.EntryPath; yield blob.PinKind; yield blob.EntryMode
+                                                              yield blob.EntrySha; yield string blob.EntrySize
+                                                              yield blob.RequestUri; yield blob.RequestSha256
+                                                              yield blob.RawSha256; yield blob.BytesSha256
+                                                          yield terminal.RequestUri; yield terminal.RawSha256 ]
+                                                        |> List.map frame |> String.concat "" |> sha
+                                                    Ok { Receiver=snapshot; Pins=blobs; TerminalRefEvidence=terminal
+                                                         PinSnapshotSha256=digest }
+                                                | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                                                | Error failure, _ | _, Error failure -> Error failure)
+                                        | Error failure, _ | _, Error failure -> Error failure)))))
 
     type private RulesetSummary =
         { RulesetId: int64
