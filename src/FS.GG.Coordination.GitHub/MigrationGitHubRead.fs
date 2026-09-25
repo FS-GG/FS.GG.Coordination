@@ -2806,7 +2806,7 @@ module MigrationGitHubRead =
                                   Variables=variables; Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement

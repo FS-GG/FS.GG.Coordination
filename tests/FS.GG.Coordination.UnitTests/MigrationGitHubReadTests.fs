@@ -1828,6 +1828,19 @@ let ``Project census rejects duplicate items and a missing cursor`` () =
                  MigrationGitHubRead.readProjectItems projectOptions
                      (FakeTransport [ ok Map.empty missingCursor ]))
 
+[<Fact>]
+let ``Project item census refuses duplicate raw content identity and page completeness`` () =
+    let item =
+        """{"id":"ITEM_1","isArchived":false,"updatedAt":"2026-09-23T10:00:00Z","content":{"__typename":"Issue","id":"ISSUE_1","number":7,"repository":{"databaseId":42}}}"""
+    let page = projectPage 1 "false" "null" $"[{item}]"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readProjectItems projectOptions
+                         (FakeTransport [ ok Map.empty duplicate ]))
+    check (page.Replace("\"__typename\":\"Issue\"", "\"__typename\":\"Issue\",\"__typename\":\"DraftIssue\"")) "__typename"
+    check (page.Replace("\"databaseId\":42", "\"databaseId\":42,\"databaseId\":77")) "databaseId"
+    check (page.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")) "hasNextPage"
+
 let private fieldPage total hasNext cursor nodes =
     sprintf """{"data":{"organization":{"projectV2":{"id":"PROJECT_1","number":1,"fields":{"totalCount":%d,"nodes":%s,"pageInfo":{"hasNextPage":%s,"endCursor":%s}}}}}}"""
         total nodes hasNext cursor
