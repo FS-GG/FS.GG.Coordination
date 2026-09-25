@@ -44,6 +44,14 @@ class UnknownEffect(RuntimeError):
     pass
 
 
+def native_run(command, refusal, **kwargs):
+    """Keep command and process exception text out of surfaced failures."""
+    try:
+        return subprocess.run(command, **kwargs)
+    except (OSError, subprocess.SubprocessError):
+        raise UnknownEffect(refusal) from None
+
+
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"), ensure_ascii=False).encode()
 
@@ -161,16 +169,13 @@ def gh_request(path, method="GET", body=None, allow_not_found=False):
     command = ["gh", "api", "--method", method, "-H", f"X-GitHub-Api-Version: {API_VERSION}", path]
     if body is not None:
         command.extend(["--input", "-"])
-    try:
-        completed = subprocess.run(command, input=None if body is None else canonical(body), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired as error:
-        raise UnknownEffect(f"github-{method.lower()}-timeout:{path}") from error
+    completed = native_run(command, f"github-{method.lower()}-command-unavailable", input=None if body is None else canonical(body), stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
     if completed.returncode != 0:
         detail = completed.stderr.decode(errors="replace")[:200].strip()
         if allow_not_found and ("HTTP 404" in detail or "status code 404" in detail):
             value = {"status": "absent", "httpStatus": 404}
             return value, {}, canonical(value)
-        raise UnknownEffect(f"github-{method.lower()}-unknown:{path}")
+        raise UnknownEffect(f"github-{method.lower()}-unknown")
     payload = completed.stdout
     try:
         value = json.loads(payload) if payload.strip() else None
@@ -181,12 +186,9 @@ def gh_request(path, method="GET", body=None, allow_not_found=False):
 
 def gh_pages(path):
     command = ["gh", "api", "--method", "GET", "-H", f"X-GitHub-Api-Version: {API_VERSION}", "--paginate", "--slurp", path]
-    try:
-        completed = subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired as error:
-        raise UnknownEffect("github-pages-timeout:" + path) from error
+    completed = native_run(command, "github-pages-command-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
     if completed.returncode != 0:
-        raise UnknownEffect("github-get-unknown:" + path)
+        raise UnknownEffect("github-get-unknown")
     try:
         pages = json.loads(completed.stdout)
     except json.JSONDecodeError as error:
@@ -199,7 +201,7 @@ def gh_pages(path):
 def gh_graphql(repository, number):
     owner, repo = repository.split("/")
     query = "query($owner:String!,$repo:String!,$number:Int!){repository(owner:$owner,name:$repo){pullRequest(number:$number){id autoMergeRequest{enabledAt} mergeQueueEntry{id}}}}"
-    completed = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"owner={owner}", "-F", f"repo={repo}", "-F", f"number={number}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
+    completed = native_run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"owner={owner}", "-F", f"repo={repo}", "-F", f"number={number}"], "github-merge-modes-command-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
     if completed.returncode != 0:
         raise UnknownEffect("github-merge-modes-unknown")
     try:
@@ -215,10 +217,7 @@ def gh_graphql_mutation(name, node_id):
         query = "mutation($id:ID!){dequeuePullRequest(input:{pullRequestId:$id}){pullRequest{id}}}"
     else:
         raise Refused("graphql-mutation-name")
-    try:
-        completed = subprocess.run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"id={node_id}"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired as error:
-        raise UnknownEffect("github-graphql-timeout:" + name) from error
+    completed = native_run(["gh", "api", "graphql", "-f", f"query={query}", "-F", f"id={node_id}"], "github-graphql-command-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
     if completed.returncode != 0:
         raise UnknownEffect("github-graphql-unknown:" + name)
     return json.loads(completed.stdout)
@@ -273,15 +272,17 @@ def validate_archive(config):
     with tempfile.TemporaryDirectory(prefix="fsgg-retirement-archive-") as scratch:
         clone = pathlib.Path(scratch) / "archive.git"
         verifier = pathlib.Path(scratch) / "verify.git"
-        subprocess.run(["git", "init", "--quiet", "--bare", str(verifier)], check=True, timeout=COMMAND_TIMEOUT_SECONDS)
-        verified = subprocess.run(["git", "-C", str(verifier), "bundle", "verify", str(bundle)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
+        initialized = native_run(["git", "init", "--quiet", "--bare", str(verifier)], "archive-verifier-init-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
+        if initialized.returncode != 0:
+            raise Refused("archive-verifier-init")
+        verified = native_run(["git", "-C", str(verifier), "bundle", "verify", str(bundle)], "archive-bundle-verify-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
         if verified.returncode != 0:
             raise Refused("archive-bundle-invalid")
-        imported = subprocess.run(["git", "clone", "--quiet", "--bare", str(bundle), str(clone)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
+        imported = native_run(["git", "clone", "--quiet", "--bare", str(bundle), str(clone)], "archive-bundle-import-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
         if imported.returncode != 0:
             raise Refused("archive-bundle-import")
         def git_value(revision):
-            result = subprocess.run(["git", "-C", str(clone), "rev-parse", revision], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
+            result = native_run(["git", "-C", str(clone), "rev-parse", revision], "archive-closure-read-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
             if result.returncode != 0:
                 raise Refused("archive-closure-missing:" + revision)
             return result.stdout.decode().strip()
@@ -391,7 +392,7 @@ def validate_changed_paths(candidate_tree, parent_tree, files, merge_tree=None):
         expected = candidate_entries.get(path)
         observed = merge_entries.get(path)
         if observed != expected:
-            raise Refused("merged-changed-path-mismatch:" + path)
+            raise Refused("merged-changed-path-mismatch")
         delivered.append({"path": path, "candidate": expected, "merged": observed})
     return sha(canonical(delivered))
 
@@ -578,31 +579,28 @@ def create_rule(config, value, permanent):
         snapshot = observe(config); current = snapshot["permanentRule" if permanent else "temporaryRule"]
         if not rule_matches(current, payload):
             retain_census(config, snapshot, f"{len(value['effects']):02d}-{kind}-refused-readback")
-            raise Refused(kind + "-readback:" + canonical({"expected": normalized_rule(dict(payload, id=(current or {}).get("id"))), "observed": current}).decode())
+            raise Refused(kind + "-readback")
     rule_id = current["id"]
     value = record_effect(config, value, kind, digest, snapshot)
     return checkpoint(config, value, value["stage"], None, **({"permanentRuleId": rule_id} if permanent else {"temporaryRuleId": rule_id, "cleanupRequired": True}))
 
 
 def push_retirement_head(config, archive):
-    try:
-        credential = subprocess.run(["gh", "auth", "token"], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
-    except subprocess.TimeoutExpired as error:
-        raise UnknownEffect("retirement-head-credential-timeout") from error
+    credential = native_run(["gh", "auth", "token"], "retirement-head-credential-command-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
     if credential.returncode != 0 or not credential.stdout.strip():
         raise Refused("retirement-head-credential-unavailable")
-    token = credential.stdout.decode().strip()
+    try:
+        token = credential.stdout.decode().strip()
+    except UnicodeError:
+        raise Refused("retirement-head-credential-invalid") from None
     environment = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_COUNT="1", GIT_CONFIG_KEY_0="http.extraHeader", GIT_CONFIG_VALUE_0="Authorization: Basic " + base64.b64encode(("x-access-token:" + token).encode()).decode())
     with tempfile.TemporaryDirectory(prefix="fsgg-retirement-push-") as scratch:
         clone = pathlib.Path(scratch) / "archive.git"
-        imported = subprocess.run(["git", "clone", "--quiet", "--bare", archive["bundleLocation"], str(clone)], stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
+        imported = native_run(["git", "clone", "--quiet", "--bare", archive["bundleLocation"], str(clone)], "retirement-head-bundle-import-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS)
         if imported.returncode != 0:
             raise Refused("retirement-head-bundle-import")
         command = ["git", "-C", str(clone), "push", "--porcelain", f"--force-with-lease={config['branchRef']}:{config['candidateHead']}", f"https://github.com/{config['repository']}.git", f"{config['retirementHead']}:{config['branchRef']}"]
-        try:
-            return subprocess.run(command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS, env=environment)
-        except subprocess.TimeoutExpired as error:
-            raise UnknownEffect("retirement-head-push-timeout") from error
+        return native_run(command, "retirement-head-push-command-unavailable", stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=False, timeout=COMMAND_TIMEOUT_SECONDS, env=environment)
 
 
 def advance_retirement_head(config, value):
