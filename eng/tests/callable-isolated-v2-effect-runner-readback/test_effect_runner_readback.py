@@ -281,6 +281,22 @@ class RunnerReadbackTests(unittest.TestCase):
             readback.qualify(result, runner, audit, selection, NOW,
                              approval_witness=reviewed(result))
 
+    def test_final_scope_cannot_replace_selected_audit_actor(self):
+        preflight, selection, runner, audit = fixture()
+        original_scope = audit.scope
+        reads = [0]
+
+        def scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                selection["auditActorId"] = 1002
+            return original_scope()
+
+        audit.scope = scope
+        result = readback.qualify(preflight, runner, audit, selection, NOW,
+                                  approval_witness=reviewed(preflight))
+        self.assertEqual(result.audit_actor_id, 1001)
+
     def test_unavailable_or_drifting_independent_port_refuses_without_leak(self):
         result, selection, runner, audit = fixture()
         audit.scopes[1]["credentialId"] = "4" * 64

@@ -123,7 +123,7 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
             approval_witness: approval.ApprovalWitnessResult | None = None
             ) -> ReadbackResult:
     """Compare exact fake observations; never authenticate or dispatch."""
-    selection = _exact(selection, SELECTION, "readback-selection-shape")
+    selection = dict(_exact(selection, SELECTION, "readback-selection-shape"))
     if (type(preflight) is not release.PreflightResult
             or type(approval_witness) is not approval.ApprovalWitnessResult
             or preflight.schema != release.RESULT_SCHEMA
