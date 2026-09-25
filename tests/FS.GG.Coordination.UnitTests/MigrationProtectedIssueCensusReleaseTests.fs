@@ -415,3 +415,101 @@ let ``protected census token handoff refuses forged reservation and unknown mark
     Assert.Equal(Error "protected-census-handoff-unknown",
                  markHandoff f handoffPins reservation
                      (Some (releaseReadback f (Some reservation))) (Some lostMarker))
+
+let private nativePins =
+    { AttemptResourceId="protected-native-attempts:release-test"
+      AttemptArtifactSha256=String.replicate 64 "a" }
+
+let private nativeDescription =
+    { AttemptResourceId=nativePins.AttemptResourceId
+      AttemptArtifactSha256=nativePins.AttemptArtifactSha256
+      NativeAttemptNamespaceId=handoffPins.NativeAttemptNamespaceId
+      VaultResourceId=handoffPins.VaultResourceId
+      VaultArtifactSha256=handoffPins.VaultArtifactSha256
+      CandidateMayRead=false; CandidateMayWrite=false
+      AuthoritativeCompleteReadback=true }
+
+let private capturedMarker (f: Fixture) =
+    let reservation = capturedReservation f
+    let mutable marked: ProtectedIssueCensusHandoffRequest option = None
+    let handoff =
+        { new IProtectedIssueCensusHandoffPort with
+            member _.Describe() = handoffDescription
+            member _.MarkOnce request = marked <- Some request; HandoffMarked
+            member _.ReadMarker _ = marked }
+    Assert.Equal(Ok (), markHandoff f handoffPins reservation
+                             (Some (releaseReadback f (Some reservation))) (Some handoff))
+    marked.Value
+
+let private markerPort marker =
+    { new IProtectedIssueCensusHandoffPort with
+        member _.Describe() = handoffDescription
+        member _.MarkOnce _ = failwith "recovery must not mark again"
+        member _.ReadMarker _ = marker }
+
+let private nativePort description readback =
+    { new IProtectedIssueCensusNativeAttemptPort with
+        member _.Describe() = description
+        member _.ReadAttempts _ = readback }
+
+let private inspectAttempt marker handoff native =
+    MigrationProtectedIssueCensusAttemptRecovery.inspect
+        handoffPins nativePins marker handoff native
+
+[<Fact>]
+let ``protected native attempt recovery keeps every observed phase on hold`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let unknown =
+        { Request=marker; ProviderAttemptId=marker.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    let inspect record =
+        inspectAttempt marker (Some (markerPort (Some marker)))
+            (Some (nativePort nativeDescription (Some [record])))
+    Assert.Equal(Ok NativeResultUnknown, inspect unknown)
+    let vaulted =
+        { unknown with Phase=TokenVaulted
+                       TokenFingerprintSha256=Some (String.replicate 64 "b") }
+    Assert.Equal(Ok NativeRevocationRequired, inspect vaulted)
+    let revoked =
+        { vaulted with Phase=NativeRevoked
+                       RevocationReceiptSha256=Some (String.replicate 64 "c") }
+    Assert.Equal(Ok ProtectedReceiptRequired, inspect revoked)
+
+[<Fact>]
+let ``protected native attempt recovery refuses omitted duplicate and foreign readback`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let exact =
+        { Request=marker; ProviderAttemptId=marker.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    let inspect readback =
+        inspectAttempt marker (Some (markerPort (Some marker)))
+            (Some (nativePort nativeDescription readback))
+    Assert.Equal(Error "protected-census-attempt-unknown", inspect None)
+    Assert.Equal(Error "protected-census-attempt-unknown", inspect (Some []))
+    Assert.Equal(Error "protected-census-attempt-duplicate", inspect (Some [exact; exact]))
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspect (Some [{ exact with ProviderAttemptId=String.replicate 64 "d" }]))
+    Assert.Equal(Error "protected-census-attempt-phase",
+                 inspect (Some [{ exact with Phase=TokenVaulted }]))
+
+[<Fact>]
+let ``protected native attempt recovery refuses candidate writable authority and missing marker`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let mutable nativeReads = 0
+    let native description =
+        { new IProtectedIssueCensusNativeAttemptPort with
+            member _.Describe() = description
+            member _.ReadAttempts _ = nativeReads <- nativeReads + 1; Some [] }
+    Assert.Equal(Error "protected-census-attempt-installation",
+                 inspectAttempt marker (Some (markerPort (Some marker)))
+                     (Some (native { nativeDescription with CandidateMayWrite=true })))
+    Assert.Equal(0, nativeReads)
+    Assert.Equal(Error "protected-census-attempt-unknown",
+                 inspectAttempt marker (Some (markerPort None))
+                     (Some (native nativeDescription)))
+    Assert.Equal(0, nativeReads)
