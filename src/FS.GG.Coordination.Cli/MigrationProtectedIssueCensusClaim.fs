@@ -8,6 +8,28 @@ type ProtectedIssueCensusClaimPins =
     { JournalResourceId: string
       JournalArtifactSha256: string }
 
+type ProtectedIssueCensusStoreHeadPins =
+    { StoreResourceId: string
+      StoreArtifactSha256: string }
+
+type ProtectedIssueCensusStoreHeadDescription =
+    { StoreResourceId: string
+      StoreArtifactSha256: string
+      CandidateMayRead: bool
+      CandidateMayWrite: bool
+      ImmutableHead: bool }
+
+type ProtectedIssueCensusStoreHead =
+    { Selection: ProtectedIssueCensusSelection
+      StoreResourceId: string
+      Generation: int64
+      CorpusSha256: string
+      HeadSha256: string }
+
+type IProtectedIssueCensusStoreHeadPort =
+    abstract Describe: unit -> ProtectedIssueCensusStoreHeadDescription
+    abstract ReadHead: ProtectedIssueCensusSelection -> ProtectedIssueCensusStoreHead option
+
 type ProtectedIssueCensusClaimDescription =
     { JournalResourceId: string
       JournalArtifactSha256: string
@@ -95,15 +117,15 @@ module MigrationProtectedIssueCensusClaim =
           storeResourceId; string storeGeneration ]
         |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes |> sha
 
-    let verifyAndClaim (attestationPins: ProtectedIssueCensusAttestationPins)
-                       (claimPins: ProtectedIssueCensusClaimPins)
-                       (selection: ProtectedIssueCensusSelection)
-                       (storeResourceId: string)
-                       (proof: ProtectedIssueCensusProof)
-                       (storeGeneration: int64)
-                       (attestation: ProtectedIssueCensusSealAttestation option)
-                       (clock: IProtectedIssueCensusClockPort option)
-                       (claimPort: IProtectedIssueCensusClaimPort option) : Result<unit, string> =
+    let private verifyAndClaimJournal (attestationPins: ProtectedIssueCensusAttestationPins)
+                                      (claimPins: ProtectedIssueCensusClaimPins)
+                                      (selection: ProtectedIssueCensusSelection)
+                                      (storeResourceId: string)
+                                      (proof: ProtectedIssueCensusProof)
+                                      (storeGeneration: int64)
+                                      (attestation: ProtectedIssueCensusSealAttestation option)
+                                      (clock: IProtectedIssueCensusClockPort option)
+                                      (claimPort: IProtectedIssueCensusClaimPort option) : Result<unit, string> =
         match preflight claimPins claimPort with
         | Error reason -> Error reason
         | Ok journal ->
@@ -164,3 +186,63 @@ module MigrationProtectedIssueCensusClaim =
                                                     && current.Generation = committed.CommitGeneration
                                                     && current.SealSha256 = committed.CommitHeadSha256 -> Ok ()
                                 | Some _ -> Error "protected-census-claim-head"
+
+    let private readStoreHead (port: IProtectedIssueCensusStoreHeadPort)
+                              (selection: ProtectedIssueCensusSelection)
+                              (storeResourceId: string)
+                              (proof: ProtectedIssueCensusProof)
+                              (storeGeneration: int64) =
+        let observed =
+            try port.ReadHead selection
+            with _ -> None
+        match observed with
+        | None -> Error "protected-census-store-unknown"
+        | Some head when head.Selection <> selection
+                         || head.StoreResourceId <> storeResourceId
+                         || head.Generation <> storeGeneration
+                         || head.CorpusSha256 <> proof.CorpusSha256
+                         || not (exactSha head.HeadSha256) ->
+            Error "protected-census-store-head"
+        | Some head -> Ok head
+
+    let verifyAndClaim (attestationPins: ProtectedIssueCensusAttestationPins)
+                       (claimPins: ProtectedIssueCensusClaimPins)
+                       (storeHeadPins: ProtectedIssueCensusStoreHeadPins)
+                       (selection: ProtectedIssueCensusSelection)
+                       (storeResourceId: string)
+                       (proof: ProtectedIssueCensusProof)
+                       (storeGeneration: int64)
+                       (attestation: ProtectedIssueCensusSealAttestation option)
+                       (clock: IProtectedIssueCensusClockPort option)
+                       (storeHeadPort: IProtectedIssueCensusStoreHeadPort option)
+                       (claimPort: IProtectedIssueCensusClaimPort option) : Result<unit, string> =
+        if String.IsNullOrWhiteSpace storeHeadPins.StoreResourceId
+           || storeHeadPins.StoreResourceId <> storeResourceId
+           || not (exactSha storeHeadPins.StoreArtifactSha256) then
+            Error "protected-census-store-pins"
+        else
+            match storeHeadPort with
+            | None -> Error "protected-census-store-unavailable"
+            | Some store ->
+                let description =
+                    try Some (store.Describe())
+                    with _ -> None
+                match description with
+                | None -> Error "protected-census-store-unavailable"
+                | Some installed when installed.StoreResourceId <> storeHeadPins.StoreResourceId
+                                      || installed.StoreArtifactSha256 <> storeHeadPins.StoreArtifactSha256
+                                      || installed.CandidateMayRead || installed.CandidateMayWrite
+                                      || not installed.ImmutableHead ->
+                    Error "protected-census-store-installation"
+                | Some _ ->
+                    match readStoreHead store selection storeResourceId proof storeGeneration with
+                    | Error reason -> Error reason
+                    | Ok before ->
+                        match verifyAndClaimJournal attestationPins claimPins selection storeResourceId
+                                                    proof storeGeneration attestation clock claimPort with
+                        | Error reason -> Error reason
+                        | Ok () ->
+                            match readStoreHead store selection storeResourceId proof storeGeneration with
+                            | Error reason -> Error reason
+                            | Ok after when after = before -> Ok ()
+                            | Ok _ -> Error "protected-census-store-head"
