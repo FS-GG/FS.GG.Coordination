@@ -146,9 +146,10 @@ writer enablement.
     public-feed installed-harness result, and still-unauthorized `.4b` operation proposal under
     `evidence/github-substrate-v2/gs2-09-9/` and `eng/`. The installed 0.1.0 bytes passed; no replacement version
     or product repair was required.
-  - [x] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** GS2-09.9's
-    current permission ceiling excludes provider mutation and external acceptance, so a later operation packet
-    must bind the exact target, actor/credential authority, package and receiver revisions, source/base/check,
+  - [x] **V2-CALL-01.4b — Admit one compatible isolated operation (separate protected authority).** At that
+    source-only window, GS2-09.9's permission ceiling excluded provider mutation and external acceptance. The
+    separate operation packet therefore had to bind the exact target, actor/credential authority, package and
+    receiver revisions, source/base/check,
     epoch/policy/journal identities, allowed mutation, recovery and cleanup. Prefer a fresh intentionally public,
     synthetic-only disposable target, or use an entitled private target. The registered private sandbox's
     `required_status_checks` endpoint currently returns `403` because the required entitlement is absent; do not
