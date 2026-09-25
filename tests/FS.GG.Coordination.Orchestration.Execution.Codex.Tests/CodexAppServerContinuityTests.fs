@@ -78,6 +78,12 @@ type CodexAppServerContinuityTests() =
     let completedWithDynamicMetadata fields =
         completedWithDynamicToolCall
             (",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\"" + fields)
+    let completedWithCollabToolCall fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"collabAgentToolCall\"" + fields + "}]")
+    let completedWithCollabMetadata fields =
+        completedWithCollabToolCall
+            (",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\"" + fields)
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -641,6 +647,80 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab tool call requires its state receivers sender status and tool``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab tool call refuses foreign required shapes and enum values``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"agentsStates\":[],\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[17],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":null,\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"foreign\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"foreign\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab agent states require typed status and nullable message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for states in
+            [ "{\"a\":null}"
+              "{\"a\":{}}"
+              "{\"a\":{\"status\":\"foreign\"}}"
+              "{\"a\":{\"status\":\"running\",\"message\":17}}"
+              "{\"a\":{\"status\":\"running\",\"status\":\"completed\"}}"
+              "{\"a\":{\"status\":\"running\"},\"a\":{\"status\":\"completed\"}}" ] do
+            let fields =
+                ",\"agentsStates\":" + states
+                + ",\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab optional model prompt and effort retain schema shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"model\":17"
+              ",\"prompt\":false"
+              ",\"reasoningEffort\":\"\""
+              ",\"reasoningEffort\":17" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``collab tool call schema state and optional values retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"model\":null,\"prompt\":null,\"reasoningEffort\":null"
+              ",\"agentsStates\":{\"a\":{\"status\":\"running\",\"message\":null}},\"receiverThreadIds\":[\"r\"],\"senderThreadId\":\"s\",\"status\":\"interrupted\",\"tool\":\"followupTask\",\"model\":\"gpt-6-sol\",\"prompt\":\"x\",\"reasoningEffort\":\"high\"" ] do
+            let terminal =
+                if fields.StartsWith(",\"agentsStates\":", StringComparison.Ordinal) then
+                    completedWithCollabToolCall fields
+                else completedWithCollabMetadata fields
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
             )
 
     [<Fact>]
