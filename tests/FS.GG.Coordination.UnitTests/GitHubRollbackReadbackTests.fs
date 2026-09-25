@@ -219,3 +219,110 @@ let ``signed Q6 readback refuses altered native revision and foreign signer`` ()
     let foreignPin = foreignPublicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     Assert.Equal(Error [ InvalidObserverSignature ],
                  verifySigned foreignPin foreignPublicKey signature expected selected completed claims finalEpoch)
+
+let private orderBinding : GitHubRollbackExpectedOrderBinding =
+    { SandboxResourceId="sandbox:qualified-812"; EpochResourceId="epoch:protected-v1"
+      WitnessResourceId="witness:protected-journal"; WitnessGeneration=27L }
+
+let private orderWitness (selected: GitHubRollbackPlan) (completed: GitHubRollbackReceipt list) : GitHubRollbackNativeOrderWitness =
+    let events =
+        (selected.Steps, completed)
+        ||> List.map2 (fun step receipt ->
+            let ordinal = int64 (6 - step.Order)
+            { StepId=step.StepId; TargetIdentity=step.TargetIdentity
+              ReceiptSha256=receipt.ReceiptSha256
+              ReceiptCommitOrdinal=ordinal * 10L + 1L
+              NativeReadOrdinal=ordinal * 10L + 2L
+              NativeStateSha256=step.CapturedStateSha256 })
+    { SandboxResourceId=orderBinding.SandboxResourceId
+      WitnessResourceId=orderBinding.WitnessResourceId
+      WitnessGeneration=orderBinding.WitnessGeneration
+      Steps=events
+      Terminal={ EpochResourceId=orderBinding.EpochResourceId
+                 ReceiptSha256=(List.last completed).ReceiptSha256
+                 NativeReadOrdinal=100L; Phase="OperatingV1"; PlanSeal=selected.Seal } }
+
+[<Fact>]
+let ``signed native order witness binds exact sandbox epoch and protected generation`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    let witness = orderWitness selected completed
+    use signer = RSA.Create()
+    signer.KeySize <- 3072
+    let publicKey = signer.ExportSubjectPublicKeyInfo()
+    let pin = publicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let payload = payloadForOrderedSigning orderBinding witness expected selected completed claims finalEpoch |> get
+    let signature = signer.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+    Assert.Equal(Ok(), verifySignedOrdered pin publicKey signature orderBinding witness expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 verifySignedOrdered pin publicKey signature
+                     { orderBinding with SandboxResourceId="sandbox:foreign" }
+                     witness expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 verifySignedOrdered pin publicKey signature
+                     { orderBinding with WitnessGeneration=28L }
+                     witness expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 verifySignedOrdered pin publicKey signature
+                     { orderBinding with EpochResourceId="epoch:foreign" }
+                     witness expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ InvalidExpectedOrderBinding ],
+                 verifySignedOrdered pin publicKey signature
+                     { orderBinding with WitnessResourceId="" }
+                     witness expected selected completed claims finalEpoch)
+
+[<Fact>]
+let ``signed native order witness refuses crossed receipts duplicate and altered native reads`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    let witness = orderWitness selected completed
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 payloadForOrderedSigning orderBinding
+                     { witness with Steps=witness.Steps |> List.take 4 }
+                     expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 payloadForOrderedSigning orderBinding
+                     { witness with Steps=witness.Steps |> List.updateAt 4 witness.Steps[3] }
+                     expected selected completed claims finalEpoch)
+    let crossed = { witness.Steps[1] with ReceiptCommitOrdinal=witness.Steps[0].NativeReadOrdinal }
+    Assert.Equal(Error [ InvalidObservationOrder ],
+                 payloadForOrderedSigning orderBinding
+                     { witness with Steps=witness.Steps |> List.updateAt 1 crossed }
+                     expected selected completed claims finalEpoch)
+    let beforeCommit = { witness.Steps[2] with NativeReadOrdinal=witness.Steps[2].ReceiptCommitOrdinal }
+    Assert.Equal(Error [ InvalidObservationOrder ],
+                 payloadForOrderedSigning orderBinding
+                     { witness with Steps=witness.Steps |> List.updateAt 2 beforeCommit }
+                     expected selected completed claims finalEpoch)
+    Assert.Equal(Error [ InvalidObservationOrder ],
+                 payloadForOrderedSigning orderBinding
+                     { witness with Terminal={ witness.Terminal with
+                                                  NativeReadOrdinal=witness.Steps[4].NativeReadOrdinal } }
+                     expected selected completed claims finalEpoch)
+    let foreignTarget = { witness.Steps[3] with TargetIdentity="target:foreign" }
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 payloadForOrderedSigning orderBinding
+                     { witness with Steps=witness.Steps |> List.updateAt 3 foreignTarget }
+                     expected selected completed claims finalEpoch)
+    use signer = RSA.Create()
+    signer.KeySize <- 3072
+    let publicKey = signer.ExportSubjectPublicKeyInfo()
+    let pin = publicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let payload = payloadForOrderedSigning orderBinding witness expected selected completed claims finalEpoch |> get
+    let signature = signer.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+    let altered = { witness.Steps[0] with NativeReadOrdinal=13L }
+    Assert.Equal(Error [ InvalidObserverSignature ],
+                 verifySignedOrdered pin publicKey signature orderBinding
+                     { witness with Steps=witness.Steps |> List.updateAt 0 altered }
+                     expected selected completed claims finalEpoch)
+    let relabeled = { witness.Steps[4] with NativeStateSha256=sha "altered-state" }
+    Assert.Equal(Error [ OrderWitnessMismatch ],
+                 verifySignedOrdered pin publicKey signature orderBinding
+                     { witness with Steps=witness.Steps |> List.updateAt 4 relabeled }
+                     expected selected completed claims finalEpoch)
