@@ -203,6 +203,31 @@ class AppRecordTests(unittest.TestCase):
             ).read_target(digest, responses)
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_boolean_repository_id_in_mint_or_effective_scope_refuses(self):
+        for location in ("record", "request", "redacted", "effective"):
+            for alias in (True, 1.0):
+                with self.subTest(location=location, alias=alias):
+                    selected, _, responses, _, record, witness = fixture()
+                    selected["repositoryId"] = 1
+                    digest = hashlib.sha256(canonical(selected)).hexdigest()
+                    record["targetSha256"] = digest
+                    record["repositoryIds"] = [1]
+                    record["request"]["repository_ids"] = [1]
+                    record["redactedResponse"]["repositories"][0]["id"] = 1
+                    witness["targetSha256"] = digest
+                    witness["repositoryIds"] = [1]
+                    if location == "record":
+                        record["repositoryIds"] = [alias]
+                    elif location == "request":
+                        record["request"]["repository_ids"] = [alias]
+                    elif location == "redacted":
+                        record["redactedResponse"]["repositories"][0]["id"] = alias
+                    else:
+                        witness["repositoryIds"] = [alias]
+                    self.refuses(selected=selected, digest=digest,
+                                 response_hashes=responses, record=record,
+                                 witness=witness)
+
 
 if __name__ == "__main__":
     unittest.main()

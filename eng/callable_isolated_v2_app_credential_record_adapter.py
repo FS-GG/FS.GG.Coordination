@@ -40,6 +40,11 @@ def _positive(value: Any) -> bool:
     return type(value) is int and value > 0
 
 
+def _one_repository(value: Any, selected_id: int) -> bool:
+    return (type(value) is list and len(value) == 1
+            and _positive(value[0]) and value[0] == selected_id)
+
+
 def _exact(value: Any, keys: set[str], reason: str) -> dict[str, Any]:
     if type(value) is not dict or set(value) != keys:
         raise Refused(reason)
@@ -162,13 +167,19 @@ class AppCredentialRecordAdapter:
                 or type(record["appId"]) is not int
                 or record["installationId"] != selected["installationId"]
                 or type(record["installationId"]) is not int
-                or type(record["repositoryIds"]) is not list
-                or record["repositoryIds"] != [selected["repositoryId"]]
+                or not _one_repository(record["repositoryIds"],
+                                       selected["repositoryId"])
                 or record["permissions"] != PERMISSIONS
                 or record["targetSha256"] != target_sha256
                 or type(record["responseSha256"]) is not list
                 or record["responseSha256"] != list(response_sha256)
                 or record["prestateSha256"] != selected["prestateSha256"]
+                or not _one_repository(request["repository_ids"],
+                                       selected["repositoryId"])
+                or type(redacted["repositories"]) is not list
+                or len(redacted["repositories"]) != 1
+                or type(redacted["repositories"][0]) is not dict
+                or not _positive(redacted["repositories"][0].get("id"))
                 or request != {"method": "POST",
                                "path": f"app/installations/{selected['installationId']}/access_tokens",
                                "repository_ids": [selected["repositoryId"]],
@@ -211,8 +222,8 @@ class AppCredentialRecordAdapter:
                 or effective["mintSha256"] != mint_sha
                 or effective["appId"] != self.app_id
                 or effective["installationId"] != selected["installationId"]
-                or type(effective["repositoryIds"]) is not list
-                or effective["repositoryIds"] != [selected["repositoryId"]]
+                or not _one_repository(effective["repositoryIds"],
+                                       selected["repositoryId"])
                 or effective["permissions"] != PERMISSIONS
                 or effective["targetSha256"] != target_sha256
                 or type(effective["responseSha256"]) is not list
