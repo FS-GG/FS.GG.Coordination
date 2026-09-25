@@ -164,6 +164,23 @@ class GitTreeWitnessTests(unittest.TestCase):
         self.assertEqual(len(result.source_files), 7)
         self.assertFalse(hasattr(witness, "dispatch"))
 
+    def test_byte_verifier_result_requires_exact_closed_success(self):
+        valid = {"schema": "fsgg.coordination.callable-isolated-v2-effect-byte-check/1",
+                 "verified": True, "authorized": False, "canDispatch": False}
+        for result in ({**valid, "verified": False},
+                       {**valid, "verified": 1},
+                       {**valid, "schema": "foreign-byte-check/1"},
+                       {key: value for key, value in valid.items()
+                        if key != "verified"},
+                       {**valid, "liveEffects": 1},
+                       None):
+            with self.subTest(result=result):
+                with mock.patch.object(witness.bytes_check, "verify",
+                                       return_value=result):
+                    with self.assertRaisesRegex(
+                            witness.Refused, "git-source-byte-check"):
+                        self.observe()
+
     def test_wrong_commit_tree_blob_and_path_mode_refuse(self):
         self.refuses(lambda p, _b, _s, _g, _i: object.__setattr__(p, "coordination_revision", "a" * 40))
         self.refuses(lambda p, _b, _s, _g, _i: object.__setattr__(p, "source_tree", "b" * 40))

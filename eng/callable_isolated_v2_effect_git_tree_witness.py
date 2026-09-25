@@ -237,6 +237,12 @@ def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
         checked = bytes_check.verify(blobs["archive"], blobs["workflow"],
             blobs["manifest"], preflight.manifest_sha256,
             blobs["builderSource"], blobs["nativeSource"])
+        checked = _exact(checked, {"schema", "verified", "authorized", "canDispatch"},
+                         "git-source-byte-check")
+        if (checked["schema"] !=
+                "fsgg.coordination.callable-isolated-v2-effect-byte-check/1"
+                or checked["verified"] is not True):
+            raise Refused("git-source-byte-check")
         if checked["authorized"] is not False or checked["canDispatch"] is not False:
             raise Refused("git-byte-authority")
         source_files = {
