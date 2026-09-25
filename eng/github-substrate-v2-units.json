@@ -1324,10 +1324,10 @@
         {
           "id": "github-callable-protected-operation-acceptance",
           "qGate": "Q6",
-          "commandSha256": "aa167816cc7c9cefe56d14c0118edcaee4293b01b0a52fff75350e8d94a19eb1"
+          "commandSha256": "5d4ccf0e6c28fa19dfa188c2a03a8efb2f90d18187eb1265fa6d4f5e065b9451"
         }
       ],
-      "contractSha256": "8d74fd733b10b35e3bc765a769115d0b0fca530472fba6608481370dbbdb2d4b"
+      "contractSha256": "866b227dc10f051b2f9b55832e9c61989e355947b11b4eb82f7720182a2bdeff"
     }
   ]
 }

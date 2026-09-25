@@ -5,12 +5,14 @@ This reads immutable historical evidence and public provider identities. It neve
 dispatches an operation, mints a credential, or changes a GitHub authority.
 """
 
+import base64
 import hashlib
 import json
 import pathlib
 import subprocess
 import sys
 import tempfile
+import urllib.request
 
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -30,6 +32,82 @@ def run(*args: str, cwd: pathlib.Path = ROOT, input_bytes: bytes | None = None) 
         raise ValueError(f"{args[0]} {args[1] if len(args) > 1 else ''} failed: "
                          f"{result.stderr.decode(errors='replace').strip()}")
     return result.stdout
+
+
+def github(path: str) -> dict:
+    return json.loads(run("gh", "api", path))
+
+
+def digest(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def require(condition: bool, label: str) -> None:
+    if not condition:
+        raise ValueError(label)
+
+
+def github_file(repository: str, path: str, revision: str, expected_sha: str) -> bytes:
+    value = github(f"repos/{repository}/contents/{path}?ref={revision}")
+    raw = base64.b64decode("".join(value["content"].split()), validate=True)
+    require(digest(raw) == expected_sha, f"historical provider bytes: {path}")
+    return raw
+
+
+def live_readback(temporary: pathlib.Path) -> None:
+    packet = json.loads((ROOT / "evidence/github-substrate-v2/gs2-09-9/callable-readiness.json").read_bytes())
+    handoff = json.loads((ROOT / "evidence/github-substrate-v2/gs2-09-9/callable-discovery-handoff.json").read_bytes())
+    source, release, receiver = packet["source"], packet["release"], packet["receiver"]
+    repository = source["repository"]
+
+    for key, tree in (("protectedMerge", "protectedMergeTree"), ("releaseSourceCommit", "releaseSourceTree")):
+        observed = github(f"repos/{repository}/commits/{source[key]}")
+        require(observed["sha"] == source[key] and observed["commit"]["tree"]["sha"] == source[tree],
+                f"source commit/tree: {key}")
+    for path, expected in source["runtimeFiles"].items():
+        github_file(repository, path, source["protectedMerge"], expected)
+    tag = github(f"repos/{repository}/git/ref/tags/{source['tag']}")
+    require(tag["object"]["sha"] == source["protectedMerge"], "release tag")
+    published = github(f"repos/{repository}/releases/tags/{source['tag']}")
+    name = f"{release['packageId']}.{release['version']}.nupkg"
+    asset = next(item for item in published["assets"] if item["name"] == name)
+    require(asset["digest"] == "sha256:" + release["githubReleaseAssetSha256"], "release asset metadata")
+    run("gh", "release", "download", source["tag"], "-R", repository,
+        "--pattern", name, "--dir", str(temporary))
+    require(digest((temporary / name).read_bytes()) == release["githubReleaseAssetSha256"],
+            "release asset bytes")
+    lower_name = release["packageId"].lower()
+    url = (f"https://api.nuget.org/v3-flatcontainer/{lower_name}/{release['version']}/"
+           f"{lower_name}.{release['version']}.nupkg")
+    with urllib.request.urlopen(url, timeout=60) as response:
+        require(digest(response.read()) == release["nugetOrgServedSha256"], "NuGet served bytes")
+
+    for key, tree in (("adoptingRevision", "adoptingTree"),
+                      ("qualifiedExecutionRevision", "qualifiedExecutionTree")):
+        observed = github(f"repos/{receiver['repository']}/commits/{receiver[key]}")
+        require(observed["commit"]["tree"]["sha"] == receiver[tree], f"receiver commit/tree: {key}")
+    github_file(receiver["repository"], receiver["manifest"], receiver["adoptingRevision"],
+                receiver["manifestSha256"])
+    accepted = packet["nativeAcceptance"]["protectedRun"]
+    observed_run = github(f"repos/{accepted['repository']}/actions/runs/{accepted['runId']}")
+    require(observed_run["run_attempt"] == accepted["attempt"]
+            and observed_run["head_sha"] == accepted["headSha"]
+            and observed_run["conclusion"] == accepted["conclusion"], "protected native run")
+
+    identity = handoff["packet"]
+    for row in (identity,):
+        pull = github(f"repos/{row['repository']}/pulls/{row['pullRequest']}")
+        require(pull["head"]["sha"] == row["candidateHead"]
+                and pull["merge_commit_sha"] == row["protectedMerge"] and pull["merged_at"],
+                "protected handoff pull request")
+        github_file(row["repository"], row["path"], row["protectedMerge"], row["sha256"])
+        github_file(row["repository"], row["validator"]["path"], row["protectedMerge"],
+                    row["validator"]["sha256"])
+    consumer = handoff["consumer"]
+    github_file(consumer["roadmapRepository"], consumer["roadmapPath"],
+                consumer["roadmapRevision"], consumer["roadmapSha256"])
+    github_file(consumer["roadmapRepository"], consumer["populationMappingPath"],
+                consumer["roadmapRevision"], consumer["populationMappingSha256"])
 
 
 def main() -> int:
@@ -71,11 +149,12 @@ def main() -> int:
         historical = temporary / "readiness-source"
         run("git", "worktree", "add", "--detach", str(historical), READINESS_MERGE)
         try:
-            run(sys.executable, str(historical / "eng/validate-callable-readiness.py"), "--live", cwd=historical)
+            run(sys.executable, str(historical / "eng/validate-callable-readiness.py"), cwd=historical)
         finally:
             run("git", "worktree", "remove", "--force", str(historical))
 
-        run(sys.executable, "eng/validate-callable-discovery-handoff.py", "--live")
+        run(sys.executable, "eng/validate-callable-discovery-handoff.py")
+        live_readback(temporary)
 
     print("GS2-09.9 protected native acceptance and handoff revalidated; no provider mutation")
     return 0

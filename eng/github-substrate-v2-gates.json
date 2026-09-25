@@ -376,8 +376,8 @@
     {
       "id": "github-callable-protected-operation-acceptance",
       "qGate": "Q6",
-      "executable": "python3",
-      "args": ["eng/validate-github-callable-protected-acceptance.py"]
+      "executable": "dotnet",
+      "args": ["fsi", "eng/validate-github-callable-protected-acceptance.fsx", "--", "--root", "."]
     },
     {
       "id": "github-complete-discovery-contract",
