@@ -54,7 +54,7 @@ def fixture():
     preflight = release.PreflightResult(REV, TREE, MANIFEST, 404, ARCHIVE,
         202, 1, 303, 606, 505, source_record_id=101)
     producer_result = producer.ProducerWitnessResult(REV, TREE, 202, 1, 404,
-        ARCHIVE, BUNDLE, WORKFLOW, BLOB, "2026-09-25T11:57:00Z")
+        ARCHIVE, BUNDLE, WORKFLOW, BLOB, "2026-09-25T11:57:00Z", 303, 101)
     identity_scope = {"principalId": "identity-reader", "credentialId": "2" * 64,
         "repository": release.REPOSITORY, "repositoryId": 77,
         "permissions": ["members:read", "metadata:read"],
@@ -116,6 +116,7 @@ class ApprovalIdentityTests(unittest.TestCase):
         self.assertEqual(result.approval_event_sha256,
                          selection["approvalEventSha256"])
         self.assertEqual(result.source_record_id, 101)
+        self.assertEqual(result.producer_actor_id, 303)
         self.assertEqual(identity.reads, [606])
         self.assertEqual(event.reads, [505])
 
@@ -194,6 +195,21 @@ class ApprovalIdentityTests(unittest.TestCase):
         selection["approvalEventSha256"] = hashlib.sha256(event.record).hexdigest()
         with self.assertRaises(approval.Refused):
             approval.qualify(preflight, made, identity, event, selection, NOW)
+
+    def test_changed_preflight_actor_or_source_record_cannot_rewrite_review(self):
+        for event_key, result_field, foreign in (
+                ("producerActorId", "producer_actor_id", 304),
+                ("sourceRecordId", "source_record_id", 102)):
+            with self.subTest(event_key=event_key):
+                preflight, made, selection, identity, event = fixture()
+                object.__setattr__(preflight, result_field, foreign)
+                claim = json.loads(event.record)
+                claim[event_key] = foreign
+                event.record = canonical(claim)
+                selection["approvalEventSha256"] = hashlib.sha256(event.record).hexdigest()
+                with self.assertRaises(approval.Refused):
+                    approval.qualify(preflight, made, identity, event,
+                                     selection, NOW)
         preflight, made, selection, identity, event = fixture()
         claim = json.loads(event.record)
         claim["sourceRecordId"] = 102

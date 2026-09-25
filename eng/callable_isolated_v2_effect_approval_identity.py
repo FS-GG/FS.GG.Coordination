@@ -17,7 +17,7 @@ import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-reviewer-identity/1"
 EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/2"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/2"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/3"
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}\Z")
 
 
@@ -48,6 +48,7 @@ class ApprovalWitnessResult:
     manifest_sha256: str
     bundle_sha256: str
     source_record_id: int
+    producer_actor_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -166,10 +167,13 @@ def qualify(preflight: release.PreflightResult,
                     preflight.producer_run_attempt,
                     preflight.producer_actor_id, preflight.artifact_id,
                     produced.producer_run_id,
-                    produced.producer_run_attempt, produced.artifact_id))
+                    produced.producer_run_attempt, produced.artifact_id,
+                    produced.producer_actor_id, produced.source_record_id))
             or preflight.reviewer_actor_id == preflight.producer_actor_id
             or produced.coordination_revision != preflight.coordination_revision
             or produced.source_tree != preflight.source_tree
+            or produced.producer_actor_id != preflight.producer_actor_id
+            or produced.source_record_id != preflight.source_record_id
             or (produced.producer_run_id, produced.producer_run_attempt,
                 produced.artifact_id) !=
                (preflight.producer_run_id, preflight.producer_run_attempt,
@@ -267,4 +271,5 @@ def qualify(preflight: release.PreflightResult,
         preflight.reviewer_actor_id, preflight.approval_event_id,
         selection["approvalEventSha256"], preflight.manifest_sha256,
         produced.bundle_sha256,
-        source_record_id=preflight.source_record_id)
+        source_record_id=preflight.source_record_id,
+        producer_actor_id=preflight.producer_actor_id)
