@@ -104,6 +104,12 @@ Both relation response paths now reject duplicate JSON members recursively
 before interpreting node, endpoint, connection or page facts. This does not
 provide the missing protected native observer or complete typed inspect proof.
 
+A fourteenth independent control found the issue type GraphQL reader could
+accept duplicate raw type names or `hasNextPage` values into a typed census.
+It was red before the repair. The issue type reader now shares the recursive
+GraphQL member check with native relation reads before interpreting type or
+pagination facts. Complete native inspect authority remains outstanding.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

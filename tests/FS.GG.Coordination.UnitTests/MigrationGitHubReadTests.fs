@@ -1752,6 +1752,17 @@ let ``issue type census accepts GitHub terminal cursor and rejects missing conti
                  MigrationGitHubRead.readIssueTypes options (FakeTransport [ ok Map.empty missingCursor ]))
 
 [<Fact>]
+let ``issue type census refuses duplicate raw type name and page completeness`` () =
+    let terminal =
+        """{"data":{"repository":{"databaseId":42,"issueTypes":{"nodes":[{"id":"IT_1","name":"Task"}],"pageInfo":{"hasNextPage":false,"endCursor":"NA"}}}}}"""
+    let duplicateName = terminal.Replace("\"name\":\"Task\"", "\"name\":\"Task\",\"name\":\"Bug\"")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:name"),
+                 MigrationGitHubRead.readIssueTypes options (FakeTransport [ ok Map.empty duplicateName ]))
+    let duplicateTerminal = terminal.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:hasNextPage"),
+                 MigrationGitHubRead.readIssueTypes options (FakeTransport [ ok Map.empty duplicateTerminal ]))
+
+[<Fact>]
 let ``HTTP migration read transport refuses mutation-shaped requests before network send`` () =
     use client = new HttpClient()
     let transport = HttpMigrationGitHubReadTransport(client) :> IMigrationGitHubReadTransport
