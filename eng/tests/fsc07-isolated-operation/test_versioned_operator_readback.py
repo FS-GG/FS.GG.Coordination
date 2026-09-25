@@ -393,6 +393,23 @@ class VersionedReadbackTests(unittest.TestCase):
             self.assertEqual(server.errors, [])
             self.assertEqual(len(server.observed), 1)
             self.assertEqual(server.events, [])
+        for wrong in (
+            dataclasses.replace(pull_expected(), repository="FS-GG/disposable?foreign"),
+            dataclasses.replace(pull_expected(), source_ref="refs/heads/../foreign"),
+        ):
+            with self.subTest(identity=wrong), loopback_server([]) as server:
+                transport = operator.LoopbackHttpTransport(
+                    f"http://127.0.0.1:{server.server_port}")
+                self.assert_unknown(operator.run_pull_once(
+                    wrong, transport, reserve_once_factory()))
+                self.assertEqual(server.observed, [])
+        with loopback_server([]) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            wrong = dataclasses.replace(protection_expected(), branch="../main")
+            self.assert_unknown(operator.run_protection_once(
+                wrong, transport, reserve_once_factory()))
+            self.assertEqual(server.observed, [])
 
     def test_q6_loopback_lost_response_unknown_and_no_repeat(self):
         pull = dict(pull_observed().pulls[0])
@@ -415,6 +432,79 @@ class VersionedReadbackTests(unittest.TestCase):
             self.assertEqual(server.errors, [])
             self.assertEqual(server.events, [])
             self.assertNotIn(SENTINEL, repr(first) + repr(second))
+
+    def test_q6_loopback_redirected_or_refused_write_is_unknown(self):
+        pull = pull_observed().pulls[0]
+        for status in (302, 401):
+            events = (pull_read_events() * 2 +
+                      [event("POST", "repos/FS-GG/disposable/pulls",
+                             body=operator.pull_request_body(pull_expected()),
+                             value={"message": "moved"}, status=status,
+                             headers={"Location": "https://api.github.com/"})] +
+                      pull_read_events((pull,)) * 2)
+            with self.subTest(status=status), loopback_server(events) as server:
+                transport = operator.LoopbackHttpTransport(
+                    f"http://127.0.0.1:{server.server_port}")
+                result = operator.run_pull_once(
+                    pull_expected(), transport, reserve_once_factory())
+                self.assert_unknown(result)
+                self.assertEqual(result.reason, "pull-request-provider-explicit-refusal")
+                self.assertEqual(sum(item["method"] == "POST"
+                                     for item in server.observed), 1)
+                self.assertEqual(server.errors, [])
+        policy = protection_observed().policy
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         value={"message": "moved"}, status=302,
+                         headers={"Location": "https://api.github.com/"})] +
+                  protection_read_events(True, policy) * 2)
+        with loopback_server(events) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            result = operator.run_protection_once(
+                protection_expected(), transport, reserve_once_factory())
+            self.assert_unknown(result)
+            self.assertEqual(result.reason, "branch-protection-provider-explicit-refusal")
+            self.assertEqual(sum(item["method"] == "PUT"
+                                 for item in server.observed), 1)
+            self.assertEqual(server.errors, [])
+
+    def test_q6_loopback_500_is_readback_only(self):
+        pull = pull_observed().pulls[0]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         value={"message": SENTINEL}, status=500)] +
+                  pull_read_events((pull,)) * 2)
+        with loopback_server(events) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            result = operator.run_pull_once(
+                pull_expected(), transport, reserve_once_factory())
+            self.assertIsInstance(result, operator.ExactPull)
+            self.assertEqual(sum(item["method"] == "POST"
+                                 for item in server.observed), 1)
+            self.assertEqual(server.errors, [])
+            self.assertEqual(server.events, [])
+            self.assertNotIn(SENTINEL, repr(result))
+
+    def test_q6_malformed_injected_write_response_is_unknown(self):
+        class MalformedTransport(operator.OfflineTranscriptTransport):
+            def request(self, method, path, body=None):
+                if method == "POST":
+                    self.writes += 1
+                    return operator.HttpResponse(201, {}, b"{}")
+                return super().request(method, path, body)
+
+        pull = pull_observed().pulls[0]
+        transport = MalformedTransport(
+            pull_read_events() * 2 + pull_read_events((pull,)) * 2)
+        result = operator.run_pull_once(pull_expected(), transport,
+                                        reserve_once_factory())
+        self.assert_unknown(result)
+        self.assertEqual(result.reason, "pull-request-provider-response-invalid")
+        self.assertEqual(transport.writes, 1)
 
     def test_q6_lost_response_unknown_and_no_repeat(self):
         pull = dict(pull_observed().pulls[0])
