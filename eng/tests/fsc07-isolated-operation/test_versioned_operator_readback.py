@@ -245,6 +245,22 @@ class VersionedReadbackTests(unittest.TestCase):
             operator.NativeReadAdapter(
                 operator.OfflineTranscriptTransport(events)).read_pull_census(expected)
 
+    def test_pull_list_omitted_fields_refuse_after_lost_response(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        for missing in ("state", "draft", "title", "body"):
+            with self.subTest(missing=missing):
+                post = pull_read_events((pull,))
+                del post[3]["response"]["json"][0][missing]
+                events = (pull_read_events() * 2 +
+                          [event("POST", "repos/FS-GG/disposable/pulls",
+                                 body=operator.pull_request_body(expected),
+                                 error=SENTINEL)] + post * 2)
+                transport = operator.OfflineTranscriptTransport(events)
+                self.assert_unknown(operator.run_pull_once(
+                    expected, transport, reserve_once_factory()))
+                self.assertEqual(transport.writes, 1)
+
     def test_protection_rejects_extra_effective_required_context(self):
         observed = protection_observed()
         for contexts in (["required-check", "foreign-check"],
