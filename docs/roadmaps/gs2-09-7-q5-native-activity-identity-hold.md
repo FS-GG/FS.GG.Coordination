@@ -193,6 +193,12 @@ number overlap. The binder now checks those identity sets independently of
 the supplied typed population. This does not prove initial sandbox census
 or protected journal custody.
 
+A twenty-seventh independent control found the raw-to-typed project item
+adapter could accept two captured rows with the same item ID when a matching
+typed population was supplied. It was red before the repair. The binder now
+requires distinct, nonblank item IDs across every captured project page.
+This remains partial project census evidence without protected native capture.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
