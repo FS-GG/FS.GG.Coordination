@@ -43,18 +43,32 @@ let private fixtureWithSelectionAndMarkerClock select markerClockResource marker
           ApiOrigin="https://api.github.test"; Owner="FS-GG"; Repository="copy"
           RepositoryId=42L }
         |> select
+    let storeResourceId = "protected-store:native-test"
+    let storeGeneration = 7L
+    let journalHead: ProtectedIssueCensusClaimHead =
+        { JournalResourceId="protected-journal:native-test"
+          Generation=9L; SealSha256=String.replicate 64 "6" }
+    let claimId =
+        MigrationProtectedIssueCensusClaim.claimId
+            selection storeResourceId storeGeneration
+    let reservationId =
+        MigrationProtectedIssueCensusRelease.reservationId claimId journalHead
     let marker =
         { NativeAttemptId=MigrationProtectedIssueCensusHandoff.attemptId
-                            (String.replicate 64 "2") handoffPins
-          ReservationId=String.replicate 64 "2"
-          ClaimId=String.replicate 64 "3"
+                            reservationId handoffPins
+          ReservationId=reservationId
+          ClaimId=claimId
           Selection=selection; AppId=handoffPins.AppId
           InstallationId=handoffPins.InstallationId
           RepositoryId=selection.RepositoryId
           PermissionSha256=handoffPins.PermissionSha256
           VaultResourceId=handoffPins.VaultResourceId
+          StoreResourceId=storeResourceId
+          StoreGeneration=storeGeneration
           ExpectedStoreHeadSha256=String.replicate 64 "5"
-          ExpectedJournalHeadSha256=String.replicate 64 "6"
+          JournalResourceId=journalHead.JournalResourceId
+          ExpectedJournalGeneration=journalHead.Generation
+          ExpectedJournalHeadSha256=journalHead.SealSha256
           ClockResourceId=markerClockResource
           ClockArtifactSha256=markerClockArtifact
           SignedExpiresAtUtc=issued.AddSeconds 60 }

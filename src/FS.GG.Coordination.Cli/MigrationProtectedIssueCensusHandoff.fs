@@ -44,7 +44,11 @@ type ProtectedIssueCensusHandoffRequest =
       RepositoryId: int64
       PermissionSha256: string
       VaultResourceId: string
+      StoreResourceId: string
+      StoreGeneration: int64
       ExpectedStoreHeadSha256: string
+      JournalResourceId: string
+      ExpectedJournalGeneration: int64
       ExpectedJournalHeadSha256: string
       ClockResourceId: string
       ClockArtifactSha256: string
@@ -205,8 +209,13 @@ module MigrationProtectedIssueCensusHandoff =
                                       RepositoryId=handoffPins.RepositoryId
                                       PermissionSha256=handoffPins.PermissionSha256
                                       VaultResourceId=handoffPins.VaultResourceId
+                                      StoreResourceId=expectedReservation.StoreResourceId
+                                      StoreGeneration=expectedReservation.StoreGeneration
                                       ExpectedStoreHeadSha256=
                                         expectedReservation.ExpectedStoreHeadSha256
+                                      JournalResourceId=expectedReservation.JournalResourceId
+                                      ExpectedJournalGeneration=
+                                        expectedReservation.ExpectedJournalGeneration
                                       ExpectedJournalHeadSha256=
                                         expectedReservation.ExpectedJournalHeadSha256
                                       ClockResourceId=attestationPins.ClockResourceId

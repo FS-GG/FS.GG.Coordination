@@ -57,6 +57,10 @@ module MigrationProtectedIssueCensusAttemptRecovery =
     val validSelectionShape:
         selection:ProtectedIssueCensusSelection -> bool
 
+    /// Structural claim-to-reservation chain; authentic store and journal readback remain required.
+    val validMarkerChain:
+        marker:ProtectedIssueCensusHandoffRequest -> bool
+
     /// Unsigned canonical commitment over the complete native snapshot bytes.
     val expectedSnapshotSealSha256:
         snapshot:ProtectedIssueCensusNativeAttemptSnapshot -> string
