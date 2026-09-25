@@ -114,6 +114,33 @@ type CodexAppServerUsageTruthTests() =
         )
 
     [<Fact>]
+    member _.``one wire digest cannot be counted as two thread snapshots``() =
+        let twoUpdates = { terminal with UsageUpdateCount = 2 }
+        for second in [ snapshot; { snapshot with Last = snapshot.Cumulative } ] do
+            Assert.Equal(
+                Error "app-server-usage-snapshot-duplicate",
+                CodexAppServerUsageTruth.assess twoUpdates
+                    [ ThreadSnapshot snapshot; ThreadSnapshot second ]
+            )
+
+    [<Fact>]
+    member _.``two distinct copied-live wire identities retain no-usage verdict``() =
+        let bytes =
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
+            |> File.ReadAllBytes
+        let second =
+            match CodexAppServerUsageProjection.parse scope.ThreadId binding.TurnId
+                      (Array.append bytes [| byte '\n' |]) with
+            | Ok update -> update
+            | Error code -> failwithf "copied-live whitespace variant refused: %s" code
+        let twoUpdates = { terminal with UsageUpdateCount = 2 }
+        let result =
+            CodexAppServerUsageTruth.assess twoUpdates
+                [ ThreadSnapshot snapshot; ThreadSnapshot second ]
+            |> noVerdict
+        Assert.Equal([ "thread-last-total-snapshot" ], result.ObservedEvidenceClasses)
+
+    [<Fact>]
     member _.``exec child completed frame with matching IDs remains a different provenance``() =
         let raw =
             """{"type":"turn.completed","thread_id":"native-thread","turn_id":"native-turn","usage":{"input_tokens":100,"cached_input_tokens":20,"output_tokens":40,"reasoning_output_tokens":10}}"""
