@@ -3,12 +3,16 @@
 
 import dataclasses
 import copy
+import contextlib
 import hashlib
+import http.server
 import importlib.util
 import json
 import pathlib
+import socket
 import subprocess
 import tempfile
+import threading
 import unittest
 import urllib.error
 
@@ -135,6 +139,73 @@ def reserve_once_factory():
         seen.add(key)
         return True
     return reserve
+
+
+@contextlib.contextmanager
+def loopback_server(events):
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def log_message(self, *_args):
+            pass
+
+        def do_GET(self):
+            self.handle_event()
+
+        def do_POST(self):
+            self.handle_event()
+
+        def do_PUT(self):
+            self.handle_event()
+
+        def handle_event(self):
+            try:
+                scripted = self.server.events.pop(0)
+            except IndexError:
+                self.server.errors.append("unexpected-request")
+                self.send_error(500)
+                return
+            length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(length)
+            request_body = json.loads(raw_body) if raw_body else None
+            if (scripted["method"] != self.command
+                    or scripted["path"] != self.path.lstrip("/")
+                    or scripted["body"] != request_body):
+                self.server.errors.append("request-mismatch")
+                self.send_error(500)
+                return
+            self.server.observed.append({
+                "method": self.command, "path": self.path,
+                "authorization": self.headers.get("Authorization"),
+            })
+            if "raise" in scripted:
+                self.connection.shutdown(socket.SHUT_RDWR)
+                self.connection.close()
+                return
+            response = scripted["response"]
+            payload = response.get("rawBody")
+            if payload is None:
+                payload = json.dumps(response["json"], sort_keys=True,
+                                     separators=(",", ":"))
+            data = payload.encode()
+            self.send_response(response["status"])
+            for name, value in response["headers"]:
+                self.send_header(name, value)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.end_headers()
+            self.wfile.write(data)
+
+    server = http.server.ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+    server.events = copy.deepcopy(events)
+    server.errors = []
+    server.observed = []
+    thread = threading.Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield server
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=5)
 
 
 class VersionedReadbackTests(unittest.TestCase):
@@ -268,6 +339,82 @@ class VersionedReadbackTests(unittest.TestCase):
                                               reserve_once_factory())
         self.assertIsInstance(result, operator.ExactProtection)
         self.assertEqual(transport.writes, 1)
+
+    def test_q3_loopback_http_pull_and_protection(self):
+        pull = pull_observed().pulls[0]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + pull_read_events((pull,)) * 2)
+        with loopback_server(events) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            result = operator.run_pull_once(pull_expected(), transport,
+                                            reserve_once_factory())
+            self.assertIsInstance(result, operator.ExactPull)
+            self.assertEqual(server.errors, [])
+            self.assertEqual(server.events, [])
+            self.assertEqual(sum(item["method"] == "POST"
+                                 for item in server.observed), 1)
+            self.assertTrue(all(item["authorization"] is None
+                                for item in server.observed))
+        policy = protection_observed().policy
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         error=SENTINEL)] + protection_read_events(True, policy) * 2)
+        with loopback_server(events) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            result = operator.run_protection_once(
+                protection_expected(), transport, reserve_once_factory())
+            self.assertIsInstance(result, operator.ExactProtection)
+            self.assertEqual(server.errors, [])
+            self.assertEqual(server.events, [])
+            self.assertEqual(sum(item["method"] == "PUT"
+                                 for item in server.observed), 1)
+            self.assertTrue(all(item["authorization"] is None
+                                for item in server.observed))
+
+    def test_q6_loopback_origin_and_redirect_refuse_without_egress(self):
+        for url in ("https://api.github.com", "http://localhost:1234",
+                    "http://127.0.0.1:0", "http://127.0.0.1:80/path",
+                    "http://user@127.0.0.1:80"):
+            with self.subTest(url=url):
+                with self.assertRaises(operator.Refused):
+                    operator.LoopbackHttpTransport(url)
+        events = [event("GET", "repos/FS-GG/disposable", value={}, status=302,
+                        headers={"Location": "https://api.github.com/"})]
+        with loopback_server(events) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            self.assert_unknown(operator.run_pull_once(
+                pull_expected(), transport, reserve_once_factory()))
+            self.assertEqual(server.errors, [])
+            self.assertEqual(len(server.observed), 1)
+            self.assertEqual(server.events, [])
+
+    def test_q6_loopback_lost_response_unknown_and_no_repeat(self):
+        pull = dict(pull_observed().pulls[0])
+        pull["base"] = {**pull["base"], "sha": SHA_C}
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) * 2 + pull_read_events() * 2)
+        with loopback_server(events) as server:
+            transport = operator.LoopbackHttpTransport(
+                f"http://127.0.0.1:{server.server_port}")
+            reserve = reserve_once_factory()
+            first = operator.run_pull_once(pull_expected(), transport, reserve)
+            second = operator.run_pull_once(pull_expected(), transport, reserve)
+            self.assert_unknown(first)
+            self.assert_unknown(second)
+            self.assertEqual(sum(item["method"] == "POST"
+                                 for item in server.observed), 1)
+            self.assertEqual(server.errors, [])
+            self.assertEqual(server.events, [])
+            self.assertNotIn(SENTINEL, repr(first) + repr(second))
 
     def test_q6_lost_response_unknown_and_no_repeat(self):
         pull = dict(pull_observed().pulls[0])
