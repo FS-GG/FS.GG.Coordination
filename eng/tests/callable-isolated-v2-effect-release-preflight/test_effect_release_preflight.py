@@ -115,6 +115,7 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.schema, preflight.RESULT_SCHEMA)
+        self.assertEqual(result.archive_sha256, fixture()[2]["archiveSha256"])
         self.assertEqual(left.reads, ["source"])
         self.assertEqual(right.reads, [505])
         self.assertFalse(hasattr(preflight, "dispatch"))
