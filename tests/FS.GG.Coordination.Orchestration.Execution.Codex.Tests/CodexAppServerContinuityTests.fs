@@ -53,6 +53,8 @@ type CodexAppServerContinuityTests() =
     let replace (bytes: byte array) oldText newText =
         let original = Encoding.UTF8.GetString bytes
         Encoding.UTF8.GetBytes(original.Replace(oldText, newText, StringComparison.Ordinal))
+    let completedWithItems items =
+        replace completed "\"items\":[]" ("\"items\":" + items)
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -157,6 +159,48 @@ type CodexAppServerContinuityTests() =
         Assert.Equal(
             ContinuityGap "app-server-continuity-json-invalid",
             status (CodexAppServerContinuity.apply first (frame 2L malformed))
+        )
+
+    [<Fact>]
+    member _.``nonobject turn item cannot mark a native terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for items in [ "[null]"; "[42]"; "[\"text\"]" ] do
+            let terminal = completedWithItems items
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``missing or foreign turn item discriminator cannot mark a terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for items in
+            [ "[{}]"
+              "[{\"id\":\"item-1\",\"type\":\"foreignItem\"}]"
+              "[{\"id\":\"\",\"type\":\"reasoning\"}]" ] do
+            let terminal = completedWithItems items
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``duplicate turn item identity key cannot mark a terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"id\":\"item-1\",\"type\":\"reasoning\"}]"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-item-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``supported common turn item identity retains terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal = completedWithItems "[{\"id\":\"item-1\",\"type\":\"reasoning\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
         )
 
     [<Fact>]

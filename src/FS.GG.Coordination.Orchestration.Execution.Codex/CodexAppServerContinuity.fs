@@ -53,6 +53,13 @@ type private CodexAppServerNativeEvent =
 [<RequireQualifiedAccess>]
 module CodexAppServerContinuity =
     let private digestPattern = Regex("^[0-9a-f]{64}$", RegexOptions.CultureInvariant)
+    let private supportedItemTypes =
+        set [ "userMessage"; "hookPrompt"; "agentMessage"; "functionCallOutput";
+              "plan"; "reasoning"; "commandExecution"; "fileChange";
+              "mcpToolCall"; "dynamicToolCall"; "collabAgentToolCall";
+              "subAgentActivity"; "webSearch"; "imageView"; "sleep";
+              "imageGeneration"; "enteredReviewMode"; "exitedReviewMode";
+              "contextCompaction" ]
 
     let private boundedText (value: string) =
         not (String.IsNullOrWhiteSpace value)
@@ -76,6 +83,20 @@ module CodexAppServerContinuity =
             let text = value.GetString()
             if boundedText text then Ok text else Error code
 
+    let private validTurnItemIdentity (item: JsonElement) =
+        if item.ValueKind <> JsonValueKind.Object then false
+        else
+            let names = item.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match item.TryGetProperty "id", item.TryGetProperty "type" with
+                | (true, id), (true, itemType) when
+                    id.ValueKind = JsonValueKind.String
+                    && itemType.ValueKind = JsonValueKind.String ->
+                    boundedText (id.GetString())
+                    && Set.contains (itemType.GetString()) supportedItemTypes
+                | _ -> false
+
     let private parseTurn expectedThread expectedTurn methodName (parameters: JsonElement) =
         match fields "app-server-turn-params-invalid"
                 (set [ "threadId"; "turn" ]) (set [ "threadId"; "turn" ]) parameters with
@@ -94,6 +115,10 @@ module CodexAppServerContinuity =
                 | Error error -> Error error
                 | Ok () when turn.GetProperty("items").ValueKind <> JsonValueKind.Array ->
                     Error "app-server-turn-shape-invalid"
+                | Ok () when
+                    turn.GetProperty("items").EnumerateArray()
+                    |> Seq.exists (validTurnItemIdentity >> not) ->
+                    Error "app-server-turn-item-invalid"
                 | Ok () ->
                     match
                         readText "app-server-turn-identity-invalid" turn "id",
