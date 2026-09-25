@@ -142,6 +142,30 @@ module CodexAppServerContinuity =
                     | _ -> false
                 | _ -> false
 
+    let private validFileUpdateChange (change: JsonElement) =
+        if change.ValueKind <> JsonValueKind.Object then false
+        else
+            let names = change.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match change.TryGetProperty "diff", change.TryGetProperty "path",
+                      change.TryGetProperty "kind" with
+                | (true, diff), (true, path), (true, kind) when
+                    diff.ValueKind = JsonValueKind.String
+                    && path.ValueKind = JsonValueKind.String
+                    && kind.ValueKind = JsonValueKind.Object ->
+                    let kindNames = kind.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                    if kindNames.Length <> (kindNames |> Set.ofList |> Set.count) then false
+                    else
+                        match kind.TryGetProperty "type" with
+                        | true, kindType when kindType.ValueKind = JsonValueKind.String ->
+                            match kindType.GetString() with
+                            | "add" | "delete" -> true
+                            | "update" -> optionalNullableString kind "move_path"
+                            | _ -> false
+                        | _ -> false
+                | _ -> false
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -177,6 +201,15 @@ module CodexAppServerContinuity =
                                 && optionalNullableInt64 item "durationMs"
                                 && optionalNullableInt32 item "exitCode"
                                 && optionalCommandSource item
+                            | _ -> false
+                        | "fileChange" ->
+                            match item.TryGetProperty "changes", item.TryGetProperty "status" with
+                            | (true, changes), (true, status) ->
+                                changes.ValueKind = JsonValueKind.Array
+                                && (changes.EnumerateArray() |> Seq.forall validFileUpdateChange)
+                                && status.ValueKind = JsonValueKind.String
+                                && Set.contains (status.GetString())
+                                    (set [ "inProgress"; "completed"; "failed"; "declined" ])
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
