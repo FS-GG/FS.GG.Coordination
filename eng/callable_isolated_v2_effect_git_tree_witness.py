@@ -207,6 +207,13 @@ def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
             or type(now) is not dt.datetime or now.tzinfo is None
             or now.utcoffset() != dt.timedelta(0)):
         raise Refused("git-selection-invalid")
+    blobs = _exact(blobs, {"archive", "workflow", "manifest",
+                            "builderSource", "nativeSource"},
+                   "git-source-blobs-shape")
+    try:
+        blobs = copy.deepcopy(blobs)
+    except Exception:
+        raise Refused("git-source-blobs-unavailable") from None
     scope_before = _scope(git_port, selection["repositoryId"],
                           ["contents:read", "metadata:read"], now)
     identity_scope = _scope(identity_port, selection["repositoryId"],
@@ -221,9 +228,6 @@ def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
         raise Refused("git-reader-custody")
     _identity(identity_port, selection["identityEventId"], identity_scope,
               selection["repositoryId"], now)
-    blobs = _exact(blobs, {"archive", "workflow", "manifest",
-                            "builderSource", "nativeSource"},
-                   "git-source-blobs-shape")
     try:
         if (hashlib.sha256(blobs["archive"]).hexdigest() !=
                 preflight.archive_sha256

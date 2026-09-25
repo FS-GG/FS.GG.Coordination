@@ -172,6 +172,20 @@ class GitTreeWitnessTests(unittest.TestCase):
             next(oid for kind, oid in git_objects_read_order(g) if kind == "blob"), b"foreign"))
         self.refuses(mode_override=(builder.WORKFLOW, "120000"))
 
+    def test_identity_callback_cannot_replace_earlier_source_archive(self):
+        preflight, blobs, selection, port, identity = fixture()
+        original_archive = blobs["archive"]
+        blobs["archive"] = b"foreign-archive"
+        original_identity_read = identity.read_repository_identity
+
+        def read_identity(event_id):
+            blobs["archive"] = original_archive
+            return original_identity_read(event_id)
+
+        identity.read_repository_identity = read_identity
+        with self.assertRaises(witness.Refused):
+            witness.qualify(preflight, blobs, port, identity, selection, NOW)
+
     def test_scope_and_missing_object_refuse(self):
         self.refuses(lambda _p, _b, _s, g, _i: g.scopes[0].__setitem__("credentialId", "1" * 64))
         self.refuses(lambda _p, _b, _s, g, _i: g.scopes[1].__setitem__("repositoryId", 78))
