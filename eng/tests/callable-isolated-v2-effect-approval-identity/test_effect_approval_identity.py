@@ -120,6 +120,8 @@ class ApprovalIdentityTests(unittest.TestCase):
         self.assertEqual(result.producer_actor_id, 303)
         self.assertEqual(result.repository_id, 77)
         self.assertEqual(result.identity_event_id, 808)
+        self.assertEqual(result.approved_at, "2026-09-25T11:58:00Z")
+        self.assertEqual(result.expires_at, "2026-09-25T12:15:00Z")
         self.assertEqual(identity.reads, [606])
         self.assertEqual(event.reads, [505])
 
