@@ -293,6 +293,43 @@ module CodexAppServerContinuity =
             effort.GetString().Length > 0
         | _ -> false
 
+    let private validOptionalWebSearchAction (item: JsonElement) =
+        match item.TryGetProperty "action" with
+        | false, _ -> true
+        | true, action when action.ValueKind = JsonValueKind.Null -> true
+        | true, action when action.ValueKind = JsonValueKind.Object ->
+            let names = action.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match action.TryGetProperty "type" with
+                | true, actionType when actionType.ValueKind = JsonValueKind.String ->
+                    match actionType.GetString() with
+                    | "search" ->
+                        let queriesValid =
+                            match action.TryGetProperty "queries" with
+                            | false, _ -> true
+                            | true, queries when queries.ValueKind = JsonValueKind.Null -> true
+                            | true, queries when queries.ValueKind = JsonValueKind.Array ->
+                                queries.EnumerateArray()
+                                |> Seq.forall (fun query -> query.ValueKind = JsonValueKind.String)
+                            | _ -> false
+                        optionalNullableString action "query" && queriesValid
+                    | "openPage" -> optionalNullableString action "url"
+                    | "findInPage" ->
+                        optionalNullableString action "url"
+                        && optionalNullableString action "pattern"
+                    | "other" -> true
+                    | _ -> false
+                | _ -> false
+        | _ -> false
+
+    let private validOptionalWebSearchResults (item: JsonElement) =
+        match item.TryGetProperty "results" with
+        | false, _ -> true
+        | true, results ->
+            results.ValueKind = JsonValueKind.Null
+            || results.ValueKind = JsonValueKind.Array
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -390,6 +427,12 @@ module CodexAppServerContinuity =
                                 && optionalNullableString item "model"
                                 && optionalNullableString item "prompt"
                                 && optionalCollabReasoningEffort item
+                            | _ -> false
+                        | "webSearch" ->
+                            match item.TryGetProperty "query" with
+                            | true, query when query.ValueKind = JsonValueKind.String ->
+                                validOptionalWebSearchAction item
+                                && validOptionalWebSearchResults item
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
