@@ -162,6 +162,9 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                     || markerDescription.InstallationId <> handoffPins.InstallationId
                     || markerDescription.RepositoryId <> handoffPins.RepositoryId
                     || markerDescription.PermissionSha256 <> handoffPins.PermissionSha256
+                    || markerDescription.ClockResourceId <> expectedMarker.ClockResourceId
+                    || markerDescription.ClockArtifactSha256
+                       <> expectedMarker.ClockArtifactSha256
                     || markerDescription.CandidateMayRead || markerDescription.CandidateMayWrite
                     || not markerDescription.AtomicReservationConsumeAndMark
                     || not markerDescription.AtomicExpiryCompare

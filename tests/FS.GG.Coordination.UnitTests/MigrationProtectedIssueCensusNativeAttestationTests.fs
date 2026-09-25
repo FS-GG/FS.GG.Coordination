@@ -24,7 +24,7 @@ let private handoffPins =
       AppId=101L; InstallationId=202L; RepositoryId=42L
       PermissionSha256=String.replicate 64 "4" }
 
-let private fixture () =
+let private fixtureWithMarkerClock markerClockResource markerClockArtifact =
     use signer = ECDsa.Create(ECCurve.NamedCurves.nistP256)
     let publicBytes = signer.ExportSubjectPublicKeyInfo()
     let pins =
@@ -54,8 +54,8 @@ let private fixture () =
           VaultResourceId=handoffPins.VaultResourceId
           ExpectedStoreHeadSha256=String.replicate 64 "5"
           ExpectedJournalHeadSha256=String.replicate 64 "6"
-          ClockResourceId=pins.ClockResourceId
-          ClockArtifactSha256=pins.ClockArtifactSha256
+          ClockResourceId=markerClockResource
+          ClockArtifactSha256=markerClockArtifact
           SignedExpiresAtUtc=issued.AddSeconds 60 }
     let record =
         { Request=marker; ProviderAttemptId=marker.NativeAttemptId
@@ -88,16 +88,20 @@ let private fixture () =
         { unsignedAttestation with SignatureBase64=Convert.ToBase64String signature }
     pins, marker, snapshot, signed, issued.AddSeconds 10
 
+let private fixture () =
+    fixtureWithMarkerClock "protected-clock:native-test" (String.replicate 64 "b")
+
 let private verify pins marker snapshot attestation now =
     MigrationProtectedIssueCensusNativeAttestation.verify
         pins marker snapshot attestation
         (Some (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
 
-let private inspectSigned (pins: ProtectedIssueCensusNativeAttestationPins)
-                          (marker: ProtectedIssueCensusHandoffRequest)
-                          (snapshot: ProtectedIssueCensusNativeAttemptSnapshot)
-                          (attestation: ProtectedIssueCensusNativeSnapshotAttestation option)
-                          (now: DateTimeOffset) =
+let private inspectSignedWithHandoffClock (pins: ProtectedIssueCensusNativeAttestationPins)
+                                          (marker: ProtectedIssueCensusHandoffRequest)
+                                          (snapshot: ProtectedIssueCensusNativeAttemptSnapshot)
+                                          (attestation: ProtectedIssueCensusNativeSnapshotAttestation option)
+                                          (now: DateTimeOffset)
+                                          handoffClockResource handoffClockArtifact =
     let nativePins: ProtectedIssueCensusNativeAttemptPins =
         { AttemptResourceId=pins.NativeAttemptResourceId
           AttemptArtifactSha256=pins.NativeAttemptArtifactSha256 }
@@ -111,8 +115,8 @@ let private inspectSigned (pins: ProtectedIssueCensusNativeAttestationPins)
                   NativeAttemptNamespaceId=handoffPins.NativeAttemptNamespaceId
                   ReleaseResourceId="protected-release:native-test"
                   ReleaseArtifactSha256=String.replicate 64 "a"
-                  ClockResourceId=pins.ClockResourceId
-                  ClockArtifactSha256=pins.ClockArtifactSha256
+                  ClockResourceId=handoffClockResource
+                  ClockArtifactSha256=handoffClockArtifact
                   AppId=handoffPins.AppId
                   InstallationId=handoffPins.InstallationId
                   RepositoryId=handoffPins.RepositoryId
@@ -137,6 +141,10 @@ let private inspectSigned (pins: ProtectedIssueCensusNativeAttestationPins)
         pins attestation
         (Some (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
         handoffPins nativePins marker (Some handoff) (Some native)
+
+let private inspectSigned pins marker snapshot attestation now =
+    inspectSignedWithHandoffClock pins marker snapshot attestation now
+        pins.ClockResourceId pins.ClockArtifactSha256
 
 [<Fact>]
 let ``native snapshot verifier accepts exact fake signed complete snapshot`` () =
@@ -205,3 +213,28 @@ let ``signed recovery qualifies exactly the snapshot it classifies`` () =
     let changed = { unsignedChanged with Head=changedHead }
     Assert.Equal(Error "protected-native-attestation-binding",
                  inspectSigned pins marker changed (Some attestation) now)
+
+[<Fact>]
+let ``signed recovery refuses marker from a foreign clock despite matching signed snapshot`` () =
+    let pins, marker, snapshot, attestation, now =
+        fixtureWithMarkerClock "protected-clock:foreign" (String.replicate 64 "0")
+    Assert.Equal(Error "protected-native-attestation-binding",
+                 verify pins marker snapshot (Some attestation) now)
+    Assert.Equal(Error "protected-native-attestation-binding",
+                 inspectSigned pins marker snapshot (Some attestation) now)
+    let pins, marker, snapshot, attestation, now =
+        fixtureWithMarkerClock pins.ClockResourceId (String.replicate 64 "0")
+    Assert.Equal(Error "protected-native-attestation-binding",
+                 verify pins marker snapshot (Some attestation) now)
+    Assert.Equal(Error "protected-native-attestation-binding",
+                 inspectSigned pins marker snapshot (Some attestation) now)
+
+[<Fact>]
+let ``signed recovery refuses drifted handoff clock description`` () =
+    let pins, marker, snapshot, attestation, now = fixture ()
+    Assert.Equal(Error "protected-census-attempt-installation",
+                 inspectSignedWithHandoffClock pins marker snapshot (Some attestation) now
+                     "protected-clock:foreign" (String.replicate 64 "0"))
+    Assert.Equal(Error "protected-census-attempt-installation",
+                 inspectSignedWithHandoffClock pins marker snapshot (Some attestation) now
+                     pins.ClockResourceId (String.replicate 64 "0"))
