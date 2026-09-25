@@ -103,6 +103,33 @@ class MintProofHandoffTests(unittest.TestCase):
         self.write(changed)
         self.assert_refused_before_gh(self.run_live())
 
+    def test_missing_token_refuses_before_provider_without_secret_output(self):
+        self.environment.pop("FSGG_SANDBOX_TOKEN")
+        result = self.run_live()
+        self.assert_refused_before_gh(result)
+        self.assertNotIn(str(self.path), result.stdout + result.stderr)
+
+    def test_unexpected_proof_field_and_invalid_extra_level_refuse(self):
+        changed = proof()
+        changed["token"] = TOKEN
+        self.write(changed)
+        self.assert_refused_before_gh(self.run_live())
+        changed = proof()
+        changed["permissions"]["metadata"] = "admin"
+        self.write(changed)
+        self.assert_refused_before_gh(self.run_live())
+
+    def test_installation_selection_and_hash_shape_refuse(self):
+        for key, value in (("installationId", 0),
+                           ("repositorySelection", "all"),
+                           ("mintResponseSha256", "bad"),
+                           ("viewerResponseSha256", "bad")):
+            with self.subTest(key=key):
+                changed = proof()
+                changed[key] = value
+                self.write(changed)
+                self.assert_refused_before_gh(self.run_live())
+
     def test_foreign_app_or_actor_refuses_before_provider(self):
         for key, value in (("appId", 4166419), ("appSlug", "other-app"),
                            ("actor", {"login": "EHotwagner", "databaseId": 1645484})):

@@ -19,6 +19,9 @@ REPOSITORY = {"id": 1353050537, "nodeId": "R_kgDOUKXpqQ",
               "fullName": "FS-GG/FS.GG.GitHub.Substrate.Sandbox"}
 GRANTS = {"administration": "write", "contents": "write", "issues": "write",
           "pull_requests": "write", "organization_projects": "write"}
+PROOF_FIELDS = {"schema", "appId", "appSlug", "actor", "installationId",
+                "repositorySelection", "repository", "permissions", "expiresAt",
+                "tokenSha256", "mintResponseSha256", "viewerResponseSha256"}
 HEX_SHA256 = re.compile(r"[0-9a-f]{64}\Z")
 MAX_BYTES = 64 * 1024
 
@@ -61,6 +64,9 @@ def read_proof(path: str) -> dict:
 def verify(proof: dict, token: str, now: dt.datetime) -> None:
     require(type(token) is str and len(token) > 20 and token.isascii()
             and not any(character.isspace() for character in token), "missing-token")
+    # The protected host emits a fixed sanitized projection. Unknown members can
+    # accidentally carry a credential into the candidate's evidence directory.
+    require(set(proof) == PROOF_FIELDS, "proof-fields")
     require(proof.get("schema") == SCHEMA, "schema")
     require(type(proof.get("appId")) is int and proof["appId"] == 4166418,
             "app-id")
@@ -74,7 +80,7 @@ def verify(proof: dict, token: str, now: dt.datetime) -> None:
     grants = proof.get("permissions")
     require(type(grants) is dict and all(grants.get(name) == level
                                         for name, level in GRANTS.items()), "grants")
-    require(all(type(name) is str and type(level) is str
+    require(all(type(name) is str and level in ("read", "write")
                 and (level != "write" or name in GRANTS)
                 for name, level in grants.items()), "extra-grant")
     for name in ("mintResponseSha256", "viewerResponseSha256", "tokenSha256"):
