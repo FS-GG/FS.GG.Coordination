@@ -114,6 +114,25 @@ let private claimPins =
     { JournalResourceId="protected-claim-journal:fixture"
       JournalArtifactSha256=String.replicate 64 "e" }
 
+let private storeHeadPins =
+    { StoreResourceId="protected-store:fixture"
+      StoreArtifactSha256=String.replicate 64 "f" }
+
+let private storeHeadDescription =
+    { StoreResourceId=storeHeadPins.StoreResourceId
+      StoreArtifactSha256=storeHeadPins.StoreArtifactSha256
+      CandidateMayRead=false; CandidateMayWrite=false; ImmutableHead=true }
+
+let private storeHead =
+    { Selection=selection; StoreResourceId=storeHeadPins.StoreResourceId
+      Generation=7L; CorpusSha256=String.replicate 64 "d"
+      HeadSha256=String.replicate 64 "a" }
+
+let private storePort head =
+    { new IProtectedIssueCensusStoreHeadPort with
+        member _.Describe() = storeHeadDescription
+        member _.ReadHead _ = Some head }
+
 let private claimDescription =
     { JournalResourceId=claimPins.JournalResourceId
       JournalArtifactSha256=claimPins.JournalArtifactSha256
@@ -130,8 +149,95 @@ let private committedRecord request =
 
 let private verifyAndClaim pins proof attestation now port =
     MigrationProtectedIssueCensusClaim.verifyAndClaim
-        pins claimPins selection "protected-store:fixture" proof 7L
-        (Some attestation) (Some (clock pins.ClockResourceId now)) port
+        pins claimPins storeHeadPins selection "protected-store:fixture" proof 7L
+        (Some attestation) (Some (clock pins.ClockResourceId now))
+        (Some (storePort storeHead)) port
+
+[<Fact>]
+let ``protected census claim refuses signed stale store head before journal CAS`` () =
+    let pins, proof, attestation, now = fixture ()
+    let mutable attempts = 0
+    let journal =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
+            member _.ClaimOnce _ = attempts <- attempts + 1; ClaimUnknown
+            member _.ReadClaim _ = None }
+    let result =
+        MigrationProtectedIssueCensusClaim.verifyAndClaim
+            pins claimPins storeHeadPins selection "protected-store:fixture" proof 7L
+            (Some attestation) (Some (clock pins.ClockResourceId now))
+            (Some (storePort { storeHead with Generation=8L })) (Some journal)
+    Assert.Equal(Error "protected-census-store-head", result)
+    Assert.Equal(0, attempts)
+
+[<Fact>]
+let ``protected census claim refuses foreign missing and candidate-readable store head`` () =
+    let pins, proof, attestation, now = fixture ()
+    let mutable attempts = 0
+    let journal =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
+            member _.ClaimOnce _ = attempts <- attempts + 1; ClaimUnknown
+            member _.ReadClaim _ = None }
+    let invoke store =
+        MigrationProtectedIssueCensusClaim.verifyAndClaim
+            pins claimPins storeHeadPins selection "protected-store:fixture" proof 7L
+            (Some attestation) (Some (clock pins.ClockResourceId now)) store (Some journal)
+    Assert.Equal(Error "protected-census-store-unavailable", invoke None)
+    let foreign = storePort { storeHead with Selection={ selection with RunNonce="other" } }
+    Assert.Equal(Error "protected-census-store-head", invoke (Some foreign))
+    let otherCorpus = storePort { storeHead with CorpusSha256=String.replicate 64 "0" }
+    Assert.Equal(Error "protected-census-store-head", invoke (Some otherCorpus))
+    let missing =
+        { new IProtectedIssueCensusStoreHeadPort with
+            member _.Describe() = storeHeadDescription
+            member _.ReadHead _ = None }
+    Assert.Equal(Error "protected-census-store-unknown", invoke (Some missing))
+    let crashed =
+        { new IProtectedIssueCensusStoreHeadPort with
+            member _.Describe() = storeHeadDescription
+            member _.ReadHead _ = failwith "lost protected readback" }
+    Assert.Equal(Error "protected-census-store-unknown", invoke (Some crashed))
+    let candidateReadable =
+        { new IProtectedIssueCensusStoreHeadPort with
+            member _.Describe() = { storeHeadDescription with CandidateMayRead=true }
+            member _.ReadHead _ = failwith "must refuse before read" }
+    Assert.Equal(Error "protected-census-store-installation", invoke (Some candidateReadable))
+    Assert.Equal(0, attempts)
+
+[<Fact>]
+let ``protected census claim refuses store head drift after durable journal claim`` () =
+    let pins, proof, attestation, now = fixture ()
+    let mutable request: ProtectedIssueCensusClaimRequest option = None
+    let mutable storeReads = 0
+    let store =
+        { new IProtectedIssueCensusStoreHeadPort with
+            member _.Describe() = storeHeadDescription
+            member _.ReadHead _ =
+                storeReads <- storeReads + 1
+                if storeReads = 1 then Some storeHead
+                else Some { storeHead with HeadSha256=String.replicate 64 "b" } }
+    let journal =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() =
+                match request with
+                | None -> Some initialHead
+                | Some value ->
+                    Some { initialHead with Generation=1L
+                                            SealSha256=(committedRecord value).CommitHeadSha256 }
+            member _.ClaimOnce value = request <- Some value; ClaimCommitted
+            member _.ReadClaim _ = request |> Option.map committedRecord }
+    let result =
+        MigrationProtectedIssueCensusClaim.verifyAndClaim
+            pins claimPins storeHeadPins selection "protected-store:fixture" proof 7L
+            (Some attestation) (Some (clock pins.ClockResourceId now))
+            (Some store) (Some journal)
+    Assert.Equal(Error "protected-census-store-head", result)
+    Assert.Equal(2, storeReads)
+    Assert.True(request.IsSome)
 
 [<Fact>]
 let ``protected census attestation claim refuses duplicate signed handoff`` () =
