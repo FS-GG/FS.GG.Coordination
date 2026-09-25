@@ -76,6 +76,15 @@ bindings. The mapper has no current-session event hook, authenticated assignment
 start or continuity journal, publisher, or applied Host receipt. Its output is
 structural evidence only and is not an installed producer.
 
+The dormant [`DirectSessionCorrelationHandoff`](../../src/FS.GG.Coordination.Orchestration.Execution.Codex/DirectSessionCorrelationHandoff.fs)
+defines separate interfaces for an owner-approved assignment and a supported
+current-session turn source. Its pure gate requires the expected workspace/item
+scope, native session ID, prospective window challenge and thread to agree before
+mapping usage. The interfaces have no trusted implementation or challenge issuer;
+an arbitrary caller can still fabricate both records. Production qualification
+must establish independent source and assignment authentication, prospective
+challenge issuance, start and sequence continuity, and Host application.
+
 ## Capability and evidence handoff
 
 The missing interface is a supported, authenticated event stream for the
