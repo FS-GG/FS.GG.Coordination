@@ -177,6 +177,19 @@ class GitTreeWitnessTests(unittest.TestCase):
         self.refuses(lambda _p, _b, _s, g, _i: g.scopes[1].__setitem__("repositoryId", 78))
         self.refuses(lambda _p, _b, _s, g, _i: g.objects.clear())
 
+    def test_same_scope_object_mutated_during_git_read_refuses(self):
+        preflight, blobs, selection, port, identity = fixture()
+        shared = copy.deepcopy(port.scopes[0])
+        port.scope = lambda: shared
+        original_read = port.read_commit
+        def drift(oid):
+            raw = original_read(oid)
+            shared["credentialId"] = "f" * 64
+            return raw
+        port.read_commit = drift
+        with self.assertRaises(witness.Refused):
+            witness.qualify(preflight, blobs, port, identity, selection, NOW)
+
     def test_independent_repository_identity_and_object_format_refuse(self):
         self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("objectFormat", "sha256"))
         self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("repositoryId", 78))
