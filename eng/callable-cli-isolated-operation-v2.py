@@ -348,11 +348,16 @@ class NativeReadAdapter:
         listed = self._open_pulls(expected.repository)
         selected: list[dict] = []
         seen: set[int] = set()
+        seen_nodes: set[str] = set()
         for item in listed:
             number = item.get("number") if type(item) is dict else None
-            if type(number) is not int or number <= 0 or number in seen:
+            node_id = item.get("node_id") if type(item) is dict else None
+            if (type(number) is not int or number <= 0 or number in seen
+                    or type(node_id) is not str or not node_id
+                    or node_id in seen_nodes):
                 raise Refused("native-pull-list-identity")
             seen.add(number)
+            seen_nodes.add(node_id)
             status, _, detail = self._get(f"repos/{expected.repository}/pulls/{number}")
             if (status != 200 or type(detail) is not dict
                     or detail.get("number") != number):
