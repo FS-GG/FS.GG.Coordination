@@ -198,6 +198,11 @@ def qualify(source_port: IntegratedSourcePort,
             blobs["builderSource"], blobs["nativeSource"])
     except Exception:
         raise Refused("release-byte-check") from None
+    checked = _exact(checked, {"schema", "verified", "authorized", "canDispatch"},
+                     "release-byte-check")
+    if (checked["schema"] != "fsgg.coordination.callable-isolated-v2-effect-byte-check/1"
+            or checked["verified"] is not True):
+        raise Refused("release-byte-check")
     if checked["authorized"] is not False or checked["canDispatch"] is not False:
         raise Refused("release-authority-closed")
     if (_scope(source_port, "source", now) != source_scope
