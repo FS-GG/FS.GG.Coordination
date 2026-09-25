@@ -30,6 +30,7 @@ def packet():
             "operatorSha256": "c" * 64, "controlsSha256": "d" * 64,
             "effectArchiveSha256": "e" * 64, "workflowRevision": "f" * 40,
             "workflowPath": candidate.WORKFLOW_PATH, "workflowSha256": "1" * 64,
+            "producerRunId": 99, "artifactId": 100, "producerActorId": 98,
         },
         "runtime": {
             "runnerImage": "ghcr.io/fs-gg/isolated-v2@sha256:" + "2" * 64,
@@ -98,6 +99,9 @@ class EffectCandidateTests(unittest.TestCase):
             ("source", "effectArchiveSha256", "b" * 64),
             ("source", "workflowRevision", "b" * 40),
             ("source", "workflowSha256", "b" * 64),
+            ("source", "producerRunId", 201),
+            ("source", "artifactId", 202),
+            ("source", "producerActorId", 203),
             ("runtime", "runnerImage", "ghcr.io/fs-gg/other@sha256:" + "2" * 64),
             ("runtime", "imageAttestationSha256", "b" * 64),
             ("runtime", "interpreterSha256", "b" * 64),
