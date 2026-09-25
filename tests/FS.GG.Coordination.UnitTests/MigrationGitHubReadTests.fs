@@ -789,6 +789,17 @@ let ``repository ruleset detail refuses duplicate raw ref name condition`` () =
                      (FakeTransport [ repo; ok Map.empty $"[{row}]"; ok Map.empty detail ]))
 
 [<Fact>]
+let ``repository ruleset detail refuses duplicate nested rule parameter`` () =
+    let row = rulesetSummary 91 "main" (Some "branch") "active"
+    let source = rulesetDetail 91 "main" "branch"
+    let detail =
+        source.Replace("\"rules\":[{\"type\":\"required_signatures\"}]",
+                       "\"rules\":[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"build\",\"context\":\"bypass\"}]}}]")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:context"),
+                 MigrationGitHubRead.readRepositoryBranchTagRulesets options
+                     (FakeTransport [ repo; ok Map.empty $"[{row}]"; ok Map.empty detail ]))
+
+[<Fact>]
 let ``repository rulesets refuse incomplete pages and provider failures`` () =
     let row = rulesetSummary 91 "main" (Some "branch") "active"
     let next = "https://api.github.test/repos/FS-GG/copy/rulesets?per_page=100&page=2&includes_parents=true"

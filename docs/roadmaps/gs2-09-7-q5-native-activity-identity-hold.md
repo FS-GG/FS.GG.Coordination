@@ -141,6 +141,12 @@ or tag target set. It was red before the repair. `rulesetConditions` now
 refuses duplicate members in `conditions` before parsing `ref_name` itself.
 This remains partial settings readback, not complete native authority.
 
+A twentieth independent control found a repository ruleset rule could retain
+ambiguous nested `parameters.required_status_checks[].context` members while
+only its parameter root was checked. It was red before the repair.
+`rulesetRule` now refuses duplicate members recursively within `parameters`
+before retaining their raw JSON. Native installed ruleset proof remains held.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
