@@ -544,6 +544,28 @@ class VersionedReadbackTests(unittest.TestCase):
             expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_repository_dot_segments_refuse_before_native_callbacks(self):
+        for repository in ("../disposable", "./disposable",
+                           "FS-GG/..", "FS-GG/."):
+            for kind in ("pull", "protection"):
+                with self.subTest(repository=repository, kind=kind):
+                    original = pull_expected() if kind == "pull" else protection_expected()
+                    expected = dataclasses.replace(original, repository=repository)
+                    calls = []
+
+                    class Transport:
+                        def request(self, method, path, body=None):
+                            calls.append((method, path))
+                            raise OSError("no-native-request-allowed")
+
+                    def reserve(_key):
+                        calls.append(("reserve", ""))
+                        return True
+
+                    runner = operator.run_pull_once if kind == "pull" else operator.run_protection_once
+                    self.assert_unknown(runner(expected, Transport(), reserve))
+                    self.assertEqual(calls, [])
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
