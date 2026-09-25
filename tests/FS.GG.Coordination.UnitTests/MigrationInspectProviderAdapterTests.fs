@@ -136,6 +136,52 @@ let ``issue adapter refuses duplicate raw repository identity members`` () =
                      MigrationInspectProviderAdapter.bindIssues options population changedCalls)
 
 [<Fact>]
+let ``issue adapter independently refuses duplicate census identities`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let second = """{"number":2,"id":102,"node_id":"ISSUE_2","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+    let body = $"[{issueBody.TrimStart('[').TrimEnd(']')},{second}]"
+    let population, calls = readIssues [ repository; reply body ]
+    let digest (value: string) =
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
+    let cases: (string * string * (MigrationIssueRecord -> MigrationIssueRecord)) list =
+        [ "\"node_id\":\"ISSUE_2\"", "\"node_id\":\"ISSUE_1\"", (fun item -> { item with NodeId="ISSUE_1" })
+          "\"id\":102", "\"id\":101", (fun item -> { item with DatabaseId=101L })
+          "\"number\":2", "\"number\":1", (fun item -> { item with Number=1 }) ]
+    for needle, replacement, change in cases do
+        let changedBody = body.Replace(needle, replacement)
+        let changedSecond = second.Replace(needle, replacement)
+        let item = change population.Issues.[1]
+        let item = { item with PayloadJson=changedSecond; PayloadSha256=digest changedSecond }
+        let changedPopulation =
+            { population with Issues=[ population.Issues.Head; item ]
+                              Pages=[ { population.Pages.Head with PayloadSha256=digest changedBody } ] }
+        let changedCalls =
+            calls |> List.mapi (fun index (request, outcome) ->
+                if index = 1 then request, reply changedBody else request, outcome)
+        Assert.Equal(Error "issue-duplicate-identity",
+                     MigrationInspectProviderAdapter.bindIssues options changedPopulation changedCalls)
+
+[<Fact>]
+let ``issue adapter independently refuses PR marker duplicates and overlap`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let population, calls = readIssues [ repository; reply issueBody ]
+    let digest (value: string) =
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
+    for markers, numbers in
+        [ """{"number":1,"pull_request":{}}""", [ 1 ]
+          """{"number":3,"pull_request":{}},{"number":3,"pull_request":{}}""", [ 3; 3 ] ] do
+        let body = issueBody.TrimEnd(']') + "," + markers + "]"
+        let changedPopulation =
+            { population with PullRequestCount=numbers.Length
+                              PullRequestMarkerNumbers=numbers
+                              Pages=[ { population.Pages.Head with PayloadSha256=digest body } ] }
+        let changedCalls =
+            calls |> List.mapi (fun index (request, outcome) ->
+                if index = 1 then request, reply body else request, outcome)
+        Assert.Equal(Error "issue-duplicate-identity",
+                     MigrationInspectProviderAdapter.bindIssues options changedPopulation changedCalls)
+
+[<Fact>]
 let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
     let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
     let extra =

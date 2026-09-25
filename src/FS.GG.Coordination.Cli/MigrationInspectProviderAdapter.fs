@@ -238,8 +238,20 @@ module MigrationInspectProviderAdapter =
                                 |> List.map (fun item ->
                                     item.Number, item.DatabaseId, item.NodeId, item.State,
                                     item.UpdatedAt, item.PayloadJson)
+                            let issueNumbers = rawRecords |> List.map (fun (number, _, _, _, _, _) -> number)
+                            let databaseIds = rawRecords |> List.map (fun (_, databaseId, _, _, _, _) -> databaseId)
+                            let nodeIds = rawRecords |> List.map (fun (_, _, nodeId, _, _, _) -> nodeId)
+                            let issueNumberSet = Set.ofList issueNumbers
+                            let uniqueCensus =
+                                issueNumbers.Length = issueNumberSet.Count
+                                && databaseIds.Length = (databaseIds |> Set.ofList |> Set.count)
+                                && nodeIds.Length = (nodeIds |> Set.ofList |> Set.count)
+                                && rawPullRequestNumbers.Length = (rawPullRequestNumbers |> Set.ofList |> Set.count)
+                                && (rawPullRequestNumbers |> List.forall (fun number ->
+                                    not (Set.contains number issueNumberSet)))
                             if rawPullRequestNumbers.Length <> population.PullRequestCount then Error "issue-pr-count"
                             elif rawPullRequestNumbers <> population.PullRequestMarkerNumbers then Error "issue-pr-markers"
+                            elif not uniqueCensus then Error "issue-duplicate-identity"
                             elif rawRecords <> typedRecords then Error "issue-raw-typed-mismatch"
                             else
                                 let pages =
