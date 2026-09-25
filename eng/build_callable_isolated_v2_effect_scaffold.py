@@ -15,7 +15,7 @@ ARCHIVE_NAME = "fsgg-callable-isolated-v2-effect-scaffold.pyz"
 MANIFEST = "work/fsc07-isolated-operator-v2/effect-scaffold-manifest.json"
 WORKFLOW = ".github/workflows/callable-isolated-v2-execute.yml"
 NATIVE_SOURCE = "eng/callable-cli-isolated-operation-v2.py"
-NATIVE_SOURCE_SHA256 = "deaf6fdd9d466128f6bf54729fb0e59514bebef04cc4bdc6fd4d56dae65b1a64"
+NATIVE_SOURCE_SHA256 = "125f06550788b4b6cc6416e3644ea1e31ea0124aeee93ef9d0ac8cb196c13b14"
 MEMBERS = {
     "__main__.py": "eng/callable_isolated_v2_effect_entry.py",
     "callable_isolated_v2_effect_closed.py":

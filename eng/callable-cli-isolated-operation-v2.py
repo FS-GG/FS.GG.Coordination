@@ -357,6 +357,12 @@ class NativeReadAdapter:
             if (status != 200 or type(detail) is not dict
                     or detail.get("number") != number):
                 raise Refused("native-pull-detail-identity")
+            for row in (item, detail):
+                if (row.get("state") != "open"
+                        or type(row.get("draft")) is not bool
+                        or ("merged" in row and row["merged"] is not False)
+                        or ("merged_at" in row and row["merged_at"] is not None)):
+                    raise Refused("native-open-pull-row-state")
             if (("url" in item) != ("url" in detail)
                     or ("url" in detail and
                         (type(detail["url"]) is not str
