@@ -326,3 +326,73 @@ let ``signed native order witness refuses crossed receipts duplicate and altered
                  verifySignedOrdered pin publicKey signature orderBinding
                      { witness with Steps=witness.Steps |> List.updateAt 4 relabeled }
                      expected selected completed claims finalEpoch)
+
+let private nativeBytes (selected: GitHubRollbackPlan) (claims: GitHubRollbackStepProvenanceClaim list)
+    (witness: GitHubRollbackNativeOrderWitness) : GitHubRollbackNativeByteBatch =
+    let steps =
+        (selected.Steps, List.zip claims witness.Steps)
+        ||> List.map2 (fun step (claim, order) ->
+            let name = step.TargetIdentity.Substring("target:".Length)
+            { StepId=step.StepId; TargetIdentity=step.TargetIdentity
+              NativeRevision=claim.NativeRevision; NativeReadOrdinal=order.NativeReadOrdinal
+              RawResponse=Encoding.UTF8.GetBytes($"native:{step.StepId}")
+              CanonicalState=Encoding.UTF8.GetBytes($"captured:{name}") })
+    { Steps=steps
+      Terminal={ EpochResourceId=orderBinding.EpochResourceId
+                 NativeRevision="epoch-revision:9"
+                 NativeReadOrdinal=witness.Terminal.NativeReadOrdinal
+                 RawResponse=Encoding.UTF8.GetBytes("native:epoch")
+                 CanonicalEpoch=Encoding.UTF8.GetBytes($"OperatingV1\n{selected.Seal}\ntrue\ntrue") } }
+
+[<Fact>]
+let ``signed native custody binds retained bytes and canonical state to selected read`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    let witness = orderWitness selected completed
+    let native = nativeBytes selected claims witness
+    use signer = RSA.Create()
+    signer.KeySize <- 3072
+    let publicKey = signer.ExportSubjectPublicKeyInfo()
+    let pin = publicKey |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let payload = payloadForCustodySigning orderBinding witness native expected selected completed claims finalEpoch |> get
+    let signature = signer.SignData(payload, HashAlgorithmName.SHA256, RSASignaturePadding.Pss)
+    Assert.Equal(Ok(), verifySignedCustody pin publicKey signature orderBinding witness native expected selected completed claims finalEpoch)
+    let alteredRaw = { native.Steps[2] with RawResponse=Encoding.UTF8.GetBytes("other-native-response") }
+    Assert.Equal(Error [ InvalidObserverSignature ],
+                 verifySignedCustody pin publicKey signature orderBinding witness
+                     { native with Steps=native.Steps |> List.updateAt 2 alteredRaw }
+                     expected selected completed claims finalEpoch)
+    let alteredTerminal = { native.Terminal with RawResponse=Encoding.UTF8.GetBytes("other-epoch-response") }
+    Assert.Equal(Error [ InvalidObserverSignature ],
+                 verifySignedCustody pin publicKey signature orderBinding witness
+                     { native with Terminal=alteredTerminal }
+                     expected selected completed claims finalEpoch)
+
+[<Fact>]
+let ``native custody refuses missing duplicate foreign revision and unmatching canonical bytes`` () =
+    let selected = plan "accepted-rollback"
+    let completed = receipts selected false
+    let claims = provenance selected completed
+    let finalEpoch = terminal selected.Seal completed
+    let expected = binding selected.Seal
+    let witness = orderWitness selected completed
+    let native = nativeBytes selected claims witness
+    let prove batch =
+        payloadForCustodySigning orderBinding witness batch expected selected completed claims finalEpoch
+    Assert.Equal(Error [ RawEvidenceMismatch ], prove { native with Steps=native.Steps |> List.take 4 })
+    Assert.Equal(Error [ RawEvidenceMismatch ],
+                 prove { native with Steps=native.Steps |> List.updateAt 4 native.Steps[3] })
+    let foreignRevision = { native.Steps[1] with NativeRevision="revision:foreign" }
+    Assert.Equal(Error [ RawEvidenceMismatch ],
+                 prove { native with Steps=native.Steps |> List.updateAt 1 foreignRevision })
+    let wrongCanonical = { native.Steps[0] with CanonicalState=Encoding.UTF8.GetBytes("wrong-state") }
+    Assert.Equal(Error [ RawEvidenceMismatch ],
+                 prove { native with Steps=native.Steps |> List.updateAt 0 wrongCanonical })
+    let emptyRaw = { native.Steps[0] with RawResponse=Array.empty }
+    Assert.Equal(Error [ InvalidRawEvidence ],
+                 prove { native with Steps=native.Steps |> List.updateAt 0 emptyRaw })
+    let wrongEpoch = { native.Terminal with CanonicalEpoch=Encoding.UTF8.GetBytes("OpenV2") }
+    Assert.Equal(Error [ RawEvidenceMismatch ], prove { native with Terminal=wrongEpoch })

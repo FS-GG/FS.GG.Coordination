@@ -14,6 +14,8 @@ type GitHubRollbackSignatureFailure =
     | InvalidExpectedOrderBinding
     | OrderWitnessMismatch
     | InvalidObservationOrder
+    | InvalidRawEvidence
+    | RawEvidenceMismatch
 
 type GitHubRollbackExpectedOrderBinding =
     { SandboxResourceId: string
@@ -42,6 +44,25 @@ type GitHubRollbackNativeOrderWitness =
       WitnessGeneration: int64
       Steps: GitHubRollbackStepOrderWitness list
       Terminal: GitHubRollbackTerminalOrderWitness }
+
+type GitHubRollbackStepNativeBytes =
+    { StepId: string
+      TargetIdentity: string
+      NativeRevision: string
+      NativeReadOrdinal: int64
+      RawResponse: byte[]
+      CanonicalState: byte[] }
+
+type GitHubRollbackTerminalNativeBytes =
+    { EpochResourceId: string
+      NativeRevision: string
+      NativeReadOrdinal: int64
+      RawResponse: byte[]
+      CanonicalEpoch: byte[] }
+
+type GitHubRollbackNativeByteBatch =
+    { Steps: GitHubRollbackStepNativeBytes list
+      Terminal: GitHubRollbackTerminalNativeBytes }
 
 module GitHubRollbackReadbackSignature =
     let private exactAtom (value: string) =
@@ -222,3 +243,71 @@ module GitHubRollbackReadbackSignature =
         (terminal: GitHubRollbackEpochProvenanceClaim) =
         verifyPinnedPayload pinnedSpkiSha256 publicKeySpki signature
             (fun () -> payloadForOrderedSigning expectedOrder witness expected plan receipts claims terminal)
+
+    let private sha256Hex (bytes: byte[]) =
+        (SHA256.HashData(bytes) |> Convert.ToHexString).ToLowerInvariant()
+
+    let private canonicalEpochBytes (epoch: GitHubRollbackEpochClaim) =
+        String.concat "\n"
+            [ epoch.Phase; epoch.PlanSeal
+              if epoch.Complete then "true" else "false"
+              if epoch.Authorized then "true" else "false" ]
+        |> Encoding.UTF8.GetBytes
+
+    let payloadForCustodySigning (expectedOrder: GitHubRollbackExpectedOrderBinding)
+        (witness: GitHubRollbackNativeOrderWitness) (native: GitHubRollbackNativeByteBatch)
+        (expected: GitHubRollbackExpectedReadbackBinding) (plan: GitHubRollbackPlan)
+        (receipts: GitHubRollbackReceipt list) (claims: GitHubRollbackStepProvenanceClaim list)
+        (terminal: GitHubRollbackEpochProvenanceClaim) =
+        match payloadForOrderedSigning expectedOrder witness expected plan receipts claims terminal with
+        | Error failures -> Error failures
+        | Ok orderedPayload ->
+            if native.Steps.Length <> witness.Steps.Length then
+                Error [ RawEvidenceMismatch ]
+            elif native.Steps |> List.exists (fun step ->
+                    isNull step.RawResponse || step.RawResponse.Length = 0
+                    || isNull step.CanonicalState || step.CanonicalState.Length = 0)
+                 || isNull native.Terminal.RawResponse || native.Terminal.RawResponse.Length = 0
+                 || isNull native.Terminal.CanonicalEpoch || native.Terminal.CanonicalEpoch.Length = 0 then
+                Error [ InvalidRawEvidence ]
+            elif (List.zip3 witness.Steps claims native.Steps
+                  |> List.exists (fun (order, claim, bytes) ->
+                      bytes.StepId <> order.StepId
+                      || bytes.TargetIdentity <> order.TargetIdentity
+                      || bytes.NativeRevision <> claim.NativeRevision
+                      || bytes.NativeReadOrdinal <> order.NativeReadOrdinal
+                      || sha256Hex bytes.CanonicalState <> claim.Readback.StateSha256))
+                 || native.Terminal.EpochResourceId <> witness.Terminal.EpochResourceId
+                 || native.Terminal.NativeRevision <> terminal.NativeRevision
+                 || native.Terminal.NativeReadOrdinal <> witness.Terminal.NativeReadOrdinal
+                 || native.Terminal.CanonicalEpoch <> canonicalEpochBytes terminal.Epoch then
+                Error [ RawEvidenceMismatch ]
+            else
+                use stream = new MemoryStream()
+                use writer = new BinaryWriter(stream, Encoding.UTF8, true)
+                atom writer "fsgg.gs2-09.7.q6-native-byte-custody/v1"
+                writer.Write(orderedPayload.Length)
+                writer.Write(orderedPayload)
+                integer writer native.Steps.Length
+                for step in native.Steps do
+                    atom writer step.StepId
+                    atom writer step.TargetIdentity
+                    atom writer step.NativeRevision
+                    writer.Write(step.NativeReadOrdinal)
+                    atom writer (sha256Hex step.RawResponse)
+                    atom writer (sha256Hex step.CanonicalState)
+                atom writer native.Terminal.EpochResourceId
+                atom writer native.Terminal.NativeRevision
+                writer.Write(native.Terminal.NativeReadOrdinal)
+                atom writer (sha256Hex native.Terminal.RawResponse)
+                atom writer (sha256Hex native.Terminal.CanonicalEpoch)
+                writer.Flush()
+                Ok(stream.ToArray())
+
+    let verifySignedCustody pinnedSpkiSha256 (publicKeySpki: byte[]) (signature: byte[])
+        (expectedOrder: GitHubRollbackExpectedOrderBinding) (witness: GitHubRollbackNativeOrderWitness)
+        (native: GitHubRollbackNativeByteBatch) (expected: GitHubRollbackExpectedReadbackBinding)
+        (plan: GitHubRollbackPlan) (receipts: GitHubRollbackReceipt list)
+        (claims: GitHubRollbackStepProvenanceClaim list) (terminal: GitHubRollbackEpochProvenanceClaim) =
+        verifyPinnedPayload pinnedSpkiSha256 publicKeySpki signature
+            (fun () -> payloadForCustodySigning expectedOrder witness native expected plan receipts claims terminal)

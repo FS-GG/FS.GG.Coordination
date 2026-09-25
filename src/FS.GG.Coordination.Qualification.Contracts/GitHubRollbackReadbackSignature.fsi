@@ -8,6 +8,8 @@ type GitHubRollbackSignatureFailure =
     | InvalidExpectedOrderBinding
     | OrderWitnessMismatch
     | InvalidObservationOrder
+    | InvalidRawEvidence
+    | RawEvidenceMismatch
 
 type GitHubRollbackExpectedOrderBinding =
     { SandboxResourceId: string
@@ -37,6 +39,25 @@ type GitHubRollbackNativeOrderWitness =
       Steps: GitHubRollbackStepOrderWitness list
       Terminal: GitHubRollbackTerminalOrderWitness }
 
+type GitHubRollbackStepNativeBytes =
+    { StepId: string
+      TargetIdentity: string
+      NativeRevision: string
+      NativeReadOrdinal: int64
+      RawResponse: byte[]
+      CanonicalState: byte[] }
+
+type GitHubRollbackTerminalNativeBytes =
+    { EpochResourceId: string
+      NativeRevision: string
+      NativeReadOrdinal: int64
+      RawResponse: byte[]
+      CanonicalEpoch: byte[] }
+
+type GitHubRollbackNativeByteBatch =
+    { Steps: GitHubRollbackStepNativeBytes list
+      Terminal: GitHubRollbackTerminalNativeBytes }
+
 module GitHubRollbackReadbackSignature =
     val payloadForSigning:
         expected:GitHubRollbackExpectedReadbackBinding -> plan:GitHubRollbackPlan ->
@@ -58,3 +79,16 @@ module GitHubRollbackReadbackSignature =
         expected:GitHubRollbackExpectedReadbackBinding -> plan:GitHubRollbackPlan ->
         receipts:GitHubRollbackReceipt list -> claims:GitHubRollbackStepProvenanceClaim list ->
         terminal:GitHubRollbackEpochProvenanceClaim -> Result<unit, GitHubRollbackSignatureFailure list>
+    val payloadForCustodySigning:
+        expectedOrder:GitHubRollbackExpectedOrderBinding -> witness:GitHubRollbackNativeOrderWitness ->
+        native:GitHubRollbackNativeByteBatch -> expected:GitHubRollbackExpectedReadbackBinding ->
+        plan:GitHubRollbackPlan -> receipts:GitHubRollbackReceipt list ->
+        claims:GitHubRollbackStepProvenanceClaim list -> terminal:GitHubRollbackEpochProvenanceClaim ->
+        Result<byte[], GitHubRollbackSignatureFailure list>
+    val verifySignedCustody:
+        pinnedSpkiSha256:string -> publicKeySpki:byte[] -> signature:byte[] ->
+        expectedOrder:GitHubRollbackExpectedOrderBinding -> witness:GitHubRollbackNativeOrderWitness ->
+        native:GitHubRollbackNativeByteBatch -> expected:GitHubRollbackExpectedReadbackBinding ->
+        plan:GitHubRollbackPlan -> receipts:GitHubRollbackReceipt list ->
+        claims:GitHubRollbackStepProvenanceClaim list -> terminal:GitHubRollbackEpochProvenanceClaim ->
+        Result<unit, GitHubRollbackSignatureFailure list>
