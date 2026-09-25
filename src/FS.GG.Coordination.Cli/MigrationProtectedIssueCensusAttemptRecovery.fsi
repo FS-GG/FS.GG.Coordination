@@ -53,6 +53,10 @@ type IProtectedIssueCensusNativeAttemptPort =
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusAttemptRecovery =
+    /// Unsigned canonical commitment over the complete native snapshot bytes.
+    val expectedSnapshotSealSha256:
+        snapshot:ProtectedIssueCensusNativeAttemptSnapshot -> string
+
     /// Every successful classification is still a hold; no provider retry or token action.
     val inspect:
         handoffPins:ProtectedIssueCensusHandoffPins ->
