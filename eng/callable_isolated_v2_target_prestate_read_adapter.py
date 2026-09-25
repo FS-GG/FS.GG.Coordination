@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import importlib.util
@@ -86,7 +87,7 @@ def _scope(port: NativeReadPort, target: dict[str, Any],
                                         "pull_requests": "read"}
             or _time(value["expiresAt"]) <= now):
         raise Refused("prestate-scope-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 class _GetOnly:

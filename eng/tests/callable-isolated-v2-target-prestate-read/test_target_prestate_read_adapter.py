@@ -225,6 +225,22 @@ class PrestateTests(unittest.TestCase):
                 selected, 101, 1, NOW).observe_prestate()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_prestate_reader_scope_mutated_at_final_read_refuses(self):
+        selected, scope, emitted, witness = fixture()
+        transport = FakeTransport(scope, emitted)
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "8" * 64
+            return shared
+        transport.scope = reused_scope
+        with self.assertRaises(prestate.Refused):
+            prestate.CompleteTargetPrestateAdapter(
+                transport, FakeWitness(witness), selected, 101, 1, NOW
+            ).observe_prestate()
+
     def test_boolean_witness_numeric_id_alias_refuses(self):
         for field in ("installationId", "repositoryId"):
             with self.subTest(field=field):
