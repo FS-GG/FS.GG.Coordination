@@ -94,6 +94,9 @@ type CodexAppServerContinuityTests() =
             ("[{\"id\":\"item-1\",\"type\":\"subAgentActivity\"" + fields + "}]")
     let withTurnFields (bytes: byte array) fields =
         replace bytes "\"items\":[]" ("\"items\":[]" + fields)
+    let failedWithCodexErrorInfo info =
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        withTurnFields failed (",\"error\":{\"message\":\"x\",\"codexErrorInfo\":" + info + "}")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -234,6 +237,65 @@ type CodexAppServerContinuityTests() =
             TerminalObserved("completed", 0),
             status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed ",\"error\":null")))
         )
+
+    [<Fact>]
+    member _.``codex error info refuses foreign union variants``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for info in
+            [ "true"
+              "17"
+              "\"foreign\""
+              "{}"
+              "{\"httpConnectionFailed\":{},\"responseStreamDisconnected\":{}}"
+              "{\"httpConnectionFailed\":{},\"extra\":true}"
+              "{\"httpConnectionFailed\":{},\"httpConnectionFailed\":{}}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``codex error HTTP subtype requires nullable uint16 status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for payload in
+            [ "null"
+              "{\"httpStatusCode\":-1}"
+              "{\"httpStatusCode\":65536}"
+              "{\"httpStatusCode\":\"503\"}"
+              "{\"httpStatusCode\":200,\"httpStatusCode\":503}" ] do
+            let info = "{\"responseStreamDisconnected\":" + payload + "}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``codex error active turn subtype requires known turn kind``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for payload in [ "{}"; "{\"turnKind\":null}"; "{\"turnKind\":\"foreign\"}" ] do
+            let info = "{\"activeTurnNotSteerable\":" + payload + "}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``codex error info schema variants retain failed terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for info in
+            [ "null"
+              "\"contextWindowExceeded\""
+              "\"other\""
+              "{\"httpConnectionFailed\":{}}"
+              "{\"responseStreamConnectionFailed\":{\"httpStatusCode\":null}}"
+              "{\"responseStreamDisconnected\":{\"httpStatusCode\":0}}"
+              "{\"responseTooManyFailedAttempts\":{\"httpStatusCode\":65535}}"
+              "{\"activeTurnNotSteerable\":{\"turnKind\":\"review\"}}"
+              "{\"activeTurnNotSteerable\":{\"turnKind\":\"compact\"}}" ] do
+            Assert.Equal(
+                TerminalObserved("failed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
 
     [<Fact>]
     member _.``subscription refuses wrong workspace item turn and transport``() =

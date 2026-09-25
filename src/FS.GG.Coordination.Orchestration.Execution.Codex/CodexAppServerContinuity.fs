@@ -468,6 +468,45 @@ module CodexAppServerContinuity =
                     && variantValid
                 | _ -> false
 
+    let private validOptionalCodexErrorInfo (error: JsonElement) =
+        match error.TryGetProperty "codexErrorInfo" with
+        | false, _ -> true
+        | true, info when info.ValueKind = JsonValueKind.Null -> true
+        | true, info when info.ValueKind = JsonValueKind.String ->
+            Set.contains (info.GetString())
+                (set [ "contextWindowExceeded"; "sessionBudgetExceeded"; "usageLimitExceeded";
+                       "rateLimitExceeded"; "serverOverloaded"; "cyberPolicy";
+                       "misalignmentPolicyViolation"; "internalServerError"; "unauthorized";
+                       "badRequest"; "threadRollbackFailed"; "sandboxError"; "other" ])
+        | true, info when info.ValueKind = JsonValueKind.Object ->
+            match info.EnumerateObject() |> Seq.toList with
+            | [ variant ] when variant.Value.ValueKind = JsonValueKind.Object ->
+                let detail = variant.Value
+                let names = detail.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                if names.Length <> (names |> Set.ofList |> Set.count) then false
+                else
+                    match variant.Name with
+                    | "httpConnectionFailed"
+                    | "responseStreamConnectionFailed"
+                    | "responseStreamDisconnected"
+                    | "responseTooManyFailedAttempts" ->
+                        match detail.TryGetProperty "httpStatusCode" with
+                        | false, _ -> true
+                        | true, status when status.ValueKind = JsonValueKind.Null -> true
+                        | true, status when status.ValueKind = JsonValueKind.Number ->
+                            match status.TryGetInt32() with
+                            | true, number -> number >= 0 && number <= 65535
+                            | _ -> false
+                        | _ -> false
+                    | "activeTurnNotSteerable" ->
+                        match detail.TryGetProperty "turnKind" with
+                        | true, kind when kind.ValueKind = JsonValueKind.String ->
+                            Set.contains (kind.GetString()) (set [ "review"; "compact" ])
+                        | _ -> false
+                    | _ -> false
+            | _ -> false
+        | _ -> false
+
     let private validOptionalTurnError (turn: JsonElement) =
         match turn.TryGetProperty "error" with
         | false, _ -> true
@@ -479,6 +518,7 @@ module CodexAppServerContinuity =
                 match error.TryGetProperty "message" with
                 | true, message when message.ValueKind = JsonValueKind.String ->
                     optionalNullableString error "additionalDetails"
+                    && validOptionalCodexErrorInfo error
                 | _ -> false
         | _ -> false
 
