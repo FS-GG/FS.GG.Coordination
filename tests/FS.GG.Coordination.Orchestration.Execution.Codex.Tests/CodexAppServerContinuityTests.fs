@@ -63,6 +63,9 @@ type CodexAppServerContinuityTests() =
         completedWithItems
             ("[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\""
              + fields + "}]")
+    let completedWithFileChange fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"fileChange\"" + fields + "}]")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -375,6 +378,66 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``file change item requires changes collection and schema status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"status\":\"completed\""
+              ",\"changes\":null,\"status\":\"completed\""
+              ",\"changes\":[],\"status\":null"
+              ",\"changes\":[],\"status\":\"foreign\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``file change entries require string diff path and typed kind``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for change in
+            [ "{}"
+              "{\"diff\":null,\"path\":\"a\",\"kind\":{\"type\":\"add\"}}"
+              "{\"diff\":\"+a\",\"path\":1,\"kind\":{\"type\":\"add\"}}"
+              "{\"diff\":\"+a\",\"path\":\"a\",\"kind\":null}" ] do
+            let fields = ",\"changes\":[" + change + "],\"status\":\"completed\""
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``file change kind refuses missing foreign and duplicate discriminator``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for kind in
+            [ "{}"
+              "{\"type\":\"foreign\"}"
+              "{\"type\":\"add\",\"type\":\"delete\"}"
+              "{\"type\":\"update\",\"move_path\":17}" ] do
+            let fields =
+                ",\"changes\":[{\"diff\":\"+a\",\"path\":\"a\",\"kind\":"
+                + kind + "}],\"status\":\"completed\""
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``schema file change kinds and statuses retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for kind in
+            [ "{\"type\":\"add\"}"
+              "{\"type\":\"delete\"}"
+              "{\"type\":\"update\"}"
+              "{\"type\":\"update\",\"move_path\":null}"
+              "{\"type\":\"update\",\"move_path\":\"b\"}" ] do
+            let fields =
+                ",\"changes\":[{\"diff\":\"+a\",\"path\":\"a\",\"kind\":"
+                + kind + "}],\"status\":\"completed\""
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
             )
 
     [<Fact>]
