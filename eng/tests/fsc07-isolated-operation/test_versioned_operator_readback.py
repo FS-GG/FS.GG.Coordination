@@ -463,6 +463,38 @@ class VersionedReadbackTests(unittest.TestCase):
             expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_native_protection_refuses_terminal_policy_type_alias(self):
+        for field in ("strict", "admin-enabled", "check-app-id"):
+            with self.subTest(field=field):
+                events = protection_read_events(
+                    protected=True, policy=protection_observed().policy)
+                terminal = events[7]["response"]["json"]
+                if field == "strict":
+                    terminal["required_status_checks"]["strict"] = 1
+                elif field == "admin-enabled":
+                    terminal["enforce_admins"]["enabled"] = 0
+                else:
+                    terminal["required_status_checks"]["checks"][0]["app_id"] = 17.0
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events * 2))
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    protection_expected(),
+                    lambda: reader.read_protection(protection_expected())))
+
+    def test_lost_response_terminal_policy_type_alias_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        post[7]["response"]["json"]["required_status_checks"]["strict"] = 1
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
