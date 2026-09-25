@@ -362,7 +362,8 @@ class NativeReadAdapter:
         if (status != 200 or type(branch_body) is not dict
                 or branch_body.get("name") != branch
                 or type(commit) is not dict or commit.get("sha") != sha
-                or type(branch_body.get("protected")) is not bool):
+                or type(branch_body.get("protected")) is not bool
+                or not _branch_protection_url_matches(branch_body, expected)):
             raise Refused("native-branch-identity")
         status, _, policy = self._get(f"{branch_path}/protection")
         protected = branch_body["protected"]
@@ -380,7 +381,8 @@ class NativeReadAdapter:
                 or terminal_branch.get("name") != branch
                 or type(terminal_commit) is not dict
                 or terminal_commit.get("sha") != sha
-                or terminal_branch.get("protected") is not protected):
+                or terminal_branch.get("protected") is not protected
+                or not _branch_protection_url_matches(terminal_branch, expected)):
             raise Refused("native-protection-terminal-branch-drift")
         terminal_policy_status, _, terminal_policy = self._get(f"{branch_path}/protection")
         if terminal_policy_status != status or terminal_policy != policy:
@@ -649,12 +651,23 @@ def _disabled(value: object) -> bool:
     return value is False or (type(value) is dict and value == {"enabled": False})
 
 
+def _protection_url(expected: ExpectedProtection) -> str:
+    branch = urllib.parse.quote(expected.branch, safe="/")
+    return (f"https://api.github.com/repos/{expected.repository}/"
+            f"branches/{branch}/protection")
+
+
+def _branch_protection_url_matches(branch: object, expected: ExpectedProtection) -> bool:
+    return (type(branch) is dict and
+            ("protection_url" not in branch or
+             (type(branch["protection_url"]) is str and
+              branch["protection_url"] == _protection_url(expected))))
+
+
 def _protection_urls_match(policy: object, expected: ExpectedProtection) -> bool:
     if type(policy) is not dict:
         return False
-    branch = urllib.parse.quote(expected.branch, safe="/")
-    root = (f"https://api.github.com/repos/{expected.repository}/"
-            f"branches/{branch}/protection")
+    root = _protection_url(expected)
     checks = policy.get("required_status_checks")
     if ("url" in policy and
             (type(policy["url"]) is not str or policy["url"] != root)):
