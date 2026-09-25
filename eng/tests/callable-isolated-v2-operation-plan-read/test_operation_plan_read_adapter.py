@@ -210,6 +210,21 @@ class OperationPlanTests(unittest.TestCase):
                 FakeSeal(seal), *envelopes, 500, "f" * 64, NOW).observe_operation_plan()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_plan_reader_scope_mutated_at_final_read_refuses(self):
+        envelopes, prepared, scope, seal = fixture()
+        port = FakePort(canonical(prepared), scope)
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "a" * 64
+            return shared
+        port.scope = reused_scope
+        with self.assertRaises(plan.Refused):
+            plan.OperationPlanReadAdapter(port, FakeSeal(seal), *envelopes,
+                500, "f" * 64, NOW).observe_operation_plan()
+
 
 if __name__ == "__main__":
     unittest.main()

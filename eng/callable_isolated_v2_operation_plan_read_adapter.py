@@ -92,7 +92,7 @@ def _scope(port: PlanReadPort, now: dt.datetime) -> dict[str, Any]:
             or type(value["permissions"]) is not list
             or _time(value["expiresAt"]) <= now):
         raise Refused("plan-reader-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 class OperationPlanReadAdapter:
