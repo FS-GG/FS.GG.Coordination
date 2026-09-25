@@ -809,6 +809,59 @@ let private selectedActions =
     """{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":["FS-GG/*@*"]}"""
 
 [<Fact>]
+let ``rollback selected Actions policy remains partial and brackets repository identity`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedActions =
+        [ "fsgg.gs2-09.7.actions-policy-raw/v1"
+          hash """{"id":42,"full_name":"FS-GG/copy"}"""
+          hash actionsSelected
+          "selected"
+          "https://api.github.test/repositories/42/actions/permissions/selected-actions"
+          hash selectedActions ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty actionsSelected; ok Map.empty selectedActions
+          repo; ok Map.empty actionsSelected; ok Map.empty selectedActions
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedActions options transport with
+    | Error reason -> failwithf "Actions readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedActions, proof.ActionsPolicySha256)
+        Assert.Equal(Some [ "FS-GG/*@*" ], proof.First.PatternsAllowed)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(9, transport.Requests.Length)
+    let changedSelected = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 7 then ok Map.empty (" " + selectedActions) else response))
+    Assert.Equal(Error "changed:actions-policy-raw",
+                 MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedActions options changedSelected)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedActions options changedCore)
+    Assert.Equal(Error "changed:actions-policy-state",
+                 MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responses))
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackActionsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expectedActions options noCalls)
+    Assert.Empty(noCalls.Requests)
+    let missingSelected = FakeTransport (responses |> List.take 4)
+    match MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedActions options missingSelected with
+    | Error _ -> ()
+    | Ok _ -> failwith "missing selected Actions allowlist was accepted"
+
+[<Fact>]
 let ``repository Actions core policy reads only exact identity and policy GETs`` () =
     let transport = FakeTransport [ repo; ok Map.empty actionsAll ]
     match MigrationGitHubRead.readRepositoryActionsPolicy options transport with
