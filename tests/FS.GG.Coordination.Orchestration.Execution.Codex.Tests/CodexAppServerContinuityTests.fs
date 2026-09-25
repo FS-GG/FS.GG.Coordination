@@ -94,6 +94,8 @@ type CodexAppServerContinuityTests() =
             ("[{\"id\":\"item-1\",\"type\":\"subAgentActivity\"" + fields + "}]")
     let withTurnFields (bytes: byte array) fields =
         replace bytes "\"items\":[]" ("\"items\":[]" + fields)
+    let withEmission (bytes: byte array) value =
+        replace bytes "\"params\":" ("\"emittedAtMs\":" + value + ",\"params\":")
     let failedWithCodexErrorInfo info =
         let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
         withTurnFields failed (",\"error\":{\"message\":\"x\",\"codexErrorInfo\":" + info + "}")
@@ -109,6 +111,29 @@ type CodexAppServerContinuityTests() =
         Assert.Equal(InTurn 1, status second)
         let third = CodexAppServerContinuity.apply second (frame 3L completed)
         Assert.Equal(TerminalObserved("completed", 1), status third)
+
+    [<Fact>]
+    member _.``schema emitted timestamp on native notifications preserves continuity``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started "1000"))
+        Assert.Equal(InTurn 0, status first)
+        let second = CodexAppServerContinuity.apply first (frame 2L (withEmission usage "1001"))
+        Assert.Equal(InTurn 1, status second)
+        let third = CodexAppServerContinuity.apply second (frame 3L (withEmission completed "1002"))
+        Assert.Equal(TerminalObserved("completed", 1), status third)
+
+    [<Fact>]
+    member _.``malformed native emitted timestamp refuses start usage and terminal``() =
+        for value in [ "null"; "\"1000\""; "1.5"; "9223372036854775808" ] do
+            let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+            Assert.Equal(
+                ContinuityGap "app-server-continuity-emitted-at-invalid",
+                status (CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started value)))
+            )
+            for payload in [ usage; completed ] do
+                Assert.Equal(
+                    ContinuityGap "app-server-continuity-emitted-at-invalid",
+                    status (CodexAppServerContinuity.apply first (frame 2L (withEmission payload value)))
+                )
 
     [<Fact>]
     member _.``terminal with incomplete native items view cannot close continuity``() =

@@ -41,6 +41,22 @@ type CodexAppServerUsageProjectionTests() =
             Assert.Equal(digest, update.WireSha256)
 
     [<Fact>]
+    member _.``schema emitted timestamp preserves pinned usage projection``() =
+        let bytes = edit "\"params\":" "\"emittedAtMs\":1000,\"params\":"
+        match parse bytes with
+        | Error code -> failwithf "unexpected refusal %s" code
+        | Ok update ->
+            Assert.Equal(100L, update.Cumulative.Input)
+            let digest = SHA256.HashData bytes |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+            Assert.Equal(digest, update.WireSha256)
+
+    [<Fact>]
+    member _.``malformed emitted timestamp refuses pinned usage projection``() =
+        for value in [ "null"; "\"1000\""; "1.5"; "9223372036854775808" ] do
+            refused "app-server-usage-emitted-at-invalid"
+                (parse (edit "\"params\":" ("\"emittedAtMs\":" + value + ",\"params\":")))
+
+    [<Fact>]
     member _.``caller expected thread and turn must match independently``() =
         refused "app-server-usage-identity-mismatch"
             (CodexAppServerUsageProjection.parse "borrowed-thread" "native-turn" fixture)
