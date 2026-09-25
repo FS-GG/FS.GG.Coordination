@@ -168,6 +168,47 @@ class ProducerArtifactTests(unittest.TestCase):
         self.refuses(lambda _p, _t, _s, _r, b: setattr(b, "bundle", b"foreign"))
         self.refuses(lambda _p, _t, _s, r, _b: r.run.__setitem__("artifactIds", []))
 
+    def test_later_artifact_read_cannot_rewrite_earlier_run_actor(self):
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        shared_run = copy.deepcopy(run_port.run)
+        shared_run["actorId"] = 606
+        original_artifact_read = run_port.read_artifact
+
+        def read_run(run_id, attempt):
+            return shared_run
+
+        def read_artifact(artifact_id):
+            shared_run["actorId"] = 303
+            return original_artifact_read(artifact_id)
+
+        run_port.read_run = read_run
+        run_port.read_artifact = read_artifact
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW,
+                             workflow_source=source_result(preflight, selected))
+
+    def test_bundle_read_cannot_rewrite_earlier_artifact_digest(self):
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        shared_artifact = copy.deepcopy(run_port.artifact)
+        original_digest = shared_artifact["digest"]
+        shared_artifact["digest"] = "sha256:" + "f" * 64
+        original_bundle_read = bundle_port.download_bundle
+
+        def read_artifact(artifact_id):
+            return shared_artifact
+
+        def download_bundle(artifact_id, url):
+            shared_artifact["digest"] = original_digest
+            return original_bundle_read(artifact_id, url)
+
+        run_port.read_artifact = read_artifact
+        bundle_port.download_bundle = download_bundle
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW,
+                             workflow_source=source_result(preflight, selected))
+
     def test_reader_custody_preflight_and_time_refuse(self):
         self.refuses(lambda _p, _t, _s, _r, b: b.scopes[0].__setitem__("credentialId", "1" * 64))
         self.refuses(lambda _p, _t, _s, _r, b: b.scopes[1].__setitem__("repositoryId", 78))
