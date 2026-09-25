@@ -328,6 +328,42 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assertIsInstance(operator.classify_protection_after_one_attempt(
             expected, lambda: observed), operator.ExactProtection)
 
+    def test_branch_protection_url_must_name_selected_target(self):
+        expected = protection_expected()
+        policy = protection_observed().policy
+        root = "https://api.github.com/repos/FS-GG/disposable/branches/main/protection"
+        variants = (
+            "https://api.github.com/repos/FS-GG/foreign/branches/main/protection",
+            root.replace("api.github.com", "API.github.com"),
+            root.replace("api.github.com", "api.github.com:443"),
+            root + "?alias=1",
+            root.replace("/main/", "/%6dain/"),
+            17,
+        )
+        for wrong in variants:
+            with self.subTest(wrong=wrong):
+                post = protection_read_events(True, policy)
+                post[2]["response"]["json"]["protection_url"] = wrong
+                post[6]["response"]["json"]["protection_url"] = wrong
+                events = (protection_read_events() * 2 +
+                          [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                                 body=operator.protection_body(expected), error=SENTINEL)] +
+                          post * 2)
+                transport = operator.OfflineTranscriptTransport(events)
+                self.assert_unknown(operator.run_protection_once(
+                    expected, transport, reserve_once_factory()))
+                self.assertEqual(transport.writes, 1)
+        post = protection_read_events(True, policy)
+        post[2]["response"]["json"]["protection_url"] = root
+        post[6]["response"]["json"]["protection_url"] = root
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected), error=SENTINEL)] +
+                  post * 2)
+        result = operator.run_protection_once(
+            expected, operator.OfflineTranscriptTransport(events), reserve_once_factory())
+        self.assertIsInstance(result, operator.ExactProtection)
+
     def test_pull_accepts_only_two_complete_exact_reads(self):
         reads = iter((pull_observed(), pull_observed()))
         result = operator.classify_pull_after_one_attempt(
