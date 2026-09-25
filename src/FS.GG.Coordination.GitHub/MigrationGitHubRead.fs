@@ -1645,7 +1645,7 @@ module MigrationGitHubRead =
                 let parametersJson =
                     if not (element.TryGetProperty("parameters", &parameters)) then Ok None
                     elif parameters.ValueKind = JsonValueKind.Object then
-                        uniqueObjectMembers parameters
+                        uniqueJsonMembers parameters
                         |> Result.map (fun () -> Some(parameters.GetRawText()))
                     else Error(MigrationReadFailure.MalformedResponse "invalid:rule-parameters")
                 parametersJson
