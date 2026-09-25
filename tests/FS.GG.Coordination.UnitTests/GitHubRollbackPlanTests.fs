@@ -54,6 +54,13 @@ let ``resealed plan refuses a sixth repeated domain despite contiguous reverse o
     Assert.Contains(InvalidStepPopulation, withSteps repeated |> refusal)
 
 [<Fact>]
+let ``distinct rollback domains cannot alias one target identity`` () =
+    let aliased = { steps[1] with TargetIdentity=steps[0].TargetIdentity }
+    Assert.NotEqual(steps[0].RestorePayloadSha256, aliased.RestorePayloadSha256)
+    let candidate = steps[0] :: aliased :: (steps |> List.skip 2)
+    Assert.Contains(InvalidStepPopulation, withSteps candidate |> refusal)
+
+[<Fact>]
 let ``two distinct rollback targets cannot share a normalized seal through pipe injection`` () =
     let original = { steps[0] with StepId="unit"; TargetIdentity="left|authority-snapshot|right" }
     let altered = { original with StepId="unit|authority-snapshot|left"; TargetIdentity="right" }

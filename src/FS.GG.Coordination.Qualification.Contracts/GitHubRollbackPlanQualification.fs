@@ -123,7 +123,8 @@ module GitHubRollbackPlanQualification =
           if plan.Steps.IsEmpty
              || (plan.Steps |> List.map _.Order) <> [ plan.Steps.Length .. -1 .. 1 ]
              || (plan.Steps |> List.map _.Domain) <> List.rev requiredDomains
-             || (plan.Steps |> List.map _.StepId |> Set.ofList |> Set.count) <> plan.Steps.Length then InvalidStepPopulation
+             || (plan.Steps |> List.map _.StepId |> Set.ofList |> Set.count) <> plan.Steps.Length
+             || (plan.Steps |> List.map _.TargetIdentity |> Set.ofList |> Set.count) <> plan.Steps.Length then InvalidStepPopulation
           for step in plan.Steps do
               if not (isSealAtom step.StepId) || not (isSealAtom step.TargetIdentity)
                  || not (isSha step.CapturedStateSha256) || not (isSha step.RestorePayloadSha256) then
