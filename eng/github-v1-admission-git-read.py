@@ -121,14 +121,20 @@ def no_duplicate_pairs(pairs):
     return value
 
 
-def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=refs,
-            observed_at: str | None = None) -> dict:
+def _collect(remote: str, read_repository_id, read_refs,
+             observed_at: str | None, installed: bool) -> dict:
     require(read_repository_id() == REPOSITORY_ID, "authority-repository-id")
     before = read_refs(remote)
     head = before.get(CUTOVER_REF)
     require(isinstance(head, str) and OID.fullmatch(head) is not None, "authority-cutover-ref")
     require(not any(ref.startswith(CLAIM_PREFIX) for ref in before), "authority-claim-census-not-empty")
-    require(not any(ref.startswith(OPERATION_PREFIX) for ref in before), "authority-operation-census-not-empty")
+    operation_refs = {ref for ref in before if ref.startswith(OPERATION_PREFIX)}
+    if installed:
+        require(operation_refs == {OPERATION_REF}
+                and OID.fullmatch(before[OPERATION_REF]) is not None,
+                "authority-operation-census-not-installed")
+    else:
+        require(not operation_refs, "authority-operation-census-not-empty")
     tags = {ref: oid for ref, oid in before.items() if ref.startswith(TAG_PREFIX)}
     require(len(tags) == 1, "authority-genesis-tag-census")
 
@@ -174,7 +180,8 @@ def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=re
     if observed_at is None:
         observed_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     return {
-        "schema": "fsgg.v1-admission-genesis-git-read/1",
+        "schema": ("fsgg.v1-admission-operating-git-read/1" if installed
+                   else "fsgg.v1-admission-genesis-git-read/1"),
         "observedAt": observed_at,
         "repository": REPOSITORY,
         "repositoryId": REPOSITORY_ID,
@@ -202,11 +209,28 @@ def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=re
         },
         "operation": {
             "ref": OPERATION_REF,
-            "firstHead": None,
-            "secondHead": None,
-            "observation": "deleted",
+            "firstHead": before[OPERATION_REF] if installed else None,
+            "secondHead": after[OPERATION_REF] if installed else None,
+            "observation": "present" if installed else "deleted",
         },
     }
+
+
+def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=refs,
+            observed_at: str | None = None) -> dict:
+    """Genesis preflight still requires both operation and claim journals absent."""
+    return _collect(remote, read_repository_id, read_refs, observed_at, False)
+
+
+def collect_operating(remote: str = REMOTE, read_repository_id=repository_id,
+                      read_refs=refs, observed_at: str | None = None) -> dict:
+    """Observe an installed admission ref and no unverified claim journals.
+
+    This is a read-only source for NoClaimRequired operations. Claim refs remain
+    a refusal until their complete history is collected and replayed by the
+    typed authority port.
+    """
+    return _collect(remote, read_repository_id, read_refs, observed_at, True)
 
 
 def collect_installed(expected_commit: str, remote: str = REMOTE,
@@ -269,11 +293,14 @@ def collect_installed(expected_commit: str, remote: str = REMOTE,
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=pathlib.Path, required=True)
-    parser.add_argument("--expect-installed-commit")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--expect-installed-commit")
+    mode.add_argument("--operating", action="store_true")
     args = parser.parse_args()
     try:
         value = (collect_installed(args.expect_installed_commit)
-                 if args.expect_installed_commit else collect())
+                 if args.expect_installed_commit else
+                 collect_operating() if args.operating else collect())
         require(not args.output.is_symlink() and not args.output.exists(), "authority-output-exists")
         descriptor = os.open(args.output, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
         with os.fdopen(descriptor, "wb") as output:
@@ -283,6 +310,12 @@ def main() -> int:
                               "authorityHead": value["cutoverFirstHead"],
                               "operationRef": OPERATION_REF,
                               "operationCommit": value["operation"]["commitOid"]},
+                             sort_keys=True, separators=(",", ":")))
+        elif args.operating:
+            print(json.dumps({"schema": "fsgg.v1-admission-operating-git-read-result/1",
+                              "authorityHead": value["cutover"]["commit"],
+                              "operationRef": OPERATION_REF,
+                              "operationHead": value["operation"]["firstHead"]},
                              sort_keys=True, separators=(",", ":")))
         else:
             print(json.dumps({"schema": "fsgg.v1-admission-genesis-git-read-result/1",
