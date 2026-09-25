@@ -83,7 +83,7 @@ module CodexAppServerContinuity =
             let text = value.GetString()
             if boundedText text then Ok text else Error code
 
-    let private validTurnItemIdentity (item: JsonElement) =
+    let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
             let names = item.EnumerateObject() |> Seq.map _.Name |> Seq.toList
@@ -93,8 +93,17 @@ module CodexAppServerContinuity =
                 | (true, id), (true, itemType) when
                     id.ValueKind = JsonValueKind.String
                     && itemType.ValueKind = JsonValueKind.String ->
+                    let typeName = itemType.GetString()
+                    let variantValid =
+                        match typeName with
+                        | "agentMessage" ->
+                            match item.TryGetProperty "text" with
+                            | true, text -> text.ValueKind = JsonValueKind.String
+                            | _ -> false
+                        | _ -> true
                     boundedText (id.GetString())
-                    && Set.contains (itemType.GetString()) supportedItemTypes
+                    && Set.contains typeName supportedItemTypes
+                    && variantValid
                 | _ -> false
 
     let private parseTurn expectedThread expectedTurn methodName (parameters: JsonElement) =
@@ -117,7 +126,7 @@ module CodexAppServerContinuity =
                     Error "app-server-turn-shape-invalid"
                 | Ok () when
                     turn.GetProperty("items").EnumerateArray()
-                    |> Seq.exists (validTurnItemIdentity >> not) ->
+                    |> Seq.exists (validTurnItem >> not) ->
                     Error "app-server-turn-item-invalid"
                 | Ok () ->
                     match
