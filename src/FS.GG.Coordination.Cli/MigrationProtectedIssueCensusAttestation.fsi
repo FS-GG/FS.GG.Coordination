@@ -7,7 +7,15 @@ type ProtectedIssueCensusAttestationPins =
       SignerPublicKeySha256: string
       SignerArtifactSha256: string
       ClockResourceId: string
+      ClockArtifactSha256: string
       MaximumAgeSeconds: int }
+
+type ProtectedIssueCensusClockDescription =
+    { ClockResourceId: string
+      ClockArtifactSha256: string
+      CandidateMayRead: bool
+      CandidateMayWrite: bool
+      MonotonicUtc: bool }
 
 type ProtectedIssueCensusSealAttestation =
     { Selection: ProtectedIssueCensusSelection
@@ -19,7 +27,9 @@ type ProtectedIssueCensusSealAttestation =
       SignatureBase64: string }
 
 type IProtectedIssueCensusClockPort =
-    abstract Describe: unit -> string
+    /// The installed description must be pinned and candidate-inaccessible;
+    /// source-only fake descriptions do not prove host custody or monotonicity.
+    abstract Describe: unit -> ProtectedIssueCensusClockDescription
     abstract ReadNow: unit -> DateTimeOffset option
 
 [<RequireQualifiedAccess>]

@@ -14,6 +14,7 @@ type ProtectedIssueCensusReleaseDescription =
       JournalResourceId: string
       JournalArtifactSha256: string
       ClockResourceId: string
+      ClockArtifactSha256: string
       SignerPublicKeySha256: string
       SignerArtifactSha256: string
       CandidateMayRead: bool
@@ -27,6 +28,7 @@ type ProtectedIssueCensusReleaseRequest =
       ClaimId: string
       AttestationPayloadSha256: string
       ClockResourceId: string
+      ClockArtifactSha256: string
       SignerPublicKeySha256: string
       SignerArtifactSha256: string
       SignedIssuedAtUtc: DateTimeOffset
