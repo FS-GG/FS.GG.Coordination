@@ -1370,6 +1370,21 @@ let ``issue comment stream refuses unavailable body and uncensused source`` () =
                  MigrationGitHubRead.readIssueComments options (issueCensus ()) 99 noRequests)
     Assert.Empty(noRequests.Requests)
 
+[<Fact>]
+let ``issue comment stream refuses duplicate raw subject body and actor members`` () =
+    let record = issueComment 301 "COMMENT_301" 1
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readIssueComments options (issueCensus ()) 1
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    let subject = "https://api.github.test/repos/FS-GG/copy/issues/1"
+    let foreign = "https://api.github.test/repos/FS-GG/copy/issues/2"
+    check (record.Replace($"\"issue_url\":\"{subject}\"",
+                          $"\"issue_url\":\"{subject}\",\"issue_url\":\"{foreign}\"")) "issue_url"
+    check (record.Replace("\"body\":\"fsgg:claim payload\"",
+                          "\"body\":\"fsgg:claim payload\",\"body\":\"other claim\"")) "body"
+    check (record.Replace("\"login\":\"reviewer\"", "\"login\":\"reviewer\",\"login\":\"other\"")) "login"
+
 let private issueEvent id nodeId kind =
     $"""{{"id":{id},"node_id":"{nodeId}","event":"{kind}","created_at":"2026-09-23T10:00:00Z","actor":null}}"""
 
