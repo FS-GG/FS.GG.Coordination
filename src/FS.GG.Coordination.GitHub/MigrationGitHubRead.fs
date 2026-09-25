@@ -649,7 +649,7 @@ module MigrationGitHubRead =
                 result |> Result.bind (fun () -> uniqueJsonMembers value)) (Ok())
         | _ -> Ok()
 
-    let private parseUniqueRelationResponse body =
+    let private parseUniqueGraphQLResponse body =
         parse body
         |> Result.bind (fun document ->
             match uniqueJsonMembers document.RootElement with
@@ -2442,7 +2442,7 @@ module MigrationGitHubRead =
                         GraphQL { Uri=options.GraphQLUri; Document=issueTypeQuery; Variables=variables
                                   Headers=headers options.Token options.UserAgent; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2573,7 +2573,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parseUniqueRelationResponse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2643,7 +2643,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parseUniqueRelationResponse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
