@@ -63,6 +63,13 @@ The fake store tests retention and one winner under concurrent append attempts. 
 recovery reader, authenticated live transport or current-session source is installed, so this
 contract does not prove upstream notification completeness or session capture.
 
+`CodexAppServerJournalRecovery` verifies a future store-issued sealed snapshot against the separately
+bound subscription. It checks the declared count and head, every predecessor and ordinal, the
+immutable frame digest, and the reducer's event order. Its result is either a provisional terminal
+status or an explicit gap; it never produces completed-turn usage. The read port requires an
+authenticated, transactionally complete seal. No seal issuer, trusted recovery source, or durable
+store implementation is installed. A supplied JSON file cannot establish journal completeness.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
