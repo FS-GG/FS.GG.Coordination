@@ -263,6 +263,36 @@ module CodexAppServerContinuity =
             content.EnumerateArray() |> Seq.forall validDynamicToolContentItem
         | _ -> false
 
+    let private validCollabAgentStates (states: JsonElement) =
+        if states.ValueKind <> JsonValueKind.Object then false
+        else
+            let names = states.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                states.EnumerateObject()
+                |> Seq.forall (fun entry ->
+                    let state = entry.Value
+                    if state.ValueKind <> JsonValueKind.Object then false
+                    else
+                        let stateNames = state.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                        if stateNames.Length <> (stateNames |> Set.ofList |> Set.count) then false
+                        else
+                            match state.TryGetProperty "status" with
+                            | true, agentStatus when agentStatus.ValueKind = JsonValueKind.String ->
+                                Set.contains (agentStatus.GetString())
+                                    (set [ "pendingInit"; "running"; "interrupted"; "completed";
+                                           "errored"; "shutdown"; "notFound" ])
+                                && optionalNullableString state "message"
+                            | _ -> false)
+
+    let private optionalCollabReasoningEffort (item: JsonElement) =
+        match item.TryGetProperty "reasoningEffort" with
+        | false, _ -> true
+        | true, effort when effort.ValueKind = JsonValueKind.Null -> true
+        | true, effort when effort.ValueKind = JsonValueKind.String ->
+            effort.GetString().Length > 0
+        | _ -> false
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -338,6 +368,28 @@ module CodexAppServerContinuity =
                                 && optionalNullableBoolean item "success"
                                 && optionalNullableInt64 item "durationMs"
                                 && validOptionalDynamicContentItems item
+                            | _ -> false
+                        | "collabAgentToolCall" ->
+                            match item.TryGetProperty "agentsStates", item.TryGetProperty "receiverThreadIds",
+                                  item.TryGetProperty "senderThreadId", item.TryGetProperty "status",
+                                  item.TryGetProperty "tool" with
+                            | (true, states), (true, receivers), (true, sender), (true, status), (true, tool) ->
+                                validCollabAgentStates states
+                                && receivers.ValueKind = JsonValueKind.Array
+                                && (receivers.EnumerateArray()
+                                    |> Seq.forall (fun receiver -> receiver.ValueKind = JsonValueKind.String))
+                                && sender.ValueKind = JsonValueKind.String
+                                && status.ValueKind = JsonValueKind.String
+                                && Set.contains (status.GetString())
+                                    (set [ "inProgress"; "completed"; "failed"; "interrupted" ])
+                                && tool.ValueKind = JsonValueKind.String
+                                && Set.contains (tool.GetString())
+                                    (set [ "spawnAgent"; "sendInput"; "resumeAgent"; "wait";
+                                           "closeAgent"; "sendMessage"; "followupTask";
+                                           "interruptAgent"; "listAgents" ])
+                                && optionalNullableString item "model"
+                                && optionalNullableString item "prompt"
+                                && optionalCollabReasoningEffort item
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
