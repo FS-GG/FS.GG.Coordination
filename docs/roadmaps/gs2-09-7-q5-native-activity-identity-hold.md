@@ -116,6 +116,12 @@ accept duplicate raw content `__typename`, repository `databaseId` or
 `readProjectItems` now checks recursive member uniqueness before interpreting
 item identity, content or pagination. This remains partial project evidence.
 
+A sixteenth independent control found the project field GraphQL reader could
+accept duplicate raw `dataType`, option `name` or `hasNextPage` members into
+typed schema evidence. It was red before the repair. `readProjectFields` now
+checks recursive member uniqueness before interpreting fields, options or
+pagination. This remains partial project authority evidence.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
