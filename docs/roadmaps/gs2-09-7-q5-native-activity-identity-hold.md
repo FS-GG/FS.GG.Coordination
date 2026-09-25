@@ -163,6 +163,14 @@ the page digest was supplied. It was red before the repair. The adapter now
 refuses duplicate JSON members recursively before extracting issue rows or
 PR marker numbers. This does not establish candidate-inaccessible capture.
 
+A twenty-third independent control found the raw-to-typed project adapter
+could accept captured item and field pages with duplicate `hasNextPage`
+members while the typed population stayed unchanged. Both controls were red
+before the repair. The adapter now checks recursive JSON member uniqueness
+before interpreting project item, field or value pages. This remains a
+source-only precursor; captured-page provenance and complete native inspect
+authority are unproven.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
