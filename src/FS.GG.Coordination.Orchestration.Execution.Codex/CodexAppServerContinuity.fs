@@ -41,7 +41,7 @@ type CodexAppServerContinuityState =
             Binding: CodexAppServerSubscriptionBinding
             NextOrdinal: int64
             Status: CodexAppServerContinuityStatus
-            LastCumulative: CodexAppServerTokenCounts option
+            LastUsage: CodexAppServerUsageUpdate option
             UsageHashes: Set<string>
         }
 
@@ -683,7 +683,7 @@ module CodexAppServerContinuity =
                     { Binding = binding
                       NextOrdinal = 1L
                       Status = AwaitingStart
-                      LastCumulative = None
+                      LastUsage = None
                       UsageHashes = Set.empty }
 
     let status state = state.Status
@@ -716,14 +716,19 @@ module CodexAppServerContinuity =
                     Set.contains usage.WireSha256 state.UsageHashes ->
                     gap "app-server-continuity-usage-duplicate" state
                 | InTurn count, NativeUsageUpdated usage when
-                    state.LastCumulative
-                    |> Option.exists (fun prior -> not (cumulativeAtLeast usage.Cumulative prior)) ->
+                    state.LastUsage
+                    |> Option.exists (fun prior ->
+                        prior.Last = usage.Last && prior.Cumulative = usage.Cumulative) ->
+                    gap "app-server-continuity-usage-duplicate" state
+                | InTurn count, NativeUsageUpdated usage when
+                    state.LastUsage
+                    |> Option.exists (fun prior -> not (cumulativeAtLeast usage.Cumulative prior.Cumulative)) ->
                     gap "app-server-continuity-usage-regressed" state
                 | InTurn count, NativeUsageUpdated usage ->
                     { state with
                         Status = InTurn(count + 1)
                         NextOrdinal = state.NextOrdinal + 1L
-                        LastCumulative = Some usage.Cumulative
+                        LastUsage = Some usage
                         UsageHashes = Set.add usage.WireSha256 state.UsageHashes }
                 | InTurn count, NativeTurnTerminal terminal ->
                     { state with

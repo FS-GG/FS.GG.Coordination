@@ -1077,6 +1077,31 @@ type CodexAppServerContinuityTests() =
         )
 
     [<Fact>]
+    member _.``same native usage snapshot with different wire whitespace refuses duplicate``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        let reserialized =
+            replace usage "\"method\":\"thread/tokenUsage/updated\""
+                "\"method\": \"thread/tokenUsage/updated\""
+        Assert.NotEqual<byte array>(usage, reserialized)
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-usage-duplicate",
+            status (CodexAppServerContinuity.apply second (frame 3L reserialized))
+        )
+
+    [<Fact>]
+    member _.``progressed native cumulative usage remains a second update``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        let progressed =
+            replace usage "\"inputTokens\":100" "\"inputTokens\":101"
+            |> fun bytes -> replace bytes "\"totalTokens\":140" "\"totalTokens\":141"
+        Assert.Equal(
+            InTurn 2,
+            status (CodexAppServerContinuity.apply second (frame 3L progressed))
+        )
+
+    [<Fact>]
     member _.``terminal without usage stays explicit and disconnect before terminal is a gap``() =
         let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
         let noUsage = CodexAppServerContinuity.apply first (frame 2L completed)
