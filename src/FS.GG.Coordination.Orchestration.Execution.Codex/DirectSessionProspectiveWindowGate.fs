@@ -118,7 +118,7 @@ module DirectSessionProspectiveWindowGate =
                         Error "direct-session-window-source-substitution"
                     | Ok observation when
                         not (utc observation.ObservedAt)
-                        || observation.ObservedAt < issued.IssuedAt
+                        || observation.ObservedAt <= issued.IssuedAt
                         || observation.ObservedAt > now
                         || observation.ObservedAt >= issued.ExpiresAt
                         ->
