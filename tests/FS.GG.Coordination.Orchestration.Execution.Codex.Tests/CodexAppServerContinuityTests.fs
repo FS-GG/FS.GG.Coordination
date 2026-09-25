@@ -66,6 +66,9 @@ type CodexAppServerContinuityTests() =
     let completedWithFileChange fields =
         completedWithItems
             ("[{\"id\":\"item-1\",\"type\":\"fileChange\"" + fields + "}]")
+    let completedWithMcpToolCall fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"mcpToolCall\"" + fields + "}]")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -438,6 +441,47 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool call requires arguments server tool and status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"server\":\"s\",\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool call server tool and status require schema types``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"arguments\":{},\"server\":null,\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":17,\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":\"declined\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":null" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool call accepts schema statuses and unconstrained arguments``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for arguments, callStatus in
+            [ "null", "inProgress"
+              "[]", "completed"
+              "{\"q\":1}", "failed" ] do
+            let fields =
+                ",\"arguments\":" + arguments
+                + ",\"server\":\"s\",\"tool\":\"t\",\"status\":\"" + callStatus + "\""
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
             )
 
     [<Fact>]
