@@ -182,9 +182,9 @@ def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
             selection: dict[str, Any],
             now: dt.datetime) -> TreeWitnessResult:
     """Bind exact selected source bytes to raw Git objects; never authorize."""
-    selection = _exact(selection, {"repositoryId", "identityEventId",
+    selection = dict(_exact(selection, {"repositoryId", "identityEventId",
         "sourceReaderPrincipalId", "sourceReaderCredentialId"},
-        "git-selection-shape")
+        "git-selection-shape"))
     if (type(preflight) is not release.PreflightResult
             or preflight.schema != release.RESULT_SCHEMA
             or preflight.authorized is not False

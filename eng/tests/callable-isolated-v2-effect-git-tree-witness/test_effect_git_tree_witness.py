@@ -215,6 +215,22 @@ class GitTreeWitnessTests(unittest.TestCase):
         self.refuses(lambda _p, _b, _s, _g, i: i.scopes[0].__setitem__("permissions", ["metadata:write"]))
         self.refuses(lambda _p, _b, _s, _g, i: i.record.__setitem__("principalId", "git-reader"))
 
+    def test_final_identity_scope_cannot_replace_selected_event(self):
+        preflight, blobs, selection, port, identity = fixture()
+        original_scope = identity.scope
+        reads = [0]
+
+        def scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                selection["identityEventId"] = 809
+            return original_scope()
+
+        identity.scope = scope
+        result = witness.qualify(preflight, blobs, port, identity,
+                                 selection, NOW)
+        self.assertEqual(result.identity_event_id, 808)
+
 
 def git_objects_read_order(port):
     # A stable blob key suffices to independently mutate one returned object.
