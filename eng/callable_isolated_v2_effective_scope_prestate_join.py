@@ -123,6 +123,7 @@ class EffectiveScopePrestateJoin:
         scope_before = _scope(self.metadata, self.now)
         try:
             observed = self.prestate.observe_prestate()
+            observed = copy.deepcopy(observed)
         except Exception:
             raise Refused("effective-prestate-unavailable") from None
         observed = _exact(observed, {"schema", "complete", "principalId",
