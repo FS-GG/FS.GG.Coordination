@@ -97,6 +97,9 @@ type CodexAppServerContinuityTests() =
     let failedWithCodexErrorInfo info =
         let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
         withTurnFields failed (",\"error\":{\"message\":\"x\",\"codexErrorInfo\":" + info + "}")
+    let failedWithMisalignment misalignment =
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        withTurnFields failed (",\"error\":{\"message\":\"x\",\"misalignment\":" + misalignment + "}")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -295,6 +298,48 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("failed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``misalignment error details refuse foreign member shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for details in
+            [ "false"
+              "[]"
+              "{\"detailedExplanation\":17}"
+              "{\"errorType\":true}"
+              "{\"errorType\":\"a\",\"errorType\":\"b\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithMisalignment details)))
+            )
+
+    [<Fact>]
+    member _.``misalignment steer requires object with string message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for steer in
+            [ "true"
+              "{}"
+              "{\"message\":null}"
+              "{\"message\":17}"
+              "{\"message\":\"a\",\"message\":\"b\"}" ] do
+            let details = "{\"steer\":" + steer + "}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithMisalignment details)))
+            )
+
+    [<Fact>]
+    member _.``misalignment nullable details and steer retain failed terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for details in
+            [ "null"
+              "{}"
+              "{\"detailedExplanation\":null,\"errorType\":null,\"steer\":null}"
+              "{\"detailedExplanation\":\"detail\",\"errorType\":\"new-category\",\"steer\":{\"message\":\"\"}}" ] do
+            Assert.Equal(
+                TerminalObserved("failed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithMisalignment details)))
             )
 
     [<Fact>]
