@@ -799,6 +799,68 @@ let ``repository ruleset page evidence detects changed raw bytes across reads`` 
         | Error failure -> failwithf "unexpected empty ruleset refusal: %A" failure
     Assert.NotEqual(read "[]", read " [ ] ")
 
+[<Fact>]
+let ``rollback repository-owned rulesets are raw bound but settings remain partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let firstRow = rulesetSummary 91 "main" None "enabled"
+    let secondRow = rulesetSummary 92 "release" (Some "tag") "active"
+    let next = "https://api.github.test/repos/FS-GG/copy/rulesets?per_page=100&page=2&includes_parents=true"
+    let firstPass =
+        [ repo
+          ok (Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ]) $"[{firstRow}]"
+          ok Map.empty $"[{secondRow}]"
+          ok Map.empty (rulesetDetail 91 "main" "branch")
+          ok Map.empty (rulesetDetail 92 "release" "tag") ]
+    let preliminary =
+        MigrationGitHubRead.readRepositoryBranchTagRulesets options (FakeTransport firstPass)
+        |> function Ok value -> value | Error failure -> failwithf "invalid ruleset fixture: %A" failure
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedRulesets =
+        [ yield "fsgg.gs2-09.7.repository-rulesets-raw/v1"
+          yield string preliminary.RepositoryId
+          yield string preliminary.PageCount
+          for page in preliminary.ListPages do
+              yield page.ListRequestedUri
+              yield page.ListPayloadSha256
+              yield page.ListNextUri |> Option.defaultValue ""
+          for rule in preliminary.Rulesets do
+              yield string rule.RulesetId
+              yield rule.DetailUri
+              yield rule.PayloadSha256 ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses = [ ok Map.empty repositoryCore; ok Map.empty repositoryCore ]
+                    @ firstPass @ firstPass @ [ ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedRulesets options transport with
+    | Error reason -> failwithf "ruleset readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedRulesets, proof.RepositoryRulesetsSha256)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(2, proof.First.Rulesets.Length)
+        Assert.Equal(13, transport.Requests.Length)
+    let changedPage = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 9 then ok Map.empty ($" [{secondRow}] ") else response))
+    Assert.Equal(Error "changed:repository-rulesets-raw",
+                 MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedRulesets options changedPage)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 12 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedRulesets options changedCore)
+    Assert.Equal(Error "changed:repository-rulesets-state",
+                 MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responses))
+    let foreignPlan = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackRulesetsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expectedRulesets options foreignPlan)
+    Assert.Empty(foreignPlan.Requests)
+
 let private actionsAll =
     """{"enabled":true,"allowed_actions":"all","selected_actions_url":null,"sha_pinning_required":false}"""
 

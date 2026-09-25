@@ -37,6 +37,8 @@
     <Compile Include="MigrationRollbackCustomPropertiesReadback.fs" />
     <Compile Include="MigrationRollbackActionsReadback.fsi" />
     <Compile Include="MigrationRollbackActionsReadback.fs" />
+    <Compile Include="MigrationRollbackRulesetsReadback.fsi" />
+    <Compile Include="MigrationRollbackRulesetsReadback.fs" />
     <Compile Include="MigrationSandboxFixtureSeed.fsi" />
     <Compile Include="MigrationSandboxFixtureSeed.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
