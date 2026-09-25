@@ -7,6 +7,7 @@ provider or dispatch capability can result from this module.
 
 from __future__ import annotations
 
+import copy
 import dataclasses
 import datetime as dt
 import hashlib
@@ -110,7 +111,11 @@ def _observe(port: object, method: str, role: str, payload_sha256: str,
         raise Refused("observer-time")
     if type(value["blobs"]) is not dict or type(envelope["facts"]) is not dict:
         raise Refused("observer-result-shape")
-    return envelope, value["blobs"]
+    try:
+        snapshot = copy.deepcopy(value)
+    except Exception:
+        raise Refused("observer-snapshot-unavailable") from None
+    return snapshot["envelope"], snapshot["blobs"]
 
 
 def verify_observed_candidate(
