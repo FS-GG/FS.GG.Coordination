@@ -121,6 +121,19 @@ let ``foreign repository and raw typed issue mismatch refuse`` () =
                  MigrationInspectProviderAdapter.bindIssues options changed calls)
 
 [<Fact>]
+let ``issue adapter refuses a captured continuation omitted by typed page proof`` () =
+    let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
+    let next = "https://api.github.test/repos/FS-GG/copy/issues?state=all&per_page=100&page=2"
+    let changed =
+        calls |> List.mapi (fun index (request, outcome) ->
+            match index, outcome with
+            | 1, Response response ->
+                request, Response { response with Headers=Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ] }
+            | _ -> request, outcome)
+    Assert.Equal(Error "issue-page-chain",
+                 MigrationInspectProviderAdapter.bindIssues options population changed)
+
+[<Fact>]
 let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
     let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
     let extra =

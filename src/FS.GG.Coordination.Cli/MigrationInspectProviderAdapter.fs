@@ -93,6 +93,20 @@ module MigrationInspectProviderAdapter =
         | Response reply when reply.StatusCode = 200 -> Ok reply.Body
         | _ -> Error "provider-response"
 
+    let private capturedNextUri = function
+        | Response reply when reply.StatusCode = 200 ->
+            let link =
+                reply.Headers
+                |> Map.toSeq
+                |> Seq.choose (fun (name, value) ->
+                    if String.Equals(name, "link", StringComparison.OrdinalIgnoreCase) then Some value
+                    else None)
+                |> String.concat ","
+            match Transport.tryNextLink link with
+            | Ok next -> Some(next |> Option.map _.AbsoluteUri)
+            | Error _ -> None
+        | _ -> None
+
     let private repositoryBinding options =
         let expected = $"{options.Repository.Owner}/{options.Repository.Repository}"
         options.Cohort.Isolated
@@ -210,6 +224,9 @@ module MigrationInspectProviderAdapter =
                              page.NextUri = (if index + 1 < population.Pages.Length
                                              then Some population.Pages.[index + 1].RequestedUri else None))
                          |> List.contains false then Error "issue-page-chain"
+                    elif List.zip population.Pages calls
+                         |> List.exists (fun (page, (_, outcome)) ->
+                             capturedNextUri outcome <> Some page.NextUri) then Error "issue-page-chain"
                     else
                         match parseIssuePages population.RepositoryId raw with
                         | Error reason -> Error reason
