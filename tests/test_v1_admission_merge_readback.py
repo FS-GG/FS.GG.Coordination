@@ -26,14 +26,18 @@ P = readback.PREFIX
 
 
 def request(attempt=1):
-    public = {
+    core = {
         "version": 1, "repository_id": readback.REPOSITORY_ID,
         "operation_id": "operation-79", "operation_generation": 2,
         "effect_id": "merge-1", "attempt": attempt,
         "pr_number": 3695, "pr_id": 700, "pr_node_id": "PR_synthetic",
         "base_sha": BASE, "head_sha": HEAD, "expected_tree_sha": TREE,
-        "expected_commit_message": "Synthetic squash commit\n", "method": "squash",
+        "method": "squash",
     }
+    marker = hashlib.sha256(json.dumps(core, sort_keys=True,
+                                       separators=(",", ":")).encode() + b"\n").hexdigest()
+    public = dict(core, expected_commit_message=
+                  f"Synthetic squash commit\n\nFS-GG-V1-Effect: {marker}\n")
     canonical = json.dumps(public, sort_keys=True, separators=(",", ":")).encode() + b"\n"
     return readback.MergeRequestIdentity(
         public["operation_id"], public["operation_generation"], public["effect_id"],
@@ -53,6 +57,7 @@ class FakeGitHub:
         self.actor_id = 77
         self.main = BASE
         self.calls = []
+        self.message = request().expected_commit_message
 
     def read(self, path):
         self.calls.append(path)
@@ -77,7 +82,7 @@ class FakeGitHub:
             f"{P}/git/commits/{MERGE}": {
                 "sha": MERGE, "tree": {"sha": self.tree},
                 "parents": [{"sha": self.parent}],
-                "message": "Synthetic squash commit\n",
+                "message": self.message,
             },
             f"{P}/compare/{MERGE}...{self.main}": {
                 "status": "identical" if self.main == MERGE else "ahead",
@@ -144,6 +149,17 @@ class MergeReadbackTests(unittest.TestCase):
         self.assertIsInstance(readback.reconcile(self.fake.read, self.policy,
                                                  self.request, self.pre),
                               readback.UnknownReadback)
+        self.fake.actor_id = 77
+        self.fake.message = "Synthetic squash commit\n"
+        self.assertIsInstance(readback.reconcile(self.fake.read, self.policy,
+                                                 self.request, self.pre),
+                              readback.UnknownReadback)
+
+    def test_generic_message_cannot_be_a_request_identity(self):
+        generic = dataclasses.replace(self.request,
+                                      expected_commit_message="Synthetic squash commit\n")
+        with self.assertRaisesRegex(readback.Refused, "merge-request-marker"):
+            readback.capture_pre_send(self.fake.read, self.policy, generic)
 
     def test_no_second_attempt_or_foreign_generation(self):
         second = request(attempt=2)

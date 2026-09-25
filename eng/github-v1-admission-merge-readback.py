@@ -121,7 +121,7 @@ def _validate(policy: RegisteredMergePolicy, request: MergeRequestIdentity) -> N
             and isinstance(request.request_sha256, str)
             and HEX64.fullmatch(request.request_sha256) is not None,
             "merge-request-shape")
-    public = {
+    core = {
         "version": 1, "repository_id": REPOSITORY_ID,
         "operation_id": request.operation_id,
         "operation_generation": request.operation_generation,
@@ -130,9 +130,14 @@ def _validate(policy: RegisteredMergePolicy, request: MergeRequestIdentity) -> N
         "pr_node_id": request.pr_node_id,
         "base_sha": request.base_sha, "head_sha": request.head_sha,
         "expected_tree_sha": request.expected_tree_sha,
-        "expected_commit_message": request.expected_commit_message,
         "method": request.method,
     }
+    core_bytes = json.dumps(core, sort_keys=True, separators=(",", ":"),
+                            ensure_ascii=True).encode("ascii") + b"\n"
+    marker = hashlib.sha256(core_bytes).hexdigest()
+    require(request.expected_commit_message.endswith(
+        f"\n\nFS-GG-V1-Effect: {marker}\n"), "merge-request-marker")
+    public = dict(core, expected_commit_message=request.expected_commit_message)
     canonical = json.dumps(public, sort_keys=True, separators=(",", ":"),
                            ensure_ascii=True).encode("ascii") + b"\n"
     require(len(canonical) <= 8192
