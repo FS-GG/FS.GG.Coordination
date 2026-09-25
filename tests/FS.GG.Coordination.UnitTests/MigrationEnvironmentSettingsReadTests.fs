@@ -171,6 +171,19 @@ let ``environment source refuses custom-rule count and terminal repository drift
                  MigrationEnvironmentSettingsRead.read options drift)
 
 [<Fact>]
+let ``environment source refuses unexpected custom-rule continuation`` () =
+    let continued =
+        reply 200
+            (Map.ofList [ "Link", "<https://api.github.test/repos/FS-GG/copy/environments/fleet-cutover/deployment_protection_rules?page=2>; rel=\"next\"" ])
+            custom
+    let transport = FakeTransport [ ok repository; ok (list environment 1); ok environment
+                                    ok branches; continued; ok repository ]
+    match MigrationEnvironmentSettingsRead.read options transport with
+    | Error(MigrationReadFailure.PaginationRefused "unexpected-custom-rule-link") -> ()
+    | result -> failwithf "custom rule continuation accepted: %A" result
+    Assert.Equal(5, transport.Requests.Length)
+
+[<Fact>]
 let ``environment source refuses unknown or inconsistent branch policy`` () =
     let unknown = branches.Replace("\"type\":\"branch\"", "\"type\":\"unknown\"")
     let transport = FakeTransport [ ok repository; ok (list environment 1); ok environment; ok unknown ]
