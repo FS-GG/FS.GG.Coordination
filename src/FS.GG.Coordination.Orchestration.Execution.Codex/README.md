@@ -29,6 +29,11 @@ requires two independently supplied records to agree on the exact assignment, na
 prospective window challenge and thread before calling the mapper. No trusted implementation of
 either interface is installed, so its successful structural result is not capture evidence.
 
+`DirectSessionProspectiveWindowGate` models the next source boundary: an issued challenge is valid
+for at most five minutes, may prepare one turn, and must match the selected current-session source.
+Its ledger is immutable test state, not durable atomic replay custody. The issuer, trusted clock,
+source authentication and persistent one-use store have no installed implementation.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL

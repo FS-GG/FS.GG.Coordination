@@ -85,6 +85,16 @@ an arbitrary caller can still fabricate both records. Production qualification
 must establish independent source and assignment authentication, prospective
 challenge issuance, start and sequence continuity, and Host application.
 
+The dormant [`DirectSessionProspectiveWindowGate`](../../src/FS.GG.Coordination.Orchestration.Execution.Codex/DirectSessionProspectiveWindowGate.fs)
+adds an explicit prospective issuer and selected current-session source contract.
+Its pure test model refuses expired or premature windows, repeated challenges,
+foreign workspace/item assignments, changed challenges and source substitutions.
+An accepted challenge consumes immutable test state only. There is no protected
+challenge issuer, trusted clock, authenticated current-session source or durable
+atomic replay ledger; resetting the test state would permit reuse. Those custody
+components must be independently established before any live producer uses this
+gate, and success here remains a structural result rather than capture evidence.
+
 ## Capability and evidence handoff
 
 The missing interface is a supported, authenticated event stream for the
