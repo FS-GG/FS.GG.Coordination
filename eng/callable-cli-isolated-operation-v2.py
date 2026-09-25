@@ -281,6 +281,10 @@ class NativeReadAdapter:
             if status != 200 or type(body) is not list or len(body) > 100:
                 raise Refused("native-pull-page-invalid")
             links = self._links(header, prefix)
+            if (("first" in links and links["first"] != 1)
+                    or ("prev" in links and
+                        (page == 1 or links["prev"] != page - 1))):
+                raise Refused("native-pull-link-direction")
             if "last" in links:
                 if advertised_last is not None and links["last"] != advertised_last:
                     raise Refused("native-pull-last-drift")
@@ -302,6 +306,7 @@ class NativeReadAdapter:
             terminal_links = self._links(terminal_header, prefix)
             if (terminal_status != 200 or terminal_body != []
                     or "next" in terminal_links
+                    or ("first" in terminal_links and terminal_links["first"] != 1)
                     or ("last" in terminal_links
                         and terminal_links["last"] != page)
                     or ("prev" in terminal_links

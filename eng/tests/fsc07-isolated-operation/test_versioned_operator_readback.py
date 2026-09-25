@@ -299,6 +299,40 @@ class VersionedReadbackTests(unittest.TestCase):
                     expected, transport, reserve_once_factory()))
                 self.assertEqual(transport.writes, 1)
 
+    def test_pull_pagination_direction_must_be_coherent_after_lost_response(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        prefix = "https://api.github.com/repos/FS-GG/disposable/pulls?state=open&per_page=100&page="
+        for response_index, relation, linked_page in (
+                (3, "prev", 50),
+                (3, "first", 2),
+                (4, "first", 2)):
+            with self.subTest(response_index=response_index, relation=relation):
+                post = pull_read_events((pull,))
+                post[response_index]["response"]["headers"] = [[
+                    "Link", f'<{prefix}{linked_page}>; rel="{relation}"']]
+                events = (pull_read_events() * 2 +
+                          [event("POST", "repos/FS-GG/disposable/pulls",
+                                 body=operator.pull_request_body(expected),
+                                 error=SENTINEL)] + post * 2)
+                transport = operator.OfflineTranscriptTransport(events)
+                self.assert_unknown(operator.run_pull_once(
+                    expected, transport, reserve_once_factory()))
+                self.assertEqual(transport.writes, 1)
+        post = pull_read_events((pull,))
+        post[3]["response"]["headers"] = [[
+            "Link", f'<{prefix}1>; rel="first"']]
+        post[4]["response"]["headers"] = [[
+            "Link", f'<{prefix}1>; rel="first", <{prefix}1>; rel="prev"']]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assertIsInstance(operator.run_pull_once(
+            expected, transport, reserve_once_factory()), operator.ExactPull)
+        self.assertEqual(transport.writes, 1)
+
     def test_protection_rejects_extra_effective_required_context(self):
         observed = protection_observed()
         for contexts in (["required-check", "foreign-check"],
