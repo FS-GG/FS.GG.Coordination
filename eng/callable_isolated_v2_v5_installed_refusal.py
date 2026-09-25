@@ -109,6 +109,7 @@ def qualify(selection: candidate.Selection, chosen: dict, probe_port,
                 or selection.manifest_sha256 != candidate.PINNED_BYTES["manifest"]
                 or not all(_positive(getattr(selection, key)) for key in
                            ("repository_id", "artifact_id", "producer_run_id",
+                            "producer_run_attempt",
                             "review_event_id", "producer_actor_id",
                             "reviewer_actor_id", "source_record_id"))
                 or not candidate._hex(selection.revision, candidate.HEX40)

@@ -38,7 +38,7 @@ def fixture():
     archive = builder._archive(entry)
     selection = candidate.Selection(
         candidate.PINNED_BYTES["archive"], candidate.PINNED_BYTES["manifest"],
-        "1" * 40, "2" * 40, 300, 305, 100, 302, 301, 304, 303,
+        "1" * 40, "2" * 40, 300, 1, 305, 100, 302, 301, 304, 303,
         "2026-09-25T11:57:00Z", "2026-09-25T12:10:00Z",
         "source-reader", "a" * 64, "review-reader", "b" * 64)
     selected = {"repositoryId": 100, "artifactId": 302,

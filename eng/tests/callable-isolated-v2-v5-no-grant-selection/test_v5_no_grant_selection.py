@@ -103,8 +103,9 @@ class V5SelectionTests(unittest.TestCase):
         self.assertEqual(review.calls, [305])
         self.assertEqual(result.archive_sha256, fixture()[2]["archiveSha256"])
         self.assertEqual((result.repository_id, result.artifact_id,
-                          result.source_record_id, result.reviewer_actor_id),
-                         (100, 302, 303, 304))
+                          result.source_record_id, result.reviewer_actor_id,
+                          result.producer_run_attempt),
+                         (100, 302, 303, 304, 1))
         self.assertEqual((result.source_reader_principal,
                           result.review_reader_principal),
                          ("source-reader", "review-reader"))
