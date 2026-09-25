@@ -132,7 +132,7 @@ def fixture(mode_override=None):
     objects[revision] = commit
     result = release.PreflightResult(revision, tree,
         hashlib.sha256(blobs["manifest"]).hexdigest(), 404,
-        hashlib.sha256(archive).hexdigest())
+        hashlib.sha256(archive).hexdigest(), 202, 1, 303, 606, 505)
     selection = {"repositoryId": 77, "identityEventId": 808,
         "sourceReaderPrincipalId": "source-reader",
         "sourceReaderCredentialId": "1" * 64}
