@@ -93,6 +93,8 @@ class RunnerIssuerTests(unittest.TestCase):
         result = issuer.qualify(selection, membership, readback, approval,
                                 selected, port, NOW)
         self.assertEqual(port.calls, [1001])
+        self.assertEqual(result.issued_at, "2026-09-25T11:57:40Z")
+        self.assertEqual(result.reader_principal, "issuer-reader")
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)

@@ -41,6 +41,10 @@ class IssuerWitness:
     run_attempt: int
     event_id: int
     issuer_actor_id: int
+    issued_at: str
+    expires_at: str
+    reader_principal: str
+    reader_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -192,7 +196,9 @@ def qualify(selection: candidate.Selection, membership: tree.TreeWitness,
             raise Refused("v5-issuer-drift")
         return IssuerWitness(selection.revision, readback.run_id,
                              readback.run_attempt, selected["eventId"],
-                             selected["issuerActorId"])
+                             selected["issuerActorId"], record["issuedAt"],
+                             record["expiresAt"], scope["principalId"],
+                             scope["credentialId"])
     except Refused:
         raise
     except Exception:
