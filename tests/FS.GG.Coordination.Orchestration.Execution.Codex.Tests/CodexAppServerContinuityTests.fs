@@ -103,6 +103,44 @@ type CodexAppServerContinuityTests() =
         Assert.Equal(TerminalObserved("completed", 1), status third)
 
     [<Fact>]
+    member _.``terminal with incomplete native items view cannot close continuity``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for view in [ "summary"; "notLoaded" ] do
+            let terminal =
+                replace completed "\"items\":[]" ("\"items\":[],\"itemsView\":\"" + view + "\"")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-items-view-incomplete",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``foreign native items view refuses start and terminal frames``() =
+        for frameBytes in [ started; completed ] do
+            for view in [ "null"; "17"; "\"foreign\"" ] do
+                let payload = replace frameBytes "\"items\":[]" ("\"items\":[],\"itemsView\":" + view)
+                let state =
+                    if obj.ReferenceEquals(frameBytes, started) then beginBound ()
+                    else CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+                let ordinal = if obj.ReferenceEquals(frameBytes, started) then 1L else 2L
+                Assert.Equal(
+                    ContinuityGap "app-server-turn-items-view-invalid",
+                    status (CodexAppServerContinuity.apply state (frame ordinal payload))
+                )
+
+    [<Fact>]
+    member _.``schema full terminal and summary start items views retain status``() =
+        let summaryStart =
+            replace started "\"items\":[]" "\"items\":[],\"itemsView\":\"summary\""
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L summaryStart)
+        Assert.Equal(InTurn 0, status first)
+        let fullTerminal =
+            replace completed "\"items\":[]" "\"items\":[],\"itemsView\":\"full\""
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L fullTerminal))
+        )
+
+    [<Fact>]
     member _.``subscription refuses wrong workspace item turn and transport``() =
         for wrong in
             [ { binding with Scope = { scope with WorkspaceId = "other-workspace" } }
