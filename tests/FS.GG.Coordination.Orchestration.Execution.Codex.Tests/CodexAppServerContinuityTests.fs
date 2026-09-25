@@ -89,6 +89,9 @@ type CodexAppServerContinuityTests() =
             ("[{\"id\":\"item-1\",\"type\":\"webSearch\"" + fields + "}]")
     let completedWithWebSearchMetadata fields =
         completedWithWebSearch (",\"query\":\"q\"" + fields)
+    let completedWithSubAgentActivity fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"subAgentActivity\"" + fields + "}]")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -778,6 +781,43 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``subagent activity requires path thread and kind``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"agentThreadId\":\"thread\",\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithSubAgentActivity fields)))
+            )
+
+    [<Fact>]
+    member _.``subagent activity refuses foreign path thread and kind shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"agentPath\":null,\"agentThreadId\":\"thread\",\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":17,\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\",\"kind\":\"foreign\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\",\"kind\":null" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithSubAgentActivity fields)))
+            )
+
+    [<Fact>]
+    member _.``subagent activity schema kinds retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for activityKind in [ "started"; "interacted"; "interrupted"; "completed" ] do
+            let fields =
+                ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\",\"kind\":\""
+                + activityKind + "\""
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithSubAgentActivity fields)))
             )
 
     [<Fact>]
