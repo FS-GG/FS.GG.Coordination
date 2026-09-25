@@ -687,7 +687,9 @@ def classify_protection_after_one_attempt(
                     (type(contexts) is not list or contexts not in
                      ([], [expected.check_context])))
                 or not _disabled(policy.get("enforce_admins"))
+                or "required_pull_request_reviews" not in policy
                 or policy.get("required_pull_request_reviews") is not None
+                or "restrictions" not in policy
                 or policy.get("restrictions") is not None
                 or not _disabled(policy.get("allow_force_pushes"))
                 or not _disabled(policy.get("allow_deletions"))

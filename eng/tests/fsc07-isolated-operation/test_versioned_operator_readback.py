@@ -283,6 +283,17 @@ class VersionedReadbackTests(unittest.TestCase):
                         protection_expected(), lambda: compatible),
                         operator.ExactProtection)
 
+    def test_protection_requires_explicit_null_review_and_actor_restrictions(self):
+        observed = protection_observed()
+        for key in ("required_pull_request_reviews", "restrictions"):
+            with self.subTest(missing=key):
+                policy = copy.deepcopy(observed.policy)
+                del policy[key]
+                incomplete = dataclasses.replace(observed, policy=policy)
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    protection_expected(), lambda: incomplete,
+                    provider_response={"status": 500, "body": SENTINEL}))
+
     def test_pull_accepts_only_two_complete_exact_reads(self):
         reads = iter((pull_observed(), pull_observed()))
         result = operator.classify_pull_after_one_attempt(
