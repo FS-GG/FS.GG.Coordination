@@ -223,6 +223,63 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assertIsInstance(value, operator.Unknown)
         self.assertNotIn(SENTINEL, repr(value))
 
+    def test_lost_response_read_cannot_rewrite_selected_pull_sha(self):
+        expected_pull = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["head"]["sha"] = SHA_C
+        observed_pull = dataclasses.replace(
+            pull_observed(), source_branch_sha=SHA_C, pulls=(pull,))
+
+        def read_pull():
+            object.__setattr__(expected_pull, "source_sha", SHA_C)
+            pull["body"] = operator.pull_request_body(expected_pull)["body"]
+            return observed_pull
+
+        self.assert_unknown(operator.classify_pull_after_one_attempt(
+            expected_pull, read_pull))
+
+    def test_lost_response_read_cannot_rewrite_selected_protection_sha(self):
+        expected_protection = protection_expected()
+        observed_protection = dataclasses.replace(
+            protection_observed(), branch_sha=SHA_C)
+
+        def read_protection():
+            object.__setattr__(expected_protection, "branch_sha", SHA_C)
+            return observed_protection
+
+        self.assert_unknown(operator.classify_protection_after_one_attempt(
+            expected_protection, read_protection))
+
+    def test_reservation_callback_cannot_redirect_selected_native_write(self):
+        for kind in ("pull", "protection"):
+            with self.subTest(kind=kind):
+                expected = pull_expected() if kind == "pull" else protection_expected()
+                events = (pull_read_events() if kind == "pull"
+                          else protection_read_events()) * 2
+                playback = operator.OfflineTranscriptTransport(events)
+                posts = []
+
+                class TracingTransport:
+                    def request(self, method, path, body=None):
+                        if method in {"POST", "PUT"}:
+                            posts.append((method, path))
+                            raise OSError("synthetic-lost-response")
+                        return playback.request(method, path, body)
+
+                def reserve(_key):
+                    if kind == "pull":
+                        object.__setattr__(expected, "repository", "FS-GG/foreign")
+                    else:
+                        object.__setattr__(expected, "branch", "foreign")
+                    return True
+
+                runner = (operator.run_pull_once if kind == "pull"
+                          else operator.run_protection_once)
+                self.assert_unknown(runner(expected, TracingTransport(), reserve))
+                self.assertEqual(posts, [
+                    ("POST", "repos/FS-GG/disposable/pulls") if kind == "pull"
+                    else ("PUT", "repos/FS-GG/disposable/branches/main/protection")])
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):

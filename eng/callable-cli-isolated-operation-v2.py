@@ -626,6 +626,7 @@ def classify_pull_after_one_attempt(
     try:
         if not _valid_pull(expected):
             return Unknown("pull-request-identity-invalid")
+        expected = dataclasses.replace(expected)
         observed = _two(read)
         if (type(observed) is not PullCensus or observed.complete is not True
                 or type(observed.repository_id) is not int
@@ -707,6 +708,7 @@ def classify_protection_after_one_attempt(
     try:
         if not _valid_protection(expected):
             return Unknown("branch-protection-identity-invalid")
+        expected = dataclasses.replace(expected)
         observed = _two(read)
         if (type(observed) is not ProtectionReadback
                 or observed.complete is not True
@@ -763,6 +765,7 @@ def run_pull_once(expected: ExpectedPull, transport: object,
     try:
         if not _valid_pull(expected):
             return Unknown("pull-request-identity-invalid")
+        expected = dataclasses.replace(expected)
         reader = NativeReadAdapter(transport)
         before = _two(lambda: reader.read_pull_census(expected))
         if (type(before) is not PullCensus or before.complete is not True
@@ -804,6 +807,7 @@ def run_protection_once(expected: ExpectedProtection, transport: object,
     try:
         if not _valid_protection(expected):
             return Unknown("branch-protection-identity-invalid")
+        expected = dataclasses.replace(expected)
         reader = NativeReadAdapter(transport)
         before = _two(lambda: reader.read_protection(expected))
         if (type(before) is not ProtectionReadback or before.complete is not True

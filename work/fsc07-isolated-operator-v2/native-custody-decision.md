@@ -13,6 +13,8 @@ Status: read-only owner packet, 2026-09-25. This is a proposed qualification bou
 
 Protected Coordination `main` read back as `b8225f6b63f764f58ec20735d3cf849b37c57276` at this checkpoint. The heads above are drafts, not installed source. The historical v1 operation and its receiver/credential do not transfer to this revision.
 
+The later source-only native classifier candidate pins external native-source SHA-256 `02fa2ff3d8f7022685bccc275b254f6a4f4aad77387e7b46a8b8f8948a9cd0ea` in the closed scaffold manifest; its archive bytes remain unchanged. Red-before offline controls showed an injected read callback could rewrite the selected pull or protection SHA after initial validation, and a reservation callback could redirect the sole attempted POST or PUT to a foreign repository or branch. The classifiers and one-attempt runners now copy the validated expected operation before invoking callbacks. This source edit needs fresh independent protected byte review; the offline controls do not establish installed authority.
+
 ## Principal and evidence custody to select
 
 Each protected observation must identify its principal, credential scope, source API or journal, observed run/attempt, immutable evidence ID and digest, and observation time. The dispatch actor cannot provide its own reviewer or membership proof. The grant issuer must differ from the dispatch actor and reviewer; readback credentials must not inherit the execution writer's `pull_requests:write` scope.
