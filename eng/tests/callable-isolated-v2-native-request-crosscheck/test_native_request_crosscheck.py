@@ -27,9 +27,9 @@ SPEC.loader.exec_module(native)
 class NativeRequestCrosscheckTests(unittest.TestCase):
     def selected(self):
         envelopes, record, scope, seal = fixture()
-        observed = plan.OperationPlanReadAdapter(
+        observed, verified = plan.OperationPlanReadAdapter(
             FakePort(canonical(record), scope), FakeSeal(seal), *envelopes,
-            500, "f" * 64, NOW).observe_operation_plan()
+            500, "f" * 64, NOW).observe_with_verified_request()
         self.assertEqual(observed["envelope"]["facts"]["operation"],
                          record["operation"])
         target = record["target"]
@@ -37,10 +37,10 @@ class NativeRequestCrosscheckTests(unittest.TestCase):
             target["repositoryId"], target["repository"],
             target["sourceRef"], target["sourceSha"],
             target["baseRef"], target["baseSha"])
-        return record, expected
+        return record, expected, verified
 
     def test_plan_request_is_exact_native_request_and_digest(self):
-        record, expected = self.selected()
+        record, expected, verified = self.selected()
         with (mock.patch.object(os, "getenv", side_effect=AssertionError("token")),
               mock.patch.object(socket.socket, "connect",
                                 side_effect=AssertionError("provider")),
@@ -49,6 +49,9 @@ class NativeRequestCrosscheckTests(unittest.TestCase):
             body = native.pull_request_body(expected)
         self.assertEqual(plan.TITLE, native.PULL_TITLE)
         self.assertEqual(body, record["request"])
+        self.assertEqual(verified.canonical_request, canonical(body))
+        self.assertEqual(verified.request_sha256,
+                         record["operation"]["requestSha256"])
         self.assertEqual(hashlib.sha256(canonical(body)).hexdigest(),
                          record["operation"]["requestSha256"])
         self.assertEqual(record["operation"]["identity"],
@@ -59,7 +62,7 @@ class NativeRequestCrosscheckTests(unittest.TestCase):
         self.assertEqual(record["operation"]["maxProviderWrites"], 1)
 
     def test_each_native_target_coordinate_changes_sealed_request(self):
-        record, expected = self.selected()
+        record, expected, _ = self.selected()
         for field, changed in (("repository_id", 301),
                                ("repository", "FS-GG/foreign"),
                                ("source_ref", "refs/heads/foreign"),
