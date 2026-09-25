@@ -218,6 +218,20 @@ class ProducerArtifactTests(unittest.TestCase):
         self.refuses(lambda _p, _t, _s, r, _b: r.run.__setitem__("completedAt", "2026-09-25T11:54:00Z"))
         self.refuses(lambda _p, _t, s, _r, _b: s.__setitem__("workflowPath", "../other.yml"))
 
+    def test_scope_callback_cannot_replace_selected_identity_event(self):
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        original_scope = run_port.scope
+
+        def scope():
+            selected["identityEventId"] = 809
+            return original_scope()
+
+        run_port.scope = scope
+        result = producer.qualify(preflight, tree, run_port, bundle_port,
+                                  selected, NOW,
+                                  workflow_source=source_result(preflight, selected))
+        self.assertEqual(result.identity_event_id, 808)
+
     def test_reused_reader_scope_mutated_during_bundle_read_refuses(self):
         for changed_port in ("producer", "bundle"):
             with self.subTest(changed_port=changed_port):
