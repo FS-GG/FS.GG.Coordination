@@ -1929,9 +1929,21 @@ module MigrationGitHubRead =
                             if document.RootElement.ValueKind <> JsonValueKind.Array then
                                 Error(MigrationReadFailure.MalformedResponse "pull-requests-not-array")
                             else
+                                let parseUniquePullRequest value =
+                                    uniqueObjectMembers value
+                                    |> Result.bind (fun () ->
+                                        property "head" value |> Result.bind uniqueObjectMembers)
+                                    |> Result.bind (fun () ->
+                                        property "base" value
+                                        |> Result.bind (fun baseValue ->
+                                            uniqueObjectMembers baseValue
+                                            |> Result.bind (fun () ->
+                                                property "repo" baseValue
+                                                |> Result.bind uniqueObjectMembers)))
+                                    |> Result.bind (fun () -> parsePullRequest repositoryId value)
                                 let parsed =
                                     document.RootElement.EnumerateArray()
-                                    |> Seq.map (parsePullRequest repositoryId) |> Seq.toList
+                                    |> Seq.map parseUniquePullRequest |> Seq.toList
                                 match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                 | Some failure -> Error failure
                                 | None ->

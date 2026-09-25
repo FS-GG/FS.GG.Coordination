@@ -1110,6 +1110,24 @@ let ``pull request census refuses changed population duplicate and wrong base re
                  MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) drift)
 
 [<Fact>]
+let ``pull request census refuses duplicate raw members in identity and revision`` () =
+    let record = pullRequest 3 "PR_3"
+    let duplicateState = record.Replace("\"state\":\"open\"", "\"state\":\"open\",\"state\":\"closed\"")
+    let stateTransport = FakeTransport [ repo; ok Map.empty $"[{duplicateState}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:state"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) stateTransport)
+    let head = String.replicate 40 "a"
+    let duplicateHead = record.Replace($"\"head\":{{\"sha\":\"{head}\"}}",
+                                       $"\"head\":{{\"sha\":\"{head}\",\"sha\":\"{head}\"}}")
+    let headTransport = FakeTransport [ repo; ok Map.empty $"[{duplicateHead}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:sha"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) headTransport)
+    let duplicateBase = record.Replace("\"repo\":{\"id\":42}", "\"repo\":{\"id\":42,\"id\":43}")
+    let baseTransport = FakeTransport [ repo; ok Map.empty $"[{duplicateBase}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:id"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) baseTransport)
+
+[<Fact>]
 let ``pull request census refuses malformed revisions and a nonterminal issue census`` () =
     let malformed = (pullRequest 3 "PR_3").Replace(String.replicate 40 "a", "not-a-sha")
     let transport = FakeTransport [ repo; ok Map.empty $"[{malformed}]" ]
