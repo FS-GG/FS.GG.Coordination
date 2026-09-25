@@ -118,6 +118,14 @@ def controls_fixture(selected: dict) -> dict:
     }
 
 
+def review_fixture(selected: dict) -> dict:
+    return {"schema": readback.REVIEW_SCHEMA, "complete": True,
+            "selectionSha256": hashlib.sha256(canonical(selected)).hexdigest(),
+            "bindings": copy.deepcopy(selected),
+            "reviewerId": selected.get("reviewerId", 0), "reviewerMembership": "active",
+            "reviewEventId": 208, "reviewedAt": "2026-09-25T12:04:00Z"}
+
+
 class ReleaseObserver:
     def __init__(self, packet: dict):
         self.packet = packet
@@ -144,8 +152,17 @@ class ControlsObserver:
         return copy.deepcopy(self.value)
 
 
+class ReviewObserver:
+    def __init__(self, value: dict):
+        self.value = value
+
+    def read_review(self) -> dict:
+        return copy.deepcopy(self.value)
+
+
 def verify(packet: dict, selected: dict | None = None, controls: dict | None = None,
-           observed: dict | None = None, approved: dict | None = None):
+           observed: dict | None = None, approved: dict | None = None,
+           reviewed: dict | None = None):
     selection = selection_fixture(packet) if selected is None else selected
     control_value = controls_fixture(selection) if controls is None else controls
     raw_selection = canonical(selection)
@@ -153,10 +170,73 @@ def verify(packet: dict, selected: dict | None = None, controls: dict | None = N
         raw_selection, hashlib.sha256(raw_selection).hexdigest(), canonical(packet),
         ReleaseObserver(packet if observed is None else observed),
         ApprovalObserver(packet if approved is None else approved),
-        ControlsObserver(control_value), NOW)
+        ControlsObserver(control_value), NOW,
+        ReviewObserver(review_fixture(selection) if reviewed is None else reviewed))
 
 
 class SelectedReadbackTests(unittest.TestCase):
+    def test_self_sealed_selection_without_independent_review_refuses(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        raw = canonical(selected)
+        with self.assertRaisesRegex(readback.Refused, "selection-review-custody"):
+            readback.verify_selected_readback(
+                raw, hashlib.sha256(raw).hexdigest(), canonical(packet),
+                ReleaseObserver(packet), ApprovalObserver(packet),
+                ControlsObserver(controls_fixture(selected)), NOW)
+
+    def test_selection_review_must_independently_bind_actor_artifact_runner_and_time(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        baseline = review_fixture(selected)
+        for key, replacement in (("complete", False), ("selectionSha256", "0" * 64),
+                                 ("reviewerId", selected["actorId"]),
+                                 ("reviewerMembership", "unknown"),
+                                 ("reviewEventId", selected["approvalId"]),
+                                 ("reviewedAt", "2026-09-25T11:59:59Z"),
+                                 ("reviewedAt", "2026-09-25T12:06:00Z")):
+            with self.subTest(key=key, replacement=replacement):
+                review = copy.deepcopy(baseline)
+                review[key] = replacement
+                with self.assertRaises(readback.Refused):
+                    verify(packet, reviewed=review)
+        for key, replacement in (("sourceTree", "f" * 40), ("actorId", 999),
+                                 ("producerRunId", 999), ("artifactId", 999),
+                                 ("runnerImage", "ghcr.io/fs-gg/other@sha256:" + "9" * 64),
+                                 ("imageAttestationSha256", "9" * 64),
+                                 ("closureManifestSha256", "9" * 64),
+                                 ("packetSha256", "9" * 64)):
+            with self.subTest(binding=key):
+                review = copy.deepcopy(baseline)
+                review["bindings"][key] = replacement
+                with self.assertRaisesRegex(readback.Refused, "selection-review-binding"):
+                    verify(packet, reviewed=review)
+        review = copy.deepcopy(baseline)
+        del review["reviewEventId"]
+        with self.assertRaisesRegex(readback.Refused, "selection-review-shape"):
+            verify(packet, reviewed=review)
+
+    def test_selection_review_port_must_be_distinct_and_available(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        raw = canonical(selected)
+        release_port = ReleaseObserver(packet)
+        approval_port = ApprovalObserver(packet)
+        controls_port = ControlsObserver(controls_fixture(selected))
+        with self.assertRaisesRegex(readback.Refused, "selection-review-custody"):
+            readback.verify_selected_readback(
+                raw, hashlib.sha256(raw).hexdigest(), canonical(packet),
+                release_port, approval_port, controls_port, NOW, controls_port)
+
+        class UnavailableReview:
+            def read_review(self):
+                raise RuntimeError("unavailable")
+
+        with self.assertRaisesRegex(readback.Refused, "selection-review-unavailable"):
+            readback.verify_selected_readback(
+                raw, hashlib.sha256(raw).hexdigest(), canonical(packet),
+                release_port, approval_port, controls_port, NOW, UnavailableReview())
+
     def test_complete_synthetic_readback_is_non_authorizing_and_has_no_io(self):
         packet = packet_fixture()
         with patch("builtins.open", side_effect=AssertionError("file or journal IO")), \

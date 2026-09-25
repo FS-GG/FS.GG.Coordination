@@ -17,6 +17,7 @@ import validate_callable_isolated_v2_release_workflow as held
 
 SCHEMA = "fsgg.coordination.callable-isolated-v2-release-selection/1"
 CONTROLS_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-controls/1"
+REVIEW_SCHEMA = "fsgg.coordination.callable-isolated-v2-selection-review/1"
 DRAFT_HEAD = "55ca33b7b45fd81889ffbccb4fbd4939f352b7d3"
 ORIGINAL_HELD_WORKFLOW_SHA256 = "1aac83c07ad0c798bd946dfecc87d16924a94455c05b566d43b44eb70aa445b9"
 REFRESHED_HELD_WORKFLOW_SHA256 = "c486fe746ee88536897c277fc1cbcc320813c08d4b876dacb01adb78da759e93"
@@ -43,6 +44,9 @@ CONTROL_KEYS = frozenset({
     "executionTokenPresent", "providerRequestCount", "journalWriteCount",
     "workingDirectoryWriteCount",
 })
+REVIEW_KEYS = frozenset({"schema", "complete", "selectionSha256", "bindings",
+                         "reviewerId", "reviewerMembership", "reviewEventId",
+                         "reviewedAt"})
 
 
 class Refused(ValueError):
@@ -53,6 +57,12 @@ class InstalledControlObserver(Protocol):
     """Future independent read-only observer; no adapter is supplied."""
 
     def read_controls(self) -> dict[str, Any]: ...
+
+
+class SelectionReviewObserver(Protocol):
+    """Future independent protected selection-review reader; no adapter here."""
+
+    def read_review(self) -> dict[str, Any]: ...
 
 
 @dataclasses.dataclass(frozen=True)
@@ -173,17 +183,48 @@ def _controls(value: Any, selected: dict[str, Any]) -> None:
     _refusal(value["unknownCommand"], ["execute-native-pull"], UNKNOWN_STDERR_SHA256)
 
 
+def _review(value: Any, selection_raw: bytes, selection_sha256: str,
+            selected: dict[str, Any], packet: dict[str, Any], now: dt.datetime) -> None:
+    _exact(value, REVIEW_KEYS, "readback-selection-review-shape")
+    if (value["schema"] != REVIEW_SCHEMA or value["complete"] is not True
+            or value["selectionSha256"] != selection_sha256
+            or type(value["bindings"]) is not dict
+            or _canonical(value["bindings"]) != selection_raw
+            or type(value["reviewerId"]) is not int
+            or value["reviewerId"] != selected["reviewerId"]
+            or value["reviewerId"] == selected["actorId"]
+            or value["reviewerMembership"] != "active"
+            or type(value["reviewEventId"]) is not int
+            or value["reviewEventId"] <= 0
+            or value["reviewEventId"] == selected["approvalId"]):
+        raise Refused("readback-selection-review-binding")
+    try:
+        reviewed = release._time(value["reviewedAt"])
+        approved = release._time(packet["approval"]["approvedAt"])
+        expires = release._time(packet["approval"]["expiresAt"])
+    except release.Refused:
+        raise Refused("readback-selection-review-time") from None
+    if not approved <= reviewed <= now < expires:
+        raise Refused("readback-selection-review-time")
+
+
 def verify_selected_readback(selection_raw: bytes, selection_sha256: str,
                              packet_raw: bytes,
                              release_observer: release.ProtectedReleaseObserver,
                              approval_observer: release.ProtectedApprovalObserver,
                              controls_observer: InstalledControlObserver,
-                             now: dt.datetime) -> ReadbackEvidence:
-    """Require exact selected pins and three distinct observations; never authorize."""
+                             now: dt.datetime,
+                             selection_review_observer: SelectionReviewObserver | None = None
+                             ) -> ReadbackEvidence:
+    """Require exact selected pins and four distinct observations; never authorize."""
     selected = _selection(selection_raw, selection_sha256)
     if (release_observer is None or approval_observer is None or controls_observer is None
             or len({id(release_observer), id(approval_observer), id(controls_observer)}) != 3):
         raise Refused("readback-observer-custody")
+    if (selection_review_observer is None
+            or id(selection_review_observer) in
+            {id(release_observer), id(approval_observer), id(controls_observer)}):
+        raise Refused("readback-selection-review-custody")
     try:
         prepared = release.verify_prepared_packet(
             packet_raw, selected["packetSha256"], release_observer, approval_observer, now)
@@ -219,6 +260,11 @@ def verify_selected_readback(selection_raw: bytes, selection_sha256: str,
     except Exception:
         raise Refused("readback-controls-unavailable") from None
     _controls(controls, selected)
+    try:
+        review = selection_review_observer.read_review()
+    except Exception:
+        raise Refused("readback-selection-review-unavailable") from None
+    _review(review, selection_raw, selection_sha256, selected, packet, now)
     return ReadbackEvidence(selected["sourceRevision"], selected["workflowSha256"],
                             selected["archiveSha256"], selected["runnerImage"],
                             selected["closureManifestSha256"])
