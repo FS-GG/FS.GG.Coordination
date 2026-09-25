@@ -320,6 +320,23 @@ let ``Project item adapter refuses duplicate raw pagination members`` () =
                  MigrationInspectProviderAdapter.bindProjectItems options population changedCalls)
 
 [<Fact>]
+let ``Project item adapter independently refuses duplicate item identities`` () =
+    let second =
+        """{"id":"ITEM_2","isArchived":false,"updatedAt":"2026-09-25T10:00:00Z","content":{"__typename":"Issue","id":"ISSUE_2","number":2,"repository":{"databaseId":42}}}"""
+    let body = projectPage 2 "false" "null" $"[{projectItem},{second}]"
+    let population, calls = readProjectItems [ reply body ]
+    let changedSecond = second.Replace("\"ITEM_2\"", "\"ITEM_1\"")
+    let changedBody = projectPage 2 "false" "null" $"[{projectItem},{changedSecond}]"
+    let digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes changedSecond)).ToLowerInvariant()
+    let changedItem =
+        { population.Items.[1] with ItemNodeId="ITEM_1"
+                                    PayloadJson=changedSecond; PayloadSha256=digest }
+    let changedPopulation = { population with Items=[ population.Items.Head; changedItem ] }
+    let changedCalls = calls |> List.map (fun (request, _) -> request, reply changedBody)
+    Assert.Equal(Error "project-duplicate-identity",
+                 MigrationInspectProviderAdapter.bindProjectItems options changedPopulation changedCalls)
+
+[<Fact>]
 let ``foreign Project identity and wrong GraphQL continuation refuse`` () =
     let first = projectPage 2 "true" "\"cursor-1\"" $"[{projectItem}]"
     let second = projectPage 2 "false" "null"

@@ -363,11 +363,15 @@ module MigrationInspectProviderAdapter =
                         let sameTotals = pages |> List.forall (fun (total, _, _) -> total = population.TotalCount)
                         let rows = pages |> List.collect (fun (_, _, values) -> values)
                         let rawRecords = rows |> List.map fst |> List.sortBy (fun (id, _, _, _, _) -> id)
+                        let itemIds = rows |> List.map (fun ((id, _, _, _, _), _) -> id)
                         let typedRecords =
                             population.Items |> List.map (fun item ->
                                 item.ItemNodeId, item.Archived, item.UpdatedAt, item.Content, item.PayloadJson)
                         if not correctCursors || not terminal then Error "project-page-chain"
                         elif not sameTotals || rows.Length <> population.TotalCount then Error "project-total"
+                        elif itemIds |> List.exists String.IsNullOrWhiteSpace
+                             || itemIds.Length <> (itemIds |> Set.ofList |> Set.count) then
+                            Error "project-duplicate-identity"
                         elif rawRecords <> typedRecords then Error "project-raw-typed-mismatch"
                         else
                             let evidence =
