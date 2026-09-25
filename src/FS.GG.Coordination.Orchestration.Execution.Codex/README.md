@@ -118,6 +118,9 @@ notification parser's grammar; exec child counters must obey the telemetry mappe
 This validates evidence-class labels only and does not authenticate candidate provenance.
 Its correlation also uses the telemetry mapper's exact scope grammar, so equal
 but malformed repository, issue, workspace or binding fields cannot become canonical.
+It refuses a typed summary whose first entry equals the sealed head or whose usage-update count
+cannot fit between a first start and terminal under the recovery reader's entry cap. These are
+necessary structural checks, not proof of actual sealed journal custody or complete replay.
 The structural key retains the bounded UTC reservation window, selected source adapter,
 reservation, transport connection and protocol identity; malformed or unsupported facts refuse.
 These supplied values do not authenticate a live source.

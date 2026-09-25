@@ -182,6 +182,22 @@ type CodexAppServerUsageTruthTests() =
             )
 
     [<Fact>]
+    member _.``one entry cannot be both the first start and a terminal seal head``() =
+        let impossible = { terminal with SealedHeadEntryId = terminal.FirstEntryId }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess impossible []
+        )
+
+    [<Fact>]
+    member _.``usage-update count cannot exceed closed journal entry capacity``() =
+        let impossible = { terminal with UsageUpdateCount = 9999 }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess impossible []
+        )
+
+    [<Fact>]
     member _.``null or foreign response candidate refuses``() =
         Assert.Equal(
             Error "app-server-usage-candidates-invalid",
