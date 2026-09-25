@@ -33,6 +33,9 @@ type IProtectedIssueCensusStoreHeadPort =
 type ProtectedIssueCensusClaimDescription =
     { JournalResourceId: string
       JournalArtifactSha256: string
+      StoreHeadResourceId: string
+      StoreHeadArtifactSha256: string
+      AtomicStoreHeadCompare: bool
       CandidateMayRead: bool
       CandidateMayWrite: bool
       ImmutableJournal: bool }
@@ -48,6 +51,8 @@ type ProtectedIssueCensusClaimRequest =
       Selection: ProtectedIssueCensusSelection
       CustodyStoreResourceId: string
       StoreGeneration: int64
+      ExpectedStoreCorpusSha256: string
+      ExpectedStoreHeadSha256: string
       JournalResourceId: string
       ExpectedHeadGeneration: int64
       ExpectedHeadSha256: string }
@@ -82,14 +87,16 @@ module MigrationProtectedIssueCensusClaim =
 
     let expectedCommitHeadSha256 (previous: ProtectedIssueCensusClaimHead)
                                      (request: ProtectedIssueCensusClaimRequest) =
-        [ "fsgg.gs2-09.7.protected-census-claim-head/v1"
+        [ "fsgg.gs2-09.7.protected-census-claim-head/v2"
           previous.JournalResourceId; string previous.Generation; previous.SealSha256
           request.ClaimId; request.AttestationPayloadSha256
+          request.ExpectedStoreCorpusSha256; request.ExpectedStoreHeadSha256
           request.JournalResourceId; string request.ExpectedHeadGeneration
           request.ExpectedHeadSha256 ]
         |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes |> sha
 
     let private preflight (pins: ProtectedIssueCensusClaimPins)
+                          (storePins: ProtectedIssueCensusStoreHeadPins)
                           (port: IProtectedIssueCensusClaimPort option) =
         if String.IsNullOrWhiteSpace pins.JournalResourceId
            || not (exactSha pins.JournalArtifactSha256) then
@@ -102,6 +109,9 @@ module MigrationProtectedIssueCensusClaim =
                     let description = journal.Describe()
                     if description.JournalResourceId <> pins.JournalResourceId
                        || description.JournalArtifactSha256 <> pins.JournalArtifactSha256
+                       || description.StoreHeadResourceId <> storePins.StoreResourceId
+                       || description.StoreHeadArtifactSha256 <> storePins.StoreArtifactSha256
+                       || not description.AtomicStoreHeadCompare
                        || description.CandidateMayRead || description.CandidateMayWrite
                        || not description.ImmutableJournal then
                         Error "protected-census-claim-installation"
@@ -119,6 +129,8 @@ module MigrationProtectedIssueCensusClaim =
 
     let private verifyAndClaimJournal (attestationPins: ProtectedIssueCensusAttestationPins)
                                       (claimPins: ProtectedIssueCensusClaimPins)
+                                      (storeHeadPins: ProtectedIssueCensusStoreHeadPins)
+                                      (beforeStoreHead: ProtectedIssueCensusStoreHead)
                                       (selection: ProtectedIssueCensusSelection)
                                       (storeResourceId: string)
                                       (proof: ProtectedIssueCensusProof)
@@ -126,7 +138,7 @@ module MigrationProtectedIssueCensusClaim =
                                       (attestation: ProtectedIssueCensusSealAttestation option)
                                       (clock: IProtectedIssueCensusClockPort option)
                                       (claimPort: IProtectedIssueCensusClaimPort option) : Result<unit, string> =
-        match preflight claimPins claimPort with
+        match preflight claimPins storeHeadPins claimPort with
         | Error reason -> Error reason
         | Ok journal ->
             match MigrationProtectedIssueCensusAttestation.verify
@@ -154,6 +166,8 @@ module MigrationProtectedIssueCensusClaim =
                                     attestationPins claim |> sha
                               Selection=selection; CustodyStoreResourceId=storeResourceId
                               StoreGeneration=storeGeneration
+                              ExpectedStoreCorpusSha256=beforeStoreHead.CorpusSha256
+                              ExpectedStoreHeadSha256=beforeStoreHead.HeadSha256
                               JournalResourceId=claimPins.JournalResourceId
                               ExpectedHeadGeneration=head.Generation
                               ExpectedHeadSha256=head.SealSha256 }
@@ -238,7 +252,8 @@ module MigrationProtectedIssueCensusClaim =
                     match readStoreHead store selection storeResourceId proof storeGeneration with
                     | Error reason -> Error reason
                     | Ok before ->
-                        match verifyAndClaimJournal attestationPins claimPins selection storeResourceId
+                        match verifyAndClaimJournal attestationPins claimPins storeHeadPins before
+                                                    selection storeResourceId
                                                     proof storeGeneration attestation clock claimPort with
                         | Error reason -> Error reason
                         | Ok () ->
