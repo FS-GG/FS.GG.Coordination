@@ -146,8 +146,9 @@ class ReviewReadAdapter:
             raise Refused("review-workflow-binding")
         self.transport = transport
         self.audit = audit
-        self.workflow = envelope
-        self.facts = facts
+        self.workflow_input = envelope
+        self.workflow = copy.deepcopy(envelope)
+        self.facts = self.workflow["facts"]
         self.repository_id = repository_id
         self.organization_id = organization_id
         self.reviewer_id = reviewer_id
@@ -158,6 +159,8 @@ class ReviewReadAdapter:
         self.now = now
 
     def observe_review(self) -> dict[str, Any]:
+        if self.workflow_input != self.workflow:
+            raise Refused("review-workflow-drift")
         scope_before = _scope(self.transport, self.repository_id, self.now)
         if (scope_before["principalId"] == self.workflow["principalId"]
                 or scope_before["credentialId"] == self.workflow["credentialId"]):
@@ -244,6 +247,8 @@ class ReviewReadAdapter:
                 or not approved < expires
                 or expires - approved > dt.timedelta(minutes=30)):
             raise Refused("review-audit-time")
+        if self.workflow_input != self.workflow:
+            raise Refused("review-workflow-drift")
         scope_after = _scope(self.transport, self.repository_id, self.now)
         if scope_after != scope_before:
             raise Refused("review-scope-drift")
