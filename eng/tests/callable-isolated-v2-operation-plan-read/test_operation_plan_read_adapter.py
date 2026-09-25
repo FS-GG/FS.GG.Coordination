@@ -1,6 +1,7 @@
 """Independent fake-store controls for a held operation-plan observer."""
 
 import copy
+import dataclasses
 import datetime as dt
 import hashlib
 import json
@@ -106,6 +107,32 @@ class FakeSeal:
 
 
 class OperationPlanTests(unittest.TestCase):
+    def test_same_sealed_read_exposes_canonical_request_without_candidate_blob(self):
+        envelopes, record, scope, seal = fixture()
+        port = FakePort(canonical(record), scope)
+        independent = FakeSeal(seal)
+        adapter = plan.OperationPlanReadAdapter(port, independent, *envelopes,
+                                                500, "f" * 64, NOW)
+        observation, verified = adapter.observe_with_verified_request()
+        self.assertEqual(port.reads, [500])
+        self.assertEqual(len(independent.calls), 1)
+        self.assertEqual(observation["blobs"], {})
+        self.assertEqual(verified.canonical_request, canonical(record["request"]))
+        self.assertEqual(verified.request_sha256,
+                         record["operation"]["requestSha256"])
+        self.assertEqual(verified.operation_id, record["operation"]["id"])
+        self.assertEqual(verified.plan_record_id, 500)
+        self.assertEqual(verified.plan_sha256, sha(canonical(record)))
+        self.assertEqual(verified.schema, plan.REQUEST_SCHEMA)
+        self.assertFalse(verified.authorized)
+        self.assertFalse(verified.can_dispatch)
+        self.assertEqual(verified.live_effects, 0)
+        for changed in ({"authorized": True}, {"can_dispatch": True},
+                        {"live_effects": 1}, {"schema": "foreign"}):
+            with self.subTest(changed=changed):
+                with self.assertRaises((TypeError, ValueError)):
+                    dataclasses.replace(verified, **changed)
+
     def observe(self, envelopes=None, record=None, raw=None, scope=None, seal=None):
         selected, prepared, reader_scope, attestation = fixture()
         source = selected if envelopes is None else envelopes

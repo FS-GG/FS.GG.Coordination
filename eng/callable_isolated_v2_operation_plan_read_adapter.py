@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import datetime as dt
 import hashlib
 import json
@@ -13,11 +14,27 @@ import callable_isolated_v2_effect_candidate as candidate
 
 PLAN_SCHEMA = "fsgg.coordination.callable-isolated-v2-operation-plan/1"
 SEAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-plan-seal/1"
+REQUEST_SCHEMA = "fsgg.coordination.callable-isolated-v2-verified-request/1"
 TITLE = "V2-CALL-01.4b synthetic delivery v2"
 
 
 class Refused(ValueError):
     """Fixed refusal without plan, provider or credential contents."""
+
+
+@dataclasses.dataclass(frozen=True)
+class VerifiedRequest:
+    """Closed request bytes from the same canonical plan and seal read."""
+
+    plan_record_id: int
+    plan_sha256: str
+    operation_id: str
+    request_sha256: str
+    canonical_request: bytes
+    schema: str = dataclasses.field(init=False, default=REQUEST_SCHEMA)
+    authorized: bool = dataclasses.field(init=False, default=False)
+    can_dispatch: bool = dataclasses.field(init=False, default=False)
+    live_effects: int = dataclasses.field(init=False, default=0)
 
 
 class PlanReadPort(Protocol):
@@ -122,6 +139,11 @@ class OperationPlanReadAdapter:
         self.now = now
 
     def observe_operation_plan(self) -> dict[str, Any]:
+        observation, _ = self.observe_with_verified_request()
+        return observation
+
+    def observe_with_verified_request(self) -> tuple[dict[str, Any], VerifiedRequest]:
+        """Return the existing candidate observation and sealed request once."""
         source, workflow, review, target = self.selected
         source_facts = source["facts"]
         workflow_facts = workflow["facts"]
@@ -266,7 +288,7 @@ class OperationPlanReadAdapter:
                 or expires > review_expires
                 or expires - sealed_at > dt.timedelta(minutes=30)):
             raise Refused("plan-seal-time")
-        return {"envelope": {
+        observation = {"envelope": {
             "schema": observers.SCHEMA, "role": "operation-plan", "complete": True,
             "principalId": scope_after["principalId"],
             "credentialId": scope_after["credentialId"],
@@ -274,3 +296,6 @@ class OperationPlanReadAdapter:
             "candidateSha256": self.candidate_sha256,
             "observedAt": self.now.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "facts": {"operation": operation}}, "blobs": {}}
+        verified = VerifiedRequest(self.record_id, digest, operation["id"],
+                                   request_sha, _canonical(request))
+        return observation, verified
