@@ -89,6 +89,34 @@ module CodexAppServerContinuity =
         | true, value ->
             value.ValueKind = JsonValueKind.String || value.ValueKind = JsonValueKind.Null
 
+    let private optionalNullableInt32 (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | false, _ -> true
+        | true, value when value.ValueKind = JsonValueKind.Null -> true
+        | true, value when value.ValueKind = JsonValueKind.Number ->
+            match value.TryGetInt32() with
+            | true, _ -> true
+            | _ -> false
+        | _ -> false
+
+    let private optionalNullableInt64 (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | false, _ -> true
+        | true, value when value.ValueKind = JsonValueKind.Null -> true
+        | true, value when value.ValueKind = JsonValueKind.Number ->
+            match value.TryGetInt64() with
+            | true, _ -> true
+            | _ -> false
+        | _ -> false
+
+    let private optionalCommandSource (node: JsonElement) =
+        match node.TryGetProperty "source" with
+        | false, _ -> true
+        | true, value when value.ValueKind = JsonValueKind.String ->
+            Set.contains (value.GetString())
+                (set [ "agent"; "userShell"; "unifiedExecStartup"; "unifiedExecInteraction" ])
+        | _ -> false
+
     let private validCommandAction (action: JsonElement) =
         if action.ValueKind <> JsonValueKind.Object then false
         else
@@ -142,6 +170,13 @@ module CodexAppServerContinuity =
                                 && status.ValueKind = JsonValueKind.String
                                 && Set.contains (status.GetString())
                                     (set [ "inProgress"; "completed"; "failed"; "declined" ])
+                                && optionalNullableString item "aggregatedOutput"
+                                && optionalNullableString item "pluginId"
+                                && optionalNullableString item "processId"
+                                && optionalNullableString item "scriptPath"
+                                && optionalNullableInt64 item "durationMs"
+                                && optionalNullableInt32 item "exitCode"
+                                && optionalCommandSource item
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
