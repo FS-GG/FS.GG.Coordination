@@ -110,6 +110,8 @@ module MigrationReviewDeliveryCapture =
             Rest { Method=Get; Uri=target; Headers=headers; Body=None
                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
         match transport.Send request with
+        | Response response when response.StatusCode = 200 && isNull response.Body ->
+            fail "invalid:null-body"
         | Response response when response.StatusCode = 200 -> response
         | Response response -> fail $"http:{response.StatusCode}"
         | NetworkFailure | TimedOut -> fail "transport:unavailable"

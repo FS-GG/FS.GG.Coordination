@@ -91,6 +91,21 @@ let ``missing check continuation refuses rather than accepting a partial count``
     Assert.True(transport.Requests.Length < 16)
 
 [<Fact>]
+let ``HTTP 200 null body refuses before any later stream request`` () =
+    let route request =
+        match request with
+        | Rest rest when rest.Uri.AbsolutePath.EndsWith("/check-runs", StringComparison.Ordinal) ->
+            ok Map.empty null
+        | _ -> responseForPull request
+    let transport = FakeTransport route
+    assertError "invalid:null-body" (capture transport)
+    Assert.DoesNotContain(transport.Requests, fun request ->
+        match request with
+        | Rest rest -> rest.Uri.AbsolutePath.EndsWith("/statuses", StringComparison.Ordinal)
+                       || rest.Uri.AbsolutePath.EndsWith("/tags", StringComparison.Ordinal)
+        | _ -> false)
+
+[<Fact>]
 let ``escaped check continuation refuses before dispatch to foreign authority`` () =
     let route request =
         match request with
