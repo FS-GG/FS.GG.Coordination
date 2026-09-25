@@ -8,6 +8,7 @@ credential, HTTP client, grant, journal or dispatch port is present.
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -79,7 +80,7 @@ def _scope(transport: ReviewReadTransport, repository_id: int, now: dt.datetime)
             raise Refused("review-scope-expired")
     except candidate.Refused:
         raise Refused("review-scope-expired") from None
-    return value
+    return copy.deepcopy(value)
 
 
 def _read(transport: ReviewReadTransport, path: str) -> tuple[object, bytes]:
