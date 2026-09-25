@@ -1,0 +1,19 @@
+{
+  "schema": "fsgg.coordination.callable-isolated-operation-proposal/5",
+  "identity": "v2-call-01-4b-isolated-native-v2-provisional",
+  "state": "prepared-not-authorized",
+  "authorized": false,
+  "contract": {
+    "path": "eng/callable-cli-isolated-operation-v2-contract.json",
+    "sha256": "f319d096b5b945edb1304ed5be146dce53ef16307d3bd8225dd65e2868f47747",
+    "operationSourceSha256": "748af1842aaf9b62b747926c4f824b174eb816230c4d10301735d38092e4dbaf"
+  },
+  "historicalPreflight": {
+    "path": "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json",
+    "sha256": "ca9ee64633866425ced8d4578964df70eb3dc4cac2fd420f2d2963d5222e7de8",
+    "operationIdentity": "v2-call-01-4b-isolated-native-v1",
+    "authority": "historical-observation-only"
+  },
+  "requiredBeforeAnyEffect": "new typed authority contract, sealed candidate, protected grant, and fresh capability readback",
+  "proposalSha256": "771a6596314e578a101750744a4a413b92a97ecb6845d3f72e7e2075323f6a61"
+}

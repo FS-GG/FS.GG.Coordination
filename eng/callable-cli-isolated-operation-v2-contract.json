@@ -1,0 +1,29 @@
+{
+  "schema": "fsgg.coordination.callable-isolated-operation-contract/5",
+  "identity": "v2-call-01-4b-isolated-native-v2-provisional",
+  "state": "prepared-not-authorized",
+  "authorized": false,
+  "source": {
+    "operationSource": "eng/callable-cli-isolated-operation-v2.py",
+    "operationSourceSha256": "748af1842aaf9b62b747926c4f824b174eb816230c4d10301735d38092e4dbaf"
+  },
+  "qualificationControls": {
+    "path": "eng/tests/fsc07-isolated-operation/test_versioned_operator_readback.py",
+    "sha256": "8e92cf365c147eaf4bde189e747b4759f22cf5ffa7ccf2e181467fa860746a76"
+  },
+  "historicalPreflight": {
+    "path": "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json",
+    "sha256": "ca9ee64633866425ced8d4578964df70eb3dc4cac2fd420f2d2963d5222e7de8",
+    "operationIdentity": "v2-call-01-4b-isolated-native-v1",
+    "authority": "historical-observation-only"
+  },
+  "scope": "offline-inspect-and-controlled-transcript-only; no live provider authority or effect command",
+  "forbidden": [
+    "live-provider-mutation",
+    "new-external-acceptance",
+    "migration-or-cutover",
+    "production-writer-enable",
+    "historical-operation-rewrite"
+  ],
+  "contractSha256": "f319d096b5b945edb1304ed5be146dce53ef16307d3bd8225dd65e2868f47747"
+}
