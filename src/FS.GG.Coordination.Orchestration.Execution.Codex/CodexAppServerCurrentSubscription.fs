@@ -26,6 +26,7 @@ type CodexAppServerReservedSubscription =
     {
         Reservation: DirectSessionChallengeReservationReceipt
         Binding: CodexAppServerSubscriptionBinding
+        SubscribedAt: DateTimeOffset
     }
 
 [<RequireQualifiedAccess>]
@@ -125,4 +126,8 @@ module CodexAppServerCurrentSubscription =
                                               expectedScope observation.Binding.TurnId expectedTransport
                                               bindingAdapter with
                                     | Error code -> gap code
-                                    | Ok _ -> Ok { Reservation = receipt; Binding = observation.Binding }
+                                    | Ok _ ->
+                                        Ok
+                                            { Reservation = receipt
+                                              Binding = observation.Binding
+                                              SubscribedAt = observation.SubscribedAt }
