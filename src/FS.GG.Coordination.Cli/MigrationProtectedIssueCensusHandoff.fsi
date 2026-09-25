@@ -64,6 +64,11 @@ type IProtectedIssueCensusHandoffPort =
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusHandoff =
+    /// Stable identity shared with a future protected native provider adapter.
+    val attemptId:
+        reservationId:string ->
+        pins:ProtectedIssueCensusHandoffPins -> string
+
     /// Fake-port marker only. No token is minted, returned, logged or dispatched.
     val mark:
         attestationPins:ProtectedIssueCensusAttestationPins ->

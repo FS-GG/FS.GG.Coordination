@@ -73,7 +73,7 @@ module MigrationProtectedIssueCensusHandoff =
 
     let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
-    let private attemptId (reservationId: string) (pins: ProtectedIssueCensusHandoffPins) =
+    let attemptId (reservationId: string) (pins: ProtectedIssueCensusHandoffPins) =
         [ "fsgg.gs2-09.7.protected-census-native-attempt/v1"
           pins.NativeAttemptNamespaceId; reservationId
           string pins.AppId; string pins.InstallationId; string pins.RepositoryId
