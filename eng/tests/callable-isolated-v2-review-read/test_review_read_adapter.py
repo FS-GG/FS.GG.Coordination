@@ -232,6 +232,29 @@ class ReviewReadTests(unittest.TestCase):
         with self.assertRaises(review.Refused):
             reader.observe_review()
 
+    def test_workflow_actor_mutated_after_review_construction_refuses(self):
+        selected_workflow, scope, approvals, membership, audit = fixture()
+        reader = review.ReviewReadAdapter(
+            FakeTransport(scope, approvals, membership), FakeAudit(audit),
+            selected_workflow, 123, 88, 203, "reviewer", 500, "d" * 64,
+            "2026-09-25T12:20:00Z", NOW)
+        selected_workflow["facts"]["dispatchActorId"] = 203
+        with self.assertRaises(review.Refused):
+            reader.observe_review()
+        selected_workflow, scope, approvals, membership, audit = fixture()
+        class MutatingTransport(FakeTransport):
+            def get(self, path):
+                response = super().get(path)
+                if len(self.paths) == 1:
+                    selected_workflow["facts"]["dispatchActorId"] = 203
+                return response
+        reader = review.ReviewReadAdapter(
+            MutatingTransport(scope, approvals, membership), FakeAudit(audit),
+            selected_workflow, 123, 88, 203, "reviewer", 500, "d" * 64,
+            "2026-09-25T12:20:00Z", NOW)
+        with self.assertRaises(review.Refused):
+            reader.observe_review()
+
 
 if __name__ == "__main__":
     unittest.main()
