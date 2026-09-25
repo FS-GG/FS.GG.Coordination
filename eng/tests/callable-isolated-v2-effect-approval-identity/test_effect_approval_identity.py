@@ -16,6 +16,7 @@ sys.path.insert(0, str(ENG))
 import callable_isolated_v2_effect_release_preflight as release
 import callable_isolated_v2_effect_producer_artifact as producer
 import callable_isolated_v2_effect_approval_identity as approval
+import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 NOW = dt.datetime(2026, 9, 25, 12, tzinfo=dt.timezone.utc)
 REV = "a" * 40
@@ -23,8 +24,8 @@ TREE = "b" * 40
 MANIFEST = "c" * 64
 ARCHIVE = "d" * 64
 BUNDLE = "e" * 64
-WORKFLOW = "f" * 64
-BLOB = "1" * 40
+WORKFLOW = closed_workflow.PINNED_WORKFLOW_SHA256
+BLOB = closed_workflow.PINNED_WORKFLOW_BLOB_OID
 
 
 def canonical(value):
@@ -166,6 +167,22 @@ class ApprovalIdentityTests(unittest.TestCase):
         event.read_approval_event = mutate_on_read
         with self.assertRaises(approval.Refused):
             approval.qualify(preflight, made, identity, event, selection, NOW)
+
+    def test_coherent_foreign_workflow_approval_refuses(self):
+        for field, value in (("workflowSha256", "9" * 64),
+                             ("workflowBlobOid", "2" * 40)):
+            with self.subTest(field=field):
+                preflight, made, selection, identity, event = fixture()
+                object.__setattr__(made,
+                    "workflow_sha256" if field == "workflowSha256"
+                    else "workflow_blob_oid", value)
+                claim = json.loads(event.record)
+                claim[field] = value
+                event.record = canonical(claim)
+                selection["approvalEventSha256"] = hashlib.sha256(event.record).hexdigest()
+                with self.assertRaises(approval.Refused):
+                    approval.qualify(preflight, made, identity, event,
+                                     selection, NOW)
 
 
 if __name__ == "__main__":

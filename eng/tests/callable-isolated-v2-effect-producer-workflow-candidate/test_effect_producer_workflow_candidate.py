@@ -25,6 +25,8 @@ class ProducerWorkflowCandidateTests(unittest.TestCase):
               mock.patch("sqlite3.connect", side_effect=AssertionError("journal"))):
             result = verifier.verify(raw, hashlib.sha256(raw).hexdigest())
         self.assertEqual(result["workflowSha256"], verifier.PINNED_WORKFLOW_SHA256)
+        self.assertEqual(result["workflowBlobOid"],
+                         verifier.PINNED_WORKFLOW_BLOB_OID)
         self.assertFalse(result["producerEnabled"])
         self.assertFalse(result["authorized"])
         self.assertFalse(result["canDispatch"])

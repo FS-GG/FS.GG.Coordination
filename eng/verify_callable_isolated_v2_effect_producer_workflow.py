@@ -6,6 +6,7 @@ import hashlib
 import re
 
 PINNED_WORKFLOW_SHA256 = "cb0183fe19b6b3a06e27f5112e4e65bbd8d7ceeac1c0d6693bcf260cb0be1820"
+PINNED_WORKFLOW_BLOB_OID = "49dc5dc03ae143ef50b74100f8f9d7262ebf558d"
 SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-producer-workflow-check/1"
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 REQUIRED = (
@@ -44,7 +45,9 @@ def verify(raw: bytes, approved_sha256: str) -> dict[str, object]:
             or type(approved_sha256) is not str
             or HEX64.fullmatch(approved_sha256) is None
             or approved_sha256 != PINNED_WORKFLOW_SHA256
-            or hashlib.sha256(raw).hexdigest() != PINNED_WORKFLOW_SHA256):
+            or hashlib.sha256(raw).hexdigest() != PINNED_WORKFLOW_SHA256
+            or hashlib.sha1(b"blob " + str(len(raw)).encode() + b"\0" + raw).hexdigest()
+               != PINNED_WORKFLOW_BLOB_OID):
         raise Refused("producer-workflow-digest")
     try:
         text = raw.decode("ascii")
@@ -64,5 +67,6 @@ def verify(raw: bytes, approved_sha256: str) -> dict[str, object]:
     if positions != sorted(positions):
         raise Refused("producer-workflow-step-order")
     return {"schema": SCHEMA, "workflowSha256": PINNED_WORKFLOW_SHA256,
+            "workflowBlobOid": PINNED_WORKFLOW_BLOB_OID,
             "producerEnabled": False, "authorized": False,
             "canDispatch": False, "liveEffects": 0}

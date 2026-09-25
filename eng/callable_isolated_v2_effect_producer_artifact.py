@@ -15,6 +15,7 @@ import callable_isolated_v2_effect_candidate as candidate
 import callable_isolated_v2_effect_git_tree_witness as git_tree
 import callable_isolated_v2_effect_producer_workflow_source as workflow_source_check
 import callable_isolated_v2_effect_release_preflight as release
+import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 RUN_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-run/1"
 ARTIFACT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-artifact/1"
@@ -135,7 +136,8 @@ def qualify(preflight: release.PreflightResult,
                         "producerRunAttempt", "producerActorId", "workflowId",
                         "artifactId"))
             or selection["workflowPath"] != WORKFLOW
-            or not candidate._hex(selection["workflowSha256"], candidate.HEX64)
+            or selection["workflowSha256"] !=
+               closed_workflow.PINNED_WORKFLOW_SHA256
             or not candidate._hex(preflight.coordination_revision, candidate.HEX40)
             or not candidate._hex(preflight.source_tree, candidate.HEX40)
             or not candidate._hex(preflight.archive_sha256, candidate.HEX64)
@@ -171,8 +173,8 @@ def qualify(preflight: release.PreflightResult,
             or workflow_source.identity_event_id != selection["identityEventId"]
             or workflow_source.workflow_path != WORKFLOW
             or workflow_source.workflow_sha256 != selection["workflowSha256"]
-            or not candidate._hex(workflow_source.workflow_blob_oid,
-                                  candidate.HEX40)
+            or workflow_source.workflow_blob_oid !=
+               closed_workflow.PINNED_WORKFLOW_BLOB_OID
             or type(now) is not dt.datetime or now.tzinfo is None
             or now.utcoffset() != dt.timedelta(0)):
         raise Refused("producer-selection-invalid")
