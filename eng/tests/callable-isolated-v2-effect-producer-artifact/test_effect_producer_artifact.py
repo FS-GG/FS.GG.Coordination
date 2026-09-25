@@ -20,6 +20,7 @@ import callable_isolated_v2_effect_release_preflight as release
 import callable_isolated_v2_effect_git_tree_witness as tree_witness
 import callable_isolated_v2_effect_producer_artifact as producer
 import callable_isolated_v2_effect_producer_workflow_source as workflow_source
+import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 NOW = dt.datetime(2026, 9, 25, 12, tzinfo=dt.timezone.utc)
 REV = "a" * 40
@@ -70,7 +71,8 @@ def fixture():
     selected = {"repositoryId": 77, "identityEventId": 808,
         "producerRunId": 202, "producerRunAttempt": 1,
         "producerActorId": 303, "workflowId": 909,
-        "workflowPath": workflow, "workflowSha256": "e" * 64,
+        "workflowPath": workflow,
+        "workflowSha256": closed_workflow.PINNED_WORKFLOW_SHA256,
         "artifactId": 404}
     run_scope = {"principalId": "run-reader", "credentialId": "1" * 64,
         "repository": release.REPOSITORY, "repositoryId": 77,
@@ -87,7 +89,8 @@ def fixture():
         "headTree": TREE, "headBranch": "main", "event": "workflow_dispatch",
         "status": "completed", "conclusion": "success",
         "actorId": 303, "workflowId": 909, "workflowPath": workflow,
-        "workflowSha256": "e" * 64, "artifactIds": [404],
+        "workflowSha256": closed_workflow.PINNED_WORKFLOW_SHA256,
+        "artifactIds": [404],
         "createdAt": "2026-09-25T11:55:00Z",
         "completedAt": "2026-09-25T11:57:00Z"}
     artifact = {"schema": producer.ARTIFACT_SCHEMA, "complete": True,
@@ -108,7 +111,8 @@ def source_result(preflight, selected):
     return workflow_source.WorkflowSourceResult(
         preflight.coordination_revision, preflight.source_tree,
         selected["repositoryId"], selected["identityEventId"],
-        selected["workflowPath"], selected["workflowSha256"], "f" * 40)
+        selected["workflowPath"], selected["workflowSha256"],
+        closed_workflow.PINNED_WORKFLOW_BLOB_OID)
 
 
 class ProducerArtifactTests(unittest.TestCase):
@@ -143,7 +147,8 @@ class ProducerArtifactTests(unittest.TestCase):
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.archive_sha256, preflight.archive_sha256)
-        self.assertEqual(result.workflow_blob_oid, "f" * 40)
+        self.assertEqual(result.workflow_blob_oid,
+                         closed_workflow.PINNED_WORKFLOW_BLOB_OID)
         self.assertEqual(len(run_port.reads), 2)
         self.assertEqual(len(bundle_port.reads), 1)
 
@@ -212,6 +217,21 @@ class ProducerArtifactTests(unittest.TestCase):
         preflight, tree, selected, run_port, bundle_port = fixture()
         selected_source = source_result(preflight, selected)
         object.__setattr__(selected_source, "coordination_revision", "f" * 40)
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW, workflow_source=selected_source)
+
+    def test_coherent_foreign_workflow_source_blob_refuses(self):
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        selected_source = source_result(preflight, selected)
+        object.__setattr__(selected_source, "workflow_blob_oid", "2" * 40)
+        with self.assertRaises(producer.Refused):
+            producer.qualify(preflight, tree, run_port, bundle_port,
+                             selected, NOW, workflow_source=selected_source)
+        preflight, tree, selected, run_port, bundle_port = fixture()
+        selected["workflowSha256"] = "9" * 64
+        run_port.run["workflowSha256"] = "9" * 64
+        selected_source = source_result(preflight, selected)
         with self.assertRaises(producer.Refused):
             producer.qualify(preflight, tree, run_port, bundle_port,
                              selected, NOW, workflow_source=selected_source)

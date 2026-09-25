@@ -13,6 +13,7 @@ from typing import Any, Protocol
 import callable_isolated_v2_effect_candidate as candidate
 import callable_isolated_v2_effect_producer_artifact as producer
 import callable_isolated_v2_effect_release_preflight as release
+import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-reviewer-identity/1"
 EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/1"
@@ -174,8 +175,10 @@ def qualify(preflight: release.PreflightResult,
             or produced.archive_sha256 != preflight.archive_sha256
             or not candidate._hex(preflight.manifest_sha256, candidate.HEX64)
             or not candidate._hex(produced.bundle_sha256, candidate.HEX64)
-            or not candidate._hex(produced.workflow_sha256, candidate.HEX64)
-            or not candidate._hex(produced.workflow_blob_oid, candidate.HEX40)
+            or produced.workflow_sha256 !=
+               closed_workflow.PINNED_WORKFLOW_SHA256
+            or produced.workflow_blob_oid !=
+               closed_workflow.PINNED_WORKFLOW_BLOB_OID
             or type(now) is not dt.datetime or now.tzinfo is None
             or now.utcoffset() != dt.timedelta(0)):
         raise Refused("approval-selection-invalid")
