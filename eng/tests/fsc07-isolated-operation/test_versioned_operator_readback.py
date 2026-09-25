@@ -426,6 +426,43 @@ class VersionedReadbackTests(unittest.TestCase):
             expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_native_protection_refuses_foreign_branch_commit_url(self):
+        selected = f"https://api.github.com/repos/FS-GG/disposable/commits/{SHA_B}"
+        foreign = f"https://api.github.com/repos/FS-GG/foreign/commits/{SHA_B}"
+        for probe in (2, 6):
+            for url in (foreign, selected + "?alias=1", None, selected):
+                with self.subTest(probe=probe, url=url):
+                    events = protection_read_events(
+                        protected=True, policy=protection_observed().policy)
+                    events[probe]["response"]["json"]["commit"]["url"] = url
+                    reader = operator.NativeReadAdapter(
+                        operator.OfflineTranscriptTransport(events))
+                    if url == selected:
+                        self.assertTrue(reader.read_protection(
+                            protection_expected()).protected)
+                    else:
+                        with self.assertRaisesRegex(
+                                operator.Refused,
+                                ("native-branch-identity" if probe == 2
+                                 else "native-protection-terminal-branch-drift")):
+                            reader.read_protection(protection_expected())
+
+    def test_lost_response_foreign_branch_commit_url_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        foreign = f"https://api.github.com/repos/FS-GG/foreign/commits/{SHA_B}"
+        for index in (2, 6):
+            post[index]["response"]["json"]["commit"]["url"] = foreign
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
