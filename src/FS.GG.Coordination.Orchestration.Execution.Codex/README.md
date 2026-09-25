@@ -95,6 +95,10 @@ cumulative token snapshots do not provide completed-turn usage, so this result c
 telemetry mapper or prove a Host receipt. No trusted sealed reader or native capture path is
 installed.
 
+The continuity entry point refuses a malformed expected workspace/item scope before reading a
+subscription authenticator, even when a supplied binding would echo that same malformed scope.
+This uses the telemetry mapper's scope grammar and does not establish source authentication.
+
 `CodexAppServerUsageTruth` emits a canonical workspace/item/session/thread/turn correlation with
 an explicit no-usage verdict. In the pinned App Server v2 0.156.1 schema, `turn/completed` carries
 turn status but no usage; `thread/tokenUsage/updated` carries `last` and cumulative snapshots. The

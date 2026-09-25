@@ -90,6 +90,26 @@ type CodexAppServerContinuityTests() =
             )
 
     [<Fact>]
+    member _.``equal malformed expected and bound scopes refuse before source read``() =
+        let malformedScopes =
+            [ { scope with Repository = "FS-GG"; IssueRef = "FS-GG#123" }
+              { scope with IssueRef = "FS-GG/other#123" }
+              { scope with BindingDigest = "not-a-digest" }
+              { scope with WorkspaceId = " " } ]
+        for malformed in malformedScopes do
+            let mutable reads = 0
+            let source =
+                { new ICodexAppServerSubscriptionAuthenticator with
+                    member _.ReadBoundSubscription() =
+                        reads <- reads + 1
+                        Ok { binding with Scope = malformed } }
+            Assert.Equal(
+                Error "app-server-subscription-input-invalid",
+                CodexAppServerContinuity.beginWindow malformed "native-turn" transport source
+            )
+            Assert.Equal(0, reads)
+
+    [<Fact>]
     member _.``missing start and duplicate start are permanent gaps``() =
         let missing = CodexAppServerContinuity.apply (beginBound ()) (frame 1L usage)
         Assert.Equal(ContinuityGap "app-server-continuity-start-missing", status missing)

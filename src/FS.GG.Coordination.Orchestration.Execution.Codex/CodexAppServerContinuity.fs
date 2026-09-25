@@ -148,6 +148,7 @@ module CodexAppServerContinuity =
         (authenticator: ICodexAppServerSubscriptionAuthenticator)
         : Result<CodexAppServerContinuityState, string> =
         if isNull (box expectedScope)
+           || not (DirectSessionTelemetryFacts.validScope expectedScope)
            || not (boundedText expectedTurn)
            || not (boundedText expectedTransport)
            || isNull (box authenticator) then
