@@ -49,10 +49,10 @@ def qualify(source_tree: git_tree.TreeWitnessResult,
             git_port: git_tree.GitObjectPort, selection: dict[str, Any],
             now: dt.datetime) -> WorkflowSourceResult:
     """Require the selected producer workflow's exact Git blob; no dispatch."""
-    selection = _exact(selection, {"repositoryId", "identityEventId",
+    selection = dict(_exact(selection, {"repositoryId", "identityEventId",
         "workflowSha256", "gitReaderPrincipalId", "gitReaderCredentialId",
         "sourceReaderPrincipalId", "sourceReaderCredentialId"},
-        "workflow-source-selection-shape")
+        "workflow-source-selection-shape"))
     if (type(source_tree) is not git_tree.TreeWitnessResult
             or source_tree.schema != git_tree.RESULT_SCHEMA
             or source_tree.authorized is not False

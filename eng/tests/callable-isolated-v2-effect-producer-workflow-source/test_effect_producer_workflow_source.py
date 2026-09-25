@@ -67,6 +67,20 @@ class ProducerWorkflowSourceTests(unittest.TestCase):
         self.refuses(lambda t, _g, _s: object.__setattr__(t, "source_tree", "f" * 40))
         self.refuses(lambda _t, g, _s: g.objects.__setitem__(git_oid("blob", RAW), b"foreign"))
 
+    def test_git_read_cannot_replace_foreign_selected_workflow_digest(self):
+        source_tree, port, selection = fixture()
+        expected = selection["workflowSha256"]
+        selection["workflowSha256"] = "f" * 64
+        original_read = port.read_commit
+
+        def read_commit(oid):
+            selection["workflowSha256"] = expected
+            return original_read(oid)
+
+        port.read_commit = read_commit
+        with self.assertRaises(workflow.Refused):
+            workflow.qualify(source_tree, port, selection, NOW)
+
     def test_digest_consistent_foreign_workflow_refuses_before_producer_read(self):
         source_tree, port, selection = fixture(raw=FOREIGN_RAW)
         with self.assertRaises(workflow.Refused):
