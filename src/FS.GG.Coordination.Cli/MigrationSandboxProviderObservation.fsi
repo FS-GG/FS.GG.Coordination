@@ -61,12 +61,13 @@ type MigrationSandboxProviderFailure =
 
 /// A single terminal census pass, not a quiescent two-pass Q5/Q6 snapshot.
 /// This adapter has no write port or command. ObserveScope always refuses permission
-/// attestation with an installation token alone: the workflow declaration and
-/// X-Accepted-GitHub-Permissions are not evidence of the token's effective grants.
+/// attestation with an installation token alone. ObserveMintedScope consumes the
+/// protected workflow's sanitized mint artifact and rechecks live token identities.
 type MigrationSandboxProviderObservation =
     new: options:MigrationSandboxProviderOptions * transport:IMigrationGitHubReadTransport ->
         MigrationSandboxProviderObservation
     member ReadScopeIdentity: unit -> Result<MigrationSandboxScopeIdentityEvidence, MigrationSandboxProviderFailure>
     member ObserveScope: unit -> Result<MigrationSandboxScopeObservation, MigrationSandboxProviderFailure>
+    member ObserveMintedScope: mintProofJson:string * atUtc:DateTimeOffset -> Result<MigrationSandboxScopeObservation, MigrationSandboxProviderFailure>
     member ReadFixture: nonce:string -> Result<MigrationSandboxFixtureEvidence, MigrationSandboxProviderFailure>
     member ObserveFixture: nonce:string -> Result<MigrationSandboxFixtureObservation, MigrationSandboxProviderFailure>
