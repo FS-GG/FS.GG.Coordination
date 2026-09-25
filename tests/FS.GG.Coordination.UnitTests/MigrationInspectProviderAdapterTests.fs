@@ -119,10 +119,13 @@ let private protectedCensusPort descriptor batch =
         member _.Read _ = batch }
 
 let private protectedCensusInventory (batch: ProtectedIssueCensusBatch) =
-    let objectIds = batch.Identity :: batch.Pages |> List.map _.CustodyObjectId
+    let reads = batch.Identity :: batch.Pages
+    let objectIds = reads |> List.map _.CustodyObjectId
     { Selection=batch.Selection; CustodyStoreResourceId=batch.CustodyStoreResourceId
       Complete=true; HighWaterOrdinal=int64 objectIds.Length
-      SealSha256=String.replicate 64 "f"; ObjectIds=objectIds }
+      SealSha256=MigrationProtectedIssueCensus.expectedInventoryCommitment
+                     protectedCensusPins batch.Selection reads
+      ObjectIds=objectIds }
 
 let private protectedCensusStore (batch: ProtectedIssueCensusBatch) =
     let objects =
@@ -411,6 +414,7 @@ let ``protected issue census refuses omitted extra duplicate or drifting store i
           { inventory with Complete=false }
           { inventory with HighWaterOrdinal=3L }
           { inventory with SealSha256="unsealed" }
+          { inventory with SealSha256=String.replicate 64 "f" }
           { inventory with Selection={ inventory.Selection with RunNonce="stale" } } ] do
         Assert.Equal(Error "protected-census-store-inventory",
                      bind (fun () -> Some changed))

@@ -102,6 +102,28 @@ module MigrationProtectedIssueCensus =
 
     let private framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
+    let expectedInventoryCommitment (pins: ProtectedIssueCensusPins)
+                                    (selection: ProtectedIssueCensusSelection)
+                                    (reads: ProtectedIssueCensusRead list) =
+        let atoms =
+            [ "fsgg.gs2-09.7.protected-census-store-inventory/v1"
+              string selection.RunId; string selection.RunAttempt; selection.RunNonce
+              selection.CandidateSha; selection.WorkflowSha; selection.ApiOrigin
+              selection.Owner; selection.Repository; string selection.RepositoryId
+              pins.ReaderResourceId; pins.ReaderArtifactSha256; pins.ProviderResourceId
+              pins.CustodyStoreResourceId; pins.CustodyStoreArtifactSha256
+              pins.CustodyStoreAclPolicySha256; pins.CustodyReaderPrincipalId
+              pins.CustodyWriterPrincipalId; pins.CandidatePrincipalId
+              string reads.Length ]
+            @ (reads |> List.collect (fun read ->
+                [ string read.ReadOrdinal; read.CustodyObjectId; read.RequestMethod
+                  read.RequestUri; read.ResponseUri; string read.StatusCode
+                  read.ProviderResourceId; sha read.RawBody
+                  string read.ResponseHeaders.Length ]
+                @ (read.ResponseHeaders |> List.collect (fun (name, value) ->
+                    [ name; value ]))))
+        atoms |> List.map framed |> String.concat "" |> sha
+
     let private validCapture (read: ProtectedIssueCensusRead) =
         try
             let bytes = Convert.FromBase64String read.RawBodyBytesBase64
@@ -204,6 +226,7 @@ module MigrationProtectedIssueCensus =
         && inventory.Complete
         && inventory.HighWaterOrdinal = int64 reads.Length
         && exactSha 64 inventory.SealSha256
+        && inventory.SealSha256 = expectedInventoryCommitment pins selection reads
         && inventory.ObjectIds = (reads |> List.map _.CustodyObjectId)
 
     let private verifyStoredReads (pins: ProtectedIssueCensusPins)
@@ -314,7 +337,7 @@ module MigrationProtectedIssueCensus =
                                     |> Result.mapError (fun reason -> $"protected-census-raw-typed:{reason}")
                                     |> Result.map (fun inspect ->
                                         let parts =
-                                            [ "fsgg.gs2-09.7.protected-issue-census/v5"
+                                            [ "fsgg.gs2-09.7.protected-issue-census/v6"
                                               string selection.RunId; string selection.RunAttempt
                                               selection.RunNonce; selection.CandidateSha; selection.WorkflowSha
                                               selection.ApiOrigin; selection.Owner; selection.Repository
