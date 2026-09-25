@@ -507,6 +507,31 @@ module CodexAppServerContinuity =
             | _ -> false
         | _ -> false
 
+    let private validOptionalMisalignment (error: JsonElement) =
+        match error.TryGetProperty "misalignment" with
+        | false, _ -> true
+        | true, details when details.ValueKind = JsonValueKind.Null -> true
+        | true, details when details.ValueKind = JsonValueKind.Object ->
+            let names = details.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                let steerValid =
+                    match details.TryGetProperty "steer" with
+                    | false, _ -> true
+                    | true, steer when steer.ValueKind = JsonValueKind.Null -> true
+                    | true, steer when steer.ValueKind = JsonValueKind.Object ->
+                        let steerNames = steer.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                        if steerNames.Length <> (steerNames |> Set.ofList |> Set.count) then false
+                        else
+                            match steer.TryGetProperty "message" with
+                            | true, message -> message.ValueKind = JsonValueKind.String
+                            | _ -> false
+                    | _ -> false
+                optionalNullableString details "detailedExplanation"
+                && optionalNullableString details "errorType"
+                && steerValid
+        | _ -> false
+
     let private validOptionalTurnError (turn: JsonElement) =
         match turn.TryGetProperty "error" with
         | false, _ -> true
@@ -519,6 +544,7 @@ module CodexAppServerContinuity =
                 | true, message when message.ValueKind = JsonValueKind.String ->
                     optionalNullableString error "additionalDetails"
                     && validOptionalCodexErrorInfo error
+                    && validOptionalMisalignment error
                 | _ -> false
         | _ -> false
 
