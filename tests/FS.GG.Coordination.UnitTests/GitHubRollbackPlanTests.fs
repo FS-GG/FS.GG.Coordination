@@ -17,10 +17,11 @@ let private steps =
     [ step 5 "restore-authority" AuthoritySnapshot; step 4 "restore-schedules" Schedule
       step 3 "restore-v1-projections" V1Projection; step 2 "restore-receiver-pins" ReceiverPin
       step 1 "restore-settings" Settings ]
-let private baseline () =
+let private withSteps candidateSteps =
     qualify "rollback-gs2-09-6-fixture" (revision "a") (digest "b") (digest "c") (digest "d")
-        (digest "e") (digest "f") (digest "1") (digest "2") "VerifiedV2" steps
+        (digest "e") (digest "f") (digest "1") (digest "2") "VerifiedV2" candidateSteps
         (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+let private baseline () = withSteps steps
 let private get = function Ok value -> value | Error findings -> failwithf "unexpected refusal: %A" findings
 let private refusal = function Error findings -> findings | Ok _ -> failwith "invalid rollback plan qualified"
 
@@ -38,6 +39,18 @@ let ``missing domain forward order and altered seal refuse`` () =
     Assert.Contains(MissingDomain Settings, verify plan.Seal { plan with Steps=plan.Steps |> List.filter (fun value -> value.Domain <> Settings) } |> refusal)
     Assert.Contains(InvalidStepPopulation, verify plan.Seal { plan with Steps=List.rev plan.Steps } |> refusal)
     Assert.Equal(Error [ AlteredSeal ], verify (digest "9") plan)
+
+[<Fact>]
+let ``resealed five-domain plan refuses a swapped restoration sequence`` () =
+    let swapped =
+        [ { steps[0] with Domain=Schedule }; { steps[1] with Domain=AuthoritySnapshot } ]
+        @ (steps |> List.skip 2)
+    Assert.Contains(InvalidStepPopulation, withSteps swapped |> refusal)
+
+[<Fact>]
+let ``resealed plan refuses a sixth repeated domain despite contiguous reverse order`` () =
+    let repeated = step 6 "restore-authority-twice" AuthoritySnapshot :: steps
+    Assert.Contains(InvalidStepPopulation, withSteps repeated |> refusal)
 
 [<Fact>]
 let ``receipt prefix resumes at exactly the next reverse step`` () =
