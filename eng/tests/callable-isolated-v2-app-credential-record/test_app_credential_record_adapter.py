@@ -203,6 +203,21 @@ class AppRecordTests(unittest.TestCase):
             ).read_target(digest, responses)
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_mint_reader_scope_mutated_at_final_read_refuses(self):
+        selected, digest, responses, scope, record, witness = fixture()
+        port = FakeMint(scope, canonical(record))
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "8" * 64
+            return shared
+        port.scope = reused_scope
+        with self.assertRaises(app.Refused):
+            app.AppCredentialRecordAdapter(port, FakeWitness(witness),
+                selected, 400, 700, "6" * 64, NOW).read_target(digest, responses)
+
     def test_boolean_repository_id_in_mint_or_effective_scope_refuses(self):
         for location in ("record", "request", "redacted", "effective"):
             for alias in (True, 1.0):

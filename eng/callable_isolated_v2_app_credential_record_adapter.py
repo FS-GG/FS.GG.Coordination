@@ -80,7 +80,7 @@ def _scope(port: MintMetadataPort, now: dt.datetime) -> dict[str, Any]:
             or value["permissions"] != ["read-mint-metadata"]
             or _time(value["expiresAt"]) <= now):
         raise Refused("app-record-reader-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 class AppCredentialRecordAdapter:
