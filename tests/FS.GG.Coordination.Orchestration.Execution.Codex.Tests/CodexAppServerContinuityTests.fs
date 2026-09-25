@@ -84,6 +84,11 @@ type CodexAppServerContinuityTests() =
     let completedWithCollabMetadata fields =
         completedWithCollabToolCall
             (",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\"" + fields)
+    let completedWithWebSearch fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"webSearch\"" + fields + "}]")
+    let completedWithWebSearchMetadata fields =
+        completedWithWebSearch (",\"query\":\"q\"" + fields)
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -721,6 +726,58 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``web search item requires string query``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in [ ""; ",\"query\":null"; ",\"query\":17" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearch fields)))
+            )
+
+    [<Fact>]
+    member _.``web search results and action reject foreign shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"results\":{}"
+              ",\"action\":[]"
+              ",\"action\":{}"
+              ",\"action\":{\"type\":\"foreign\"}"
+              ",\"action\":{\"type\":\"search\",\"type\":\"other\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``web search action optional fields retain variant shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for action in
+            [ "{\"type\":\"search\",\"query\":17}"
+              "{\"type\":\"search\",\"queries\":[\"a\",17]}"
+              "{\"type\":\"search\",\"queries\":{}}"
+              "{\"type\":\"openPage\",\"url\":17}"
+              "{\"type\":\"findInPage\",\"url\":17}"
+              "{\"type\":\"findInPage\",\"pattern\":17}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata (",\"action\":" + action))))
+            )
+
+    [<Fact>]
+    member _.``web search schema actions and nullable results retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"action\":null,\"results\":null"
+              ",\"action\":{\"type\":\"search\",\"query\":null,\"queries\":[\"q\"]},\"results\":[null,17,{}]"
+              ",\"action\":{\"type\":\"openPage\",\"url\":null}"
+              ",\"action\":{\"type\":\"findInPage\",\"url\":\"u\",\"pattern\":null}"
+              ",\"action\":{\"type\":\"other\"}" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata fields)))
             )
 
     [<Fact>]
