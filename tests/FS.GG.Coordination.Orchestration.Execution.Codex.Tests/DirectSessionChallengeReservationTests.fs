@@ -34,7 +34,7 @@ type DirectSessionChallengeReservationTests() =
     let sourceId = "trusted-current-session-source-v1"
     let challenge = String.replicate 64 "d"
     let issuedAt = DateTimeOffset(2026, 9, 25, 12, 0, 0, TimeSpan.Zero)
-    let now = issuedAt.AddMinutes 1.
+    let now = issuedAt.AddSeconds 20.
     let assignment =
         { Scope = scope; NativeSessionId = "native-session-current"; WindowChallenge = challenge }
     let issued =
@@ -80,8 +80,12 @@ type DirectSessionChallengeReservationTests() =
             member _.ReadCurrentWindowTurn() = result }
 
     let clock time =
+        let times = ConcurrentQueue<Result<DateTimeOffset, string>>([ Ok time; Ok(time.AddSeconds 20.) ])
         { new IDirectSessionWindowClock with
-            member _.ReadUtcNow() = Ok time }
+            member _.ReadUtcNow() =
+                match times.TryDequeue() with
+                | true, value -> value
+                | _ -> Error "clock-exhausted" }
 
     let run expected time issuedResult sourceResult store =
         DirectSessionChallengeReservation.prepareOnce expected sourceId (clock time)
@@ -211,6 +215,47 @@ type DirectSessionChallengeReservationTests() =
             Error AlreadyReserved,
             run scope now (Ok issued) (Ok observation) store
         )
+
+    [<Fact>]
+    member _.``pre-reservation turn observation burns challenge without preparing usage``() =
+        for observedAt in [ now.AddSeconds -5.; now ] do
+            let store = AtomicChallengeFakeStore() :> IDirectSessionChallengeReservationStore
+            let times = ConcurrentQueue<Result<DateTimeOffset, string>>([ Ok now; Ok(now.AddSeconds 10.) ])
+            let stale = { observation with ObservedAt = observedAt }
+            let trustedClock =
+                { new IDirectSessionWindowClock with
+                    member _.ReadUtcNow() =
+                        match times.TryDequeue() with
+                        | true, time -> time
+                        | _ -> Error "clock-exhausted" }
+            let result =
+                DirectSessionChallengeReservation.prepareOnce scope sourceId trustedClock
+                    (issuer (Ok issued)) (source (Ok stale)) store
+            match result with
+            | Error(ReservedGap(receipt, "direct-session-reservation-observation-not-prospective")) ->
+                Assert.Equal(challenge, receipt.Request.Challenge)
+            | other -> failwithf "wanted pre-reservation observation gap, received %A" other
+            Assert.Equal(Error AlreadyReserved, run scope now (Ok issued) (Ok observation) store)
+
+    [<Fact>]
+    member _.``clock rollback after reservation burns challenge``() =
+        let store = AtomicChallengeFakeStore() :> IDirectSessionChallengeReservationStore
+        let times = ConcurrentQueue<Result<DateTimeOffset, string>>([ Ok now; Ok(now.AddSeconds -5.) ])
+        let stale = { observation with ObservedAt = now.AddSeconds -10. }
+        let trustedClock =
+            { new IDirectSessionWindowClock with
+                member _.ReadUtcNow() =
+                    match times.TryDequeue() with
+                    | true, time -> time
+                    | _ -> Error "clock-exhausted" }
+        let result =
+            DirectSessionChallengeReservation.prepareOnce scope sourceId trustedClock
+                (issuer (Ok issued)) (source (Ok stale)) store
+        match result with
+        | Error(ReservedGap(receipt, "direct-session-reservation-clock-regressed")) ->
+            Assert.Equal(challenge, receipt.Request.Challenge)
+        | other -> failwithf "wanted regressed-clock gap, received %A" other
+        Assert.Equal(Error AlreadyReserved, run scope now (Ok issued) (Ok observation) store)
 
     [<Fact>]
     member _.``substituted source after reservation is a retained gap``() =

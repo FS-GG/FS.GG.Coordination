@@ -41,6 +41,8 @@ challenge across scopes. The source is read only after a matching reservation re
 error has an unknown effect and must not be retried blindly; a source or clock gap after a confirmed
 reservation burns the challenge. Concurrent fake-store tests exercise this contract, but no durable
 store or trusted clock implementation is installed.
+The second clock read must not precede the reservation read, and the returned turn observation
+must be strictly later than reservation. A chronology gap also burns the confirmed challenge.
 
 `CodexAppServerUsageProjection` is a read-only parser for the installed CLI 0.156.1 app-server v2
 `thread/tokenUsage/updated` notification shape. It preserves the notification's exact thread and
