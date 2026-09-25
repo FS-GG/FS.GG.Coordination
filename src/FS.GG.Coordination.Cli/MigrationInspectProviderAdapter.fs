@@ -713,6 +713,7 @@ module MigrationInspectProviderAdapter =
                     stage <- "response"
                     use document = JsonDocument.Parse body
                     let root = document.RootElement
+                    requireUniqueMembers root
                     let mutable errors = Unchecked.defaultof<JsonElement>
                     require (not (root.TryGetProperty("errors", &errors)))
                     let item = root.GetProperty("data").GetProperty("node")

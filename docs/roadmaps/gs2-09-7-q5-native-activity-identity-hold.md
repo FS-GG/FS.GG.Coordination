@@ -171,6 +171,13 @@ before interpreting project item, field or value pages. This remains a
 source-only precursor; captured-page provenance and complete native inspect
 authority are unproven.
 
+A twenty-fourth independent control found the raw-to-typed native relation
+adapter could accept a captured GraphQL response with duplicate root `data`
+members while the typed relation population stayed unchanged. It was red
+before the repair. The shared relation response parser now refuses duplicate
+JSON members recursively for initial and continuation pages. This does not
+establish protected native capture or complete typed inspect authority.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

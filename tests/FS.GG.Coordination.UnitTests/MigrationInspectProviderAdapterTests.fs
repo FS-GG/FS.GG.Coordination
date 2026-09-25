@@ -547,6 +547,27 @@ let ``native relation adapter binds census and reciprocal raw edges`` () =
                      options issues issueProof population extraMutation)
 
 [<Fact>]
+let ``native relation adapter refuses duplicate raw response envelope`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let issues, issueCalls = readIssues [ repository; reply issueBody ]
+    let issueProof =
+        match MigrationInspectProviderAdapter.bindIssues options issues issueCalls with
+        | Ok proof -> proof | Error reason -> failwithf "Issue proof refused: %s" reason
+    let body = relationReply "ISSUE_1" 1 None None None None
+    let relationTransport = FakeTransport [ reply body ]
+    let population =
+        match MigrationGitHubRead.readNativeRelations options.Repository issues relationTransport with
+        | Ok value -> value | Error failure -> failwithf "Relation reader refused: %A" failure
+    Assert.True(MigrationInspectProviderAdapter.bindNativeRelations
+                    options issues issueProof population relationTransport.Calls |> Result.isOk)
+    let ambiguous = body.Replace("{\"data\":", "{\"data\":null,\"data\":")
+    let changedCalls = relationTransport.Calls |> List.map (fun (request, _) -> request, reply ambiguous)
+    match MigrationInspectProviderAdapter.bindNativeRelations
+              options issues issueProof population changedCalls with
+    | Error reason -> Assert.StartsWith("relation-raw-or-scope:", reason)
+    | Ok _ -> failwith "Duplicate raw relation response envelope was accepted"
+
+[<Fact>]
 let ``native relation continuation contributes linked raw page evidence`` () =
     let issue2 =
         """{"number":2,"id":102,"node_id":"ISSUE_2","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
