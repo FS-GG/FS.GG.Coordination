@@ -11,6 +11,13 @@ before the repair. Reconciliation now refuses blank or duplicate node IDs
 across the combined issue/PR census before a native activity digest can be
 formed. This prevents one native identity from occupying two subject slots.
 
+A second independent control showed the same node ID could occupy a censused
+subject slot and an event slot, or an activity slot could have a blank node
+ID. That control was red before the follow-up repair. Reconciliation now
+checks uniqueness across census and activity records together and refuses
+blank activity node IDs. This remains a typed-capture consistency check;
+it does not prove that the typed records were parsed from provider bytes.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

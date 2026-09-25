@@ -161,7 +161,9 @@ module MigrationNativeActivity =
         elif not inputPopulations then fail "stream-population"
         elif not allPageSets || not allStreamsTerminal then fail "stream-pages"
         elif not allStreamsBound then fail "stream-binding-or-payload"
-        elif not (unique activityNodes) then fail "duplicate-activity"
+        elif not (unique (censusNodes @ activityNodes))
+             || (activityNodes |> List.exists String.IsNullOrWhiteSpace) then
+            fail "duplicate-activity"
         elif orphanReviewComment then fail "orphan-review-comment"
         else
             let pageParts (pages: MigrationRestPageEvidence list) =
