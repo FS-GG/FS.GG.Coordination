@@ -134,6 +134,35 @@ type CodexAppServerJournalTests() =
         Assert.Equal(JournalHalted "app-server-journal-receipt-invalid", status second)
 
     [<Fact>]
+    member _.``immediately reused receipt entry id halts before usage reduction``() =
+        let store =
+            { new ICodexAppServerJournalStore with
+                member _.TryAppend request =
+                    Ok(JournalAppended { Append = request; EntryId = "same-entry" }) }
+        let first = CodexAppServerJournal.recordFrame store (beginBound ()) (frame 1L started)
+        Assert.Equal(RecordedContinuity(InTurn 0), status first)
+        let second = CodexAppServerJournal.recordFrame store first (frame 2L usage)
+        Assert.Equal(JournalHalted "app-server-journal-receipt-invalid", status second)
+
+    [<Fact>]
+    member _.``nonadjacent reused receipt entry id cannot become terminal``() =
+        let store =
+            { new ICodexAppServerJournalStore with
+                member _.TryAppend request =
+                    let ordinal =
+                        match request.Event with
+                        | ObservedFrame(number, _, _, _, _)
+                        | ObservedDisconnect number
+                        | ObservedGap(number, _) -> number
+                    let entryId = if ordinal = 2L then "entry-2" else "entry-1"
+                    Ok(JournalAppended { Append = request; EntryId = entryId }) }
+        let first = CodexAppServerJournal.recordFrame store (beginBound ()) (frame 1L started)
+        let second = CodexAppServerJournal.recordFrame store first (frame 2L usage)
+        Assert.Equal(RecordedContinuity(InTurn 1), status second)
+        let third = CodexAppServerJournal.recordFrame store second (frame 3L completed)
+        Assert.Equal(JournalHalted "app-server-journal-receipt-invalid", status third)
+
+    [<Fact>]
     member _.``sequence gap is retained and a copied frame resists caller mutation``() =
         let fake = AtomicAppServerJournalFake()
         let store = fake :> ICodexAppServerJournalStore

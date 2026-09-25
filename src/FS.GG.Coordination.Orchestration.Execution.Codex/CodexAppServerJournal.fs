@@ -41,6 +41,7 @@ type CodexAppServerJournalWindow =
         {
             Continuity: CodexAppServerContinuityState
             LastEntryId: string option
+            SeenEntryIds: Set<string>
             NextOrdinal: int64
             Halt: string option
         }
@@ -55,7 +56,11 @@ module CodexAppServerJournal =
     let beginWindow expectedScope expectedTurn expectedTransport authenticator =
         CodexAppServerContinuity.beginWindow expectedScope expectedTurn expectedTransport authenticator
         |> Result.map (fun continuity ->
-            { Continuity = continuity; LastEntryId = None; NextOrdinal = 1L; Halt = None })
+            { Continuity = continuity
+              LastEntryId = None
+              SeenEntryIds = Set.empty
+              NextOrdinal = 1L
+              Halt = None })
 
     let status state =
         match state.Halt with
@@ -80,12 +85,14 @@ module CodexAppServerJournal =
             isNull (box receipt)
             || isNull (box receipt.Append)
             || receipt.Append <> request
-            || not (boundedText receipt.EntryId) ->
+            || not (boundedText receipt.EntryId)
+            || Set.contains receipt.EntryId state.SeenEntryIds ->
             halted "app-server-journal-receipt-invalid" state
         | Ok (JournalAppended receipt) ->
             { state with
                 Continuity = applyAccepted state.Continuity
                 LastEntryId = Some receipt.EntryId
+                SeenEntryIds = Set.add receipt.EntryId state.SeenEntryIds
                 NextOrdinal = state.NextOrdinal + 1L }
 
     let private recordGap store state code =

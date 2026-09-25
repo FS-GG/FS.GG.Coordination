@@ -62,8 +62,9 @@ subscription to this interactive thread or transport-journal implementation is i
 `CodexAppServerJournal` adds a dormant atomic append port for that future transport journal. Each
 request carries the exact subscription binding, predecessor receipt, ordinal and immutable frame
 bytes (or a disconnect fact). A matching append receipt permits the in-memory continuity reducer
-to advance. Local frame and sequence refusals are retained as terminal gap entries. A duplicate,
-conflicting or uncertain store outcome permanently halts that window.
+to advance. The writer halts if a matching store receipt reuses any earlier entry ID, as the
+recovery reader would refuse that chain. Local frame and sequence refusals are retained as terminal
+gap entries. A duplicate, conflicting or uncertain store outcome permanently halts that window.
 The fake store tests retention and one winner under concurrent append attempts. No durable store,
 recovery reader, authenticated live transport or current-session source is installed, so this
 contract does not prove upstream notification completeness or session capture.
