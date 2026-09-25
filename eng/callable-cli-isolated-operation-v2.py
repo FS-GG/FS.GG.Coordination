@@ -647,6 +647,12 @@ def _disabled(value: object) -> bool:
     return value is False or (type(value) is dict and value == {"enabled": False})
 
 
+UNSELECTED_PROTECTION_FLAGS = (
+    "required_signatures", "required_linear_history", "block_creations",
+    "required_conversation_resolution", "lock_branch", "allow_fork_syncing",
+)
+
+
 def classify_protection_after_one_attempt(
         expected: ExpectedProtection,
         read: Callable[[], ProtectionReadback],
@@ -684,7 +690,9 @@ def classify_protection_after_one_attempt(
                 or policy.get("required_pull_request_reviews") is not None
                 or policy.get("restrictions") is not None
                 or not _disabled(policy.get("allow_force_pushes"))
-                or not _disabled(policy.get("allow_deletions"))):
+                or not _disabled(policy.get("allow_deletions"))
+                or any(key in policy and not _disabled(policy[key])
+                       for key in UNSELECTED_PROTECTION_FLAGS)):
             return Unknown("branch-protection-readback-mismatch")
         return ExactProtection(_digest({
             "operation_identity": expected.operation_identity,

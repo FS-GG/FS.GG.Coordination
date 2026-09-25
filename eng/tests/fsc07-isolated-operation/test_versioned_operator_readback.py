@@ -265,6 +265,24 @@ class VersionedReadbackTests(unittest.TestCase):
                 self.assertIsInstance(operator.classify_protection_after_one_attempt(
                     protection_expected(), lambda: compatible), operator.ExactProtection)
 
+    def test_protection_rejects_unselected_enabled_policy_flag(self):
+        observed = protection_observed()
+        for key in operator.UNSELECTED_PROTECTION_FLAGS:
+            for value in ({"enabled": True}, True, None, 1.0):
+                with self.subTest(key=key, value=value):
+                    policy = {**observed.policy, key: value}
+                    wrong = dataclasses.replace(observed, policy=policy)
+                    self.assert_unknown(operator.classify_protection_after_one_attempt(
+                        protection_expected(), lambda: wrong,
+                        provider_response={"status": "lost", "body": SENTINEL}))
+            for value in ({"enabled": False}, False):
+                with self.subTest(key=key, disabled=value):
+                    policy = {**observed.policy, key: value}
+                    compatible = dataclasses.replace(observed, policy=policy)
+                    self.assertIsInstance(operator.classify_protection_after_one_attempt(
+                        protection_expected(), lambda: compatible),
+                        operator.ExactProtection)
+
     def test_pull_accepts_only_two_complete_exact_reads(self):
         reads = iter((pull_observed(), pull_observed()))
         result = operator.classify_pull_after_one_attempt(
