@@ -34,6 +34,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
+BRANCH = re.compile(r"[A-Za-z0-9._/-]+\Z")
 
 
 class Refused(Exception):
@@ -394,8 +395,10 @@ def _valid_pull(expected: object) -> bool:
             and REPOSITORY.fullmatch(expected.repository) is not None
             and type(expected.source_ref) is str
             and expected.source_ref.startswith("refs/heads/")
+            and _safe_branch(expected.source_ref.removeprefix("refs/heads/"))
             and type(expected.base_ref) is str
             and expected.base_ref.startswith("refs/heads/")
+            and _safe_branch(expected.base_ref.removeprefix("refs/heads/"))
             and expected.source_ref != expected.base_ref
             and _oid(expected.source_sha) and _oid(expected.base_sha))
 
@@ -404,7 +407,7 @@ def _valid_protection(expected: object) -> bool:
     return (type(expected) is ExpectedProtection and _shape(expected)
             and type(expected.repository) is str
             and REPOSITORY.fullmatch(expected.repository) is not None
-            and type(expected.branch) is str and bool(expected.branch)
+            and _safe_branch(expected.branch)
             and _oid(expected.branch_sha)
             and type(expected.check_context) is str and bool(expected.check_context)
             and type(expected.check_app_id) is int and expected.check_app_id > 0)
@@ -438,6 +441,11 @@ def _shape(expected) -> bool:
             and expected.write_attempts == 1
             and type(expected.repository_id) is int
             and expected.repository_id > 0)
+
+
+def _safe_branch(value: object) -> bool:
+    return (type(value) is str and BRANCH.fullmatch(value) is not None
+            and all(segment not in {"", ".", ".."} for segment in value.split("/")))
 
 
 def _oid(value: object) -> bool:
@@ -706,7 +714,13 @@ def run_pull_once(expected: ExpectedPull, transport: object,
         if reserve_once(key) is not True:
             return Unknown("pull-request-attempt-not-reserved")
         try:
-            transport.request("POST", f"repos/{expected.repository}/pulls", body)
+            response = transport.request("POST", f"repos/{expected.repository}/pulls", body)
+            if (type(response) is not HttpResponse or type(response.status) is not int
+                    or type(response.headers) is not tuple
+                    or type(response.body) is not bytes):
+                return Unknown("pull-request-provider-response-invalid")
+            if not (200 <= response.status < 300 or 500 <= response.status < 600):
+                return Unknown("pull-request-provider-explicit-refusal")
         except OfflineMismatch:
             return Unknown("pull-request-controlled-request-mismatch")
         except Exception:
@@ -742,7 +756,13 @@ def run_protection_once(expected: ExpectedProtection, transport: object,
             return Unknown("branch-protection-attempt-not-reserved")
         try:
             branch = urllib.parse.quote(expected.branch, safe="/")
-            transport.request("PUT", f"repos/{expected.repository}/branches/{branch}/protection", body)
+            response = transport.request("PUT", f"repos/{expected.repository}/branches/{branch}/protection", body)
+            if (type(response) is not HttpResponse or type(response.status) is not int
+                    or type(response.headers) is not tuple
+                    or type(response.body) is not bytes):
+                return Unknown("branch-protection-provider-response-invalid")
+            if not (200 <= response.status < 300 or 500 <= response.status < 600):
+                return Unknown("branch-protection-provider-explicit-refusal")
         except OfflineMismatch:
             return Unknown("branch-protection-controlled-request-mismatch")
         except Exception:
