@@ -245,6 +245,26 @@ class VersionedReadbackTests(unittest.TestCase):
             operator.NativeReadAdapter(
                 operator.OfflineTranscriptTransport(events)).read_pull_census(expected)
 
+    def test_protection_rejects_extra_effective_required_context(self):
+        observed = protection_observed()
+        for contexts in (["required-check", "foreign-check"],
+                         ["required-check", "required-check"],
+                         ["foreign-check"], "required-check", True, 1.0):
+            with self.subTest(contexts=contexts):
+                policy = copy.deepcopy(observed.policy)
+                policy["required_status_checks"]["contexts"] = contexts
+                wrong = dataclasses.replace(observed, policy=policy)
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    protection_expected(), lambda: wrong,
+                    provider_response={"status": 500, "body": SENTINEL}))
+        for contexts in ([], ["required-check"]):
+            with self.subTest(compatible=contexts):
+                policy = copy.deepcopy(observed.policy)
+                policy["required_status_checks"]["contexts"] = contexts
+                compatible = dataclasses.replace(observed, policy=policy)
+                self.assertIsInstance(operator.classify_protection_after_one_attempt(
+                    protection_expected(), lambda: compatible), operator.ExactProtection)
+
     def test_pull_accepts_only_two_complete_exact_reads(self):
         reads = iter((pull_observed(), pull_observed()))
         result = operator.classify_pull_after_one_attempt(

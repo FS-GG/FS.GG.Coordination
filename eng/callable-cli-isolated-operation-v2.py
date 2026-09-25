@@ -670,12 +670,16 @@ def classify_protection_after_one_attempt(
         policy = observed.policy
         checks = policy.get("required_status_checks")
         entries = checks.get("checks") if type(checks) is dict else None
+        contexts = checks.get("contexts") if type(checks) is dict else None
         if (type(checks) is not dict or checks.get("strict") is not True
                 or type(entries) is not list or len(entries) != 1
                 or type(entries[0]) is not dict
                 or entries[0].get("context") != expected.check_context
                 or type(entries[0].get("app_id")) is not int
                 or entries[0]["app_id"] != expected.check_app_id
+                or ("contexts" in checks and
+                    (type(contexts) is not list or contexts not in
+                     ([], [expected.check_context])))
                 or not _disabled(policy.get("enforce_admins"))
                 or policy.get("required_pull_request_reviews") is not None
                 or policy.get("restrictions") is not None
