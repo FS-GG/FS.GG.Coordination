@@ -104,12 +104,24 @@ let private protectedCensusPort descriptor batch =
         member _.Describe() = descriptor
         member _.Read _ = batch }
 
+let private protectedCensusStore (batch: ProtectedIssueCensusBatch) =
+    let objects =
+        batch.Identity :: batch.Pages
+        |> List.map (fun read ->
+            read.CustodyObjectId,
+            { Selection=batch.Selection; CustodyStoreResourceId=batch.CustodyStoreResourceId
+              Read=read })
+        |> Map.ofList
+    { new IProtectedIssueCensusStorePort with
+        member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+        member _.ReadObject(_, objectId) = Map.tryFind objectId objects }
+
 [<Fact>]
 let ``protected issue census binds retained raw bytes through exact selected fake port`` () =
     let population, batch = protectedCensusFixture ()
     let port = protectedCensusPort protectedCensusPins (Some batch)
     match MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-              (Some port) options population with
+              (Some port) (Some (protectedCensusStore batch)) options population with
     | Error reason -> failwithf "Expected source-only protected census proof: %s" reason
     | Ok proof ->
         Assert.True(proof.Inspect.ScopeVerified)
@@ -121,7 +133,8 @@ let ``protected issue census binds retained raw bytes through exact selected fak
 let ``protected issue census refuses absent or drifted installation and read`` () =
     let population, batch = protectedCensusFixture ()
     let bind pins selection port =
-        MigrationProtectedIssueCensus.bind pins selection port options population
+        MigrationProtectedIssueCensus.bind pins selection port
+            (Some (protectedCensusStore batch)) options population
         |> Result.map ignore
     Assert.Equal(Error "protected-census-pins",
                  bind { protectedCensusPins with ReaderResourceId="" }
@@ -145,12 +158,14 @@ let ``protected issue census refuses foreign run and custody store`` () =
     let population, batch = protectedCensusFixture ()
     let bind value =
         MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
         |> Result.map ignore
     Assert.Equal(Error "protected-census-selection",
                  MigrationProtectedIssueCensus.bind protectedCensusPins
                      { protectedCensusSelection with RepositoryId=43L }
-                     (Some (protectedCensusPort protectedCensusPins (Some batch))) options population
+                     (Some (protectedCensusPort protectedCensusPins (Some batch)))
+                     (Some (protectedCensusStore batch)) options population
                  |> Result.map ignore)
     for changed in
         [ { batch with Selection={ batch.Selection with RunNonce="stale" } }
@@ -163,7 +178,8 @@ let ``protected issue census refuses partial seal and omitted page`` () =
     let population, batch = protectedCensusFixture ()
     let bind value =
         MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
         |> Result.map ignore
     for changed in
         [ { batch with Complete=false }
@@ -176,7 +192,8 @@ let ``protected issue census refuses byte drift and duplicate or stale objects``
     let population, batch = protectedCensusFixture ()
     let bind value =
         MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
         |> Result.map ignore
     let page = batch.Pages.Head
     for changed in
@@ -194,7 +211,8 @@ let ``protected issue census refuses foreign provider and unbound or ambiguous h
     let population, batch = protectedCensusFixture ()
     let bind value =
         MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
         |> Result.map ignore
     let page = batch.Pages.Head
     for changed in
@@ -210,7 +228,8 @@ let ``protected issue census corpus digest binds all recorded headers`` () =
     let population, batch = protectedCensusFixture ()
     let bind value =
         MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
     let original = bind batch |> Result.defaultWith failwith
     let page = batch.Pages.Head
     let changed =
@@ -223,7 +242,8 @@ let ``protected issue census refuses captured write redirect and body byte subst
     let population, batch = protectedCensusFixture ()
     let bind value =
         MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
         |> Result.map ignore
     let page = batch.Pages.Head
     for changed in
@@ -236,7 +256,7 @@ let ``protected issue census refuses captured write redirect and body byte subst
 
 [<Fact>]
 let ``protected issue census unknown fake-port result refuses without retry`` () =
-    let population, _ = protectedCensusFixture ()
+    let population, batch = protectedCensusFixture ()
     let mutable reads = 0
     let port =
         { new IProtectedIssueCensusPort with
@@ -246,8 +266,67 @@ let ``protected issue census unknown fake-port result refuses without retry`` ()
                 raise (InvalidOperationException "unknown protected read") }
     Assert.Equal(Error "protected-census-read-unavailable",
                  MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
-                     (Some port) options population |> Result.map ignore)
+                     (Some port) (Some (protectedCensusStore batch)) options population
+                 |> Result.map ignore)
     Assert.Equal(1, reads)
+
+[<Fact>]
+let ``protected issue census refuses missing foreign or changed stored object`` () =
+    let population, batch = protectedCensusFixture ()
+    let reader = protectedCensusPort protectedCensusPins (Some batch)
+    let bind store =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some reader) store options population |> Result.map ignore
+    let stored = protectedCensusStore batch
+    Assert.Equal(Error "protected-census-store-unavailable", bind None)
+    let mutable readerCalls = 0
+    let countedReader =
+        { new IProtectedIssueCensusPort with
+            member _.Describe() = protectedCensusPins
+            member _.Read _ =
+                readerCalls <- readerCalls + 1
+                Some batch }
+    Assert.Equal(Error "protected-census-store-unavailable",
+                 MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+                     (Some countedReader) None options population |> Result.map ignore)
+    Assert.Equal(0, readerCalls)
+    let missing =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.ReadObject(_, _) = None }
+    Assert.Equal(Error "protected-census-store-unavailable", bind (Some missing))
+    let foreign =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = "candidate-writable-store"
+            member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
+    Assert.Equal(Error "protected-census-store-installation", bind (Some foreign))
+    let changed =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.ReadObject(selection, objectId) =
+                stored.ReadObject(selection, objectId)
+                |> Option.map (fun value ->
+                    if objectId = "object:2"
+                    then { value with Read={ value.Read with RawBody=value.Read.RawBody + " " } }
+                    else value) }
+    Assert.Equal(Error "protected-census-store-binding", bind (Some changed))
+    let stale =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.ReadObject(selection, objectId) =
+                stored.ReadObject(selection, objectId)
+                |> Option.map (fun value ->
+                    { value with Selection={ value.Selection with RunNonce="stale" } }) }
+    Assert.Equal(Error "protected-census-store-binding", bind (Some stale))
+    let mutable attempts = 0
+    let unknown =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.ReadObject(_, _) =
+                attempts <- attempts + 1
+                raise (InvalidOperationException "unknown protected store read") }
+    Assert.Equal(Error "protected-census-store-unavailable", bind (Some unknown))
+    Assert.Equal(1, attempts)
 
 let private readProjectItems responses =
     let transport = FakeTransport responses
