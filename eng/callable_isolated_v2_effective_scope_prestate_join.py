@@ -126,7 +126,9 @@ class EffectiveScopePrestateJoin:
         except Exception:
             raise Refused("effective-prestate-unavailable") from None
         observed = _exact(observed, {"schema", "complete", "principalId",
-                    "credentialId", "recordId", "runId", "runAttempt",
+                    "credentialId", "witnessPrincipalId",
+                    "witnessCredentialId", "witnessObservedAt",
+                    "witnessExpiresAt", "recordId", "runId", "runAttempt",
                     "target", "transcriptSha256", "observedAt"},
                     "effective-prestate-shape")
         if (observed["schema"] != prestate.SCHEMA
@@ -136,6 +138,14 @@ class EffectiveScopePrestateJoin:
                 or observed["principalId"] == scope_before["principalId"]
                 or not candidate._hex(observed["credentialId"], candidate.HEX64)
                 or observed["credentialId"] == scope_before["credentialId"]
+                or type(observed["witnessPrincipalId"]) is not str
+                or not observed["witnessPrincipalId"]
+                or observed["witnessPrincipalId"] in
+                   (observed["principalId"], scope_before["principalId"])
+                or not candidate._hex(observed["witnessCredentialId"],
+                                      candidate.HEX64)
+                or observed["witnessCredentialId"] in
+                   (observed["credentialId"], scope_before["credentialId"])
                 or not all(_positive(observed[key]) for key in
                            ("recordId", "runId", "runAttempt"))
                 or observed["runId"] != self.run_id
@@ -145,7 +155,12 @@ class EffectiveScopePrestateJoin:
                                       candidate.HEX64)):
             raise Refused("effective-prestate-binding")
         prestate_at = _time(observed["observedAt"])
-        if not self.now - dt.timedelta(minutes=5) <= prestate_at <= self.now:
+        witness_at = _time(observed["witnessObservedAt"])
+        witness_expiry = _time(observed["witnessExpiresAt"])
+        if (not self.now - dt.timedelta(minutes=5) <= prestate_at <= self.now
+                or not self.now - dt.timedelta(minutes=30) <= witness_at
+                       <= prestate_at < witness_expiry
+                or witness_expiry <= self.now):
             raise Refused("effective-prestate-time")
         try:
             raw = self.metadata.read_effective_metadata(credential_id)

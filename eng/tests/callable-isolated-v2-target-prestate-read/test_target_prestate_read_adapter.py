@@ -146,6 +146,10 @@ class PrestateTests(unittest.TestCase):
         self.assertEqual(witness.calls[0][:2], (101, 1))
         self.assertEqual(result["target"]["prestateSha256"],
                          fixture()[0]["prestateSha256"])
+        self.assertEqual(result["witnessPrincipalId"], "prestate-witness")
+        self.assertEqual(result["witnessCredentialId"], "2" * 64)
+        self.assertEqual(result["witnessObservedAt"], "2026-09-25T11:59:00Z")
+        self.assertEqual(result["witnessExpiresAt"], "2026-09-25T12:15:00Z")
         self.assertNotIn("authorized", result)
         self.assertFalse(hasattr(prestate, "dispatch"))
 
