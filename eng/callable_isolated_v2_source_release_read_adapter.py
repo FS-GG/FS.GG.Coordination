@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import io
@@ -84,7 +85,7 @@ def _scope(transport: ReleaseReadTransport, repository_id: int,
             raise Refused("source-scope-expired")
     except candidate.Refused:
         raise Refused("source-scope-expired") from None
-    return value
+    return copy.deepcopy(value)
 
 
 def _read(transport: ReleaseReadTransport, path: str) -> tuple[Any, str]:
