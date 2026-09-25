@@ -157,6 +157,12 @@ numbers from captured raw pages. This is still a source precursor: initial
 sandbox census, protected native observer and full inspect authority remain
 unproven.
 
+A twenty-second independent control found the raw-to-typed issue adapter
+could accept a captured page with duplicate `pull_request` members after
+the page digest was supplied. It was red before the repair. The adapter now
+refuses duplicate JSON members recursively before extracting issue rows or
+PR marker numbers. This does not establish candidate-inaccessible capture.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

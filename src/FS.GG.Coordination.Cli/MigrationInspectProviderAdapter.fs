@@ -131,11 +131,23 @@ module MigrationInspectProviderAdapter =
         && (parameters |> Array.exists (fun parts -> parts.[0] = "per_page" && parts.[1] = "100"))
 
     let private parseIssuePages repositoryId (raw: string list) =
+        let rec requireUniqueMembers (value: JsonElement) =
+            match value.ValueKind with
+            | JsonValueKind.Object ->
+                let properties = value.EnumerateObject() |> Seq.toList
+                let names = properties |> List.map _.Name
+                if names.Length <> (names |> Set.ofList |> Set.count) then
+                    failwith "duplicate-json-member"
+                properties |> List.iter (fun property -> requireUniqueMembers property.Value)
+            | JsonValueKind.Array ->
+                value.EnumerateArray() |> Seq.iter requireUniqueMembers
+            | _ -> ()
         try
             raw
             |> List.map (fun body ->
                 use document = JsonDocument.Parse body
                 if document.RootElement.ValueKind <> JsonValueKind.Array then failwith "issue-page-array"
+                requireUniqueMembers document.RootElement
                 let items = document.RootElement.EnumerateArray() |> Seq.toList
                 let isPullRequest (item: JsonElement) =
                     let mutable marker = Unchecked.defaultof<JsonElement>

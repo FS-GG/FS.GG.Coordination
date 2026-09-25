@@ -2,6 +2,8 @@ module FS.GG.Coordination.MigrationInspectProviderAdapterTests
 
 open System
 open System.Collections.Generic
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Cli
@@ -152,6 +154,20 @@ let ``issue adapter binds exact PR marker numbers from raw pages`` () =
     Assert.Equal(Error "issue-pr-markers",
                  MigrationInspectProviderAdapter.bindIssues options
                      { population with PullRequestMarkerNumbers=[ 4 ] } calls)
+
+[<Fact>]
+let ``issue adapter refuses ambiguous raw PR marker members`` () =
+    let clean = """[{"number":3,"pull_request":{}}]"""
+    let ambiguous = """[{"number":3,"pull_request":{},"pull_request":{}}]"""
+    let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply clean ]
+    let digest = ambiguous |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                 |> Convert.ToHexString |> _.ToLowerInvariant()
+    let changed = { population with Pages=[ { population.Pages.Head with PayloadSha256=digest } ] }
+    let changedCalls =
+        calls |> List.mapi (fun index (request, outcome) ->
+            if index = 1 then request, reply ambiguous else request, outcome)
+    Assert.Equal(Error "raw-issue-parse",
+                 MigrationInspectProviderAdapter.bindIssues options changed changedCalls)
 
 [<Fact>]
 let ``adapter transport refuses write shaped requests before dispatch`` () =
