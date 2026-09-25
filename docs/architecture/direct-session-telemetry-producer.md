@@ -53,9 +53,11 @@ claim coverage:
    item. Then verify the joined facts through private `item-detail/2`, including
    its revision and observation time. Queue zero alone cannot establish this
    match. Any publication loss stays a coverage gap even if a later retry applies.
-5. **Keep delivery separate.** Record a native process terminal and usage
-   coverage independently of issue delivery. The producer must not mint a native
-   item outcome, change a board row, acquire a claim, or resume an orchestration
+5. **Keep delivery separate.** Record a native process terminal only when the
+   native source reports one. Closing an observation window is not process exit;
+   it leaves a terminal gap if exit was not observed. Track usage coverage
+   independently of issue delivery. The producer must not mint a native item
+   outcome, change a board row, acquire a claim, or resume an orchestration
    route. Unsupported session hooks, missing assignment or an unverifiable Host
    receipt produce an incomplete-evidence verdict without a guessed zero.
 
@@ -65,6 +67,42 @@ illustrate compact `runtime-start`, `runtime-turn-usage`, `runtime-gap` and
 distinguishes applied from durably received and unknown submission outcomes.
 Those types are useful source references, but the runner's WorkItem command and
 executor authority do not apply to a direct session.
+
+## Capability and evidence handoff
+
+The missing interface is a supported, authenticated event stream for the
+**current** Codex thread. The existing
+[`CodexTurnProjection`](../../src/FS.GG.Coordination.Orchestration.Execution.Codex/CodexTurnProjection.fs)
+can interpret a completed-turn JSON event, but its caller receives events only
+from the Codex child it launched. The runner's
+[`TelemetryTurnJournal`](../../src/FS.GG.Coordination.Orchestration.Runner.Client/TelemetryTurnJournal.fs)
+then persists those observations under its executor command. Reusing either
+type without a current-session event source and a separately authorized
+assignment would make the identity and coverage claims circular.
+
+A proposed direct-session adapter should expose three results before any event
+submission:
+
+| Result | Evidence the adapter must return | Refusal boundary |
+| --- | --- | --- |
+| Current-thread capability | Supported event-source version, native thread identity, observation cursor or explicit lack of one, and whether completed-turn counters are available | A process lookup, credential wrapper, transcript read or future-child launcher does not prove current-thread observation. |
+| Assignment binding | Independently authorized workspace association and exact repository, WorkItem persistence ID, issue, attempt, generation, invocation, producer and prospective window | A prompt naming an issue, an inferred workspace, or a retrospective mapping cannot bind prior turns. |
+| Event continuity | Ordered native starts, completed-turn IDs and counters, source timestamps, sequence and loss reports for the bound window | Missing cursor continuity, changed bytes under one native identity, or an unobserved start remains a gap. |
+
+The private qualification packet should retain the assignment readback, source
+capability result, start boundary, native event identities and counters,
+digest-bound batch identity, authenticated applied Host receipt, and later
+`item-detail/2` revision with the matched event identities. Each record must
+name the same workspace, repository and WorkItem, with attempts and invocations
+joined exactly. A `durably-received` result, an empty queue, or a readback made
+before application is insufficient. Keep the packet private; a public review
+may report only the verdict, opaque evidence identifiers and gaps.
+
+The first implementation gate is the current-thread capability result. Until a
+supported source can produce it, the producer must return `unsupported` and
+must not create a synthetic prospective root, infer a turn from the interactive
+transcript, or submit an ingest batch. This is a source contract for a future
+adapter, not an API or executable currently present in this repository.
 
 ## Source-only acceptance scaffold
 
@@ -76,6 +114,8 @@ executor authority do not apply to a direct session.
 | Native turn without exact workspace/item/attempt binding | Refused; no event submission |
 | Duplicate turn identity with changed counters | Conflict; retain original evidence and mark coverage incomplete |
 | Successful native exit with no completed-turn counters | Terminal observed; usage gap |
+| Observation window closes without a native process exit | Window closed; process terminal remains unobserved |
+| Native event stream reports a sequence gap or cannot prove cursor continuity | Retain the gap; no complete-window claim |
 | Batch queued or durably received without applied Host receipt | Pending application; no completeness claim |
 | Applied receipt for another batch, producer, workspace or item | Receipt mismatch; no completeness claim |
 | Queue zero but private item readback omits the turn | Incomplete joined evidence |
