@@ -168,6 +168,47 @@ let ``changed provider page across complete passes refuses before a manifest`` (
     Assert.Equal(0, stages.Calls)
 
 [<Fact>]
+let ``new live subject in the second pass refuses before a manifest`` () =
+    let firstAuthority = GitHubCompleteDiscoveryQualification.expectedAuthorities.Head
+    let newSubject =
+        { Identity="repository:42:issue:unexpected"
+          Revision="new"; PayloadSha256=digest "unexpected" }
+    let source =
+        FakeSource(fun pass authority ->
+            let value = observation pass authority "{}"
+            if pass = 2 && authority = firstAuthority then
+                Ok
+                    { value with
+                        Read={ value.Read with ItemCount=1; Subjects=[ newSubject ] }
+                        Pages=[ { value.Pages.Head with Subjects=[ newSubject ] } ] }
+            else Ok value)
+    let stages = MissingManifest()
+    match GitHubMigrationInspect.inspect request source stages with
+    | Error(GitHubMigrationInspectFailure.DiscoveryRefused findings) ->
+        Assert.Contains(findings, function
+            | GitHubCompleteDiscoveryFinding.NonQuiescentDiscovery _ -> true
+            | _ -> false)
+    | other -> failwithf "Expected new-subject refusal; got %A" other
+    Assert.Equal(0, stages.Calls)
+
+[<Fact>]
+let ``request identity must hash the captured page URI`` () =
+    let firstAuthority = GitHubCompleteDiscoveryQualification.expectedAuthorities.Head
+    let source =
+        FakeSource(fun pass authority ->
+            let value = observation pass authority "{}"
+            if authority = firstAuthority then
+                Ok
+                    { value with
+                        Pages=[ { value.Pages.Head with RequestIdentitySha256=digest "different-request" } ] }
+            else Ok value)
+    let stages = MissingManifest()
+    Assert.Equal(
+        Error(GitHubMigrationInspectFailure.InvalidProviderEvidence(1, firstAuthority, "request-identity")),
+        GitHubMigrationInspect.inspect request source stages)
+    Assert.Equal(0, stages.Calls)
+
+[<Fact>]
 let ``complete quiescent provider evidence still refuses absent manifest source`` () =
     let source = FakeSource(fun pass authority -> Ok(observation pass authority "{}"))
     let stages = MissingManifest()
