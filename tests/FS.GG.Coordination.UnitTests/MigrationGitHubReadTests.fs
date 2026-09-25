@@ -1972,6 +1972,19 @@ let ``Project values refuse a missing outer page and duplicate field identity`` 
                      (FakeTransport [ ok Map.empty (valuePage 1 "false" "null" $"[{duplicateItem}]") ]))
 
 [<Fact>]
+let ``Project values refuse duplicate raw field option and nested page members`` () =
+    let item = valueItem $"[{selectedValue}]" 1 "false"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readProjectValues projectOptions
+                         (FakeTransport [ ok Map.empty (valuePage 1 "false" "null" $"[{duplicate}]") ]))
+    check (item.Replace("\"field\":{\"id\":\"FIELD_1\"}",
+                        "\"field\":{\"id\":\"FIELD_1\",\"id\":\"FIELD_2\"}")) "id"
+    check (item.Replace("\"optionId\":\"OPTION_1\"",
+                        "\"optionId\":\"OPTION_1\",\"optionId\":\"OPTION_2\"")) "optionId"
+    check (item.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")) "hasNextPage"
+
+[<Fact>]
 let ``Project snapshot reconciles exact membership revisions declarations and bytes`` () =
     let membership =
         """{"id":"ITEM_1","isArchived":false,"updatedAt":"2026-09-23T10:00:00Z","content":{"__typename":"DraftIssue","id":"DRAFT_1"}}"""
