@@ -57,6 +57,11 @@ type IProtectedIssueCensusReleasePort =
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusRelease =
+    /// Stable one-use identity for the exact claimed journal successor head.
+    val reservationId:
+        claimId:string ->
+        journalHead:ProtectedIssueCensusClaimHead -> string
+
     /// Fake-port reservation only. A successful result does not release a token.
     val reserve:
         attestationPins:ProtectedIssueCensusAttestationPins ->

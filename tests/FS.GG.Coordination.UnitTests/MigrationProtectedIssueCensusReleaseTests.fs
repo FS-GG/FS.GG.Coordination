@@ -281,3 +281,137 @@ let ``protected census release refuses concurrent head conflict and lost readbac
             member _.ReadReservation _ = None }
     Assert.Equal(Error "protected-census-release-unknown",
                  reserve f storePort claimPort (Some lost))
+
+let private handoffPins =
+    { HandoffResourceId="protected-handoff:release-test"
+      HandoffArtifactSha256=String.replicate 64 "6"
+      VaultResourceId="protected-vault:release-test"
+      VaultArtifactSha256=String.replicate 64 "7"
+      NativeAttemptNamespaceId="protected-attempts:release-test"
+      AppId=101L; InstallationId=202L; RepositoryId=selection.RepositoryId
+      PermissionSha256=String.replicate 64 "8" }
+
+let private handoffDescription =
+    { HandoffResourceId=handoffPins.HandoffResourceId
+      HandoffArtifactSha256=handoffPins.HandoffArtifactSha256
+      VaultResourceId=handoffPins.VaultResourceId
+      VaultArtifactSha256=handoffPins.VaultArtifactSha256
+      NativeAttemptNamespaceId=handoffPins.NativeAttemptNamespaceId
+      ReleaseResourceId=releasePins.ReleaseResourceId
+      ReleaseArtifactSha256=releasePins.ReleaseArtifactSha256
+      ClockResourceId="protected-clock:release-test"
+      ClockArtifactSha256=String.replicate 64 "9"
+      AppId=handoffPins.AppId; InstallationId=handoffPins.InstallationId
+      RepositoryId=handoffPins.RepositoryId
+      PermissionSha256=handoffPins.PermissionSha256
+      CandidateMayRead=false; CandidateMayWrite=false
+      AtomicReservationConsumeAndMark=true; AtomicExpiryCompare=true }
+
+let private capturedReservation (f: Fixture) =
+    let mutable stored: ProtectedIssueCensusReleaseRequest option = None
+    let release =
+        { new IProtectedIssueCensusReleasePort with
+            member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
+            member _.ReserveOnce request = stored <- Some request; ReleaseReserved
+            member _.ReadReservation _ = stored }
+    Assert.Equal(Ok (), reserve f (Some (store f.StoreHead))
+                                 (Some (journal f.ClaimRecord f.JournalHead)) (Some release))
+    stored.Value
+
+let private releaseReadback (f: Fixture) reservation =
+    { new IProtectedIssueCensusReleasePort with
+        member _.Describe() = releaseDescription f.Pins.SignerPublicKeySha256
+        member _.ReserveOnce _ = failwith "handoff must not reserve again"
+        member _.ReadReservation _ = reservation }
+
+let private markHandoff (f: Fixture) pins reservation releasePort handoffPort =
+    MigrationProtectedIssueCensusHandoff.mark
+        f.Pins storePins claimPins releasePins pins selection f.Proof
+        (Some f.Seal) (Some (clock f)) reservation releasePort handoffPort
+
+[<Fact>]
+let ``protected census token handoff marker is exact and one attempt`` () =
+    let f = fixture ()
+    let reservation = capturedReservation f
+    let mutable marked: ProtectedIssueCensusHandoffRequest option = None
+    let mutable attempts = 0
+    let port =
+        { new IProtectedIssueCensusHandoffPort with
+            member _.Describe() = handoffDescription
+            member _.MarkOnce request =
+                attempts <- attempts + 1
+                match marked with
+                | Some _ -> HandoffDuplicate
+                | None -> marked <- Some request; HandoffMarked
+            member _.ReadMarker _ = marked }
+    let invoke () =
+        markHandoff f handoffPins reservation
+            (Some (releaseReadback f (Some reservation))) (Some port)
+    Assert.Equal(Ok (), invoke ())
+    Assert.Equal(Error "protected-census-handoff-duplicate", invoke ())
+    Assert.Equal(2, attempts)
+    Assert.Equal(reservation.ReservationId, marked.Value.ReservationId)
+    Assert.Equal(handoffPins.InstallationId, marked.Value.InstallationId)
+    Assert.Equal(handoffPins.VaultResourceId, marked.Value.VaultResourceId)
+    Assert.Equal(f.Pins.ClockArtifactSha256, marked.Value.ClockArtifactSha256)
+
+[<Fact>]
+let ``protected census token handoff refuses foreign target and candidate vault`` () =
+    let f = fixture ()
+    let reservation = capturedReservation f
+    let release = Some (releaseReadback f (Some reservation))
+    let mutable attempts = 0
+    let port description =
+        { new IProtectedIssueCensusHandoffPort with
+            member _.Describe() = description
+            member _.MarkOnce _ = attempts <- attempts + 1; HandoffUnknown
+            member _.ReadMarker _ = None }
+    Assert.Equal(Error "protected-census-handoff-pins",
+                 markHandoff f { handoffPins with RepositoryId=selection.RepositoryId + 1L }
+                     reservation release (Some (port handoffDescription)))
+    Assert.Equal(Error "protected-census-handoff-installation",
+                 markHandoff f handoffPins reservation release
+                     (Some (port { handoffDescription with CandidateMayWrite=true })))
+    Assert.Equal(Error "protected-census-handoff-installation",
+                 markHandoff f handoffPins reservation release
+                     (Some (port { handoffDescription with InstallationId=203L })))
+    Assert.Equal(Error "protected-census-handoff-installation",
+                 markHandoff f handoffPins reservation release
+                     (Some (port { handoffDescription with AtomicExpiryCompare=false })))
+    Assert.Equal(0, attempts)
+
+[<Fact>]
+let ``protected census token handoff refuses forged reservation and unknown marker`` () =
+    let f = fixture ()
+    let reservation = capturedReservation f
+    let mutable attempts = 0
+    let port =
+        { new IProtectedIssueCensusHandoffPort with
+            member _.Describe() = handoffDescription
+            member _.MarkOnce _ = attempts <- attempts + 1; HandoffUnknown
+            member _.ReadMarker _ = failwith "unknown must not be retried" }
+    Assert.Equal(Error "protected-census-handoff-binding",
+                 markHandoff f handoffPins
+                     { reservation with ClaimId=String.replicate 64 "0" }
+                     (Some (releaseReadback f (Some reservation))) (Some port))
+    Assert.Equal(Error "protected-census-handoff-unknown",
+                 markHandoff f handoffPins reservation
+                     (Some (releaseReadback f (Some reservation))) (Some port))
+    Assert.Equal(1, attempts)
+    Assert.Equal(Error "protected-census-handoff-unknown",
+                 markHandoff f handoffPins reservation
+                     (Some (releaseReadback f None)) (Some port))
+    Assert.Equal(1, attempts)
+    let foreign = { reservation with ExpectedStoreHeadSha256=String.replicate 64 "0" }
+    Assert.Equal(Error "protected-census-handoff-binding",
+                 markHandoff f handoffPins reservation
+                     (Some (releaseReadback f (Some foreign))) (Some port))
+    Assert.Equal(1, attempts)
+    let lostMarker =
+        { new IProtectedIssueCensusHandoffPort with
+            member _.Describe() = handoffDescription
+            member _.MarkOnce _ = HandoffMarked
+            member _.ReadMarker _ = None }
+    Assert.Equal(Error "protected-census-handoff-unknown",
+                 markHandoff f handoffPins reservation
+                     (Some (releaseReadback f (Some reservation))) (Some lostMarker))

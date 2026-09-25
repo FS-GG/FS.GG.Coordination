@@ -66,7 +66,7 @@ module MigrationProtectedIssueCensusRelease =
 
     let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
-    let private reservationId (claimId: string) (journalHead: ProtectedIssueCensusClaimHead) =
+    let reservationId (claimId: string) (journalHead: ProtectedIssueCensusClaimHead) =
         [ "fsgg.gs2-09.7.protected-census-release-reservation/v1"
           claimId; journalHead.JournalResourceId; string journalHead.Generation
           journalHead.SealSha256 ]
