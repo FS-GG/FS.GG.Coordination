@@ -440,8 +440,7 @@ PULL_TITLE = "V2-CALL-01.4b synthetic delivery v2"
 
 def _valid_pull(expected: object) -> bool:
     return (type(expected) is ExpectedPull and _shape(expected)
-            and type(expected.repository) is str
-            and REPOSITORY.fullmatch(expected.repository) is not None
+            and _safe_repository(expected.repository)
             and type(expected.source_ref) is str
             and expected.source_ref.startswith("refs/heads/")
             and _safe_branch(expected.source_ref.removeprefix("refs/heads/"))
@@ -454,8 +453,7 @@ def _valid_pull(expected: object) -> bool:
 
 def _valid_protection(expected: object) -> bool:
     return (type(expected) is ExpectedProtection and _shape(expected)
-            and type(expected.repository) is str
-            and REPOSITORY.fullmatch(expected.repository) is not None
+            and _safe_repository(expected.repository)
             and _safe_branch(expected.branch)
             and _oid(expected.branch_sha)
             and type(expected.check_context) is str and bool(expected.check_context)
@@ -495,6 +493,11 @@ def _shape(expected) -> bool:
 def _safe_branch(value: object) -> bool:
     return (type(value) is str and BRANCH.fullmatch(value) is not None
             and all(segment not in {"", ".", ".."} for segment in value.split("/")))
+
+
+def _safe_repository(value: object) -> bool:
+    return (type(value) is str and REPOSITORY.fullmatch(value) is not None
+            and all(segment not in {".", ".."} for segment in value.split("/")))
 
 
 def _oid(value: object) -> bool:
