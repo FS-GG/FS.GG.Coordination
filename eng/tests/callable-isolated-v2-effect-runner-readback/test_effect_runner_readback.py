@@ -154,6 +154,17 @@ class RunnerReadbackTests(unittest.TestCase):
             readback.qualify(preflight, runner, audit, selection, NOW,
                              approval_witness=reviewed(preflight))
 
+    def test_release_reviewer_cannot_be_installed_probe_actor(self):
+        preflight, selection, runner, audit = fixture()
+        selection["runnerActorId"] = preflight.reviewer_actor_id
+        runner.record["runnerActorId"] = preflight.reviewer_actor_id
+        audit.record["runnerActorId"] = preflight.reviewer_actor_id
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+        self.assertEqual(runner.reads, [])
+        self.assertEqual(audit.reads, [])
+
     def test_probe_before_review_or_after_expiry_refuses(self):
         for field, value in (("approved_at", "2026-09-25T11:58:30Z"),
                              ("expires_at", "2026-09-25T11:59:30Z")):
