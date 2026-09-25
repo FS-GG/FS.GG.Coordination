@@ -375,9 +375,8 @@ class NativeReadAdapter:
                     raise Refused("native-pull-list-detail-drift")
                 listed_repo = listed_side.get("repo")
                 detail_repo = detail_side.get("repo")
-                if (type(listed_repo) is not dict or type(detail_repo) is not dict
-                        or type(listed_repo.get("id")) is not int
-                        or type(detail_repo.get("id")) is not int
+                if (not _repo_object_consistent(listed_repo)
+                        or not _repo_object_consistent(detail_repo)
                         or listed_repo.get("id") != detail_repo.get("id")
                         or listed_repo.get("full_name") != detail_repo.get("full_name")
                         or ("url" in listed_repo) != ("url" in detail_repo)
@@ -635,12 +634,25 @@ def _complete_digest(value: object) -> bool:
 
 
 def _same_repo(value: object, expected: ExpectedPull) -> bool:
-    return (type(value) is dict and type(value.get("id")) is int
+    return (_repo_object_consistent(value)
             and value["id"] == expected.repository_id
-            and value.get("full_name") == expected.repository
+            and value["full_name"] == expected.repository)
+
+
+def _repo_object_consistent(value: object) -> bool:
+    if type(value) is not dict or type(value.get("id")) is not int or value["id"] <= 0:
+        return False
+    repository = value.get("full_name")
+    if not _safe_repository(repository):
+        return False
+    owner, name = repository.split("/")
+    return (("name" not in value or value["name"] == name)
+            and ("owner" not in value or
+                 (type(value["owner"]) is dict
+                  and value["owner"].get("login") == owner))
             and ("url" not in value or
                  (type(value["url"]) is str and value["url"] ==
-                  f"https://api.github.com/repos/{expected.repository}")))
+                  f"https://api.github.com/repos/{repository}")))
 
 
 def _pull_url(repository: str, number: int) -> str:
