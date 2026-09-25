@@ -369,6 +369,8 @@ class NativeReadAdapter:
         if ((protected and (status != 200 or type(policy) is not dict))
                 or (not protected and status != 404)):
             raise Refused("native-protection-status")
+        if protected and not _protection_urls_match(policy, expected):
+            raise Refused("native-protection-target")
         self._repo(expected.repository, expected.repository_id)
         if self._ref(expected.repository, f"refs/heads/{branch}") != sha:
             raise Refused("native-protection-terminal-ref-drift")
@@ -647,6 +649,25 @@ def _disabled(value: object) -> bool:
     return value is False or (type(value) is dict and value == {"enabled": False})
 
 
+def _protection_urls_match(policy: object, expected: ExpectedProtection) -> bool:
+    if type(policy) is not dict:
+        return False
+    branch = urllib.parse.quote(expected.branch, safe="/")
+    root = (f"https://api.github.com/repos/{expected.repository}/"
+            f"branches/{branch}/protection")
+    checks = policy.get("required_status_checks")
+    if ("url" in policy and
+            (type(policy["url"]) is not str or policy["url"] != root)):
+        return False
+    if type(checks) is dict:
+        for key, suffix in (("url", "/required_status_checks"),
+                            ("contexts_url", "/required_status_checks/contexts")):
+            if key in checks and (type(checks[key]) is not str
+                                  or checks[key] != root + suffix):
+                return False
+    return True
+
+
 UNSELECTED_PROTECTION_FLAGS = (
     "required_signatures", "required_linear_history", "block_creations",
     "required_conversation_resolution", "lock_branch", "allow_fork_syncing",
@@ -671,6 +692,7 @@ def classify_protection_after_one_attempt(
                 or observed.branch != expected.branch
                 or observed.branch_sha != expected.branch_sha
                 or type(observed.policy) is not dict
+                or not _protection_urls_match(observed.policy, expected)
                 or not _complete_digest(observed.transcript_sha256)):
             return Unknown("branch-protection-readback-incomplete")
         policy = observed.policy

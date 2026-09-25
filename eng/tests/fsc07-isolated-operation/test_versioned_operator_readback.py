@@ -294,6 +294,40 @@ class VersionedReadbackTests(unittest.TestCase):
                     protection_expected(), lambda: incomplete,
                     provider_response={"status": 500, "body": SENTINEL}))
 
+    def test_protection_foreign_response_url_refuses_after_lost_response(self):
+        expected = protection_expected()
+        foreign = "https://api.github.com/repos/FS-GG/foreign/branches/main/protection"
+        for section, key, url in (
+                ("policy", "url", foreign),
+                ("checks", "url", foreign + "/required_status_checks"),
+                ("checks", "contexts_url", foreign + "/required_status_checks/contexts"),
+                ("policy", "url", 17)):
+            with self.subTest(section=section, key=key, url=url):
+                policy = copy.deepcopy(protection_observed().policy)
+                destination = (policy if section == "policy" else
+                               policy["required_status_checks"])
+                destination[key] = url
+                observed = dataclasses.replace(protection_observed(), policy=policy)
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    expected, lambda: observed, provider_response={"body": SENTINEL}))
+                events = (protection_read_events() * 2 +
+                          [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                                 body=operator.protection_body(expected), error=SENTINEL)] +
+                          protection_read_events(True, policy) * 2)
+                transport = operator.OfflineTranscriptTransport(events)
+                self.assert_unknown(operator.run_protection_once(
+                    expected, transport, reserve_once_factory()))
+                self.assertEqual(transport.writes, 1)
+        policy = copy.deepcopy(protection_observed().policy)
+        root = "https://api.github.com/repos/FS-GG/disposable/branches/main/protection"
+        policy["url"] = root
+        policy["required_status_checks"]["url"] = root + "/required_status_checks"
+        policy["required_status_checks"]["contexts_url"] = (
+            root + "/required_status_checks/contexts")
+        observed = dataclasses.replace(protection_observed(), policy=policy)
+        self.assertIsInstance(operator.classify_protection_after_one_attempt(
+            expected, lambda: observed), operator.ExactProtection)
+
     def test_pull_accepts_only_two_complete_exact_reads(self):
         reads = iter((pull_observed(), pull_observed()))
         result = operator.classify_pull_after_one_attempt(
