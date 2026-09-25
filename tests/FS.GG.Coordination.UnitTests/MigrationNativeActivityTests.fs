@@ -168,6 +168,31 @@ let ``native activity refuses a stream page from another repository`` () =
             { input with IssueEvents=[ { stream with Pages=[ foreignPage ] } ] }
 
 [<Fact>]
+let ``native activity refuses undersized and misnumbered stream page queries`` () =
+    let input = sample ()
+    let stream = input.IssueEvents.Head
+    let undersized =
+        { stream.Pages.Head with
+            RequestedUri="https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=1" }
+    assertRefused "stream-pages"
+        { input with IssueEvents=[ { stream with Pages=[ undersized ] } ] }
+    let secondUri = "https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=100&page=3"
+    let twoPages =
+        [ { stream.Pages.Head with NextUri=Some secondUri }
+          { stream.Pages.Head with RequestedUri=secondUri } ]
+    assertRefused "stream-pages"
+        { input with IssueEvents=[ { stream with PageCount=2; Pages=twoPages } ] }
+    for query in
+        [ "?state=open&per_page=100"
+          "?state=all&per_page=100&per_page=100"
+          "?state=all&per_page=100&after=cursor" ] do
+        let alteredPage =
+            { input.Issues.Pages.Head with
+                RequestedUri="https://api.github.test/repos/FS-GG/copy/issues" + query }
+        assertRefused "stream-pages"
+            { input with Issues={ input.Issues with Pages=[ alteredPage ] } }
+
+[<Fact>]
 let ``missing issue census page proof refuses and changed proof changes digest`` () =
     let input = sample ()
     assertRefused "stream-pages" { input with Issues={ input.Issues with Pages=[] } }
