@@ -22,6 +22,7 @@ sys.path.insert(0, str(ENG))
 import build_callable_isolated_v2_effect_scaffold as builder
 import callable_isolated_v2_effect_closed as closed
 import callable_isolated_v2_effect_entry as entry
+import verify_callable_isolated_v2_effect_scaffold as verifier
 
 
 class DenyPorts:
@@ -85,6 +86,9 @@ class ClosedScaffoldTests(unittest.TestCase):
 
                 def substituted(relative):
                     raw = actual(relative)
+                    if relative == builder.WORKFLOW and relative == changed:
+                        return raw.replace(b"if: ${{ false }}",
+                                           b"if: ${{ true }}")
                     return raw + b"\n# unreviewed mutation\n" if relative == changed else raw
 
                 with mock.patch.object(builder, "_source", side_effect=substituted):
@@ -92,6 +96,56 @@ class ClosedScaffoldTests(unittest.TestCase):
                                                 "effect-source-or-workflow-drift"):
                         builder.build(output)
                 self.assertFalse(output.exists())
+
+    def test_packaged_native_source_cannot_be_an_alternate_python_entry(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = pathlib.Path(temporary) / builder.ARCHIVE_NAME
+            builder.build(archive)
+            probe = subprocess.run([sys.executable, "-I", "-S", "-c",
+                "import sys; sys.path.insert(0, sys.argv[1]); "
+                "import callable_isolated_native_v2", str(archive)],
+                capture_output=True, text=True, timeout=10, check=False)
+            self.assertNotEqual(probe.returncode, 0)
+            self.assertIn("ModuleNotFoundError", probe.stderr)
+
+    def test_exact_byte_verifier_refuses_post_build_mutations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_path = pathlib.Path(temporary) / builder.ARCHIVE_NAME
+            builder.build(archive_path)
+            archive = archive_path.read_bytes()
+            workflow = (ROOT / builder.WORKFLOW).read_bytes()
+            manifest = (ROOT / builder.MANIFEST).read_bytes()
+            approved = hashlib.sha256(manifest).hexdigest()
+            checked = verifier.verify(archive, workflow, manifest, approved)
+            self.assertIs(checked["authorized"], False)
+            self.assertIs(checked["canDispatch"], False)
+            for changed in (
+                (archive + b"x", workflow, manifest, approved),
+                (archive, workflow.replace(b"if: ${{ false }}",
+                                           b"if: ${{ true }}"), manifest, approved),
+                (archive, workflow, manifest + b" ", approved),
+                (archive, workflow, manifest, "0" * 64),
+            ):
+                with self.subTest(changed=changed[0][-1:]):
+                    with self.assertRaises(verifier.Refused):
+                        verifier.verify(*changed)
+            foreign_manifest = json.loads(manifest)
+            foreign_manifest["members"][0]["source"] = "eng/foreign-entry.py"
+            foreign_raw = (json.dumps(foreign_manifest, sort_keys=True,
+                           separators=(",", ":")) + "\n").encode()
+            with self.assertRaises(verifier.Refused):
+                verifier.verify(archive, workflow, foreign_raw,
+                                hashlib.sha256(foreign_raw).hexdigest())
+
+            extended = archive + b"FOREIGN_TRAILING_BYTES"
+            extended_manifest = json.loads(manifest)
+            extended_manifest["archiveSha256"] = hashlib.sha256(extended).hexdigest()
+            extended_manifest["archiveSize"] = len(extended)
+            extended_raw = (json.dumps(extended_manifest, sort_keys=True,
+                            separators=(",", ":")) + "\n").encode()
+            with self.assertRaises(verifier.Refused):
+                verifier.verify(extended, workflow, extended_raw,
+                                hashlib.sha256(extended_raw).hexdigest())
 
     def test_clean_installed_no_grant_is_zero_post_and_zero_journal_change(self):
         requests = []
