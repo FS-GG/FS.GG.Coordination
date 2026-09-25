@@ -55,6 +55,10 @@ type CodexAppServerContinuityTests() =
         Encoding.UTF8.GetBytes(original.Replace(oldText, newText, StringComparison.Ordinal))
     let completedWithItems items =
         replace completed "\"items\":[]" ("\"items\":" + items)
+    let completedWithCommandActions actions =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":"
+             + actions + ",\"cwd\":\"/tmp\",\"status\":\"completed\"}]")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -265,6 +269,57 @@ type CodexAppServerContinuityTests() =
         let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
         let terminal =
             completedWithItems "[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``nonobject or foreign nested command action cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for actions in
+            [ "[null]"
+              "[{}]"
+              "[{\"command\":\"echo ok\",\"type\":\"foreign\"}]" ] do
+            let terminal = completedWithCommandActions actions
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``read command action requires string name and path``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for actions in
+            [ "[{\"command\":\"cat x\",\"type\":\"read\",\"name\":\"x\"}]"
+              "[{\"command\":\"cat x\",\"type\":\"read\",\"name\":42,\"path\":\"/tmp/x\"}]" ] do
+            let terminal = completedWithCommandActions actions
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``search command action optional path and query have bounded shape``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for actions in
+            [ "[{\"command\":\"rg x\",\"type\":\"search\",\"path\":42}]"
+              "[{\"command\":\"rg x\",\"type\":\"search\",\"query\":42}]" ] do
+            let terminal = completedWithCommandActions actions
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``supported nested command actions retain terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let actions =
+            "[{\"command\":\"cat x\",\"type\":\"read\",\"name\":\"x\",\"path\":\"/tmp/x\"},"
+            + "{\"command\":\"ls\",\"type\":\"listFiles\",\"path\":null},"
+            + "{\"command\":\"rg x\",\"type\":\"search\",\"query\":null},"
+            + "{\"command\":\"echo ok\",\"type\":\"unknown\"}]"
+        let terminal = completedWithCommandActions actions
         Assert.Equal(
             TerminalObserved("completed", 0),
             status (CodexAppServerContinuity.apply first (frame 2L terminal))

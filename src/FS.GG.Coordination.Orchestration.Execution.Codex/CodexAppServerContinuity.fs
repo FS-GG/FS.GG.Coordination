@@ -83,6 +83,37 @@ module CodexAppServerContinuity =
             let text = value.GetString()
             if boundedText text then Ok text else Error code
 
+    let private optionalNullableString (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | false, _ -> true
+        | true, value ->
+            value.ValueKind = JsonValueKind.String || value.ValueKind = JsonValueKind.Null
+
+    let private validCommandAction (action: JsonElement) =
+        if action.ValueKind <> JsonValueKind.Object then false
+        else
+            let names = action.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match action.TryGetProperty "command", action.TryGetProperty "type" with
+                | (true, command), (true, actionType) when
+                    command.ValueKind = JsonValueKind.String
+                    && actionType.ValueKind = JsonValueKind.String ->
+                    match actionType.GetString() with
+                    | "read" ->
+                        match action.TryGetProperty "name", action.TryGetProperty "path" with
+                        | (true, name), (true, path) ->
+                            name.ValueKind = JsonValueKind.String
+                            && path.ValueKind = JsonValueKind.String
+                        | _ -> false
+                    | "listFiles" -> optionalNullableString action "path"
+                    | "search" ->
+                        optionalNullableString action "path"
+                        && optionalNullableString action "query"
+                    | "unknown" -> true
+                    | _ -> false
+                | _ -> false
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -106,6 +137,7 @@ module CodexAppServerContinuity =
                             | (true, command), (true, actions), (true, cwd), (true, status) ->
                                 command.ValueKind = JsonValueKind.String
                                 && actions.ValueKind = JsonValueKind.Array
+                                && (actions.EnumerateArray() |> Seq.forall validCommandAction)
                                 && cwd.ValueKind = JsonValueKind.String
                                 && status.ValueKind = JsonValueKind.String
                                 && Set.contains (status.GetString())

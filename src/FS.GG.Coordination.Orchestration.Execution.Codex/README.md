@@ -61,9 +61,10 @@ subscription to this interactive thread or transport-journal implementation is i
 The pinned v2 turn frame reader refuses nonobject, duplicate-key, missing-ID or unsupported-type
 `items` members. It checks common `ThreadItem` identity and discriminator fields and requires the
 schema's string `text` field for `agentMessage`. For `commandExecution`, it checks the required
-command, working-directory, action-array and status-enum shapes. Nested command actions and other
-variant payload fields still need a full schema-bound reader before a native terminal can be
-trusted.
+command, working-directory, action-array and status-enum shapes. Nested command actions must be
+one of the four pinned variants with their required field types; optional search/list path and
+query fields must be string or null. Other variant payload fields still need a full schema-bound
+reader before a native terminal can be trusted.
 
 `CodexAppServerJournal` adds a dormant atomic append port for that future transport journal. Each
 request carries the exact subscription binding, predecessor receipt, ordinal and immutable frame
