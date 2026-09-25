@@ -1557,6 +1557,37 @@ class VersionedReadbackTests(unittest.TestCase):
                                             "native-pull-list-base-target"):
                     reader.read_pull_census(pull_expected())
 
+    def test_q6_open_census_duplicate_node_id_stays_unknown(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, body="unrelated")
+        post = pull_read_events((selected, unrelated))
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_open_census_requires_unique_nonempty_node_ids(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((selected, unrelated))))
+        self.assertEqual(len(reader.read_pull_census(pull_expected()).pulls), 1)
+        for node_id in ("PR_8", ""):
+            with self.subTest(node_id=node_id):
+                wrong = copy.deepcopy(unrelated)
+                wrong["node_id"] = node_id
+                reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+                    pull_read_events((selected, wrong))))
+                with self.assertRaisesRegex(operator.Refused,
+                                            "native-pull-list-identity"):
+                    reader.read_pull_census(pull_expected())
+
     def test_q6_restart_replay_cli_and_v5_inspect_binding(self):
         root = SOURCE.parents[1]
         preflight_path = root / operator.HISTORICAL_PREFLIGHT
