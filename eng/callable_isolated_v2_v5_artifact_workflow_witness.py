@@ -38,6 +38,10 @@ class Witness:
     artifact_id: int
     archive_sha256: str
     workflow_sha256: str
+    artifact_reader_principal: str
+    artifact_credential_id: str
+    workflow_reader_principal: str
+    workflow_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -184,7 +188,11 @@ def qualify(selection: candidate.Selection, readback: installed.Readback,
             raise Refused("v5-producer-drift")
         return Witness(selection.revision, selection.source_tree,
                        selection.artifact_id, selection.archive_sha256,
-                       candidate.PINNED_BYTES["workflow"])
+                       candidate.PINNED_BYTES["workflow"],
+                       artifact_scope["principalId"],
+                       artifact_scope["credentialId"],
+                       workflow_scope["principalId"],
+                       workflow_scope["credentialId"])
     except Refused:
         raise
     except Exception:
