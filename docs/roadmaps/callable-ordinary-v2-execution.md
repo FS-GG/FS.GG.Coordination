@@ -49,6 +49,18 @@ immediately before GS2-09.7 representative rehearsal, not work waiting after GS2
 registers exact Q3 contract and Q6 recovery command identities. Synthetic dummy unit IDs and synthetic receipts
 are never acceptance evidence.
 
+The GS2-09.9 unit receipt is a separate acceptance obligation. The original Q3/Q6 source gates
+qualified a controlled provider and installed recovery interface; their source ceiling did not
+authorize a live effect. The later protected V2-CALL-01.4c run accepted exactly one isolated
+synthetic native operation with installed 0.1.1, and V2-CALL-01.5b handed its bound readiness
+packet to discovery. Those immutable facts satisfy the roadmap's callable scope only after a
+current exact candidate independently revalidates the retained native archives, protected run,
+installed package and receiver identities, handoff bytes, and all source gates. A new custom
+GS2-09.9 receipt must bind the current unit contract, gate results and protected merges before
+this unit can be a typed prerequisite of GS2-09.7. The historical handoff alone is discovery
+input, not that receipt. None of these facts accepts fleet migration, Q4, OpenV2, or production
+writer enablement.
+
 ## Prior sources and reusable evidence
 
 - `ShardedJournalAdapter` and the accepted [GS2-04.9 receipt](../../evidence/github-substrate-v2/accepted/GS2-04.9.json)
