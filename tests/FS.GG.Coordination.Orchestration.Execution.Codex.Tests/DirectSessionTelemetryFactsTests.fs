@@ -157,6 +157,30 @@ type DirectSessionTelemetryFactsTests() =
                 { observed with CounterProvenance = "" })
 
     [<Fact>]
+    member _.``known non-turn provenance cannot relabel copied-live snapshot counters``() =
+        let bytes =
+            Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
+            |> File.ReadAllBytes
+        let last =
+            match CodexAppServerUsageProjection.parse assignment.ThreadId "native-turn" bytes with
+            | Ok update -> update.Last
+            | Error code -> failwithf "copied-live usage refused: %s" code
+        let copiedCounters =
+            { usage with
+                Input = last.Input
+                CachedInput = last.CachedInput
+                Output = last.Output
+                Reasoning = Some last.ReasoningOutput
+                Total = last.Total }
+        for provenance in
+            [ "thread-last-total-snapshot"
+              "exec-child-turn-completed"
+              "one-upstream-response" ] do
+            refuse "direct-session-provenance-not-completed-turn"
+                (DirectSessionTelemetryFacts.prepareCompletedTurn assignment
+                    { observed with Usage = copiedCounters; CounterProvenance = provenance })
+
+    [<Fact>]
     member _.``changed counters retain identity but change payload digest``() =
         let first = DirectSessionTelemetryFacts.prepareCompletedTurn assignment observed |> accepted
         let changed =
