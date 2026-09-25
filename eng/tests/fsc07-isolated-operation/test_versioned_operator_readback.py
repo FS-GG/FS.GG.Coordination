@@ -874,7 +874,9 @@ class VersionedReadbackTests(unittest.TestCase):
         complete = dict(pull_observed().pulls[0],
                         url="https://api.github.com/repos/FS-GG/disposable/pulls/8")
         for response in ({"status": 201, "body": complete},
-                         operator.HttpResponse(201, (), json.dumps(complete).encode())):
+                         operator.HttpResponse(201, (), json.dumps(complete).encode()),
+                         operator.HttpResponse(201, (("Location", complete["url"]),),
+                                               json.dumps(complete).encode())):
             with self.subTest(positive=type(response).__name__):
                 self.assertIsInstance(operator.classify_pull_after_one_attempt(
                     pull_expected(), pull_observed,
@@ -885,6 +887,13 @@ class VersionedReadbackTests(unittest.TestCase):
         for response in ({"status": 201},
                          {"status": 201, "body": wrong_head},
                          {"status": 201, "body": wrong_number},
+                         operator.HttpResponse(201, (("Location", complete["url"] + "?q=1"),),
+                                               json.dumps(complete).encode()),
+                         operator.HttpResponse(201, (("Location", complete["url"]),
+                                                     ("location", complete["url"])),
+                                               json.dumps(complete).encode()),
+                         {"status": 201, "body": complete,
+                          "headers": {"Location": complete["url"] + "/9"}},
                          operator.HttpResponse(201, (), b'{"number":8,"number":9}')):
             with self.subTest(negative=repr(response)[:80]):
                 self.assert_unknown(operator.classify_pull_after_one_attempt(
@@ -1046,6 +1055,23 @@ class VersionedReadbackTests(unittest.TestCase):
         transport = operator.OfflineTranscriptTransport(events)
         self.assertIsInstance(operator.run_pull_once(
             expected, transport, reserve_once_factory()), operator.ExactPull)
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_success_response_foreign_location_stays_unknown(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        response_pull = dict(pull, url=
+                             "https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         value=response_pull, status=201,
+                         headers={"Location":
+                                  "https://api.github.com/repos/FS-GG/disposable/pulls/9"})] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
     def test_q3_loopback_http_pull_and_protection(self):
