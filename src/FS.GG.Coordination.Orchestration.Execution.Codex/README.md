@@ -103,6 +103,9 @@ turn aggregate. A matching `codex exec` child turn is a different session proven
 keeps all three evidence classes out of completed-turn telemetry and refuses candidates with
 foreign IDs. Its correlation also uses the telemetry mapper's exact scope grammar, so equal
 but malformed repository, issue, workspace or binding fields cannot become canonical.
+The structural key retains the bounded UTC reservation window, selected source adapter,
+reservation, transport connection and protocol identity; malformed or unsupported facts refuse.
+These supplied values do not authenticate a live source.
 A future native per-turn usage contract and trusted current-session source are still
 required before this correlation can yield usage or an applied Host receipt.
 
