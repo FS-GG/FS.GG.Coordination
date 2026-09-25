@@ -234,7 +234,10 @@ type MigrationSandboxProviderObservation(options: MigrationSandboxProviderOption
 
     let issueRequestAllowed request =
         match request with
-        | Rest value when value.Method = Get && value.Body.IsNone ->
+        | Rest value when value.Method = Get && value.Body.IsNone
+                          && value.Headers = headers
+                          && value.ApiVersion = ApiVersion.required
+                          && value.Idempotency = ReplaySafe ->
             value.Uri = repositoryUri || validIssuePageRequest 1 value.Uri
         | _ -> false
 
@@ -243,6 +246,9 @@ type MigrationSandboxProviderObservation(options: MigrationSandboxProviderOption
         | GraphQL value ->
             value.Uri = options.GraphQLUri
             && value.Document = MigrationGitHubRead.projectItemsQuery 2
+            && value.Headers = headers
+            && value.ApiVersion = ApiVersion.required
+            && value.Idempotency = ReplaySafe
             && Map.tryFind "owner" value.Variables = Some "FS-GG"
             && (value.Variables |> Map.forall (fun key value ->
                 key = "owner" || (key = "after" && not (String.IsNullOrWhiteSpace value))))

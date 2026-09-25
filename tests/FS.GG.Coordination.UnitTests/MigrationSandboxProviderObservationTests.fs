@@ -75,8 +75,13 @@ let ``scope binds four exact raw provider identities but installation grant rema
         Assert.Equal(4, transport.Calls.Length)
         Assert.All(transport.Calls, fun request ->
             match request with
-            | Rest value -> Assert.Equal(Get, value.Method); Assert.True(value.Body.IsNone)
-            | GraphQL value -> Assert.StartsWith("query", value.Document))
+            | Rest value ->
+                Assert.Equal(Get, value.Method)
+                Assert.True(value.Body.IsNone)
+                Assert.Equal(Some "Bearer synthetic-controlled-token", Map.tryFind "authorization" value.Headers)
+            | GraphQL value ->
+                Assert.StartsWith("query", value.Document)
+                Assert.Equal(Some "Bearer synthetic-controlled-token", Map.tryFind "authorization" value.Headers))
     let refusal, _ = adapter [ reply viewer; reply repo; reply projectScope; reply installationRepositories ]
     Assert.Equal(Error MigrationSandboxProviderFailure.GrantUnavailable, refusal.ObserveScope())
     let forgedPermissions =
@@ -115,6 +120,10 @@ let ``fixture parses terminal issue and Project censuses with exact ETag and raw
         Assert.True(evidence.IssuePages.Head.NextIdentity.IsNone)
         Assert.True(evidence.ProjectPages.Head.NextIdentity.IsNone)
         Assert.Equal(4, transport.Calls.Length)
+        Assert.All(transport.Calls, fun request ->
+            match request with
+            | Rest value -> Assert.Equal(Some "Bearer synthetic-controlled-token", Map.tryFind "authorization" value.Headers)
+            | GraphQL value -> Assert.Equal(Some "Bearer synthetic-controlled-token", Map.tryFind "authorization" value.Headers))
 
 [<Fact>]
 let ``fixture census includes nonce marker on another issue`` () =
