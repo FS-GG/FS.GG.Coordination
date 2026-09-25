@@ -141,9 +141,9 @@ def qualify(preflight: release.PreflightResult,
             event_port: ApprovalEventPort,
             selection: dict[str, Any], now: dt.datetime) -> ApprovalWitnessResult:
     """Compare two independent fake readers; never approve an operation."""
-    selection = _exact(selection, {"repositoryId", "identityEventId", "organizationId",
+    selection = dict(_exact(selection, {"repositoryId", "identityEventId", "organizationId",
         "reviewerLogin", "identityRecordId", "approvalEventSha256"},
-        "approval-selection-shape")
+        "approval-selection-shape"))
     if (type(preflight) is not release.PreflightResult
             or type(produced) is not producer.ProducerWitnessResult
             or preflight.schema != release.RESULT_SCHEMA
