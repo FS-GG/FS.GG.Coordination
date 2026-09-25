@@ -17,7 +17,7 @@ import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-reviewer-identity/1"
 EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/2"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/3"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/4"
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}\Z")
 
 
@@ -49,6 +49,7 @@ class ApprovalWitnessResult:
     bundle_sha256: str
     source_record_id: int
     producer_actor_id: int
+    repository_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -174,6 +175,8 @@ def qualify(preflight: release.PreflightResult,
             or produced.source_tree != preflight.source_tree
             or produced.producer_actor_id != preflight.producer_actor_id
             or produced.source_record_id != preflight.source_record_id
+            or type(produced.repository_id) is not int
+            or produced.repository_id != selection["repositoryId"]
             or (produced.producer_run_id, produced.producer_run_attempt,
                 produced.artifact_id) !=
                (preflight.producer_run_id, preflight.producer_run_attempt,
@@ -272,4 +275,5 @@ def qualify(preflight: release.PreflightResult,
         selection["approvalEventSha256"], preflight.manifest_sha256,
         produced.bundle_sha256,
         source_record_id=preflight.source_record_id,
-        producer_actor_id=preflight.producer_actor_id)
+        producer_actor_id=preflight.producer_actor_id,
+        repository_id=selection["repositoryId"])
