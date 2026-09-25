@@ -48,6 +48,15 @@ type IProtectedIssueCensusPort =
     abstract Describe: unit -> ProtectedIssueCensusPins
     abstract Read: ProtectedIssueCensusSelection -> ProtectedIssueCensusBatch option
 
+type ProtectedIssueCensusStoredRead =
+    { Selection: ProtectedIssueCensusSelection
+      CustodyStoreResourceId: string
+      Read: ProtectedIssueCensusRead }
+
+type IProtectedIssueCensusStorePort =
+    abstract Describe: unit -> string
+    abstract ReadObject: ProtectedIssueCensusSelection * string -> ProtectedIssueCensusStoredRead option
+
 type ProtectedIssueCensusProof =
     { Inspect: GitHubMigrationInspectAuthority
       CustodyObjectIds: string list
@@ -132,14 +141,41 @@ module MigrationProtectedIssueCensus =
         Rest { Method=Get; Uri=Uri read.RequestUri; Headers=Map.empty; Body=None
                ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }, response read
 
+    let private verifyStoredReads (pins: ProtectedIssueCensusPins)
+                                  (selection: ProtectedIssueCensusSelection)
+                                  (store: IProtectedIssueCensusStorePort option)
+                                  (reads: ProtectedIssueCensusRead list) =
+        match store with
+        | None -> Error "protected-census-store-unavailable"
+        | Some protectedStore ->
+            try
+                if protectedStore.Describe() <> pins.CustodyStoreResourceId then
+                    Error "protected-census-store-installation"
+                else
+                    let rec verify remaining =
+                        match remaining with
+                        | [] -> Ok ()
+                        | read :: rest ->
+                            match protectedStore.ReadObject(selection, read.CustodyObjectId) with
+                            | None -> Error "protected-census-store-unavailable"
+                            | Some stored when stored.Selection <> selection
+                                               || stored.CustodyStoreResourceId <> pins.CustodyStoreResourceId
+                                               || stored.Read <> read ->
+                                Error "protected-census-store-binding"
+                            | Some _ -> verify rest
+                    verify reads
+            with _ -> Error "protected-census-store-unavailable"
+
     let bind (pins: ProtectedIssueCensusPins) (selection: ProtectedIssueCensusSelection)
-             (port: IProtectedIssueCensusPort option) (options: MigrationInspectProviderOptions)
+             (port: IProtectedIssueCensusPort option) (store: IProtectedIssueCensusStorePort option)
+             (options: MigrationInspectProviderOptions)
              (population: MigrationIssuePopulation) =
         if not (validPins pins) then Error "protected-census-pins"
         elif not (validSelection selection options) then Error "protected-census-selection"
         else
             match port with
             | None -> Error "protected-census-port-unavailable"
+            | Some _ when Option.isNone store -> Error "protected-census-store-unavailable"
             | Some protectedPort ->
                 try
                     if protectedPort.Describe() <> pins then Error "protected-census-installation"
@@ -190,26 +226,29 @@ module MigrationProtectedIssueCensus =
                                || batch.Identity.LinkHeader.IsSome
                                || not pagesMatch then Error "protected-census-object-or-page"
                             else
-                                let captures = reads |> List.map capture
-                                MigrationInspectProviderAdapter.bindIssues options population captures
-                                |> Result.mapError (fun reason -> $"protected-census-raw-typed:{reason}")
-                                |> Result.map (fun inspect ->
-                                    let parts =
-                                        [ "fsgg.gs2-09.7.protected-issue-census/v2"
-                                          string selection.RunId; string selection.RunAttempt
-                                          selection.RunNonce; selection.CandidateSha; selection.WorkflowSha
-                                          selection.ApiOrigin; selection.Owner; selection.Repository
-                                          string selection.RepositoryId; pins.ReaderResourceId
-                                          pins.ReaderArtifactSha256; pins.ProviderResourceId
-                                          pins.CustodyStoreResourceId
-                                          string batch.SealedPageCount ]
-                                        @ (reads |> List.collect (fun read ->
-                                            [ string read.ReadOrdinal; read.CustodyObjectId
-                                              read.RequestMethod; read.RequestUri; read.ResponseUri
-                                              read.ProviderResourceId; sha read.RawBody
-                                              string read.ResponseHeaders.Length ]
-                                            @ (read.ResponseHeaders |> List.collect (fun (name, value) ->
-                                                [ name; value ]))))
-                                    { Inspect=inspect; CustodyObjectIds=objectIds
-                                      CorpusSha256=parts |> List.map framed |> String.concat "" |> sha })
+                                match verifyStoredReads pins selection store reads with
+                                | Error reason -> Error reason
+                                | Ok () ->
+                                    let captures = reads |> List.map capture
+                                    MigrationInspectProviderAdapter.bindIssues options population captures
+                                    |> Result.mapError (fun reason -> $"protected-census-raw-typed:{reason}")
+                                    |> Result.map (fun inspect ->
+                                        let parts =
+                                            [ "fsgg.gs2-09.7.protected-issue-census/v3"
+                                              string selection.RunId; string selection.RunAttempt
+                                              selection.RunNonce; selection.CandidateSha; selection.WorkflowSha
+                                              selection.ApiOrigin; selection.Owner; selection.Repository
+                                              string selection.RepositoryId; pins.ReaderResourceId
+                                              pins.ReaderArtifactSha256; pins.ProviderResourceId
+                                              pins.CustodyStoreResourceId
+                                              string batch.SealedPageCount ]
+                                            @ (reads |> List.collect (fun read ->
+                                                [ string read.ReadOrdinal; read.CustodyObjectId
+                                                  read.RequestMethod; read.RequestUri; read.ResponseUri
+                                                  read.ProviderResourceId; sha read.RawBody
+                                                  string read.ResponseHeaders.Length ]
+                                                @ (read.ResponseHeaders |> List.collect (fun (name, value) ->
+                                                    [ name; value ]))))
+                                        { Inspect=inspect; CustodyObjectIds=objectIds
+                                          CorpusSha256=parts |> List.map framed |> String.concat "" |> sha })
                 with _ -> Error "protected-census-read-unavailable"

@@ -46,6 +46,16 @@ type IProtectedIssueCensusPort =
     abstract Describe: unit -> ProtectedIssueCensusPins
     abstract Read: ProtectedIssueCensusSelection -> ProtectedIssueCensusBatch option
 
+type ProtectedIssueCensusStoredRead =
+    { Selection: ProtectedIssueCensusSelection
+      CustodyStoreResourceId: string
+      Read: ProtectedIssueCensusRead }
+
+/// An independent candidate-inaccessible store port must back this source contract.
+type IProtectedIssueCensusStorePort =
+    abstract Describe: unit -> string
+    abstract ReadObject: ProtectedIssueCensusSelection * string -> ProtectedIssueCensusStoredRead option
+
 type ProtectedIssueCensusProof =
     { Inspect: GitHubMigrationInspectAuthority
       CustodyObjectIds: string list
@@ -58,6 +68,7 @@ module MigrationProtectedIssueCensus =
         pins:ProtectedIssueCensusPins ->
         selection:ProtectedIssueCensusSelection ->
         port:IProtectedIssueCensusPort option ->
+        store:IProtectedIssueCensusStorePort option ->
         options:MigrationInspectProviderOptions ->
         population:MigrationIssuePopulation ->
             Result<ProtectedIssueCensusProof, string>
