@@ -48,6 +48,15 @@ comment endpoint and record type. This prevents one record from occupying two
 typed activity slots. It still cannot prove that the database IDs and
 payloads came from retained provider responses.
 
+A sixth independent control reached the native issue reader itself: it
+accepted an `unknown` issue state as a typed censused subject, while the PR
+reader already refused unknown states. The control was red before the repair.
+`readIssues` now accepts only `open` or `closed` issue state from the
+[repository issues endpoint](https://docs.github.com/en/rest/issues/issues#list-repository-issues),
+before it creates subject evidence. This is one provider-parser field check;
+the complete nine-authority raw-to-typed inspect adapter and protected
+claim/receipt correspondence remain absent.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

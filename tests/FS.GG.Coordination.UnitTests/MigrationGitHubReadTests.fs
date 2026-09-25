@@ -1617,6 +1617,14 @@ let ``duplicate issue identity and repository drift refuse`` () =
     Assert.Single(drift.Requests) |> ignore
 
 [<Fact>]
+let ``issue census refuses unknown native state before subject evidence`` () =
+    let unknown = (issue 1 "ISSUE_1").Replace("\"state\":\"open\"", "\"state\":\"unknown\"")
+    let transport = FakeTransport [ repo; ok Map.empty $"[{unknown}]" ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:issue-state"),
+                 MigrationGitHubRead.readIssues options transport)
+    Assert.Equal(2, transport.Requests.Length)
+
+[<Fact>]
 let ``GraphQL partial data with an authorization error is never a complete type census`` () =
     let partial =
         """{"data":{"repository":{"databaseId":42,"issueTypes":{"nodes":[{"id":"IT_1","name":"Task"}],"pageInfo":{"hasNextPage":false,"endCursor":"NA"}}}},"errors":[{"type":"FORBIDDEN","message":"not accessible"}]}"""

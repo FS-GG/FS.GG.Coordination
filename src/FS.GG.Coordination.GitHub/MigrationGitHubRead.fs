@@ -1770,7 +1770,9 @@ module MigrationGitHubRead =
               requiredString "state" value, requiredString "updated_at" value with
         | Ok number, Ok databaseId, Ok nodeId, Ok state, Ok updated ->
             let mutable timestamp = DateTimeOffset.MinValue
-            if not (DateTimeOffset.TryParse(updated, &timestamp)) then
+            if state <> "open" && state <> "closed" then
+                Error(MigrationReadFailure.MalformedResponse "invalid:issue-state")
+            elif not (DateTimeOffset.TryParse(updated, &timestamp)) then
                 Error(MigrationReadFailure.MalformedResponse "invalid:updated_at")
             else
                 let payload = value.GetRawText()
