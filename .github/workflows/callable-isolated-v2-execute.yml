@@ -1,0 +1,28 @@
+name: callable-isolated-v2-execute-proposal
+
+# Source-only disabled native-effect scaffold. No grant or secret is installed.
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: callable-isolated-v2-execute-proposal
+  cancel-in-progress: false
+
+jobs:
+  execute-native-pull:
+    if: ${{ false }}
+    runs-on: [self-hosted, linux, x64, isolated-v2-effect-unselected]
+    environment: callable-isolated-v2-effect-unselected
+    permissions: {}
+    timeout-minutes: 5
+    env:
+      EFFECT_STATE: unselected
+      EXPECTED_SOURCE_REVISION: '0000000000000000000000000000000000000000'
+      EXPECTED_ARCHIVE_SHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+      EXPECTED_RUNNER_IMAGE_SHA256: '0000000000000000000000000000000000000000000000000000000000000000'
+    steps:
+      - name: Refuse while native authority and pins are unselected
+        shell: bash
+        run: exit 78
