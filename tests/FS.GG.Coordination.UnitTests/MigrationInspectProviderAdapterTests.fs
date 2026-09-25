@@ -67,7 +67,21 @@ let private protectedCensusPins =
     { ReaderResourceId="protected-reader:fixture"
       ReaderArtifactSha256=String.replicate 64 "a"
       ProviderResourceId="provider:fixture"
-      CustodyStoreResourceId="protected-store:fixture" }
+      CustodyStoreResourceId="protected-store:fixture"
+      CustodyStoreArtifactSha256=String.replicate 64 "d"
+      CustodyStoreAclPolicySha256=String.replicate 64 "e"
+      CustodyReaderPrincipalId="host-reader:fixture"
+      CustodyWriterPrincipalId="host-writer:fixture"
+      CandidatePrincipalId="candidate:fixture" }
+
+let private protectedCensusStoreDescription =
+    { ResourceId=protectedCensusPins.CustodyStoreResourceId
+      ArtifactSha256=protectedCensusPins.CustodyStoreArtifactSha256
+      AclPolicySha256=protectedCensusPins.CustodyStoreAclPolicySha256
+      ReaderPrincipalId=protectedCensusPins.CustodyReaderPrincipalId
+      WriterPrincipalId=protectedCensusPins.CustodyWriterPrincipalId
+      CandidatePrincipalId=protectedCensusPins.CandidatePrincipalId
+      CandidateMayRead=false; CandidateMayWrite=false; ImmutableObjects=true }
 
 let private protectedCensusSelection =
     { RunId=101L; RunAttempt=2; RunNonce="nonce:fixture"
@@ -113,7 +127,7 @@ let private protectedCensusStore (batch: ProtectedIssueCensusBatch) =
               Read=read })
         |> Map.ofList
     { new IProtectedIssueCensusStorePort with
-        member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+        member _.Describe() = protectedCensusStoreDescription
         member _.ReadObject(_, objectId) = Map.tryFind objectId objects }
 
 [<Fact>]
@@ -292,17 +306,51 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     Assert.Equal(0, readerCalls)
     let missing =
         { new IProtectedIssueCensusStorePort with
-            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.Describe() = protectedCensusStoreDescription
             member _.ReadObject(_, _) = None }
     Assert.Equal(Error "protected-census-store-unavailable", bind (Some missing))
     let foreign =
         { new IProtectedIssueCensusStorePort with
-            member _.Describe() = "candidate-writable-store"
+            member _.Describe() = { protectedCensusStoreDescription with ResourceId="candidate-writable-store" }
             member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
     Assert.Equal(Error "protected-census-store-installation", bind (Some foreign))
+    let bindCounted description =
+        readerCalls <- 0
+        let driftedStore =
+            { new IProtectedIssueCensusStorePort with
+                member _.Describe() = description
+                member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
+        let result =
+            MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+                (Some countedReader) (Some driftedStore) options population |> Result.map ignore
+        Assert.Equal(Error "protected-census-store-installation", result)
+        Assert.Equal(0, readerCalls)
+    for description in
+        [ { protectedCensusStoreDescription with CandidateMayWrite=true }
+          { protectedCensusStoreDescription with CandidateMayRead=true }
+          { protectedCensusStoreDescription with ImmutableObjects=false }
+          { protectedCensusStoreDescription with AclPolicySha256=String.replicate 64 "f" }
+          { protectedCensusStoreDescription with ArtifactSha256=String.replicate 64 "f" }
+          { protectedCensusStoreDescription with CandidatePrincipalId="foreign-candidate" }
+          { protectedCensusStoreDescription with ReaderPrincipalId=protectedCensusPins.CandidatePrincipalId } ] do
+        bindCounted description
+    let mutable describes = 0
+    let mutable objectReads = 0
+    let drifting =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() =
+                describes <- describes + 1
+                if describes = 1 then protectedCensusStoreDescription
+                else { protectedCensusStoreDescription with CandidateMayWrite=true }
+            member _.ReadObject(_, _) =
+                objectReads <- objectReads + 1
+                None }
+    Assert.Equal(Error "protected-census-store-installation", bind (Some drifting))
+    Assert.Equal(2, describes)
+    Assert.Equal(0, objectReads)
     let changed =
         { new IProtectedIssueCensusStorePort with
-            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.Describe() = protectedCensusStoreDescription
             member _.ReadObject(selection, objectId) =
                 stored.ReadObject(selection, objectId)
                 |> Option.map (fun value ->
@@ -312,7 +360,7 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     Assert.Equal(Error "protected-census-store-binding", bind (Some changed))
     let stale =
         { new IProtectedIssueCensusStorePort with
-            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.Describe() = protectedCensusStoreDescription
             member _.ReadObject(selection, objectId) =
                 stored.ReadObject(selection, objectId)
                 |> Option.map (fun value ->
@@ -321,7 +369,7 @@ let ``protected issue census refuses missing foreign or changed stored object`` 
     let mutable attempts = 0
     let unknown =
         { new IProtectedIssueCensusStorePort with
-            member _.Describe() = protectedCensusPins.CustodyStoreResourceId
+            member _.Describe() = protectedCensusStoreDescription
             member _.ReadObject(_, _) =
                 attempts <- attempts + 1
                 raise (InvalidOperationException "unknown protected store read") }
