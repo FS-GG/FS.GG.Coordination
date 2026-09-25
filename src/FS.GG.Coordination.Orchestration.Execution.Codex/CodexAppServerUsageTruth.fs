@@ -10,7 +10,14 @@ type CodexDirectTurnCorrelation =
         Scope: DirectSessionTurnScope
         NativeSessionId: string
         WindowChallenge: string
+        ReservationId: string
+        AuthorizedSourceAdapterId: string
+        IssuedAt: DateTimeOffset
+        ExpiresAt: DateTimeOffset
         NativeTurnId: string
+        TransportIdentity: string
+        ConnectionId: string
+        ProtocolVersion: string
         SubscriptionDigest: string
         FirstEntryId: string
         SealedHeadEntryId: string
@@ -54,7 +61,18 @@ module CodexAppServerUsageTruth =
            || not (boundedText terminal.Reservation.Request.NativeSessionId)
            || isNull terminal.Reservation.Request.Challenge
            || not (digestPattern.IsMatch terminal.Reservation.Request.Challenge)
+           || not (boundedText terminal.Reservation.ReservationId)
+           || not (boundedText terminal.Reservation.Request.AuthorizedSourceAdapterId)
+           || terminal.Reservation.Request.AuthorizedSourceAdapterId.Length > 128
+           || terminal.Reservation.Request.IssuedAt.Offset <> TimeSpan.Zero
+           || terminal.Reservation.Request.ExpiresAt.Offset <> TimeSpan.Zero
+           || terminal.Reservation.Request.ExpiresAt <= terminal.Reservation.Request.IssuedAt
+           || terminal.Reservation.Request.ExpiresAt - terminal.Reservation.Request.IssuedAt
+              > TimeSpan.FromMinutes 5.
            || not (boundedText terminal.Binding.TurnId)
+           || not (boundedText terminal.Binding.TransportIdentity)
+           || not (boundedText terminal.Binding.ConnectionId)
+           || terminal.Binding.ProtocolVersion <> "codex-app-server-v2/0.156.1"
            || isNull terminal.Binding.SubscriptionDigest
            || not (digestPattern.IsMatch terminal.Binding.SubscriptionDigest)
            || not (boundedText terminal.FirstEntryId)
@@ -66,7 +84,14 @@ module CodexAppServerUsageTruth =
                 { Scope = terminal.Binding.Scope
                   NativeSessionId = terminal.Reservation.Request.NativeSessionId
                   WindowChallenge = terminal.Reservation.Request.Challenge
+                  ReservationId = terminal.Reservation.ReservationId
+                  AuthorizedSourceAdapterId = terminal.Reservation.Request.AuthorizedSourceAdapterId
+                  IssuedAt = terminal.Reservation.Request.IssuedAt
+                  ExpiresAt = terminal.Reservation.Request.ExpiresAt
                   NativeTurnId = terminal.Binding.TurnId
+                  TransportIdentity = terminal.Binding.TransportIdentity
+                  ConnectionId = terminal.Binding.ConnectionId
+                  ProtocolVersion = terminal.Binding.ProtocolVersion
                   SubscriptionDigest = terminal.Binding.SubscriptionDigest
                   FirstEntryId = terminal.FirstEntryId
                   SealedHeadEntryId = terminal.SealedHeadEntryId

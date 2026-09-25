@@ -75,6 +75,13 @@ type CodexAppServerUsageTruthTests() =
         Assert.Equal(request.NativeSessionId, result.Correlation.NativeSessionId)
         Assert.Equal(binding.TurnId, result.Correlation.NativeTurnId)
         Assert.Equal(challenge, result.Correlation.WindowChallenge)
+        Assert.Equal(terminal.Reservation.ReservationId, result.Correlation.ReservationId)
+        Assert.Equal(request.AuthorizedSourceAdapterId, result.Correlation.AuthorizedSourceAdapterId)
+        Assert.Equal(request.IssuedAt, result.Correlation.IssuedAt)
+        Assert.Equal(request.ExpiresAt, result.Correlation.ExpiresAt)
+        Assert.Equal(binding.TransportIdentity, result.Correlation.TransportIdentity)
+        Assert.Equal(binding.ConnectionId, result.Correlation.ConnectionId)
+        Assert.Equal(binding.ProtocolVersion, result.Correlation.ProtocolVersion)
         Assert.Equal(terminal.SealedHeadEntryId, result.Correlation.SealedHeadEntryId)
         Assert.Empty result.ObservedEvidenceClasses
 
@@ -184,3 +191,56 @@ type CodexAppServerUsageTruthTests() =
             Error "app-server-usage-correlation-invalid",
             CodexAppServerUsageTruth.assess candidate []
         )
+
+    [<Fact>]
+    member _.``unsupported transport protocol cannot be canonical``() =
+        let candidate = { terminal with Binding = { binding with ProtocolVersion = "foreign-v1" } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )
+
+    [<Fact>]
+    member _.``blank transport connection cannot be canonical``() =
+        let candidate = { terminal with Binding = { binding with ConnectionId = "" } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )
+
+    [<Fact>]
+    member _.``unattributed reservation cannot be canonical``() =
+        let candidate =
+            { terminal with
+                Reservation =
+                    { Request = { request with AuthorizedSourceAdapterId = "" }
+                      ReservationId = "" } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )
+
+    [<Fact>]
+    member _.``non UTC reservation window cannot be canonical``() =
+        let candidate =
+            { terminal with
+                Reservation =
+                    { terminal.Reservation with
+                        Request = { request with IssuedAt = request.IssuedAt.ToOffset(TimeSpan.FromHours 1.) } } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )
+
+    [<Fact>]
+    member _.``zero or overlong reservation window cannot be canonical``() =
+        for expiresAt in [ request.IssuedAt; request.IssuedAt.AddMinutes 6. ] do
+            let candidate =
+                { terminal with
+                    Reservation =
+                        { terminal.Reservation with
+                            Request = { request with ExpiresAt = expiresAt } } }
+            Assert.Equal(
+                Error "app-server-usage-correlation-invalid",
+                CodexAppServerUsageTruth.assess candidate []
+            )
