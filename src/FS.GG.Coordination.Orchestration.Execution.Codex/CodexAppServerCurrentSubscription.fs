@@ -105,7 +105,7 @@ module CodexAppServerCurrentSubscription =
                                     || not (utc observation.SubscribedAt)
                                     || not (utc observation.ObservedAt)
                                     || observation.SubscribedAt < issued.IssuedAt
-                                    || observation.SubscribedAt < reservationNow
+                                    || observation.SubscribedAt <= reservationNow
                                     || observation.SubscribedAt >= observation.ObservedAt
                                     || observation.ObservedAt > observedNow
                                     || observedNow >= issued.ExpiresAt

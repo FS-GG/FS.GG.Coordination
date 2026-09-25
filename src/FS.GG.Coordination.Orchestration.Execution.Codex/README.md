@@ -78,10 +78,12 @@ store implementation is installed. A supplied JSON file cannot establish journal
 current-session App Server subscription. It reserves the challenge atomically before reading the
 native source, then checks the exact workspace/item, session, challenge, thread, selected adapter,
 transport and subscription time against a later trusted clock read. A confirmed reservation stays
-burned on a source or clock gap. This is a structural handoff only: no trusted native current-session
-source, issuer, clock, durable reservation store or transport implementation is installed. The
-source must later retain the first `turn/started` notification in the journal; this gate does not
-prove that a selected turn began after subscription or produce completed-turn usage.
+burned on a source or clock gap. A subscription time tied with the reservation clock cannot
+establish prospective order and burns the challenge. This is a structural handoff only: no trusted
+native current-session source, issuer, clock, durable reservation store or transport implementation
+is installed. The source must later retain the first `turn/started` notification in the journal;
+this gate does not prove that a selected turn began after subscription or produce completed-turn
+usage.
 
 `CodexAppServerFirstStart` adds that next structural check. After the one-use subscription
 reservation, a future authenticated journal reader must provide the first append receipt and its

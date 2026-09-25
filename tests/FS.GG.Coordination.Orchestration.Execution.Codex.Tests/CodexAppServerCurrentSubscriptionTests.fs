@@ -146,6 +146,16 @@ type CodexAppServerCurrentSubscriptionTests() =
         Assert.Equal(Error AlreadyReserved, prepare scope (Ok issued) (Ok observation) expiredStore)
 
     [<Fact>]
+    member _.``subscription tied with reservation time cannot prove prospective order``() =
+        let store = AtomicSubscriptionChallengeFake() :> IDirectSessionChallengeReservationStore
+        let ambiguous = { observation with SubscribedAt = reservationNow }
+        Assert.Equal(
+            "app-server-current-subscription-outside-window",
+            gapCode (prepare scope (Ok issued) (Ok ambiguous) store)
+        )
+        Assert.Equal(Error AlreadyReserved, prepare scope (Ok issued) (Ok observation) store)
+
+    [<Fact>]
     member _.``wrong scope transport protocol or digest cannot bind the subscription``() =
         let cases =
             [ { observation with Binding = { binding with Scope = { scope with WorkspaceId = "other-workspace" } } },
