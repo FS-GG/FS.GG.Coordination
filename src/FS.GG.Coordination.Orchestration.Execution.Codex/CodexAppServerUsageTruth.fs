@@ -65,6 +65,17 @@ module CodexAppServerUsageTruth =
                isNull digest || not (digestPattern.IsMatch digest)))
            || (terminal.UsageWireSha256s |> Set.ofList |> Set.count)
               <> terminal.UsageUpdateCount
+           || isNull (box terminal.UsageSnapshots)
+           || List.length terminal.UsageSnapshots <> terminal.UsageUpdateCount
+           || (List.zip terminal.UsageWireSha256s terminal.UsageSnapshots
+               |> List.exists (fun (digest, update) ->
+                   isNull (box update)
+                   || update.ThreadId <> terminal.Binding.Scope.ThreadId
+                   || update.TurnId <> terminal.Binding.TurnId
+                   || update.WireSha256 <> digest
+                   || not (CodexAppServerUsageProjection.validCounts update.Last)
+                   || not (CodexAppServerUsageProjection.validCounts update.Cumulative)
+                   || not (CodexAppServerUsageProjection.dominates update.Cumulative update.Last)))
            || not (boundedText terminal.Reservation.Request.NativeSessionId)
            || isNull terminal.Reservation.Request.Challenge
            || not (digestPattern.IsMatch terminal.Reservation.Request.Challenge)
@@ -105,7 +116,7 @@ module CodexAppServerUsageTruth =
                   SealedHeadEntryId = terminal.SealedHeadEntryId
                   TerminalStatus = terminal.TerminalStatus }
 
-    let private evidenceClass correlation usageDigests candidate =
+    let private evidenceClass correlation usageDigests usageSnapshots candidate =
         match candidate with
         | ThreadSnapshot snapshot when
             isNull (box snapshot)
@@ -122,6 +133,9 @@ module CodexAppServerUsageTruth =
         | ThreadSnapshot snapshot when
             not (Set.contains snapshot.WireSha256 usageDigests) ->
             Error "app-server-usage-snapshot-journal-mismatch"
+        | ThreadSnapshot snapshot when
+            not (List.contains snapshot usageSnapshots) ->
+            Error "app-server-usage-snapshot-counters-mismatch"
         | ThreadSnapshot _ -> Ok "thread-last-total-snapshot"
         | ExecChildCompleted usage when
             isNull (box usage)
@@ -164,14 +178,14 @@ module CodexAppServerUsageTruth =
                     Error "app-server-usage-candidates-invalid"
                 | ThreadSnapshot _ :: _ when snapshotCount >= terminal.UsageUpdateCount ->
                     Error "app-server-usage-snapshot-count-mismatch"
+                | ThreadSnapshot snapshot :: _ when
+                    Set.contains snapshot.WireSha256 seenSnapshotDigests ->
+                    Error "app-server-usage-snapshot-duplicate"
                 | candidate :: tail ->
-                    match evidenceClass correlation usageDigests candidate with
+                    match evidenceClass correlation usageDigests terminal.UsageSnapshots candidate with
                     | Error code -> Error code
                     | Ok evidence ->
                         match candidate with
-                        | ThreadSnapshot snapshot when
-                            Set.contains snapshot.WireSha256 seenSnapshotDigests ->
-                            Error "app-server-usage-snapshot-duplicate"
                         | ThreadSnapshot snapshot ->
                             collect tail (Set.add evidence classes)
                                 (Set.add snapshot.WireSha256 seenSnapshotDigests) (snapshotCount + 1)

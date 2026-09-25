@@ -707,6 +707,9 @@ module CodexAppServerContinuity =
 
     let status state = state.Status
 
+    /// Only journal recovery may retain the last parsed update after an accepted usage transition.
+    let internal latestUsageUpdate state = state.LastUsage
+
     /// Exposes the validated binding to a future journal gate; it is not authentication proof.
     let subscriptionBinding state = state.Binding
 

@@ -28,7 +28,7 @@ type ICodexAppServerJournalRecoverySource =
 
 /// Structural replay only; neither case is completed-turn usage or Host evidence.
 type CodexAppServerRecoveryVerdict =
-    | ProvisionalTerminal of status: string * usageUpdates: int * usageWireSha256s: string list
+    | ProvisionalTerminal of status: string * usageUpdates: int * usageWireSha256s: string list * usageSnapshots: CodexAppServerUsageUpdate list
     | ProvisionalGap of code: string
 
 [<RequireQualifiedAccess>]
@@ -117,7 +117,7 @@ module CodexAppServerJournalRecovery =
                 | Ok snapshot when List.length snapshot.Entries <> snapshot.Seal.EntryCount ->
                     Error "app-server-recovery-count-mismatch"
                 | Ok snapshot ->
-                    let rec replay entries expectedOrdinal priorId seen current usageDigests =
+                    let rec replay entries expectedOrdinal priorId seen current usageSnapshots =
                         match entries with
                         | [] ->
                             if priorId <> Some snapshot.Seal.HeadEntryId then
@@ -127,8 +127,12 @@ module CodexAppServerJournalRecovery =
                                 | Choice2Of2 code -> Ok(ProvisionalGap code)
                                 | Choice1Of2 continuity ->
                                     match CodexAppServerContinuity.status continuity with
-                                    | TerminalObserved(terminal, count) when count = List.length usageDigests ->
-                                        Ok(ProvisionalTerminal(terminal, count, List.rev usageDigests))
+                                    | TerminalObserved(terminal, count) when count = List.length usageSnapshots ->
+                                        let accepted = List.rev usageSnapshots
+                                        Ok(ProvisionalTerminal(
+                                            terminal, count,
+                                            accepted |> List.map _.WireSha256,
+                                            accepted))
                                     | TerminalObserved _ -> Error "app-server-recovery-usage-count-mismatch"
                                     | ContinuityGap code -> Ok(ProvisionalGap code)
                                     | _ -> Error "app-server-recovery-terminal-missing"
@@ -154,13 +158,19 @@ module CodexAppServerJournalRecovery =
                                 match replayEntry continuity receipt.Append.Event with
                                 | Error code -> Error code
                                 | Ok next ->
-                                    let nextUsageDigests =
+                                    let nextUsageSnapshots =
                                         match receipt.Append.Event, CodexAppServerContinuity.status continuity, next with
                                         | ObservedFrame(_, _, _, _, digest), InTurn before, Choice1Of2 updated ->
                                             match CodexAppServerContinuity.status updated with
-                                            | InTurn after when after = before + 1 -> digest :: usageDigests
-                                            | _ -> usageDigests
-                                        | _ -> usageDigests
-                                    replay tail (expectedOrdinal + 1L) (Some receipt.EntryId)
-                                        (Set.add receipt.EntryId seen) next nextUsageDigests
+                                            | InTurn after when after = before + 1 ->
+                                                match CodexAppServerContinuity.latestUsageUpdate updated with
+                                                | Some usage when usage.WireSha256 = digest -> Ok(usage :: usageSnapshots)
+                                                | _ -> Error "app-server-recovery-usage-projection-mismatch"
+                                            | _ -> Ok usageSnapshots
+                                        | _ -> Ok usageSnapshots
+                                    match nextUsageSnapshots with
+                                    | Error code -> Error code
+                                    | Ok accepted ->
+                                        replay tail (expectedOrdinal + 1L) (Some receipt.EntryId)
+                                            (Set.add receipt.EntryId seen) next accepted
                     replay snapshot.Entries 1L None Set.empty (Choice1Of2 initial) []
