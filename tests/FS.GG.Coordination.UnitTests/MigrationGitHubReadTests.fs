@@ -478,6 +478,53 @@ let ``repository core settings refuse invalid options and unavailable provider``
     Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
                  MigrationGitHubRead.readRepositoryCoreSettings options unavailable)
 
+let private settingsRollbackPlan settingsTarget =
+    let sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let steps =
+        [ 5, AuthoritySnapshot, "authority"; 4, Schedule, "schedules"
+          3, V1Projection, "v1"; 2, ReceiverPin, "receivers"; 1, Settings, "settings" ]
+        |> List.map (fun (order, domain, name) ->
+            { Order=order; StepId=$"restore-{name}"; Domain=domain
+              TargetIdentity=(if domain = Settings then settingsTarget else $"target:{name}")
+              CapturedStateSha256=sha $"captured-full:{name}"
+              RestorePayloadSha256=sha $"payload:{name}" })
+    GitHubRollbackPlanQualification.qualify "accepted-rollback" (String.replicate 40 "a")
+        (String.replicate 64 "b") (String.replicate 64 "c") (String.replicate 64 "d")
+        (String.replicate 64 "e") (String.replicate 64 "f") (String.replicate 64 "1")
+        (String.replicate 64 "2") "VerifiedV2" steps
+        (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+    |> function Ok value -> value | Error failures -> failwithf "invalid fixture plan: %A" failures
+
+[<Fact>]
+let ``rollback settings core readback is raw bound yet explicitly partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let expectedCore = repositoryCore |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                       |> Convert.ToHexString |> _.ToLowerInvariant()
+    let transport = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty repositoryCore ]
+    match MigrationRollbackSettingsReadback.captureCorePartial selected.Seal selected "REPO_42" expectedCore options transport with
+    | Error reason -> failwithf "core settings readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(selected.Seal, proof.PlanSeal)
+        Assert.Equal(expectedCore, proof.CorePayloadSha256)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(2, transport.Requests.Length)
+    let changedRaw = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty (" " + repositoryCore) ]
+    Assert.Equal(Error "changed:settings-core-raw",
+                 MigrationRollbackSettingsReadback.captureCorePartial selected.Seal selected "REPO_42" expectedCore options changedRaw)
+    Assert.Equal(Error "changed:settings-core-state",
+                 MigrationRollbackSettingsReadback.captureCorePartial selected.Seal selected "REPO_42" (String.replicate 64 "9")
+                     options (FakeTransport [ ok Map.empty repositoryCore; ok Map.empty repositoryCore ]))
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:settings-rollback-target",
+                 MigrationRollbackSettingsReadback.captureCorePartial
+                     (settingsRollbackPlan "repository-settings:43:REPO_43").Seal
+                     (settingsRollbackPlan "repository-settings:43:REPO_43") "REPO_42" expectedCore options noCalls)
+    Assert.Empty(noCalls.Requests)
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackSettingsReadback.captureCorePartial (String.replicate 64 "8")
+                     selected "REPO_42" expectedCore options noCalls)
+    Assert.Empty(noCalls.Requests)
+
 let private propertySchema =
     """[{"property_name":"environment","source_type":"organization","value_type":"single_select","required":true,"require_explicit_values":true,"values_editable_by":"org_actors","default_value":"production","allowed_values":["production","development"]},{"property_name":"teams","source_type":"organization","value_type":"multi_select","required":false,"values_editable_by":null,"allowed_values":["backend","frontend"]},{"property_name":"approved","source_type":"organization","value_type":"true_false","required":false}]"""
 
