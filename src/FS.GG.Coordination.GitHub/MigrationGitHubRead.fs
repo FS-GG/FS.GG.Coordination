@@ -2346,9 +2346,17 @@ module MigrationGitHubRead =
                                 if document.RootElement.ValueKind <> JsonValueKind.Array then
                                     Error(MigrationReadFailure.MalformedResponse "events-not-array")
                                 else
+                                    let parseUniqueEvent value =
+                                        uniqueObjectMembers value
+                                        |> Result.bind (fun () ->
+                                            property "actor" value
+                                            |> Result.bind (fun actor ->
+                                                if actor.ValueKind = JsonValueKind.Null then Ok ()
+                                                else uniqueObjectMembers actor))
+                                        |> Result.bind (fun () -> parseIssueEvent issueNumber value)
                                     let parsed =
                                         document.RootElement.EnumerateArray()
-                                        |> Seq.map (parseIssueEvent issueNumber) |> Seq.toList
+                                        |> Seq.map parseUniqueEvent |> Seq.toList
                                     match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                     | Some failure -> Error failure
                                     | None ->
