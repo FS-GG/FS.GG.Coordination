@@ -15,25 +15,35 @@ type ProtectedIssueCensusClaimDescription =
       CandidateMayWrite: bool
       ImmutableJournal: bool }
 
+type ProtectedIssueCensusClaimHead =
+    { JournalResourceId: string
+      Generation: int64
+      SealSha256: string }
+
 type ProtectedIssueCensusClaimRequest =
     { ClaimId: string
       AttestationPayloadSha256: string
       Selection: ProtectedIssueCensusSelection
       CustodyStoreResourceId: string
       StoreGeneration: int64
-      JournalResourceId: string }
+      JournalResourceId: string
+      ExpectedHeadGeneration: int64
+      ExpectedHeadSha256: string }
 
 type ProtectedIssueCensusClaimRecord =
     { Request: ProtectedIssueCensusClaimRequest
-      CommitGeneration: int64 }
+      CommitGeneration: int64
+      CommitHeadSha256: string }
 
 type ProtectedIssueCensusClaimOutcome =
     | ClaimCommitted
     | ClaimDuplicate
+    | ClaimConflict
     | ClaimUnknown
 
 type IProtectedIssueCensusClaimPort =
     abstract Describe: unit -> ProtectedIssueCensusClaimDescription
+    abstract ReadHead: unit -> ProtectedIssueCensusClaimHead option
     abstract ClaimOnce: ProtectedIssueCensusClaimRequest -> ProtectedIssueCensusClaimOutcome
     abstract ReadClaim: string -> ProtectedIssueCensusClaimRecord option
 
@@ -47,6 +57,15 @@ module MigrationProtectedIssueCensusClaim =
         not (isNull value) && value.Length = 64
         && (value |> Seq.forall (fun ch ->
             (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
+
+    let expectedCommitHeadSha256 (previous: ProtectedIssueCensusClaimHead)
+                                     (request: ProtectedIssueCensusClaimRequest) =
+        [ "fsgg.gs2-09.7.protected-census-claim-head/v1"
+          previous.JournalResourceId; string previous.Generation; previous.SealSha256
+          request.ClaimId; request.AttestationPayloadSha256
+          request.JournalResourceId; string request.ExpectedHeadGeneration
+          request.ExpectedHeadSha256 ]
+        |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes |> sha
 
     let private preflight (pins: ProtectedIssueCensusClaimPins)
                           (port: IProtectedIssueCensusClaimPort option) =
@@ -95,26 +114,53 @@ module MigrationProtectedIssueCensusClaim =
                 match attestation with
                 | None -> Error "protected-census-attestation-unavailable"
                 | Some claim ->
-                    let request =
-                        { ClaimId=claimId selection storeResourceId storeGeneration
-                          AttestationPayloadSha256=
-                            MigrationProtectedIssueCensusAttestation.signingPayload
-                                attestationPins claim |> sha
-                          Selection=selection; CustodyStoreResourceId=storeResourceId
-                          StoreGeneration=storeGeneration
-                          JournalResourceId=claimPins.JournalResourceId }
-                    let outcome =
-                        try journal.ClaimOnce request
-                        with _ -> ClaimUnknown
-                    match outcome with
-                    | ClaimDuplicate -> Error "protected-census-claim-duplicate"
-                    | ClaimUnknown -> Error "protected-census-claim-unknown"
-                    | ClaimCommitted ->
-                        let readback =
-                            try journal.ReadClaim request.ClaimId
-                            with _ -> None
-                        match readback with
-                        | None -> Error "protected-census-claim-unknown"
-                        | Some committed when committed.Request = request
-                                              && committed.CommitGeneration > 0L -> Ok ()
-                        | Some _ -> Error "protected-census-claim-binding"
+                    let before =
+                        try journal.ReadHead()
+                        with _ -> None
+                    match before with
+                    | None -> Error "protected-census-claim-unknown"
+                    | Some head when head.JournalResourceId <> claimPins.JournalResourceId
+                                     || head.Generation < 0L
+                                     || head.Generation = Int64.MaxValue
+                                     || not (exactSha head.SealSha256) ->
+                        Error "protected-census-claim-head"
+                    | Some head ->
+                        let request =
+                            { ClaimId=claimId selection storeResourceId storeGeneration
+                              AttestationPayloadSha256=
+                                MigrationProtectedIssueCensusAttestation.signingPayload
+                                    attestationPins claim |> sha
+                              Selection=selection; CustodyStoreResourceId=storeResourceId
+                              StoreGeneration=storeGeneration
+                              JournalResourceId=claimPins.JournalResourceId
+                              ExpectedHeadGeneration=head.Generation
+                              ExpectedHeadSha256=head.SealSha256 }
+                        let outcome =
+                            try journal.ClaimOnce request
+                            with _ -> ClaimUnknown
+                        match outcome with
+                        | ClaimDuplicate -> Error "protected-census-claim-duplicate"
+                        | ClaimConflict -> Error "protected-census-claim-conflict"
+                        | ClaimUnknown -> Error "protected-census-claim-unknown"
+                        | ClaimCommitted ->
+                            let readback =
+                                try journal.ReadClaim request.ClaimId
+                                with _ -> None
+                            match readback with
+                            | None -> Error "protected-census-claim-unknown"
+                            | Some committed when committed.Request <> request ->
+                                Error "protected-census-claim-binding"
+                            | Some committed when committed.CommitGeneration <> head.Generation + 1L
+                                                  || committed.CommitHeadSha256
+                                                     <> expectedCommitHeadSha256 head request ->
+                                Error "protected-census-claim-head"
+                            | Some committed ->
+                                let after =
+                                    try journal.ReadHead()
+                                    with _ -> None
+                                match after with
+                                | None -> Error "protected-census-claim-unknown"
+                                | Some current when current.JournalResourceId = claimPins.JournalResourceId
+                                                    && current.Generation = committed.CommitGeneration
+                                                    && current.SealSha256 = committed.CommitHeadSha256 -> Ok ()
+                                | Some _ -> Error "protected-census-claim-head"

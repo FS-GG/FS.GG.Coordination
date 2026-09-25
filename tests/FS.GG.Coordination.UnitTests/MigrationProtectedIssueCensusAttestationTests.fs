@@ -119,6 +119,15 @@ let private claimDescription =
       JournalArtifactSha256=claimPins.JournalArtifactSha256
       CandidateMayRead=false; CandidateMayWrite=false; ImmutableJournal=true }
 
+let private initialHead =
+    { JournalResourceId=claimPins.JournalResourceId
+      Generation=0L; SealSha256=String.replicate 64 "a" }
+
+let private committedRecord request =
+    { Request=request; CommitGeneration=1L
+      CommitHeadSha256=MigrationProtectedIssueCensusClaim.expectedCommitHeadSha256
+                           initialHead request }
+
 let private verifyAndClaim pins proof attestation now port =
     MigrationProtectedIssueCensusClaim.verifyAndClaim
         pins claimPins selection "protected-store:fixture" proof 7L
@@ -132,14 +141,19 @@ let ``protected census attestation claim refuses duplicate signed handoff`` () =
     let journal =
         { new IProtectedIssueCensusClaimPort with
             member _.Describe() = claimDescription
+            member _.ReadHead() =
+                match stored with
+                | None -> Some initialHead
+                | Some request ->
+                    Some { initialHead with Generation=1L
+                                            SealSha256=(committedRecord request).CommitHeadSha256 }
             member _.ClaimOnce request =
                 attempts <- attempts + 1
                 match stored with
                 | Some _ -> ClaimDuplicate
                 | None -> stored <- Some request; ClaimCommitted
             member _.ReadClaim _ =
-                stored |> Option.map (fun request ->
-                    { Request=request; CommitGeneration=1L }) }
+                stored |> Option.map committedRecord }
     Assert.Equal(Ok (), verifyAndClaim pins proof attestation now (Some journal))
     Assert.Equal(Error "protected-census-claim-duplicate",
                  verifyAndClaim pins proof attestation now (Some journal))
@@ -154,6 +168,7 @@ let ``protected census attestation claim refuses absent unknown and forged journ
     let unknown =
         { new IProtectedIssueCensusClaimPort with
             member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
             member _.ClaimOnce _ =
                 attempts <- attempts + 1
                 ClaimUnknown
@@ -165,6 +180,7 @@ let ``protected census attestation claim refuses absent unknown and forged journ
     let lost =
         { new IProtectedIssueCensusClaimPort with
             member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
             member _.ClaimOnce _ = ClaimCommitted
             member _.ReadClaim _ =
                 readbacks <- readbacks + 1
@@ -175,6 +191,7 @@ let ``protected census attestation claim refuses absent unknown and forged journ
     let candidateWritable =
         { new IProtectedIssueCensusClaimPort with
             member _.Describe() = { claimDescription with CandidateMayWrite=true }
+            member _.ReadHead() = failwith "installation must refuse before head"
             member _.ClaimOnce _ = failwith "installation must refuse before claim"
             member _.ReadClaim _ = None }
     Assert.Equal(Error "protected-census-claim-installation",
@@ -182,12 +199,57 @@ let ``protected census attestation claim refuses absent unknown and forged journ
     let forgedReadback =
         { new IProtectedIssueCensusClaimPort with
             member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
             member _.ClaimOnce _ = ClaimCommitted
             member _.ReadClaim _ =
                 Some { Request={ ClaimId=String.replicate 64 "f"
                                  AttestationPayloadSha256=proof.CorpusSha256
                                  Selection=selection; CustodyStoreResourceId="protected-store:fixture"
-                                 StoreGeneration=7L; JournalResourceId=claimPins.JournalResourceId }
-                       CommitGeneration=1L } }
+                                 StoreGeneration=7L; JournalResourceId=claimPins.JournalResourceId
+                                 ExpectedHeadGeneration=0L; ExpectedHeadSha256=initialHead.SealSha256 }
+                       CommitGeneration=1L; CommitHeadSha256=String.replicate 64 "f" } }
     Assert.Equal(Error "protected-census-claim-binding",
                  verifyAndClaim pins proof attestation now (Some forgedReadback))
+
+[<Fact>]
+let ``protected census attestation claim refuses head jump and lost CAS`` () =
+    let pins, proof, attestation, now = fixture ()
+    let mutable request: ProtectedIssueCensusClaimRequest option = None
+    let jump =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
+            member _.ClaimOnce value = request <- Some value; ClaimCommitted
+            member _.ReadClaim _ =
+                request |> Option.map (fun value ->
+                    { (committedRecord value) with CommitGeneration=99L }) }
+    Assert.Equal(Error "protected-census-claim-head",
+                 verifyAndClaim pins proof attestation now (Some jump))
+    request <- None
+    let changedPostHead =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
+            member _.ClaimOnce value = request <- Some value; ClaimCommitted
+            member _.ReadClaim _ = request |> Option.map committedRecord }
+    Assert.Equal(Error "protected-census-claim-head",
+                 verifyAndClaim pins proof attestation now (Some changedPostHead))
+    let mutable attempts = 0
+    let unknownPrehead =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() = None
+            member _.ClaimOnce _ = attempts <- attempts + 1; ClaimCommitted
+            member _.ReadClaim _ = None }
+    Assert.Equal(Error "protected-census-claim-unknown",
+                 verifyAndClaim pins proof attestation now (Some unknownPrehead))
+    Assert.Equal(0, attempts)
+    let conflict =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() = Some initialHead
+            member _.ClaimOnce _ = attempts <- attempts + 1; ClaimConflict
+            member _.ReadClaim _ = failwith "conflicted CAS must not read a receipt" }
+    Assert.Equal(Error "protected-census-claim-conflict",
+                 verifyAndClaim pins proof attestation now (Some conflict))
+    Assert.Equal(1, attempts)
