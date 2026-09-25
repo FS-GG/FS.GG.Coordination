@@ -21,7 +21,12 @@ type ProtectedIssueCensusPins =
     { ReaderResourceId: string
       ReaderArtifactSha256: string
       ProviderResourceId: string
-      CustodyStoreResourceId: string }
+      CustodyStoreResourceId: string
+      CustodyStoreArtifactSha256: string
+      CustodyStoreAclPolicySha256: string
+      CustodyReaderPrincipalId: string
+      CustodyWriterPrincipalId: string
+      CandidatePrincipalId: string }
 
 type ProtectedIssueCensusRead =
     { ReadOrdinal: int64
@@ -53,8 +58,19 @@ type ProtectedIssueCensusStoredRead =
       CustodyStoreResourceId: string
       Read: ProtectedIssueCensusRead }
 
+type ProtectedIssueCensusStoreDescription =
+    { ResourceId: string
+      ArtifactSha256: string
+      AclPolicySha256: string
+      ReaderPrincipalId: string
+      WriterPrincipalId: string
+      CandidatePrincipalId: string
+      CandidateMayRead: bool
+      CandidateMayWrite: bool
+      ImmutableObjects: bool }
+
 type IProtectedIssueCensusStorePort =
-    abstract Describe: unit -> string
+    abstract Describe: unit -> ProtectedIssueCensusStoreDescription
     abstract ReadObject: ProtectedIssueCensusSelection * string -> ProtectedIssueCensusStoredRead option
 
 type ProtectedIssueCensusProof =
@@ -127,6 +143,35 @@ module MigrationProtectedIssueCensus =
         && exactSha 64 pins.ReaderArtifactSha256
         && exactAtom pins.ProviderResourceId
         && exactAtom pins.CustodyStoreResourceId
+        && exactSha 64 pins.CustodyStoreArtifactSha256
+        && exactSha 64 pins.CustodyStoreAclPolicySha256
+        && exactAtom pins.CustodyReaderPrincipalId
+        && exactAtom pins.CustodyWriterPrincipalId
+        && exactAtom pins.CandidatePrincipalId
+        && pins.CustodyReaderPrincipalId <> pins.CandidatePrincipalId
+        && pins.CustodyWriterPrincipalId <> pins.CandidatePrincipalId
+
+    let private validStoreDescription (pins: ProtectedIssueCensusPins)
+                                      (description: ProtectedIssueCensusStoreDescription) =
+        description.ResourceId = pins.CustodyStoreResourceId
+        && description.ArtifactSha256 = pins.CustodyStoreArtifactSha256
+        && description.AclPolicySha256 = pins.CustodyStoreAclPolicySha256
+        && description.ReaderPrincipalId = pins.CustodyReaderPrincipalId
+        && description.WriterPrincipalId = pins.CustodyWriterPrincipalId
+        && description.CandidatePrincipalId = pins.CandidatePrincipalId
+        && not description.CandidateMayRead
+        && not description.CandidateMayWrite
+        && description.ImmutableObjects
+
+    let private preflightStore (pins: ProtectedIssueCensusPins)
+                               (store: IProtectedIssueCensusStorePort option) =
+        match store with
+        | None -> Error "protected-census-store-unavailable"
+        | Some protectedStore ->
+            try
+                if validStoreDescription pins (protectedStore.Describe()) then Ok ()
+                else Error "protected-census-store-installation"
+            with _ -> Error "protected-census-store-unavailable"
 
     let private response (read: ProtectedIssueCensusRead) =
         let headers =
@@ -149,7 +194,7 @@ module MigrationProtectedIssueCensus =
         | None -> Error "protected-census-store-unavailable"
         | Some protectedStore ->
             try
-                if protectedStore.Describe() <> pins.CustodyStoreResourceId then
+                if not (validStoreDescription pins (protectedStore.Describe())) then
                     Error "protected-census-store-installation"
                 else
                     let rec verify remaining =
@@ -173,10 +218,14 @@ module MigrationProtectedIssueCensus =
         if not (validPins pins) then Error "protected-census-pins"
         elif not (validSelection selection options) then Error "protected-census-selection"
         else
-            match port with
-            | None -> Error "protected-census-port-unavailable"
-            | Some _ when Option.isNone store -> Error "protected-census-store-unavailable"
-            | Some protectedPort ->
+            let storeReady =
+                match port with
+                | None -> Ok ()
+                | Some _ -> preflightStore pins store
+            match port, storeReady with
+            | None, _ -> Error "protected-census-port-unavailable"
+            | Some _, Error reason -> Error reason
+            | Some protectedPort, Ok () ->
                 try
                     if protectedPort.Describe() <> pins then Error "protected-census-installation"
                     else
@@ -234,13 +283,18 @@ module MigrationProtectedIssueCensus =
                                     |> Result.mapError (fun reason -> $"protected-census-raw-typed:{reason}")
                                     |> Result.map (fun inspect ->
                                         let parts =
-                                            [ "fsgg.gs2-09.7.protected-issue-census/v3"
+                                            [ "fsgg.gs2-09.7.protected-issue-census/v4"
                                               string selection.RunId; string selection.RunAttempt
                                               selection.RunNonce; selection.CandidateSha; selection.WorkflowSha
                                               selection.ApiOrigin; selection.Owner; selection.Repository
                                               string selection.RepositoryId; pins.ReaderResourceId
                                               pins.ReaderArtifactSha256; pins.ProviderResourceId
                                               pins.CustodyStoreResourceId
+                                              pins.CustodyStoreArtifactSha256
+                                              pins.CustodyStoreAclPolicySha256
+                                              pins.CustodyReaderPrincipalId
+                                              pins.CustodyWriterPrincipalId
+                                              pins.CandidatePrincipalId
                                               string batch.SealedPageCount ]
                                             @ (reads |> List.collect (fun read ->
                                                 [ string read.ReadOrdinal; read.CustodyObjectId

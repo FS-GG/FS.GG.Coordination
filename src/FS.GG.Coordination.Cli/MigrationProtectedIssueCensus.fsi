@@ -19,7 +19,12 @@ type ProtectedIssueCensusPins =
     { ReaderResourceId: string
       ReaderArtifactSha256: string
       ProviderResourceId: string
-      CustodyStoreResourceId: string }
+      CustodyStoreResourceId: string
+      CustodyStoreArtifactSha256: string
+      CustodyStoreAclPolicySha256: string
+      CustodyReaderPrincipalId: string
+      CustodyWriterPrincipalId: string
+      CandidatePrincipalId: string }
 
 type ProtectedIssueCensusRead =
     { ReadOrdinal: int64
@@ -51,9 +56,20 @@ type ProtectedIssueCensusStoredRead =
       CustodyStoreResourceId: string
       Read: ProtectedIssueCensusRead }
 
+type ProtectedIssueCensusStoreDescription =
+    { ResourceId: string
+      ArtifactSha256: string
+      AclPolicySha256: string
+      ReaderPrincipalId: string
+      WriterPrincipalId: string
+      CandidatePrincipalId: string
+      CandidateMayRead: bool
+      CandidateMayWrite: bool
+      ImmutableObjects: bool }
+
 /// An independent candidate-inaccessible store port must back this source contract.
 type IProtectedIssueCensusStorePort =
-    abstract Describe: unit -> string
+    abstract Describe: unit -> ProtectedIssueCensusStoreDescription
     abstract ReadObject: ProtectedIssueCensusSelection * string -> ProtectedIssueCensusStoredRead option
 
 type ProtectedIssueCensusProof =
