@@ -15,7 +15,7 @@ import callable_isolated_v2_effect_release_preflight as release
 
 PROBE_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-refusal/2"
 AUDIT_SCHEMA = "fsgg.coordination.callable-isolated-v2-no-effect-audit/2"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/5"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/6"
 REFUSAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-scaffold-refusal/1"
 IDENTITY = {"runId", "runAttempt", "coordinationRevision", "sourceTree",
             "artifactId", "manifestSha256", "archiveSha256", "installPath",
@@ -167,6 +167,7 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
             or selection["repositoryId"] != approval_witness.repository_id
             or selection["identityEventId"] != approval_witness.identity_event_id
             or selection["approvalEventId"] != approval_witness.approval_event_id
+            or selection["runnerActorId"] == approval_witness.reviewer_actor_id
             or selection["auditActorId"] == selection["runnerActorId"]
             or not all(candidate._hex(selection[key], candidate.HEX64) for key in
                        ("imageDigest", "attestationDigest", "interpreterSha256",
