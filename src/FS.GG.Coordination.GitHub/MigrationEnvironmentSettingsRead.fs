@@ -342,14 +342,17 @@ module MigrationEnvironmentSettingsRead =
 
     let private readCustom (options: MigrationGitHubReadOptions) transport uri =
         get options transport uri |> Result.bind (fun response ->
-            parse response.Body |> Result.bind (fun root ->
-                match count "total_count" root, array "custom_deployment_protection_rules" root with
-                | Ok total, Ok values when total = values.Length ->
-                    values |> List.map customRule |> sequence
-                    |> Result.bind (unique (fun item -> string item.RuleId))
-                    |> Result.map (fun rules -> response.Body, rules)
-                | Ok _, Ok _ -> Error(MigrationReadFailure.PaginationRefused "custom-rule-count")
-                | Error error, _ | _, Error error -> Error error))
+            if response.Headers |> Map.exists (fun name _ -> name.Equals("link", StringComparison.OrdinalIgnoreCase)) then
+                Error(MigrationReadFailure.PaginationRefused "unexpected-custom-rule-link")
+            else
+                parse response.Body |> Result.bind (fun root ->
+                    match count "total_count" root, array "custom_deployment_protection_rules" root with
+                    | Ok total, Ok values when total = values.Length ->
+                        values |> List.map customRule |> sequence
+                        |> Result.bind (unique (fun item -> string item.RuleId))
+                        |> Result.map (fun rules -> response.Body, rules)
+                    | Ok _, Ok _ -> Error(MigrationReadFailure.PaginationRefused "custom-rule-count")
+                    | Error error, _ | _, Error error -> Error error))
 
     let read (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         if not (validOptions options) then Error MigrationReadFailure.InvalidOptions
