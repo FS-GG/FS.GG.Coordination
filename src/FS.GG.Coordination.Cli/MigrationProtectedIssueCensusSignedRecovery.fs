@@ -22,6 +22,6 @@ module MigrationProtectedIssueCensusSignedRecovery =
             | Error reason -> Error reason
             | Ok (snapshot, hold) ->
                 match MigrationProtectedIssueCensusNativeAttestation.verify
-                          attestationPins expectedMarker snapshot attestation clock with
+                          attestationPins handoffPins expectedMarker snapshot attestation clock with
                 | Error reason -> Error reason
                 | Ok () -> Ok hold

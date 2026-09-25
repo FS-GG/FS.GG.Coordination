@@ -31,6 +31,7 @@ module MigrationProtectedIssueCensusNativeAttestation =
     /// Fake-key source verifier only; it does not install a signer or native reader.
     val verify:
         pins:ProtectedIssueCensusNativeAttestationPins ->
+        handoffPins:ProtectedIssueCensusHandoffPins ->
         expectedMarker:ProtectedIssueCensusHandoffRequest ->
         snapshot:ProtectedIssueCensusNativeAttemptSnapshot ->
         attestation:ProtectedIssueCensusNativeSnapshotAttestation option ->
