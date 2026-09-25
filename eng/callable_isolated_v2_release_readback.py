@@ -42,11 +42,13 @@ CONTROL_KEYS = frozenset({
     "closureManifestSha256", "installedArchivePostSha256",
     "interpreterPostSha256", "closurePostSha256", "noGrant", "unknownCommand",
     "executionTokenPresent", "providerRequestCount", "journalWriteCount",
-    "workingDirectoryWriteCount",
+    "workingDirectoryWriteCount", "observedAt",
 })
 REVIEW_KEYS = frozenset({"schema", "complete", "selectionSha256", "bindings",
                          "reviewerId", "reviewerMembership", "reviewEventId",
-                         "reviewedAt"})
+                         "reviewedAt", "repository", "workflowPath",
+                         "sourceRevision", "runId", "runAttempt",
+                         "environmentId", "actorId", "approvalId"})
 
 
 class Refused(ValueError):
@@ -156,7 +158,8 @@ def _refusal(value: Any, argv: list[str], stderr_sha256: str) -> None:
         raise Refused("readback-control-refusal")
 
 
-def _controls(value: Any, selected: dict[str, Any]) -> None:
+def _controls(value: Any, selected: dict[str, Any], packet: dict[str, Any],
+              now: dt.datetime) -> dt.datetime:
     _exact(value, CONTROL_KEYS, "readback-controls-shape")
     if (value["schema"] != CONTROLS_SCHEMA or value["complete"] is not True
             or any(type(value[key]) is not type(selected[other])
@@ -181,15 +184,33 @@ def _controls(value: Any, selected: dict[str, Any]) -> None:
         raise Refused("readback-controls-incomplete")
     _refusal(value["noGrant"], ["inspect-grant"], NO_GRANT_STDERR_SHA256)
     _refusal(value["unknownCommand"], ["execute-native-pull"], UNKNOWN_STDERR_SHA256)
+    try:
+        observed = release._time(value["observedAt"])
+        approved = release._time(packet["approval"]["approvedAt"])
+        expires = release._time(packet["approval"]["expiresAt"])
+    except release.Refused:
+        raise Refused("readback-controls-time") from None
+    if not approved <= observed <= now < expires:
+        raise Refused("readback-controls-time")
+    return observed
 
 
 def _review(value: Any, selection_raw: bytes, selection_sha256: str,
-            selected: dict[str, Any], packet: dict[str, Any], now: dt.datetime) -> None:
+            selected: dict[str, Any], packet: dict[str, Any],
+            controls_observed_at: dt.datetime, now: dt.datetime) -> None:
     _exact(value, REVIEW_KEYS, "readback-selection-review-shape")
     if (value["schema"] != REVIEW_SCHEMA or value["complete"] is not True
             or value["selectionSha256"] != selection_sha256
             or type(value["bindings"]) is not dict
             or _canonical(value["bindings"]) != selection_raw
+            or type(value["repository"]) is not str
+            or value["repository"] != packet["source"]["repository"]
+            or type(value["workflowPath"]) is not str
+            or value["workflowPath"] != packet["workflow"]["path"]
+            or any(type(value[key]) is not type(selected[key])
+                   or value[key] != selected[key] for key in
+                   ("sourceRevision", "runId", "runAttempt",
+                    "environmentId", "actorId", "approvalId"))
             or type(value["reviewerId"]) is not int
             or value["reviewerId"] != selected["reviewerId"]
             or value["reviewerId"] == selected["actorId"]
@@ -204,7 +225,7 @@ def _review(value: Any, selection_raw: bytes, selection_sha256: str,
         expires = release._time(packet["approval"]["expiresAt"])
     except release.Refused:
         raise Refused("readback-selection-review-time") from None
-    if not approved <= reviewed <= now < expires:
+    if not approved <= controls_observed_at < reviewed <= now < expires:
         raise Refused("readback-selection-review-time")
 
 
@@ -259,12 +280,13 @@ def verify_selected_readback(selection_raw: bytes, selection_sha256: str,
         controls = controls_observer.read_controls()
     except Exception:
         raise Refused("readback-controls-unavailable") from None
-    _controls(controls, selected)
+    controls_observed_at = _controls(controls, selected, packet, now)
     try:
         review = selection_review_observer.read_review()
     except Exception:
         raise Refused("readback-selection-review-unavailable") from None
-    _review(review, selection_raw, selection_sha256, selected, packet, now)
+    _review(review, selection_raw, selection_sha256, selected, packet,
+            controls_observed_at, now)
     return ReadbackEvidence(selected["sourceRevision"], selected["workflowSha256"],
                             selected["archiveSha256"], selected["runnerImage"],
                             selected["closureManifestSha256"])

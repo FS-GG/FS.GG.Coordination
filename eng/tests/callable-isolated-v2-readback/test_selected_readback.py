@@ -115,6 +115,7 @@ def controls_fixture(selected: dict) -> dict:
                            "stderrSha256": readback.UNKNOWN_STDERR_SHA256},
         "executionTokenPresent": False, "providerRequestCount": 0,
         "journalWriteCount": 0, "workingDirectoryWriteCount": 0,
+        "observedAt": "2026-09-25T12:03:00Z",
     }
 
 
@@ -122,6 +123,13 @@ def review_fixture(selected: dict) -> dict:
     return {"schema": readback.REVIEW_SCHEMA, "complete": True,
             "selectionSha256": hashlib.sha256(canonical(selected)).hexdigest(),
             "bindings": copy.deepcopy(selected),
+            "repository": "FS-GG/FS.GG.Coordination",
+            "workflowPath": release.WORKFLOW,
+            "sourceRevision": selected.get("sourceRevision"),
+            "runId": selected.get("runId"), "runAttempt": selected.get("runAttempt"),
+            "environmentId": selected.get("environmentId"),
+            "actorId": selected.get("actorId"),
+            "approvalId": selected.get("approvalId"),
             "reviewerId": selected.get("reviewerId", 0), "reviewerMembership": "active",
             "reviewEventId": 208, "reviewedAt": "2026-09-25T12:04:00Z"}
 
@@ -175,6 +183,48 @@ def verify(packet: dict, selected: dict | None = None, controls: dict | None = N
 
 
 class SelectedReadbackTests(unittest.TestCase):
+    def test_review_event_must_name_its_own_protected_origin(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        baseline = review_fixture(selected)
+        # An otherwise exact selection supplied by an unrelated event is not
+        # evidence that this run's distinct reviewer approved it.
+        del baseline["runId"]
+        with self.assertRaisesRegex(readback.Refused, "selection-review-shape"):
+            verify(packet, reviewed=baseline)
+        for key, replacement in (
+                ("repository", "FS-GG/other"),
+                ("workflowPath", ".github/workflows/other.yml"),
+                ("sourceRevision", "f" * 40),
+                ("runId", 999), ("runAttempt", 2),
+                ("environmentId", 999), ("actorId", selected["reviewerId"]),
+                ("approvalId", 999), ("runId", True)):
+            with self.subTest(key=key, replacement=replacement):
+                review = review_fixture(selected)
+                review[key] = replacement
+                with self.assertRaisesRegex(readback.Refused, "selection-review-binding"):
+                    verify(packet, reviewed=review)
+
+    def test_review_must_follow_installed_control_observation(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        controls = controls_fixture(selected)
+        del controls["observedAt"]
+        with self.assertRaisesRegex(readback.Refused, "controls-shape"):
+            verify(packet, controls=controls)
+        for controls_time, review_time in (
+                ("2026-09-25T11:59:59Z", "2026-09-25T12:04:00Z"),
+                ("2026-09-25T12:06:00Z", "2026-09-25T12:07:00Z"),
+                ("2026-09-25T12:04:00Z", "2026-09-25T12:03:59Z"),
+                ("2026-09-25T12:04:00Z", "2026-09-25T12:04:00Z")):
+            with self.subTest(controls_time=controls_time, review_time=review_time):
+                controls = controls_fixture(selected)
+                controls["observedAt"] = controls_time
+                review = review_fixture(selected)
+                review["reviewedAt"] = review_time
+                with self.assertRaises(readback.Refused):
+                    verify(packet, controls=controls, reviewed=review)
+
     def test_self_sealed_selection_without_independent_review_refuses(self):
         packet = packet_fixture()
         selected = selection_fixture(packet)
