@@ -434,6 +434,16 @@ module CodexAppServerContinuity =
                                 validOptionalWebSearchAction item
                                 && validOptionalWebSearchResults item
                             | _ -> false
+                        | "subAgentActivity" ->
+                            match item.TryGetProperty "agentPath", item.TryGetProperty "agentThreadId",
+                                  item.TryGetProperty "kind" with
+                            | (true, path), (true, threadId), (true, activityKind) ->
+                                path.ValueKind = JsonValueKind.String
+                                && threadId.ValueKind = JsonValueKind.String
+                                && activityKind.ValueKind = JsonValueKind.String
+                                && Set.contains (activityKind.GetString())
+                                    (set [ "started"; "interacted"; "interrupted"; "completed" ])
+                            | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
                     && Set.contains typeName supportedItemTypes
