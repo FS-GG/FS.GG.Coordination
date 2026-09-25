@@ -24,6 +24,11 @@ not observe the current interactive session, authenticate the assignment, submit
 an applied Host receipt. The [direct-session boundary](../../docs/architecture/direct-session-telemetry-producer.md)
 describes those remaining requirements.
 
+`DirectSessionCorrelationHandoff` adds explicit assignment and current-turn source interfaces. It
+requires two independently supplied records to agree on the exact assignment, native session,
+prospective window challenge and thread before calling the mapper. No trusted implementation of
+either interface is installed, so its successful structural result is not capture evidence.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
