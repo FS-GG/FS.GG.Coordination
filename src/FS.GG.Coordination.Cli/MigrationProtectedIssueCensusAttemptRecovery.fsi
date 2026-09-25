@@ -53,6 +53,10 @@ type IProtectedIssueCensusNativeAttemptPort =
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusAttemptRecovery =
+    /// Structural readback check only; the protected owner must authenticate the selection.
+    val validSelectionShape:
+        selection:ProtectedIssueCensusSelection -> bool
+
     /// Unsigned canonical commitment over the complete native snapshot bytes.
     val expectedSnapshotSealSha256:
         snapshot:ProtectedIssueCensusNativeAttemptSnapshot -> string

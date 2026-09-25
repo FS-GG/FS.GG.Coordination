@@ -75,7 +75,9 @@ module MigrationProtectedIssueCensusNativeAttestation =
         match publicKey pins with
         | None -> Error "protected-native-attestation-pins"
         | Some publicBytes ->
-            if expectedMarker.ClockResourceId <> pins.ClockResourceId
+            if not (MigrationProtectedIssueCensusAttemptRecovery.validSelectionShape
+                        expectedMarker.Selection)
+               || expectedMarker.ClockResourceId <> pins.ClockResourceId
                || expectedMarker.ClockArtifactSha256 <> pins.ClockArtifactSha256 then
                 Error "protected-native-attestation-binding"
             elif snapshot.AttemptId <> expectedMarker.NativeAttemptId
