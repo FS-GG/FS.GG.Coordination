@@ -1,6 +1,7 @@
 """Source-only v5 port proposal cannot reach an authority or effect port."""
 
 import contextlib
+import dataclasses
 import io
 import os
 import pathlib
@@ -23,6 +24,27 @@ class DenyAccess:
 
 
 class ClosedV5PortTests(unittest.TestCase):
+    def test_closed_result_cannot_be_constructed_or_replaced_as_authority(self):
+        for changed in ({"authorized": True}, {"can_dispatch": True},
+                        {"live_effects": 1}, {"exit_code": 0},
+                        {"schema": "foreign"}):
+            with self.subTest(changed=changed):
+                with self.assertRaises((TypeError, ValueError)):
+                    proposal.ClosedV5Decision("caller", **changed)
+                with self.assertRaises((TypeError, ValueError)):
+                    dataclasses.replace(proposal.ClosedV5Decision("caller"),
+                                        **changed)
+
+    def test_colliding_role_objects_still_cannot_open_any_port(self):
+        shared = DenyAccess()
+        ports = proposal.ProposedPorts(*([shared] * len(dataclasses.fields(
+            proposal.ProposedPorts))))
+        result = proposal.inspect_closed(shared, shared, ports,
+                                         b"SYNTHETIC_UNTRUSTED_GRANT")
+        self.assertFalse(result.authorized)
+        self.assertFalse(result.can_dispatch)
+        self.assertEqual(result.exit_code, 78)
+
     def test_absent_and_untrusted_grant_refuse_without_port_access(self):
         for grant in (None, b"SYNTHETIC_UNTRUSTED_GRANT", DenyAccess()):
             with self.subTest(grant_type=type(grant).__name__):
