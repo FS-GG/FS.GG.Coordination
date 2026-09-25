@@ -183,6 +183,9 @@ module CodexAppServerContinuity =
 
     let status state = state.Status
 
+    /// Exposes the validated binding to a future journal gate; it is not authentication proof.
+    let subscriptionBinding state = state.Binding
+
     /// Apply one supplied frame. Any gap is latched; later frames cannot restore coverage.
     /// The ordinal is not a native App Server cursor and cannot prove upstream completeness.
     let apply (state: CodexAppServerContinuityState) (frame: CodexAppServerObservedFrame) =
