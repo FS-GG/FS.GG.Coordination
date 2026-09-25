@@ -15,6 +15,7 @@ import tempfile
 import threading
 import unittest
 import urllib.error
+import urllib.parse
 
 
 SOURCE = pathlib.Path(__file__).resolve().parents[2] / "callable-cli-isolated-operation-v2.py"
@@ -80,6 +81,15 @@ def event(method, path, body=None, value=None, status=200, headers=None, error=N
     return item
 
 
+def ref_value(ref, sha):
+    repository = "FS-GG/disposable"
+    branch = urllib.parse.quote(ref.removeprefix("refs/heads/"), safe="/")
+    return {"ref": ref,
+            "url": f"https://api.github.com/repos/{repository}/git/refs/heads/{branch}",
+            "object": {"type": "commit", "sha": sha,
+                       "url": f"https://api.github.com/repos/{repository}/git/commits/{sha}"}}
+
+
 def pull_read_events(pulls=(), source_sha=SHA_A, base_sha=SHA_B,
                      page_header=None, terminal=(), detail=True):
     repo = "FS-GG/disposable"
@@ -93,9 +103,9 @@ def pull_read_events(pulls=(), source_sha=SHA_A, base_sha=SHA_B,
         event("GET", prefix, value={"id": 44, "full_name": repo,
                                       "transcript_sha256": "0" * 64}),
         event("GET", f"{prefix}/git/ref/heads/source",
-              value={"ref": "refs/heads/source", "object": {"sha": source_sha}}),
+              value=ref_value("refs/heads/source", source_sha)),
         event("GET", f"{prefix}/git/ref/heads/main",
-              value={"ref": "refs/heads/main", "object": {"sha": base_sha}}),
+              value=ref_value("refs/heads/main", base_sha)),
         event("GET", f"{prefix}/pulls?state=open&per_page=100&page=1",
               value=listed, headers={"Link": page_header} if page_header else {}),
         event("GET", f"{prefix}/pulls?state=open&per_page=100&page=2",
@@ -108,9 +118,9 @@ def pull_read_events(pulls=(), source_sha=SHA_A, base_sha=SHA_B,
         event("GET", prefix, value={"id": 44, "full_name": repo,
                                       "transcript_sha256": "0" * 64}),
         event("GET", f"{prefix}/git/ref/heads/source",
-              value={"ref": "refs/heads/source", "object": {"sha": source_sha}}),
+              value=ref_value("refs/heads/source", source_sha)),
         event("GET", f"{prefix}/git/ref/heads/main",
-              value={"ref": "refs/heads/main", "object": {"sha": base_sha}}),
+              value=ref_value("refs/heads/main", base_sha)),
     ])
     return events
 
@@ -121,7 +131,7 @@ def protection_read_events(protected=False, policy=None, branch_sha=SHA_B):
     first = [
         event("GET", prefix, value={"id": 44, "full_name": repo}),
         event("GET", f"{prefix}/git/ref/heads/main",
-              value={"ref": "refs/heads/main", "object": {"sha": branch_sha}}),
+              value=ref_value("refs/heads/main", branch_sha)),
         event("GET", f"{prefix}/branches/main",
               value={"name": "main", "commit": {"sha": branch_sha},
                      "protected": protected}),
@@ -252,6 +262,34 @@ class VersionedReadbackTests(unittest.TestCase):
             with self.subTest(missing=missing):
                 post = pull_read_events((pull,))
                 del post[3]["response"]["json"][0][missing]
+                events = (pull_read_events() * 2 +
+                          [event("POST", "repos/FS-GG/disposable/pulls",
+                                 body=operator.pull_request_body(expected),
+                                 error=SENTINEL)] + post * 2)
+                transport = operator.OfflineTranscriptTransport(events)
+                self.assert_unknown(operator.run_pull_once(
+                    expected, transport, reserve_once_factory()))
+                self.assertEqual(transport.writes, 1)
+
+    def test_pull_ref_must_name_selected_commit_object_after_lost_response(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        for location, key, value in (
+                ("object", "type", "tag"),
+                ("object", "url",
+                 "https://api.github.com/repos/FS-GG/foreign/git/commits/" + SHA_A),
+                ("ref", "url",
+                 "https://api.github.com/repos/FS-GG/disposable/git/refs/heads/source?alias=1"),
+                ("object", "type", None)):
+            with self.subTest(location=location, key=key, value=value):
+                post = pull_read_events((pull,))
+                for index in (1, 7):
+                    body = post[index]["response"]["json"]
+                    target = body["object"] if location == "object" else body
+                    if value is None:
+                        del target[key]
+                    else:
+                        target[key] = value
                 events = (pull_read_events() * 2 +
                           [event("POST", "repos/FS-GG/disposable/pulls",
                                  body=operator.pull_request_body(expected),
