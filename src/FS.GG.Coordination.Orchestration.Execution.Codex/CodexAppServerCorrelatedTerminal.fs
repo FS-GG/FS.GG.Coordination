@@ -12,6 +12,7 @@ type CodexAppServerCorrelatedTerminal =
         SealedHeadEntryId: string
         TerminalStatus: string
         UsageUpdateCount: int
+        UsageWireSha256s: string list
     }
 
 [<RequireQualifiedAccess>]
@@ -61,11 +62,12 @@ module CodexAppServerCorrelatedTerminal =
                               authenticator cachedSource with
                     | Error code -> gap code
                     | Ok(ProvisionalGap code) -> gap code
-                    | Ok(ProvisionalTerminal(terminal, count)) ->
+                    | Ok(ProvisionalTerminal(terminal, count, usageDigests)) ->
                         Ok
                             { Reservation = started.Reservation
                               Binding = started.Binding
                               FirstEntryId = started.StartReceipt.EntryId
                               SealedHeadEntryId = snapshot.Seal.HeadEntryId
                               TerminalStatus = terminal
-                              UsageUpdateCount = count }
+                              UsageUpdateCount = count
+                              UsageWireSha256s = usageDigests }
