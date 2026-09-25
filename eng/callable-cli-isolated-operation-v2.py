@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""Import-only poststate proof for a prospective isolated-operation revision.
+"""Controlled poststate proof for a prospective isolated-operation revision.
 
-This is a new, inactive operator identity. It has no credential, HTTP, write,
-retry, or CLI entrypoint. The original V2-CALL-01.4b operator and accepted
-GS2-09.9 evidence remain immutable. A future governed contract and complete
-native reader must bind these predicates before any effect is authorized.
+This is a new, inactive operator identity. Its injected runtime can exercise
+one controlled request but has no credential or native HTTP implementation.
+The CLI uses a local transcript only. The original V2-CALL-01.4b operator and
+accepted GS2-09.9 evidence remain immutable. A future governed contract,
+durable attempt fence, and complete native reader must bind these predicates
+before any effect is authorized.
 """
 
 from __future__ import annotations
@@ -13,9 +15,13 @@ import argparse
 import dataclasses
 import hashlib
 import json
+import os
 import pathlib
 import re
+import sqlite3
+import stat
 import sys
+import urllib.parse
 from typing import Callable
 
 OPERATION_IDENTITY = "v2-call-01-4b-isolated-native-v2-provisional"
@@ -30,6 +36,10 @@ HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 
 class Refused(Exception):
     """A fixed, public refusal reason with no provider exception attached."""
+
+
+class OfflineMismatch(Exception):
+    """A controlled transcript did not match the requested operation."""
 
 
 @dataclasses.dataclass(frozen=True)
@@ -66,7 +76,9 @@ class ExpectedProtection:
     operation_identity: str
     write_attempts: int
     repository_id: int
+    repository: str
     branch: str
+    branch_sha: str
     check_context: str
     check_app_id: int
 
@@ -76,6 +88,7 @@ class ProtectionReadback:
     complete: bool
     repository_id: int
     branch: str
+    branch_sha: str
     protected: bool
     policy: dict
     transcript_sha256: str
@@ -89,6 +102,224 @@ class ExactProtection:
 @dataclasses.dataclass(frozen=True)
 class Unknown:
     reason: str
+
+
+@dataclasses.dataclass(frozen=True)
+class HttpResponse:
+    status: int
+    headers: tuple[tuple[str, str], ...]
+    body: bytes
+
+
+class NativeReadAdapter:
+    """Derive complete readbacks from injected raw REST responses.
+
+    The injected transport is the only I/O surface. This class contains no
+    HTTP client, token, credential lookup, or automatic retry.
+    """
+
+    def __init__(self, transport: object):
+        self.transport = transport
+        self.transcript: list[dict] = []
+
+    def _get(self, path: str) -> tuple[int, str, object]:
+        response = self.transport.request("GET", path, None)
+        if (type(response) is not HttpResponse or type(response.status) is not int
+                or type(response.headers) is not tuple or type(response.body) is not bytes
+                or len(response.body) > 4_000_000):
+            raise Refused("native-response-shape")
+        if any(type(pair) is not tuple or len(pair) != 2
+               or any(type(item) is not str for item in pair)
+               for pair in response.headers):
+            raise Refused("native-header-shape")
+        links = [(key, value) for key, value in response.headers
+                 if key.lower() == "link"]
+        if len(links) > 1:
+            raise Refused("native-link-shape")
+        link = links[0][1] if links else ""
+        try:
+            body = json.loads(response.body)
+        except (UnicodeError, ValueError):
+            raise Refused("native-json-invalid") from None
+        self.transcript.append({"path": path, "status": response.status,
+                                "link": link, "bodySha256": _sha(response.body)})
+        return response.status, link, body
+
+    def _repo(self, repository: str, repository_id: int) -> None:
+        status, _, body = self._get(f"repos/{repository}")
+        if (status != 200 or type(body) is not dict
+                or body.get("id") != repository_id
+                or body.get("full_name") != repository):
+            raise Refused("native-repository-mismatch")
+
+    def _ref(self, repository: str, ref: str) -> str:
+        branch = ref.removeprefix("refs/heads/")
+        path = f"repos/{repository}/git/ref/heads/{urllib.parse.quote(branch, safe='/')}"
+        status, _, body = self._get(path)
+        obj = body.get("object") if type(body) is dict else None
+        sha = obj.get("sha") if type(obj) is dict else None
+        if (status != 200 or type(body) is not dict or body.get("ref") != ref
+                or not _oid(sha)):
+            raise Refused("native-ref-mismatch")
+        return sha
+
+    @staticmethod
+    def _links(header: str, path_prefix: str) -> dict[str, int]:
+        if not header:
+            return {}
+        result: dict[str, int] = {}
+        for part in header.split(","):
+            match = re.fullmatch(r'\s*<([^<>]+)>;\s*rel="(next|last|prev|first)"\s*', part)
+            if match is None or match.group(2) in result:
+                raise Refused("native-link-invalid")
+            parsed = urllib.parse.urlparse(match.group(1))
+            query = urllib.parse.parse_qs(parsed.query, keep_blank_values=True)
+            if (parsed.scheme != "https" or parsed.netloc != "api.github.com"
+                    or parsed.path != "/" + path_prefix or parsed.fragment
+                    or set(query) != {"state", "per_page", "page"}
+                    or query["state"] != ["open"] or query["per_page"] != ["100"]
+                    or len(query["page"]) != 1 or not query["page"][0].isdigit()):
+                raise Refused("native-link-target")
+            page = int(query["page"][0])
+            if page < 1 or page > 51:
+                raise Refused("native-link-page")
+            result[match.group(2)] = page
+        return result
+
+    def _open_pulls(self, repository: str) -> list[dict]:
+        prefix = f"repos/{repository}/pulls"
+        collected: list[dict] = []
+        page = 1
+        advertised_last: int | None = None
+        while page <= 50:
+            path = f"{prefix}?state=open&per_page=100&page={page}"
+            status, header, body = self._get(path)
+            if status != 200 or type(body) is not list or len(body) > 100:
+                raise Refused("native-pull-page-invalid")
+            links = self._links(header, prefix)
+            if "last" in links:
+                if advertised_last is not None and links["last"] != advertised_last:
+                    raise Refused("native-pull-last-drift")
+                advertised_last = links["last"]
+            if links.get("next") is not None:
+                if (links["next"] != page + 1
+                        or ("last" in links and links["last"] < page + 1)
+                        or not body):
+                    raise Refused("native-pull-continuation-invalid")
+                collected.extend(body)
+                page += 1
+                continue
+            if (advertised_last is not None and advertised_last != page) or (page > 1 and not body):
+                raise Refused("native-pull-terminal-contradiction")
+            collected.extend(body)
+            terminal = f"{prefix}?state=open&per_page=100&page={page + 1}"
+            terminal_status, terminal_header, terminal_body = self._get(terminal)
+            terminal_links = self._links(terminal_header, prefix)
+            if (terminal_status != 200 or terminal_body != []
+                    or "next" in terminal_links
+                    or ("last" in terminal_links
+                        and terminal_links["last"] != page + 1)):
+                raise Refused("native-pull-terminal-unproved")
+            return collected
+        raise Refused("native-pull-page-limit")
+
+    def read_pull_census(self, expected: ExpectedPull) -> PullCensus:
+        self.transcript = []
+        self._repo(expected.repository, expected.repository_id)
+        source_sha = self._ref(expected.repository, expected.source_ref)
+        base_sha = self._ref(expected.repository, expected.base_ref)
+        listed = self._open_pulls(expected.repository)
+        selected: list[dict] = []
+        seen: set[int] = set()
+        for item in listed:
+            number = item.get("number") if type(item) is dict else None
+            if type(number) is not int or number <= 0 or number in seen:
+                raise Refused("native-pull-list-identity")
+            seen.add(number)
+            status, _, detail = self._get(f"repos/{expected.repository}/pulls/{number}")
+            if (status != 200 or type(detail) is not dict
+                    or detail.get("number") != number):
+                raise Refused("native-pull-detail-identity")
+            for side in ("head", "base"):
+                listed_side = item.get(side)
+                detail_side = detail.get(side)
+                if (type(listed_side) is not dict or type(detail_side) is not dict
+                        or listed_side.get("sha") != detail_side.get("sha")
+                        or listed_side.get("ref") != detail_side.get("ref")):
+                    raise Refused("native-pull-list-detail-drift")
+            if detail.get("body") == pull_request_body(expected)["body"]:
+                selected.append(detail)
+        return PullCensus(True, expected.repository_id, source_sha, base_sha,
+                          tuple(selected), _digest(self.transcript))
+
+    def read_protection(self, expected: ExpectedProtection) -> ProtectionReadback:
+        self.transcript = []
+        self._repo(expected.repository, expected.repository_id)
+        branch = expected.branch
+        sha = self._ref(expected.repository, f"refs/heads/{branch}")
+        branch_path = f"repos/{expected.repository}/branches/{urllib.parse.quote(branch, safe='/')}"
+        status, _, branch_body = self._get(branch_path)
+        commit = branch_body.get("commit") if type(branch_body) is dict else None
+        if (status != 200 or type(branch_body) is not dict
+                or branch_body.get("name") != branch
+                or type(commit) is not dict or commit.get("sha") != sha
+                or type(branch_body.get("protected")) is not bool):
+            raise Refused("native-branch-identity")
+        status, _, policy = self._get(f"{branch_path}/protection")
+        protected = branch_body["protected"]
+        if ((protected and (status != 200 or type(policy) is not dict))
+                or (not protected and status != 404)):
+            raise Refused("native-protection-status")
+        return ProtectionReadback(True, expected.repository_id, branch, sha,
+                                  protected, policy if protected else {},
+                                  _digest(self.transcript))
+
+
+PULL_TITLE = "V2-CALL-01.4b synthetic delivery v2"
+
+
+def _valid_pull(expected: object) -> bool:
+    return (type(expected) is ExpectedPull and _shape(expected)
+            and type(expected.repository) is str
+            and expected.repository.count("/") == 1
+            and type(expected.source_ref) is str
+            and expected.source_ref.startswith("refs/heads/")
+            and type(expected.base_ref) is str
+            and expected.base_ref.startswith("refs/heads/")
+            and expected.source_ref != expected.base_ref
+            and _oid(expected.source_sha) and _oid(expected.base_sha))
+
+
+def _valid_protection(expected: object) -> bool:
+    return (type(expected) is ExpectedProtection and _shape(expected)
+            and type(expected.repository) is str
+            and expected.repository.count("/") == 1
+            and type(expected.branch) is str and bool(expected.branch)
+            and _oid(expected.branch_sha)
+            and type(expected.check_context) is str and bool(expected.check_context)
+            and type(expected.check_app_id) is int and expected.check_app_id > 0)
+
+
+def pull_request_body(expected: ExpectedPull) -> dict:
+    """A deterministic request marker binds an exact poststate to this intent."""
+    core = dataclasses.asdict(expected)
+    marker = _digest({"effect": "create-pull", "intent": core})
+    return {"title": PULL_TITLE,
+            "head": expected.source_ref.removeprefix("refs/heads/"),
+            "base": expected.base_ref.removeprefix("refs/heads/"),
+            "body": f"FS-GG-Effect: {marker}"}
+
+
+def protection_body(expected: ExpectedProtection) -> dict:
+    return {
+        "required_status_checks": {"strict": True, "checks": [
+            {"context": expected.check_context, "app_id": expected.check_app_id}]},
+        "enforce_admins": False,
+        "required_pull_request_reviews": None,
+        "restrictions": None,
+        "allow_force_pushes": False,
+        "allow_deletions": False,
+    }
 
 
 def _shape(expected) -> bool:
@@ -199,10 +430,19 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--contract", required=True)
     parser.add_argument("--proposal", required=True)
     parser.add_argument("--preflight", required=True)
-    parser.add_argument("action", choices=["inspect"])
+    parser.add_argument("--scenario")
+    parser.add_argument("--journal")
+    parser.add_argument("action", choices=["inspect", "exercise-offline"])
     args = parser.parse_args(argv)
     try:
-        result = inspect(args.contract, args.proposal, args.preflight)
+        inspection = inspect(args.contract, args.proposal, args.preflight)
+        if args.action == "inspect":
+            result = inspection
+        else:
+            if not args.scenario or not args.journal:
+                raise Refused("offline-scenario-and-journal-required")
+            scenario, _ = _read_object(args.scenario)
+            result = exercise_offline(scenario, SqliteAttemptFence(args.journal).reserve_once)
     except Refused as error:
         print(str(error), file=sys.stderr)
         return 2
@@ -243,15 +483,7 @@ def classify_pull_after_one_attempt(
     """
     del provider_response
     try:
-        if (type(expected) is not ExpectedPull or not _shape(expected)
-                or type(expected.repository) is not str
-                or expected.repository.count("/") != 1
-                or type(expected.source_ref) is not str
-                or not expected.source_ref.startswith("refs/heads/")
-                or type(expected.base_ref) is not str
-                or not expected.base_ref.startswith("refs/heads/")
-                or expected.source_ref == expected.base_ref
-                or not _oid(expected.source_sha) or not _oid(expected.base_sha)):
+        if not _valid_pull(expected):
             return Unknown("pull-request-identity-invalid")
         observed = _two(read)
         if (type(observed) is not PullCensus or observed.complete is not True
@@ -271,6 +503,8 @@ def classify_pull_after_one_attempt(
                 or type(pull.get("node_id")) is not str or not pull["node_id"]
                 or pull.get("state") != "open" or pull.get("draft") is not False
                 or pull.get("merged") is not False
+                or pull.get("title") != PULL_TITLE
+                or pull.get("body") != pull_request_body(expected)["body"]
                 or head.get("ref") != expected.source_ref.removeprefix("refs/heads/")
                 or head.get("sha") != expected.source_sha
                 or (head.get("repo") or {}).get("id") != expected.repository_id
@@ -296,11 +530,7 @@ def classify_protection_after_one_attempt(
     """Require full protection readback, including disabled force pushes."""
     del provider_response
     try:
-        if (type(expected) is not ExpectedProtection or not _shape(expected)
-                or type(expected.branch) is not str or not expected.branch
-                or type(expected.check_context) is not str or not expected.check_context
-                or type(expected.check_app_id) is not int
-                or expected.check_app_id <= 0):
+        if not _valid_protection(expected):
             return Unknown("branch-protection-identity-invalid")
         observed = _two(read)
         if (type(observed) is not ProtectionReadback
@@ -309,6 +539,7 @@ def classify_protection_after_one_attempt(
                 or type(observed.repository_id) is not int
                 or observed.repository_id != expected.repository_id
                 or observed.branch != expected.branch
+                or observed.branch_sha != expected.branch_sha
                 or type(observed.policy) is not dict
                 or not _complete_digest(observed.transcript_sha256)):
             return Unknown("branch-protection-readback-incomplete")
@@ -336,6 +567,196 @@ def classify_protection_after_one_attempt(
         }))
     except Exception:
         return Unknown("branch-protection-readback-unavailable")
+
+
+def run_pull_once(expected: ExpectedPull, transport: object,
+                  reserve_once: Callable[[str], bool]) -> ExactPull | Unknown:
+    """Exercise one injected POST after complete absent prestate, then reread.
+
+    `reserve_once` must be a durable before-send fence in any future installed
+    caller. This module provides no native transport or durable fence.
+    """
+    try:
+        if not _valid_pull(expected):
+            return Unknown("pull-request-identity-invalid")
+        reader = NativeReadAdapter(transport)
+        before = _two(lambda: reader.read_pull_census(expected))
+        if (type(before) is not PullCensus or before.complete is not True
+                or before.repository_id != expected.repository_id
+                or before.source_branch_sha != expected.source_sha
+                or before.base_branch_sha != expected.base_sha
+                or type(before.pulls) is not tuple or before.pulls
+                or not _complete_digest(before.transcript_sha256)):
+            return Unknown("pull-request-prestate-not-absent")
+        body = pull_request_body(expected)
+        key = _digest({"operation": OPERATION_IDENTITY,
+                       "effect": "create-pull", "repository": expected.repository,
+                       "body": body, "sourceSha": expected.source_sha,
+                       "baseSha": expected.base_sha})
+        if reserve_once(key) is not True:
+            return Unknown("pull-request-attempt-not-reserved")
+        try:
+            transport.request("POST", f"repos/{expected.repository}/pulls", body)
+        except OfflineMismatch:
+            return Unknown("pull-request-controlled-request-mismatch")
+        except Exception:
+            # A lost response may conceal an applied write. Never send again.
+            pass
+        return classify_pull_after_one_attempt(
+            expected, lambda: reader.read_pull_census(expected))
+    except Exception:
+        return Unknown("pull-request-runtime-unavailable")
+
+
+def run_protection_once(expected: ExpectedProtection, transport: object,
+                        reserve_once: Callable[[str], bool]) -> ExactProtection | Unknown:
+    """Exercise one injected PUT after complete absent prestate, then reread."""
+    try:
+        if not _valid_protection(expected):
+            return Unknown("branch-protection-identity-invalid")
+        reader = NativeReadAdapter(transport)
+        before = _two(lambda: reader.read_protection(expected))
+        if (type(before) is not ProtectionReadback or before.complete is not True
+                or before.repository_id != expected.repository_id
+                or before.branch != expected.branch
+                or before.branch_sha != expected.branch_sha
+                or before.protected is not False
+                or not _complete_digest(before.transcript_sha256)):
+            return Unknown("branch-protection-prestate-not-absent")
+        body = protection_body(expected)
+        key = _digest({"operation": OPERATION_IDENTITY,
+                       "effect": "set-protection", "repositoryId": expected.repository_id,
+                       "repository": expected.repository,
+                       "branch": expected.branch, "body": body})
+        if reserve_once(key) is not True:
+            return Unknown("branch-protection-attempt-not-reserved")
+        try:
+            branch = urllib.parse.quote(expected.branch, safe="/")
+            transport.request("PUT", f"repos/{expected.repository}/branches/{branch}/protection", body)
+        except OfflineMismatch:
+            return Unknown("branch-protection-controlled-request-mismatch")
+        except Exception:
+            pass
+        return classify_protection_after_one_attempt(
+            expected, lambda: reader.read_protection(expected))
+    except Exception:
+        return Unknown("branch-protection-runtime-unavailable")
+
+
+class OfflineTranscriptTransport:
+    """Local JSON event playback; incapable of contacting a provider."""
+
+    def __init__(self, events: object):
+        if type(events) is not list:
+            raise Refused("offline-events-invalid")
+        self.events = iter(events)
+        self.writes = 0
+
+    def request(self, method: str, path: str, body: object = None) -> HttpResponse:
+        try:
+            event = next(self.events)
+        except StopIteration:
+            raise OfflineMismatch() from None
+        if (type(event) is not dict or event.get("method") != method
+                or event.get("path") != path or event.get("body") != body):
+            raise OfflineMismatch()
+        if method in {"POST", "PUT"}:
+            self.writes += 1
+        if "raise" in event:
+            raise OSError(str(event["raise"])) from None
+        response = event.get("response")
+        if (type(response) is not dict or type(response.get("status")) is not int
+                or type(response.get("headers")) is not list):
+            raise OfflineMismatch()
+        pairs = response["headers"]
+        if any(type(pair) is not list or len(pair) != 2
+               or any(type(item) is not str for item in pair)
+               for pair in pairs):
+            raise OfflineMismatch()
+        raw = response.get("rawBody")
+        if raw is None:
+            raw = json.dumps(response.get("json"), sort_keys=True,
+                             separators=(",", ":"))
+        if type(raw) is not str:
+            raise OfflineMismatch()
+        return HttpResponse(response["status"], tuple(tuple(pair) for pair in pairs),
+                            raw.encode())
+
+
+class SqliteAttemptFence:
+    """Offline persistent attempt demonstration, not an installed issuer fence."""
+
+    def __init__(self, path: str):
+        self.path = pathlib.Path(path)
+        try:
+            parent = self.path.parent
+            parent_mode = parent.stat().st_mode
+            if not stat.S_ISDIR(parent_mode) or parent_mode & 0o077:
+                raise Refused("offline-journal-parent-custody")
+            if self.path.is_symlink():
+                raise Refused("offline-journal-symlink")
+            if not self.path.exists():
+                flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+                if hasattr(os, "O_NOFOLLOW"):
+                    flags |= os.O_NOFOLLOW
+                fd = os.open(self.path, flags, 0o600)
+                os.close(fd)
+                directory = os.open(parent, os.O_RDONLY)
+                try:
+                    os.fsync(directory)
+                finally:
+                    os.close(directory)
+            mode = self.path.stat().st_mode
+            if not stat.S_ISREG(mode) or mode & 0o077:
+                raise Refused("offline-journal-file-custody")
+            with sqlite3.connect(self.path) as db:
+                db.execute("PRAGMA synchronous=FULL")
+                db.execute("CREATE TABLE IF NOT EXISTS attempts (request_digest TEXT PRIMARY KEY)")
+        except Refused:
+            raise
+        except (OSError, sqlite3.Error):
+            raise Refused("offline-journal-unavailable") from None
+
+    def reserve_once(self, digest: str) -> bool:
+        if not _complete_digest(digest):
+            return False
+        try:
+            with sqlite3.connect(self.path) as db:
+                db.execute("PRAGMA synchronous=FULL")
+                db.execute("BEGIN IMMEDIATE")
+                cursor = db.execute(
+                    "INSERT OR IGNORE INTO attempts (request_digest) VALUES (?)", (digest,))
+                db.commit()
+                return cursor.rowcount == 1
+        except (OSError, sqlite3.Error):
+            return False
+
+
+def exercise_offline(scenario: dict, reserve_once: Callable[[str], bool]) -> dict:
+    """Run the real predicates against a controlled event transcript only."""
+    if scenario.get("schema") != "fsgg.coordination.isolated-operation-offline-scenario/1":
+        raise Refused("offline-scenario-schema")
+    transport = OfflineTranscriptTransport(scenario.get("events"))
+    try:
+        if scenario.get("effect") == "create-pull":
+            expected = ExpectedPull(**scenario["expected"])
+            result = run_pull_once(expected, transport, reserve_once)
+        elif scenario.get("effect") == "set-protection":
+            expected = ExpectedProtection(**scenario["expected"])
+            result = run_protection_once(expected, transport, reserve_once)
+        else:
+            raise Refused("offline-effect-invalid")
+    except (KeyError, TypeError):
+        raise Refused("offline-expected-invalid") from None
+    return {
+        "schema": "fsgg.coordination.isolated-operation-offline-result/1",
+        "simulationOnly": True,
+        "authorized": False,
+        "classification": type(result).__name__,
+        "reason": result.reason if type(result) is Unknown else "exact-poststate",
+        "writeAttempts": transport.writes,
+        "liveEffects": 0,
+    }
 
 
 if __name__ == "__main__":

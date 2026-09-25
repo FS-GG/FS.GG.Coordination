@@ -35,7 +35,8 @@ def pull_expected():
 def pull_observed():
     return operator.PullCensus(True, 44, SHA_A, SHA_B, ({
         "number": 8, "node_id": "PR_8", "state": "open", "draft": False,
-        "merged": False,
+        "merged": False, "title": operator.PULL_TITLE,
+        "body": operator.pull_request_body(pull_expected())["body"],
         "head": {"ref": "source", "sha": SHA_A,
                  "repo": {"id": 44, "full_name": "FS-GG/disposable"}},
         "base": {"ref": "main", "sha": SHA_B,
@@ -45,11 +46,12 @@ def pull_observed():
 
 def protection_expected():
     return operator.ExpectedProtection(operator.OPERATION_IDENTITY, 1, 44,
-                                       "main", "required-check", 17)
+                                       "FS-GG/disposable", "main", SHA_B,
+                                       "required-check", 17)
 
 
 def protection_observed():
-    return operator.ProtectionReadback(True, 44, "main", True, {
+    return operator.ProtectionReadback(True, 44, "main", SHA_B, True, {
         "required_status_checks": {
             "strict": True,
             "checks": [{"context": "required-check", "app_id": 17}],
@@ -60,6 +62,66 @@ def protection_observed():
         "allow_force_pushes": {"enabled": False},
         "allow_deletions": {"enabled": False},
     }, DIGEST)
+
+
+def event(method, path, body=None, value=None, status=200, headers=None, error=None):
+    item = {"method": method, "path": path, "body": body}
+    if error is not None:
+        item["raise"] = error
+    else:
+        item["response"] = {"status": status,
+                            "headers": [list(pair) for pair in (headers or {}).items()],
+                            "json": value}
+    return item
+
+
+def pull_read_events(pulls=(), source_sha=SHA_A, base_sha=SHA_B,
+                     page_header=None, terminal=(), detail=True):
+    repo = "FS-GG/disposable"
+    prefix = f"repos/{repo}"
+    listed = [{"number": pull["number"], "head": pull["head"],
+               "base": pull["base"]} for pull in pulls]
+    events = [
+        event("GET", prefix, value={"id": 44, "full_name": repo,
+                                      "transcript_sha256": "0" * 64}),
+        event("GET", f"{prefix}/git/ref/heads/source",
+              value={"ref": "refs/heads/source", "object": {"sha": source_sha}}),
+        event("GET", f"{prefix}/git/ref/heads/main",
+              value={"ref": "refs/heads/main", "object": {"sha": base_sha}}),
+        event("GET", f"{prefix}/pulls?state=open&per_page=100&page=1",
+              value=listed, headers={"Link": page_header} if page_header else {}),
+        event("GET", f"{prefix}/pulls?state=open&per_page=100&page=2",
+              value=list(terminal)),
+    ]
+    if detail:
+        events.extend(event("GET", f"{prefix}/pulls/{pull['number']}", value=pull)
+                      for pull in pulls)
+    return events
+
+
+def protection_read_events(protected=False, policy=None, branch_sha=SHA_B):
+    repo = "FS-GG/disposable"
+    prefix = f"repos/{repo}"
+    return [
+        event("GET", prefix, value={"id": 44, "full_name": repo}),
+        event("GET", f"{prefix}/git/ref/heads/main",
+              value={"ref": "refs/heads/main", "object": {"sha": branch_sha}}),
+        event("GET", f"{prefix}/branches/main",
+              value={"name": "main", "commit": {"sha": branch_sha},
+                     "protected": protected}),
+        event("GET", f"{prefix}/branches/main/protection", value=policy or {},
+              status=200 if protected else 404),
+    ]
+
+
+def reserve_once_factory():
+    seen = set()
+    def reserve(key):
+        if key in seen:
+            return False
+        seen.add(key)
+        return True
+    return reserve
 
 
 class VersionedReadbackTests(unittest.TestCase):
@@ -169,7 +231,101 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assert_unknown(operator.classify_protection_after_one_attempt(
             protection_expected(), failed))
 
-    def test_inspect_binds_v5_and_historical_preflight_without_effect(self):
+    def test_q3_exact_native_pr_and_protection_runtime(self):
+        pull = pull_observed().pulls[0]
+        post = pull_read_events((pull,))
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        result = operator.run_pull_once(pull_expected(), transport,
+                                        reserve_once_factory())
+        self.assertIsInstance(result, operator.ExactPull)
+        self.assertEqual(transport.writes, 1)
+        self.assertNotEqual(result.census_sha256, "0" * 64)
+        protection = protection_observed()
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         error=SENTINEL)] +
+                  protection_read_events(True, protection.policy) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        result = operator.run_protection_once(protection_expected(), transport,
+                                              reserve_once_factory())
+        self.assertIsInstance(result, operator.ExactProtection)
+        self.assertEqual(transport.writes, 1)
+
+    def test_q6_lost_response_unknown_and_no_repeat(self):
+        pull = dict(pull_observed().pulls[0])
+        pull["head"] = {**pull["head"], "sha": SHA_C}
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) * 2 + pull_read_events() * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        reserve = reserve_once_factory()
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport, reserve))
+        self.assertEqual(transport.writes, 1)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport, reserve))
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_runtime_refuses_force_push_after_put(self):
+        policy = {**protection_observed().policy,
+                  "allow_force_pushes": {"enabled": True}}
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         error=SENTINEL)] +
+                  protection_read_events(True, policy) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            protection_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_incomplete_page_and_false_terminal_refuse_before_write(self):
+        pull = pull_observed().pulls[0]
+        link_next = ('<https://api.github.com/repos/FS-GG/disposable/pulls?'
+                     'state=open&per_page=100&page=2>; rel="next"')
+        # A short first page with a next link is not a terminal census.
+        events = pull_read_events((pull,), page_header=link_next)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+        false_last = ('<https://api.github.com/repos/FS-GG/disposable/pulls?'
+                      'state=open&per_page=100&page=3>; rel="last"')
+        events = pull_read_events()
+        events[3]["response"]["headers"] = [["Link", link_next], ["link", false_last]]
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+        events = pull_read_events(page_header=false_last)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+        events = pull_read_events()
+        events[4]["response"]["headers"] = [["Link", false_last]]
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+
+    def test_q6_controlled_exception_sentinel_not_surfaced(self):
+        events = pull_read_events() * 2 + [
+            event("POST", "repos/FS-GG/disposable/pulls",
+                  body=operator.pull_request_body(pull_expected()), error=SENTINEL)]
+        transport = operator.OfflineTranscriptTransport(events)
+        result = operator.run_pull_once(pull_expected(), transport,
+                                        reserve_once_factory())
+        self.assert_unknown(result)
+        self.assertEqual(transport.writes, 1)
+        self.assertNotIn(SENTINEL, repr(result))
+
+    def test_q6_restart_replay_cli_and_v5_inspect_binding(self):
         root = SOURCE.parents[1]
         preflight_path = root / operator.HISTORICAL_PREFLIGHT
         historical = {
@@ -214,6 +370,36 @@ class VersionedReadbackTests(unittest.TestCase):
             self.assertIs(result["authorized"], False)
             self.assertEqual(result["liveEffects"], 0)
             self.assertIs(result["historicalObservationOnly"], True)
+            pull = pull_observed().pulls[0]
+            scenario = {
+                "schema": "fsgg.coordination.isolated-operation-offline-scenario/1",
+                "effect": "create-pull", "expected": dataclasses.asdict(pull_expected()),
+                "events": (pull_read_events() * 2 +
+                           [event("POST", "repos/FS-GG/disposable/pulls",
+                                  body=operator.pull_request_body(pull_expected()),
+                                  error=SENTINEL)] + pull_read_events((pull,)) * 2),
+            }
+            scenario_path = pathlib.Path(temp) / "scenario.json"
+            scenario_path.write_text(json.dumps(scenario))
+            journal_path = pathlib.Path(temp) / "attempts.sqlite"
+            exercise_command = command[:-1] + ["--scenario", str(scenario_path),
+                                               "--journal", str(journal_path),
+                                               "exercise-offline"]
+            exercise = subprocess.run(exercise_command,
+                                      capture_output=True, text=True, check=False)
+            self.assertEqual(exercise.returncode, 0, exercise.stderr)
+            result = json.loads(exercise.stdout)
+            self.assertEqual(result["classification"], "ExactPull")
+            self.assertEqual(result["writeAttempts"], 1)
+            self.assertIs(result["simulationOnly"], True)
+            self.assertNotIn(SENTINEL, exercise.stdout + exercise.stderr)
+            replay = subprocess.run(exercise_command, capture_output=True,
+                                    text=True, check=False)
+            self.assertEqual(replay.returncode, 0, replay.stderr)
+            replay_result = json.loads(replay.stdout)
+            self.assertEqual(replay_result["classification"], "Unknown")
+            self.assertEqual(replay_result["reason"], "pull-request-attempt-not-reserved")
+            self.assertEqual(replay_result["writeAttempts"], 0)
             contract["source"]["operationSourceSha256"] = "0" * 64
             contract["contractSha256"] = operator._digest({
                 key: value for key, value in contract.items() if key != "contractSha256"})
