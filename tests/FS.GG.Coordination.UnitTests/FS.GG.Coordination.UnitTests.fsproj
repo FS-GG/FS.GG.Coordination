@@ -59,6 +59,7 @@
     <Compile Include="GitHubLiveOperationTests.fs" />
     <Compile Include="GitHubSealedHistoryTests.fs" />
     <Compile Include="GitHubRollbackPlanTests.fs" />
+    <Compile Include="GitHubRollbackReadbackTests.fs" />
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
     <Compile Include="MigrationNativeActivityTests.fs" />

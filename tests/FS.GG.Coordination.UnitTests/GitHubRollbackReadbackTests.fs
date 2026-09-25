@@ -1,0 +1,100 @@
+module FS.GG.Coordination.GitHubRollbackReadbackTests
+
+open System
+open System.Security.Cryptography
+open System.Text
+open Xunit
+open FS.GG.Coordination.Qualification.Contracts
+open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackPlanQualification
+open FS.GG.Coordination.Qualification.Contracts.GitHubRollbackReadbackQualification
+
+let private sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private digest character = String.replicate 64 character
+let private revision character = String.replicate 40 character
+let private get = function Ok value -> value | Error failures -> failwithf "unexpected refusal: %A" failures
+let private refusal = function Error failures -> failures | Ok _ -> failwith "unqualified readback passed"
+
+let private steps =
+    [ 5, AuthoritySnapshot, "authority"; 4, Schedule, "schedules"
+      3, V1Projection, "v1-projections"; 2, ReceiverPin, "receivers"; 1, Settings, "settings" ]
+    |> List.map (fun (order, domain, name) ->
+        { Order=order; StepId=$"restore-{name}"; Domain=domain; TargetIdentity=$"target:{name}"
+          CapturedStateSha256=sha $"captured:{name}"; RestorePayloadSha256=sha $"payload:{name}" })
+
+let private plan identity =
+    qualify identity (revision "a") (digest "b") (digest "c") (digest "d")
+        (digest "e") (digest "f") (digest "1") (digest "2") "VerifiedV2" steps
+        (DateTimeOffset.Parse "2026-09-23T10:00:00Z") |> get
+
+let private receipts (selected: GitHubRollbackPlan) wrongFirst =
+    ([], selected.Steps)
+    ||> List.fold (fun previous step ->
+        let result = if step.Order = 5 && wrongFirst then sha "foreign-result" else step.CapturedStateSha256
+        previous @ [ createReceipt selected (List.tryLast previous) step result ])
+
+let private readbacks (selected: GitHubRollbackPlan) : GitHubRollbackReadbackClaim list =
+    selected.Steps
+    |> List.map (fun step ->
+        { Order=step.Order; StepId=step.StepId; Domain=step.Domain
+          TargetIdentity=step.TargetIdentity; StateSha256=step.CapturedStateSha256
+          Complete=true; Authorized=true })
+
+let private epoch seal : GitHubRollbackEpochClaim =
+    { Phase="OperatingV1"; PlanSeal=seal; Complete=true; Authorized=true }
+
+[<Fact>]
+let ``complete five-domain native claims match pinned plan receipts and terminal epoch`` () =
+    let selected = plan "accepted-rollback"
+    Assert.Equal(Ok(), verifyClaims selected.Seal selected (receipts selected false)
+                         (readbacks selected) (epoch selected.Seal))
+
+[<Fact>]
+let ``foreign plan and incomplete receipt prefix refuse before readback can qualify`` () =
+    let selected = plan "accepted-rollback"
+    let foreign = plan "foreign-rollback"
+    Assert.Equal(Error [ PlanOrReceiptInvalid [ AlteredSeal ] ],
+                 verifyClaims selected.Seal foreign (receipts foreign false)
+                              (readbacks foreign) (epoch selected.Seal))
+    Assert.Equal(Error [ IncompleteReceiptPopulation ],
+                 verifyClaims selected.Seal selected ((receipts selected false) |> List.take 4)
+                              (readbacks selected) (epoch selected.Seal))
+
+[<Fact>]
+let ``missing duplicate and foreign native subjects refuse`` () =
+    let selected = plan "accepted-rollback"
+    let proof = readbacks selected
+    let completed = receipts selected false
+    Assert.Equal(Error [ ReadbackPopulationMismatch ],
+                 verifyClaims selected.Seal selected completed (proof |> List.take 4) (epoch selected.Seal))
+    Assert.Contains(ReadbackMismatch selected.Steps[1].StepId,
+                    verifyClaims selected.Seal selected completed (proof[0] :: proof[0] :: (proof |> List.skip 2))
+                                 (epoch selected.Seal) |> refusal)
+    let foreign = { proof[2] with TargetIdentity="target:foreign" }
+    Assert.Contains(ReadbackMismatch selected.Steps[2].StepId,
+                    verifyClaims selected.Seal selected completed (proof |> List.updateAt 2 foreign)
+                                 (epoch selected.Seal) |> refusal)
+
+[<Fact>]
+let ``changed state forged receipt and untrusted or stale epoch refuse`` () =
+    let selected = plan "accepted-rollback"
+    let proof = readbacks selected
+    let completed = receipts selected false
+    let changed = { proof[3] with StateSha256=sha "changed-state" }
+    Assert.Contains(ReadbackMismatch selected.Steps[3].StepId,
+                    verifyClaims selected.Seal selected completed (proof |> List.updateAt 3 changed)
+                                 (epoch selected.Seal) |> refusal)
+    Assert.Contains(ReadbackMismatch selected.Steps[0].StepId,
+                    verifyClaims selected.Seal selected (receipts selected true) proof
+                                 (epoch selected.Seal) |> refusal)
+    let unauthorized = { proof[4] with Authorized=false }
+    Assert.Contains(ReadbackMismatch selected.Steps[4].StepId,
+                    verifyClaims selected.Seal selected completed (proof |> List.updateAt 4 unauthorized)
+                                 (epoch selected.Seal) |> refusal)
+    let incomplete = { proof[0] with Complete=false }
+    Assert.Contains(ReadbackMismatch selected.Steps[0].StepId,
+                    verifyClaims selected.Seal selected completed (proof |> List.updateAt 0 incomplete)
+                                 (epoch selected.Seal) |> refusal)
+    Assert.Equal(Error [ TerminalEpochMismatch ],
+                 verifyClaims selected.Seal selected completed proof { epoch selected.Seal with Phase="OpenV2" })
+    Assert.Equal(Error [ TerminalEpochMismatch ],
+                 verifyClaims selected.Seal selected completed proof { epoch selected.Seal with PlanSeal=sha "foreign-plan" })
