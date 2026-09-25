@@ -74,6 +74,8 @@ def selection_fixture(packet: dict) -> dict:
         "workflowSha256": packet["workflow"]["sha256"],
         "archiveSha256": packet["artifact"]["archiveSha256"],
         "manifestSha256": packet["artifact"]["manifestSha256"],
+        "producerRunId": packet["artifact"]["producerRunId"],
+        "artifactId": packet["artifact"]["artifactId"],
         "runnerImage": packet["runner"]["image"],
         "imageAttestationSha256": packet["runner"]["imageAttestationSha256"],
         "interpreterSha256": packet["runtime"]["interpreterSha256"],
@@ -83,6 +85,7 @@ def selection_fixture(packet: dict) -> dict:
         "runId": packet["run"]["runId"],
         "runAttempt": packet["run"]["runAttempt"],
         "environmentId": packet["run"]["environmentId"],
+        "actorId": packet["run"]["actorId"],
         "approvalId": packet["approval"]["approvalId"],
         "reviewerId": packet["approval"]["reviewerId"],
     }
@@ -195,6 +198,39 @@ class SelectedReadbackTests(unittest.TestCase):
         with self.assertRaisesRegex(readback.Refused, "protected-binding"):
             verify(packet, observed=observed)
 
+    def test_resealed_packet_cannot_swap_actor_run_artifact_or_image_selection(self):
+        baseline = packet_fixture()
+        selected = selection_fixture(baseline)
+        changes = [
+            ("run", "actorId", 999),
+            ("run", "runId", 999),
+            ("run", "runAttempt", 2),
+            ("artifact", "producerRunId", 999),
+            ("artifact", "artifactId", 999),
+            ("runner", "image", "ghcr.io/fs-gg/other@sha256:" + "9" * 64),
+        ]
+        for section, key, replacement in changes:
+            with self.subTest(section=section, key=key):
+                packet = copy.deepcopy(baseline)
+                packet[section][key] = replacement
+                if key in ("runId", "runAttempt"):
+                    packet["approval"][key] = replacement
+                selected_copy = copy.deepcopy(selected)
+                selected_copy["packetSha256"] = hashlib.sha256(canonical(packet)).hexdigest()
+                with self.assertRaisesRegex(readback.Refused, "selected-binding"):
+                    verify(packet, selected_copy)
+        for key in ("actorId", "producerRunId", "artifactId"):
+            with self.subTest(missing_selected=key):
+                selected_copy = copy.deepcopy(selected)
+                del selected_copy[key]
+                with self.assertRaisesRegex(readback.Refused, "selection-shape"):
+                    verify(baseline, selected_copy)
+            with self.subTest(boolean_selected=key):
+                selected_copy = copy.deepcopy(selected)
+                selected_copy[key] = True
+                with self.assertRaisesRegex(readback.Refused, "selection-unselected"):
+                    verify(baseline, selected_copy)
+
     def test_absent_or_non_distinct_reviewer_refuses(self):
         packet = packet_fixture()
         missing = copy.deepcopy(packet)
@@ -214,6 +250,10 @@ class SelectedReadbackTests(unittest.TestCase):
         selected = selection_fixture(packet)
         del selected["reviewerId"]
         with self.assertRaisesRegex(readback.Refused, "selection-shape"):
+            verify(packet, selected)
+        selected = selection_fixture(packet)
+        selected["actorId"] = selected["reviewerId"]
+        with self.assertRaisesRegex(readback.Refused, "selection-unselected"):
             verify(packet, selected)
 
     def test_incomplete_or_effectful_control_readback_refuses(self):

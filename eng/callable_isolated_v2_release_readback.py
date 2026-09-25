@@ -23,9 +23,10 @@ NO_GRANT_STDERR_SHA256 = hashlib.sha256(b"inspect-refused:inspect-arguments\n").
 UNKNOWN_STDERR_SHA256 = hashlib.sha256(b"inspect-only\n").hexdigest()
 SELECTION_KEYS = frozenset({
     "schema", "state", "sourceRevision", "sourceTree", "workflowSha256",
-    "archiveSha256", "manifestSha256", "runnerImage", "imageAttestationSha256",
+    "archiveSha256", "manifestSha256", "producerRunId", "artifactId",
+    "runnerImage", "imageAttestationSha256",
     "interpreterSha256", "closureManifestSha256", "stdlibTreeSha256",
-    "packetSha256", "runId", "runAttempt", "environmentId", "approvalId",
+    "packetSha256", "runId", "runAttempt", "environmentId", "actorId", "approvalId",
     "reviewerId",
 })
 CONTROL_KEYS = frozenset({
@@ -123,7 +124,9 @@ def _selection(raw: bytes, expected_sha256: str) -> dict[str, Any]:
                     "closureManifestSha256", "stdlibTreeSha256", "packetSha256"))
             or value["closureManifestSha256"] == release.LOCAL_CLOSURE_SHA256
             or any(type(value[key]) is not int or value[key] <= 0 for key in
-                   ("runId", "runAttempt", "environmentId", "approvalId", "reviewerId"))):
+                   ("producerRunId", "artifactId", "runId", "runAttempt",
+                    "environmentId", "actorId", "approvalId", "reviewerId"))
+            or value["actorId"] == value["reviewerId"]):
         raise Refused("readback-selection-unselected")
     return value
 
@@ -183,6 +186,8 @@ def verify_selected_readback(selection_raw: bytes, selection_sha256: str,
         "workflowSha256": packet["workflow"]["sha256"],
         "archiveSha256": packet["artifact"]["archiveSha256"],
         "manifestSha256": packet["artifact"]["manifestSha256"],
+        "producerRunId": packet["artifact"]["producerRunId"],
+        "artifactId": packet["artifact"]["artifactId"],
         "runnerImage": packet["runner"]["image"],
         "imageAttestationSha256": packet["runner"]["imageAttestationSha256"],
         "interpreterSha256": packet["runtime"]["interpreterSha256"],
@@ -191,6 +196,7 @@ def verify_selected_readback(selection_raw: bytes, selection_sha256: str,
         "runId": packet["run"]["runId"],
         "runAttempt": packet["run"]["runAttempt"],
         "environmentId": packet["run"]["environmentId"],
+        "actorId": packet["run"]["actorId"],
         "approvalId": packet["approval"]["approvalId"],
         "reviewerId": packet["approval"]["reviewerId"],
     }

@@ -257,6 +257,30 @@ class AuthorityPortTests(unittest.TestCase):
         self.assertFalse(candidate.can_dispatch)
         self.assertFalse(result.can_dispatch)
 
+    def test_lost_cas_ack_and_repeated_pure_readback_never_create_a_second_attempt(self):
+        archive, observer = subject()
+        verified = authority.verify_issued_candidate(
+            archive, observer, observer.issuer, observer.journal, NOW)
+        candidate = authority.plan_attempt_reservation(verified)
+        cas, check = readback(candidate.request)
+        lost_ack = copy.deepcopy(cas)
+        lost_ack["outcome"] = "response-unknown"
+        with self.assertRaisesRegex(authority.Refused, "cas-unknown"):
+            authority.verify_attempt_readback(candidate, lost_ack, check)
+        incomplete = copy.deepcopy(check)
+        incomplete["complete"] = False
+        with self.assertRaisesRegex(authority.Refused, "readback-binding"):
+            authority.verify_attempt_readback(candidate, cas, incomplete)
+        for _ in range(2):
+            result = authority.verify_attempt_readback(candidate, cas, check)
+            self.assertFalse(result.authorized)
+            self.assertFalse(result.can_dispatch)
+            self.assertEqual(0, result.live_effects)
+        observer.replay_value["used"] = True
+        with self.assertRaisesRegex(authority.Refused, "replayed-or-unknown"):
+            authority.verify_issued_candidate(archive, observer, observer.issuer,
+                                              observer.journal, NOW)
+
 
 if __name__ == "__main__":
     unittest.main()
