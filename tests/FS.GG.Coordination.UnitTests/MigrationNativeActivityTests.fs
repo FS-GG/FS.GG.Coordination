@@ -184,6 +184,17 @@ let ``orphan inline review comment and duplicate native node refuse`` () =
         { input with IssueEvents=[ { eventStream with Events=[ { issueEvent with NodeId="IC_201" } ] } ] }
 
 [<Fact>]
+let ``native activity refuses one node identity used as both subject and event`` () =
+    let input = sample ()
+    let issueNode = input.Issues.Issues.Head.NodeId
+    let eventStream = input.IssueEvents.Head
+    assertRefused "duplicate-activity"
+        { input with IssueEvents=[ { eventStream with Events=[ { issueEvent with NodeId=issueNode } ] } ] }
+    assertRefused "duplicate-activity"
+        { input with IssueComments=[ { input.IssueComments.Head with
+                                        Comments=[ { issueComment with NodeId="" } ] } ] }
+
+[<Fact>]
 let ``changed page digest changes the full activity snapshot`` () =
     let input = sample ()
     let first = MigrationNativeActivity.reconcile input |> requireOk
