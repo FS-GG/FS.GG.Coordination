@@ -85,6 +85,11 @@ let ``declared workflow pin captures exact isolated copy bytes in two read-only 
     | Ok proof ->
         Assert.Equal(GitHubMigrationInspect.cohortSha256 f.Cohort, proof.CohortSha256)
         Assert.Equal(2, proof.First.Length + proof.Second.Length)
+        Assert.Equal(1, proof.FirstProviderSnapshots.Length)
+        Assert.Equal(1, proof.SecondProviderSnapshots.Length)
+        Assert.Equal(proof.FirstProviderSnapshots.Head.PinSnapshotSha256,
+                     proof.SecondProviderSnapshots.Head.PinSnapshotSha256)
+        Assert.NotEmpty(proof.FirstProviderSnapshots.Head.TerminalRefEvidence.RawBody)
         for pin in proof.First @ proof.Second do
             Assert.True(Array.forall2 (=) f.Bytes pin.Bytes)
             Assert.Equal(f.Declaration.ExpectedBytesSha256, pin.BytesSha256)

@@ -37,7 +37,9 @@ type MigrationWorkflowPinBlob =
 type MigrationWorkflowPinTwoPass =
     { CohortSha256: string
       First: MigrationWorkflowPinBlob list
-      Second: MigrationWorkflowPinBlob list }
+      Second: MigrationWorkflowPinBlob list
+      FirstProviderSnapshots: MigrationReceiverPinSnapshot list
+      SecondProviderSnapshots: MigrationReceiverPinSnapshot list }
 
 [<RequireQualifiedAccess>]
 module MigrationWorkflowPinCapture =

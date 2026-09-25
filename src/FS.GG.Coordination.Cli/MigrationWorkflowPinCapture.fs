@@ -34,7 +34,9 @@ type MigrationWorkflowPinBlob =
 type MigrationWorkflowPinTwoPass =
     { CohortSha256: string
       First: MigrationWorkflowPinBlob list
-      Second: MigrationWorkflowPinBlob list }
+      Second: MigrationWorkflowPinBlob list
+      FirstProviderSnapshots: MigrationReceiverPinSnapshot list
+      SecondProviderSnapshots: MigrationReceiverPinSnapshot list }
 
 [<RequireQualifiedAccess>]
 module MigrationWorkflowPinCapture =
@@ -143,7 +145,7 @@ module MigrationWorkflowPinCapture =
                 |> List.sortBy _.Receiver
                 |> List.fold (fun state receiver ->
                     state
-                    |> Result.bind (fun captured ->
+                    |> Result.bind (fun (captured, providerSnapshots) ->
                         let declared = sorted |> List.filter (fun value -> value.Receiver = receiver.Receiver)
                         let snapshot = Map.find receiver.Receiver byReceiver
                         if declared.IsEmpty then Error $"missing:pin-declarations:{receiver.Receiver}"
@@ -181,12 +183,21 @@ module MigrationWorkflowPinCapture =
                                         result
                                         |> Result.bind (fun previous ->
                                             bind pin |> Result.map (fun item -> item :: previous))) (Ok [])
-                                    |> Result.map (fun items -> List.rev items @ captured)))) (Ok [])
+                                    |> Result.map (fun items ->
+                                        List.rev items @ captured, observed :: providerSnapshots)))) (Ok([], []))
             readPass receivers.First
-            |> Result.bind (fun first ->
+            |> Result.bind (fun (first, firstSnapshots) ->
                 readPass receivers.Second
-                |> Result.bind (fun second ->
+                |> Result.bind (fun (second, secondSnapshots) ->
                     let first = first |> List.sortBy (fun value -> value.Declaration.Receiver, value.Declaration.Path)
                     let second = second |> List.sortBy (fun value -> value.Declaration.Receiver, value.Declaration.Path)
+                    let firstSnapshots = firstSnapshots |> List.sortBy _.Receiver.ReceiverName
+                    let secondSnapshots = secondSnapshots |> List.sortBy _.Receiver.ReceiverName
                     if List.map _.Bytes first <> List.map _.Bytes second then Error "changed:pin-bytes"
-                    else Ok { CohortSha256=cohortSha; First=first; Second=second }))
+                    elif (firstSnapshots |> List.map _.PinSnapshotSha256)
+                         <> (secondSnapshots |> List.map _.PinSnapshotSha256) then
+                        Error "changed:pin-provider-snapshot"
+                    else
+                        Ok { CohortSha256=cohortSha; First=first; Second=second
+                             FirstProviderSnapshots=firstSnapshots
+                             SecondProviderSnapshots=secondSnapshots }))
