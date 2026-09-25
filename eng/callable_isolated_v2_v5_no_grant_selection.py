@@ -59,6 +59,7 @@ class Selection:
     revision: str
     source_tree: str
     producer_run_id: int
+    producer_run_attempt: int
     review_event_id: int
     repository_id: int
     artifact_id: int
@@ -203,7 +204,8 @@ def qualify(source_port, review_port, chosen, blobs, now):
             raise Refused("v5-selection-drift")
         return Selection(review["archiveSha256"], review["manifestSha256"],
                          selected["revision"], selected["sourceTree"],
-                         selected["runId"], selected["reviewEventId"],
+                         selected["runId"], selected["runAttempt"],
+                         selected["reviewEventId"],
                          selected["repositoryId"], selected["artifactId"],
                          selected["producerActorId"], selected["reviewerActorId"],
                          selected["sourceRecordId"], review["reviewedAt"],
