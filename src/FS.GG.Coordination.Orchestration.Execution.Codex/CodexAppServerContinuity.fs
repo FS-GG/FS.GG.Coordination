@@ -42,6 +42,7 @@ type CodexAppServerContinuityState =
             NextOrdinal: int64
             Status: CodexAppServerContinuityStatus
             StartAt: int64 option
+            LastEmittedAt: int64 option
             LastUsage: CodexAppServerUsageUpdate option
             UsageHashes: Set<string>
         }
@@ -638,13 +639,16 @@ module CodexAppServerContinuity =
                 | Ok () when not (validOptionalEmittedAt root) ->
                     Error "app-server-continuity-emitted-at-invalid"
                 | Ok () ->
+                    let emittedAt = optionalInt64Value root "emittedAtMs"
                     match readText "app-server-continuity-method-invalid" root "method" with
                     | Error error -> Error error
                     | Ok "thread/tokenUsage/updated" ->
                         CodexAppServerUsageProjection.parse expectedThread expectedTurn bytes
                         |> Result.map NativeUsageUpdated
+                        |> Result.map (fun event -> event, emittedAt)
                     | Ok ("turn/started" | "turn/completed" as methodName) ->
                         parseTurn expectedThread expectedTurn methodName (root.GetProperty "params")
+                        |> Result.map (fun event -> event, emittedAt)
                     | Ok _ -> Error "app-server-continuity-method-unsupported"
             with :? JsonException ->
                 Error "app-server-continuity-json-invalid"
@@ -697,6 +701,7 @@ module CodexAppServerContinuity =
                       NextOrdinal = 1L
                       Status = AwaitingStart
                       StartAt = None
+                      LastEmittedAt = None
                       LastUsage = None
                       UsageHashes = Set.empty }
 
@@ -720,12 +725,20 @@ module CodexAppServerContinuity =
         | _ ->
             match parseFrame state.Binding.Scope.ThreadId state.Binding.TurnId frame.Payload with
             | Error code -> gap code state
-            | Ok event ->
+            | Ok (_, Some emittedAt) when
+                state.LastEmittedAt |> Option.exists (fun prior -> emittedAt < prior) ->
+                gap "app-server-continuity-emission-time-regressed" state
+            | Ok (event, emittedAt) ->
+                let nextEmittedAt =
+                    match emittedAt with
+                    | Some _ -> emittedAt
+                    | None -> state.LastEmittedAt
                 match state.Status, event with
                 | AwaitingStart, NativeTurnStarted startedAt ->
                     { state with
                         Status = InTurn 0
                         StartAt = startedAt
+                        LastEmittedAt = nextEmittedAt
                         NextOrdinal = state.NextOrdinal + 1L }
                 | AwaitingStart, _ -> gap "app-server-continuity-start-missing" state
                 | InTurn _, NativeTurnStarted _ -> gap "app-server-continuity-start-duplicate" state
@@ -745,6 +758,7 @@ module CodexAppServerContinuity =
                     { state with
                         Status = InTurn(count + 1)
                         NextOrdinal = state.NextOrdinal + 1L
+                        LastEmittedAt = nextEmittedAt
                         LastUsage = Some usage
                         UsageHashes = Set.add usage.WireSha256 state.UsageHashes }
                 | InTurn _, NativeTurnTerminal(_, startedAt) when
@@ -753,6 +767,7 @@ module CodexAppServerContinuity =
                 | InTurn count, NativeTurnTerminal(terminal, _) ->
                     { state with
                         Status = TerminalObserved(terminal, count)
+                        LastEmittedAt = nextEmittedAt
                         NextOrdinal = state.NextOrdinal + 1L }
                 | _ -> gap "app-server-continuity-transition-invalid" state
 
