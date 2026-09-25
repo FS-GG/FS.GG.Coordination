@@ -1523,6 +1523,40 @@ class VersionedReadbackTests(unittest.TestCase):
                                             "native-open-pull-row-state"):
                     reader.read_pull_census(pull_expected())
 
+    def test_q6_open_census_foreign_base_target_stays_unknown(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        unrelated["base"]["repo"] = {"id": 45, "full_name": "FS-GG/foreign"}
+        post = pull_read_events((selected, unrelated))
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_open_census_base_target_is_selected_for_every_row(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        unrelated["head"]["repo"] = {"id": 45, "full_name": "FS-GG/fork"}
+        reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((selected, unrelated))))
+        self.assertEqual(len(reader.read_pull_census(pull_expected()).pulls), 1)
+        for foreign in ({"id": 45, "full_name": "FS-GG/disposable"},
+                        {"id": 44, "full_name": "FS-GG/foreign"}):
+            with self.subTest(foreign=foreign):
+                wrong = copy.deepcopy(unrelated)
+                wrong["base"]["repo"] = foreign
+                reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+                    pull_read_events((selected, wrong))))
+                with self.assertRaisesRegex(operator.Refused,
+                                            "native-pull-list-base-target"):
+                    reader.read_pull_census(pull_expected())
+
     def test_q6_restart_replay_cli_and_v5_inspect_binding(self):
         root = SOURCE.parents[1]
         preflight_path = root / operator.HISTORICAL_PREFLIGHT
