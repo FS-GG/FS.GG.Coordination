@@ -16,8 +16,8 @@ import callable_isolated_v2_effect_release_preflight as release
 import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-reviewer-identity/1"
-EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/1"
+EVENT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-event/2"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-approval-witness/2"
 LOGIN = re.compile(r"[A-Za-z0-9-]{1,39}\Z")
 
 
@@ -47,6 +47,7 @@ class ApprovalWitnessResult:
     approval_event_sha256: str
     manifest_sha256: str
     bundle_sha256: str
+    source_record_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -124,7 +125,7 @@ def _event(raw: bytes, selected_digest: str) -> dict[str, Any]:
         "producerRunAttempt", "producerActorId", "artifactId",
         "bundleSha256", "workflowSha256", "workflowBlobOid",
         "manifestSha256", "reviewerActorId", "identityRecordId",
-        "approvalEventId", "decision", "approvedAt", "expiresAt"},
+        "approvalEventId", "sourceRecordId", "decision", "approvedAt", "expiresAt"},
         "approval-event-shape")
 
 
@@ -159,6 +160,7 @@ def qualify(preflight: release.PreflightResult,
                                   candidate.HEX64)
             or not _positive(preflight.reviewer_actor_id)
             or not _positive(preflight.approval_event_id)
+            or not _positive(preflight.source_record_id)
             or any(not _positive(value) for value in
                    (preflight.producer_run_id,
                     preflight.producer_run_attempt,
@@ -237,6 +239,7 @@ def qualify(preflight: release.PreflightResult,
         "reviewerActorId": preflight.reviewer_actor_id,
         "identityRecordId": selection["identityRecordId"],
         "approvalEventId": preflight.approval_event_id,
+        "sourceRecordId": preflight.source_record_id,
         "repositoryId": selection["repositoryId"]}
     if (event["schema"] != EVENT_SCHEMA or event["immutable"] is not True
             or event["repository"] != release.REPOSITORY
@@ -245,6 +248,7 @@ def qualify(preflight: release.PreflightResult,
                    ("repositoryId", "producerRunId", "producerRunAttempt",
                     "producerActorId", "artifactId", "reviewerActorId",
                     "identityRecordId", "approvalEventId"))
+            or type(event["sourceRecordId"]) is not int
             or any(event[key] != value for key, value in expected.items())):
         raise Refused("approval-event-binding")
     approved = _time(event["approvedAt"])
@@ -262,4 +266,5 @@ def qualify(preflight: release.PreflightResult,
         preflight.producer_run_attempt, preflight.artifact_id,
         preflight.reviewer_actor_id, preflight.approval_event_id,
         selection["approvalEventSha256"], preflight.manifest_sha256,
-        produced.bundle_sha256)
+        produced.bundle_sha256,
+        source_record_id=preflight.source_record_id)

@@ -62,7 +62,7 @@ def fixture():
         zipped.writestr(builder.ARCHIVE_NAME, archive)
     bundle = container.getvalue()
     preflight = release.PreflightResult(REV, TREE, "c" * 64, 404,
-        ARCHIVE_SHA(archive), 202, 1, 303, 606, 505)
+        ARCHIVE_SHA(archive), 202, 1, 303, 606, 505, 101)
     tree = tree_witness.TreeWitnessResult(REV, TREE,
         ARCHIVE_SHA(archive), tuple(sorted((path, "d" * 64)
             for path in producer.SOURCE_PATHS)), 808)

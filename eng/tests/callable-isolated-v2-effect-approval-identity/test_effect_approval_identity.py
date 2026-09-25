@@ -52,7 +52,7 @@ class Port:
 
 def fixture():
     preflight = release.PreflightResult(REV, TREE, MANIFEST, 404, ARCHIVE,
-        202, 1, 303, 606, 505)
+        202, 1, 303, 606, 505, source_record_id=101)
     producer_result = producer.ProducerWitnessResult(REV, TREE, 202, 1, 404,
         ARCHIVE, BUNDLE, WORKFLOW, BLOB, "2026-09-25T11:57:00Z")
     identity_scope = {"principalId": "identity-reader", "credentialId": "2" * 64,
@@ -78,6 +78,7 @@ def fixture():
         "producerActorId": 303, "artifactId": 404,
         "bundleSha256": BUNDLE, "workflowSha256": WORKFLOW,
         "workflowBlobOid": BLOB, "manifestSha256": MANIFEST,
+        "sourceRecordId": 101,
         "reviewerActorId": 606, "identityRecordId": 707,
         "approvalEventId": 505, "decision": "approved",
         "approvedAt": "2026-09-25T11:58:00Z",
@@ -114,6 +115,7 @@ class ApprovalIdentityTests(unittest.TestCase):
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.approval_event_sha256,
                          selection["approvalEventSha256"])
+        self.assertEqual(result.source_record_id, 101)
         self.assertEqual(identity.reads, [606])
         self.assertEqual(event.reads, [505])
 
@@ -183,6 +185,22 @@ class ApprovalIdentityTests(unittest.TestCase):
                 with self.assertRaises(approval.Refused):
                     approval.qualify(preflight, made, identity, event,
                                      selection, NOW)
+
+    def test_immutable_event_missing_selected_source_record_refuses(self):
+        preflight, made, selection, identity, event = fixture()
+        claim = json.loads(event.record)
+        claim.pop("sourceRecordId")
+        event.record = canonical(claim)
+        selection["approvalEventSha256"] = hashlib.sha256(event.record).hexdigest()
+        with self.assertRaises(approval.Refused):
+            approval.qualify(preflight, made, identity, event, selection, NOW)
+        preflight, made, selection, identity, event = fixture()
+        claim = json.loads(event.record)
+        claim["sourceRecordId"] = 102
+        event.record = canonical(claim)
+        selection["approvalEventSha256"] = hashlib.sha256(event.record).hexdigest()
+        with self.assertRaises(approval.Refused):
+            approval.qualify(preflight, made, identity, event, selection, NOW)
 
 
 if __name__ == "__main__":

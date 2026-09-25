@@ -63,6 +63,7 @@ def fixture():
         "sourceTree": TREE, "producerRunId": 202,
         "producerRunAttempt": 1, "producerActorId": 303,
         "artifactId": 404, "reviewerActorId": 606,
+        "sourceRecordId": 101,
         "manifestSha256": sha(manifest),
         "reviewedAt": "2026-09-25T11:58:00Z",
         "expiresAt": "2026-09-25T12:15:00Z"}
@@ -96,7 +97,7 @@ class ReleasePreflightTests(unittest.TestCase):
                         source_record if source is None else source)
         right = FakePort(approval_claim if approval_scope is None else approval_scope,
                          approval_event if approval is None else approval)
-        result = preflight.qualify(left, right, revision, tree, 202,
+        result = preflight.qualify(left, right, revision, tree, 101, 202,
             run_attempt, producer, 404, reviewer, 505, NOW)
         return result, left, right
 
@@ -116,6 +117,7 @@ class ReleasePreflightTests(unittest.TestCase):
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.schema, preflight.RESULT_SCHEMA)
         self.assertEqual(result.archive_sha256, fixture()[2]["archiveSha256"])
+        self.assertEqual(result.source_record_id, 101)
         self.assertEqual((result.producer_run_id, result.producer_run_attempt,
                           result.producer_actor_id, result.reviewer_actor_id,
                           result.approval_event_id), (202, 1, 303, 606, 505))
@@ -172,7 +174,7 @@ class ReleasePreflightTests(unittest.TestCase):
         right = FakePort(approval_claim, approval_event)
         right.scopes[1]["credentialId"] = "8" * 64
         with self.assertRaisesRegex(preflight.Refused, "release-scope-drift"):
-            preflight.qualify(left, right, REVISION, TREE, 202, 1,
+            preflight.qualify(left, right, REVISION, TREE, 101, 202, 1,
                               303, 404, 606, 505, NOW)
         class Broken(FakePort):
             def read_approval(self, event_id):
@@ -180,7 +182,7 @@ class ReleasePreflightTests(unittest.TestCase):
         with self.assertRaises(preflight.Refused) as caught:
             preflight.qualify(FakePort(source_claim, source_record),
                 Broken(approval_claim, approval_event), REVISION, TREE,
-                202, 1, 303, 404, 606, 505, NOW)
+                101, 202, 1, 303, 404, 606, 505, NOW)
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
     def test_reused_source_or_approval_scope_mutated_at_final_read_refuses(self):
@@ -199,8 +201,22 @@ class ReleasePreflightTests(unittest.TestCase):
                     return shared
                 port.scope = scope
                 with self.assertRaises(preflight.Refused):
-                    preflight.qualify(left, right, REVISION, TREE, 202, 1,
+                    preflight.qualify(left, right, REVISION, TREE, 101, 202, 1,
                                       303, 404, 606, 505, NOW)
+
+    def test_swapped_positive_source_record_id_refuses(self):
+        source_claim, approval_claim, source_record, approval_event = fixture()
+        source_record["recordId"] = 102
+        with self.assertRaises(preflight.Refused):
+            preflight.qualify(FakePort(source_claim, source_record),
+                FakePort(approval_claim, approval_event), REVISION, TREE,
+                101, 202, 1, 303, 404, 606, 505, NOW)
+        source_claim, approval_claim, source_record, approval_event = fixture()
+        approval_event["sourceRecordId"] = 102
+        with self.assertRaises(preflight.Refused):
+            preflight.qualify(FakePort(source_claim, source_record),
+                FakePort(approval_claim, approval_event), REVISION, TREE,
+                101, 202, 1, 303, 404, 606, 505, NOW)
 
 
 if __name__ == "__main__":
