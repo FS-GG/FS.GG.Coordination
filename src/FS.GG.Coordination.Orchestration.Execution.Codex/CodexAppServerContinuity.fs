@@ -109,6 +109,24 @@ module CodexAppServerContinuity =
             | _ -> false
         | _ -> false
 
+    let private optionalInt64Value (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | true, value when value.ValueKind = JsonValueKind.Number ->
+            match value.TryGetInt64() with
+            | true, number -> Some number
+            | _ -> None
+        | _ -> None
+
+    let private terminalTimeRegressed (turn: JsonElement) =
+        let durationNegative =
+            optionalInt64Value turn "durationMs"
+            |> Option.exists (fun duration -> duration < 0L)
+        let completionBeforeStart =
+            match optionalInt64Value turn "startedAt", optionalInt64Value turn "completedAt" with
+            | Some startedAt, Some completedAt -> completedAt < startedAt
+            | _ -> false
+        durationNegative || completionBeforeStart
+
     let private optionalCommandSource (node: JsonElement) =
         match node.TryGetProperty "source" with
         | false, _ -> true
@@ -472,6 +490,13 @@ module CodexAppServerContinuity =
                     turn.GetProperty("items").EnumerateArray()
                     |> Seq.exists (validTurnItem >> not) ->
                     Error "app-server-turn-item-invalid"
+                | Ok () when
+                    not (optionalNullableInt64 turn "startedAt")
+                    || not (optionalNullableInt64 turn "completedAt")
+                    || not (optionalNullableInt64 turn "durationMs") ->
+                    Error "app-server-turn-time-invalid"
+                | Ok () when methodName = "turn/completed" && terminalTimeRegressed turn ->
+                    Error "app-server-turn-time-regressed"
                 | Ok () ->
                     match turn.TryGetProperty "itemsView" with
                     | true, view when view.ValueKind <> JsonValueKind.String ->

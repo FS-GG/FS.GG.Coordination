@@ -92,6 +92,8 @@ type CodexAppServerContinuityTests() =
     let completedWithSubAgentActivity fields =
         completedWithItems
             ("[{\"id\":\"item-1\",\"type\":\"subAgentActivity\"" + fields + "}]")
+    let withTurnFields (bytes: byte array) fields =
+        replace bytes "\"items\":[]" ("\"items\":[]" + fields)
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -139,6 +141,50 @@ type CodexAppServerContinuityTests() =
             TerminalObserved("completed", 0),
             status (CodexAppServerContinuity.apply first (frame 2L fullTerminal))
         )
+
+    [<Fact>]
+    member _.``native turn timestamp metadata requires nullable int64 values``() =
+        for frameBytes in [ started; completed ] do
+            for fields in
+                [ ",\"startedAt\":\"1\""
+                  ",\"completedAt\":1.5"
+                  ",\"durationMs\":true"
+                  ",\"durationMs\":9223372036854775808" ] do
+                let payload = withTurnFields frameBytes fields
+                let isStart = obj.ReferenceEquals(frameBytes, started)
+                let state =
+                    if isStart then beginBound ()
+                    else CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+                let ordinal = if isStart then 1L else 2L
+                Assert.Equal(
+                    ContinuityGap "app-server-turn-time-invalid",
+                    status (CodexAppServerContinuity.apply state (frame ordinal payload))
+                )
+
+    [<Fact>]
+    member _.``native terminal cannot close with regressed or negative duration``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"startedAt\":200,\"completedAt\":199"
+              ",\"durationMs\":-1" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-time-regressed",
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed fields)))
+            )
+
+    [<Fact>]
+    member _.``schema nullable and ordered native turn times retain continuity``() =
+        let startPayload = withTurnFields started ",\"startedAt\":null,\"completedAt\":null,\"durationMs\":null"
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L startPayload)
+        Assert.Equal(InTurn 0, status first)
+        for fields in
+            [ ",\"startedAt\":null,\"completedAt\":null,\"durationMs\":null"
+              ",\"startedAt\":200,\"completedAt\":200,\"durationMs\":0"
+              ",\"startedAt\":200,\"completedAt\":201,\"durationMs\":9223372036854775807" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed fields)))
+            )
 
     [<Fact>]
     member _.``subscription refuses wrong workspace item turn and transport``() =
