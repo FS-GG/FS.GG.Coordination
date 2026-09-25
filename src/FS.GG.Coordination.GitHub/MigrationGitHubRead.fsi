@@ -122,7 +122,8 @@ type MigrationReceiverTreeEntry =
     { EntryPath: string
       EntryMode: string
       EntryKind: string
-      EntrySha: string }
+      EntrySha: string
+      EntrySize: int64 option }
 
 type MigrationReceiverSnapshot =
     { ReceiverName: string
@@ -139,6 +140,32 @@ type MigrationReceiverSnapshot =
       TerminalRefEvidence: MigrationReceiverObjectEvidence
       TreeEntries: MigrationReceiverTreeEntry list
       SnapshotSha256: string }
+
+/// A caller-declared pin in one receiver. This declaration is not proof that the inventory is exhaustive.
+type MigrationReceiverPinDeclaration =
+    { EntryPath: string
+      PinKind: string }
+
+/// Exact bytes of an immutable Git blob reached through a verified receiver tree.
+type MigrationReceiverPinBlob =
+    { EntryPath: string
+      PinKind: string
+      EntryMode: string
+      EntrySha: string
+      EntrySize: int64
+      RequestUri: string
+      RequestSha256: string
+      RawBody: string
+      RawSha256: string
+      Bytes: byte array
+      BytesSha256: string }
+
+/// Preparatory observation only; the declared receiver/pin inventory has no provider exhaustiveness proof.
+type MigrationReceiverPinSnapshot =
+    { Receiver: MigrationReceiverSnapshot
+      Pins: MigrationReceiverPinBlob list
+      TerminalRefEvidence: MigrationReceiverObjectEvidence
+      PinSnapshotSha256: string }
 
 /// Only repository-owned branch/tag rulesets. Inherited, push, or hidden bypass state refuses.
 type MigrationRulesetListPage =
@@ -453,6 +480,13 @@ module MigrationGitHubRead =
         options:MigrationGitHubReadOptions -> receiverName:string -> expectedNodeId:string ->
         refName:string -> expectedHead:string -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationReceiverSnapshot, MigrationReadFailure>
+
+    /// Read declared workflow/package blob bytes through the verified recursive tree; no full authority claim.
+    val readReceiverPinSnapshot:
+        options:MigrationGitHubReadOptions -> receiverName:string -> expectedNodeId:string ->
+        refName:string -> expectedHead:string -> pins:MigrationReceiverPinDeclaration list ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationReceiverPinSnapshot, MigrationReadFailure>
 
     /// Read-only repository-owned branch/tag snapshot; refuses inherited, push and omitted bypass state.
     val readRepositoryBranchTagRulesets:
