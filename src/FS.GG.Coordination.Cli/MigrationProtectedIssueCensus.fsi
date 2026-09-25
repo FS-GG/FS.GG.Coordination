@@ -88,6 +88,12 @@ type ProtectedIssueCensusProof =
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensus =
+    /// Pure canonical commitment; an installed protected authority must authenticate it.
+    val expectedInventoryCommitment:
+        pins:ProtectedIssueCensusPins ->
+        selection:ProtectedIssueCensusSelection ->
+        reads:ProtectedIssueCensusRead list -> string
+
     /// Fake-port contract only. A protected host must install and authenticate the port and pins.
     val bind:
         pins:ProtectedIssueCensusPins ->
