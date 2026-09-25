@@ -34,6 +34,12 @@ for at most five minutes, may prepare one turn, and must match the selected curr
 Its ledger is immutable test state, not durable atomic replay custody. The issuer, trusted clock,
 source authentication and persistent one-use store have no installed implementation.
 
+`DirectSessionChallengeReservation` defines a typed atomic insert-if-absent store port keyed by the
+challenge across scopes. The source is read only after a matching reservation receipt. A store
+error has an unknown effect and must not be retried blindly; a source or clock gap after a confirmed
+reservation burns the challenge. Concurrent fake-store tests exercise this contract, but no durable
+store or trusted clock implementation is installed.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
