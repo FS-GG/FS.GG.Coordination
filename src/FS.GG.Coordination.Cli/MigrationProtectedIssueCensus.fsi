@@ -18,6 +18,7 @@ type ProtectedIssueCensusSelection =
 type ProtectedIssueCensusPins =
     { ReaderResourceId: string
       ReaderArtifactSha256: string
+      ProviderResourceId: string
       CustodyStoreResourceId: string }
 
 type ProtectedIssueCensusRead =
@@ -26,6 +27,8 @@ type ProtectedIssueCensusRead =
       RequestUri: string
       ResponseUri: string
       StatusCode: int
+      ProviderResourceId: string
+      ResponseHeaders: (string * string) list
       LinkHeader: string option
       RawBody: string
       RawBodyBytesBase64: string

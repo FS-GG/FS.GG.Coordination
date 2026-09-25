@@ -20,6 +20,7 @@ type ProtectedIssueCensusSelection =
 type ProtectedIssueCensusPins =
     { ReaderResourceId: string
       ReaderArtifactSha256: string
+      ProviderResourceId: string
       CustodyStoreResourceId: string }
 
 type ProtectedIssueCensusRead =
@@ -28,6 +29,8 @@ type ProtectedIssueCensusRead =
       RequestUri: string
       ResponseUri: string
       StatusCode: int
+      ProviderResourceId: string
+      ResponseHeaders: (string * string) list
       LinkHeader: string option
       RawBody: string
       RawBodyBytesBase64: string
@@ -75,6 +78,28 @@ module MigrationProtectedIssueCensus =
             && text = read.RawBody
         with _ -> false
 
+    let private validHeaders (pins: ProtectedIssueCensusPins) (read: ProtectedIssueCensusRead) =
+        try
+            let headerName (name: string) =
+                exactAtom name
+                && (name |> Seq.forall (fun ch ->
+                    (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z')
+                    || (ch >= '0' && ch <= '9') || ch = '-'))
+            let headerValue (value: string) =
+                not (isNull value)
+                && (value |> Seq.forall (fun ch -> ch = '\t' || (ch >= ' ' && ch <= '~')))
+            let headers = read.ResponseHeaders
+            let names = headers |> List.map (fst >> _.ToLowerInvariant())
+            let link =
+                headers |> List.tryPick (fun (name, value) ->
+                    if name.Equals("link", StringComparison.OrdinalIgnoreCase)
+                    then Some value else None)
+            read.ProviderResourceId = pins.ProviderResourceId
+            && (headers |> List.forall (fun (name, value) -> headerName name && headerValue value))
+            && names.Length = (names |> Set.ofList |> Set.count)
+            && read.LinkHeader = link
+        with _ -> false
+
     let private validSelection (selection: ProtectedIssueCensusSelection)
                                (options: MigrationInspectProviderOptions) =
         selection.RunId > 0L && selection.RunAttempt > 0
@@ -91,11 +116,14 @@ module MigrationProtectedIssueCensus =
     let private validPins (pins: ProtectedIssueCensusPins) =
         exactAtom pins.ReaderResourceId
         && exactSha 64 pins.ReaderArtifactSha256
+        && exactAtom pins.ProviderResourceId
         && exactAtom pins.CustodyStoreResourceId
 
     let private response (read: ProtectedIssueCensusRead) =
-        let headers = read.LinkHeader |> Option.map (fun value -> Map.ofList [ "link", value ])
-                      |> Option.defaultValue Map.empty
+        let headers =
+            read.ResponseHeaders
+            |> List.map (fun (name, value) -> name.ToLowerInvariant(), value)
+            |> Map.ofList
         Response
             { StatusCode=read.StatusCode; Headers=headers; Body=read.RawBody; ETag=None
               RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
@@ -141,6 +169,7 @@ module MigrationProtectedIssueCensus =
                                     && exactAtom read.RawBody
                                     && read.StatusCode = 200)
                             let capturesValid = reads |> List.forall validCapture
+                            let headersValid = reads |> List.forall (validHeaders pins)
                             let ordered =
                                 ordinals |> List.mapi (fun index ordinal -> ordinal = int64 (index + 1))
                                          |> List.forall id
@@ -154,6 +183,7 @@ module MigrationProtectedIssueCensus =
                                     && sha read.RawBody = page.PayloadSha256
                                     && next = Ok page.NextUri)
                             if not capturesValid then Error "protected-census-capture-shape"
+                            elif not headersValid then Error "protected-census-header-or-provider"
                             elif not readShape || not ordered
                                || objectIds.Length <> (objectIds |> Set.ofList |> Set.count)
                                || batch.Identity.RequestUri <> expectedIdentity.AbsoluteUri
@@ -165,18 +195,21 @@ module MigrationProtectedIssueCensus =
                                 |> Result.mapError (fun reason -> $"protected-census-raw-typed:{reason}")
                                 |> Result.map (fun inspect ->
                                     let parts =
-                                        [ "fsgg.gs2-09.7.protected-issue-census/v1"
+                                        [ "fsgg.gs2-09.7.protected-issue-census/v2"
                                           string selection.RunId; string selection.RunAttempt
                                           selection.RunNonce; selection.CandidateSha; selection.WorkflowSha
                                           selection.ApiOrigin; selection.Owner; selection.Repository
                                           string selection.RepositoryId; pins.ReaderResourceId
-                                          pins.ReaderArtifactSha256; pins.CustodyStoreResourceId
+                                          pins.ReaderArtifactSha256; pins.ProviderResourceId
+                                          pins.CustodyStoreResourceId
                                           string batch.SealedPageCount ]
                                         @ (reads |> List.collect (fun read ->
                                             [ string read.ReadOrdinal; read.CustodyObjectId
                                               read.RequestMethod; read.RequestUri; read.ResponseUri
-                                              sha read.RawBody
-                                              defaultArg read.LinkHeader "" ]))
+                                              read.ProviderResourceId; sha read.RawBody
+                                              string read.ResponseHeaders.Length ]
+                                            @ (read.ResponseHeaders |> List.collect (fun (name, value) ->
+                                                [ name; value ]))))
                                     { Inspect=inspect; CustodyObjectIds=objectIds
                                       CorpusSha256=parts |> List.map framed |> String.concat "" |> sha })
                 with _ -> Error "protected-census-read-unavailable"

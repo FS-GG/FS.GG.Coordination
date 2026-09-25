@@ -66,6 +66,7 @@ let private readIssues responses =
 let private protectedCensusPins =
     { ReaderResourceId="protected-reader:fixture"
       ReaderArtifactSha256=String.replicate 64 "a"
+      ProviderResourceId="provider:fixture"
       CustodyStoreResourceId="protected-store:fixture" }
 
 let private protectedCensusSelection =
@@ -83,7 +84,10 @@ let private protectedCensusFixture () =
             | Rest request, Response response ->
                 { ReadOrdinal=int64 (index + 1); RequestMethod="GET"
                   RequestUri=request.Uri.AbsoluteUri; ResponseUri=request.Uri.AbsoluteUri
-                  StatusCode=response.StatusCode; LinkHeader=Map.tryFind "link" response.Headers
+                  StatusCode=response.StatusCode
+                  ProviderResourceId=protectedCensusPins.ProviderResourceId
+                  ResponseHeaders=[ "content-type", "application/json" ]
+                  LinkHeader=Map.tryFind "link" response.Headers
                   RawBody=response.Body
                   RawBodyBytesBase64=response.Body |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
                   CustodyObjectId=$"object:{index + 1}" }
@@ -121,6 +125,9 @@ let ``protected issue census refuses absent or drifted installation and read`` (
         |> Result.map ignore
     Assert.Equal(Error "protected-census-pins",
                  bind { protectedCensusPins with ReaderResourceId="" }
+                      protectedCensusSelection None)
+    Assert.Equal(Error "protected-census-pins",
+                 bind { protectedCensusPins with ProviderResourceId="" }
                       protectedCensusSelection None)
     Assert.Equal(Error "protected-census-port-unavailable",
                  bind protectedCensusPins protectedCensusSelection None)
@@ -178,8 +185,38 @@ let ``protected issue census refuses byte drift and duplicate or stale objects``
           { batch with Pages=[ { page with CustodyObjectId=batch.Identity.CustodyObjectId } ] }
           { batch with Pages=[ { page with ReadOrdinal=batch.Identity.ReadOrdinal } ] }
           { batch with Pages=[ { page with ReadOrdinal=3L } ] }
-          { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\"" } ] } ] do
+          { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\""
+                                           ResponseHeaders=[ "link", "<https://api.github.test/next>; rel=\"next\"" ] } ] } ] do
         Assert.Equal(Error "protected-census-object-or-page", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses foreign provider and unbound or ambiguous headers`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+        |> Result.map ignore
+    let page = batch.Pages.Head
+    for changed in
+        [ { batch with Pages=[ { page with ProviderResourceId="foreign-provider" } ] }
+          { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\"" } ] }
+          { batch with Pages=[ { page with ResponseHeaders=[ "link", "one"; "Link", "two" ] } ] }
+          { batch with Pages=[ { page with ResponseHeaders=[ "bad\nname", "value" ] } ] }
+          { batch with Pages=[ { page with ResponseHeaders=[ "content-type", "value\r\nX: injected" ] } ] } ] do
+        Assert.Equal(Error "protected-census-header-or-provider", bind changed)
+
+[<Fact>]
+let ``protected issue census corpus digest binds all recorded headers`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+    let original = bind batch |> Result.defaultWith failwith
+    let page = batch.Pages.Head
+    let changed =
+        { batch with Pages=[ { page with ResponseHeaders=page.ResponseHeaders @ [ "x-github-request-id", "trace-2" ] } ] }
+    let updated = bind changed |> Result.defaultWith failwith
+    Assert.NotEqual(original.CorpusSha256, updated.CorpusSha256)
 
 [<Fact>]
 let ``protected issue census refuses captured write redirect and body byte substitution`` () =
