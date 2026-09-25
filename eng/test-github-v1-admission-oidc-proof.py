@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import base64
+import dataclasses
 import hashlib
 import importlib.util
 import json
@@ -48,13 +49,22 @@ class OidcProofTests(unittest.TestCase):
         }).encode()
         cls.native = proof.NativeJobIdentity(
             workflow_path=".github/workflows/gs2-v1-admission-operating.yml",
-            workflow_head="a" * 40,
+            run_head="a" * 40,
+            workflow_sha="b" * 40,
             run_id=123456,
             run_attempt=1,
             actor_id=1645484,
             check_run_id=987654,
             environment_name="fleet-v1-admission-runtime",
             environment_node_id="EN_synthetic",
+        )
+        cls.registered = proof.RegisteredServicePolicy(
+            workflow_path=cls.native.workflow_path,
+            workflow_sha=cls.native.workflow_sha,
+            actor_id=cls.native.actor_id,
+            environment_name=cls.native.environment_name,
+            environment_node_id=cls.native.environment_node_id,
+            subject="synthetic-job",
         )
         cls.now = 1790310000
         cls.plan = b"public sealed admission plan\n"
@@ -72,9 +82,9 @@ class OidcProofTests(unittest.TestCase):
             "jti": "synthetic-token-1", "iat": self.now - 60,
             "nbf": self.now - 60, "exp": self.now + 300,
             "repository": proof.REPOSITORY, "repository_id": proof.REPOSITORY_ID,
-            "ref": proof.REF, "sha": n.workflow_head,
+            "ref": proof.REF, "sha": n.run_head,
             "workflow_ref": f"{proof.REPOSITORY}/{n.workflow_path}@{proof.REF}",
-            "workflow_sha": n.workflow_head, "run_id": str(n.run_id),
+            "workflow_sha": n.workflow_sha, "run_id": str(n.run_id),
             "run_attempt": str(n.run_attempt), "actor_id": str(n.actor_id),
             "check_run_id": str(n.check_run_id),
             "environment": n.environment_name,
@@ -96,10 +106,11 @@ class OidcProofTests(unittest.TestCase):
         ).stdout
         return signing_input + "." + b64(signature)
 
-    def verify(self, token, audience=None, native=None, jwks=None):
+    def verify(self, token, audience=None, native=None, registered=None, jwks=None):
         return proof.verify_signed_job(
             token, self.jwks if jwks is None else jwks,
             self.native if native is None else native,
+            self.registered if registered is None else registered,
             self.audience if audience is None else audience,
             self.now,
         )
@@ -132,7 +143,7 @@ class OidcProofTests(unittest.TestCase):
         for field, value in [
             ("run_id", "999"), ("run_attempt", "2"), ("check_run_id", "999"),
             ("actor_id", "999"), ("environment", "genesis"),
-            ("environment_node_id", "EN_foreign"), ("workflow_sha", "b" * 40),
+            ("environment_node_id", "EN_foreign"), ("workflow_sha", "c" * 40),
             ("repository_id", "1"), ("ref", "refs/heads/feature"),
         ]:
             claims = self.claims()
@@ -143,13 +154,22 @@ class OidcProofTests(unittest.TestCase):
         claims["exp"] = self.now - 1
         with self.assertRaises(proof.Refused):
             self.verify(self.token(claims))
+        foreign = dataclasses.replace(self.native,
+                                      workflow_path=".github/workflows/foreign.yml",
+                                      environment_name="foreign-runtime")
+        foreign_claims = self.claims()
+        foreign_claims["workflow_ref"] = (
+            f"{proof.REPOSITORY}/{foreign.workflow_path}@{proof.REF}")
+        foreign_claims["environment"] = foreign.environment_name
+        with self.assertRaises(proof.Refused):
+            self.verify(self.token(foreign_claims), native=foreign)
 
     def test_malformed_audience_nonce_and_native_shape_refuse(self):
         with self.assertRaises(proof.Refused):
             proof.plan_audience(self.plan, "not-a-nonce")
         with self.assertRaises(proof.Refused):
             self.verify(self.token(), native=proof.NativeJobIdentity(
-                self.native.workflow_path, self.native.workflow_head,
+                self.native.workflow_path, self.native.run_head, self.native.workflow_sha,
                 self.native.run_id, 2, self.native.actor_id,
                 self.native.check_run_id, self.native.environment_name,
                 self.native.environment_node_id))
