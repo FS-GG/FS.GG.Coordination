@@ -132,8 +132,16 @@ def verify_public_preflight(
             and job_policy.environment_name == registered.environment_name
             and job_policy.environment_node_id == registered.environment_node_id,
             "public-plan-installed-policy")
-    job = JOB.collect_two(read_json, job_policy, plan["run_id"], plan["check_run_id"])
-    target = TARGET.collect_two(read_json, plan["pr_number"])
+    # Read both inventories in each pass. Sequential independent two-read
+    # calls could accept a job that changed before the target census began.
+    first_job = JOB.collect_once(read_json, job_policy,
+                                 plan["run_id"], plan["check_run_id"])
+    first_target = TARGET.collect_once(read_json, plan["pr_number"])
+    job = JOB.collect_once(read_json, job_policy,
+                           plan["run_id"], plan["check_run_id"])
+    target = TARGET.collect_once(read_json, plan["pr_number"])
+    require(first_job == job and first_target == target,
+            "public-plan-two-read-drift")
     require(all(target[key] == plan[key] for key in
                 ("repository_id", "pr_number", "pr_id", "pr_node_id",
                  "base_sha", "head_sha")), "public-plan-target-drift")

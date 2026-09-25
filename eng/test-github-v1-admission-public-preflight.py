@@ -59,8 +59,8 @@ class PublicPreflightTests(unittest.TestCase):
                           separators=(",", ":")).encode() + b"\n"
 
     def verify(self, sealed=None, typed=None):
-        with (mock.patch.object(preflight.JOB, "collect_two", return_value=self.job) as job,
-              mock.patch.object(preflight.TARGET, "collect_two", return_value=self.target) as target,
+        with (mock.patch.object(preflight.JOB, "collect_once", return_value=self.job) as job,
+              mock.patch.object(preflight.TARGET, "collect_once", return_value=self.target) as target,
               mock.patch.object(preflight.OIDC, "verify_signed_job", return_value=
                                 preflight.OIDC.SignedJobProof("jti", 10, 20, "aud", "1" * 64)) as signed):
             result = preflight.verify_public_preflight(
@@ -77,8 +77,8 @@ class PublicPreflightTests(unittest.TestCase):
         self.assertEqual(result.token_id, "jti")
         self.assertEqual(result.job_census_sha256, "f" * 64)
         self.assertEqual(result.target_census_sha256, "0" * 64)
-        job.assert_called_once()
-        target.assert_called_once()
+        self.assertEqual(job.call_count, 2)
+        self.assertEqual(target.call_count, 2)
         self.assertEqual(signed.call_args.args[4],
                          preflight.OIDC.plan_audience(self.sealed(), self.plan["nonce"]))
 
@@ -92,8 +92,8 @@ class PublicPreflightTests(unittest.TestCase):
 
     def test_native_target_drift_refuses_before_oidc(self):
         self.target["base_sha"] = "9" * 40
-        with (mock.patch.object(preflight.JOB, "collect_two", return_value=self.job),
-              mock.patch.object(preflight.TARGET, "collect_two", return_value=self.target),
+        with (mock.patch.object(preflight.JOB, "collect_once", return_value=self.job),
+              mock.patch.object(preflight.TARGET, "collect_once", return_value=self.target),
               mock.patch.object(preflight.OIDC, "verify_signed_job") as signed):
             with self.assertRaises(preflight.Refused):
                 preflight.verify_public_preflight(
@@ -104,13 +104,26 @@ class PublicPreflightTests(unittest.TestCase):
 
     def test_foreign_installed_policy_refuses_before_native_read(self):
         foreign = dataclasses.replace(self.registered, environment_name="foreign")
-        with mock.patch.object(preflight.JOB, "collect_two") as job:
+        with mock.patch.object(preflight.JOB, "collect_once") as job:
             with self.assertRaises(preflight.Refused):
                 preflight.verify_public_preflight(
                     self.sealed(), self.typed, "signed", b"public-jwks",
                     self.job_policy, foreign, object(), 12,
                 )
             job.assert_not_called()
+
+    def test_job_change_between_combined_passes_refuses_before_oidc(self):
+        changed = dict(self.job, complete_census_sha256="9" * 64)
+        with (mock.patch.object(preflight.JOB, "collect_once",
+                                side_effect=[self.job, changed]),
+              mock.patch.object(preflight.TARGET, "collect_once", return_value=self.target),
+              mock.patch.object(preflight.OIDC, "verify_signed_job") as signed):
+            with self.assertRaisesRegex(preflight.Refused, "public-plan-two-read-drift"):
+                preflight.verify_public_preflight(
+                    self.sealed(), self.typed, "signed", b"public-jwks",
+                    self.job_policy, self.registered, object(), 12,
+                )
+            signed.assert_not_called()
 
 
 if __name__ == "__main__":
