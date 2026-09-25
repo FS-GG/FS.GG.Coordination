@@ -9,7 +9,15 @@ type ProtectedIssueCensusAttestationPins =
       SignerPublicKeySha256: string
       SignerArtifactSha256: string
       ClockResourceId: string
+      ClockArtifactSha256: string
       MaximumAgeSeconds: int }
+
+type ProtectedIssueCensusClockDescription =
+    { ClockResourceId: string
+      ClockArtifactSha256: string
+      CandidateMayRead: bool
+      CandidateMayWrite: bool
+      MonotonicUtc: bool }
 
 type ProtectedIssueCensusSealAttestation =
     { Selection: ProtectedIssueCensusSelection
@@ -21,7 +29,7 @@ type ProtectedIssueCensusSealAttestation =
       SignatureBase64: string }
 
 type IProtectedIssueCensusClockPort =
-    abstract Describe: unit -> string
+    abstract Describe: unit -> ProtectedIssueCensusClockDescription
     abstract ReadNow: unit -> DateTimeOffset option
 
 [<RequireQualifiedAccess>]
@@ -44,6 +52,7 @@ module MigrationProtectedIssueCensusAttestation =
     let private publicKey (pins: ProtectedIssueCensusAttestationPins) =
         if not (exactSha pins.SignerPublicKeySha256)
            || not (exactSha pins.SignerArtifactSha256)
+           || not (exactSha pins.ClockArtifactSha256)
            || not (exactAtom pins.ClockResourceId)
            || pins.MaximumAgeSeconds < 1 || pins.MaximumAgeSeconds > 300 then None
         else
@@ -57,9 +66,9 @@ module MigrationProtectedIssueCensusAttestation =
     let signingPayload (pins: ProtectedIssueCensusAttestationPins)
                        (attestation: ProtectedIssueCensusSealAttestation) =
         let selection = attestation.Selection
-        [ "fsgg.gs2-09.7.protected-census-seal-attestation/v1"
+        [ "fsgg.gs2-09.7.protected-census-seal-attestation/v2"
           pins.SignerPublicKeySha256; pins.SignerArtifactSha256
-          pins.ClockResourceId; string pins.MaximumAgeSeconds
+          pins.ClockResourceId; pins.ClockArtifactSha256; string pins.MaximumAgeSeconds
           string selection.RunId; string selection.RunAttempt; selection.RunNonce
           selection.CandidateSha; selection.WorkflowSha; selection.ApiOrigin
           selection.Owner; selection.Repository; string selection.RepositoryId
@@ -95,7 +104,11 @@ module MigrationProtectedIssueCensusAttestation =
                     else
                         let observed =
                             try
-                                if trustedClock.Describe() <> pins.ClockResourceId then
+                                let installed = trustedClock.Describe()
+                                if installed.ClockResourceId <> pins.ClockResourceId
+                                   || installed.ClockArtifactSha256 <> pins.ClockArtifactSha256
+                                   || installed.CandidateMayRead || installed.CandidateMayWrite
+                                   || not installed.MonotonicUtc then
                                     Error "protected-census-clock-installation"
                                 else
                                     match trustedClock.ReadNow() with

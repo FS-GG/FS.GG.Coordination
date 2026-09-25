@@ -16,6 +16,7 @@ type ProtectedIssueCensusReleaseDescription =
       JournalResourceId: string
       JournalArtifactSha256: string
       ClockResourceId: string
+      ClockArtifactSha256: string
       SignerPublicKeySha256: string
       SignerArtifactSha256: string
       CandidateMayRead: bool
@@ -29,6 +30,7 @@ type ProtectedIssueCensusReleaseRequest =
       ClaimId: string
       AttestationPayloadSha256: string
       ClockResourceId: string
+      ClockArtifactSha256: string
       SignerPublicKeySha256: string
       SignerArtifactSha256: string
       SignedIssuedAtUtc: DateTimeOffset
@@ -115,6 +117,8 @@ module MigrationProtectedIssueCensusRelease =
                     || releaseDescription.JournalResourceId <> claimPins.JournalResourceId
                     || releaseDescription.JournalArtifactSha256 <> claimPins.JournalArtifactSha256
                     || releaseDescription.ClockResourceId <> attestationPins.ClockResourceId
+                    || releaseDescription.ClockArtifactSha256
+                       <> attestationPins.ClockArtifactSha256
                     || releaseDescription.SignerPublicKeySha256
                        <> attestationPins.SignerPublicKeySha256
                     || releaseDescription.SignerArtifactSha256
@@ -179,6 +183,7 @@ module MigrationProtectedIssueCensusRelease =
                                           Selection=selection; ClaimId=expectedId
                                           AttestationPayloadSha256=payloadSha
                                           ClockResourceId=attestationPins.ClockResourceId
+                                          ClockArtifactSha256=attestationPins.ClockArtifactSha256
                                           SignerPublicKeySha256=attestationPins.SignerPublicKeySha256
                                           SignerArtifactSha256=attestationPins.SignerArtifactSha256
                                           SignedIssuedAtUtc=seal.IssuedAtUtc

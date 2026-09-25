@@ -16,7 +16,9 @@ let private selection =
 
 let private clock resource now =
     { new IProtectedIssueCensusClockPort with
-        member _.Describe() = resource
+        member _.Describe() =
+            { ClockResourceId=resource; ClockArtifactSha256=String.replicate 64 "9"
+              CandidateMayRead=false; CandidateMayWrite=false; MonotonicUtc=true }
         member _.ReadNow() = Some now }
 
 let private fixture () =
@@ -26,7 +28,8 @@ let private fixture () =
         { SignerPublicKeySpkiBase64=Convert.ToBase64String publicKey
           SignerPublicKeySha256=digest publicKey
           SignerArtifactSha256=String.replicate 64 "c"
-          ClockResourceId="protected-clock:fixture"; MaximumAgeSeconds=60 }
+          ClockResourceId="protected-clock:fixture"
+          ClockArtifactSha256=String.replicate 64 "9"; MaximumAgeSeconds=60 }
     let issued = DateTimeOffset(2026, 9, 25, 10, 0, 0, TimeSpan.Zero)
     let proof =
         { Inspect=Unchecked.defaultof<_>; CustodyObjectIds=[]
@@ -82,6 +85,36 @@ let ``protected census seal verifier refuses unsigned foreign or stale claims`` 
     Assert.Equal(Error "protected-census-clock-installation",
                  verify pins proof (Some attestation)
                      (Some (clock "candidate-clock" now)))
+    let candidateWritable =
+        { new IProtectedIssueCensusClockPort with
+            member _.Describe() =
+                { ClockResourceId=pins.ClockResourceId
+                  ClockArtifactSha256=pins.ClockArtifactSha256
+                  CandidateMayRead=false; CandidateMayWrite=true; MonotonicUtc=true }
+            member _.ReadNow() = Some now }
+    Assert.Equal(Error "protected-census-clock-installation",
+                 verify pins proof (Some attestation) (Some candidateWritable))
+    let wrongArtifact =
+        { new IProtectedIssueCensusClockPort with
+            member _.Describe() =
+                { ClockResourceId=pins.ClockResourceId
+                  ClockArtifactSha256=String.replicate 64 "0"
+                  CandidateMayRead=false; CandidateMayWrite=false; MonotonicUtc=true }
+            member _.ReadNow() = Some now }
+    Assert.Equal(Error "protected-census-clock-installation",
+                 verify pins proof (Some attestation) (Some wrongArtifact))
+    let nonMonotonic =
+        { new IProtectedIssueCensusClockPort with
+            member _.Describe() =
+                { ClockResourceId=pins.ClockResourceId
+                  ClockArtifactSha256=pins.ClockArtifactSha256
+                  CandidateMayRead=false; CandidateMayWrite=false; MonotonicUtc=false }
+            member _.ReadNow() = Some now }
+    Assert.Equal(Error "protected-census-clock-installation",
+                 verify pins proof (Some attestation) (Some nonMonotonic))
+    let otherClockPins = { pins with ClockArtifactSha256=String.replicate 64 "0" }
+    Assert.Equal(Error "protected-census-attestation-signature",
+                 verify otherClockPins proof (Some attestation) (Some wrongArtifact))
     Assert.Equal(Error "protected-census-attestation-signature",
                  verify pins proof
                      (Some { attestation with SignatureBase64=Convert.ToBase64String(Array.zeroCreate<byte> 64) })
@@ -102,7 +135,10 @@ let ``protected census seal verifier refuses unknown clock once`` () =
     let mutable calls = 0
     let unknown =
         { new IProtectedIssueCensusClockPort with
-            member _.Describe() = pins.ClockResourceId
+            member _.Describe() =
+                { ClockResourceId=pins.ClockResourceId
+                  ClockArtifactSha256=pins.ClockArtifactSha256
+                  CandidateMayRead=false; CandidateMayWrite=false; MonotonicUtc=true }
             member _.ReadNow() =
                 calls <- calls + 1
                 raise (InvalidOperationException "unknown protected clock") }

@@ -47,6 +47,7 @@ let private releaseDescription keySha =
       JournalResourceId=claimPins.JournalResourceId
       JournalArtifactSha256=claimPins.JournalArtifactSha256
       ClockResourceId="protected-clock:release-test"
+      ClockArtifactSha256=String.replicate 64 "9"
       SignerPublicKeySha256=keySha
       SignerArtifactSha256=String.replicate 64 "f"
       CandidateMayRead=false; CandidateMayWrite=false
@@ -68,7 +69,8 @@ let private fixture () =
         { SignerPublicKeySpkiBase64=Convert.ToBase64String publicKey
           SignerPublicKeySha256=digest publicKey
           SignerArtifactSha256=String.replicate 64 "f"
-          ClockResourceId="protected-clock:release-test"; MaximumAgeSeconds=60 }
+          ClockResourceId="protected-clock:release-test"
+          ClockArtifactSha256=String.replicate 64 "9"; MaximumAgeSeconds=60 }
     let issued = DateTimeOffset(2026, 9, 25, 10, 0, 0, TimeSpan.Zero)
     let proof =
         { Inspect=Unchecked.defaultof<_>; CustodyObjectIds=[]
@@ -113,7 +115,10 @@ let private fixture () =
 
 let private clock (f: Fixture) =
     { new IProtectedIssueCensusClockPort with
-        member _.Describe() = f.Pins.ClockResourceId
+        member _.Describe() =
+            { ClockResourceId=f.Pins.ClockResourceId
+              ClockArtifactSha256=f.Pins.ClockArtifactSha256
+              CandidateMayRead=false; CandidateMayWrite=false; MonotonicUtc=true }
         member _.ReadNow() = Some f.Now }
 
 let private store (head: ProtectedIssueCensusStoreHead) =
@@ -159,6 +164,7 @@ let ``protected census release reservation is one use and exactly bound`` () =
     Assert.Equal(f.JournalHead.SealSha256, stored.Value.ExpectedJournalHeadSha256)
     Assert.Equal(f.Seal.ExpiresAtUtc, stored.Value.SignedExpiresAtUtc)
     Assert.Equal(f.Pins.ClockResourceId, stored.Value.ClockResourceId)
+    Assert.Equal(f.Pins.ClockArtifactSha256, stored.Value.ClockArtifactSha256)
 
 [<Fact>]
 let ``protected census release checks signed expiry inside reservation CAS`` () =
@@ -197,6 +203,8 @@ let ``protected census release refuses unpinned or non-atomic expiry authority``
                  invoke { expected with AtomicExpiryCompare=false })
     Assert.Equal(Error "protected-census-release-installation",
                  invoke { expected with ClockResourceId="candidate-clock" })
+    Assert.Equal(Error "protected-census-release-installation",
+                 invoke { expected with ClockArtifactSha256=String.replicate 64 "0" })
     Assert.Equal(Error "protected-census-release-installation",
                  invoke { expected with SignerPublicKeySha256=String.replicate 64 "0" })
 
