@@ -87,6 +87,14 @@ for the selected thread and turn after subscription. Source, clock and receipt f
 reservation. No trusted journal reader or native transport is installed; the result does not
 establish a complete turn, usage or an applied Host receipt.
 
+`CodexAppServerCorrelatedTerminal` links the prospective first-start receipt to an authenticated
+sealed journal read. The first receipt must match exactly, and the existing recovery reducer must
+verify the complete chain through a terminal notification. It returns only a provisional terminal
+status and usage-update count for the exact workspace/item and native turn. App Server `last` and
+cumulative token snapshots do not provide completed-turn usage, so this result cannot feed the
+telemetry mapper or prove a Host receipt. No trusted sealed reader or native capture path is
+installed.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
