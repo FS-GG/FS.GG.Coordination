@@ -331,6 +331,74 @@ let ``receiver pin two pass remains preparatory and refuses raw drift`` () =
     let noCalls = FakeTransport []
     Assert.Equal(Error "invalid:receiver-pin-declaration",
                  MigrationReceiverCapture.capturePinBytesTwoPass cohort Map.empty options noCalls)
+
+let private receiverRollbackCohort : GitHubMigrationCopyCohort =
+    { Repositories=[ { Id=42L; NodeId="REPO_42"; FullName="FS-GG/copy"
+                       SourceHead=String.replicate 40 "d"; TargetHead=receiverHead } ]
+      Receivers=[ { Receiver="receiver-a"; RepositoryId=42L
+                    RefName="refs/heads/main"; ExpectedHead=receiverHead } ]
+      ProjectOrganization="FS-GG"; ProjectNumber=1; ProjectNodeId="PROJECT_1"
+      SourceRevision=String.replicate 40 "e"; Isolated=true }
+
+let private receiverRollbackPlan cohortSha stateSha =
+    let sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let steps =
+        [ 5, AuthoritySnapshot, "authority"; 4, Schedule, "schedules"
+          3, V1Projection, "v1"; 2, ReceiverPin, "receivers"; 1, Settings, "settings" ]
+        |> List.map (fun (order, domain, name) ->
+            { Order=order; StepId=$"restore-{name}"; Domain=domain
+              TargetIdentity=(if domain = ReceiverPin then $"receiver-cohort:{cohortSha}" else $"target:{name}")
+              CapturedStateSha256=(if domain = ReceiverPin then stateSha else sha $"captured:{name}")
+              RestorePayloadSha256=sha $"payload:{name}" })
+    GitHubRollbackPlanQualification.qualify "accepted-rollback" (String.replicate 40 "a")
+        (String.replicate 64 "b") (String.replicate 64 "c") (String.replicate 64 "d")
+        (String.replicate 64 "e") (String.replicate 64 "f") (String.replicate 64 "1")
+        (String.replicate 64 "2") "VerifiedV2" steps
+        (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+    |> function Ok value -> value | Error failures -> failwithf "invalid fixture plan: %A" failures
+
+[<Fact>]
+let ``declared receiver rollback readback binds raw two pass digest yet stays partial`` () =
+    let declarations = Map [ "receiver-a", pinDeclaration ]
+    let preliminary =
+        MigrationReceiverCapture.capturePinBytesTwoPass receiverRollbackCohort declarations options
+            (FakeTransport (pinResponses @ pinResponses))
+        |> function Ok value -> value | Error reason -> failwith reason
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedState =
+        [ "fsgg.gs2-09.7.receiver-pin-declared-state/v1"
+          preliminary.CohortSha256; "receiver-a"; preliminary.First.Head.PinSnapshotSha256 ]
+        |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let selected = receiverRollbackPlan preliminary.CohortSha256 expectedState
+    let transport = FakeTransport (pinResponses @ pinResponses)
+    match MigrationRollbackReceiverReadback.captureDeclared selected.Seal selected
+              receiverRollbackCohort declarations options transport with
+    | Error reason -> failwithf "declared readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedState, proof.StateSha256)
+        Assert.Equal(selected.Seal, proof.PlanSeal)
+        Assert.False(proof.InventoryBound)
+        Assert.Equal(14, transport.Requests.Length)
+    let wrongState = receiverRollbackPlan preliminary.CohortSha256 (String.replicate 64 "9")
+    Assert.Equal(Error "changed:receiver-pin-rollback-state",
+                 MigrationRollbackReceiverReadback.captureDeclared wrongState.Seal wrongState
+                     receiverRollbackCohort declarations options (FakeTransport (pinResponses @ pinResponses)))
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:receiver-cohort",
+                 MigrationRollbackReceiverReadback.captureDeclared selected.Seal selected
+                     { receiverRollbackCohort with Receivers=[] } declarations options noCalls)
+    Assert.Empty(noCalls.Requests)
+    let foreignCohort =
+        { receiverRollbackCohort with Receivers=[ { receiverRollbackCohort.Receivers.Head with Receiver="foreign" } ] }
+    Assert.Equal(Error "invalid:receiver-pin-rollback-target",
+                 MigrationRollbackReceiverReadback.captureDeclared selected.Seal selected
+                     foreignCohort declarations options noCalls)
+    Assert.Empty(noCalls.Requests)
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackReceiverReadback.captureDeclared (String.replicate 64 "8") selected
+                     receiverRollbackCohort declarations options noCalls)
+    Assert.Empty(noCalls.Requests)
     Assert.Empty(noCalls.Requests)
 
 type private RedirectedHandler() =

@@ -29,6 +29,8 @@
     <Compile Include="MigrationInspectProviderAdapter.fs" />
     <Compile Include="MigrationReceiverCapture.fsi" />
     <Compile Include="MigrationReceiverCapture.fs" />
+    <Compile Include="MigrationRollbackReceiverReadback.fsi" />
+    <Compile Include="MigrationRollbackReceiverReadback.fs" />
     <Compile Include="MigrationSandboxFixtureSeed.fsi" />
     <Compile Include="MigrationSandboxFixtureSeed.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
