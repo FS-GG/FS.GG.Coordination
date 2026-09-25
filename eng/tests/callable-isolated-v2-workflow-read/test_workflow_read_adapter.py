@@ -148,6 +148,22 @@ class WorkflowReadTests(unittest.TestCase):
         with self.assertRaisesRegex(adapter.Refused, "workflow-scope-drift"):
             reader.observe_workflow()
 
+    def test_reused_workflow_reader_scope_mutated_at_final_read_refuses(self):
+        scope, run, contents = fixture()
+        transport = FakeTransport(scope, run, contents)
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "d" * 64
+            return shared
+        transport.scope = reused_scope
+        reader = adapter.WorkflowRunReadAdapter(
+            transport, 123, 101, 1, REV, SHA256, "c" * 64, NOW)
+        with self.assertRaises(adapter.Refused):
+            reader.observe_workflow()
+
     def test_redirect_duplicate_and_secret_exception_refuse(self):
         scope, run, contents = fixture()
         transport = FakeTransport(scope, run, contents)
