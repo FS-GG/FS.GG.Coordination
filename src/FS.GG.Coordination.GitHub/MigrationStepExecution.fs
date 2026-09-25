@@ -91,7 +91,15 @@ type MigrationDispatchOutcome =
     | Unknown
 
 [<RequireQualifiedAccess>]
-type MigrationAdvanceCut = NoCut | StopAfterIntent | StopAfterInFlight | StopAfterDispatch | StopAfterEffect
+type MigrationAdvanceCut =
+    | NoCut
+    | StopBeforeIntent
+    | StopAfterIntent
+    | StopAfterInFlight
+    | StopAfterDispatch
+    | StopAfterReadback
+    | StopBeforeReceipt
+    | StopAfterEffect
 
 [<RequireQualifiedAccess>]
 type MigrationAdvanceResult =
@@ -283,11 +291,15 @@ module MigrationStepExecution =
         let settle (authority: MigrationJournalAuthority) =
             if authority.Stage <> MigrationJournalStage.InFlight then
                 Error [ MigrationExecutionFailure.JournalConflict ]
+            elif cut = MigrationAdvanceCut.StopAfterReadback then
+                Ok(MigrationAdvanceResult.Interrupted "after-effect-readback-before-target-readback")
             elif cut = MigrationAdvanceCut.StopAfterEffect then
                 Ok(MigrationAdvanceResult.Interrupted "after-effect-before-receipt")
             else
                 match inspectEpoch step runtime, inspectFence step runtime, inspectTarget true step runtime with
                 | Error failures, _, _ | _, Error failures, _ | _, _, Error failures -> Error failures
+                | Ok _, Ok _, Ok _ when cut = MigrationAdvanceCut.StopBeforeReceipt ->
+                    Ok(MigrationAdvanceResult.Interrupted "after-target-readback-before-receipt")
                 | Ok _, Ok _, Ok _ ->
                     match runtime.PersistSettlement(authority.Generation, authority.Commit, step.OperationId, step.DesiredTargetSha256) with
                     | MigrationCasOutcome.Unknown -> Ok(MigrationAdvanceResult.Pending "settlement-outcome-unknown")
@@ -371,6 +383,8 @@ module MigrationStepExecution =
             | Ok _, Ok _, Ok None ->
                 match inspectTarget false step runtime with
                 | Error failures -> Error failures
+                | Ok _ when cut = MigrationAdvanceCut.StopBeforeIntent ->
+                    Ok(MigrationAdvanceResult.Interrupted "before-intent")
                 | Ok _ ->
                     match runtime.PersistIntent(step.JournalGeneration, step.JournalHead, step.OperationId, step.Seal) with
                     | MigrationCasOutcome.Unknown -> Ok(MigrationAdvanceResult.Pending "intent-outcome-unknown")
