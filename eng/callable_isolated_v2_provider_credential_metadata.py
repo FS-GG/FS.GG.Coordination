@@ -39,6 +39,8 @@ class CredentialMetadata:
     installation_id: int
     repository_id: int
     request_sha256: str
+    reader_principal_id: str
+    reader_credential_id: str
     schema: str = dataclasses.field(init=False, default=SCHEMA)
     authorized: bool = dataclasses.field(init=False, default=False)
     can_dispatch: bool = dataclasses.field(init=False, default=False)
@@ -163,4 +165,6 @@ def qualify(spec: RequestSpec, native: NativeCoordinates,
         raise Refused("credential-time-binding")
     return CredentialMetadata(selected_credential_id, selected_app_id,
                               native.installation_id, native.repository_id,
-                              spec.request_sha256)
+                              spec.request_sha256,
+                              selected_reader_principal,
+                              selected_reader_credential)
