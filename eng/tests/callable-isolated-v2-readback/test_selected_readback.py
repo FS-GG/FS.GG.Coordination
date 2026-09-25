@@ -215,6 +215,15 @@ class SelectedReadbackTests(unittest.TestCase):
         with self.assertRaisesRegex(readback.Refused, "protected-binding"):
             verify(packet, observed=observed)
 
+    def test_historical_disabled_workflow_digest_cannot_be_selected(self):
+        for digest in (readback.ORIGINAL_HELD_WORKFLOW_SHA256,
+                       readback.REFRESHED_HELD_WORKFLOW_SHA256):
+            with self.subTest(digest=digest):
+                packet = packet_fixture()
+                packet["workflow"]["sha256"] = digest
+                with self.assertRaisesRegex(readback.Refused, "selection-unselected"):
+                    verify(packet)
+
     def test_resealed_packet_cannot_swap_actor_run_artifact_or_image_selection(self):
         baseline = packet_fixture()
         selected = selection_fixture(baseline)

@@ -18,6 +18,11 @@ import validate_callable_isolated_v2_release_workflow as held
 SCHEMA = "fsgg.coordination.callable-isolated-v2-release-selection/1"
 CONTROLS_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-controls/1"
 DRAFT_HEAD = "55ca33b7b45fd81889ffbccb4fbd4939f352b7d3"
+ORIGINAL_HELD_WORKFLOW_SHA256 = "1aac83c07ad0c798bd946dfecc87d16924a94455c05b566d43b44eb70aa445b9"
+REFRESHED_HELD_WORKFLOW_SHA256 = "c486fe746ee88536897c277fc1cbcc320813c08d4b876dacb01adb78da759e93"
+HELD_WORKFLOW_SHA256S = frozenset({ORIGINAL_HELD_WORKFLOW_SHA256,
+                                    REFRESHED_HELD_WORKFLOW_SHA256,
+                                    held.WORKFLOW_SHA256})
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
 NO_GRANT_STDERR_SHA256 = hashlib.sha256(b"inspect-refused:inspect-arguments\n").hexdigest()
 UNKNOWN_STDERR_SHA256 = hashlib.sha256(b"inspect-only\n").hexdigest()
@@ -111,7 +116,7 @@ def _selection(raw: bytes, expected_sha256: str) -> dict[str, Any]:
             or release.HEX40.fullmatch(value["sourceTree"]) is None
             or value["sourceTree"] == "0" * 40
             or not _sha(value["workflowSha256"])
-            or value["workflowSha256"] == held.WORKFLOW_SHA256
+            or value["workflowSha256"] in HELD_WORKFLOW_SHA256S
             or value["archiveSha256"] != release.ARCHIVE_SHA256
             or value["manifestSha256"] != release.ZIPAPP_MANIFEST_SHA256
             or type(value["runnerImage"]) is not str
