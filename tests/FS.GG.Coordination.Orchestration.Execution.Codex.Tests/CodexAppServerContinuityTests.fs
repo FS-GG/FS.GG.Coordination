@@ -72,6 +72,12 @@ type CodexAppServerContinuityTests() =
     let completedWithMcpMetadata fields =
         completedWithMcpToolCall
             (",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":\"completed\"" + fields)
+    let completedWithDynamicToolCall fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"dynamicToolCall\"" + fields + "}]")
+    let completedWithDynamicMetadata fields =
+        completedWithDynamicToolCall
+            (",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\"" + fields)
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -579,6 +585,62 @@ type CodexAppServerContinuityTests() =
             Assert.Equal(
                 TerminalObserved("completed", 0),
                 status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool call requires arguments tool and schema status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"status\":\"completed\""
+              ",\"arguments\":{},\"tool\":\"t\""
+              ",\"arguments\":{},\"tool\":null,\"status\":\"completed\""
+              ",\"arguments\":{},\"tool\":\"t\",\"status\":\"declined\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool call nullable metadata rejects foreign shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"namespace\":17"
+              ",\"success\":\"true\""
+              ",\"durationMs\":1.5"
+              ",\"durationMs\":9223372036854775808"
+              ",\"contentItems\":{}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool content items require known discriminator and text or URL``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for content in
+            [ "null"
+              "{}"
+              "{\"type\":\"foreign\",\"text\":\"x\"}"
+              "{\"type\":\"inputText\"}"
+              "{\"type\":\"inputImage\",\"imageUrl\":null}"
+              "{\"type\":\"inputAudio\",\"audioUrl\":17}"
+              "{\"type\":\"inputText\",\"text\":\"a\",\"text\":\"b\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicMetadata (",\"contentItems\":[" + content + "]"))))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool schema payload retains terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"arguments\":null,\"tool\":\"\",\"status\":\"inProgress\""
+              ",\"arguments\":[],\"tool\":\"t\",\"status\":\"failed\",\"namespace\":null,\"success\":null,\"durationMs\":null,\"contentItems\":null"
+              ",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\",\"namespace\":\"n\",\"success\":true,\"durationMs\":9223372036854775807,\"contentItems\":[{\"type\":\"inputText\",\"text\":\"\"},{\"type\":\"inputImage\",\"imageUrl\":\"u\"},{\"type\":\"inputAudio\",\"audioUrl\":\"u\"}]" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicToolCall fields)))
             )
 
     [<Fact>]

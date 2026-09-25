@@ -233,6 +233,36 @@ module CodexAppServerContinuity =
             || value.ValueKind = JsonValueKind.True
             || value.ValueKind = JsonValueKind.False
 
+    let private validDynamicToolContentItem (content: JsonElement) =
+        if content.ValueKind <> JsonValueKind.Object then false
+        else
+            let names = content.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match content.TryGetProperty "type" with
+                | true, contentType when contentType.ValueKind = JsonValueKind.String ->
+                    let payloadName =
+                        match contentType.GetString() with
+                        | "inputText" -> Some "text"
+                        | "inputImage" -> Some "imageUrl"
+                        | "inputAudio" -> Some "audioUrl"
+                        | _ -> None
+                    match payloadName with
+                    | Some name ->
+                        match content.TryGetProperty name with
+                        | true, payload -> payload.ValueKind = JsonValueKind.String
+                        | _ -> false
+                    | None -> false
+                | _ -> false
+
+    let private validOptionalDynamicContentItems (item: JsonElement) =
+        match item.TryGetProperty "contentItems" with
+        | false, _ -> true
+        | true, content when content.ValueKind = JsonValueKind.Null -> true
+        | true, content when content.ValueKind = JsonValueKind.Array ->
+            content.EnumerateArray() |> Seq.forall validDynamicToolContentItem
+        | _ -> false
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -295,6 +325,19 @@ module CodexAppServerContinuity =
                                 && optionalNullableInt64 item "durationMs"
                                 && optionalNullableString item "mcpAppResourceUri"
                                 && optionalNullableString item "pluginId"
+                            | _ -> false
+                        | "dynamicToolCall" ->
+                            match item.TryGetProperty "arguments", item.TryGetProperty "tool",
+                                  item.TryGetProperty "status" with
+                            | (true, _), (true, tool), (true, status) ->
+                                tool.ValueKind = JsonValueKind.String
+                                && status.ValueKind = JsonValueKind.String
+                                && Set.contains (status.GetString())
+                                    (set [ "inProgress"; "completed"; "failed" ])
+                                && optionalNullableString item "namespace"
+                                && optionalNullableBoolean item "success"
+                                && optionalNullableInt64 item "durationMs"
+                                && validOptionalDynamicContentItems item
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
