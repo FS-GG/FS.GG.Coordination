@@ -1,0 +1,51 @@
+name: callable-isolated-v2-effect-release-proposal
+
+# Candidate source only. The job has two independent refusal gates.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: callable-isolated-v2-effect-release-proposal
+  cancel-in-progress: false
+
+jobs:
+  produce-closed-scaffold:
+    if: ${{ false }}
+    runs-on: [self-hosted, linux, x64, isolated-v2-release-unselected]
+    environment: callable-isolated-v2-release-unselected
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Refuse until protected source and runner are selected
+        shell: bash
+        run: exit 78
+
+      - name: Check out the selected workflow revision
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ github.sha }}
+
+      - name: Build the deterministic closed scaffold
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -S eng/build_callable_isolated_v2_effect_scaffold.py \
+            --output dist/fsgg-callable-isolated-v2-effect-scaffold.pyz \
+            --manifest dist/effect-scaffold-manifest.json
+          cmp -s work/fsc07-isolated-operator-v2/effect-scaffold-manifest.json \
+            dist/effect-scaffold-manifest.json
+
+      - name: Upload the closed scaffold only
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: fsgg-callable-isolated-v2-effect-scaffold.pyz
+          path: dist/fsgg-callable-isolated-v2-effect-scaffold.pyz
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
