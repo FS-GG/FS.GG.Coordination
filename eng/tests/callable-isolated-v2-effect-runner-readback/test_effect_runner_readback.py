@@ -46,7 +46,7 @@ class Port:
 
 def fixture():
     result = release.PreflightResult("a" * 40, "b" * 40,
-        "c" * 64, 404, SHA(ARCHIVE))
+        "c" * 64, 404, SHA(ARCHIVE), 202, 1, 303, 606, 505)
     selected = {"runId": 707, "runAttempt": 1, "runnerActorId": 808,
         "auditActorId": 1001,
         "auditEventId": 909, "imageDigest": "d" * 64,
