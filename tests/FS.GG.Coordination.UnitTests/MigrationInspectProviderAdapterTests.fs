@@ -136,6 +136,19 @@ let ``issue adapter refuses a captured continuation omitted by typed page proof`
                  MigrationInspectProviderAdapter.bindIssues options population changed)
 
 [<Fact>]
+let ``issue adapter refuses duplicate raw repository identity members`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let population, calls = readIssues [ repository; reply issueBody ]
+    for ambiguous in
+        [ """{"id":43,"id":42,"full_name":"FS-GG/copy"}"""
+          """{"id":42,"full_name":"FS-GG/foreign","full_name":"FS-GG/copy"}""" ] do
+        let changedCalls =
+            calls |> List.mapi (fun index (request, outcome) ->
+                if index = 0 then request, reply ambiguous else request, outcome)
+        Assert.Equal(Error "issue-capture-shape",
+                     MigrationInspectProviderAdapter.bindIssues options population changedCalls)
+
+[<Fact>]
 let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
     let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
     let extra =

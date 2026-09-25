@@ -178,6 +178,13 @@ before the repair. The shared relation response parser now refuses duplicate
 JSON members recursively for initial and continuation pages. This does not
 establish protected native capture or complete typed inspect authority.
 
+A twenty-fifth independent control found the raw-to-typed issue adapter
+could accept a captured repository identity response with conflicting
+duplicate `id` or `full_name` members while the typed issue population
+stayed unchanged. It was red before the repair. The binder now refuses
+duplicate JSON members before validating the repository identity response.
+Protected native repository observation remains outstanding.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
