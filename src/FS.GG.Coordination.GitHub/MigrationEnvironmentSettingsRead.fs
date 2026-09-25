@@ -149,6 +149,8 @@ module MigrationEnvironmentSettingsRead =
         let request = Rest { Method=Get; Uri=uri; Headers=headers options; Body=None
                              ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
         match transport.Send request with
+        | Response value when value.StatusCode = 200 && isNull value.Body ->
+            fail "missing:response-body"
         | Response value when value.StatusCode = 200 -> Ok value
         | Response value -> Error(MigrationReadFailure.HttpRefused value.StatusCode)
         | NetworkFailure | TimedOut -> Error MigrationReadFailure.TransportUnavailable

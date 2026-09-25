@@ -184,6 +184,15 @@ let ``environment source refuses unexpected custom-rule continuation`` () =
     Assert.Equal(5, transport.Requests.Length)
 
 [<Fact>]
+let ``environment source refuses null successful response without later requests`` () =
+    for prefixLength in 0 .. 5 do
+        let transport =
+            FakeTransport((success |> List.take prefixLength) @ [ reply 200 Map.empty null ])
+        Assert.Equal(Error(MigrationReadFailure.MalformedResponse "missing:response-body"),
+                     MigrationEnvironmentSettingsRead.read options transport)
+        Assert.Equal(prefixLength + 1, transport.Requests.Length)
+
+[<Fact>]
 let ``environment source refuses unknown or inconsistent branch policy`` () =
     let unknown = branches.Replace("\"type\":\"branch\"", "\"type\":\"unknown\"")
     let transport = FakeTransport [ ok repository; ok (list environment 1); ok environment; ok unknown ]
