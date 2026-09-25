@@ -124,12 +124,13 @@ let private verify pins marker snapshot attestation now =
         pins handoffPins marker snapshot attestation
         (Some (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
 
-let private inspectSignedWithHandoffClock (pins: ProtectedIssueCensusNativeAttestationPins)
+let private inspectSignedWithHeadAndClock (pins: ProtectedIssueCensusNativeAttestationPins)
                                           (marker: ProtectedIssueCensusHandoffRequest)
                                           (snapshot: ProtectedIssueCensusNativeAttemptSnapshot)
                                           (attestation: ProtectedIssueCensusNativeSnapshotAttestation option)
                                           (now: DateTimeOffset)
-                                          handoffClockResource handoffClockArtifact =
+                                          handoffClockResource handoffClockArtifact
+                                          readHead clockPort =
     let nativePins: ProtectedIssueCensusNativeAttemptPins =
         { AttemptResourceId=pins.NativeAttemptResourceId
           AttemptArtifactSha256=pins.NativeAttemptArtifactSha256 }
@@ -163,12 +164,18 @@ let private inspectSignedWithHandoffClock (pins: ProtectedIssueCensusNativeAttes
                   VaultArtifactSha256=handoffPins.VaultArtifactSha256
                   CandidateMayRead=false; CandidateMayWrite=false
                   AuthoritativeCompleteReadback=true }
-            member _.ReadHead() = Some snapshot.Head
+            member _.ReadHead() = readHead ()
             member _.ReadAttempts _ = Some snapshot }
     MigrationProtectedIssueCensusSignedRecovery.inspectSigned
-        pins attestation
-        (Some (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
+        pins attestation (Some clockPort)
         handoffPins nativePins marker (Some handoff) (Some native)
+
+let private inspectSignedWithHandoffClock pins marker snapshot attestation now
+                                          handoffClockResource handoffClockArtifact =
+    inspectSignedWithHeadAndClock pins marker snapshot attestation now
+        handoffClockResource handoffClockArtifact
+        (fun () -> Some snapshot.Head)
+        (clock pins.ClockResourceId pins.ClockArtifactSha256 now)
 
 let private inspectSigned pins marker snapshot attestation now =
     inspectSignedWithHandoffClock pins marker snapshot attestation now
@@ -178,6 +185,44 @@ let private inspectSigned pins marker snapshot attestation now =
 let ``native snapshot verifier accepts exact fake signed complete snapshot`` () =
     let pins, marker, snapshot, attestation, now = fixture ()
     Assert.Equal(Ok (), verify pins marker snapshot (Some attestation) now)
+
+[<Fact>]
+let ``signed recovery refuses native head advancing during attestation clock read`` () =
+    let pins, marker, snapshot, attestation, now = fixture ()
+    let mutable advanced = false
+    let mutable headReads = 0
+    let readHead () =
+        headReads <- headReads + 1
+        if advanced then Some { snapshot.Head with Generation=snapshot.Head.Generation + 1L }
+        else Some snapshot.Head
+    let advancingClock =
+        { new IProtectedIssueCensusClockPort with
+            member _.Describe() =
+                { ClockResourceId=pins.ClockResourceId
+                  ClockArtifactSha256=pins.ClockArtifactSha256
+                  CandidateMayRead=false; CandidateMayWrite=false; MonotonicUtc=true }
+            member _.ReadNow() =
+                advanced <- true
+                Some now }
+    Assert.Equal(Error "protected-census-attempt-head",
+                 inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
+                     pins.ClockResourceId pins.ClockArtifactSha256 readHead advancingClock)
+    Assert.True(headReads >= 3)
+
+[<Fact>]
+let ``signed recovery refuses lost final native head after signature validation`` () =
+    let pins, marker, snapshot, attestation, now = fixture ()
+    for readFinal in [ (fun () -> None)
+                       (fun () -> failwith "native read lost") ] do
+        let mutable headReads = 0
+        let readHead () =
+            headReads <- headReads + 1
+            if headReads < 3 then Some snapshot.Head else readFinal ()
+        Assert.Equal(Error "protected-census-attempt-unknown",
+                     inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
+                         pins.ClockResourceId pins.ClockArtifactSha256 readHead
+                         (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
+        Assert.Equal(3, headReads)
 
 [<Fact>]
 let ``native snapshot verifier refuses forged stale and foreign evidence`` () =

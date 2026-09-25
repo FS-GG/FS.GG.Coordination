@@ -24,4 +24,16 @@ module MigrationProtectedIssueCensusSignedRecovery =
                 match MigrationProtectedIssueCensusNativeAttestation.verify
                           attestationPins handoffPins expectedMarker snapshot attestation clock with
                 | Error reason -> Error reason
-                | Ok () -> Ok hold
+                | Ok () ->
+                    // The signed snapshot can be superseded while the protected clock
+                    // and signature are checked. Return no classification on a changed
+                    // or unavailable native head; this read is still hold-only.
+                    match nativePort with
+                    | None -> Error "protected-census-attempt-unknown"
+                    | Some native ->
+                        try
+                            match native.ReadHead() with
+                            | Some current when current = snapshot.Head -> Ok hold
+                            | Some _ -> Error "protected-census-attempt-head"
+                            | None -> Error "protected-census-attempt-unknown"
+                        with _ -> Error "protected-census-attempt-unknown"
