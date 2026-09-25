@@ -376,6 +376,56 @@ class VersionedReadbackTests(unittest.TestCase):
             expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_exact_pull_refuses_foreign_pull_object_url(self):
+        root = "https://api.github.com/repos/FS-GG/disposable/pulls/8"
+        for url in ("https://api.github.com/repos/FS-GG/foreign/pulls/8",
+                    "https://api.github.com/repos/FS-GG/disposable/pulls/9",
+                    root + "?alias=1", None, root):
+            with self.subTest(url=url):
+                pull = copy.deepcopy(pull_observed().pulls[0])
+                pull["url"] = url
+                observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+                result = operator.classify_pull_after_one_attempt(
+                    pull_expected(), lambda: observed)
+                if url == root:
+                    self.assertIsInstance(result, operator.ExactPull)
+                else:
+                    self.assert_unknown(result)
+
+    def test_native_pull_list_detail_refuses_object_url_drift(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        events = pull_read_events((pull,))
+        events[3]["response"]["json"][0]["url"] = (
+            "https://api.github.com/repos/FS-GG/foreign/pulls/8")
+        events[5]["response"]["json"]["url"] = (
+            "https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        reader = operator.NativeReadAdapter(
+            operator.OfflineTranscriptTransport(events))
+        with self.assertRaisesRegex(operator.Refused, "native-pull-list-detail-url-drift"):
+            reader.read_pull_census(pull_expected())
+        exact = "https://api.github.com/repos/FS-GG/disposable/pulls/8"
+        events = pull_read_events((pull,))
+        events[3]["response"]["json"][0]["url"] = exact
+        events[5]["response"]["json"]["url"] = exact
+        reader = operator.NativeReadAdapter(
+            operator.OfflineTranscriptTransport(events))
+        self.assertEqual(reader.read_pull_census(pull_expected()).pulls[0]["url"], exact)
+
+    def test_lost_response_foreign_pull_object_url_stays_unknown(self):
+        expected = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["url"] = "https://api.github.com/repos/FS-GG/foreign/pulls/8"
+        post = pull_read_events((pull,))
+        post[3]["response"]["json"][0]["url"] = pull["url"]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):

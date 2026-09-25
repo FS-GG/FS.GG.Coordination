@@ -338,6 +338,12 @@ class NativeReadAdapter:
             if (status != 200 or type(detail) is not dict
                     or detail.get("number") != number):
                 raise Refused("native-pull-detail-identity")
+            if (("url" in item) != ("url" in detail)
+                    or ("url" in detail and
+                        (type(detail["url"]) is not str
+                         or item["url"] != detail["url"]
+                         or detail["url"] != _pull_url(expected.repository, number)))):
+                raise Refused("native-pull-list-detail-url-drift")
             if (type(item.get("node_id")) is not str
                     or item["node_id"] != detail.get("node_id")):
                 raise Refused("native-pull-list-detail-node-drift")
@@ -614,6 +620,10 @@ def _same_repo(value: object, expected: ExpectedPull) -> bool:
                   f"https://api.github.com/repos/{expected.repository}")))
 
 
+def _pull_url(repository: str, number: int) -> str:
+    return f"https://api.github.com/repos/{repository}/pulls/{number}"
+
+
 def _two(read: Callable[[], object]):
     """An injected native reader supplies complete evidence; no write occurs."""
     try:
@@ -659,6 +669,9 @@ def classify_pull_after_one_attempt(
         if (type(head) is not dict or type(base) is not dict
                 or type(pull.get("number")) is not int or pull["number"] <= 0
                 or type(pull.get("node_id")) is not str or not pull["node_id"]
+                or ("url" in pull and
+                    (type(pull["url"]) is not str or pull["url"] !=
+                     _pull_url(expected.repository, pull["number"])))
                 or pull.get("state") != "open" or pull.get("draft") is not False
                 or pull.get("merged") is not False
                 or pull.get("title") != PULL_TITLE
