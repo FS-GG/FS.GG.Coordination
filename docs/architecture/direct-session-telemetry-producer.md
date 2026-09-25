@@ -68,6 +68,14 @@ distinguishes applied from durably received and unknown submission outcomes.
 Those types are useful source references, but the runner's WorkItem command and
 executor authority do not apply to a direct session.
 
+The dormant [`DirectSessionTelemetryFacts`](../../src/FS.GG.Coordination.Orchestration.Execution.Codex/DirectSessionTelemetryFacts.fs)
+mapper prepares a completed-turn usage envelope from supplied native facts and
+an exact workspace/item assignment. Its tests compare the output shape with the
+runner fixture and refuse missing native IDs, invalid counters and mismatched
+bindings. The mapper has no current-session event hook, authenticated assignment,
+start or continuity journal, publisher, or applied Host receipt. Its output is
+structural evidence only and is not an installed producer.
+
 ## Capability and evidence handoff
 
 The missing interface is a supported, authenticated event stream for the
