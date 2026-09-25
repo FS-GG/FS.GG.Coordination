@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open Xunit
 open FS.GG.Coordination.GitHub
 
@@ -18,8 +19,10 @@ let private page path =
 
 let private claimBody = "<!-- fsgg:claim worker=worker-1 lease=30 renewed=1 -->"
 let private comment body =
+    let commentRaw =
+        $"""{{"id":201,"node_id":"IC_201","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/1","body":{JsonSerializer.Serialize body}}}"""
     { DatabaseId=201L; NodeId="IC_201"; SubjectNumber=1; ActorLogin="worker-1"
-      CreatedAt=stamp; UpdatedAt=stamp; Body=body; PayloadJson=raw; PayloadSha256=sha raw }
+      CreatedAt=stamp; UpdatedAt=stamp; Body=body; PayloadJson=commentRaw; PayloadSha256=sha commentRaw }
 
 let private native body =
     let input : MigrationNativeActivityInput =

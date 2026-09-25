@@ -66,7 +66,37 @@ module MigrationClaimEventCapture =
 
     let private distinct rows = (rows |> Set.ofList).Count = rows.Length
 
-    let private markerFor subjectNodeId (comment: MigrationIssueCommentRecord) =
+    let private jsonString (root: JsonElement) (name: string) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        if root.TryGetProperty(name, &property) && property.ValueKind = JsonValueKind.String then
+            let value = property.GetString()
+            if String.IsNullOrWhiteSpace value then None else Some value
+        else None
+
+    let private rawCommentMatches repositoryFullName (comment: MigrationIssueCommentRecord) =
+        try
+            use document = JsonDocument.Parse comment.PayloadJson
+            let root = document.RootElement
+            let mutable number = 0L
+            let mutable idProperty = Unchecked.defaultof<JsonElement>
+            let expectedPath =
+                $"/repos/{repositoryFullName}/issues/{comment.SubjectNumber}"
+            match jsonString root "issue_url" with
+            | None -> false
+            | Some issueUrl ->
+                let mutable uri = Unchecked.defaultof<Uri>
+                root.TryGetProperty("id", &idProperty)
+                && idProperty.ValueKind = JsonValueKind.Number
+                && idProperty.TryGetInt64(&number)
+                && number = comment.DatabaseId
+                && jsonString root "node_id" = Some comment.NodeId
+                && jsonString root "body" = Some comment.Body
+                && Uri.TryCreate(issueUrl, UriKind.Absolute, &uri)
+                && uri.Scheme = Uri.UriSchemeHttps
+                && uri.AbsolutePath = expectedPath
+        with _ -> false
+
+    let private markerFor repositoryFullName subjectNodeId (comment: MigrationIssueCommentRecord) =
         let body = comment.Body
         let matchResult = markerRegex.Match body
         let startsFsgg = Regex.IsMatch(body, @"\A<!--\s*fsgg:", RegexOptions.CultureInvariant)
@@ -90,7 +120,8 @@ module MigrationClaimEventCapture =
                             not (String.IsNullOrWhiteSpace worker)
                             && Int32.TryParse(lease, &minutes) && minutes > 0
                         | _ -> false
-                if residue <> "" || not (distinct keys) || not claimValid then
+                if residue <> "" || not (distinct keys) || not claimValid
+                   || not (rawCommentMatches repositoryFullName comment) then
                     Error(InvalidMarker comment.NodeId)
                 else
                     Ok(Some
@@ -100,7 +131,7 @@ module MigrationClaimEventCapture =
                           Kind=kind
                           BodySha256=shaText body })
 
-    let private markers (native: MigrationNativeActivityCapture) =
+    let private markers repositoryFullName (native: MigrationNativeActivityCapture) =
         let issueRows =
             native.Input.IssueComments
             |> List.collect (fun stream -> stream.Comments |> List.map (fun comment -> stream.SubjectNodeId, comment))
@@ -110,16 +141,9 @@ module MigrationClaimEventCapture =
         (issueRows @ prRows)
         |> List.fold (fun state (nodeId, comment) ->
             state |> Result.bind (fun found ->
-                markerFor nodeId comment
+                markerFor repositoryFullName nodeId comment
                 |> Result.map (function Some marker -> marker :: found | None -> found))) (Ok [])
         |> Result.map List.rev
-
-    let private jsonString (root: JsonElement) (name: string) =
-        let mutable property = Unchecked.defaultof<JsonElement>
-        if root.TryGetProperty(name, &property) && property.ValueKind = JsonValueKind.String then
-            let value = property.GetString()
-            if String.IsNullOrWhiteSpace value then None else Some value
-        else None
 
     let private jsonInt64 (root: JsonElement) (name: string) =
         let mutable property = Unchecked.defaultof<JsonElement>
@@ -170,7 +194,7 @@ module MigrationClaimEventCapture =
             | Error reason -> fail (NativeFailure reason)
             | Ok verified when verified <> native.Snapshot -> fail (NativeFailure(MigrationReadFailure.SnapshotMismatch "native-seal"))
             | Ok verified ->
-                match markers native with
+                match markers declaration.RepositoryFullName native with
                 | Error reason -> fail reason
                 | Ok markerRows ->
                     let markerIds = markerRows |> List.map _.CommentNodeId
