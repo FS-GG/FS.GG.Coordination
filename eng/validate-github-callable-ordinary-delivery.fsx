@@ -113,7 +113,7 @@ let units = JsonDocument.Parse(File.ReadAllBytes(path "eng/github-substrate-v2-u
 let unit =
     units.RootElement.GetProperty("units").EnumerateArray()
     |> Seq.find (fun value -> value.GetProperty("id").GetString() = "GS2-09.9")
-if unit.GetProperty("contractSha256").GetString() <> "7c247e89200b7307a3281c0a8800f796219b22328a912c6f6bdd937a4cda8bf0" then
+if unit.GetProperty("contractSha256").GetString() <> "8d74fd733b10b35e3bc765a769115d0b0fca530472fba6608481370dbbdb2d4b" then
     failwith "GS2-09.9 contract digest drift"
 
 let testOutput =
