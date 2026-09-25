@@ -20,11 +20,11 @@ MEMBERS = {
         "eng/callable_isolated_v2_effect_closed.py",
     "callable_isolated_v2_effect_candidate.py":
         "eng/callable_isolated_v2_effect_candidate.py",
-    "callable_isolated_native_v2.py": "eng/callable-cli-isolated-operation-v2.py",
+    "native-v2.source": "eng/callable-cli-isolated-operation-v2.py",
 }
 PINNED_MEMBERS = {
     "__main__.py": "4b3ef835e4b998e374cfe61b886e07981aeab94cb0ff4262ee549c3ce693e0e7",
-    "callable_isolated_native_v2.py":
+    "native-v2.source":
         "095b465abd509127b4363f101be90ce76dde661a8abeb6aadb066041327b0ab2",
     "callable_isolated_v2_effect_candidate.py":
         "9d156f8447bda006829be5b524d21e721c173f60f39d9bdee7a7749e82185a91",
