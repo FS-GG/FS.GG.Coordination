@@ -26,6 +26,7 @@ mkdir -p "$evidence"
 [[ -n "${FSGG_SANDBOX_TOKEN:-}" ]] || { echo 'GSQ-LIVE-AUTHORITY: non-production token is missing' >&2; exit 1; }
 python3 "$(dirname "${BASH_SOURCE[0]}")/validate-github-sandbox-mint-proof.py"
 export GH_TOKEN="$FSGG_SANDBOX_TOKEN"
+export GH_HOST=github.com
 
 sha256_text() { printf '%s' "$1" | sha256sum | cut -d' ' -f1; }
 api_json() { gh api "$@"; }

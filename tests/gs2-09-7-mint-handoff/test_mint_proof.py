@@ -45,7 +45,7 @@ class MintProofHandoffTests(unittest.TestCase):
         self.path = self.directory / "mint-grants.json"
         self.calls = self.directory / "gh-called"
         stub = self.directory / "gh"
-        stub.write_text("#!/bin/sh\nprintf called > \"$FSGG_TEST_GH_CALLS\"\nexit 91\n")
+        stub.write_text("#!/bin/sh\nprintf '%s' \"$GH_HOST\" > \"$FSGG_TEST_GH_CALLS\"\nexit 91\n")
         stub.chmod(0o700)
         self.environment = dict(os.environ)
         self.environment.update({
@@ -87,6 +87,13 @@ class MintProofHandoffTests(unittest.TestCase):
         result = self.run_validator()
         self.assertEqual(0, result.returncode, result.stderr)
         self.assertIn("handoff consistent", result.stdout)
+        self.assertNotIn(TOKEN, result.stdout + result.stderr)
+
+    def test_valid_proof_pins_provider_host_before_first_call(self):
+        self.environment["GH_HOST"] = "foreign.example.invalid"
+        result = self.run_live()
+        self.assertNotEqual(0, result.returncode)
+        self.assertEqual("github.com", self.calls.read_text())
         self.assertNotIn(TOKEN, result.stdout + result.stderr)
 
     def test_missing_proof_refuses_live_route_before_provider(self):
