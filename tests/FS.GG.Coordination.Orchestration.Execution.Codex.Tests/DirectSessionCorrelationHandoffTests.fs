@@ -99,6 +99,29 @@ type DirectSessionCorrelationHandoffTests() =
             Assert.False(sourceRead)
 
     [<Fact>]
+    member _.``equal malformed scope refuses before assignment or current source read``() =
+        for malformed in
+            [ { scope with Repository = "FS-GG"; IssueRef = "FS-GG#123" }
+              { scope with IssueRef = "FS-GG/other#123" }
+              { scope with BindingDigest = "not-a-digest" } ] do
+            let mutable assignmentReads = 0
+            let mutable sourceReads = 0
+            let assignmentReader =
+                { new IDirectSessionAssignmentAuthenticator with
+                    member _.ReadAuthorizedAssignment() =
+                        assignmentReads <- assignmentReads + 1
+                        Ok { assigned with Scope = malformed } }
+            let currentReader =
+                { new IDirectSessionCurrentTurnSource with
+                    member _.ReadCurrentTurn() =
+                        sourceReads <- sourceReads + 1
+                        Ok { current with CompletedTurn = { current.CompletedTurn with SourceBinding = malformed } } }
+            refused "direct-session-assignment-scope-invalid"
+                (DirectSessionCorrelationHandoff.prepare malformed assignmentReader currentReader)
+            Assert.Equal(0, assignmentReads)
+            Assert.Equal(0, sourceReads)
+
+    [<Fact>]
     member _.``window challenge and native thread cannot be borrowed``() =
         refused "direct-session-window-mismatch"
             (run scope (Ok assigned)
