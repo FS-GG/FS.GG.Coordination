@@ -238,6 +238,23 @@ class ReleasePreflightTests(unittest.TestCase):
             preflight.qualify(left, right, REVISION, TREE, 101, 202, 1,
                               303, 404, 606, 505, NOW)
 
+    def test_byte_verifier_result_requires_exact_verified_contract(self):
+        valid = {"schema": "fsgg.coordination.callable-isolated-v2-effect-byte-check/1",
+                 "verified": True, "authorized": False, "canDispatch": False}
+        for result in ({**valid, "verified": False},
+                       {**valid, "verified": 1},
+                       {**valid, "schema": "foreign-byte-check/1"},
+                       {key: value for key, value in valid.items()
+                        if key != "verified"},
+                       {**valid, "liveEffects": 1},
+                       None):
+            with self.subTest(result=result):
+                with mock.patch.object(preflight.bytes_check, "verify",
+                                       return_value=result):
+                    with self.assertRaisesRegex(
+                            preflight.Refused, "release-byte-check"):
+                        self.observe()
+
 
 if __name__ == "__main__":
     unittest.main()
