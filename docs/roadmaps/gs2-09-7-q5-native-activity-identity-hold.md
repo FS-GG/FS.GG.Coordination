@@ -110,6 +110,12 @@ It was red before the repair. The issue type reader now shares the recursive
 GraphQL member check with native relation reads before interpreting type or
 pagination facts. Complete native inspect authority remains outstanding.
 
+A fifteenth independent control found the project item GraphQL reader could
+accept duplicate raw content `__typename`, repository `databaseId` or
+`hasNextPage` members into typed inventory. It was red before the repair.
+`readProjectItems` now checks recursive member uniqueness before interpreting
+item identity, content or pagination. This remains partial project evidence.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
