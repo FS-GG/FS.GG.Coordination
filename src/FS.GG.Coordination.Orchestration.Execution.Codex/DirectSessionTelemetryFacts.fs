@@ -57,6 +57,8 @@ module DirectSessionTelemetryFacts =
     let private repositoryName =
         Regex("^[A-Za-z0-9][A-Za-z0-9-]*/[A-Za-z0-9._-]+$", RegexOptions.CultureInvariant)
     let private hexDigest = Regex("^[0-9a-fA-F]{64}$", RegexOptions.CultureInvariant)
+    let private nonTurnProvenance =
+        set [ "thread-last-total-snapshot"; "exec-child-turn-completed"; "one-upstream-response" ]
 
     let private text maximum (value: string) =
         not (String.IsNullOrWhiteSpace value)
@@ -112,6 +114,8 @@ module DirectSessionTelemetryFacts =
         elif observed.Usage.TurnId |> Option.forall (text 256 >> not) then
             Error "direct-session-native-turn-id-missing"
         elif not (text 256 observed.CounterProvenance) then Error "direct-session-provenance-missing"
+        elif Set.contains observed.CounterProvenance nonTurnProvenance then
+            Error "direct-session-provenance-not-completed-turn"
         elif not (validUsage observed.Usage) then Error "direct-session-usage-invalid"
         else
             let turn = observed.Usage
