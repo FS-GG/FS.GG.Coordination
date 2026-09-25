@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
-"""One-shot post-genesis CAS process handoff for an already planned admission.
+"""Import-only post-genesis CAS handoff for an already planned admission.
 
-The public typed CAS plan arrives on stdin. A short-lived ordinary-App JWT may
-arrive only through inherited FD 3, which must be a pipe or socket. This process
+The public typed CAS plan is supplied by the typed service. A short-lived
+ordinary-App JWT may arrive only through an inherited pipe or socket FD. This module
 cannot invent a MutationContext or prove admission: every provider response,
 including a success or failure, remains unknown until the typed service reads
 the complete journal again. No private key, JWT, or installation token is
-accepted through arguments, environment, or a file.
+accepted through arguments, environment, or a file. It has no standalone writer
+entry point; a separately qualified service must call `execute`.
 """
 
 from __future__ import annotations
@@ -95,19 +96,3 @@ def execute(raw_plan: bytes, jwt_fd: int = 3,
         pass
     return {"schema": "fsgg.v1-admission-cas-process-result/1",
             "outcome": "response-unknown"}
-
-
-def main() -> int:
-    require(len(sys.argv) == 1, "admission-cas-process-arguments")
-    raw = sys.stdin.buffer.read(MAX_PLAN + 1)
-    result = execute(raw)
-    sys.stdout.write(json.dumps(result, sort_keys=True, separators=(",", ":")) + "\n")
-    return 0
-
-
-if __name__ == "__main__":
-    try:
-        sys.exit(main())
-    except (cas.Refused, OSError, ValueError, TypeError):
-        print("v1 admission CAS process refused", file=sys.stderr)
-        sys.exit(3)
