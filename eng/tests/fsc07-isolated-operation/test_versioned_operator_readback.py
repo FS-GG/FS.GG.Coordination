@@ -863,12 +863,33 @@ class VersionedReadbackTests(unittest.TestCase):
                 self.assert_unknown(operator.classify_pull_after_one_attempt(
                     pull_expected(), lambda: next(reads),
                     provider_response=response))
-        for response in ({"status": 200}, {"status": 500},
+        for response in ({"status": 500},
                          {"status": "lost"}):
             reads = iter((pull_observed(), pull_observed()))
             self.assertIsInstance(operator.classify_pull_after_one_attempt(
                 pull_expected(), lambda: next(reads),
                 provider_response=response), operator.ExactPull)
+
+    def test_direct_pull_success_response_must_match_native_identity(self):
+        complete = dict(pull_observed().pulls[0],
+                        url="https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        for response in ({"status": 201, "body": complete},
+                         operator.HttpResponse(201, (), json.dumps(complete).encode())):
+            with self.subTest(positive=type(response).__name__):
+                self.assertIsInstance(operator.classify_pull_after_one_attempt(
+                    pull_expected(), pull_observed,
+                    provider_response=response), operator.ExactPull)
+        wrong_head = copy.deepcopy(complete)
+        wrong_head["head"]["sha"] = SHA_C
+        wrong_number = dict(complete, number=9)
+        for response in ({"status": 201},
+                         {"status": 201, "body": wrong_head},
+                         {"status": 201, "body": wrong_number},
+                         operator.HttpResponse(201, (), b'{"number":8,"number":9}')):
+            with self.subTest(negative=repr(response)[:80]):
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(), pull_observed,
+                    provider_response=response))
 
     def test_pull_rejects_wrong_head_base_repo_and_identity(self):
         observed = pull_observed()
@@ -997,6 +1018,34 @@ class VersionedReadbackTests(unittest.TestCase):
         result = operator.run_protection_once(protection_expected(), transport,
                                               reserve_once_factory())
         self.assertIsInstance(result, operator.ExactProtection)
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_success_response_foreign_pull_identity_stays_unknown(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         value={"number": 9, "node_id": "PR_9"}, status=201)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_success_response_exact_pull_identity_stays_exact(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        response_pull = dict(pull, url=
+                             "https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         value=response_pull, status=201)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assertIsInstance(operator.run_pull_once(
+            expected, transport, reserve_once_factory()), operator.ExactPull)
         self.assertEqual(transport.writes, 1)
 
     def test_q3_loopback_http_pull_and_protection(self):
