@@ -16,7 +16,8 @@ let private raw = "{}"
 let private rawDigest = digest raw
 
 let private page path =
-    { RequestedUri="https://api.github.test/" + path
+    let query = if path = "issues" || path = "pulls" then "?state=all&per_page=100" else "?per_page=100"
+    { RequestedUri="https://api.github.test/repos/FS-GG/copy/" + path + query
       PayloadSha256=rawDigest; NextUri=None }
 
 let private issue =
@@ -153,6 +154,18 @@ let ``nonterminal and disconnected page chains refuse`` () =
     assertRefused "stream-pages" { input with IssueComments=[ { first with Terminal=false } ] }
     let badPage = { first.Pages.Head with NextUri=Some "https://api.github.test/absent" }
     assertRefused "stream-pages" { input with IssueComments=[ { first with Pages=[ badPage ] } ] }
+
+[<Fact>]
+let ``native activity refuses a stream page from another repository`` () =
+    let input = sample ()
+    let stream = input.IssueEvents.Head
+    for foreign in
+        [ "https://api.github.test/repos/FS-GG/other/issues/1/events?per_page=100"
+          "https://foreign.example/repos/FS-GG/copy/issues/1/events?per_page=100"
+          "https://api.github.test/repos/FS-GG/copy/issues/2/events?per_page=100" ] do
+        let foreignPage = { stream.Pages.Head with RequestedUri=foreign }
+        assertRefused "stream-pages"
+            { input with IssueEvents=[ { stream with Pages=[ foreignPage ] } ] }
 
 [<Fact>]
 let ``missing issue census page proof refuses and changed proof changes digest`` () =

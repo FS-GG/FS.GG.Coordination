@@ -18,6 +18,17 @@ checks uniqueness across census and activity records together and refuses
 blank activity node IDs. This remains a typed-capture consistency check;
 it does not prove that the typed records were parsed from provider bytes.
 
+A third independent control showed that a self-consistent event stream page
+from another repository could pass typed reconciliation. It was red before
+the repair. Reconciliation now derives the repository path and API origin from
+the first canonical issue-census page and requires every issue, PR and stream
+page to remain on the corresponding repository and subject path. Controlled
+cases refuse a foreign repository, foreign host and wrong issue number. This
+checks request scope within the captured input; it cannot independently
+prove the initial census belongs to an admitted sandbox or that page hashes
+match retained raw response bytes. The provider reader and future
+raw-to-typed inspect adapter still owe those proofs.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

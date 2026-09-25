@@ -61,6 +61,45 @@ module MigrationNativeActivity =
                 (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f')))))
         && linked pages
 
+    let private pagesWithinCensusScope (input: MigrationNativeActivityInput) =
+        match input.Issues.Pages with
+        | [] -> false
+        | first :: _ ->
+            let mutable censusUri = Unchecked.defaultof<Uri>
+            if not (Uri.TryCreate(first.RequestedUri, UriKind.Absolute, &censusUri))
+               || not (censusUri.AbsolutePath.EndsWith("/issues", StringComparison.Ordinal)) then false
+            else
+                let rootPath = censusUri.AbsolutePath.Substring(0, censusUri.AbsolutePath.Length - "/issues".Length)
+                let segments = rootPath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+                if segments.Length < 3 || segments.[segments.Length - 3] <> "repos"
+                   || String.IsNullOrWhiteSpace segments.[segments.Length - 2]
+                   || String.IsNullOrWhiteSpace segments.[segments.Length - 1] then false
+                else
+                    let origin = censusUri.GetLeftPart(UriPartial.Authority)
+                    let scoped pages path alternate =
+                        pages |> List.forall (fun page ->
+                            let mutable uri = Unchecked.defaultof<Uri>
+                            Uri.TryCreate(page.RequestedUri, UriKind.Absolute, &uri)
+                            && uri.Scheme = Uri.UriSchemeHttps
+                            && uri.GetLeftPart(UriPartial.Authority) = origin
+                            && uri.Fragment = ""
+                            && (uri.AbsolutePath = path || alternate = Some uri.AbsolutePath))
+                    let issuePath = rootPath + "/issues"
+                    let pullPath = rootPath + "/pulls"
+                    scoped input.Issues.Pages issuePath (Some $"/repositories/{input.Issues.RepositoryId}/issues")
+                    && scoped input.PullRequests.Pages pullPath
+                        (Some $"/repositories/{input.PullRequests.RepositoryId}/pulls")
+                    && (input.IssueComments |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None))
+                    && (input.IssueEvents |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/events" None))
+                    && (input.PullRequestComments |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None))
+                    && (input.PullRequestReviews |> List.forall (fun stream ->
+                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/reviews" None))
+                    && (input.PullRequestInlineComments |> List.forall (fun stream ->
+                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/comments" None))
+
     let private framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
     let reconcile (input: MigrationNativeActivityInput) =
@@ -159,7 +198,8 @@ module MigrationNativeActivity =
                  not (payloadValid pullRequest.PayloadJson pullRequest.PayloadSha256)) then
             fail "census-payload"
         elif not inputPopulations then fail "stream-population"
-        elif not allPageSets || not allStreamsTerminal then fail "stream-pages"
+        elif not allPageSets || not allStreamsTerminal || not (pagesWithinCensusScope input) then
+            fail "stream-pages"
         elif not allStreamsBound then fail "stream-binding-or-payload"
         elif not (unique (censusNodes @ activityNodes))
              || (activityNodes |> List.exists String.IsNullOrWhiteSpace) then
