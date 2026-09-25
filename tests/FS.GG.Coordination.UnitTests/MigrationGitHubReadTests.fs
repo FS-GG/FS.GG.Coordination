@@ -1502,6 +1502,22 @@ let ``native relation reader refuses missing reciprocal edge`` () =
                  MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport)
 
 [<Fact>]
+let ``native relation reader refuses duplicate raw initial and continuation identities`` () =
+    let first = relationReply "ISSUE_1" 1 None [] [] []
+    let duplicateRepository =
+        first.Replace("\"repository\":{\"databaseId\":42}",
+                      "\"repository\":{\"databaseId\":42,\"databaseId\":77}")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:databaseId"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ())
+                     (FakeTransport [ ok Map.empty duplicateRepository ]))
+    let initial = relationInitialBlocking (relationPage [relationNode "EXTERNAL_A" 77L] 2 true (Some "cursor-1"))
+    let continuationSource = relationContinuationBlocking (relationPage [relationNode "EXTERNAL_B" 77L] 2 false None)
+    let continuation = continuationSource.Replace("\"totalCount\":2", "\"totalCount\":2,\"totalCount\":3")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:totalCount"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ())
+                     (FakeTransport [ ok Map.empty initial; ok Map.empty continuation ]))
+
+[<Fact>]
 let ``native relation reader refuses nested truncation and partial GraphQL data`` () =
     let empty = relationConnection [] false
     let truncated = relationConnection [relationNode "ISSUE_2" 42L] true

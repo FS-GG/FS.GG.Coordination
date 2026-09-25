@@ -97,6 +97,13 @@ produce typed comment evidence. It was red before the repair.
 `readPullRequestReviewComments` now refuses duplicate root members before
 parsing an inline review comment. This remains partial native activity evidence.
 
+A thirteenth independent control found the native relation reader could
+accept duplicate raw repository IDs on an initial GraphQL response and
+duplicate connection counts on a continuation. It was red before the repair.
+Both relation response paths now reject duplicate JSON members recursively
+before interpreting node, endpoint, connection or page facts. This does not
+provide the missing protected native observer or complete typed inspect proof.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
