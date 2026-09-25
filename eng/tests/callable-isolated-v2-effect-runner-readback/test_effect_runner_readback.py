@@ -79,6 +79,8 @@ def fixture():
         "after": copy.deepcopy(obj), "archiveBytes": ARCHIVE,
         "argv": ["python3", "-I", "-S", PATH, "execute-native-pull"],
         "exitCode": 78, "stdout": REFUSAL, "stderr": b"",
+        "commandStartedAt": "2026-09-25T11:57:45Z",
+        "commandCompletedAt": "2026-09-25T11:57:50Z",
         "observedAt": "2026-09-25T11:58:00Z"}
     audit = {"schema": readback.AUDIT_SCHEMA, "complete": True,
         "principalId": "audit-reader", "credentialId": "3" * 64,
@@ -126,6 +128,7 @@ class RunnerReadbackTests(unittest.TestCase):
         self.assertEqual(result.audit_actor_id, 1001)
         self.assertEqual(result.approval_event_id, 505)
         self.assertEqual(result.approved_at, "2026-09-25T11:57:30Z")
+        self.assertEqual(result.command_started_at, "2026-09-25T11:57:45Z")
         self.assertFalse(hasattr(readback, "dispatch"))
 
     def test_installed_refusal_without_immutable_review_witness_refuses(self):
@@ -159,6 +162,33 @@ class RunnerReadbackTests(unittest.TestCase):
                 with self.assertRaises(readback.Refused):
                     readback.qualify(preflight, runner, audit, selection, NOW,
                                      approval_witness=checked)
+
+    def test_probe_without_command_execution_times_refuses(self):
+        preflight, selection, runner, audit = fixture()
+        runner.record.pop("commandStartedAt")
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+        preflight, selection, runner, audit = fixture()
+        runner.record.pop("commandCompletedAt")
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+        preflight, selection, runner, audit = fixture()
+        runner.record["commandStartedAt"] = "2026-09-25T11:57:00Z"
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+        preflight, selection, runner, audit = fixture()
+        runner.record["commandCompletedAt"] = "2026-09-25T11:57:40Z"
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
+        preflight, selection, runner, audit = fixture()
+        runner.record["commandCompletedAt"] = "2026-09-25T11:58:30Z"
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
 
     def test_selected_source_runtime_and_object_drift_refuse(self):
         for key, value in (("runId", 708), ("runAttempt", 2),
