@@ -17,6 +17,13 @@ locally selected CLI model/effort, not a claim about backend routing. Complete t
 normalized with JSONL provenance; missing or malformed usage stays unknown. Subscription execution
 has no per-invocation price here, so cost is not applicable rather than zero.
 
+`DirectSessionTelemetryFacts` is a dormant, pure mapper for a separately observed direct-session
+completed turn. It requires an exact supplied assignment and native turn ID, and prepares the
+existing `fsgg.telemetry.ingest/1` usage shape with a workspace/item correlation sidecar. It does
+not observe the current interactive session, authenticate the assignment, submit a batch, or prove
+an applied Host receipt. The [direct-session boundary](../../docs/architecture/direct-session-telemetry-producer.md)
+describes those remaining requirements.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
