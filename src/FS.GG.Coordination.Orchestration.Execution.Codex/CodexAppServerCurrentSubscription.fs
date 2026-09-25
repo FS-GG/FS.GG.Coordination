@@ -27,6 +27,7 @@ type CodexAppServerReservedSubscription =
         Reservation: DirectSessionChallengeReservationReceipt
         Binding: CodexAppServerSubscriptionBinding
         SubscribedAt: DateTimeOffset
+        ValidatedAt: DateTimeOffset
     }
 
 [<RequireQualifiedAccess>]
@@ -118,7 +119,7 @@ module CodexAppServerCurrentSubscription =
                                     gap "app-server-current-subscription-challenge-mismatch"
                                 | Ok _ when observation.NativeThreadId <> expectedScope.ThreadId ->
                                     gap "app-server-current-subscription-thread-mismatch"
-                                | Ok _ ->
+                                | Ok observedNow ->
                                     let bindingAdapter =
                                         { new ICodexAppServerSubscriptionAuthenticator with
                                             member _.ReadBoundSubscription() = Ok observation.Binding }
@@ -130,4 +131,5 @@ module CodexAppServerCurrentSubscription =
                                         Ok
                                             { Reservation = receipt
                                               Binding = observation.Binding
-                                              SubscribedAt = observation.SubscribedAt }
+                                              SubscribedAt = observation.SubscribedAt
+                                              ValidatedAt = observedNow }

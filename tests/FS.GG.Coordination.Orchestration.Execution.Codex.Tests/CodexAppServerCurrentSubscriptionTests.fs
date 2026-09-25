@@ -82,6 +82,7 @@ type CodexAppServerCurrentSubscriptionTests() =
             Assert.Equal(challenge, selected.Reservation.Request.Challenge)
             Assert.Equal(scope.ItemId, selected.Binding.Scope.ItemId)
             Assert.Equal(binding.ConnectionId, selected.Binding.ConnectionId)
+            Assert.Equal(postNow, selected.ValidatedAt)
         | other -> failwithf "unexpected subscription refusal %A" other
 
     [<Fact>]

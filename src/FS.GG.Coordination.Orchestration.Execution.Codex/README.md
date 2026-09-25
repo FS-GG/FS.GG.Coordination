@@ -87,7 +87,8 @@ prove that a selected turn began after subscription or produce completed-turn us
 reservation, a future authenticated journal reader must provide the first append receipt and its
 observation time. The gate checks the same native session and challenge, a first entry with no
 predecessor, exact binding and connection, canonical bytes and digest, and a native `turn/started`
-for the selected thread and turn after subscription. Source, clock and receipt failures burn the
+for the selected thread and turn after subscription. It retains the subscription validation clock
+and refuses a first-start clock that regresses below it. Source, clock and receipt failures burn the
 reservation. No trusted journal reader or native transport is installed; the result does not
 establish a complete turn, usage or an applied Host receipt.
 
