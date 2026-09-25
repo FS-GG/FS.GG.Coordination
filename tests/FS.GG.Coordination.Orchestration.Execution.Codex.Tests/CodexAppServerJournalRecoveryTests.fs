@@ -59,7 +59,8 @@ type CodexAppServerJournalRecoveryTests() =
 
     [<Fact>]
     member _.``sealed authored start usage terminal chain yields only provisional status``() =
-        Assert.Equal(Ok(ProvisionalTerminal("completed", 1)), recover (snapshot [ first; second; third ]))
+        let digest = SHA256.HashData usage |> Convert.ToHexString |> fun value -> value.ToLowerInvariant()
+        Assert.Equal(Ok(ProvisionalTerminal("completed", 1, [ digest ])), recover (snapshot [ first; second; third ]))
 
     [<Fact>]
     member _.``omitted tail and missing terminal refuse``() =

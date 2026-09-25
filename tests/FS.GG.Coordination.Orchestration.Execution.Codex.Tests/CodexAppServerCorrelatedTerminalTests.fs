@@ -119,6 +119,11 @@ type CodexAppServerCorrelatedTerminalTests() =
             Assert.Equal(third.EntryId, result.SealedHeadEntryId)
             Assert.Equal("completed", result.TerminalStatus)
             Assert.Equal(1, result.UsageUpdateCount)
+            let usageDigest =
+                SHA256.HashData(fixture "usage-updated.json")
+                |> Convert.ToHexString
+                |> fun value -> value.ToLowerInvariant()
+            Assert.Equal([ usageDigest ], result.UsageWireSha256s)
         | other -> failwithf "unexpected correlation refusal %A" other
 
     [<Fact>]

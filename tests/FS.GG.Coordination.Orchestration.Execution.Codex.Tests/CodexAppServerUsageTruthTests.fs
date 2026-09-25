@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Codex.Tests
 
 open System
 open System.IO
+open System.Security.Cryptography
 open FS.GG.Coordination.Orchestration.Execution.Codex
 open Xunit
 
@@ -32,13 +33,20 @@ type CodexAppServerUsageTruthTests() =
           ConnectionId = "connection-1"
           SubscriptionDigest = String.replicate 64 "e"
           ProtocolVersion = "codex-app-server-v2/0.156.1" }
+    let usageWireDigest =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
+        |> File.ReadAllBytes
+        |> SHA256.HashData
+        |> Convert.ToHexString
+        |> fun value -> value.ToLowerInvariant()
     let terminal =
         { Reservation = { Request = request; ReservationId = "reservation-1" }
           Binding = binding
           FirstEntryId = "entry-1"
           SealedHeadEntryId = "entry-3"
           TerminalStatus = "completed"
-          UsageUpdateCount = 1 }
+          UsageUpdateCount = 1
+          UsageWireSha256s = [ usageWireDigest ] }
     let snapshot =
         let bytes =
             Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", "usage-updated.json")
@@ -95,7 +103,7 @@ type CodexAppServerUsageTruthTests() =
 
     [<Fact>]
     member _.``thread snapshot evidence cannot outnumber sealed usage updates``() =
-        let noUpdates = { terminal with UsageUpdateCount = 0 }
+        let noUpdates = { terminal with UsageUpdateCount = 0; UsageWireSha256s = [] }
         Assert.Equal(
             Error "app-server-usage-snapshot-count-mismatch",
             CodexAppServerUsageTruth.assess noUpdates [ ThreadSnapshot snapshot ]
@@ -110,12 +118,17 @@ type CodexAppServerUsageTruthTests() =
             | Error code -> failwithf "copied-live whitespace variant refused: %s" code
         Assert.Equal(
             Error "app-server-usage-snapshot-count-mismatch",
-            assess [ ThreadSnapshot snapshot; ThreadSnapshot secondSnapshot ]
+            CodexAppServerUsageTruth.assess
+                { terminal with UsageUpdateCount = 1; UsageWireSha256s = [ snapshot.WireSha256 ] }
+                [ ThreadSnapshot snapshot; ThreadSnapshot secondSnapshot ]
         )
 
     [<Fact>]
     member _.``one wire digest cannot be counted as two thread snapshots``() =
-        let twoUpdates = { terminal with UsageUpdateCount = 2 }
+        let twoUpdates =
+            { terminal with
+                UsageUpdateCount = 2
+                UsageWireSha256s = [ snapshot.WireSha256; String.replicate 64 "e" ] }
         for second in [ snapshot; { snapshot with Last = snapshot.Cumulative } ] do
             Assert.Equal(
                 Error "app-server-usage-snapshot-duplicate",
@@ -134,11 +147,20 @@ type CodexAppServerUsageTruthTests() =
             | Ok update -> update
             | Error code -> failwithf "copied-live whitespace variant refused: %s" code
         let twoUpdates = { terminal with UsageUpdateCount = 2 }
+        let twoUpdates = { twoUpdates with UsageWireSha256s = [ snapshot.WireSha256; second.WireSha256 ] }
         let result =
             CodexAppServerUsageTruth.assess twoUpdates
                 [ ThreadSnapshot snapshot; ThreadSnapshot second ]
             |> noVerdict
         Assert.Equal([ "thread-last-total-snapshot" ], result.ObservedEvidenceClasses)
+
+    [<Fact>]
+    member _.``copied-live snapshot with substituted valid wire identity cannot claim journal membership``() =
+        let foreign = { snapshot with WireSha256 = String.replicate 64 "f" }
+        Assert.Equal(
+            Error "app-server-usage-snapshot-journal-mismatch",
+            assess [ ThreadSnapshot foreign ]
+        )
 
     [<Fact>]
     member _.``exec child completed frame with matching IDs remains a different provenance``() =
@@ -243,6 +265,19 @@ type CodexAppServerUsageTruthTests() =
             Error "app-server-usage-correlation-invalid",
             CodexAppServerUsageTruth.assess impossible []
         )
+
+    [<Fact>]
+    member _.``typed journal digest summary must match count and unique SHA grammar``() =
+        for candidate in
+            [ { terminal with UsageWireSha256s = [] }
+              { terminal with UsageWireSha256s = [ "not-a-digest" ] }
+              { terminal with
+                    UsageUpdateCount = 2
+                    UsageWireSha256s = [ snapshot.WireSha256; snapshot.WireSha256 ] } ] do
+            Assert.Equal(
+                Error "app-server-usage-correlation-invalid",
+                CodexAppServerUsageTruth.assess candidate []
+            )
 
     [<Fact>]
     member _.``null or foreign response candidate refuses``() =
