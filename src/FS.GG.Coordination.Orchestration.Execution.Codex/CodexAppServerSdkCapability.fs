@@ -123,7 +123,16 @@ module CodexAppServerSdkCapability =
                 else
                     let methods = routes |> List.map fst |> Set.ofList
                     let routeMap = Map.ofList routes
+                    let unreviewedTurnUsageRoute =
+                        routes
+                        |> List.exists (fun (_, target) ->
+                            property target definitions
+                            |> Option.bind (property "properties")
+                            |> Option.bind names
+                            |> Option.exists (fun fields ->
+                                Set.contains "turn" fields && Set.contains "usage" fields))
                     methods.Count = routes.Length
+                    && not unreviewedTurnUsageRoute
                     && Map.tryFind "turn/completed" routeMap = Some "TurnCompletedNotification"
                     && Map.tryFind "thread/tokenUsage/updated" routeMap
                        = Some "ThreadTokenUsageUpdatedNotification"
