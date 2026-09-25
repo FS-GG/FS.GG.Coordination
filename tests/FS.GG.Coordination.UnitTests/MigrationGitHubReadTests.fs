@@ -1231,6 +1231,20 @@ let ``pull request reviews refuse foreign subject unknown state and duplicates``
                      (FakeTransport [ repo; ok Map.empty $"[{first},{first}]" ]))
 
 [<Fact>]
+let ``pull request reviews refuse duplicate raw state revision and actor members`` () =
+    let record = pullRequestReview 601 "REVIEW_601" "APPROVED" 3
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    check (record.Replace("\"state\":\"APPROVED\"", "\"state\":\"APPROVED\",\"state\":\"DISMISSED\"")) "state"
+    let commit = String.replicate 40 "a"
+    let otherCommit = String.replicate 40 "b"
+    check (record.Replace($"\"commit_id\":\"{commit}\"",
+                          $"\"commit_id\":\"{commit}\",\"commit_id\":\"{otherCommit}\"")) "commit_id"
+    check (record.Replace("\"login\":\"reviewer\"", "\"login\":\"reviewer\",\"login\":\"other\"")) "login"
+
+[<Fact>]
 let ``pull request reviews refuse missing continuation and nonterminal source`` () =
     let next = "https://api.github.test/repos/FS-GG/copy/pulls/3/reviews?per_page=100&page=2"
     let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"

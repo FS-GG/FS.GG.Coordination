@@ -2160,9 +2160,18 @@ module MigrationGitHubRead =
                                 if document.RootElement.ValueKind <> JsonValueKind.Array then
                                     Error(MigrationReadFailure.MalformedResponse "reviews-not-array")
                                 else
+                                    let parseUniqueReview value =
+                                        uniqueObjectMembers value
+                                        |> Result.bind (fun () ->
+                                            property "user" value
+                                            |> Result.bind (fun actor ->
+                                                if actor.ValueKind = JsonValueKind.Null then Ok ()
+                                                else uniqueObjectMembers actor))
+                                        |> Result.bind (fun () ->
+                                            parsePullRequestReview expectedUrl pullRequestNumber value)
                                     let parsed =
                                         document.RootElement.EnumerateArray()
-                                        |> Seq.map (parsePullRequestReview expectedUrl pullRequestNumber) |> Seq.toList
+                                        |> Seq.map parseUniqueReview |> Seq.toList
                                     match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                     | Some failure -> Error failure
                                     | None ->
