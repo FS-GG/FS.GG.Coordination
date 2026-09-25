@@ -316,6 +316,9 @@ class NativeReadAdapter:
         raise Refused("native-pull-page-limit")
 
     def read_pull_census(self, expected: ExpectedPull) -> PullCensus:
+        if not _valid_pull(expected):
+            raise Refused("native-pull-identity-invalid")
+        expected = dataclasses.replace(expected)
         self.transcript = []
         self._repo(expected.repository, expected.repository_id)
         source_sha = self._ref(expected.repository, expected.source_ref)
@@ -363,6 +366,9 @@ class NativeReadAdapter:
                           tuple(selected), _digest(self.transcript))
 
     def read_protection(self, expected: ExpectedProtection) -> ProtectionReadback:
+        if not _valid_protection(expected):
+            raise Refused("native-protection-identity-invalid")
+        expected = dataclasses.replace(expected)
         self.transcript = []
         self._repo(expected.repository, expected.repository_id)
         branch = expected.branch

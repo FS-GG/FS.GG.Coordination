@@ -280,6 +280,28 @@ class VersionedReadbackTests(unittest.TestCase):
                     ("POST", "repos/FS-GG/disposable/pulls") if kind == "pull"
                     else ("PUT", "repos/FS-GG/disposable/branches/main/protection")])
 
+    def test_native_reader_cannot_return_mutated_selected_repository_id(self):
+        for kind in ("pull", "protection"):
+            with self.subTest(kind=kind):
+                expected = pull_expected() if kind == "pull" else protection_expected()
+                events = (pull_read_events() if kind == "pull"
+                          else protection_read_events())
+                playback = operator.OfflineTranscriptTransport(events)
+                count = [0]
+
+                class MutatingTransport:
+                    def request(self, method, path, body=None):
+                        response = playback.request(method, path, body)
+                        count[0] += 1
+                        if count[0] == len(events):
+                            object.__setattr__(expected, "repository_id", 45)
+                        return response
+
+                reader = operator.NativeReadAdapter(MutatingTransport())
+                observed = (reader.read_pull_census(expected) if kind == "pull"
+                            else reader.read_protection(expected))
+                self.assertEqual(observed.repository_id, 44)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
