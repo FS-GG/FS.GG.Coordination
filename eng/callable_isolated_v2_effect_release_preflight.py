@@ -42,6 +42,7 @@ class PreflightResult:
     source_tree: str
     manifest_sha256: str
     artifact_id: int
+    archive_sha256: str
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -189,4 +190,5 @@ def qualify(source_port: IntegratedSourcePort,
             or _scope(approval_port, "approval", now) != approval_scope):
         raise Refused("release-scope-drift")
     return PreflightResult(coordination_revision, source_tree,
-                           source["manifestSha256"], artifact_id)
+                           source["manifestSha256"], artifact_id,
+                           source["archiveSha256"])
