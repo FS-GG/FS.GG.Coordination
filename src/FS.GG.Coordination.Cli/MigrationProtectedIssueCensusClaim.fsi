@@ -31,6 +31,9 @@ type IProtectedIssueCensusStoreHeadPort =
 type ProtectedIssueCensusClaimDescription =
     { JournalResourceId: string
       JournalArtifactSha256: string
+      StoreHeadResourceId: string
+      StoreHeadArtifactSha256: string
+      AtomicStoreHeadCompare: bool
       CandidateMayRead: bool
       CandidateMayWrite: bool
       ImmutableJournal: bool }
@@ -46,6 +49,8 @@ type ProtectedIssueCensusClaimRequest =
       Selection: ProtectedIssueCensusSelection
       CustodyStoreResourceId: string
       StoreGeneration: int64
+      ExpectedStoreCorpusSha256: string
+      ExpectedStoreHeadSha256: string
       JournalResourceId: string
       ExpectedHeadGeneration: int64
       ExpectedHeadSha256: string }
@@ -64,6 +69,8 @@ type ProtectedIssueCensusClaimOutcome =
 type IProtectedIssueCensusClaimPort =
     abstract Describe: unit -> ProtectedIssueCensusClaimDescription
     abstract ReadHead: unit -> ProtectedIssueCensusClaimHead option
+    /// Installed ClaimOnce must atomically compare both expected journal and store heads.
+    /// A lost or unknown outcome must not be retried by this caller.
     abstract ClaimOnce: ProtectedIssueCensusClaimRequest -> ProtectedIssueCensusClaimOutcome
     abstract ReadClaim: string -> ProtectedIssueCensusClaimRecord option
 
@@ -81,8 +88,8 @@ module MigrationProtectedIssueCensusClaim =
         storeGeneration:int64 -> string
 
     /// Source-only fake-port contract; protected store and journal are not installed.
-    /// A successful result requires an unchanged store head around the durable journal claim.
-    /// Installation must close the gap after this last read before any protected release.
+    /// A successful result requires a coupled store-head and journal CAS plus unchanged
+    /// readback. Installation must close the gap after this last read before release.
     val verifyAndClaim:
         attestationPins:ProtectedIssueCensusAttestationPins ->
         claimPins:ProtectedIssueCensusClaimPins ->

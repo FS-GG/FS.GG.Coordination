@@ -136,6 +136,9 @@ let private storePort head =
 let private claimDescription =
     { JournalResourceId=claimPins.JournalResourceId
       JournalArtifactSha256=claimPins.JournalArtifactSha256
+      StoreHeadResourceId=storeHeadPins.StoreResourceId
+      StoreHeadArtifactSha256=storeHeadPins.StoreArtifactSha256
+      AtomicStoreHeadCompare=true
       CandidateMayRead=false; CandidateMayWrite=false; ImmutableJournal=true }
 
 let private initialHead =
@@ -240,6 +243,54 @@ let ``protected census claim refuses store head drift after durable journal clai
     Assert.True(request.IsSome)
 
 [<Fact>]
+let ``protected census claim requires atomic store head compare at journal CAS`` () =
+    let pins, proof, attestation, now = fixture ()
+    let mutable request: ProtectedIssueCensusClaimRequest option = None
+    let journal =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = claimDescription
+            member _.ReadHead() =
+                match request with
+                | None -> Some initialHead
+                | Some value ->
+                    Some { initialHead with Generation=1L
+                                            SealSha256=(committedRecord value).CommitHeadSha256 }
+            member _.ClaimOnce value =
+                // The fake protected store changed during the CAS. A coupled
+                // adapter must compare the exact head supplied in the request.
+                if value.ExpectedStoreHeadSha256 = storeHead.HeadSha256
+                   && value.ExpectedStoreCorpusSha256 = proof.CorpusSha256 then
+                    ClaimConflict
+                else
+                    request <- Some value
+                    ClaimCommitted
+            member _.ReadClaim _ = request |> Option.map committedRecord }
+    Assert.Equal(Error "protected-census-claim-conflict",
+                 verifyAndClaim pins proof attestation now (Some journal))
+    Assert.True(request.IsNone)
+
+[<Fact>]
+let ``protected census claim refuses journal without atomic store head authority`` () =
+    let pins, proof, attestation, now = fixture ()
+    let journal =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() = { claimDescription with AtomicStoreHeadCompare=false }
+            member _.ReadHead() = failwith "must refuse before journal read"
+            member _.ClaimOnce _ = failwith "must refuse before CAS"
+            member _.ReadClaim _ = None }
+    Assert.Equal(Error "protected-census-claim-installation",
+                 verifyAndClaim pins proof attestation now (Some journal))
+    let foreignStore =
+        { new IProtectedIssueCensusClaimPort with
+            member _.Describe() =
+                { claimDescription with StoreHeadResourceId="foreign-store" }
+            member _.ReadHead() = failwith "must refuse before journal read"
+            member _.ClaimOnce _ = failwith "must refuse before CAS"
+            member _.ReadClaim _ = None }
+    Assert.Equal(Error "protected-census-claim-installation",
+                 verifyAndClaim pins proof attestation now (Some foreignStore))
+
+[<Fact>]
 let ``protected census attestation claim refuses duplicate signed handoff`` () =
     let pins, proof, attestation, now = fixture ()
     let mutable attempts = 0
@@ -312,6 +363,8 @@ let ``protected census attestation claim refuses absent unknown and forged journ
                                  AttestationPayloadSha256=proof.CorpusSha256
                                  Selection=selection; CustodyStoreResourceId="protected-store:fixture"
                                  StoreGeneration=7L; JournalResourceId=claimPins.JournalResourceId
+                                 ExpectedStoreCorpusSha256=proof.CorpusSha256
+                                 ExpectedStoreHeadSha256=storeHead.HeadSha256
                                  ExpectedHeadGeneration=0L; ExpectedHeadSha256=initialHead.SealSha256 }
                        CommitGeneration=1L; CommitHeadSha256=String.replicate 64 "f" } }
     Assert.Equal(Error "protected-census-claim-binding",
