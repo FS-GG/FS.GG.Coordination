@@ -111,10 +111,10 @@ def qualify(preflight: release.PreflightResult,
             workflow_source: workflow_source_check.WorkflowSourceResult | None = None
             ) -> ProducerWitnessResult:
     """Compare exact fake producer objects; never install or dispatch."""
-    selection = _exact(selection, {"repositoryId", "identityEventId",
+    selection = dict(_exact(selection, {"repositoryId", "identityEventId",
         "producerRunId", "producerRunAttempt", "producerActorId",
         "workflowId", "workflowPath", "workflowSha256", "artifactId"},
-        "producer-selection-shape")
+        "producer-selection-shape"))
     if (type(preflight) is not release.PreflightResult
             or type(source_tree) is not git_tree.TreeWitnessResult
             or type(workflow_source) is not workflow_source_check.WorkflowSourceResult
