@@ -225,7 +225,8 @@ class NativeReadAdapter:
     def _repo(self, repository: str, repository_id: int) -> None:
         status, _, body = self._get(f"repos/{repository}")
         if (status != 200 or type(body) is not dict
-                or body.get("id") != repository_id
+                or type(body.get("id")) is not int
+                or body["id"] != repository_id
                 or body.get("full_name") != repository):
             raise Refused("native-repository-mismatch")
 
@@ -337,6 +338,7 @@ class NativeReadAdapter:
                 detail_repo = detail_side.get("repo")
                 if (type(listed_repo) is not dict or type(detail_repo) is not dict
                         or type(listed_repo.get("id")) is not int
+                        or type(detail_repo.get("id")) is not int
                         or listed_repo.get("id") != detail_repo.get("id")
                         or listed_repo.get("full_name") != detail_repo.get("full_name")):
                     raise Refused("native-pull-list-detail-repo-drift")
@@ -575,6 +577,12 @@ def _complete_digest(value: object) -> bool:
     return type(value) is str and HEX64.fullmatch(value) is not None
 
 
+def _same_repo(value: object, expected: ExpectedPull) -> bool:
+    return (type(value) is dict and type(value.get("id")) is int
+            and value["id"] == expected.repository_id
+            and value.get("full_name") == expected.repository)
+
+
 def _two(read: Callable[[], object]):
     """An injected native reader supplies complete evidence; no write occurs."""
     try:
@@ -625,12 +633,10 @@ def classify_pull_after_one_attempt(
                 or pull.get("body") != pull_request_body(expected)["body"]
                 or head.get("ref") != expected.source_ref.removeprefix("refs/heads/")
                 or head.get("sha") != expected.source_sha
-                or (head.get("repo") or {}).get("id") != expected.repository_id
-                or (head.get("repo") or {}).get("full_name") != expected.repository
+                or not _same_repo(head.get("repo"), expected)
                 or base.get("ref") != expected.base_ref.removeprefix("refs/heads/")
                 or base.get("sha") != expected.base_sha
-                or (base.get("repo") or {}).get("id") != expected.repository_id
-                or (base.get("repo") or {}).get("full_name") != expected.repository):
+                or not _same_repo(base.get("repo"), expected)):
             return Unknown("pull-request-readback-mismatch")
         return ExactPull(pull["number"], pull["node_id"], observed.transcript_sha256)
     except Exception:
