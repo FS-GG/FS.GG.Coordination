@@ -1,9 +1,9 @@
 # Prospective isolated-operation v2 source proof
 
-Status: draft, import-only, unapproved. This is a new identity and source
-boundary for the V2-CALL-01.4b isolated synthetic operation. It records no
-live provider effect and grants no actor a credential, dispatch, retry, or
-merge authority.
+Status: draft, controlled offline runtime, unapproved. This is a new identity
+and source boundary for the V2-CALL-01.4b isolated synthetic operation. It
+records no live provider effect and grants no actor a credential, dispatch,
+retry, or merge authority.
 
 ## Reason for revision
 
@@ -19,9 +19,20 @@ characterization and is not acceptance evidence.
 ## This source boundary
 
 - `eng/callable-cli-isolated-operation-v2.py` has identity
-  `v2-call-01-4b-isolated-native-v2-provisional`. It exposes only public
-  `inspect` and pure one-attempt readback classifiers. It has no HTTP client,
-  token argument, write command, or retry command.
+  `v2-call-01-4b-isolated-native-v2-provisional`. It exposes public `inspect`,
+  pure readback classifiers, an injected one-attempt runtime, and
+  `exercise-offline` against local JSON events. It has no HTTP client, token
+  argument, live write command, or retry command.
+- The runtime's native reader derives complete readback and transcript hashes
+  from raw injected REST status, Link headers, and response bytes. It checks
+  repository and branch refs, enumerates complete open-PR pages with a
+  terminal probe, joins each PR detail, and checks branch/protection status.
+  It refuses missing continuation, contradictory `last`, missing detail,
+  duplicate PR IDs, moved refs, or changing snapshots.
+- Before a controlled POST/PUT it requires a complete absent prestate and a
+  before-send attempt reservation. The offline CLI uses a local SQLite journal
+  to show replay refusal across process restarts. A future installed runtime
+  must use a separately qualified durable fence and native transport.
 - PR readback requires two identical complete native census snapshots,
   repository identity, exact source and base branch revisions, one open
   nondraft unmerged PR, and its exact head/base repo/ref/SHA fields.
@@ -30,8 +41,8 @@ characterization and is not acceptance evidence.
   disabled force pushes and deletions. Provider write responses do not count
   as proof.
 - Any incomplete, contradictory, duplicate, changed, malformed, or failed
-  read yields `Unknown`. A durable one-attempt record and qualified native
-  reader remain external prerequisites; the classifiers cannot infer them.
+  read yields `Unknown`. A lost response triggers readback without another
+  send. Controlled provider exceptions and their chains are not surfaced.
 - `inspect` binds the prospective v5 contract, proposal, source/control
   hashes, and the old preflight solely as an immutable historical observation.
   It always reports `authorized:false` and `liveEffects:0`.
@@ -44,5 +55,7 @@ rotation and fresh Q3/Q6 negative controls must bind the new version and pass
 before any GS2-09.9 receipt or acceptance. The #545 roadmap-pin source repair
 may be considered separately; it is not a receipt or authority for this
 revision. An installed protected probe must prove complete native PR and
-branch-protection response semantics, including exact head/base and force
-push state. No synthetic or production effect is authorized by this draft.
+branch-protection response semantics, including exact head/base, pagination,
+force-push state, and credential capability. The injected fence and transport
+must be replaced with qualified protected runtime components. No synthetic or
+production effect is authorized by this draft.
