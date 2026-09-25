@@ -252,6 +252,15 @@ let ``wrong GraphQL owner variables and changed typed Project item refuse`` () =
                  MigrationInspectProviderAdapter.bindProjectItems options changed calls)
 
 [<Fact>]
+let ``Project item adapter refuses duplicate raw pagination members`` () =
+    let body = projectPage 1 "false" "null" $"[{projectItem}]"
+    let population, calls = readProjectItems [ reply body ]
+    let ambiguous = body.Replace("\"hasNextPage\":false", "\"hasNextPage\":true,\"hasNextPage\":false")
+    let changedCalls = calls |> List.map (fun (request, _) -> request, reply ambiguous)
+    Assert.Equal(Error "raw-project-parse-or-scope",
+                 MigrationInspectProviderAdapter.bindProjectItems options population changedCalls)
+
+[<Fact>]
 let ``foreign Project identity and wrong GraphQL continuation refuse`` () =
     let first = projectPage 2 "true" "\"cursor-1\"" $"[{projectItem}]"
     let second = projectPage 2 "false" "null"
@@ -319,6 +328,16 @@ let ``Project field adapter binds raw declarations and terminal cursor chain`` (
                  MigrationInspectProviderAdapter.bindProjectFields options population forged)
     Assert.True((MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource).ReadAuthority(2, "project-fields") |> Result.isError)
+
+[<Fact>]
+let ``Project field adapter refuses duplicate raw pagination members`` () =
+    let field = """{"__typename":"ProjectV2Field","id":"FIELD_1","name":"Title","dataType":"TITLE"}"""
+    let body = projectFieldPage 1 "false" "null" $"[{field}]"
+    let population, calls = readProjectFields [ reply body ]
+    let ambiguous = body.Replace("\"hasNextPage\":false", "\"hasNextPage\":true,\"hasNextPage\":false")
+    let changedCalls = calls |> List.map (fun (request, _) -> request, reply ambiguous)
+    Assert.Equal(Error "project-raw-page-or-scope",
+                 MigrationInspectProviderAdapter.bindProjectFields options population changedCalls)
 
 [<Fact>]
 let ``Project value adapter binds raw values and refuses typed or nested drift`` () =

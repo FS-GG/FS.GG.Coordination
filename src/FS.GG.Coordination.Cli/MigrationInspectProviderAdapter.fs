@@ -130,18 +130,19 @@ module MigrationInspectProviderAdapter =
         && (parameters |> Array.exists (fun parts -> parts.[0] = "state" && parts.[1] = "all"))
         && (parameters |> Array.exists (fun parts -> parts.[0] = "per_page" && parts.[1] = "100"))
 
+    let rec private requireUniqueMembers (value: JsonElement) =
+        match value.ValueKind with
+        | JsonValueKind.Object ->
+            let properties = value.EnumerateObject() |> Seq.toList
+            let names = properties |> List.map _.Name
+            if names.Length <> (names |> Set.ofList |> Set.count) then
+                failwith "duplicate-json-member"
+            properties |> List.iter (fun property -> requireUniqueMembers property.Value)
+        | JsonValueKind.Array ->
+            value.EnumerateArray() |> Seq.iter requireUniqueMembers
+        | _ -> ()
+
     let private parseIssuePages repositoryId (raw: string list) =
-        let rec requireUniqueMembers (value: JsonElement) =
-            match value.ValueKind with
-            | JsonValueKind.Object ->
-                let properties = value.EnumerateObject() |> Seq.toList
-                let names = properties |> List.map _.Name
-                if names.Length <> (names |> Set.ofList |> Set.count) then
-                    failwith "duplicate-json-member"
-                properties |> List.iter (fun property -> requireUniqueMembers property.Value)
-            | JsonValueKind.Array ->
-                value.EnumerateArray() |> Seq.iter requireUniqueMembers
-            | _ -> ()
         try
             raw
             |> List.map (fun body ->
@@ -268,6 +269,7 @@ module MigrationInspectProviderAdapter =
         try
             use document = JsonDocument.Parse body
             let root = document.RootElement
+            requireUniqueMembers root
             let mutable errors = Unchecked.defaultof<JsonElement>
             if root.TryGetProperty("errors", &errors) then failwith "partial-graphql-errors"
             let project = root.GetProperty("data").GetProperty("organization").GetProperty("projectV2")
@@ -379,6 +381,7 @@ module MigrationInspectProviderAdapter =
         try
             use document = JsonDocument.Parse body
             let root = document.RootElement
+            requireUniqueMembers root
             let mutable errors = Unchecked.defaultof<JsonElement>
             if root.TryGetProperty("errors", &errors) then failwith "graphql-errors"
             let project = root.GetProperty("data").GetProperty("organization").GetProperty("projectV2")
