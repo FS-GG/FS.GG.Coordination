@@ -473,20 +473,29 @@ module CodexAppServerContinuity =
                     |> Seq.exists (validTurnItem >> not) ->
                     Error "app-server-turn-item-invalid"
                 | Ok () ->
-                    match
-                        readText "app-server-turn-identity-invalid" turn "id",
-                        readText "app-server-turn-status-invalid" turn "status"
-                    with
-                    | Ok turnId, _ when turnId <> expectedTurn ->
-                        Error "app-server-turn-identity-mismatch"
-                    | Ok _, Ok "inProgress" when methodName = "turn/started" ->
-                        Ok NativeTurnStarted
-                    | Ok _, Ok status when
-                        methodName = "turn/completed"
-                        && Set.contains status (set [ "completed"; "failed"; "interrupted" ]) ->
-                        Ok(NativeTurnTerminal status)
-                    | Ok _, Ok _ -> Error "app-server-turn-status-invalid"
-                    | Error error, _ | _, Error error -> Error error
+                    match turn.TryGetProperty "itemsView" with
+                    | true, view when view.ValueKind <> JsonValueKind.String ->
+                        Error "app-server-turn-items-view-invalid"
+                    | true, view when
+                        not (Set.contains (view.GetString()) (set [ "notLoaded"; "summary"; "full" ])) ->
+                        Error "app-server-turn-items-view-invalid"
+                    | true, view when methodName = "turn/completed" && view.GetString() <> "full" ->
+                        Error "app-server-turn-items-view-incomplete"
+                    | _ ->
+                        match
+                            readText "app-server-turn-identity-invalid" turn "id",
+                            readText "app-server-turn-status-invalid" turn "status"
+                        with
+                        | Ok turnId, _ when turnId <> expectedTurn ->
+                            Error "app-server-turn-identity-mismatch"
+                        | Ok _, Ok "inProgress" when methodName = "turn/started" ->
+                            Ok NativeTurnStarted
+                        | Ok _, Ok status when
+                            methodName = "turn/completed"
+                            && Set.contains status (set [ "completed"; "failed"; "interrupted" ]) ->
+                            Ok(NativeTurnTerminal status)
+                        | Ok _, Ok _ -> Error "app-server-turn-status-invalid"
+                        | Error error, _ | _, Error error -> Error error
 
     let private parseFrame expectedThread expectedTurn (bytes: byte array) =
         if isNull bytes || bytes.Length = 0 || bytes.Length > 65536 then
