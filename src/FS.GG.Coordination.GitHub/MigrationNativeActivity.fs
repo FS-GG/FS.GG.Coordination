@@ -198,6 +198,12 @@ module MigrationNativeActivity =
               yield! input.PullRequestComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId)
               yield! input.PullRequestReviews |> List.collect (fun stream -> stream.Reviews |> List.map _.NodeId)
               yield! input.PullRequestInlineComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId) ]
+        let activityDatabaseIds =
+            [ [ yield! input.IssueComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId)
+                yield! input.PullRequestComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId) ]
+              input.IssueEvents |> List.collect (fun stream -> stream.Events |> List.map _.DatabaseId)
+              input.PullRequestReviews |> List.collect (fun stream -> stream.Reviews |> List.map _.DatabaseId)
+              input.PullRequestInlineComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId) ]
         let orphanReviewComment =
             input.PullRequestInlineComments
             |> List.exists (fun inlineStream ->
@@ -228,6 +234,7 @@ module MigrationNativeActivity =
             fail "stream-pages"
         elif not allStreamsBound then fail "stream-binding-or-payload"
         elif not (unique (censusNodes @ activityNodes))
+             || (activityDatabaseIds |> List.exists (unique >> not))
              || (activityNodes |> List.exists String.IsNullOrWhiteSpace) then
             fail "duplicate-activity"
         elif orphanReviewComment then fail "orphan-review-comment"

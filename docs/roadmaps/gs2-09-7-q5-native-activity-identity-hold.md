@@ -39,6 +39,15 @@ and a first-page cursor. This prevents an undersized or filtered page from
 masquerading as the complete typed capture; retained provider bytes and
 initial sandbox identity are still separate authority obligations.
 
+A fifth independent control showed that two event rows with different node
+IDs but the same native database ID, or an issue and PR comment with the same
+comment database ID, could pass reconciliation. It was red before the repair.
+Reconciliation now requires unique database IDs within each native activity
+record kind, combining issue and PR comments because both use the issue
+comment endpoint and record type. This prevents one record from occupying two
+typed activity slots. It still cannot prove that the database IDs and
+payloads came from retained provider responses.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

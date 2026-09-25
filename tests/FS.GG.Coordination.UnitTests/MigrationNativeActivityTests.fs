@@ -233,6 +233,18 @@ let ``native activity refuses one node identity used as both subject and event``
                                         Comments=[ { issueComment with NodeId="" } ] } ] }
 
 [<Fact>]
+let ``native activity refuses one database identity counted twice`` () =
+    let input = sample ()
+    let eventStream = input.IssueEvents.Head
+    let duplicateEvent = { issueEvent with NodeId="IE_203" }
+    assertRefused "duplicate-activity"
+        { input with IssueEvents=[ { eventStream with Events=[ issueEvent; duplicateEvent ] } ] }
+    let prStream = input.PullRequestComments.Head
+    let duplicateComment = { pullRequestComment with DatabaseId=issueComment.DatabaseId }
+    assertRefused "duplicate-activity"
+        { input with PullRequestComments=[ { prStream with Comments=[ duplicateComment ] } ] }
+
+[<Fact>]
 let ``changed page digest changes the full activity snapshot`` () =
     let input = sample ()
     let first = MigrationNativeActivity.reconcile input |> requireOk
