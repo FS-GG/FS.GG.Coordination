@@ -52,11 +52,16 @@ module CodexAppServerSdkCapability =
         | _ -> true
 
     let private exactShape required properties (node: JsonElement) =
+        let objectKind =
+            match property "type" node with
+            | None -> true
+            | Some value -> stringValue value = Some "object"
         match property "required" node |> Option.bind stringSet,
               property "properties" node |> Option.bind names,
               names node with
         | Some actualRequired, Some actualProperties, Some fields ->
-            actualRequired = required
+            objectKind
+            && actualRequired = required
             && actualProperties = properties
             && Set.isSubset fields (set [ "$schema"; "description"; "properties";
                                           "required"; "title"; "type" ])
