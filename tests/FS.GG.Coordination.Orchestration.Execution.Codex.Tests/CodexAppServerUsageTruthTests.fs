@@ -121,6 +121,43 @@ type CodexAppServerUsageTruthTests() =
         )
 
     [<Fact>]
+    member _.``typed snapshot with invalid counters or digest cannot be observed evidence``() =
+        let invalidLast = { snapshot with Last = { snapshot.Last with Input = -1L } }
+        let regressedTotal =
+            { snapshot with
+                Cumulative =
+                    { snapshot.Last with
+                        Input = snapshot.Last.Input - 1L
+                        Total = snapshot.Last.Total - 1L } }
+        let invalidDigest = { snapshot with WireSha256 = "not-a-wire-digest" }
+        for candidate in [ invalidLast; regressedTotal; invalidDigest ] do
+            Assert.Equal(
+                Error "app-server-usage-candidate-invalid",
+                assess [ ThreadSnapshot candidate ]
+            )
+
+    [<Fact>]
+    member _.``typed exec child with invalid turn counters cannot be observed evidence``() =
+        for candidate in
+            [ { execChild with Total = execChild.Total + 1L }
+              { execChild with TurnSequence = 0L } ] do
+            Assert.Equal(
+                Error "app-server-usage-candidate-invalid",
+                assess [ ExecChildCompleted candidate ]
+            )
+
+    [<Fact>]
+    member _.``typed upstream response with invalid counters cannot be observed evidence``() =
+        let invalidCached = { snapshot.Last with CachedInput = snapshot.Last.Input + 1L }
+        let overflow =
+            { snapshot.Last with Input = Int64.MaxValue; Output = 1L; Total = Int64.MaxValue }
+        for counts in [ invalidCached; overflow ] do
+            Assert.Equal(
+                Error "app-server-usage-candidate-invalid",
+                assess [ UpstreamResponseCompleted(scope.ThreadId, binding.TurnId, "response-1", counts) ]
+            )
+
+    [<Fact>]
     member _.``foreign candidate thread or turn refuses canonical correlation``() =
         let wrongSnapshot = { snapshot with TurnId = "other-turn" }
         let wrongExec = { execChild with ThreadId = "other-thread" }

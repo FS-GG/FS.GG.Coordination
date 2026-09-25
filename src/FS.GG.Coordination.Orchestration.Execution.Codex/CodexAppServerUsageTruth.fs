@@ -104,12 +104,21 @@ module CodexAppServerUsageTruth =
             || snapshot.ThreadId <> correlation.Scope.ThreadId
             || snapshot.TurnId <> correlation.NativeTurnId ->
             Error "app-server-usage-candidate-identity-mismatch"
+        | ThreadSnapshot snapshot when
+            not (CodexAppServerUsageProjection.validCounts snapshot.Last)
+            || not (CodexAppServerUsageProjection.validCounts snapshot.Cumulative)
+            || not (CodexAppServerUsageProjection.dominates snapshot.Cumulative snapshot.Last)
+            || isNull snapshot.WireSha256
+            || not (digestPattern.IsMatch snapshot.WireSha256) ->
+            Error "app-server-usage-candidate-invalid"
         | ThreadSnapshot _ -> Ok "thread-last-total-snapshot"
         | ExecChildCompleted usage when
             isNull (box usage)
             || usage.ThreadId <> correlation.Scope.ThreadId
             || usage.TurnId <> Some correlation.NativeTurnId ->
             Error "app-server-usage-candidate-identity-mismatch"
+        | ExecChildCompleted usage when not (DirectSessionTelemetryFacts.validUsage usage) ->
+            Error "app-server-usage-candidate-invalid"
         | ExecChildCompleted _ -> Ok "exec-child-turn-completed"
         | UpstreamResponseCompleted(threadId, turnId, responseId, counts) when
             threadId <> correlation.Scope.ThreadId
@@ -117,6 +126,9 @@ module CodexAppServerUsageTruth =
             || not (boundedText responseId)
             || isNull (box counts) ->
             Error "app-server-usage-candidate-identity-mismatch"
+        | UpstreamResponseCompleted(_, _, _, counts) when
+            not (CodexAppServerUsageProjection.validCounts counts) ->
+            Error "app-server-usage-candidate-invalid"
         | UpstreamResponseCompleted _ -> Ok "one-upstream-response"
 
     /// Preserve canonical correlation while refusing to invent turn usage from snapshots,

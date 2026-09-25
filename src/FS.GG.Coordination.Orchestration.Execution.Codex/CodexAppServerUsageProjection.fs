@@ -61,6 +61,19 @@ module CodexAppServerUsageProjection =
             | true, count when count >= 0L -> Ok count
             | _ -> Error code
 
+    let internal validCounts (value: CodexAppServerTokenCounts) =
+        not (isNull (box value))
+        && value.Input >= 0L
+        && value.CachedInput >= 0L
+        && value.CacheWriteInput >= 0L
+        && value.Output >= 0L
+        && value.ReasoningOutput >= 0L
+        && value.Total >= 0L
+        && value.CachedInput <= value.Input
+        && value.ReasoningOutput <= value.Output
+        && value.Input <= Int64.MaxValue - value.Output
+        && value.Total = value.Input + value.Output
+
     let private counts (node: JsonElement) =
         let code = "app-server-usage-counters-invalid"
         let required =
@@ -82,21 +95,18 @@ module CodexAppServerUsageProjection =
                 readCount code node "reasoningOutputTokens",
                 readCount code node "totalTokens"
             with
-            | Ok input, Ok cached, Ok cacheWritten, Ok output, Ok reasoning, Ok total when
-                cached <= input
-                && reasoning <= output
-                && input <= Int64.MaxValue - output
-                && total = input + output ->
-                Ok
+            | Ok input, Ok cached, Ok cacheWritten, Ok output, Ok reasoning, Ok total ->
+                let value =
                     { Input = input
                       CachedInput = cached
                       CacheWriteInput = cacheWritten
                       Output = output
                       ReasoningOutput = reasoning
                       Total = total }
+                if validCounts value then Ok value else Error code
             | _ -> Error code
 
-    let private dominates total last =
+    let internal dominates total last =
         total.Input >= last.Input
         && total.CachedInput >= last.CachedInput
         && total.CacheWriteInput >= last.CacheWriteInput

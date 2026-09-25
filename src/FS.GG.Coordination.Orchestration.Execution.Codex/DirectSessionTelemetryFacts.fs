@@ -87,8 +87,9 @@ module DirectSessionTelemetryFacts =
         && not (isNull scope.BindingDigest)
         && hexDigest.IsMatch scope.BindingDigest
 
-    let private validUsage (turn: CodexTurnUsage) =
-        turn.TurnSequence > 0L
+    let internal validUsage (turn: CodexTurnUsage) =
+        not (isNull (box turn))
+        && turn.TurnSequence > 0L
         && ([ turn.Provider; turn.ObservedModel; turn.ObservedEffort; turn.Backend ]
             |> List.forall (Option.forall (text 128)))
         && turn.Input >= 0L
