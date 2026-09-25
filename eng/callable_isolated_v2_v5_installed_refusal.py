@@ -56,6 +56,10 @@ class Readback:
     install_path: str
     command_started_at: str
     command_completed_at: str
+    probe_reader_principal: str
+    probe_credential_id: str
+    audit_reader_principal: str
+    audit_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -272,7 +276,11 @@ def qualify(selection: candidate.Selection, chosen: dict, probe_port,
                         selected["interpreterSha256"],
                         selected["runtimeClosureSha256"],
                         selected["installPath"], probe["startedAt"],
-                        probe["completedAt"])
+                        probe["completedAt"],
+                        probe_scope["principalId"],
+                        probe_scope["credentialId"],
+                        audit_scope["principalId"],
+                        audit_scope["credentialId"])
     except Refused:
         raise
     except Exception:

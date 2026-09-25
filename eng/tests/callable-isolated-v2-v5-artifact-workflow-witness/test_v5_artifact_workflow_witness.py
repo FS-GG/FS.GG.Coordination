@@ -47,7 +47,8 @@ def fixture():
         700, 702, selection.source_tree, selection.repository_id, 701, 703,
         "3" * 64, "4" * 64, "5" * 64,
         "/opt/fsgg/v5/fsgg-callable-isolated-v2-v5-no-grant.pyz",
-        "2026-09-25T11:58:00Z", "2026-09-25T11:58:01Z")
+        "2026-09-25T11:58:00Z", "2026-09-25T11:58:01Z",
+        "probe-reader", "6" * 64, "audit-reader", "7" * 64)
     artifact_scope = {"principalId": "artifact-reader",
         "credentialId": "6" * 64, "repository": candidate.REPOSITORY,
         "repositoryId": 100, "permissions": ["actions:read"],

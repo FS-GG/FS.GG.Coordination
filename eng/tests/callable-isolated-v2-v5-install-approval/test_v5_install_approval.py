@@ -46,19 +46,25 @@ def fixture():
     source_files = tuple(sorted((path, candidate.PINNED_BYTES[key])
                                 for path, key in paths.items()))
     membership = tree.TreeWitness(selection.revision,
-        selection.source_tree, source_files, 808)
+        selection.source_tree, source_files, 808,
+        "artifact-reader", "c" * 64,
+        "workflow-reader", "d" * 64,
+        "git-reader", "e" * 64,
+        "identity-reader", "f" * 64)
     readback = installed.Readback(selection.archive_sha256,
         selection.manifest_sha256, selection.revision, selection.artifact_id,
         700, 702, selection.source_tree, selection.repository_id, 701, 703,
         "3" * 64, "4" * 64, "5" * 64, PATH,
-        "2026-09-25T11:58:00Z", "2026-09-25T11:58:01Z")
+        "2026-09-25T11:58:00Z", "2026-09-25T11:58:01Z",
+        "probe-reader", "6" * 64,
+        "audit-reader", "7" * 64)
     selected = {"eventId": 909, "reviewerActorId": 400}
     scope = {"principalId": "install-approval-reader",
-        "credentialId": "c" * 64, "repository": candidate.REPOSITORY,
+        "credentialId": "8" * 64, "repository": candidate.REPOSITORY,
         "repositoryId": 100, "permissions": ["read-install-approval"],
         "expiresAt": "2026-09-25T12:10:00Z"}
     record = {"schema": approval.APPROVAL_SCHEMA, "complete": True,
-        "principalId": "install-approval-reader", "credentialId": "c" * 64,
+        "principalId": "install-approval-reader", "credentialId": "8" * 64,
         "eventId": 909, "repository": candidate.REPOSITORY,
         "repositoryId": 100, "revision": selection.revision,
         "sourceTree": selection.source_tree, "treeIdentityEventId": 808,
@@ -133,6 +139,37 @@ class InstallApprovalTests(unittest.TestCase):
             self.observe(lambda s, _t, _r, _c, _p:
                          object.__setattr__(s, "expires_at",
                                             "2026-09-25T11:59:00Z"))
+
+    def test_install_approval_reader_cannot_reuse_git_reader(self):
+        selection, membership, readback, selected, port = fixture()
+        port.scope_data["principalId"] = "git-reader"
+        port.record["principalId"] = "git-reader"
+        with self.assertRaises(approval.Refused):
+            approval.qualify(selection, membership, readback, selected,
+                             port, NOW)
+
+    def test_all_prior_reader_identity_collisions_refuse(self):
+        for principal in ("artifact-reader", "workflow-reader",
+                          "identity-reader", "probe-reader", "audit-reader"):
+            with self.subTest(principal=principal):
+                selection, membership, readback, selected, port = fixture()
+                port.scope_data["principalId"] = principal
+                port.record["principalId"] = principal
+                with self.assertRaises(approval.Refused):
+                    approval.qualify(selection, membership, readback,
+                                     selected, port, NOW)
+        selection, membership, readback, selected, port = fixture()
+        port.scope_data["credentialId"] = membership.git_credential_id
+        port.record["credentialId"] = membership.git_credential_id
+        with self.assertRaises(approval.Refused):
+            approval.qualify(selection, membership, readback, selected,
+                             port, NOW)
+        selection, membership, readback, selected, port = fixture()
+        object.__setattr__(readback, "probe_reader_principal",
+                           membership.artifact_reader_principal)
+        with self.assertRaises(approval.Refused):
+            approval.qualify(selection, membership, readback, selected,
+                             port, NOW)
 
     def test_no_file_token_socket_or_journal_access(self):
         selection, membership, readback, selected, port = fixture()

@@ -32,6 +32,14 @@ class TreeWitness:
     source_tree: str
     source_files: tuple[tuple[str, str], ...]
     identity_event_id: int
+    artifact_reader_principal: str
+    artifact_credential_id: str
+    workflow_reader_principal: str
+    workflow_credential_id: str
+    git_reader_principal: str
+    git_credential_id: str
+    identity_reader_principal: str
+    identity_credential_id: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -135,7 +143,15 @@ def qualify(selection: candidate.Selection, prior: producer.Witness,
                 or original_blobs != blobs):
             raise Refused("v5-tree-drift")
         return TreeWitness(selection.revision, selection.source_tree,
-                           tuple(files), identity_event_id)
+                           tuple(files), identity_event_id,
+                           prior.artifact_reader_principal,
+                           prior.artifact_credential_id,
+                           prior.workflow_reader_principal,
+                           prior.workflow_credential_id,
+                           git_scope["principalId"],
+                           git_scope["credentialId"],
+                           identity_scope["principalId"],
+                           identity_scope["credentialId"])
     except Refused:
         raise
     except Exception:
