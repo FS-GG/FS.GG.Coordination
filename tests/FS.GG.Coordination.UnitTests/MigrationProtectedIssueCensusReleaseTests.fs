@@ -626,3 +626,18 @@ let ``protected native attempt recovery refuses reservation substituted under on
     Assert.Equal(Error "protected-census-attempt-binding",
                  inspectAttempt foreign (Some (markerPort (Some foreign)))
                      (Some (nativePort nativeDescription foreign (Some [record]))))
+
+[<Fact>]
+let ``protected native attempt recovery refuses offset-only handoff readback`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let alternate =
+        { marker with SignedExpiresAtUtc=
+                          marker.SignedExpiresAtUtc.ToOffset(TimeSpan.FromHours 1.0) }
+    let record =
+        { Request=marker; ProviderAttemptId=marker.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectAttempt marker (Some (markerPort (Some alternate)))
+                     (Some (nativePort nativeDescription marker (Some [record]))))
