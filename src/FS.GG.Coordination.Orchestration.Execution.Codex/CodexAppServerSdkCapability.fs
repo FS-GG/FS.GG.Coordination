@@ -71,6 +71,33 @@ module CodexAppServerSdkCapability =
         names node = Some(set [ "$ref" ])
         && property "$ref" node |> Option.bind stringValue = Some("#/definitions/" + name)
 
+    let private tokenBreakdownShape (node: JsonElement) =
+        let counters =
+            set [ "cacheWriteInputTokens"; "cachedInputTokens"; "inputTokens";
+                  "outputTokens"; "reasoningOutputTokens"; "totalTokens" ]
+        let required = Set.remove "cacheWriteInputTokens" counters
+        exactShape required counters node
+        && (property "type" node |> Option.bind stringValue) = Some "object"
+        && (counters
+            |> Set.forall (fun name ->
+                property "properties" node
+                |> Option.bind (property name)
+                |> Option.exists (fun field ->
+                    let allowed =
+                        if name = "cacheWriteInputTokens" then
+                            set [ "default"; "format"; "type" ]
+                        else set [ "format"; "type" ]
+                    names field = Some allowed
+                    && (property "type" field |> Option.bind stringValue) = Some "integer"
+                    && (property "format" field |> Option.bind stringValue) = Some "int64"
+                    && (name <> "cacheWriteInputTokens"
+                        || (property "default" field
+                            |> Option.exists (fun value ->
+                                let mutable defaultValue = 0L
+                                value.ValueKind = JsonValueKind.Number
+                                && value.TryGetInt64(&defaultValue)
+                                && defaultValue = 0L))))))
+
     let private closedServerRoutes (definitions: JsonElement) =
         let route (node: JsonElement) =
             let fields = names node
@@ -221,9 +248,10 @@ module CodexAppServerSdkCapability =
                               definition "Turn",
                               definition "ThreadTokenUsageUpdatedNotification",
                               definition "ThreadTokenUsage",
+                              definition "TokenUsageBreakdown",
                               definition "RawResponseCompletedNotification",
                               definition "ThreadResumeParams" with
-                        | Some completed, Some turn, Some updated, Some usage,
+                        | Some completed, Some turn, Some updated, Some usage, Some breakdown,
                           Some rawResponse, Some resume when
                             closedServerRoutes defs
                             && closedClientResumeRoute defs
@@ -242,6 +270,12 @@ module CodexAppServerSdkCapability =
                                 |> Option.exists (refIs "ThreadTokenUsage"))
                             && exactShape (set [ "last"; "total" ])
                                 (set [ "last"; "modelContextWindow"; "total" ]) usage
+                            && ([ "last"; "total" ]
+                                |> List.forall (fun name ->
+                                    property "properties" usage
+                                    |> Option.bind (property name)
+                                    |> Option.exists (refIs "TokenUsageBreakdown")))
+                            && tokenBreakdownShape breakdown
                             && exactShape (set [ "responseId"; "threadId"; "turnId" ])
                                 (set [ "responseId"; "threadId"; "turnId"; "usage"; "usageMetadata" ]) rawResponse
                             && (property "description" rawResponse
