@@ -495,6 +495,32 @@ class VersionedReadbackTests(unittest.TestCase):
             expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_native_pull_refuses_list_detail_draft_type_alias(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        for listed_draft in (0, 0.0):
+            with self.subTest(listed_draft=listed_draft):
+                events = pull_read_events((pull,))
+                events[3]["response"]["json"][0]["draft"] = listed_draft
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events * 2))
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(),
+                    lambda: reader.read_pull_census(pull_expected())))
+
+    def test_lost_response_pull_draft_type_alias_stays_unknown(self):
+        expected = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        post = pull_read_events((pull,))
+        post[3]["response"]["json"][0]["draft"] = 0
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
