@@ -851,6 +851,25 @@ class VersionedReadbackTests(unittest.TestCase):
             provider_response={"status": "unknown", "body": SENTINEL})
         self.assertEqual(result, operator.ExactPull(8, "PR_8", DIGEST))
 
+    def test_direct_pull_classifier_keeps_explicit_refusal_unknown(self):
+        # A future installed caller may pass its counted response directly to
+        # the classifier. Exact poststate cannot override an explicit refusal.
+        for response in ({"status": 302, "body": SENTINEL},
+                         operator.HttpResponse(401, (), b"redacted"),
+                         {"status": True}, {"status": 302.0},
+                         {"status": "302"}):
+            reads = iter((pull_observed(), pull_observed()))
+            with self.subTest(response=type(response).__name__):
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(), lambda: next(reads),
+                    provider_response=response))
+        for response in ({"status": 200}, {"status": 500},
+                         {"status": "lost"}):
+            reads = iter((pull_observed(), pull_observed()))
+            self.assertIsInstance(operator.classify_pull_after_one_attempt(
+                pull_expected(), lambda: next(reads),
+                provider_response=response), operator.ExactPull)
+
     def test_pull_rejects_wrong_head_base_repo_and_identity(self):
         observed = pull_observed()
         for wrong in (
@@ -922,6 +941,15 @@ class VersionedReadbackTests(unittest.TestCase):
         reads = iter((observed, dataclasses.replace(observed, branch="other")))
         self.assert_unknown(operator.classify_protection_after_one_attempt(
             protection_expected(), lambda: next(reads)))
+
+    def test_direct_protection_classifier_keeps_explicit_refusal_unknown(self):
+        for response in ({"status": 302, "body": SENTINEL},
+                         operator.HttpResponse(401, (), b"redacted")):
+            reads = iter((protection_observed(), protection_observed()))
+            with self.subTest(response=type(response).__name__):
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    protection_expected(), lambda: next(reads),
+                    provider_response=response))
 
     def test_protection_rejects_wrong_branch_repo_incomplete_and_retry(self):
         observed = protection_observed()

@@ -662,17 +662,33 @@ def _two(read: Callable[[], object]):
         return None
 
 
+def _response_allows_readback(value: object) -> bool:
+    """Only a 2xx, ambiguous 5xx/loss, or absent response may be reconciled."""
+    if value is None:
+        return True
+    if type(value) is HttpResponse:
+        status = value.status
+    elif type(value) is dict:
+        status = value.get("status")
+    else:
+        return False
+    return ((type(status) is int and
+             (200 <= status < 300 or 500 <= status < 600))
+            or (type(status) is str and status in {"unknown", "lost"}))
+
+
 def classify_pull_after_one_attempt(
         expected: ExpectedPull,
         read: Callable[[], PullCensus],
         provider_response: object = None) -> ExactPull | Unknown:
     """Require one complete, coherent and exact PR poststate after attempt one.
 
-    The ambiguous send response is ignored. A caller must durably prove its
-    original one-attempt count and supply a qualified complete native reader.
+    A caller must durably prove its original one-attempt count and supply a
+    qualified complete native reader. Explicit refusals cannot be reconciled.
     """
-    del provider_response
     try:
+        if not _response_allows_readback(provider_response):
+            return Unknown("pull-request-provider-response-ineligible")
         if not _valid_pull(expected):
             return Unknown("pull-request-identity-invalid")
         expected = dataclasses.replace(expected)
@@ -762,8 +778,9 @@ def classify_protection_after_one_attempt(
         read: Callable[[], ProtectionReadback],
         provider_response: object = None) -> ExactProtection | Unknown:
     """Require full protection readback, including disabled force pushes."""
-    del provider_response
     try:
+        if not _response_allows_readback(provider_response):
+            return Unknown("branch-protection-provider-response-ineligible")
         if not _valid_protection(expected):
             return Unknown("branch-protection-identity-invalid")
         expected = dataclasses.replace(expected)
