@@ -13,9 +13,9 @@ import callable_isolated_v2_effect_candidate as candidate
 import callable_isolated_v2_effect_approval_identity as approval
 import callable_isolated_v2_effect_release_preflight as release
 
-PROBE_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-refusal/1"
+PROBE_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-refusal/2"
 AUDIT_SCHEMA = "fsgg.coordination.callable-isolated-v2-no-effect-audit/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/3"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/4"
 REFUSAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-scaffold-refusal/1"
 IDENTITY = {"runId", "runAttempt", "coordinationRevision", "sourceTree",
             "artifactId", "manifestSha256", "archiveSha256", "installPath",
@@ -59,6 +59,8 @@ class ReadbackResult:
     identity_event_id: int
     approved_at: str
     expires_at: str
+    command_started_at: str
+    command_completed_at: str
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -192,7 +194,8 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
         "credentialId", "repository", "runnerActorId", "imageDigest",
         "attestationDigest", "interpreterSha256", "runtimeClosureSha256",
         "realPath", "symlink", "before", "after", "archiveBytes", "argv",
-        "exitCode", "stdout", "stderr", "observedAt"}, "readback-probe-shape")
+        "exitCode", "stdout", "stderr", "commandStartedAt",
+        "commandCompletedAt", "observedAt"}, "readback-probe-shape")
     audit = _exact(audit, IDENTITY | {"schema", "complete", "principalId",
         "credentialId", "repository", "eventId", "auditActorId",
         "runnerActorId", "object", "counts", "observedAt"},
@@ -260,10 +263,12 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
     counts = _exact(audit["counts"], COUNTS, "readback-counts-shape")
     if any(type(value) is not int or value != 0 for value in counts.values()):
         raise Refused("readback-effect-access")
+    started = _time(probe["commandStartedAt"])
+    completed = _time(probe["commandCompletedAt"])
     observed = _time(probe["observedAt"])
     audited = _time(audit["observedAt"])
-    if not (now - dt.timedelta(minutes=15) <= approved_at <= observed
-            <= audited <= now < expires_at):
+    if not (now - dt.timedelta(minutes=15) <= approved_at <= started
+            <= completed <= observed <= audited <= now < expires_at):
         raise Refused("readback-time-binding")
     if (_scope(runner_port, "read-installed-probe", now) != runner_scope
             or _scope(audit_port, "read-effect-audit", now) != audit_scope):
@@ -275,4 +280,6 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
                           preflight.source_record_id, approval_witness.repository_id,
                           approval_witness.identity_event_id,
                           approval_witness.approved_at,
-                          approval_witness.expires_at)
+                          approval_witness.expires_at,
+                          probe["commandStartedAt"],
+                          probe["commandCompletedAt"])
