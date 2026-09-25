@@ -181,6 +181,22 @@ class ApprovalIdentityTests(unittest.TestCase):
         self.refuses(lambda _p, _m, _s, i, _e: i.scopes[0].__setitem__("permissions", ["members:write"]))
         self.refuses(lambda _p, _m, _s, _i, e: setattr(e, "record", b""))
 
+    def test_final_scope_cannot_replace_selected_identity_event(self):
+        preflight, made, selection, identity, event = fixture()
+        original_scope = event.scope
+        reads = [0]
+
+        def scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                selection["identityEventId"] = 809
+            return original_scope()
+
+        event.scope = scope
+        result = approval.qualify(preflight, made, identity, event,
+                                  selection, NOW)
+        self.assertEqual(result.identity_event_id, 808)
+
     def test_in_place_scope_credential_mutation_was_a_false_green(self):
         preflight, made, selection, identity, event = fixture()
         shared = event.scopes[0]
