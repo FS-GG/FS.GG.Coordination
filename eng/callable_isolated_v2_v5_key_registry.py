@@ -40,6 +40,12 @@ class KeyWitness:
     registry_event_id: int
     reviewer_actor_id: int
     public_key_sha256: str
+    public_key_bytes: bytes
+    repository_id: int
+    registry_reader_principal: str
+    registry_credential_id: str
+    observed_at: str
+    expires_at: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -181,7 +187,10 @@ def qualify(selection: candidate.Selection,
             raise Refused("v5-key-registry-drift")
         return KeyWitness(selected["keyId"], selected["registryEventId"],
                           selected["reviewerActorId"],
-                          hashlib.sha256(public_key).hexdigest())
+                          hashlib.sha256(public_key).hexdigest(), public_key,
+                          selection.repository_id, scope["principalId"],
+                          scope["credentialId"], record["observedAt"],
+                          record["expiresAt"])
     except Refused:
         raise
     except Exception:

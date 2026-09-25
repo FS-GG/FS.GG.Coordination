@@ -87,6 +87,8 @@ class KeyRegistryTests(unittest.TestCase):
         result = registry.qualify(s, a, i, e, chosen, port, NOW)
         self.assertEqual(port.calls, [1100])
         self.assertEqual(result.key_id, KEY_ID)
+        self.assertEqual(result.public_key_bytes, PUBLIC_KEY)
+        self.assertEqual(result.registry_reader_principal, "registry-reader")
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
