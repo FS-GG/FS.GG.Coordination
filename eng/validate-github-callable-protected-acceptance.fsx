@@ -18,6 +18,7 @@ if actual <> "64d2c47bbfbbb01dd2c25694677f2892e51f2e20b9ae1a712afba0f0ea4bb22b" 
 
 let info = ProcessStartInfo("python3", WorkingDirectory = root, UseShellExecute = false,
                             RedirectStandardOutput = true, RedirectStandardError = true)
+info.Environment["PYTHONDONTWRITEBYTECODE"] <- "1"
 info.ArgumentList.Add(source)
 let child = Process.Start info
 let output = child.StandardOutput.ReadToEndAsync()
