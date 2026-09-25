@@ -125,6 +125,21 @@ type MigrationRepositoryWorkflowPermissions =
       DefaultWorkflowPermissions: string
       CanApprovePullRequestReviews: bool }
 
+/// Private-repository fork PR workflow flags only; inherited settings remain unobserved.
+type MigrationPrivateForkWorkflowSettings =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PolicyUri: string
+      PolicyPayloadJson: string
+      PolicyPayloadSha256: string
+      RunWorkflowsFromForkPullRequests: bool
+      SendWriteTokensToWorkflows: bool
+      SendSecretsAndVariables: bool
+      RequireApprovalForForkPrWorkflows: bool }
+
 /// One exact receiver ref/commit/recursive-tree observation. Blob pin bytes are not read here.
 type MigrationReceiverObjectEvidence =
     { RequestUri: string
@@ -492,6 +507,11 @@ module MigrationGitHubRead =
     val readRepositoryWorkflowPermissions:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryWorkflowPermissions, MigrationReadFailure>
+
+    /// Read-only private repository fork PR workflow flags, closed by a second exact identity read.
+    val readPrivateForkWorkflowSettings:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationPrivateForkWorkflowSettings, MigrationReadFailure>
 
     /// Exact branch ref, commit and complete recursive-tree read, closed by a second ref read.
     val readReceiverSnapshot:
