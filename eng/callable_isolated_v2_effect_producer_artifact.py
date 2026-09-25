@@ -6,6 +6,7 @@ import dataclasses
 import datetime as dt
 import hashlib
 import io
+import copy
 import zipfile
 from typing import Any, Protocol
 
@@ -95,7 +96,7 @@ def _scope(port: object, repository_id: int, permissions: list[str],
             or value["permissions"] != permissions
             or _time(value["expiresAt"]) <= now):
         raise Refused("producer-scope-binding")
-    return value
+    return copy.deepcopy(value)
 
 
 def qualify(preflight: release.PreflightResult,
