@@ -25,6 +25,7 @@ HELD_WORKFLOW_SHA256S = frozenset({ORIGINAL_HELD_WORKFLOW_SHA256,
                                     REFRESHED_HELD_WORKFLOW_SHA256,
                                     held.WORKFLOW_SHA256})
 EMPTY_SHA256 = hashlib.sha256(b"").hexdigest()
+ARCHIVE_SIZE = 14_491
 NO_GRANT_STDERR_SHA256 = hashlib.sha256(b"inspect-refused:inspect-arguments\n").hexdigest()
 UNKNOWN_STDERR_SHA256 = hashlib.sha256(b"inspect-only\n").hexdigest()
 SELECTION_KEYS = frozenset({
@@ -45,7 +46,10 @@ CONTROL_KEYS = frozenset({
     "workingDirectoryWriteCount", "observedAt", "installedArchivePath",
     "installedArchiveBefore", "installedArchiveAfter",
 })
-ARCHIVE_IDENTITY_KEYS = frozenset({"path", "realPath", "kind", "device", "inode", "sha256"})
+ARCHIVE_IDENTITY_KEYS = frozenset({
+    "path", "realPath", "kind", "device", "inode", "sha256", "size",
+    "mode", "linkCount", "mtimeNs", "ctimeNs",
+})
 REVIEW_KEYS = frozenset({"schema", "complete", "selectionSha256", "bindings",
                          "reviewerId", "reviewerMembership", "reviewEventId",
                          "reviewedAt", "repository", "workflowPath",
@@ -161,7 +165,7 @@ def _refusal(value: Any, argv: list[str], stderr_sha256: str) -> None:
 
 
 def _archive_identity(value: Any, installed_path: str, selected_sha256: str
-                      ) -> tuple[int, int]:
+                      ) -> tuple[int, int, int, int, int, int, int]:
     _exact(value, ARCHIVE_IDENTITY_KEYS, "readback-archive-identity-shape")
     if (type(value["path"]) is not str or value["path"] != installed_path
             or type(value["realPath"]) is not str
@@ -170,9 +174,19 @@ def _archive_identity(value: Any, installed_path: str, selected_sha256: str
             or type(value["device"]) is not int or value["device"] <= 0
             or type(value["inode"]) is not int or value["inode"] <= 0
             or type(value["sha256"]) is not str
-            or value["sha256"] != selected_sha256):
+            or value["sha256"] != selected_sha256
+            or type(value["size"]) is not int or value["size"] != ARCHIVE_SIZE
+            or type(value["mode"]) is not int
+            or value["mode"] & 0o170000 != 0o100000
+            or value["mode"] & 0o222 != 0
+            or value["mode"] & 0o444 == 0
+            or value["mode"] & 0o7000 != 0
+            or type(value["linkCount"]) is not int or value["linkCount"] != 1
+            or type(value["mtimeNs"]) is not int or value["mtimeNs"] <= 0
+            or type(value["ctimeNs"]) is not int or value["ctimeNs"] <= 0):
         raise Refused("readback-archive-identity")
-    return value["device"], value["inode"]
+    return (value["device"], value["inode"], value["size"], value["mode"],
+            value["linkCount"], value["mtimeNs"], value["ctimeNs"])
 
 
 def _controls(value: Any, selected: dict[str, Any], packet: dict[str, Any],

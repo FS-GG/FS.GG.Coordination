@@ -97,7 +97,10 @@ def controls_fixture(selected: dict, interpreter_path: str = INTERPRETER_PATH) -
     command = [interpreter_path, "-I", "-S", INSTALLED_PATH]
     archive_identity = {"path": INSTALLED_PATH, "realPath": INSTALLED_PATH,
                         "kind": "regular", "device": 401, "inode": 402,
-                        "sha256": selected["archiveSha256"]}
+                        "sha256": selected["archiveSha256"],
+                        "size": readback.ARCHIVE_SIZE, "mode": 0o100444,
+                        "linkCount": 1, "mtimeNs": 1_700_000_000_000_000_000,
+                        "ctimeNs": 1_700_000_000_000_000_001}
     return {
         "schema": readback.CONTROLS_SCHEMA, "complete": True,
         "runId": selected["runId"], "runAttempt": selected["runAttempt"],
@@ -193,6 +196,28 @@ def verify(packet: dict, selected: dict | None = None, controls: dict | None = N
 
 
 class SelectedReadbackTests(unittest.TestCase):
+    def test_archive_identity_requires_stable_read_only_metadata(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        controls = controls_fixture(selected)
+        # Matching device/inode and digest at two instants omit evidence that
+        # the same file was unchanged and unwritable between the probes.
+        del controls["installedArchiveBefore"]["ctimeNs"]
+        with self.assertRaisesRegex(readback.Refused, "archive-identity-shape"):
+            verify(packet, controls=controls)
+        for key, replacement in (
+                ("mode", 0o100644),
+                ("mode", 0o120444),
+                ("size", readback.ARCHIVE_SIZE + 1),
+                ("linkCount", 2),
+                ("ctimeNs", 1_700_000_000_000_000_002),
+                ("mtimeNs", 1_700_000_000_000_000_002)):
+            with self.subTest(key=key, replacement=replacement):
+                controls = controls_fixture(selected)
+                controls["installedArchiveAfter"][key] = replacement
+                with self.assertRaisesRegex(readback.Refused, "archive-"):
+                    verify(packet, controls=controls)
+
     def test_installed_refusal_requires_same_regular_archive_before_and_after(self):
         packet = packet_fixture()
         selected = selection_fixture(packet)
