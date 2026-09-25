@@ -79,6 +79,14 @@ source, issuer, clock, durable reservation store or transport implementation is 
 source must later retain the first `turn/started` notification in the journal; this gate does not
 prove that a selected turn began after subscription or produce completed-turn usage.
 
+`CodexAppServerFirstStart` adds that next structural check. After the one-use subscription
+reservation, a future authenticated journal reader must provide the first append receipt and its
+observation time. The gate checks the same native session and challenge, a first entry with no
+predecessor, exact binding and connection, canonical bytes and digest, and a native `turn/started`
+for the selected thread and turn after subscription. Source, clock and receipt failures burn the
+reservation. No trusted journal reader or native transport is installed; the result does not
+establish a complete turn, usage or an applied Host receipt.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
