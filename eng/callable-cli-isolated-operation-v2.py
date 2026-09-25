@@ -122,7 +122,20 @@ class NativeReadAdapter:
         self.transport = transport
         self.transcript: list[dict] = []
 
-    def _get(self, path: str) -> tuple[int, str, object]:
+    @staticmethod
+    def _unique_object(pairs: list[tuple[str, object]]) -> dict:
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise Refused("native-json-duplicate-member")
+            result[key] = value
+        return result
+
+    @staticmethod
+    def _finite_constant(_value: str):
+        raise Refused("native-json-nonfinite")
+
+    def _get(self, path: str, paginated: bool = False) -> tuple[int, str, object]:
         response = self.transport.request("GET", path, None)
         if (type(response) is not HttpResponse or type(response.status) is not int
                 or type(response.headers) is not tuple or type(response.body) is not bytes
@@ -137,8 +150,12 @@ class NativeReadAdapter:
         if len(links) > 1:
             raise Refused("native-link-shape")
         link = links[0][1] if links else ""
+        if link and not paginated:
+            raise Refused("native-singleton-pagination")
         try:
-            body = json.loads(response.body)
+            body = json.loads(response.body,
+                              object_pairs_hook=self._unique_object,
+                              parse_constant=self._finite_constant)
         except (UnicodeError, ValueError):
             raise Refused("native-json-invalid") from None
         self.transcript.append({"path": path, "status": response.status,
@@ -193,7 +210,7 @@ class NativeReadAdapter:
         advertised_last: int | None = None
         while page <= 50:
             path = f"{prefix}?state=open&per_page=100&page={page}"
-            status, header, body = self._get(path)
+            status, header, body = self._get(path, paginated=True)
             if status != 200 or type(body) is not list or len(body) > 100:
                 raise Refused("native-pull-page-invalid")
             links = self._links(header, prefix)
@@ -213,12 +230,15 @@ class NativeReadAdapter:
                 raise Refused("native-pull-terminal-contradiction")
             collected.extend(body)
             terminal = f"{prefix}?state=open&per_page=100&page={page + 1}"
-            terminal_status, terminal_header, terminal_body = self._get(terminal)
+            terminal_status, terminal_header, terminal_body = self._get(
+                terminal, paginated=True)
             terminal_links = self._links(terminal_header, prefix)
             if (terminal_status != 200 or terminal_body != []
                     or "next" in terminal_links
                     or ("last" in terminal_links
-                        and terminal_links["last"] != page + 1)):
+                        and terminal_links["last"] != page)
+                    or ("prev" in terminal_links
+                        and terminal_links["prev"] != page)):
                 raise Refused("native-pull-terminal-unproved")
             return collected
         raise Refused("native-pull-page-limit")
@@ -240,6 +260,12 @@ class NativeReadAdapter:
             if (status != 200 or type(detail) is not dict
                     or detail.get("number") != number):
                 raise Refused("native-pull-detail-identity")
+            if (type(item.get("node_id")) is not str
+                    or item["node_id"] != detail.get("node_id")):
+                raise Refused("native-pull-list-detail-node-drift")
+            for field in ("state", "draft", "title", "body"):
+                if field in item and item[field] != detail.get(field):
+                    raise Refused("native-pull-list-detail-field-drift")
             for side in ("head", "base"):
                 listed_side = item.get(side)
                 detail_side = detail.get(side)
@@ -247,8 +273,19 @@ class NativeReadAdapter:
                         or listed_side.get("sha") != detail_side.get("sha")
                         or listed_side.get("ref") != detail_side.get("ref")):
                     raise Refused("native-pull-list-detail-drift")
+                listed_repo = listed_side.get("repo")
+                detail_repo = detail_side.get("repo")
+                if (type(listed_repo) is not dict or type(detail_repo) is not dict
+                        or type(listed_repo.get("id")) is not int
+                        or listed_repo.get("id") != detail_repo.get("id")
+                        or listed_repo.get("full_name") != detail_repo.get("full_name")):
+                    raise Refused("native-pull-list-detail-repo-drift")
             if detail.get("body") == pull_request_body(expected)["body"]:
                 selected.append(detail)
+        self._repo(expected.repository, expected.repository_id)
+        if (self._ref(expected.repository, expected.source_ref) != source_sha
+                or self._ref(expected.repository, expected.base_ref) != base_sha):
+            raise Refused("native-pull-terminal-ref-drift")
         return PullCensus(True, expected.repository_id, source_sha, base_sha,
                           tuple(selected), _digest(self.transcript))
 
@@ -270,6 +307,20 @@ class NativeReadAdapter:
         if ((protected and (status != 200 or type(policy) is not dict))
                 or (not protected and status != 404)):
             raise Refused("native-protection-status")
+        self._repo(expected.repository, expected.repository_id)
+        if self._ref(expected.repository, f"refs/heads/{branch}") != sha:
+            raise Refused("native-protection-terminal-ref-drift")
+        terminal_status, _, terminal_branch = self._get(branch_path)
+        terminal_commit = terminal_branch.get("commit") if type(terminal_branch) is dict else None
+        if (terminal_status != 200 or type(terminal_branch) is not dict
+                or terminal_branch.get("name") != branch
+                or type(terminal_commit) is not dict
+                or terminal_commit.get("sha") != sha
+                or terminal_branch.get("protected") is not protected):
+            raise Refused("native-protection-terminal-branch-drift")
+        terminal_policy_status, _, terminal_policy = self._get(f"{branch_path}/protection")
+        if terminal_policy_status != status or terminal_policy != policy:
+            raise Refused("native-protection-terminal-policy-drift")
         return ProtectionReadback(True, expected.repository_id, branch, sha,
                                   protected, policy if protected else {},
                                   _digest(self.transcript))

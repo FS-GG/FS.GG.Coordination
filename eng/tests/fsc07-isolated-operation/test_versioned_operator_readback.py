@@ -2,6 +2,7 @@
 """Adversarial offline controls for the inactive versioned readback proof."""
 
 import dataclasses
+import copy
 import hashlib
 import importlib.util
 import json
@@ -79,8 +80,11 @@ def pull_read_events(pulls=(), source_sha=SHA_A, base_sha=SHA_B,
                      page_header=None, terminal=(), detail=True):
     repo = "FS-GG/disposable"
     prefix = f"repos/{repo}"
-    listed = [{"number": pull["number"], "head": pull["head"],
-               "base": pull["base"]} for pull in pulls]
+    listed = [{"number": pull["number"], "node_id": pull["node_id"],
+               "state": pull["state"], "draft": pull["draft"],
+               "title": pull["title"], "body": pull["body"],
+               "head": copy.deepcopy(pull["head"]),
+               "base": copy.deepcopy(pull["base"])} for pull in pulls]
     events = [
         event("GET", prefix, value={"id": 44, "full_name": repo,
                                       "transcript_sha256": "0" * 64}),
@@ -96,13 +100,21 @@ def pull_read_events(pulls=(), source_sha=SHA_A, base_sha=SHA_B,
     if detail:
         events.extend(event("GET", f"{prefix}/pulls/{pull['number']}", value=pull)
                       for pull in pulls)
+    events.extend([
+        event("GET", prefix, value={"id": 44, "full_name": repo,
+                                      "transcript_sha256": "0" * 64}),
+        event("GET", f"{prefix}/git/ref/heads/source",
+              value={"ref": "refs/heads/source", "object": {"sha": source_sha}}),
+        event("GET", f"{prefix}/git/ref/heads/main",
+              value={"ref": "refs/heads/main", "object": {"sha": base_sha}}),
+    ])
     return events
 
 
 def protection_read_events(protected=False, policy=None, branch_sha=SHA_B):
     repo = "FS-GG/disposable"
     prefix = f"repos/{repo}"
-    return [
+    first = [
         event("GET", prefix, value={"id": 44, "full_name": repo}),
         event("GET", f"{prefix}/git/ref/heads/main",
               value={"ref": "refs/heads/main", "object": {"sha": branch_sha}}),
@@ -112,6 +124,7 @@ def protection_read_events(protected=False, policy=None, branch_sha=SHA_B):
         event("GET", f"{prefix}/branches/main/protection", value=policy or {},
               status=200 if protected else 404),
     ]
+    return first + copy.deepcopy(first)
 
 
 def reserve_once_factory():
@@ -294,6 +307,85 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
                                                    reserve_once_factory()))
         self.assertEqual(transport.writes, 0)
+
+    def test_q3_terminal_ref_and_singleton_link_refuse_before_write(self):
+        events = pull_read_events()
+        events[6]["response"]["json"]["object"]["sha"] = SHA_C
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+
+    def test_q3_list_detail_foreign_identity_and_terminal_last_refuse(self):
+        pull = pull_observed().pulls[0]
+        for field in ("node_id", "head.repo"):
+            post = pull_read_events((pull,))
+            listed = post[3]["response"]["json"][0]
+            if field == "node_id":
+                listed["node_id"] = "PR_foreign"
+            else:
+                listed["head"]["repo"] = {"id": 999, "full_name": "FS-GG/foreign"}
+            events = (pull_read_events() * 2 +
+                      [event("POST", "repos/FS-GG/disposable/pulls",
+                             body=operator.pull_request_body(pull_expected()),
+                             error=SENTINEL)] + post)
+            transport = operator.OfflineTranscriptTransport(events)
+            with self.subTest(field=field):
+                self.assert_unknown(operator.run_pull_once(
+                    pull_expected(), transport, reserve_once_factory()))
+                self.assertEqual(transport.writes, 1)
+        last_one = ('<https://api.github.com/repos/FS-GG/disposable/pulls?'
+                    'state=open&per_page=100&page=1>; rel="last"')
+        last_two = ('<https://api.github.com/repos/FS-GG/disposable/pulls?'
+                    'state=open&per_page=100&page=2>; rel="last"')
+        post = pull_read_events((pull,), page_header=last_one)
+        post[4]["response"]["headers"] = [["Link", last_two]]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_duplicate_and_nonfinite_native_json_refuse(self):
+        policy = protection_observed().policy
+        malformed = {**policy, "allow_force_pushes": {"enabled": True}}
+        raw = json.dumps(malformed)[:-1] + ',"allow_force_pushes":{"enabled":false}}'
+        post = protection_read_events(True, policy)
+        post[3]["response"]["rawBody"] = raw
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         error=SENTINEL)] + post)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            protection_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+        events = pull_read_events()
+        events[0]["response"]["rawBody"] = (
+            '{"id":44,"full_name":"FS-GG/disposable","extra":NaN}')
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+        events = protection_read_events()
+        events[6]["response"]["json"]["protected"] = True
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(protection_expected(),
+                                                         transport,
+                                                         reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+        events = pull_read_events()
+        events[0]["response"]["headers"] = [[
+            "Link", "<https://api.github.com/repos/FS-GG/disposable?page=2>; rel=\"next\""]]
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 0)
+        link_next = ('<https://api.github.com/repos/FS-GG/disposable/pulls?'
+                     'state=open&per_page=100&page=2>; rel="next"')
         false_last = ('<https://api.github.com/repos/FS-GG/disposable/pulls?'
                       'state=open&per_page=100&page=3>; rel="last"')
         events = pull_read_events()
@@ -324,6 +416,20 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assert_unknown(result)
         self.assertEqual(transport.writes, 1)
         self.assertNotIn(SENTINEL, repr(result))
+
+    def test_q6_final_poststate_ref_drift_is_unknown(self):
+        pull = pull_observed().pulls[0]
+        final_pass = pull_read_events((pull,))
+        final_pass[7]["response"]["json"]["object"]["sha"] = SHA_C
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) + final_pass)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
+                                                   reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
 
     def test_q6_restart_replay_cli_and_v5_inspect_binding(self):
         root = SOURCE.parents[1]

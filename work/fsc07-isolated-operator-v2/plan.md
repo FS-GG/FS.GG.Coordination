@@ -26,9 +26,11 @@ characterization and is not acceptance evidence.
 - The runtime's native reader derives complete readback and transcript hashes
   from raw injected REST status, Link headers, and response bytes. It checks
   repository and branch refs, enumerates complete open-PR pages with a
-  terminal probe, joins each PR detail, and checks branch/protection status.
-  It refuses missing continuation, contradictory `last`, missing detail,
-  duplicate PR IDs, moved refs, or changing snapshots.
+  terminal probe, joins each PR detail and its listed node/repository identity,
+  then rereads repository and branch refs. Protection reads also close over
+  terminal branch and policy state. Singleton pagination, duplicate JSON
+  members, nonfinite values, missing continuation, contradictory `last`,
+  missing detail, duplicate PR IDs, moved refs, or changing snapshots refuse.
 - Before a controlled POST/PUT it requires a complete absent prestate and a
   before-send attempt reservation. The offline CLI uses a local SQLite journal
   to show replay refusal across process restarts. A future installed runtime
