@@ -143,7 +143,9 @@ module MigrationInspectProviderAdapter =
                         if marker.ValueKind <> JsonValueKind.Object then failwith "pr-marker"
                         true
                     else false
-                let pullRequestCount = items |> List.filter isPullRequest |> List.length
+                let pullRequestNumbers =
+                    items |> List.filter isPullRequest
+                    |> List.map (fun item -> item.GetProperty("number").GetInt32())
                 let issues =
                     items |> List.choose (fun item ->
                       if isPullRequest item then None else
@@ -157,7 +159,7 @@ module MigrationInspectProviderAdapter =
                         Some(record,
                              subject $"repository:{repositoryId}:issue:{number}"
                                  (updated.ToUniversalTime().ToString("O")) payload))
-                issues, pullRequestCount)
+                issues, pullRequestNumbers)
             |> Ok
         with _ -> Error "raw-issue-parse"
 
@@ -216,13 +218,14 @@ module MigrationInspectProviderAdapter =
                         | Ok parsed ->
                             let rawRecords = parsed |> List.collect (fst >> List.map fst)
                                                     |> List.sortBy (fun (number, _, _, _, _, _) -> number)
-                            let rawPullRequestCount = parsed |> List.sumBy snd
+                            let rawPullRequestNumbers = parsed |> List.collect snd |> List.sort
                             let typedRecords =
                                 population.Issues
                                 |> List.map (fun item ->
                                     item.Number, item.DatabaseId, item.NodeId, item.State,
                                     item.UpdatedAt, item.PayloadJson)
-                            if rawPullRequestCount <> population.PullRequestCount then Error "issue-pr-count"
+                            if rawPullRequestNumbers.Length <> population.PullRequestCount then Error "issue-pr-count"
+                            elif rawPullRequestNumbers <> population.PullRequestMarkerNumbers then Error "issue-pr-markers"
                             elif rawRecords <> typedRecords then Error "issue-raw-typed-mismatch"
                             else
                                 let pages =
@@ -651,7 +654,8 @@ module MigrationInspectProviderAdapter =
                         List.zip pages issueProof.Pages
                         |> List.forall (fun ((rows, _), proof) -> proof.Subjects = (rows |> List.map snd))
                     pageFacts && subjectFacts && rawRecords = typedRecords
-                    && (pages |> List.sumBy snd) = issues.PullRequestCount
+                    && (pages |> List.collect snd |> List.sort) = issues.PullRequestMarkerNumbers
+                    && issues.PullRequestMarkerNumbers.Length = issues.PullRequestCount
         if options.Cohort.Repositories.Length <> 1
            || options.Cohort.Repositories.Head.Id <> repositoryId
            || not population.CompleteForRepository || population.RepositoryId <> repositoryId

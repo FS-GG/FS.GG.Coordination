@@ -217,7 +217,8 @@ module MigrationNativeActivity =
                         parentReviews |> Option.forall (fun reviews -> not (Set.contains parent reviews)))))
         if issues.RepositoryId <= 0L || issues.RepositoryId <> pullRequests.RepositoryId
            || not issues.Terminal || issues.PageCount < 1
-           || not pullRequests.Terminal || issues.PullRequestCount <> pullRequests.PullRequests.Length then
+           || not pullRequests.Terminal || issues.PullRequestCount <> pullRequests.PullRequests.Length
+           || issues.PullRequestMarkerNumbers <> (pullRequests.PullRequests |> List.map _.Number |> List.sort) then
             fail "census"
         elif issues.Issues.Length <> issueNumbers.Count
              || pullRequests.PullRequests.Length <> pullRequestNumbers.Count

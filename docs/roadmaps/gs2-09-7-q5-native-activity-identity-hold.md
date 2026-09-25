@@ -147,6 +147,16 @@ only its parameter root was checked. It was red before the repair.
 `rulesetRule` now refuses duplicate members recursively within `parameters`
 before retaining their raw JSON. Native installed ruleset proof remains held.
 
+A twenty-first independent control found the issue census discarded the
+numbers of PR markers and retained only their count. A PR list with the same
+count but a different subject was accepted before the repair. The issue
+census now retains unique marker numbers; PR census and native activity
+reconciliation require the exact set. A second red-before control found the
+raw-to-typed issue adapter did not bind that new set; it now compares marker
+numbers from captured raw pages. This is still a source precursor: initial
+sandbox census, protected native observer and full inspect authority remain
+unproven.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

@@ -1086,7 +1086,7 @@ let private pullRequest number nodeId =
     $"""{{"number":{number},"id":{number + 200},"node_id":"{nodeId}","state":"open","updated_at":"2026-09-23T10:00:00Z","head":{{"sha":"{head}"}},"base":{{"sha":"{baseRevision}","repo":{{"id":42}}}}}}"""
 
 let private issuesWithPullRequests count =
-    { issueCensus () with PullRequestCount=count }
+    { issueCensus () with PullRequestCount=count; PullRequestMarkerNumbers=[ 3 .. 2 + count ] }
 
 [<Fact>]
 let ``pull request census binds terminal pages to the issue count and raw page bytes`` () =
@@ -1114,6 +1114,30 @@ let ``pull request census binds terminal pages to the issue count and raw page b
             | Rest value -> Assert.Equal(Get, value.Method)
             | _ -> failwith "pull request census issued a non-REST request")
     | Error failure -> failwithf "unexpected pull request census refusal: %A" failure
+
+[<Fact>]
+let ``pull request census refuses same count with a different issue marker number`` () =
+    let marker = """{"number":3,"pull_request":{}}"""
+    let issues =
+        MigrationGitHubRead.readIssues options
+            (FakeTransport [ repo; ok Map.empty $"[{marker}]" ])
+        |> function Ok value -> value | Error failure -> failwithf "unexpected issue marker refusal: %A" failure
+    let foreign = pullRequest 4 "PR_4"
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "pull-request-marker-set"),
+                 MigrationGitHubRead.readPullRequests options issues
+                     (FakeTransport [ repo; ok Map.empty $"[{foreign}]" ]))
+    let matching = pullRequest 3 "PR_3"
+    match MigrationGitHubRead.readPullRequests options issues
+              (FakeTransport [ repo; ok Map.empty $"[{matching}]" ]) with
+    | Ok population -> Assert.Equal([ 3 ], population.PullRequests |> List.map _.Number)
+    | Error failure -> failwithf "matching marker refused: %A" failure
+
+[<Fact>]
+let ``issue census refuses duplicate PR marker numbers`` () =
+    let marker = """{"number":3,"pull_request":{}}"""
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "3"),
+                 MigrationGitHubRead.readIssues options
+                     (FakeTransport [ repo; ok Map.empty $"[{marker},{marker}]" ]))
 
 [<Fact>]
 let ``pull request census refuses missing skipped and escaped terminal pages`` () =
@@ -1171,6 +1195,10 @@ let ``pull request census refuses malformed revisions and a nonterminal issue ce
     let nonterminal = { issuesWithPullRequests 1 with Terminal=false }
     Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "issue-census"),
                  MigrationGitHubRead.readPullRequests options nonterminal noRequests)
+    Assert.Empty(noRequests.Requests)
+    let overlap = { issuesWithPullRequests 1 with PullRequestMarkerNumbers=[ 1 ] }
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "issue-census"),
+                 MigrationGitHubRead.readPullRequests options overlap noRequests)
     Assert.Empty(noRequests.Requests)
 
 let private issueComment id nodeId issueNumber =

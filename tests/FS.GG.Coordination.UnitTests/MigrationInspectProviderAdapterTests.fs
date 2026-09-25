@@ -131,6 +131,9 @@ let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
                  MigrationInspectProviderAdapter.bindIssues options population (calls @ [ extra, reply "{}" ]))
     Assert.Equal(Error "issue-pr-count",
                  MigrationInspectProviderAdapter.bindIssues options { population with PullRequestCount=1 } calls)
+    Assert.Equal(Error "issue-pr-markers",
+                 MigrationInspectProviderAdapter.bindIssues options
+                     { population with PullRequestMarkerNumbers=[ 3 ] } calls)
     let getWithBody =
         calls |> List.mapi (fun index (request, outcome) ->
             match request with
@@ -138,6 +141,17 @@ let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
             | _ -> request, outcome)
     Assert.Equal(Error "issue-capture-shape",
                  MigrationInspectProviderAdapter.bindIssues options population getWithBody)
+
+[<Fact>]
+let ``issue adapter binds exact PR marker numbers from raw pages`` () =
+    let marker = """{"number":3,"pull_request":{}}"""
+    let body = issueBody.TrimEnd(']') + "," + marker + "]"
+    let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply body ]
+    Assert.Equal([ 3 ], population.PullRequestMarkerNumbers)
+    Assert.True(MigrationInspectProviderAdapter.bindIssues options population calls |> Result.isOk)
+    Assert.Equal(Error "issue-pr-markers",
+                 MigrationInspectProviderAdapter.bindIssues options
+                     { population with PullRequestMarkerNumbers=[ 4 ] } calls)
 
 [<Fact>]
 let ``adapter transport refuses write shaped requests before dispatch`` () =

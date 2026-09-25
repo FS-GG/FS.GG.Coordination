@@ -53,7 +53,7 @@ let private inlineComment =
 
 let private sample () : MigrationNativeActivityInput =
     { Issues={ RepositoryId=42L; PageCount=1; Terminal=true; Pages=[ page "issues" ]
-               Issues=[ issue ]; PullRequestCount=1 }
+               Issues=[ issue ]; PullRequestCount=1; PullRequestMarkerNumbers=[ 2 ] }
       PullRequests={ RepositoryId=42L; PageCount=1; Terminal=true
                      Pages=[ page "pulls" ]; PullRequests=[ pullRequest ] }
       IssueComments=[ { RepositoryId=42L; SubjectNumber=1; SubjectNodeId="I_1"
@@ -140,6 +140,12 @@ let ``complete native activity binds every censused subject and raw item`` () =
         Assert.Equal(1, snapshot.InlineCommentCount)
         Assert.Equal(64, snapshot.NormalizedSha256.Length)
         Assert.Equal(snapshot, MigrationNativeActivity.reconcile input |> requireOk)
+
+[<Fact>]
+let ``native activity refuses a PR population outside issue marker set`` () =
+    let input = sample ()
+    assertRefused "census"
+        { input with Issues={ input.Issues with PullRequestMarkerNumbers=[ 3 ] } }
 
 [<Fact>]
 let ``missing subject stream refuses without trying to find an absent review stream`` () =

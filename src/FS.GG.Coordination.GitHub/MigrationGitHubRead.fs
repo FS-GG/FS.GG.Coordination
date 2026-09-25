@@ -38,7 +38,8 @@ type MigrationIssuePopulation =
       Terminal: bool
       Pages: MigrationRestPageEvidence list
       Issues: MigrationIssueRecord list
-      PullRequestCount: int }
+      PullRequestCount: int
+      PullRequestMarkerNumbers: int list }
 
 type MigrationRepositoryCoreSettings =
     { RepositoryId: int64
@@ -1849,7 +1850,7 @@ module MigrationGitHubRead =
                 let start = Uri(options.ApiBase, path)
                 let allowedPath = start.AbsolutePath
                 let rec pages (seen: Set<string>) (count: int) (issues: MigrationIssueRecord list)
-                              (pullRequests: int) (evidence: MigrationRestPageEvidence list) (current: Uri) =
+                              (pullRequestMarkers: int list) (evidence: MigrationRestPageEvidence list) (current: Uri) =
                     if count >= 1000 || Set.contains current.AbsoluteUri seen then
                         Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
                     elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
@@ -1878,35 +1879,43 @@ module MigrationGitHubRead =
                                                 |> Result.bind (fun () ->
                                                     let mutable marker = Unchecked.defaultof<JsonElement>
                                                     if item.TryGetProperty("pull_request", &marker) then
-                                                        if marker.ValueKind = JsonValueKind.Object then Ok None
+                                                        if marker.ValueKind = JsonValueKind.Object then
+                                                            requiredInt "number" item |> Result.map Choice2Of2
                                                         else Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-marker")
-                                                    else parseIssue item |> Result.map Some))
+                                                    else parseIssue item |> Result.map Choice1Of2))
                                     let firstError = classified |> List.tryPick (function Error error -> Some error | _ -> None)
                                     match firstError with
                                     | Some error -> Error error
                                     | None ->
-                                        let records = classified |> List.choose (function Ok(Some value) -> Some value | _ -> None)
+                                        let records = classified |> List.choose (function Ok(Choice1Of2 value) -> Some value | _ -> None)
+                                        let markerNumbers = classified |> List.choose (function Ok(Choice2Of2 value) -> Some value | _ -> None)
                                         let link = Map.tryFind "link" result.Headers |> Option.defaultValue ""
                                         match Transport.tryNextLink link with
                                         | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                         | Ok next ->
                                             let accumulated = issues @ records
-                                            let prCount = pullRequests + items.Length - records.Length
+                                            let allMarkers = pullRequestMarkers @ markerNumbers
                                             let page =
                                                 { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
                                                   NextUri=next |> Option.map _.AbsoluteUri }
                                             let allPages = evidence @ [ page ]
                                             match next with
-                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) accumulated prCount allPages uri
+                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) accumulated allMarkers allPages uri
                                             | None ->
-                                                collectUnique (fun (issue: MigrationIssueRecord) -> issue.NodeId) accumulated
+                                                collectUnique string allMarkers
+                                                |> Result.bind (fun markers ->
+                                                    if accumulated |> List.exists (fun issue -> List.contains issue.Number markers) then
+                                                        Error(MigrationReadFailure.SnapshotMismatch "issue-pr-number-overlap")
+                                                    else Ok markers)
+                                                |> Result.bind (fun _ -> collectUnique (fun (issue: MigrationIssueRecord) -> issue.NodeId) accumulated)
                                                 |> Result.bind (collectUnique (fun issue -> string issue.DatabaseId))
                                                 |> Result.bind (collectUnique (fun issue -> string issue.Number))
                                                 |> Result.map (fun complete ->
                                                     { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
                                                       Pages=allPages; Issues=List.sortBy _.Number complete
-                                                      PullRequestCount=prCount })))
-                pages Set.empty 0 [] 0 [] start)
+                                                      PullRequestCount=allMarkers.Length
+                                                      PullRequestMarkerNumbers=List.sort allMarkers })))
+                pages Set.empty 0 [] [] [] start)
 
     let private parsePullRequest repositoryId (value: JsonElement) =
         let baseRepositoryId = property "base" value |> Result.bind (property "repo")
@@ -1940,7 +1949,11 @@ module MigrationGitHubRead =
                          (transport: IMigrationGitHubReadTransport) =
         if not (valid options) then Error MigrationReadFailure.InvalidOptions
         elif not issues.Terminal || issues.PageCount < 1 || issues.RepositoryId <> options.ExpectedRepositoryId
-             || issues.PullRequestCount < 0 then
+             || issues.PullRequestCount <> issues.PullRequestMarkerNumbers.Length
+             || (issues.PullRequestMarkerNumbers |> List.exists (fun number -> number <= 0))
+             || issues.PullRequestMarkerNumbers <> List.sort issues.PullRequestMarkerNumbers
+             || (issues.PullRequestMarkerNumbers |> Set.ofList |> Set.count) <> issues.PullRequestMarkerNumbers.Length
+             || (issues.Issues |> List.exists (fun issue -> List.contains issue.Number issues.PullRequestMarkerNumbers)) then
             Error(MigrationReadFailure.SnapshotMismatch "issue-census")
         else
             readRepository options transport
@@ -2001,9 +2014,12 @@ module MigrationGitHubRead =
                                             collectUnique (fun (value: MigrationPullRequestRecord) -> value.NodeId) all
                                             |> Result.bind (collectUnique (fun value -> string value.DatabaseId))
                                             |> Result.bind (collectUnique (fun value -> string value.Number))
-                                            |> Result.map (fun complete ->
-                                                { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
-                                                  Pages=allPages; PullRequests=List.sortBy _.Number complete }))
+                                            |> Result.bind (fun complete ->
+                                                if (complete |> List.map _.Number |> List.sort) <> issues.PullRequestMarkerNumbers then
+                                                    Error(MigrationReadFailure.SnapshotMismatch "pull-request-marker-set")
+                                                else
+                                                    Ok { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
+                                                         Pages=allPages; PullRequests=List.sortBy _.Number complete }))
                 pages Set.empty 0 [] [] start)
 
     let private exactCommentPageQuery pageIndex (uri: Uri) =
