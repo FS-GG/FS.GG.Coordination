@@ -135,6 +135,12 @@ accept duplicate `default_branch` members. It was red before the repair.
 Both reads now refuse duplicate root members before accepting repository
 scope or core settings. This does not establish protected native provenance.
 
+A nineteenth independent control found repository ruleset detail parsing
+could accept duplicate raw `conditions.ref_name` members, choosing one branch
+or tag target set. It was red before the repair. `rulesetConditions` now
+refuses duplicate members in `conditions` before parsing `ref_name` itself.
+This remains partial settings readback, not complete native authority.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

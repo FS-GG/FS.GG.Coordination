@@ -1591,7 +1591,9 @@ module MigrationGitHubRead =
 
     let private rulesetConditions (element: JsonElement) =
         property "conditions" element
-        |> Result.bind (property "ref_name")
+        |> Result.bind (fun conditions ->
+            uniqueObjectMembers conditions
+            |> Result.bind (fun () -> property "ref_name" conditions))
         |> Result.bind (fun refName ->
             uniqueObjectMembers refName
             |> Result.bind (fun () ->
