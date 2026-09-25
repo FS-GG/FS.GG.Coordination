@@ -27,16 +27,29 @@ type ProtectedIssueCensusNativeAttemptRecord =
       TokenFingerprintSha256: string option
       RevocationReceiptSha256: string option }
 
+type ProtectedIssueCensusNativeAttemptHead =
+    { AttemptResourceId: string
+      Generation: int64
+      SealSha256: string }
+
+type ProtectedIssueCensusNativeAttemptSnapshot =
+    { Head: ProtectedIssueCensusNativeAttemptHead
+      AttemptId: string
+      Complete: bool
+      Records: ProtectedIssueCensusNativeAttemptRecord list }
+
 type ProtectedIssueCensusRecoveryHold =
     | NativeResultUnknown
     | NativeRevocationRequired
     | ProtectedReceiptRequired
 
-/// Read-only fake port. It must come from a protected native attempt authority,
-/// never from candidate files or a caller-supplied provider result.
+/// Read-only fake port. The installed authority must return a complete snapshot
+/// between linearizable heads; the seal field alone is not an authentic signature.
+/// Reads must never come from candidate files or a caller-supplied provider result.
 type IProtectedIssueCensusNativeAttemptPort =
     abstract Describe: unit -> ProtectedIssueCensusNativeAttemptDescription
-    abstract ReadAttempts: string -> ProtectedIssueCensusNativeAttemptRecord list option
+    abstract ReadHead: unit -> ProtectedIssueCensusNativeAttemptHead option
+    abstract ReadAttempts: string -> ProtectedIssueCensusNativeAttemptSnapshot option
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusAttemptRecovery =

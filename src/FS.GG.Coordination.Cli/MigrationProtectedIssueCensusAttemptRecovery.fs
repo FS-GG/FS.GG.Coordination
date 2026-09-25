@@ -29,6 +29,17 @@ type ProtectedIssueCensusNativeAttemptRecord =
       TokenFingerprintSha256: string option
       RevocationReceiptSha256: string option }
 
+type ProtectedIssueCensusNativeAttemptHead =
+    { AttemptResourceId: string
+      Generation: int64
+      SealSha256: string }
+
+type ProtectedIssueCensusNativeAttemptSnapshot =
+    { Head: ProtectedIssueCensusNativeAttemptHead
+      AttemptId: string
+      Complete: bool
+      Records: ProtectedIssueCensusNativeAttemptRecord list }
+
 type ProtectedIssueCensusRecoveryHold =
     | NativeResultUnknown
     | NativeRevocationRequired
@@ -36,7 +47,8 @@ type ProtectedIssueCensusRecoveryHold =
 
 type IProtectedIssueCensusNativeAttemptPort =
     abstract Describe: unit -> ProtectedIssueCensusNativeAttemptDescription
-    abstract ReadAttempts: string -> ProtectedIssueCensusNativeAttemptRecord list option
+    abstract ReadHead: unit -> ProtectedIssueCensusNativeAttemptHead option
+    abstract ReadAttempts: string -> ProtectedIssueCensusNativeAttemptSnapshot option
 
 [<RequireQualifiedAccess>]
 module MigrationProtectedIssueCensusAttemptRecovery =
@@ -44,6 +56,38 @@ module MigrationProtectedIssueCensusAttemptRecovery =
         not (isNull value) && value.Length = 64
         && (value |> Seq.forall (fun ch ->
             (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
+
+    let private readStableSnapshot (native: IProtectedIssueCensusNativeAttemptPort)
+                                   (pins: ProtectedIssueCensusNativeAttemptPins)
+                                   (attemptId: string) =
+        let before =
+            try native.ReadHead()
+            with _ -> None
+        match before with
+        | None -> Error "protected-census-attempt-unknown"
+        | Some head when head.AttemptResourceId <> pins.AttemptResourceId
+                         || head.Generation < 1L
+                         || not (exactSha head.SealSha256) ->
+            Error "protected-census-attempt-head"
+        | Some head ->
+            let snapshot =
+                try native.ReadAttempts attemptId
+                with _ -> None
+            match snapshot with
+            | None -> Error "protected-census-attempt-unknown"
+            | Some observed when not observed.Complete ->
+                Error "protected-census-attempt-incomplete"
+            | Some observed when observed.AttemptId <> attemptId
+                                 || observed.Head <> head ->
+                Error "protected-census-attempt-head"
+            | Some observed ->
+                let after =
+                    try native.ReadHead()
+                    with _ -> None
+                match after with
+                | None -> Error "protected-census-attempt-unknown"
+                | Some current when current = head -> Ok observed.Records
+                | Some _ -> Error "protected-census-attempt-head"
 
     let inspect (handoffPins: ProtectedIssueCensusHandoffPins)
                 (nativePins: ProtectedIssueCensusNativeAttemptPins)
@@ -117,18 +161,17 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                         | Some marker when marker <> expectedMarker ->
                             Error "protected-census-attempt-binding"
                         | Some _ ->
-                            let nativeReadback =
-                                try native.ReadAttempts expectedMarker.NativeAttemptId
-                                with _ -> None
-                            match nativeReadback with
-                            | None | Some [] -> Error "protected-census-attempt-unknown"
-                            | Some [attempt] when attempt.Request <> expectedMarker
-                                                  || attempt.ProviderAttemptId
-                                                     <> expectedMarker.NativeAttemptId
-                                                  || attempt.VaultResourceId
-                                                     <> handoffPins.VaultResourceId ->
+                            match readStableSnapshot native nativePins
+                                                     expectedMarker.NativeAttemptId with
+                            | Error reason -> Error reason
+                            | Ok [] -> Error "protected-census-attempt-unknown"
+                            | Ok [attempt] when attempt.Request <> expectedMarker
+                                                || attempt.ProviderAttemptId
+                                                   <> expectedMarker.NativeAttemptId
+                                                || attempt.VaultResourceId
+                                                   <> handoffPins.VaultResourceId ->
                                 Error "protected-census-attempt-binding"
-                            | Some [attempt] ->
+                            | Ok [attempt] ->
                                 match attempt.Phase, attempt.TokenFingerprintSha256,
                                       attempt.RevocationReceiptSha256 with
                                 | InvocationUnknown, None, None -> Ok NativeResultUnknown
@@ -138,5 +181,5 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                                     when exactSha tokenHash && exactSha receiptHash ->
                                     Ok ProtectedReceiptRequired
                                 | _ -> Error "protected-census-attempt-phase"
-                            | Some _ -> Error "protected-census-attempt-duplicate"
+                            | Ok _ -> Error "protected-census-attempt-duplicate"
             | _ -> Error "protected-census-attempt-unavailable"

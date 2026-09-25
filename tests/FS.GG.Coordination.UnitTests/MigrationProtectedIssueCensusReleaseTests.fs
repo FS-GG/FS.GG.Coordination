@@ -429,6 +429,10 @@ let private nativeDescription =
       CandidateMayRead=false; CandidateMayWrite=false
       AuthoritativeCompleteReadback=true }
 
+let private nativeHead =
+    { AttemptResourceId=nativePins.AttemptResourceId
+      Generation=7L; SealSha256=String.replicate 64 "e" }
+
 let private capturedMarker (f: Fixture) =
     let reservation = capturedReservation f
     let mutable marked: ProtectedIssueCensusHandoffRequest option = None
@@ -450,7 +454,10 @@ let private markerPort marker =
 let private nativePort description readback =
     { new IProtectedIssueCensusNativeAttemptPort with
         member _.Describe() = description
-        member _.ReadAttempts _ = readback }
+        member _.ReadHead() = Some nativeHead
+        member _.ReadAttempts attemptId =
+            readback |> Option.map (fun records ->
+                { Head=nativeHead; AttemptId=attemptId; Complete=true; Records=records }) }
 
 let private inspectAttempt marker handoff native =
     MigrationProtectedIssueCensusAttemptRecovery.inspect
@@ -504,7 +511,10 @@ let ``protected native attempt recovery refuses candidate writable authority and
     let native description =
         { new IProtectedIssueCensusNativeAttemptPort with
             member _.Describe() = description
-            member _.ReadAttempts _ = nativeReads <- nativeReads + 1; Some [] }
+            member _.ReadHead() = Some nativeHead
+            member _.ReadAttempts attemptId =
+                nativeReads <- nativeReads + 1
+                Some { Head=nativeHead; AttemptId=attemptId; Complete=true; Records=[] } }
     Assert.Equal(Error "protected-census-attempt-installation",
                  inspectAttempt marker (Some (markerPort (Some marker)))
                      (Some (native { nativeDescription with CandidateMayWrite=true })))
@@ -513,3 +523,34 @@ let ``protected native attempt recovery refuses candidate writable authority and
                  inspectAttempt marker (Some (markerPort None))
                      (Some (native nativeDescription)))
     Assert.Equal(0, nativeReads)
+
+[<Fact>]
+let ``protected native attempt recovery refuses incomplete or stale sealed snapshot`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let record =
+        { Request=marker; ProviderAttemptId=marker.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    let exact =
+        { Head=nativeHead; AttemptId=marker.NativeAttemptId
+          Complete=true; Records=[record] }
+    let inspect snapshot before after =
+        let mutable reads = 0
+        let native =
+            { new IProtectedIssueCensusNativeAttemptPort with
+                member _.Describe() = nativeDescription
+                member _.ReadHead() =
+                    reads <- reads + 1
+                    if reads = 1 then before else after
+                member _.ReadAttempts _ = Some snapshot }
+        inspectAttempt marker (Some (markerPort (Some marker))) (Some native)
+    Assert.Equal(Error "protected-census-attempt-incomplete",
+                 inspect { exact with Complete=false } (Some nativeHead) (Some nativeHead))
+    let stale = { nativeHead with Generation=6L }
+    Assert.Equal(Error "protected-census-attempt-head",
+                 inspect { exact with Head=stale } (Some nativeHead) (Some nativeHead))
+    Assert.Equal(Error "protected-census-attempt-head",
+                 inspect exact (Some nativeHead) (Some { nativeHead with Generation=8L }))
+    Assert.Equal(Error "protected-census-attempt-unknown",
+                 inspect exact None (Some nativeHead))
