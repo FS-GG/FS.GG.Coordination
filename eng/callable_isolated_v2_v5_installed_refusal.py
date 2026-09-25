@@ -46,6 +46,16 @@ class Readback:
     artifact_id: int
     run_id: int
     audit_event_id: int
+    source_tree: str
+    repository_id: int
+    runner_actor_id: int
+    audit_actor_id: int
+    image_digest: str
+    interpreter_sha256: str
+    runtime_closure_sha256: str
+    install_path: str
+    command_started_at: str
+    command_completed_at: str
     authorized: bool = False
     can_dispatch: bool = False
     live_effects: int = 0
@@ -255,7 +265,14 @@ def qualify(selection: candidate.Selection, chosen: dict, probe_port,
             raise Refused("v5-installed-scope-drift")
         return Readback(selection.archive_sha256, selection.manifest_sha256,
                         selection.revision, selection.artifact_id,
-                        selected["runId"], selected["auditEventId"])
+                        selected["runId"], selected["auditEventId"],
+                        selection.source_tree, selection.repository_id,
+                        selected["runnerActorId"], selected["auditActorId"],
+                        selected["imageDigest"],
+                        selected["interpreterSha256"],
+                        selected["runtimeClosureSha256"],
+                        selected["installPath"], probe["startedAt"],
+                        probe["completedAt"])
     except Refused:
         raise
     except Exception:

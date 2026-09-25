@@ -109,6 +109,10 @@ class InstalledRefusalTests(unittest.TestCase):
 
     def test_matching_fake_runner_stays_closed(self):
         result = self.observe()
+        self.assertEqual(result.image_digest, "3" * 64)
+        self.assertEqual(result.install_path, PATH)
+        self.assertEqual(result.runner_actor_id, 701)
+        self.assertEqual(result.command_started_at, "2026-09-25T11:58:00Z")
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
