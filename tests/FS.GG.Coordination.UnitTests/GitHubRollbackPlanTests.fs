@@ -89,6 +89,14 @@ let ``receipt prefix resumes at exactly the next reverse step`` () =
     Assert.Equal(Ok(Some plan.Steps[2]), resume plan [ first; second ])
 
 [<Fact>]
+let ``Q6 pinned resume refuses a validly resealed substitute plan`` () =
+    let accepted = baseline () |> get
+    let substituted = withIdentityAndSteps "rollback-foreign" steps |> get
+    Assert.NotEqual(accepted.Seal, substituted.Seal)
+    Assert.Contains(AlteredSeal, resumePinned accepted.Seal substituted [] |> refusal)
+    Assert.Equal(Ok(Some accepted.Steps[0]), resumePinned accepted.Seal accepted [])
+
+[<Fact>]
 let ``every interrupted rollback prefix resumes deterministically and a completed replay is inert`` () =
     let plan = baseline () |> get
     let restored = plan.Steps |> List.map (fun step -> step.TargetIdentity, step.RestorePayloadSha256) |> Map.ofList

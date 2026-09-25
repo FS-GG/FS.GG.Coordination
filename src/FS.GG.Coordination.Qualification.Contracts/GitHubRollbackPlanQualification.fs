@@ -187,6 +187,13 @@ module GitHubRollbackPlanQualification =
             elif receipts.Length = plan.Steps.Length then Ok None
             else Ok(Some plan.Steps[receipts.Length])
 
+    // The accepted GS2-09.6 fixture keeps the historical self-pinned resume.
+    // A Q6 interpreter must supply its independently admitted plan seal here.
+    let resumePinned expectedSeal (plan: GitHubRollbackPlan) (receipts: GitHubRollbackReceipt list) =
+        match verify expectedSeal plan with
+        | Error findings -> Error findings
+        | Ok _ -> resume plan receipts
+
     let validateControls (primary: GitHubRollbackPlanControlResult list) (recovery: GitHubRollbackPlanControlResult list) =
         let validate name (values: GitHubRollbackPlanControlResult list) =
             let expected = Set.ofList requiredControls
