@@ -61,6 +61,10 @@ module MigrationProtectedIssueCensusAttemptRecovery =
     val validMarkerChain:
         marker:ProtectedIssueCensusHandoffRequest -> bool
 
+    /// Structural native phase shape; receipt digests alone are not native readback.
+    val validAttemptPhase:
+        record:ProtectedIssueCensusNativeAttemptRecord -> bool
+
     /// Unsigned canonical commitment over the complete native snapshot bytes.
     val expectedSnapshotSealSha256:
         snapshot:ProtectedIssueCensusNativeAttemptSnapshot -> string

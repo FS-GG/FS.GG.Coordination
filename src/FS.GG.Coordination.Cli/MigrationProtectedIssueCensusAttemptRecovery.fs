@@ -101,6 +101,15 @@ module MigrationProtectedIssueCensusAttemptRecovery =
             && marker.ReservationId =
                 MigrationProtectedIssueCensusRelease.reservationId claimId journalHead
 
+    let validAttemptPhase (record: ProtectedIssueCensusNativeAttemptRecord) =
+        match record.Phase, record.TokenFingerprintSha256,
+              record.RevocationReceiptSha256 with
+        | InvocationUnknown, None, None -> true
+        | TokenVaulted, Some tokenHash, None -> exactSha tokenHash
+        | NativeRevoked, Some tokenHash, Some receiptHash ->
+            exactSha tokenHash && exactSha receiptHash
+        | _ -> false
+
     let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
     let expectedSnapshotSealSha256 (snapshot: ProtectedIssueCensusNativeAttemptSnapshot) =
@@ -271,16 +280,13 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                                                         <> handoffPins.VaultResourceId ->
                                         Error "protected-census-attempt-binding"
                                     | [attempt] ->
-                                        match attempt.Phase, attempt.TokenFingerprintSha256,
-                                              attempt.RevocationReceiptSha256 with
-                                        | InvocationUnknown, None, None ->
-                                            Ok (snapshot, NativeResultUnknown)
-                                        | TokenVaulted, Some tokenHash, None when exactSha tokenHash ->
-                                            Ok (snapshot, NativeRevocationRequired)
-                                        | NativeRevoked, Some tokenHash, Some receiptHash
-                                            when exactSha tokenHash && exactSha receiptHash ->
-                                            Ok (snapshot, ProtectedReceiptRequired)
-                                        | _ -> Error "protected-census-attempt-phase"
+                                        if not (validAttemptPhase attempt) then
+                                            Error "protected-census-attempt-phase"
+                                        else
+                                            match attempt.Phase with
+                                            | InvocationUnknown -> Ok (snapshot, NativeResultUnknown)
+                                            | TokenVaulted -> Ok (snapshot, NativeRevocationRequired)
+                                            | NativeRevoked -> Ok (snapshot, ProtectedReceiptRequired)
                                     | _ -> Error "protected-census-attempt-duplicate"
             | _ -> Error "protected-census-attempt-unavailable"
 
