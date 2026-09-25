@@ -70,6 +70,8 @@ def verify(archive: bytes, workflow: bytes, manifest_raw: bytes,
             or manifest["archiveSize"] != len(archive)
             or manifest["archiveSha256"] != builder._sha(archive)
             or manifest["builderSourceSha256"] != builder._sha(builder_source)
+            or type(manifest["nativeSource"]) is not dict
+            or type(manifest["nativeSource"].get("size")) is not int
             or manifest["nativeSource"] !=
                {"path": builder.NATIVE_SOURCE,
                 "sha256": builder.NATIVE_SOURCE_SHA256,
