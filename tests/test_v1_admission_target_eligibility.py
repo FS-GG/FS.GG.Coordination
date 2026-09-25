@@ -49,9 +49,11 @@ class FakeGitHub:
         }
         self.checks = {
             HEAD: [{"id": 11, "name": "gate", "head_sha": HEAD,
+                    "check_suite": {"id": 21},
                     "app": {"id": 15368}, "status": "completed",
                     "conclusion": "success", "completed_at": "2026-09-25T01:00:00Z"}],
             TEST_MERGE: [{"id": 12, "name": "gate", "head_sha": TEST_MERGE,
+                          "check_suite": {"id": 22},
                           "app": {"id": 15368}, "status": "completed",
                           "conclusion": "success", "completed_at": "2026-09-25T01:10:00Z"}],
         }
@@ -73,6 +75,7 @@ class FakeGitHub:
     def read(self, path):
         self.calls.append(path)
         pr = {"number": 3695, "id": 700, "node_id": "PR_synthetic",
+              "user": {"id": 43},
               "state": "open", "draft": False, "merged": False,
               "base": {"ref": "main", "sha": BASE,
                        "repo": {"id": gate.REPOSITORY_ID}},
@@ -109,9 +112,16 @@ class FakeGitHub:
         else:
             body = None
             for commit in (HEAD, TEST_MERGE):
-                check_path = f"{P}/commits/{commit}/check-runs?per_page=100&filter=all&page="
+                suite_id = 21 if commit == HEAD else 22
+                suite_path = f"{P}/commits/{commit}/check-suites?per_page=100&page=1"
+                check_path = (
+                    f"{P}/check-suites/{suite_id}/check-runs?per_page=100&filter=all&page=1"
+                )
                 status_path = f"{P}/commits/{commit}/statuses?per_page=100&page="
-                if path == check_path + "1":
+                if path == suite_path:
+                    body = {"total_count": 1,
+                            "check_suites": [{"id": suite_id, "head_sha": commit}]}
+                elif path == check_path:
                     body = {"total_count": len(self.checks[commit]),
                             "check_runs": self.checks[commit]}
                 elif path == status_path + "1":
@@ -174,6 +184,30 @@ class TargetEligibilityTests(unittest.TestCase):
         self.fake.statuses[HEAD] = [{"id": 8, "context": "gate", "state": "success"}]
         with self.assertRaisesRegex(gate.Refused, "eligibility-overlapping-status"):
             gate.collect_once(self.fake.read, self.fake.policy(), 3695, NOW)
+
+    def test_self_approval_and_foreign_suite_refuse(self):
+        original = self.fake.read
+
+        def self_author(path):
+            result = original(path)
+            if path == f"{P}/pulls/3695":
+                result.body["user"]["id"] = 42
+            return result
+
+        with self.assertRaisesRegex(gate.Refused, "eligibility-self-review"):
+            gate.collect_once(self_author, self.fake.policy(), 3695, NOW)
+        self.fake = FakeGitHub()
+        self.fake.checks[HEAD][0]["check_suite"]["id"] = 999
+        with self.assertRaisesRegex(gate.NATIVE.Refused, "native-target-check-runs"):
+            gate.collect_once(self.fake.read, self.fake.policy(), 3695, NOW)
+
+    def test_unqualified_inherited_repository_selector_refuses(self):
+        inherited = copy.deepcopy(self.fake.detail)
+        inherited["conditions"]["repository_name"] = {
+            "include": [".github"], "exclude": [],
+        }
+        with self.assertRaisesRegex(gate.Refused, "eligibility-rule-conditions"):
+            gate._rule_applies_main(inherited)
 
 
 if __name__ == "__main__":

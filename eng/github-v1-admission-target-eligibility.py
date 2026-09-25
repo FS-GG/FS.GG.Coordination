@@ -5,7 +5,9 @@ The fixed Main caller supplies installed policy, not request-selected rules.
 This reader requires an exclusive writer ruleset, exact required check App IDs,
 current head and test-merge checks, and fresh review history. It refuses a
 conversation-resolution requirement until a qualified complete thread reader
-exists. A positive public result is not typed admission or merge authority.
+exists. Inherited rulesets with repository selectors also refuse until a
+qualified selector interpreter proves their exact application. A positive
+public result is not typed admission or merge authority.
 """
 
 from __future__ import annotations
@@ -20,11 +22,12 @@ import re
 import sys
 import urllib.parse
 
-SOURCE = pathlib.Path(__file__).with_name("github-v1-admission-job-native-read.py")
-SPEC = importlib.util.spec_from_file_location("v1_eligibility_native_transport", SOURCE)
-NATIVE = importlib.util.module_from_spec(SPEC)
-sys.modules[SPEC.name] = NATIVE
-SPEC.loader.exec_module(NATIVE)
+SOURCE = pathlib.Path(__file__).with_name("github-v1-admission-pr-target-read.py")
+SPEC = importlib.util.spec_from_file_location("v1_eligibility_target_transport", SOURCE)
+TARGET = importlib.util.module_from_spec(SPEC)
+sys.modules[SPEC.name] = TARGET
+SPEC.loader.exec_module(TARGET)
+NATIVE = TARGET.NATIVE
 
 PREFIX = NATIVE.PREFIX
 REPOSITORY_ID = NATIVE.REPOSITORY_ID
@@ -112,6 +115,8 @@ def _pages(read_json, transcript: list, path: str, key: str | None = None) -> li
 
 def _rule_applies_main(rule: dict) -> bool:
     conditions = rule.get("conditions")
+    # Organization/enterprise repository selectors are not interpreted here.
+    # A protected probe and closed selector interpreter must qualify them.
     require(isinstance(conditions, dict)
             and set(conditions) == {"ref_name"}
             and isinstance(conditions["ref_name"], dict)
@@ -203,9 +208,8 @@ def _policy_evidence(read_json, transcript: list,
 
 def _check_commit(read_json, transcript: list, commit_sha: str,
                   policy: InstalledTargetPolicy, after: int, now: int) -> None:
-    checks = _pages(read_json, transcript,
-                    f"{PREFIX}/commits/{commit_sha}/check-runs?per_page=100&filter=all",
-                    "check_runs")
+    checks = TARGET.complete_check_runs(
+        lambda path: _recorded(read_json, transcript, path), commit_sha)
     statuses = _pages(read_json, transcript,
                       f"{PREFIX}/commits/{commit_sha}/statuses?per_page=100")
     require(all(isinstance(item, dict) for item in checks + statuses),
@@ -233,7 +237,9 @@ def _check_commit(read_json, transcript: list, commit_sha: str,
 
 
 def _reviews(read_json, transcript: list, policy: InstalledTargetPolicy,
-             pr_number: int, head_sha: str, after: int, now: int) -> None:
+             pr_number: int, head_sha: str, author_id: int, after: int, now: int) -> None:
+    require(author_id not in policy.required_reviewer_ids,
+            "eligibility-self-review")
     reviews = _pages(read_json, transcript,
                      f"{PREFIX}/pulls/{pr_number}/reviews?per_page=100")
     require(all(isinstance(item, dict) and type(item.get("id")) is int
@@ -276,6 +282,8 @@ def collect_once(read_json, policy: InstalledTargetPolicy,
             and pr["number"] == pr_number
             and type(pr.get("id")) is int and pr["id"] > 0
             and isinstance(pr.get("node_id"), str) and bool(pr["node_id"])
+            and isinstance(pr.get("user"), dict)
+            and type(pr["user"].get("id")) is int and pr["user"]["id"] > 0
             and pr.get("state") == "open" and pr.get("draft") is False
             and pr.get("merged") is False
             and isinstance(pr.get("base"), dict)
@@ -320,7 +328,8 @@ def collect_once(read_json, policy: InstalledTargetPolicy,
     _policy_evidence(read_json, transcript, policy)
     _check_commit(read_json, transcript, head_sha, policy, head_time, now)
     _check_commit(read_json, transcript, test_merge_sha, policy, head_time, now)
-    _reviews(read_json, transcript, policy, pr_number, head_sha, head_time, now)
+    _reviews(read_json, transcript, policy, pr_number, head_sha,
+             pr["user"]["id"], head_time, now)
     return {
         "repository_id": REPOSITORY_ID,
         "pr_number": pr_number,
