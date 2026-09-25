@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.GitHub
 
 open System
 open System.Globalization
+open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -156,6 +157,147 @@ module V1AdmissionGenesisGitRead =
 
     let observedAt (GenesisGitRead evidence) = evidence.ObservedAt
 
+    let private claimObject kind (value: JsonElement) =
+        let raw = bytes 8192 value
+        if raw.Length = 0 then invalidOp "operating-claim-empty-object"
+        let prefix = Encoding.ASCII.GetBytes($"{kind} {raw.Length}\u0000")
+        let objectId =
+            SHA1.HashData(Array.append prefix raw)
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+        raw, objectId
+
+    let private claimTree (raw: byte array) =
+        let mutable offset = 0
+        let mutable entries = Map.empty
+        while offset < raw.Length do
+            let nul = Array.IndexOf(raw, 0uy, offset)
+            if nul < offset || nul + 21 > raw.Length then invalidOp "operating-claim-tree-entry"
+            let entry = Encoding.UTF8.GetString(raw, offset, nul - offset)
+            let name = entry.Substring("100644 ".Length)
+            if not (entry.StartsWith("100644 ", StringComparison.Ordinal))
+               || not (Set.contains name (Set.ofList [ "event.json"; "head.json" ]))
+               || Map.containsKey name entries then invalidOp "operating-claim-tree-entry"
+            let objectId = raw[(nul + 1) .. (nul + 20)] |> Convert.ToHexString |> _.ToLowerInvariant()
+            entries <- Map.add name objectId entries
+            offset <- nul + 21
+        if entries.Count <> 2 then invalidOp "operating-claim-tree-shape"
+        entries
+
+    let private claimCommit (raw: byte array) =
+        let value = UTF8Encoding(false, true).GetString raw
+        let boundary = value.IndexOf("\n\n", StringComparison.Ordinal)
+        if boundary < 0 then invalidOp "operating-claim-commit-boundary"
+        let headers = value.Substring(0, boundary).Split('\n') |> Array.toList
+        let fields = headers |> List.map (fun line -> line.Split(' ')[0])
+        let values prefix =
+            headers
+            |> List.choose (fun line ->
+                if line.StartsWith(prefix, StringComparison.Ordinal) then
+                    Some(line.Substring(prefix.Length))
+                else None)
+        let parent =
+            match values "parent " with
+            | [] -> None
+            | [ value ] -> Some(oid value)
+            | _ -> invalidOp "operating-claim-commit-parent"
+        let expected =
+            if parent.IsSome then [ "tree"; "parent"; "author"; "committer" ]
+            else [ "tree"; "author"; "committer" ]
+        let message = value.Substring(boundary + 2)
+        if fields <> expected || values "author " |> List.length <> 1
+           || values "committer " |> List.length <> 1
+           || not (message.EndsWith("\n", StringComparison.Ordinal))
+           || message.Length < 2
+           || message.AsSpan(0, message.Length - 1).IndexOf('\n') >= 0 then
+            invalidOp "operating-claim-commit-shape"
+        let tree = match values "tree " with [ value ] -> oid value | _ -> invalidOp "operating-claim-commit-tree"
+        tree, parent, message.Substring(0, message.Length - 1)
+
+    let private claimObservation (value: JsonElement) =
+        if not (exactProperties [ "ref"; "firstHead"; "secondHead"; "commits" ] value) then
+            invalidOp "operating-claim-shape"
+        let ref = value.GetProperty("ref").GetString()
+        let first = value.GetProperty("firstHead").GetString() |> oid
+        let second = value.GetProperty("secondHead").GetString() |> oid
+        let commits = value.GetProperty("commits").EnumerateArray() |> Seq.toArray
+        if first <> second || commits.Length = 0 || commits.Length > 4096 then
+            invalidOp "operating-claim-head-or-bound"
+        let mutable claimAddress: AggregateAddress option = None
+        let mutable total = 0
+        let decoded =
+            commits
+            |> Array.map (fun item ->
+                if not (exactProperties
+                            [ "commitOid"; "commitBytesBase64"; "treeOid"; "treeBytesBase64"
+                              "eventBytesBase64"; "headBytesBase64" ] item) then
+                    invalidOp "operating-claim-commit-shape"
+                let commitBytes, commitHash = claimObject "commit" (item.GetProperty("commitBytesBase64"))
+                let treeBytes, treeHash = claimObject "tree" (item.GetProperty("treeBytesBase64"))
+                let eventBytes, eventHash = claimObject "blob" (item.GetProperty("eventBytesBase64"))
+                let headBytes, headHash = claimObject "blob" (item.GetProperty("headBytesBase64"))
+                total <- total + commitBytes.Length + treeBytes.Length + eventBytes.Length + headBytes.Length
+                if total > 32_000_000
+                   || commitHash <> item.GetProperty("commitOid").GetString()
+                   || treeHash <> item.GetProperty("treeOid").GetString() then
+                    invalidOp "operating-claim-object-hash"
+                let tree, parent, operationId = claimCommit commitBytes
+                let entries = claimTree treeBytes
+                if V1AdmissionRegistry.gitObjectIdValue tree <> treeHash
+                   || entries["event.json"] <> eventHash
+                   || entries["head.json"] <> headHash then
+                    invalidOp "operating-claim-object-binding"
+                use headDocument = JsonDocument.Parse headBytes
+                let head = headDocument.RootElement
+                let fields =
+                    [ "aggregateDigest"; "aggregateId"; "eventDigest"; "generation"; "journalKind"
+                      "priorHeadDigest"; "schemaVersion"; "shard"; "snapshotDigest"; "terminal" ]
+                if not (exactProperties fields head)
+                   || head.GetProperty("journalKind").GetString() <> "claim"
+                   || head.GetProperty("eventDigest").GetString() <>
+                      (SHA256.HashData eventBytes |> Convert.ToHexString |> _.ToLowerInvariant()) then
+                    invalidOp "operating-claim-head-binding"
+                let address =
+                    ShardedJournalAdapter.address Claim (head.GetProperty("aggregateId").GetString())
+                    |> Result.defaultWith (fun _ -> invalidOp "operating-claim-address")
+                if address.Ref <> ref
+                   || head.GetProperty("aggregateDigest").GetString() <> address.Digest
+                   || head.GetProperty("shard").GetString() <> address.Shard
+                   || (claimAddress |> Option.exists ((<>) address)) then
+                    invalidOp "operating-claim-address-binding"
+                claimAddress <- Some address
+                let optionalDigest (name: string) =
+                    let field = head.GetProperty name
+                    if field.ValueKind = JsonValueKind.Null then None else Some(field.GetString())
+                let journalHead =
+                    { SchemaVersion = head.GetProperty("schemaVersion").GetInt32()
+                      Address = address
+                      Generation = head.GetProperty("generation").GetInt64()
+                      EventDigest = head.GetProperty("eventDigest").GetString()
+                      SnapshotDigest = optionalDigest "snapshotDigest"
+                      Terminal = head.GetProperty("terminal").GetBoolean()
+                      PriorHeadDigest = optionalDigest "priorHeadDigest"
+                      HeadDigest = SHA256.HashData headBytes |> Convert.ToHexString |> _.ToLowerInvariant() }
+                if ShardedJournalAdapter.journalHeadBytes journalHead <> headBytes then
+                    invalidOp "operating-claim-head-canonical"
+                { CommitOid = commitHash
+                  ParentOid = parent |> Option.map V1AdmissionRegistry.gitObjectIdValue
+                  TreeOid = treeHash
+                  OperationId = operationId
+                  Head = journalHead
+                  HeadBytes = headBytes
+                  Event = { Bytes = eventBytes; Digest = journalHead.EventDigest }
+                  Checkpoint = None })
+            |> List.ofArray
+        if (decoded |> List.last).CommitOid <> V1AdmissionRegistry.gitObjectIdValue first then
+            invalidOp "operating-claim-history-head"
+        let address = claimAddress.Value
+        let observation = JournalComplete(V1AdmissionRegistry.gitObjectIdValue first, decoded)
+        ShardedJournalAdapter.validate address observation
+        |> Result.defaultWith (fun _ -> invalidOp "operating-claim-journal-invalid")
+        |> ignore
+        address.CanonicalId, ref, observation
+
     let decodeOperating (asOf: DateTimeOffset) (raw: ReadOnlyMemory<byte>) =
         try
             if raw.Length = 0 || raw.Length > 32768 then
@@ -164,11 +306,18 @@ module V1AdmissionGenesisGitRead =
                 use document = JsonDocument.Parse raw
                 let root = document.RootElement
                 let operation = root.GetProperty("operation")
-                let fields = [ "schema"; "observedAt"; "repository"; "repositoryId"; "cutover"; "operation" ]
+                let fields = [ "schema"; "observedAt"; "repository"; "repositoryId"; "cutover"; "operation"; "claims" ]
+                let cutoverFields =
+                    [ "ref"; "firstHead"; "secondHead"; "tagRef"; "tagTarget"; "commit"
+                      "parent"; "genesisCommit"; "ancestry"; "commitTree"; "commitBytesBase64"
+                      "treeBytesBase64"; "treeEntries"; "eventOid"; "eventBytesBase64"
+                      "headOid"; "headBytesBase64"; "manifestSha256"; "trustAnchorSha256"
+                      "claimRefs" ]
                 let operationFields = [ "ref"; "firstHead"; "secondHead"; "observation" ]
                 let observed = time (root.GetProperty("observedAt").GetString())
                 let installedHead = operation.GetProperty("firstHead").GetString() |> oid
                 if not (exactProperties fields root)
+                   || not (exactProperties cutoverFields (root.GetProperty("cutover")))
                    || not (exactProperties operationFields operation)
                    || root.GetProperty("schema").GetString() <> "fsgg.v1-admission-operating-git-read/1"
                    || operation.GetProperty("ref").GetString() <> "refs/heads/fsgg/v2/journal/operation/79"
@@ -178,11 +327,26 @@ module V1AdmissionGenesisGitRead =
                    || observed < asOf.AddMinutes(-2.) then
                     Error [ "operating-git-evidence-binding-or-freshness" ]
                 else
+                    let claimRefs =
+                        root.GetProperty("cutover").GetProperty("claimRefs").EnumerateArray()
+                        |> Seq.map _.GetString()
+                        |> Seq.toList
+                    let claims =
+                        root.GetProperty("claims").EnumerateArray()
+                        |> Seq.map claimObservation
+                        |> Seq.toList
+                    if claimRefs.Length > 64
+                       || claimRefs <> (claimRefs |> List.distinct |> List.sort)
+                       || claimRefs <> (claims |> List.map (fun (_, ref, _) -> ref))
+                       || (claims |> List.map (fun (id, _, _) -> id) |> List.distinct |> List.length) <> claims.Length then
+                        invalidOp "operating-claim-census-binding"
                     // Reuse the strict cutover object decoder. Its genesis-only operation
                     // absence check is satisfied only in this private copy, after the
                     // installed ref and stable census above have been checked.
                     let copy = JsonNode.Parse(Encoding.UTF8.GetString raw.Span)
                     copy["schema"] <- JsonValue.Create("fsgg.v1-admission-genesis-git-read/1")
+                    copy.AsObject().Remove("claims") |> ignore
+                    copy["cutover"]["claimRefs"] <- JsonArray()
                     let operationCopy = copy["operation"]
                     operationCopy["firstHead"] <- null
                     operationCopy["secondHead"] <- null
@@ -190,7 +354,10 @@ module V1AdmissionGenesisGitRead =
                     decode (ReadOnlyMemory(Encoding.UTF8.GetBytes(copy.ToJsonString())))
                     |> Result.map (fun read ->
                         let (GenesisGitRead evidence) = read
-                        evidence.Authority, evidence.SecondHead, installedHead)
+                        let authority =
+                            { evidence.Authority with
+                                ClaimJournals = claims |> List.map (fun (id, _, observation) -> id, observation) |> Map.ofList }
+                        authority, evidence.SecondHead, installedHead)
         with _ ->
             Error [ "operating-git-evidence-invalid" ]
 

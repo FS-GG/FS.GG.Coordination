@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import base64
+import hashlib
 import importlib.util
 import json
 import os
@@ -67,6 +68,26 @@ def install_genesis(store):
     commit = git(store, "commit-tree", tree, input_bytes=b"Initialize admission genesis\n")
     git(store, "update-ref", reader.OPERATION_REF, commit)
     return commit, event, head
+
+
+def install_claim(store):
+    claim_id = "issue:fs-gg/repo#42"
+    payload = claim_id.encode()
+    digest = hashlib.sha256(str(len(payload)).encode() + b":" + payload).hexdigest()
+    ref = reader.CLAIM_PREFIX + digest[:2]
+    event = b'{"generation":1,"payload":"claim"}\n'
+    event_oid = git(store, "hash-object", "-w", "--stdin", input_bytes=event)
+    head = {"aggregateDigest": digest, "aggregateId": claim_id,
+            "eventDigest": hashlib.sha256(event).hexdigest(), "generation": 1,
+            "journalKind": "claim", "priorHeadDigest": None, "schemaVersion": 1,
+            "shard": digest[:2], "snapshotDigest": None, "terminal": False}
+    head_bytes = json.dumps(head, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+    head_oid = git(store, "hash-object", "-w", "--stdin", input_bytes=head_bytes)
+    tree = git(store, "mktree", input_bytes=(f"100644 blob {event_oid}\tevent.json\n"
+                                             f"100644 blob {head_oid}\thead.json\n").encode())
+    commit = git(store, "commit-tree", tree, input_bytes=b"claim fixture\n")
+    git(store, "update-ref", ref, commit)
+    return ref, commit
 
 
 class AuthorityGitReadTests(unittest.TestCase):
@@ -144,10 +165,15 @@ class AuthorityGitReadTests(unittest.TestCase):
             self.assertEqual({"ref": reader.OPERATION_REF, "firstHead": operation,
                               "secondHead": operation, "observation": "present"},
                              result["operation"])
-            git(store, "update-ref", reader.CLAIM_PREFIX + "one", operation)
-            with self.assertRaisesRegex(reader.Refused, "claim-census-not-empty"):
+            claim_ref, claim_head = install_claim(store)
+            with_claim = reader.collect_operating(str(store), lambda: reader.REPOSITORY_ID)
+            self.assertEqual([claim_ref], with_claim["cutover"]["claimRefs"])
+            self.assertEqual(claim_head, with_claim["claims"][0]["firstHead"])
+            self.assertEqual(1, len(with_claim["claims"][0]["commits"]))
+            git(store, "update-ref", reader.CLAIM_PREFIX + "wrong", operation)
+            with self.assertRaisesRegex(reader.Refused, "claim-census-shape"):
                 reader.collect_operating(str(store), lambda: reader.REPOSITORY_ID)
-            git(store, "update-ref", "-d", reader.CLAIM_PREFIX + "one")
+            git(store, "update-ref", "-d", reader.CLAIM_PREFIX + "wrong")
             reads = 0
 
             def moving(remote):

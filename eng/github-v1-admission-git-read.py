@@ -121,13 +121,53 @@ def no_duplicate_pairs(pairs):
     return value
 
 
+def claim_history(store: pathlib.Path, remote: str, ref: str, head: str) -> dict:
+    """Read every raw object of one claim ref before the final stable census."""
+    git([f"--git-dir={store}", "fetch", "--no-tags", remote, ref])
+    fetched = git([f"--git-dir={store}", "rev-parse", "FETCH_HEAD"]).decode().strip()
+    require(fetched == head, "authority-claim-fetch-moved")
+    commits = []
+    seen = set()
+    total = 0
+    current = head
+    while current is not None:
+        require(current not in seen and len(commits) < 4096,
+                "authority-claim-history-bound")
+        seen.add(current)
+        commit = object_bytes(store, "commit", current)
+        tree_oid, parent = parse_commit(commit)
+        tree = object_bytes(store, "tree", tree_oid)
+        entries = parse_tree(tree)
+        event = object_bytes(store, "blob", entries["event.json"])
+        journal_head = object_bytes(store, "blob", entries["head.json"])
+        total += sum(map(len, (commit, tree, event, journal_head)))
+        require(total <= 32_000_000 and all(0 < len(raw) <= 8192
+                                            for raw in (commit, tree, event, journal_head)),
+                "authority-claim-object-bound")
+        commits.append({"commitOid": current,
+                        "commitBytesBase64": base64.b64encode(commit).decode(),
+                        "treeOid": tree_oid,
+                        "treeBytesBase64": base64.b64encode(tree).decode(),
+                        "eventBytesBase64": base64.b64encode(event).decode(),
+                        "headBytesBase64": base64.b64encode(journal_head).decode()})
+        current = parent
+    return {"ref": ref, "firstHead": head, "secondHead": head,
+            "commits": list(reversed(commits))}
+
+
 def _collect(remote: str, read_repository_id, read_refs,
              observed_at: str | None, installed: bool) -> dict:
     require(read_repository_id() == REPOSITORY_ID, "authority-repository-id")
     before = read_refs(remote)
     head = before.get(CUTOVER_REF)
     require(isinstance(head, str) and OID.fullmatch(head) is not None, "authority-cutover-ref")
-    require(not any(ref.startswith(CLAIM_PREFIX) for ref in before), "authority-claim-census-not-empty")
+    claim_refs = sorted(ref for ref in before if ref.startswith(CLAIM_PREFIX))
+    if installed:
+        require(len(claim_refs) <= 64
+                and all(re.fullmatch(re.escape(CLAIM_PREFIX) + r"[0-9a-f]{2}", ref)
+                        for ref in claim_refs), "authority-claim-census-shape")
+    else:
+        require(not claim_refs, "authority-claim-census-not-empty")
     operation_refs = {ref for ref in before if ref.startswith(OPERATION_PREFIX)}
     if installed:
         require(operation_refs == {OPERATION_REF}
@@ -175,11 +215,13 @@ def _collect(remote: str, read_repository_id, read_refs,
         expected_tag = TAG_PREFIX + manifest[:16]
         require(tags == {expected_tag: head}, "authority-genesis-tag-binding")
 
+        claims = [claim_history(store, remote, ref, before[ref]) for ref in claim_refs]
+
     after = read_refs(remote)
     require(after == before, "authority-ref-census-moved")
     if observed_at is None:
         observed_at = dt.datetime.now(dt.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    return {
+    result = {
         "schema": ("fsgg.v1-admission-operating-git-read/1" if installed
                    else "fsgg.v1-admission-genesis-git-read/1"),
         "observedAt": observed_at,
@@ -205,7 +247,7 @@ def _collect(remote: str, read_repository_id, read_refs,
             "headBytesBase64": base64.b64encode(head_bytes).decode(),
             "manifestSha256": manifest,
             "trustAnchorSha256": trust,
-            "claimRefs": [],
+            "claimRefs": claim_refs,
         },
         "operation": {
             "ref": OPERATION_REF,
@@ -214,6 +256,9 @@ def _collect(remote: str, read_repository_id, read_refs,
             "observation": "present" if installed else "deleted",
         },
     }
+    if installed:
+        result["claims"] = claims
+    return result
 
 
 def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=refs,
@@ -224,12 +269,7 @@ def collect(remote: str = REMOTE, read_repository_id=repository_id, read_refs=re
 
 def collect_operating(remote: str = REMOTE, read_repository_id=repository_id,
                       read_refs=refs, observed_at: str | None = None) -> dict:
-    """Observe an installed admission ref and no unverified claim journals.
-
-    This is a read-only source for NoClaimRequired operations. Claim refs remain
-    a refusal until their complete history is collected and replayed by the
-    typed authority port.
-    """
+    """Observe installed admission and complete claim histories without writing."""
     return _collect(remote, read_repository_id, read_refs, observed_at, True)
 
 

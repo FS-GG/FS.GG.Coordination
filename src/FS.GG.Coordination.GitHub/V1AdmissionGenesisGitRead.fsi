@@ -13,7 +13,8 @@ module V1AdmissionGenesisGitRead =
     val authorityPort: GenesisGitRead -> AuthorityGitPort
     val registryRead: GenesisGitRead -> RegistryJournalRead
     /// Decode a fresh post-genesis OperatingV1 authority census. The operation
-    /// ref must be installed and stable; unverified claim refs are refused.
+    /// ref must be installed and stable; every observed claim ref is bound to a
+    /// complete, cryptographically checked journal replay.
     val decodeOperating:
         asOf: DateTimeOffset -> raw: ReadOnlyMemory<byte> ->
             Result<AuthorityGitObjects * GitObjectId * GitObjectId, string list>

@@ -964,6 +964,7 @@ let ``raw Git collector evidence decodes and verifies an OperatingV1 genesis pla
     let plan = V1AdmissionGenesisGitRead.verifyPlan now "protected-genesis" read |> Result.defaultWith (String.concat "," >> failwith)
     Assert.Equal(commit, Registry.genesisAuthorityCommit plan)
     let operating = JsonNode.Parse(raw.ToJsonString())
+    operating.AsObject()["claims"] <- JsonArray()
     let installed = Registry.genesisObjects plan |> _.CommitObjectId |> value
     operating["schema"] <- JsonValue.Create("fsgg.v1-admission-operating-git-read/1")
     operating["operation"]["firstHead"] <- JsonValue.Create(installed)
@@ -984,6 +985,49 @@ let ``raw Git collector evidence decodes and verifies an OperatingV1 genesis pla
     Assert.True(Registry.readVerified port |> Result.isOk)
     Assert.Equal(2, reads)
     Assert.True(V1AdmissionGenesisGitRead.decodeOperating (now.AddMinutes 3.) (ReadOnlyMemory(operatingBytes ())) |> Result.isError)
+    let claimAddress =
+        ShardedJournalAdapter.address Claim "Issue:FS-GG/Repo#42"
+        |> Result.defaultWith (failwithf "%A")
+    let claimEvent =
+        ShardedJournalAdapter.canonicalJson "{\"generation\":1,\"payload\":\"claim\"}"
+        |> Result.defaultWith failwith
+    let claimHead: JournalHead =
+        { SchemaVersion = 1
+          Address = claimAddress
+          Generation = 1L
+          EventDigest = ShardedJournalAdapter.sha256 claimEvent
+          SnapshotDigest = None
+          Terminal = false
+          PriorHeadDigest = None
+          HeadDigest = "" }
+    let claimHeadBytes = ShardedJournalAdapter.journalHeadBytes claimHead
+    let claimTree = treeBytes [ "event.json", gitOid "blob" claimEvent; "head.json", gitOid "blob" claimHeadBytes ]
+    let claimTreeOid = gitOid "tree" claimTree
+    let claimCommit =
+        Encoding.UTF8.GetBytes(
+            $"tree {value claimTreeOid}\nauthor FS.GG Coordination <coordination@fs.gg> 0 +0000\ncommitter FS.GG Coordination <coordination@fs.gg> 0 +0000\n\nclaim fixture\n")
+    let claimCommitOid = gitOid "commit" claimCommit |> value
+    let claimEntry = JsonObject()
+    claimEntry["commitOid"] <- JsonValue.Create(claimCommitOid)
+    claimEntry["commitBytesBase64"] <- JsonValue.Create(Convert.ToBase64String claimCommit)
+    claimEntry["treeOid"] <- JsonValue.Create(value claimTreeOid)
+    claimEntry["treeBytesBase64"] <- JsonValue.Create(Convert.ToBase64String claimTree)
+    claimEntry["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String claimEvent)
+    claimEntry["headBytesBase64"] <- JsonValue.Create(Convert.ToBase64String claimHeadBytes)
+    let claim = JsonObject()
+    claim["ref"] <- JsonValue.Create(claimAddress.Ref)
+    claim["firstHead"] <- JsonValue.Create(claimCommitOid)
+    claim["secondHead"] <- JsonValue.Create(claimCommitOid)
+    claim["commits"] <- JsonArray(claimEntry)
+    operating["cutover"]["claimRefs"] <- JsonArray(JsonValue.Create(claimAddress.Ref))
+    operating["claims"] <- JsonArray(claim)
+    Assert.True(Registry.readVerified port |> Result.isOk)
+    claimEntry["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String(Encoding.UTF8.GetBytes "changed"))
+    Assert.True(Registry.readVerified port |> Result.isError)
+    claimEntry["eventBytesBase64"] <- JsonValue.Create(Convert.ToBase64String claimEvent)
+    claim["secondHead"] <- JsonValue.Create(String.replicate 40 "f")
+    Assert.True(V1AdmissionGenesisGitRead.decodeOperating now (ReadOnlyMemory(operatingBytes ())) |> Result.isError)
+    claim["secondHead"] <- JsonValue.Create(claimCommitOid)
     operating["cutover"]["claimRefs"] <- JsonArray(JsonValue.Create("refs/heads/fsgg/v2/journal/claim/one"))
     Assert.True(V1AdmissionGenesisGitRead.decodeOperating now (ReadOnlyMemory(operatingBytes ())) |> Result.isError)
     operating["cutover"]["claimRefs"] <- JsonArray()
