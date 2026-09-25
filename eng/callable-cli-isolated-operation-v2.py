@@ -325,7 +325,7 @@ class NativeReadAdapter:
                     or item["node_id"] != detail.get("node_id")):
                 raise Refused("native-pull-list-detail-node-drift")
             for field in ("state", "draft", "title", "body"):
-                if field in item and item[field] != detail.get(field):
+                if field not in item or item[field] != detail.get(field):
                     raise Refused("native-pull-list-detail-field-drift")
             for side in ("head", "base"):
                 listed_side = item.get(side)
