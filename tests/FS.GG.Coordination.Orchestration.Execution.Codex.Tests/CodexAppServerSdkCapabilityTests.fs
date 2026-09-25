@@ -102,3 +102,21 @@ type CodexAppServerSdkCapabilityTests() =
         let changed = replace "\"title\":\"CodexAppServerProtocolV2\""
                               "\"title\":\"ForeignProtocol\""
         Assert.Equal(Error "app-server-sdk-schema-drift", inspect changed)
+
+    [<Fact>]
+    member _.``resume method cannot route to an unused foreign definition``() =
+        let redirected =
+            replace "#/definitions/ThreadResumeParams" "#/definitions/ForeignResumeParams"
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect redirected)
+
+    [<Fact>]
+    member _.``duplicate resume method requires review``() =
+        let alias = replace "\"foreign/other\"" "\"thread/resume\""
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect alias)
+
+    [<Fact>]
+    member _.``compositional client request routing requires review``() =
+        let composed =
+            replace "\"ClientRequest\":{\"oneOf\""
+                    "\"ClientRequest\":{\"allOf\":[{}],\"oneOf\""
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect composed)

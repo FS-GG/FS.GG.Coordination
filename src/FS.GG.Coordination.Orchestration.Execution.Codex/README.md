@@ -111,7 +111,9 @@ response. The `thread/resume` schema describes rejoining a running app-server th
 cannot authenticate attachment to this direct CLI process or prove notification custody. The
 probe binds the closed server-notification route map to its selected definitions, so an
 alternate `turn/completed` route cannot inherit an unchanged unused definition's no-usage
-classification. It reports the limits separately and refuses version or shape drift;
+classification. It also binds the closed client-request route for `thread/resume` to
+`ThreadResumeParams`, so an unused description cannot stand in for the request contract.
+It reports the limits separately and refuses version or shape drift;
 it never enables usage mapping or live capture.
 
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,

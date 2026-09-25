@@ -130,6 +130,55 @@ module CodexAppServerSdkCapability =
             | _ -> false
         | _ -> false
 
+    let private closedClientResumeRoute (definitions: JsonElement) =
+        let route (node: JsonElement) =
+            let properties = property "properties" node
+            let methodSchema = properties |> Option.bind (property "method")
+            let paramsSchema = properties |> Option.bind (property "params")
+            match names node, property "type" node |> Option.bind stringValue,
+                  property "required" node |> Option.bind stringSet,
+                  properties |> Option.bind names,
+                  properties |> Option.bind (property "id"),
+                  methodSchema, paramsSchema with
+            | Some fields, Some "object", Some required, Some propertyNames,
+              Some id, Some methodNode, Some paramsNode when
+                Set.isSubset fields (set [ "description"; "properties"; "required"; "title"; "type" ])
+                && (required = set [ "id"; "method" ]
+                    || required = set [ "id"; "method"; "params" ])
+                && propertyNames = set [ "id"; "method"; "params" ]
+                && refIs "RequestId" id
+                && (names methodNode
+                    |> Option.exists (fun methodFields ->
+                        Set.isSubset (set [ "enum"; "type" ]) methodFields
+                        && Set.isSubset methodFields (set [ "enum"; "title"; "type" ])))
+                && (property "type" methodNode |> Option.bind stringValue = Some "string") ->
+                match property "enum" methodNode |> Option.bind stringSet with
+                | Some methods when methods.Count = 1 ->
+                    Some(Set.minElement methods, (paramsNode, required))
+                | _ -> None
+            | _ -> None
+
+        match property "ClientRequest" definitions with
+        | Some requests when
+            names requests
+            |> Option.exists (fun fields ->
+                Set.isSubset fields (set [ "$schema"; "description"; "oneOf"; "title" ])) ->
+            match property "oneOf" requests with
+            | Some choices when choices.ValueKind = JsonValueKind.Array ->
+                let items = choices.EnumerateArray() |> Seq.toList
+                let routes = items |> List.choose route
+                if items.IsEmpty || items.Length > 256 || routes.Length <> items.Length then false
+                else
+                    let methods = routes |> List.map fst |> Set.ofList
+                    let routeMap = Map.ofList routes
+                    methods.Count = routes.Length
+                    && (routeMap |> Map.tryFind "thread/resume"
+                        |> Option.exists (fun (parameters, required) ->
+                            required = set [ "id"; "method"; "params" ]
+                            && refIs "ThreadResumeParams" parameters))
+            | _ -> false
+        | _ -> false
+
     /// A changed shape requires review; this never grants direct-session attachment or usage authority.
     let inspect (cliVersion: string) (schemaBytes: byte array)
         : Result<CodexAppServerSdkCapability, string> =
@@ -163,6 +212,7 @@ module CodexAppServerSdkCapability =
                         | Some completed, Some turn, Some updated, Some usage,
                           Some rawResponse, Some resume when
                             closedServerRoutes defs
+                            && closedClientResumeRoute defs
                             && exactShape (set [ "threadId"; "turn" ])
                                 (set [ "threadId"; "turn" ]) completed
                             && (property "properties" completed
