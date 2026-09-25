@@ -14,18 +14,17 @@ ROOT = pathlib.Path(__file__).resolve().parents[1]
 ARCHIVE_NAME = "fsgg-callable-isolated-v2-effect-scaffold.pyz"
 MANIFEST = "work/fsc07-isolated-operator-v2/effect-scaffold-manifest.json"
 WORKFLOW = ".github/workflows/callable-isolated-v2-execute.yml"
+NATIVE_SOURCE = "eng/callable-cli-isolated-operation-v2.py"
+NATIVE_SOURCE_SHA256 = "095b465abd509127b4363f101be90ce76dde661a8abeb6aadb066041327b0ab2"
 MEMBERS = {
     "__main__.py": "eng/callable_isolated_v2_effect_entry.py",
     "callable_isolated_v2_effect_closed.py":
         "eng/callable_isolated_v2_effect_closed.py",
     "callable_isolated_v2_effect_candidate.py":
         "eng/callable_isolated_v2_effect_candidate.py",
-    "native-v2.source": "eng/callable-cli-isolated-operation-v2.py",
 }
 PINNED_MEMBERS = {
     "__main__.py": "4b3ef835e4b998e374cfe61b886e07981aeab94cb0ff4262ee549c3ce693e0e7",
-    "native-v2.source":
-        "095b465abd509127b4363f101be90ce76dde661a8abeb6aadb066041327b0ab2",
     "callable_isolated_v2_effect_candidate.py":
         "9d156f8447bda006829be5b524d21e721c173f60f39d9bdee7a7749e82185a91",
     "callable_isolated_v2_effect_closed.py":
@@ -50,10 +49,12 @@ def build(output: pathlib.Path) -> dict:
     if output.name != ARCHIVE_NAME or output.is_symlink():
         raise ValueError("effect-output-name")
     sources = {name: _source(relative) for name, relative in MEMBERS.items()}
+    native_source = _source(NATIVE_SOURCE)
     workflow = _source(WORKFLOW)
     if (set(sources) != set(PINNED_MEMBERS)
             or any(_sha(raw) != PINNED_MEMBERS[name]
                    for name, raw in sources.items())
+            or _sha(native_source) != NATIVE_SOURCE_SHA256
             or _sha(workflow) != PINNED_WORKFLOW_SHA256):
         raise ValueError("effect-source-or-workflow-drift")
     output.parent.mkdir(parents=True, exist_ok=True)
@@ -72,6 +73,9 @@ def build(output: pathlib.Path) -> dict:
             "artifact": ARCHIVE_NAME,
             "archiveSha256": _sha(artifact), "archiveSize": len(artifact),
             "builderSourceSha256": _sha(pathlib.Path(__file__).read_bytes()),
+            "nativeSource": {"path": NATIVE_SOURCE,
+                             "sha256": _sha(native_source),
+                             "size": len(native_source)},
             "workflowPath": WORKFLOW, "workflowSha256": _sha(workflow),
             "entry": ["python3", "-I", "-S", ARCHIVE_NAME,
                       "execute-native-pull"],

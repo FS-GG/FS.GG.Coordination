@@ -108,6 +108,18 @@ class ClosedScaffoldTests(unittest.TestCase):
             self.assertNotEqual(probe.returncode, 0)
             self.assertIn("ModuleNotFoundError", probe.stderr)
 
+    def test_native_source_is_external_and_not_extractable_from_archive(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            archive_path = pathlib.Path(temporary) / builder.ARCHIVE_NAME
+            manifest = builder.build(archive_path)
+            with zipfile.ZipFile(archive_path) as archive:
+                self.assertFalse(any("native" in name for name in archive.namelist()))
+            self.assertEqual(manifest["nativeSource"]["path"],
+                             "eng/callable-cli-isolated-operation-v2.py")
+            self.assertEqual(manifest["nativeSource"]["sha256"],
+                hashlib.sha256((ENG / "callable-cli-isolated-operation-v2.py")
+                               .read_bytes()).hexdigest())
+
     def test_exact_byte_verifier_refuses_post_build_mutations(self):
         with tempfile.TemporaryDirectory() as temporary:
             archive_path = pathlib.Path(temporary) / builder.ARCHIVE_NAME
@@ -116,9 +128,15 @@ class ClosedScaffoldTests(unittest.TestCase):
             workflow = (ROOT / builder.WORKFLOW).read_bytes()
             manifest = (ROOT / builder.MANIFEST).read_bytes()
             approved = hashlib.sha256(manifest).hexdigest()
-            checked = verifier.verify(archive, workflow, manifest, approved)
+            builder_source = (ENG /
+                "build_callable_isolated_v2_effect_scaffold.py").read_bytes()
+            native_source = (ROOT / builder.NATIVE_SOURCE).read_bytes()
+            checked = verifier.verify(archive, workflow, manifest, approved,
+                                      builder_source, native_source)
             self.assertIs(checked["authorized"], False)
             self.assertIs(checked["canDispatch"], False)
+            with self.assertRaises(verifier.Refused):
+                verifier.verify(archive, workflow, manifest, approved)
             for changed in (
                 (archive + b"x", workflow, manifest, approved),
                 (archive, workflow.replace(b"if: ${{ false }}",
@@ -128,14 +146,24 @@ class ClosedScaffoldTests(unittest.TestCase):
             ):
                 with self.subTest(changed=changed[0][-1:]):
                     with self.assertRaises(verifier.Refused):
-                        verifier.verify(*changed)
+                        verifier.verify(*changed, builder_source,
+                                        native_source)
+            with self.assertRaises(verifier.Refused):
+                verifier.verify(archive, workflow, manifest, approved,
+                                builder_source + b"# foreign builder\n",
+                                native_source)
+            with self.assertRaises(verifier.Refused):
+                verifier.verify(archive, workflow, manifest, approved,
+                                builder_source,
+                                native_source + b"# foreign native\n")
             foreign_manifest = json.loads(manifest)
             foreign_manifest["members"][0]["source"] = "eng/foreign-entry.py"
             foreign_raw = (json.dumps(foreign_manifest, sort_keys=True,
                            separators=(",", ":")) + "\n").encode()
             with self.assertRaises(verifier.Refused):
                 verifier.verify(archive, workflow, foreign_raw,
-                                hashlib.sha256(foreign_raw).hexdigest())
+                                hashlib.sha256(foreign_raw).hexdigest(),
+                                builder_source, native_source)
 
             extended = archive + b"FOREIGN_TRAILING_BYTES"
             extended_manifest = json.loads(manifest)
@@ -145,7 +173,8 @@ class ClosedScaffoldTests(unittest.TestCase):
                             separators=(",", ":")) + "\n").encode()
             with self.assertRaises(verifier.Refused):
                 verifier.verify(extended, workflow, extended_raw,
-                                hashlib.sha256(extended_raw).hexdigest())
+                                hashlib.sha256(extended_raw).hexdigest(),
+                                builder_source, native_source)
 
     def test_clean_installed_no_grant_is_zero_post_and_zero_journal_change(self):
         requests = []

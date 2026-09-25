@@ -31,12 +31,17 @@ def _no_constant(_value):
 
 
 def verify(archive: bytes, workflow: bytes, manifest_raw: bytes,
-           approved_manifest_sha256: str) -> dict:
+           approved_manifest_sha256: str, builder_source: bytes | None = None,
+           native_source: bytes | None = None) -> dict:
     """Compare caller-supplied bytes to an independently approved manifest pin."""
     if (type(archive) is not bytes or not 0 < len(archive) <= 256_000
             or type(workflow) is not bytes or not 0 < len(workflow) <= 128_000
             or type(manifest_raw) is not bytes
             or not 0 < len(manifest_raw) <= 16_384
+            or type(builder_source) is not bytes
+            or not 0 < len(builder_source) <= 128_000
+            or type(native_source) is not bytes
+            or not 0 < len(native_source) <= 256_000
             or type(approved_manifest_sha256) is not str
             or HEX64.fullmatch(approved_manifest_sha256) is None
             or approved_manifest_sha256 == "0" * 64
@@ -54,7 +59,8 @@ def verify(archive: bytes, workflow: bytes, manifest_raw: bytes,
         raise Refused("effect-manifest-json") from None
     if (type(manifest) is not dict or manifest_raw != canonical
             or set(manifest) != {"schema", "state", "artifact", "archiveSha256",
-                    "archiveSize", "builderSourceSha256", "workflowPath",
+                    "archiveSize", "builderSourceSha256", "nativeSource",
+                    "workflowPath",
                     "workflowSha256", "entry", "members"}
             or manifest["schema"] !=
                "fsgg.coordination.callable-isolated-v2-effect-scaffold/1"
@@ -63,6 +69,12 @@ def verify(archive: bytes, workflow: bytes, manifest_raw: bytes,
             or type(manifest["archiveSize"]) is not int
             or manifest["archiveSize"] != len(archive)
             or manifest["archiveSha256"] != builder._sha(archive)
+            or manifest["builderSourceSha256"] != builder._sha(builder_source)
+            or manifest["nativeSource"] !=
+               {"path": builder.NATIVE_SOURCE,
+                "sha256": builder.NATIVE_SOURCE_SHA256,
+                "size": len(native_source)}
+            or builder._sha(native_source) != builder.NATIVE_SOURCE_SHA256
             or manifest["workflowPath"] != builder.WORKFLOW
             or manifest["workflowSha256"] != builder.PINNED_WORKFLOW_SHA256
             or builder._sha(workflow) != builder.PINNED_WORKFLOW_SHA256
