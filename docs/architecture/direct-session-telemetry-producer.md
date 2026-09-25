@@ -105,6 +105,28 @@ replay, but is neither persistent nor an authenticated custody implementation.
 No actual issuer, clock, current-session source or durable reservation store is
 installed, and the prepared fact is never submitted by this module.
 
+## Installed native source characterization
+
+The installed Codex CLI 0.156.1 offers `codex exec --json` for a child process
+launched by the existing adapter. [OpenAI's App Server protocol](https://learn.chatgpt.com/docs/app-server)
+also streams `thread/tokenUsage/updated` notifications to a connected client
+following its thread start or resume. The version-pinned generated schema has
+`threadId`, `turnId`, and `tokenUsage.last` and `tokenUsage.total` breakdowns.
+Those are usage snapshots, not an independently proven completed-turn counter
+record. The notification has no source-connection authentication, per-event
+cursor, or separate native session identity in its payload; those obligations
+would belong to an authenticated subscribed transport and continuity journal.
+
+The dormant [`CodexAppServerUsageProjection`](../../src/FS.GG.Coordination.Orchestration.Execution.Codex/CodexAppServerUsageProjection.fs)
+parses only that notification from independently authored fixture bytes. It
+requires exact expected thread and turn IDs, bounded nonnegative internally
+consistent counters, and unique closed mapping keys. It refuses other methods
+and transcript-shaped frames without exposing raw bytes. It does not convert
+`last` or cumulative counts to `CodexTurnUsage`, and no code here subscribes to
+this running private interactive thread. A supported, authorized connection
+with prospective assignment and start/usage/terminal continuity is still the
+missing live source boundary.
+
 ## Capability and evidence handoff
 
 The missing interface is a supported, authenticated event stream for the
