@@ -185,6 +185,14 @@ stayed unchanged. It was red before the repair. The binder now refuses
 duplicate JSON members before validating the repository identity response.
 Protected native repository observation remains outstanding.
 
+A twenty-sixth independent control found the raw-to-typed issue adapter
+could accept a captured issue census with repeated issue node, database or
+number identities when a matching typed population was supplied. A separate
+red-before control found the same for repeated PR markers and issue/marker
+number overlap. The binder now checks those identity sets independently of
+the supplied typed population. This does not prove initial sandbox census
+or protected journal custody.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
