@@ -65,6 +65,13 @@ before parsing an issue or counting a PR marker. This prevents ambiguous
 raw JSON from contributing to the issue/PR census; it does not supply the
 missing complete raw-to-typed inspect authority.
 
+An eighth independent control found the PR-list reader could classify a raw
+PR with duplicate top-level `state` or nested `head.sha`/`base.repo.id`
+members. It was red before the repair. `readPullRequests` now refuses
+duplicate members at the root and in the consumed `head`, `base` and
+`base.repo` objects before producing typed PR evidence. This prevents a
+single raw PR from presenting two revisions or two base repository IDs.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current
