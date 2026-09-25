@@ -115,6 +115,7 @@ module GitHubRollbackPlanQualification =
           if plan.StartEpoch <> "VerifiedV2" || plan.TerminalEpoch <> "OperatingV1" then InvalidEpochBoundary
           if plan.Steps.IsEmpty
              || (plan.Steps |> List.map _.Order) <> [ plan.Steps.Length .. -1 .. 1 ]
+             || (plan.Steps |> List.map _.Domain) <> List.rev requiredDomains
              || (plan.Steps |> List.map _.StepId |> Set.ofList |> Set.count) <> plan.Steps.Length then InvalidStepPopulation
           for step in plan.Steps do
               if String.IsNullOrWhiteSpace step.StepId || String.IsNullOrWhiteSpace step.TargetIdentity
