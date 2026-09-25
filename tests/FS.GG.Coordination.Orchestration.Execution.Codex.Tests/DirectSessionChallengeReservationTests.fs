@@ -147,6 +147,31 @@ type DirectSessionChallengeReservationTests() =
         Assert.Empty sourceCalls
 
     [<Fact>]
+    member _.``equal malformed scope cannot reserve a challenge or read source``() =
+        let malformed = { scope with BindingDigest = "not-a-digest" }
+        let malformedIssue =
+            { issued with Assignment = { assignment with Scope = malformed } }
+        let storeCalls = ConcurrentBag<int>()
+        let sourceCalls = ConcurrentBag<int>()
+        let store =
+            { new IDirectSessionChallengeReservationStore with
+                member _.TryReserveOnce _ =
+                    storeCalls.Add 1
+                    Error "unexpected-store-call" }
+        let native =
+            { new IDirectSessionWindowTurnSource with
+                member _.ReadCurrentWindowTurn() =
+                    sourceCalls.Add 1
+                    Ok observation }
+        Assert.Equal(
+            Error(Rejected "direct-session-window-input-invalid"),
+            DirectSessionChallengeReservation.prepareOnce malformed sourceId (clock now)
+                (issuer (Ok malformedIssue)) native store
+        )
+        Assert.Empty storeCalls
+        Assert.Empty sourceCalls
+
+    [<Fact>]
     member _.``unknown or inconsistent store outcome never reads current source``() =
         let sourceCalls = ConcurrentBag<int>()
         let nativeSource =

@@ -136,6 +136,25 @@ type DirectSessionProspectiveWindowGateTests() =
                 (Ok { observation with SourceAdapterId = "future-child-observer" }))
 
     [<Fact>]
+    member _.``equal malformed scopes refuse before current session source read``() =
+        for malformed in
+            [ { scope with Repository = "FS-GG"; IssueRef = "FS-GG#123" }
+              { scope with IssueRef = "FS-GG/other#123" }
+              { scope with BindingDigest = "not-a-digest" } ] do
+            let mutable sourceReads = 0
+            let native =
+                { new IDirectSessionWindowTurnSource with
+                    member _.ReadCurrentWindowTurn() =
+                        sourceReads <- sourceReads + 1
+                        Ok observation }
+            let malformedIssue =
+                { issued with Assignment = { assignment with Scope = malformed } }
+            refused "direct-session-window-input-invalid"
+                (DirectSessionProspectiveWindowGate.evaluate malformed sourceId now
+                    DirectSessionWindowLedger.empty (issuer (Ok malformedIssue)) native)
+            Assert.Equal(0, sourceReads)
+
+    [<Fact>]
     member _.``missing source and nonprospective evidence cannot prepare a fact``() =
         refused "direct-session-window-source-unavailable"
             (evaluate DirectSessionWindowLedger.empty (Ok issued)

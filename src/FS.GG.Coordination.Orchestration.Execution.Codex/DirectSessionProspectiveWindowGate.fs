@@ -59,6 +59,7 @@ module DirectSessionProspectiveWindowGate =
     /// Shared pre-source validation for both the immutable model and a future CAS boundary.
     let internal validateIssue expectedScope expectedSourceAdapterId now issued =
         if isNull (box expectedScope)
+           || not (DirectSessionTelemetryFacts.validScope expectedScope)
            || not (boundedText 128 expectedSourceAdapterId)
            || not (utc now) then
             Error "direct-session-window-input-invalid"
