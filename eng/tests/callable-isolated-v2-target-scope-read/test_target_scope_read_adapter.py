@@ -191,6 +191,21 @@ class TargetScopeTests(unittest.TestCase):
                 wanted, "f" * 64, NOW).observe_target_scope()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_target_reader_scope_mutated_at_final_read_refuses(self):
+        wanted, scope, reads, attested = fixture()
+        transport = FakeTransport(scope, reads)
+        shared = copy.deepcopy(scope)
+        calls = [0]
+        def reused_scope():
+            calls[0] += 1
+            if calls[0] == 2:
+                shared["credentialId"] = "a" * 64
+            return shared
+        transport.scope = reused_scope
+        with self.assertRaises(target.Refused):
+            target.TargetScopeReadAdapter(transport, FakeAttestor(attested),
+                wanted, "f" * 64, NOW).observe_target_scope()
+
 
 if __name__ == "__main__":
     unittest.main()
