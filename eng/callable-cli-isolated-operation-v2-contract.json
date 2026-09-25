@@ -5,11 +5,15 @@
   "authorized": false,
   "source": {
     "operationSource": "eng/callable-cli-isolated-operation-v2.py",
-    "operationSourceSha256": "748af1842aaf9b62b747926c4f824b174eb816230c4d10301735d38092e4dbaf"
+    "operationSourceSha256": "23435c0c77893100d98c5e387ef3b0d3067422f2cb1368bcd7883e3fb212232c"
   },
   "qualificationControls": {
     "path": "eng/tests/fsc07-isolated-operation/test_versioned_operator_readback.py",
-    "sha256": "8e92cf365c147eaf4bde189e747b4759f22cf5ffa7ccf2e181467fa860746a76"
+    "sha256": "9d6c4c3a74ac062c5186eb4023030a2f80cb11bce64262b1f4a48fe8f627c64f"
+  },
+  "loopbackControls": {
+    "path": "eng/qualify-callable-isolated-v2-loopback.py",
+    "sha256": "0f509273b232e29094b4a263212ce22c0a6d2ed268611633c6a92fbf5c588683"
   },
   "historicalPreflight": {
     "path": "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json",
@@ -17,7 +21,7 @@
     "operationIdentity": "v2-call-01-4b-isolated-native-v1",
     "authority": "historical-observation-only"
   },
-  "scope": "offline-inspect-and-controlled-transcript-only; no live provider authority or effect command",
+  "scope": "offline-inspect-and-loopback-http-only; no live provider authority or effect command",
   "forbidden": [
     "live-provider-mutation",
     "new-external-acceptance",
@@ -25,5 +29,5 @@
     "production-writer-enable",
     "historical-operation-rewrite"
   ],
-  "contractSha256": "f319d096b5b945edb1304ed5be146dce53ef16307d3bd8225dd65e2868f47747"
+  "contractSha256": "230c0ac5eae2e0fc84f1291d78c99c124989de4b57194af0ec95ce35d272e0a3"
 }

@@ -33,6 +33,7 @@ let contractPath = "eng/callable-cli-isolated-operation-v2-contract.json"
 let proposalPath = "eng/callable-cli-isolated-operation-v2-proposal.json"
 let sourcePath = "eng/callable-cli-isolated-operation-v2.py"
 let testsPath = "eng/tests/fsc07-isolated-operation/test_versioned_operator_readback.py"
+let loopbackPath = "eng/qualify-callable-isolated-v2-loopback.py"
 let preflightPath = "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json"
 let identity = "v2-call-01-4b-isolated-native-v2-provisional"
 
@@ -51,13 +52,16 @@ let c = contract.RootElement
 require (string "schema" c = "fsgg.coordination.callable-isolated-operation-contract/5") "v5 contract schema"
 require (string "identity" c = identity) "v5 contract identity"
 require (string "state" c = "prepared-not-authorized" && not (boolean "authorized" c)) "v5 contract authorization"
-require (string "scope" c = "offline-inspect-and-controlled-transcript-only; no live provider authority or effect command") "v5 contract scope"
+require (string "scope" c = "offline-inspect-and-loopback-http-only; no live provider authority or effect command") "v5 contract scope"
 let source = property "source" c
 require (string "operationSource" source = sourcePath) "v5 source path"
 require (string "operationSourceSha256" source = sha sourcePath) "v5 source bytes"
 let controls = property "qualificationControls" c
 require (string "path" controls = testsPath) "v5 control path"
 require (string "sha256" controls = sha testsPath) "v5 control bytes"
+let loopbackControls = property "loopbackControls" c
+require (string "path" loopbackControls = loopbackPath) "v5 loopback control path"
+require (string "sha256" loopbackControls = sha loopbackPath) "v5 loopback control bytes"
 let historical = property "historicalPreflight" c
 require (string "path" historical = preflightPath) "historical preflight path"
 require (string "sha256" historical = sha preflightPath) "historical preflight bytes"
@@ -107,19 +111,60 @@ require (string "disposition" observed = "refused-no-compatible-admitted-target"
 
 let testOutput, testError = run "python3" [ testsPath; "-v" ]
 let testReport = testOutput + testError
-require (testReport.Contains("Ran 12 tests", StringComparison.Ordinal)
+require (testReport.Contains("Ran 22 tests", StringComparison.Ordinal)
          && testReport.Contains("OK", StringComparison.Ordinal)) "v5 negative controls did not pass"
 
 let phaseCases =
     if phase = "contract" then
         [ "test_q3_exact_native_pr_and_protection_runtime"
+          "test_q3_loopback_http_pull_and_protection"
           "test_q3_runtime_refuses_force_push_after_put"
-          "test_q3_incomplete_page_and_false_terminal_refuse_before_write" ]
+          "test_q3_incomplete_page_and_false_terminal_refuse_before_write"
+          "test_q3_terminal_ref_and_singleton_link_refuse_before_write"
+          "test_q3_list_detail_foreign_identity_and_terminal_last_refuse"
+          "test_q3_duplicate_and_nonfinite_native_json_refuse" ]
     else
         [ "test_q6_lost_response_unknown_and_no_repeat"
+          "test_q6_loopback_origin_and_redirect_refuse_without_egress"
+          "test_q6_loopback_lost_response_unknown_and_no_repeat"
+          "test_q6_loopback_redirected_or_refused_write_is_unknown"
+          "test_q6_loopback_500_is_readback_only"
+          "test_q6_malformed_injected_write_response_is_unknown"
           "test_q6_controlled_exception_sentinel_not_surfaced"
+          "test_q6_final_poststate_ref_drift_is_unknown"
           "test_q6_restart_replay_cli_and_v5_inspect_binding" ]
 for case in phaseCases do
     require (testReport.Contains(case, StringComparison.Ordinal)) $"v5 {phase} control missing: {case}"
+
+let loopbackOutput, _ = run "python3" [ loopbackPath; "--phase"; phase ]
+let loopback = JsonDocument.Parse loopbackOutput
+let proof = loopback.RootElement
+require (string "schema" proof = "fsgg.coordination.callable-isolated-v2-loopback-qualification/1") "loopback proof schema"
+require (string "phase" proof = phase) "loopback proof phase"
+require (string "artifactKind" proof = "staged-source-copy") "loopback artifact classification"
+require (boolean "stagedExactArtifact" proof && boolean "loopbackHttp" proof) "loopback source and HTTP path"
+require (not (boolean "authorized" proof) && property "liveEffects" proof |> _.GetInt32() = 0) "loopback effect scope"
+let cases = property "cases" proof |> _.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+let requiredCases =
+    [ "create-pull:exact:lost:ExactPull"
+      "create-pull:wrong-head:lost:Unknown"
+      "set-protection:exact:lost:ExactProtection"
+      "set-protection:force-push:lost:Unknown"
+      "create-pull:exact:error-body:ExactPull"
+      "create-pull:exact:redirect:Unknown"
+      "set-protection:exact:unauthorized:Unknown" ]
+let requiredReplay =
+    if phase = "recovery" then
+        [ "create-pull:exact:lost:fresh-process-no-repeat"
+          "create-pull:wrong-head:lost:fresh-process-no-repeat"
+          "set-protection:exact:lost:fresh-process-no-repeat"
+          "set-protection:force-push:lost:fresh-process-no-repeat"
+          "create-pull:exact:error-body:fresh-process-no-repeat"
+          "create-pull:exact:redirect:fresh-process-no-repeat"
+          "set-protection:exact:unauthorized:fresh-process-no-repeat" ]
+    else []
+require (cases.Length = requiredCases.Length + requiredReplay.Length
+         && List.forall (fun item -> List.contains item cases) (requiredCases @ requiredReplay))
+        "loopback negative or replay case missing"
 
 printfn "versioned callable isolated operation %s qualification passed; historical observation only; zero effects" phase

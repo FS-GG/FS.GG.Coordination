@@ -5,8 +5,8 @@
   "authorized": false,
   "contract": {
     "path": "eng/callable-cli-isolated-operation-v2-contract.json",
-    "sha256": "f319d096b5b945edb1304ed5be146dce53ef16307d3bd8225dd65e2868f47747",
-    "operationSourceSha256": "748af1842aaf9b62b747926c4f824b174eb816230c4d10301735d38092e4dbaf"
+    "sha256": "230c0ac5eae2e0fc84f1291d78c99c124989de4b57194af0ec95ce35d272e0a3",
+    "operationSourceSha256": "23435c0c77893100d98c5e387ef3b0d3067422f2cb1368bcd7883e3fb212232c"
   },
   "historicalPreflight": {
     "path": "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json",
@@ -15,5 +15,5 @@
     "authority": "historical-observation-only"
   },
   "requiredBeforeAnyEffect": "new typed authority contract, sealed candidate, protected grant, and fresh capability readback",
-  "proposalSha256": "771a6596314e578a101750744a4a413b92a97ecb6845d3f72e7e2075323f6a61"
+  "proposalSha256": "9e63d9dd9ee97f66700bc31d2205c4a34f9c2026d5b49a772f53f09a91aba861"
 }
