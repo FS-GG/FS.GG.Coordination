@@ -15,6 +15,7 @@ import callable_isolated_v2_effect_release_preflight as release
 import verify_callable_isolated_v2_effect_scaffold as bytes_check
 
 RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-git-tree-witness/1"
+IDENTITY_SCHEMA = "fsgg.coordination.callable-isolated-v2-repository-identity/1"
 MAX_GIT_OBJECT = 2_000_000
 MODES = {b"100644", b"100755", b"120000", b"160000", b"40000"}
 
@@ -32,12 +33,20 @@ class GitObjectPort(Protocol):
     def read_blob(self, oid: str) -> bytes: ...
 
 
+class RepositoryIdentityPort(Protocol):
+    """Separate read-only repository/object-format attestation reader."""
+
+    def scope(self) -> dict[str, Any]: ...
+    def read_repository_identity(self, event_id: int) -> dict[str, Any]: ...
+
+
 @dataclasses.dataclass(frozen=True)
 class TreeWitnessResult:
     coordination_revision: str
     source_tree: str
     archive_sha256: str
     source_files: tuple[tuple[str, str], ...]
+    identity_event_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -70,7 +79,8 @@ def _read(port: GitObjectPort, kind: str, oid: str) -> bytes:
     return raw
 
 
-def _scope(port: GitObjectPort, repository_id: int,
+def _scope(port: GitObjectPort | RepositoryIdentityPort,
+           repository_id: int, permissions: list[str],
            now: dt.datetime) -> dict[str, Any]:
     try:
         scope = port.scope()
@@ -89,10 +99,37 @@ def _scope(port: GitObjectPort, repository_id: int,
             or type(scope["repositoryId"]) is not int
             or scope["repositoryId"] != repository_id
             or type(scope["permissions"]) is not list
-            or scope["permissions"] != ["contents:read", "metadata:read"]
+            or scope["permissions"] != permissions
             or expires <= now):
         raise Refused("git-scope-binding")
     return scope
+
+
+def _identity(port: RepositoryIdentityPort, event_id: int,
+              scope: dict[str, Any], repository_id: int,
+              now: dt.datetime) -> None:
+    try:
+        record = port.read_repository_identity(event_id)
+    except Exception:
+        raise Refused("git-identity-unavailable") from None
+    record = _exact(record, {"schema", "complete", "principalId",
+        "credentialId", "eventId", "repository", "repositoryId",
+        "objectFormat", "observedAt"}, "git-identity-shape")
+    try:
+        observed = candidate._time(record["observedAt"])
+    except candidate.Refused:
+        raise Refused("git-identity-time") from None
+    if (record["schema"] != IDENTITY_SCHEMA or record["complete"] is not True
+            or record["principalId"] != scope["principalId"]
+            or record["credentialId"] != scope["credentialId"]
+            or type(record["eventId"]) is not int
+            or record["eventId"] != event_id
+            or record["repository"] != release.REPOSITORY
+            or type(record["repositoryId"]) is not int
+            or record["repositoryId"] != repository_id
+            or record["objectFormat"] != "sha1"
+            or not now - dt.timedelta(minutes=30) <= observed <= now):
+        raise Refused("git-identity-binding")
 
 
 def _tree_entries(raw: bytes) -> dict[str, tuple[bytes, str]]:
@@ -140,11 +177,13 @@ def _blob_for_path(port: GitObjectPort, root_oid: str,
 
 
 def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
-            git_port: GitObjectPort, selection: dict[str, Any],
+            git_port: GitObjectPort, identity_port: RepositoryIdentityPort,
+            selection: dict[str, Any],
             now: dt.datetime) -> TreeWitnessResult:
     """Bind exact selected source bytes to raw Git objects; never authorize."""
-    selection = _exact(selection, {"repositoryId", "sourceReaderPrincipalId",
-        "sourceReaderCredentialId"}, "git-selection-shape")
+    selection = _exact(selection, {"repositoryId", "identityEventId",
+        "sourceReaderPrincipalId", "sourceReaderCredentialId"},
+        "git-selection-shape")
     if (type(preflight) is not release.PreflightResult
             or preflight.schema != release.RESULT_SCHEMA
             or preflight.authorized is not False
@@ -157,19 +196,30 @@ def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
             or not candidate._hex(preflight.manifest_sha256, candidate.HEX64)
             or not _positive(preflight.artifact_id)
             or not _positive(selection["repositoryId"])
+            or not _positive(selection["identityEventId"])
             or type(selection["sourceReaderPrincipalId"]) is not str
             or not selection["sourceReaderPrincipalId"]
             or not candidate._hex(selection["sourceReaderCredentialId"],
                                   candidate.HEX64)
-            or git_port is None
+            or git_port is None or identity_port is None
+            or git_port is identity_port
             or type(now) is not dt.datetime or now.tzinfo is None
             or now.utcoffset() != dt.timedelta(0)):
         raise Refused("git-selection-invalid")
-    scope_before = _scope(git_port, selection["repositoryId"], now)
+    scope_before = _scope(git_port, selection["repositoryId"],
+                          ["contents:read", "metadata:read"], now)
+    identity_scope = _scope(identity_port, selection["repositoryId"],
+                            ["metadata:read"], now)
     if (scope_before["principalId"] == selection["sourceReaderPrincipalId"]
             or scope_before["credentialId"] ==
-               selection["sourceReaderCredentialId"]):
+               selection["sourceReaderCredentialId"]
+            or identity_scope["principalId"] in
+               (scope_before["principalId"], selection["sourceReaderPrincipalId"])
+            or identity_scope["credentialId"] in
+               (scope_before["credentialId"], selection["sourceReaderCredentialId"])):
         raise Refused("git-reader-custody")
+    _identity(identity_port, selection["identityEventId"], identity_scope,
+              selection["repositoryId"], now)
     blobs = _exact(blobs, {"archive", "workflow", "manifest",
                             "builderSource", "nativeSource"},
                    "git-source-blobs-shape")
@@ -205,8 +255,11 @@ def qualify(preflight: release.PreflightResult, blobs: dict[str, bytes],
         if actual != source_files[path]:
             raise Refused("git-source-membership")
         digests.append((path, hashlib.sha256(actual).hexdigest()))
-    if _scope(git_port, selection["repositoryId"], now) != scope_before:
+    if (_scope(git_port, selection["repositoryId"],
+               ["contents:read", "metadata:read"], now) != scope_before
+            or _scope(identity_port, selection["repositoryId"],
+                      ["metadata:read"], now) != identity_scope):
         raise Refused("git-scope-drift")
     return TreeWitnessResult(preflight.coordination_revision,
                              preflight.source_tree, preflight.archive_sha256,
-                             tuple(digests))
+                             tuple(digests), selection["identityEventId"])
