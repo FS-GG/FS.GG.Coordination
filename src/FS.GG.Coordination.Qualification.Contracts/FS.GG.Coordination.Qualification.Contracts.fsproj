@@ -121,6 +121,8 @@
     <Compile Include="GitHubRollbackReadbackQualification.fs" />
     <Compile Include="GitHubRollbackReadbackProvenance.fsi" />
     <Compile Include="GitHubRollbackReadbackProvenance.fs" />
+    <Compile Include="GitHubRollbackReadbackSignature.fsi" />
+    <Compile Include="GitHubRollbackReadbackSignature.fs" />
   </ItemGroup>
 
   <ItemGroup>
