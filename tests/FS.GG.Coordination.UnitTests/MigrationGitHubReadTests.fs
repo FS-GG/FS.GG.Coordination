@@ -456,6 +456,18 @@ let ``repository core settings refuse identity drift and unknown visibility`` ()
                  MigrationGitHubRead.readRepositoryCoreSettings options unknown)
 
 [<Fact>]
+let ``repository identity and core settings refuse duplicate raw root members`` () =
+    let ambiguousIdentity = """{"id":43,"id":42,"full_name":"FS-GG/copy"}"""
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:id"),
+                 MigrationGitHubRead.readIssues options
+                     (FakeTransport [ ok Map.empty ambiguousIdentity; ok Map.empty "[]" ]))
+    let ambiguousBranch = repositoryCore.Replace("\"default_branch\":\"main\"",
+                                                 "\"default_branch\":\"other\",\"default_branch\":\"main\"")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:default_branch"),
+                 MigrationGitHubRead.readRepositoryCoreSettings options
+                     (FakeTransport [ ok Map.empty ambiguousBranch ]))
+
+[<Fact>]
 let ``repository core settings refuse missing and malformed fields without another request`` () =
     for changed in
         [ repositoryCore.Replace("\"allow_merge_commit\":false,", "")

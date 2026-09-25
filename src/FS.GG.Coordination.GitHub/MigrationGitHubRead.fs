@@ -650,12 +650,21 @@ module MigrationGitHubRead =
                 document.Dispose()
                 Error failure)
 
+    let private parseUniqueRootResponse body =
+        parse body
+        |> Result.bind (fun document ->
+            match uniqueObjectMembers document.RootElement with
+            | Ok () -> Ok document
+            | Error failure ->
+                document.Dispose()
+                Error failure)
+
     let private readRepository (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
         let uri = Uri(options.ApiBase, path)
         response transport (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
                                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
-        |> Result.bind (fun result -> parse result.Body)
+        |> Result.bind (fun result -> parseUniqueRootResponse result.Body)
         |> Result.bind (fun document ->
             use document = document
             match requiredInt64 "id" document.RootElement, requiredString "full_name" document.RootElement with
@@ -673,7 +682,9 @@ module MigrationGitHubRead =
                        Headers=headers options.Token options.UserAgent; Body=None
                        ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
             response transport request
-            |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result.Body, document))
+            |> Result.bind (fun result ->
+                parseUniqueRootResponse result.Body
+                |> Result.map (fun document -> result.Body, document))
             |> Result.bind (fun (payload, document) ->
                 use document = document
                 let root = document.RootElement
