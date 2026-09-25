@@ -10,6 +10,7 @@ from typing import Any
 import build_callable_isolated_v2_effect_scaffold as builder
 import callable_isolated_v2_effect_candidate as candidate
 import callable_isolated_v2_effect_git_tree_witness as git_tree
+import verify_callable_isolated_v2_effect_producer_workflow as closed_workflow
 
 WORKFLOW = ".github/workflows/callable-isolated-v2-effect-release.yml"
 RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-producer-workflow-source/1"
@@ -110,6 +111,10 @@ def qualify(source_tree: git_tree.TreeWitnessResult,
             or hashlib.sha256(raw).hexdigest() !=
                selection["workflowSha256"]):
         raise Refused("workflow-source-bytes")
+    try:
+        closed_workflow.verify(raw, selection["workflowSha256"])
+    except closed_workflow.Refused:
+        raise Refused("workflow-source-not-closed-candidate") from None
     try:
         scope_after = git_tree._scope(git_port, selection["repositoryId"],
                                       ["contents:read", "metadata:read"], now)

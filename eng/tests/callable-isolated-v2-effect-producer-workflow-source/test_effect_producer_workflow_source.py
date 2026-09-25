@@ -17,18 +17,19 @@ import callable_isolated_v2_effect_git_tree_witness as tree_witness
 import callable_isolated_v2_effect_producer_workflow_source as workflow
 
 NOW = dt.datetime(2026, 9, 25, 12, tzinfo=dt.timezone.utc)
-RAW = b"name: reviewed-producer\non:\n  workflow_dispatch:\npermissions: {}\n"
+RAW = (ENG.parent / ".github/workflows/callable-isolated-v2-effect-release.yml").read_bytes()
+FOREIGN_RAW = b"name: foreign-producer\non:\n  workflow_dispatch:\npermissions: {}\n"
 
 
-def fixture(mode="100644", workflow_path=workflow.WORKFLOW):
-    tree, objects = git_tree({workflow_path: (RAW, mode)})
+def fixture(mode="100644", workflow_path=workflow.WORKFLOW, raw=RAW):
+    tree, objects = git_tree({workflow_path: (raw, mode)})
     commit = b"tree " + tree.encode() + b"\nauthor Fake <fake@example.test> 0 +0000\n\nreviewed producer\n"
     revision = git_oid("commit", commit)
     objects[revision] = commit
     source_tree = tree_witness.TreeWitnessResult(revision, tree, "a" * 64,
         tuple(sorted((path, "b" * 64) for path in workflow.SOURCE_PATHS)), 808)
     selection = {"repositoryId": 77, "identityEventId": 808,
-        "workflowSha256": hashlib.sha256(RAW).hexdigest(),
+        "workflowSha256": hashlib.sha256(raw).hexdigest(),
         "gitReaderPrincipalId": "git-reader", "gitReaderCredentialId": "2" * 64,
         "sourceReaderPrincipalId": "source-reader",
         "sourceReaderCredentialId": "1" * 64}
@@ -65,6 +66,11 @@ class ProducerWorkflowSourceTests(unittest.TestCase):
         self.refuses(lambda _t, _g, s: s.__setitem__("workflowSha256", "f" * 64))
         self.refuses(lambda t, _g, _s: object.__setattr__(t, "source_tree", "f" * 40))
         self.refuses(lambda _t, g, _s: g.objects.__setitem__(git_oid("blob", RAW), b"foreign"))
+
+    def test_digest_consistent_foreign_workflow_refuses_before_producer_read(self):
+        source_tree, port, selection = fixture(raw=FOREIGN_RAW)
+        with self.assertRaises(workflow.Refused):
+            workflow.qualify(source_tree, port, selection, NOW)
 
     def test_reader_custody_and_scope_drift_refuse(self):
         self.refuses(lambda _t, _g, s: s.__setitem__("gitReaderPrincipalId", "foreign"))
