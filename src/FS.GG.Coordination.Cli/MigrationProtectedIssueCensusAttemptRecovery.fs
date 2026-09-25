@@ -1,6 +1,8 @@
 namespace FS.GG.Coordination.Cli
 
 open System
+open System.Security.Cryptography
+open System.Text
 
 type ProtectedIssueCensusNativeAttemptPins =
     { AttemptResourceId: string
@@ -57,6 +59,38 @@ module MigrationProtectedIssueCensusAttemptRecovery =
         && (value |> Seq.forall (fun ch ->
             (ch >= '0' && ch <= '9') || (ch >= 'a' && ch <= 'f')))
 
+    let private frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+
+    let expectedSnapshotSealSha256 (snapshot: ProtectedIssueCensusNativeAttemptSnapshot) =
+        let phase = function
+            | InvocationUnknown -> "invocation-unknown"
+            | TokenVaulted -> "token-vaulted"
+            | NativeRevoked -> "native-revoked"
+        let optional = function
+            | None -> [ "none" ]
+            | Some value -> [ "some"; value ]
+        let recordValues (record: ProtectedIssueCensusNativeAttemptRecord) =
+            let request = record.Request
+            let selection = request.Selection
+            [ request.NativeAttemptId; request.ReservationId; request.ClaimId
+              string selection.RunId; string selection.RunAttempt; selection.RunNonce
+              selection.CandidateSha; selection.WorkflowSha; selection.ApiOrigin
+              selection.Owner; selection.Repository; string selection.RepositoryId
+              string request.AppId; string request.InstallationId; string request.RepositoryId
+              request.PermissionSha256; request.VaultResourceId
+              request.ExpectedStoreHeadSha256; request.ExpectedJournalHeadSha256
+              request.ClockResourceId; request.ClockArtifactSha256
+              request.SignedExpiresAtUtc.ToUniversalTime().ToString("O")
+              record.ProviderAttemptId; record.VaultResourceId; phase record.Phase ]
+            @ optional record.TokenFingerprintSha256
+            @ optional record.RevocationReceiptSha256
+        [ "fsgg.gs2-09.7.protected-native-attempt-snapshot/v1"
+          snapshot.Head.AttemptResourceId; string snapshot.Head.Generation
+          snapshot.AttemptId; string snapshot.Complete; string snapshot.Records.Length ]
+        @ (snapshot.Records |> List.collect recordValues)
+        |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
     let private readStableSnapshot (native: IProtectedIssueCensusNativeAttemptPort)
                                    (pins: ProtectedIssueCensusNativeAttemptPins)
                                    (attemptId: string) =
@@ -80,6 +114,9 @@ module MigrationProtectedIssueCensusAttemptRecovery =
             | Some observed when observed.AttemptId <> attemptId
                                  || observed.Head <> head ->
                 Error "protected-census-attempt-head"
+            | Some observed when observed.Head.SealSha256
+                                 <> expectedSnapshotSealSha256 observed ->
+                Error "protected-census-attempt-seal"
             | Some observed ->
                 let after =
                     try native.ReadHead()
