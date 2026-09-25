@@ -528,6 +528,60 @@ type CodexAppServerContinuityTests() =
             )
 
     [<Fact>]
+    member _.``mcp app context requires connector and nullable text fields``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"appContext\":[]"
+              ",\"appContext\":{}"
+              ",\"appContext\":{\"connectorId\":null}"
+              ",\"appContext\":{\"connectorId\":\"c\",\"actionName\":17}"
+              ",\"appContext\":{\"connectorId\":\"c\",\"connectorId\":\"d\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp app UI requires resource and known display mode``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"mcpAppUi\":false"
+              ",\"mcpAppUi\":{}"
+              ",\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"foreign\"}"
+              ",\"mcpAppUi\":{\"resourceUri\":null,\"preferredModelDisplayMode\":\"inline\"}"
+              ",\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"inline\",\"resourceUri\":\"v\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp optional scalar metadata refuses wrong types and duration overflow``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"readOnlyHint\":\"true\""
+              ",\"durationMs\":1.5"
+              ",\"durationMs\":9223372036854775808"
+              ",\"mcpAppResourceUri\":17"
+              ",\"pluginId\":false" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp optional context UI and scalar metadata accept schema values``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"appContext\":null,\"mcpAppUi\":null,\"readOnlyHint\":null,\"durationMs\":null,\"mcpAppResourceUri\":null,\"pluginId\":null"
+              ",\"appContext\":{\"connectorId\":\"c\",\"appName\":null,\"actionName\":\"a\",\"linkId\":null,\"resourceUri\":\"u\"},\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"inline\"},\"readOnlyHint\":true,\"durationMs\":9223372036854775807,\"mcpAppResourceUri\":\"u\",\"pluginId\":\"p\""
+              ",\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"fullscreen\"},\"readOnlyHint\":false,\"durationMs\":-9223372036854775808" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
     member _.``cumulative usage regression and duplicate wire bytes refuse``() =
         let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
         let second = CodexAppServerContinuity.apply first (frame 2L usage)

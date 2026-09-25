@@ -192,6 +192,47 @@ module CodexAppServerContinuity =
                 | _ -> false
         | _ -> false
 
+    let private validOptionalMcpAppContext (item: JsonElement) =
+        match item.TryGetProperty "appContext" with
+        | false, _ -> true
+        | true, context when context.ValueKind = JsonValueKind.Null -> true
+        | true, context when context.ValueKind = JsonValueKind.Object ->
+            let names = context.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match context.TryGetProperty "connectorId" with
+                | true, connector when connector.ValueKind = JsonValueKind.String ->
+                    optionalNullableString context "actionName"
+                    && optionalNullableString context "appName"
+                    && optionalNullableString context "linkId"
+                    && optionalNullableString context "resourceUri"
+                | _ -> false
+        | _ -> false
+
+    let private validOptionalMcpAppUi (item: JsonElement) =
+        match item.TryGetProperty "mcpAppUi" with
+        | false, _ -> true
+        | true, ui when ui.ValueKind = JsonValueKind.Null -> true
+        | true, ui when ui.ValueKind = JsonValueKind.Object ->
+            let names = ui.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+            if names.Length <> (names |> Set.ofList |> Set.count) then false
+            else
+                match ui.TryGetProperty "resourceUri", ui.TryGetProperty "preferredModelDisplayMode" with
+                | (true, uri), (true, mode) ->
+                    uri.ValueKind = JsonValueKind.String
+                    && mode.ValueKind = JsonValueKind.String
+                    && Set.contains (mode.GetString()) (set [ "inline"; "fullscreen" ])
+                | _ -> false
+        | _ -> false
+
+    let private optionalNullableBoolean (node: JsonElement) (name: string) =
+        match node.TryGetProperty name with
+        | false, _ -> true
+        | true, value ->
+            value.ValueKind = JsonValueKind.Null
+            || value.ValueKind = JsonValueKind.True
+            || value.ValueKind = JsonValueKind.False
+
     let private validTurnItem (item: JsonElement) =
         if item.ValueKind <> JsonValueKind.Object then false
         else
@@ -248,6 +289,12 @@ module CodexAppServerContinuity =
                                     (set [ "inProgress"; "completed"; "failed" ])
                                 && validOptionalMcpResult item
                                 && validOptionalMcpError item
+                                && validOptionalMcpAppContext item
+                                && validOptionalMcpAppUi item
+                                && optionalNullableBoolean item "readOnlyHint"
+                                && optionalNullableInt64 item "durationMs"
+                                && optionalNullableString item "mcpAppResourceUri"
+                                && optionalNullableString item "pluginId"
                             | _ -> false
                         | _ -> true
                     boundedText (id.GetString())
