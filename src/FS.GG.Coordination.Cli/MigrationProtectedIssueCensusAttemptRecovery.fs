@@ -87,7 +87,8 @@ module MigrationProtectedIssueCensusAttemptRecovery =
            || not (exactSha marker.ExpectedStoreHeadSha256)
            || String.IsNullOrWhiteSpace marker.JournalResourceId
            || marker.ExpectedJournalGeneration < 1L
-           || not (exactSha marker.ExpectedJournalHeadSha256) then false
+           || not (exactSha marker.ExpectedJournalHeadSha256)
+           || marker.SignedExpiresAtUtc.Offset <> TimeSpan.Zero then false
         else
             let claimId =
                 MigrationProtectedIssueCensusClaim.claimId
@@ -243,7 +244,8 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                             with _ -> None
                         match readback with
                         | None -> Error "protected-census-attempt-unknown"
-                        | Some marker when marker <> expectedMarker ->
+                        | Some marker when not (validMarkerChain marker)
+                                           || marker <> expectedMarker ->
                             Error "protected-census-attempt-binding"
                         | Some _ ->
                             match readStableSnapshot native nativePins
@@ -255,12 +257,14 @@ module MigrationProtectedIssueCensusAttemptRecovery =
                                     with _ -> None
                                 match markerAfter with
                                 | None -> Error "protected-census-attempt-unknown"
-                                | Some current when current <> expectedMarker ->
+                                | Some current when not (validMarkerChain current)
+                                                   || current <> expectedMarker ->
                                     Error "protected-census-attempt-binding"
                                 | Some _ ->
                                     match snapshot.Records with
                                     | [] -> Error "protected-census-attempt-unknown"
-                                    | [attempt] when attempt.Request <> expectedMarker
+                                    | [attempt] when not (validMarkerChain attempt.Request)
+                                                     || attempt.Request <> expectedMarker
                                                      || attempt.ProviderAttemptId
                                                         <> expectedMarker.NativeAttemptId
                                                      || attempt.VaultResourceId

@@ -109,7 +109,9 @@ module MigrationProtectedIssueCensusNativeAttestation =
                          snapshot
                || not (exactSha expectedMarker.NativeAttemptId)
                || (match snapshot.Records with
-                   | [record] -> record.Request <> expectedMarker
+                   | [record] -> not (MigrationProtectedIssueCensusAttemptRecovery.validMarkerChain
+                                         record.Request)
+                                 || record.Request <> expectedMarker
                                  || record.ProviderAttemptId <> expectedMarker.NativeAttemptId
                                  || record.VaultResourceId <> expectedMarker.VaultResourceId
                    | _ -> true) then

@@ -298,3 +298,29 @@ let ``direct native attestation refuses foreign handoff identity despite valid s
                      verify pins marker snapshot (Some attestation) now)
         Assert.Equal(Error "protected-census-attempt-binding",
                      inspectSigned pins marker snapshot (Some attestation) now)
+
+let private offsetMarker (marker: ProtectedIssueCensusHandoffRequest) =
+    { marker with SignedExpiresAtUtc=
+                      marker.SignedExpiresAtUtc.ToOffset(TimeSpan.FromHours 1.0) }
+
+[<Fact>]
+let ``native recovery refuses non-UTC marker despite valid signature`` () =
+    let pins, nonUtcMarker, nonUtcSnapshot, nonUtcAttestation, now =
+        fixtureWithSelectionMarkerAndClock id offsetMarker
+            "protected-clock:native-test" (String.replicate 64 "b")
+    Assert.Equal(Error "protected-native-attestation-binding",
+                 verify pins nonUtcMarker nonUtcSnapshot (Some nonUtcAttestation) now)
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectSigned pins nonUtcMarker nonUtcSnapshot (Some nonUtcAttestation) now)
+
+[<Fact>]
+let ``native recovery refuses offset-only record rewrite under same seal`` () =
+    let pins, marker, snapshot, attestation, now = fixture ()
+    let rewrittenRecord = { snapshot.Records.Head with Request=offsetMarker marker }
+    let rewritten = { snapshot with Records=[rewrittenRecord] }
+    Assert.Equal(snapshot.Head.SealSha256,
+                 MigrationProtectedIssueCensusAttemptRecovery.expectedSnapshotSealSha256 rewritten)
+    Assert.Equal(Error "protected-native-attestation-snapshot",
+                 verify pins marker rewritten (Some attestation) now)
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectSigned pins marker rewritten (Some attestation) now)
