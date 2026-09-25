@@ -59,6 +59,10 @@ type CodexAppServerContinuityTests() =
         completedWithItems
             ("[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":"
              + actions + ",\"cwd\":\"/tmp\",\"status\":\"completed\"}]")
+    let completedWithCommandMetadata fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\""
+             + fields + "}]")
 
     [<Fact>]
     member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
@@ -324,6 +328,54 @@ type CodexAppServerContinuityTests() =
             TerminalObserved("completed", 0),
             status (CodexAppServerContinuity.apply first (frame 2L terminal))
         )
+
+    [<Fact>]
+    member _.``command item optional numeric metadata must be signed schema integers``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"exitCode\":\"0\""
+              ",\"exitCode\":1.5"
+              ",\"exitCode\":2147483648"
+              ",\"durationMs\":\"1\""
+              ",\"durationMs\":9223372036854775808" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``command item optional nullable strings refuse foreign value shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"aggregatedOutput\":{}"
+              ",\"pluginId\":false"
+              ",\"processId\":[]"
+              ",\"scriptPath\":17" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``command item source must be a known schema enum``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in [ ",\"source\":\"foreign\""; ",\"source\":null"; ",\"source\":1" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``command item schema optional nulls integer bounds and source retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"aggregatedOutput\":null,\"pluginId\":null,\"processId\":null,\"scriptPath\":null,\"durationMs\":null,\"exitCode\":null"
+              ",\"exitCode\":2147483647,\"durationMs\":9223372036854775807,\"source\":\"unifiedExecInteraction\""
+              ",\"exitCode\":-2147483648,\"durationMs\":-9223372036854775808,\"source\":\"agent\"" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
 
     [<Fact>]
     member _.``cumulative usage regression and duplicate wire bytes refuse``() =
