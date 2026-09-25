@@ -193,7 +193,9 @@ def qualify(preflight: release.PreflightResult,
     try:
         run = producer_port.read_run(selection["producerRunId"],
                                      selection["producerRunAttempt"])
+        run = copy.deepcopy(run)
         artifact = producer_port.read_artifact(selection["artifactId"])
+        artifact = copy.deepcopy(artifact)
     except Exception:
         raise Refused("producer-read-unavailable") from None
     run = _exact(run, {"schema", "complete", "principalId", "credentialId",
