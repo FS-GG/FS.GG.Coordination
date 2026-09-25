@@ -133,6 +133,22 @@ type CodexAppServerSdkCapabilityTests() =
         )
 
     [<Fact>]
+    member _.``raw response usage cannot become a string or foreign union``() =
+        for replacement in
+            [ """{"type":"string"}"""
+              """{"anyOf":[{"$ref":"#/definitions/ForeignUsage"},{"type":"null"}]}"""
+              """{"allOf":[{"$ref":"#/definitions/TokenUsageBreakdown"}]}""" ] do
+            let changed = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+            let definitions = changed["definitions"]
+            let raw = definitions["RawResponseCompletedNotification"]
+            let properties = raw["properties"].AsObject()
+            properties["usage"] <- JsonNode.Parse(replacement)
+            Assert.Equal(
+                Error "app-server-sdk-schema-drift",
+                inspect (Encoding.UTF8.GetBytes(changed.ToJsonString()))
+            )
+
+    [<Fact>]
     member _.``running-thread resume description alone never authenticates this session``() =
         let changed = replace "If thread_id identifies a running thread, app-server rejoins that thread."
                               "Resume a thread."

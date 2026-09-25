@@ -71,6 +71,20 @@ module CodexAppServerSdkCapability =
         names node = Some(set [ "$ref" ])
         && property "$ref" node |> Option.bind stringValue = Some("#/definitions/" + name)
 
+    let private nullableRefIs name (node: JsonElement) =
+        let nullType value =
+            names value = Some(set [ "type" ])
+            && (property "type" value |> Option.bind stringValue) = Some "null"
+        match names node, property "anyOf" node with
+        | Some fields, Some choices when
+            fields = set [ "anyOf" ] && choices.ValueKind = JsonValueKind.Array ->
+            match choices.EnumerateArray() |> Seq.toList with
+            | [ first; second ] ->
+                (refIs name first && nullType second)
+                || (nullType first && refIs name second)
+            | _ -> false
+        | _ -> false
+
     let private tokenBreakdownShape (node: JsonElement) =
         let counters =
             set [ "cacheWriteInputTokens"; "cachedInputTokens"; "inputTokens";
@@ -278,6 +292,9 @@ module CodexAppServerSdkCapability =
                             && tokenBreakdownShape breakdown
                             && exactShape (set [ "responseId"; "threadId"; "turnId" ])
                                 (set [ "responseId"; "threadId"; "turnId"; "usage"; "usageMetadata" ]) rawResponse
+                            && (property "properties" rawResponse
+                                |> Option.bind (property "usage")
+                                |> Option.exists (nullableRefIs "TokenUsageBreakdown"))
                             && (property "description" rawResponse
                                 |> Option.bind stringValue
                                 |> Option.exists (fun (value: string) ->
