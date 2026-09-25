@@ -49,6 +49,7 @@ module CodexAppServerUsageTruth =
            || isNull (box terminal.Binding)
            || isNull (box terminal.Binding.Scope)
            || terminal.Binding.Scope <> terminal.Reservation.Request.Scope
+           || not (DirectSessionTelemetryFacts.validScope terminal.Binding.Scope)
            || terminal.UsageUpdateCount < 0
            || not (boundedText terminal.Reservation.Request.NativeSessionId)
            || isNull terminal.Reservation.Request.Challenge
