@@ -532,6 +532,52 @@ let private propertyValues =
     """[{"property_name":"environment","value":"production"},{"property_name":"teams","value":["backend"]},{"property_name":"approved","value":true}]"""
 
 [<Fact>]
+let ``rollback custom properties bridge binds two raw surfaces but remains partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedCustom =
+        [ "fsgg.gs2-09.7.custom-properties-raw/v1"
+          hash """{"id":42,"full_name":"FS-GG/copy"}"""
+          hash propertySchema; hash propertyValues ]
+        |> List.map frame |> String.concat "" |> hash
+    let responseSet =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty propertySchema; ok Map.empty propertyValues
+          repo; ok Map.empty propertySchema; ok Map.empty propertyValues
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responseSet
+    match MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedCustom options transport with
+    | Error reason -> failwithf "custom properties readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedCustom, proof.CustomPropertiesSha256)
+        Assert.Equal(selected.Seal, proof.PlanSeal)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(9, transport.Requests.Length)
+    let alteredValues = FakeTransport (responseSet |> List.mapi (fun i response ->
+        if i = 7 then ok Map.empty (" " + propertyValues) else response))
+    Assert.Equal(Error "changed:custom-properties-raw",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedCustom options alteredValues)
+    Assert.Equal(Error "changed:custom-properties-state",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responseSet))
+    let changedCoreAfterProperties =
+        FakeTransport (responseSet |> List.mapi (fun i response ->
+            if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedCustom options changedCoreAfterProperties)
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial (String.replicate 64 "8") selected
+                     "REPO_42" (hash repositoryCore) expectedCustom options noCalls)
+    Assert.Empty(noCalls.Requests)
+
+[<Fact>]
 let ``custom properties bind exact organization schema and repository values without writes`` () =
     let transport = FakeTransport [ repo; ok Map.empty propertySchema; ok Map.empty propertyValues ]
     match MigrationGitHubRead.readCustomProperties options transport with
