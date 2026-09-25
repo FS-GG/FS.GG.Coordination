@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import dataclasses
 import hashlib
+import http.client
 import json
 import os
 import pathlib
@@ -32,6 +33,7 @@ SOURCE = "eng/callable-cli-isolated-operation-v2.py"
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
+REPOSITORY = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
 
 
 class Refused(Exception):
@@ -127,6 +129,60 @@ class HttpResponse:
     status: int
     headers: tuple[tuple[str, str], ...]
     body: bytes
+
+
+class LoopbackHttpTransport:
+    """Concrete HTTP parser limited to a literal IPv4 loopback endpoint.
+
+    There is no token source, redirect handling, proxy support, or live-host
+    fallback. A future installed provider adapter needs its own authority.
+    """
+
+    def __init__(self, base_url: str):
+        if type(base_url) is not str:
+            raise Refused("loopback-origin-invalid")
+        try:
+            parsed = urllib.parse.urlsplit(base_url)
+            port = parsed.port
+        except ValueError:
+            raise Refused("loopback-origin-invalid") from None
+        if (parsed.scheme != "http" or parsed.hostname != "127.0.0.1"
+                or type(port) is not int or not 1 <= port <= 65535
+                or parsed.netloc != f"127.0.0.1:{port}"
+                or parsed.path or parsed.query or parsed.fragment):
+            raise Refused("loopback-origin-invalid")
+        self.port = port
+
+    def request(self, method: str, path: str, body: object = None) -> HttpResponse:
+        if (type(method) is not str or method not in {"GET", "POST", "PUT"}
+                or type(path) is not str
+                or not path.startswith("repos/") or "#" in path
+                or any(segment in {"", ".", ".."} for segment in path.split("?")[0].split("/"))
+                or (method == "GET" and body is not None)
+                or (method != "GET" and type(body) is not dict)):
+            raise Refused("loopback-request-invalid")
+        try:
+            payload = None if body is None else json.dumps(
+                body, sort_keys=True, separators=(",", ":"),
+                ensure_ascii=True, allow_nan=False).encode("ascii")
+            headers = {"Accept": "application/vnd.github+json",
+                       "User-Agent": "fsgg-isolated-v2-loopback"}
+            if payload is not None:
+                headers["Content-Type"] = "application/json"
+            connection = http.client.HTTPConnection("127.0.0.1", self.port, timeout=5)
+            try:
+                connection.request(method, "/" + path, body=payload, headers=headers)
+                response = connection.getresponse()
+                raw = response.read(4_000_001)
+                if len(raw) > 4_000_000:
+                    raise Refused("loopback-response-too-large")
+                return HttpResponse(response.status, tuple(response.getheaders()), raw)
+            finally:
+                connection.close()
+        except Refused:
+            raise
+        except Exception:
+            raise Refused("loopback-transport-unavailable") from None
 
 
 class NativeReadAdapter:
@@ -335,7 +391,7 @@ PULL_TITLE = "V2-CALL-01.4b synthetic delivery v2"
 def _valid_pull(expected: object) -> bool:
     return (type(expected) is ExpectedPull and _shape(expected)
             and type(expected.repository) is str
-            and expected.repository.count("/") == 1
+            and REPOSITORY.fullmatch(expected.repository) is not None
             and type(expected.source_ref) is str
             and expected.source_ref.startswith("refs/heads/")
             and type(expected.base_ref) is str
@@ -347,7 +403,7 @@ def _valid_pull(expected: object) -> bool:
 def _valid_protection(expected: object) -> bool:
     return (type(expected) is ExpectedProtection and _shape(expected)
             and type(expected.repository) is str
-            and expected.repository.count("/") == 1
+            and REPOSITORY.fullmatch(expected.repository) is not None
             and type(expected.branch) is str and bool(expected.branch)
             and _oid(expected.branch_sha)
             and type(expected.check_context) is str and bool(expected.check_context)
