@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Codex.Tests
 open System
 open System.IO
 open System.Text
+open System.Text.Json.Nodes
 open FS.GG.Coordination.Orchestration.Execution.Codex
 open Xunit
 
@@ -14,6 +15,18 @@ type CodexAppServerSdkCapabilityTests() =
     let replace oldText newText =
         Encoding.UTF8.GetString(fixture).Replace(oldText, newText, StringComparison.Ordinal)
         |> Encoding.UTF8.GetBytes
+    let withServerRoute methodName target =
+        let schema = JsonNode.Parse(Encoding.UTF8.GetString fixture)
+        let definitions = schema["definitions"]
+        let notification = definitions["ServerNotification"]
+        let routes = (notification["oneOf"]).AsArray()
+        let route =
+            JsonNode.Parse
+                (sprintf
+                    """{"properties":{"method":{"enum":["%s"],"type":"string"},"params":{"$ref":"#/definitions/%s"}},"required":["method","params"],"type":"object"}"""
+                    methodName target)
+        routes.Add route
+        Encoding.UTF8.GetBytes(schema.ToJsonString())
 
     [<Fact>]
     member _.``pinned authored schema yields no native usage or direct attachment authority``() =
@@ -86,6 +99,18 @@ type CodexAppServerSdkCapabilityTests() =
             replace "#/definitions/TurnCompletedNotification"
                     "#/definitions/UsageBearingTurnCompletedNotification"
         Assert.Equal(Error "app-server-sdk-schema-drift", inspect redirected)
+
+    [<Fact>]
+    member _.``added usage-bearing turn route requires review before no-usage claim``() =
+        let added = withServerRoute "turn/usageCompleted" "UsageBearingTurnCompletedNotification"
+        Assert.Equal(Error "app-server-sdk-schema-drift", inspect added)
+
+    [<Fact>]
+    member _.``unrelated extra notification route does not invent usage``() =
+        let added = withServerRoute "foreign/info" "ForeignResumeParams"
+        match inspect added with
+        | Ok report -> Assert.Equal("not-established", report.NativeCompletedTurnUsageVerdict)
+        | Error code -> failwithf "unrelated route refused: %s" code
 
     [<Fact>]
     member _.``notification method aliases and compositional routing require review``() =
