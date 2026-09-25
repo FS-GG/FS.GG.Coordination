@@ -121,6 +121,7 @@ def qualify(source_port: IntegratedSourcePort,
         raise Refused("release-reader-custody")
     try:
         source = source_port.read_integrated_source()
+        source = copy.deepcopy(source)
         approval = approval_port.read_approval(approval_event_id)
     except Exception:
         raise Refused("release-read-unavailable") from None

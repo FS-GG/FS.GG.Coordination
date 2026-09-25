@@ -218,6 +218,26 @@ class ReleasePreflightTests(unittest.TestCase):
                 FakePort(approval_claim, approval_event), REVISION, TREE,
                 101, 202, 1, 303, 404, 606, 505, NOW)
 
+    def test_later_approval_port_cannot_replace_source_archive(self):
+        source_claim, approval_claim, source_record, approval_event = fixture()
+        original_archive = source_record["blobs"]["archive"]
+        source_record["blobs"]["archive"] = b"foreign-archive"
+        left = FakePort(source_claim, source_record)
+        right = FakePort(approval_claim, approval_event)
+
+        def read_source():
+            return source_record
+
+        def read_approval(event_id):
+            source_record["blobs"]["archive"] = original_archive
+            return copy.deepcopy(approval_event)
+
+        left.read_integrated_source = read_source
+        right.read_approval = read_approval
+        with self.assertRaises(preflight.Refused):
+            preflight.qualify(left, right, REVISION, TREE, 101, 202, 1,
+                              303, 404, 606, 505, NOW)
+
 
 if __name__ == "__main__":
     unittest.main()
