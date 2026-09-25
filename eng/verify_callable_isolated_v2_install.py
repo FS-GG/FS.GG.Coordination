@@ -181,6 +181,8 @@ def verify_clean_install(root: pathlib.Path, installed: pathlib.Path,
             raise Refused("install-source-digest")
     if _sha(_regular(root / "eng/callable_isolated_v2_authority.py", 128_000)) != AUTHORITY_SOURCE_SHA256:
         raise Refused("install-authority-source-digest")
+    if not isinstance(installed, pathlib.Path) or not installed.is_absolute():
+        raise Refused("install-path")
     if installed.name != ARCHIVE_NAME:
         raise Refused("install-archive-name")
     try:
@@ -211,6 +213,8 @@ def verify_clean_install(root: pathlib.Path, installed: pathlib.Path,
             raise Refused("install-interpreter-runtime") from None
         if (probe.returncode != 0 or probe.stderr or type(observed) is not dict
                 or set(observed) != {"version", "implementation", "executable", "isolated", "no_site"}
+                or type(observed["isolated"]) is not int
+                or type(observed["no_site"]) is not int
                 or observed != {"version": version, "implementation": "cpython",
                                 "executable": str(binary), "isolated": 1, "no_site": 1}):
             raise Refused("install-interpreter-runtime")
@@ -220,4 +224,8 @@ def verify_clean_install(root: pathlib.Path, installed: pathlib.Path,
                 or closed.returncode != 2 or closed.stdout or closed.stderr != "inspect-only\n"
                 or list(cwd.iterdir())):
             raise Refused("install-entry-not-closed")
+    if (_sha(_regular(installed, 32_768)) != ARCHIVE_SHA256
+            or _sha(_regular(binary, 100_000_000)) != binary_digest
+            or set(installed.parent.iterdir()) != {installed}):
+        raise Refused("install-postprobe-drift")
     return InstallEvidence(ARCHIVE_SHA256, binary_digest, version, members)

@@ -84,6 +84,23 @@ class InstallPinTests(unittest.TestCase):
         with self.assertRaisesRegex(verifier.Refused, "directory-not-clean"):
             verifier.verify_clean_install(ROOT, self.archive, self.pin)
 
+    def test_archive_drift_during_probe_refuses_evidence(self):
+        original_run = subprocess.run
+        calls = 0
+
+        def drifting_run(argv, **kwargs):
+            nonlocal calls
+            result = original_run(argv, **kwargs)
+            calls += 1
+            if calls == 3:
+                self.archive.write_bytes(self.archive.read_bytes() + b"drift")
+            return result
+
+        with patch.object(verifier.subprocess, "run", side_effect=drifting_run):
+            with self.assertRaisesRegex(verifier.Refused, "postprobe-drift"):
+                verifier.verify_clean_install(ROOT, self.archive, self.pin)
+        self.assertEqual(3, calls)
+
     def test_wrong_member_and_imported_authority_module_refuse(self):
         with zipfile.ZipFile(self.archive) as package:
             entry = package.read("__main__.py")
