@@ -78,6 +78,12 @@ review evidence. It was red before the repair. `readPullRequestReviews` now
 refuses duplicate members at the review root and in the consumed `user`
 object before parsing a review. This is a partial raw parser control only.
 
+A tenth independent control found the issue event reader could accept
+duplicate raw `event`, `created_at` or `actor.login` members and produce
+typed event evidence. It was red before the repair. `readIssueEvents` now
+refuses duplicate members at the event root and in the consumed `actor`
+object before parsing an event. This remains partial native activity evidence.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

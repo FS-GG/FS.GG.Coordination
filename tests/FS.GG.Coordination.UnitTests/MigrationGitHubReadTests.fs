@@ -1425,6 +1425,19 @@ let ``issue event stream refuses duplicates malformed actor and uncensused issue
     Assert.Empty(noRequests.Requests)
 
 [<Fact>]
+let ``issue event stream refuses duplicate raw kind revision and actor members`` () =
+    let record = issueEvent 401 "EVENT_401" "labeled"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    check (record.Replace("\"event\":\"labeled\"", "\"event\":\"labeled\",\"event\":\"unlabeled\"")) "event"
+    check (record.Replace("\"created_at\":\"2026-09-23T10:00:00Z\"",
+                          "\"created_at\":\"2026-09-23T10:00:00Z\",\"created_at\":\"2026-09-24T10:00:00Z\"")) "created_at"
+    let actor = record.Replace("\"actor\":null", "\"actor\":{\"login\":\"reviewer\",\"login\":\"other\"}")
+    check actor "login"
+
+[<Fact>]
 let ``native relation reader proves reciprocal parent and blocking directions`` () =
     let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] [relationNode "ISSUE_2" 42L]
     let second = relationReply "ISSUE_2" 2 (Some(relationNode "ISSUE_1" 42L)) [] [relationNode "ISSUE_1" 42L] []
