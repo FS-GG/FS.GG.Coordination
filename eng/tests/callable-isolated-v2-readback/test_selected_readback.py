@@ -20,6 +20,8 @@ import callable_isolated_v2_release_readback as readback  # noqa: E402
 import validate_callable_isolated_v2_release_workflow as held  # noqa: E402
 
 NOW = dt.datetime(2026, 9, 25, 12, 5, tzinfo=dt.timezone.utc)
+INSTALLED_PATH = "/opt/fsgg/isolated-v2-release/fsgg-callable-isolated-v2.pyz"
+INTERPRETER_PATH = "/opt/fsgg/python/bin/python3.14"
 
 
 def canonical(value: dict) -> bytes:
@@ -51,7 +53,7 @@ def packet_fixture() -> dict:
         "runner": {"image": "ghcr.io/fs-gg/isolated-v2-fixture@sha256:" + "e" * 64,
                    "platform": "linux/amd64", "imageAttestationSha256": "f" * 64,
                    "ephemeral": True, "readOnlyRoot": True},
-        "runtime": {"interpreterPath": "/opt/fsgg/python/bin/python3.14",
+        "runtime": {"interpreterPath": INTERPRETER_PATH,
                     "interpreterSha256": "1" * 64, "interpreterVersion": "3.14.7",
                     "flags": ["-I", "-S"], "closureManifestSha256": "2" * 64,
                     "stdlibTreeSha256": "3" * 64, "mappedFileCount": 17},
@@ -91,7 +93,8 @@ def selection_fixture(packet: dict) -> dict:
     }
 
 
-def controls_fixture(selected: dict) -> dict:
+def controls_fixture(selected: dict, interpreter_path: str = INTERPRETER_PATH) -> dict:
+    command = [interpreter_path, "-I", "-S", INSTALLED_PATH]
     return {
         "schema": readback.CONTROLS_SCHEMA, "complete": True,
         "runId": selected["runId"], "runAttempt": selected["runAttempt"],
@@ -107,10 +110,11 @@ def controls_fixture(selected: dict) -> dict:
         "installedArchivePostSha256": selected["archiveSha256"],
         "interpreterPostSha256": selected["interpreterSha256"],
         "closurePostSha256": selected["closureManifestSha256"],
-        "noGrant": {"argv": ["inspect-grant"], "exitCode": 2,
+        "installedArchivePath": INSTALLED_PATH,
+        "noGrant": {"argv": command + ["inspect-grant"], "exitCode": 2,
                     "stdoutSha256": readback.EMPTY_SHA256,
                     "stderrSha256": readback.NO_GRANT_STDERR_SHA256},
-        "unknownCommand": {"argv": ["execute-native-pull"], "exitCode": 2,
+        "unknownCommand": {"argv": command + ["execute-native-pull"], "exitCode": 2,
                            "stdoutSha256": readback.EMPTY_SHA256,
                            "stderrSha256": readback.UNKNOWN_STDERR_SHA256},
         "executionTokenPresent": False, "providerRequestCount": 0,
@@ -172,7 +176,8 @@ def verify(packet: dict, selected: dict | None = None, controls: dict | None = N
            observed: dict | None = None, approved: dict | None = None,
            reviewed: dict | None = None):
     selection = selection_fixture(packet) if selected is None else selected
-    control_value = controls_fixture(selection) if controls is None else controls
+    control_value = (controls_fixture(selection, packet["runtime"]["interpreterPath"])
+                     if controls is None else controls)
     raw_selection = canonical(selection)
     return readback.verify_selected_readback(
         raw_selection, hashlib.sha256(raw_selection).hexdigest(), canonical(packet),
@@ -183,6 +188,35 @@ def verify(packet: dict, selected: dict | None = None, controls: dict | None = N
 
 
 class SelectedReadbackTests(unittest.TestCase):
+    def test_installed_refusal_names_exact_interpreter_and_archive(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        controls = controls_fixture(selected)
+        # The old record can claim a refusal without naming the executable,
+        # isolation flags, or archive that actually received the command.
+        del controls["installedArchivePath"]
+        with self.assertRaisesRegex(readback.Refused, "controls-shape"):
+            verify(packet, controls=controls)
+        for key, replacement in (
+                ("installedArchivePath", "relative/fsgg-callable-isolated-v2.pyz"),
+                ("installedArchivePath", "/opt/fsgg/../fsgg-callable-isolated-v2.pyz"),
+                ("installedArchivePath", "/opt/fsgg/other.pyz")):
+            with self.subTest(key=key, replacement=replacement):
+                controls = controls_fixture(selected)
+                controls[key] = replacement
+                with self.assertRaisesRegex(readback.Refused, "controls-archive-path"):
+                    verify(packet, controls=controls)
+        for argv in (
+                ["inspect-grant"],
+                ["/usr/bin/python3", "-I", "-S", INSTALLED_PATH, "inspect-grant"],
+                [INTERPRETER_PATH, "-S", INSTALLED_PATH, "inspect-grant"],
+                [INTERPRETER_PATH, "-I", "-S", "/tmp/other.pyz", "inspect-grant"]):
+            with self.subTest(argv=argv):
+                controls = controls_fixture(selected)
+                controls["noGrant"]["argv"] = argv
+                with self.assertRaisesRegex(readback.Refused, "control-refusal"):
+                    verify(packet, controls=controls)
+
     def test_review_event_must_name_its_own_protected_origin(self):
         packet = packet_fixture()
         selected = selection_fixture(packet)

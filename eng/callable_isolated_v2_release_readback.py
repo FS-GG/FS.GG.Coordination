@@ -42,7 +42,7 @@ CONTROL_KEYS = frozenset({
     "closureManifestSha256", "installedArchivePostSha256",
     "interpreterPostSha256", "closurePostSha256", "noGrant", "unknownCommand",
     "executionTokenPresent", "providerRequestCount", "journalWriteCount",
-    "workingDirectoryWriteCount", "observedAt",
+    "workingDirectoryWriteCount", "observedAt", "installedArchivePath",
 })
 REVIEW_KEYS = frozenset({"schema", "complete", "selectionSha256", "bindings",
                          "reviewerId", "reviewerMembership", "reviewEventId",
@@ -161,6 +161,13 @@ def _refusal(value: Any, argv: list[str], stderr_sha256: str) -> None:
 def _controls(value: Any, selected: dict[str, Any], packet: dict[str, Any],
               now: dt.datetime) -> dt.datetime:
     _exact(value, CONTROL_KEYS, "readback-controls-shape")
+    installed_path = value["installedArchivePath"]
+    if (type(installed_path) is not str or not installed_path.startswith("/")
+            or any(part in {"", ".", ".."} for part in installed_path.split("/")[1:])
+            or installed_path.rsplit("/", 1)[-1] != release.ARCHIVE
+            or any(ord(character) < 33 or ord(character) > 126
+                   for character in installed_path)):
+        raise Refused("readback-controls-archive-path")
     if (value["schema"] != CONTROLS_SCHEMA or value["complete"] is not True
             or any(type(value[key]) is not type(selected[other])
                    or value[key] != selected[other] for key, other in
@@ -182,8 +189,10 @@ def _controls(value: Any, selected: dict[str, Any], packet: dict[str, Any],
                    ("providerRequestCount", "journalWriteCount",
                     "workingDirectoryWriteCount"))):
         raise Refused("readback-controls-incomplete")
-    _refusal(value["noGrant"], ["inspect-grant"], NO_GRANT_STDERR_SHA256)
-    _refusal(value["unknownCommand"], ["execute-native-pull"], UNKNOWN_STDERR_SHA256)
+    command = [packet["runtime"]["interpreterPath"], "-I", "-S", installed_path]
+    _refusal(value["noGrant"], command + ["inspect-grant"], NO_GRANT_STDERR_SHA256)
+    _refusal(value["unknownCommand"], command + ["execute-native-pull"],
+             UNKNOWN_STDERR_SHA256)
     try:
         observed = release._time(value["observedAt"])
         approved = release._time(packet["approval"]["approvedAt"])
