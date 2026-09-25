@@ -54,6 +54,15 @@ journal sidecar, not an App Server cursor, so it cannot establish upstream notif
 completeness. A terminal observation does not yield completed-turn usage. No authenticated
 subscription to this interactive thread or transport-journal implementation is installed.
 
+`CodexAppServerJournal` adds a dormant atomic append port for that future transport journal. Each
+request carries the exact subscription binding, predecessor receipt, ordinal and immutable frame
+bytes (or a disconnect fact). A matching append receipt permits the in-memory continuity reducer
+to advance. Local frame and sequence refusals are retained as terminal gap entries. A duplicate,
+conflicting or uncertain store outcome permanently halts that window.
+The fake store tests retention and one winner under concurrent append attempts. No durable store,
+recovery reader, authenticated live transport or current-session source is installed, so this
+contract does not prove upstream notification completeness or session capture.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
