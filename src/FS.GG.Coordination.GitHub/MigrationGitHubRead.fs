@@ -125,6 +125,20 @@ type MigrationRepositoryWorkflowPermissions =
       DefaultWorkflowPermissions: string
       CanApprovePullRequestReviews: bool }
 
+type MigrationPrivateForkWorkflowSettings =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PolicyUri: string
+      PolicyPayloadJson: string
+      PolicyPayloadSha256: string
+      RunWorkflowsFromForkPullRequests: bool
+      SendWriteTokensToWorkflows: bool
+      SendSecretsAndVariables: bool
+      RequireApprovalForForkPrWorkflows: bool }
+
 type MigrationReceiverObjectEvidence =
     { RequestUri: string
       RawBody: string
@@ -1065,6 +1079,76 @@ module MigrationGitHubRead =
                             | Ok _, Ok _ ->
                                 Error(MigrationReadFailure.MalformedResponse "invalid:workflow-permissions")
                             | Error failure, _ | _, Error failure -> Error failure))))
+
+    let readPrivateForkWorkflowSettings (options: MigrationGitHubReadOptions)
+                                        (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let identityUri = Uri(options.ApiBase, repositoryPath)
+            let policyUri = Uri(options.ApiBase, $"{repositoryPath}/actions/permissions/fork-pr-workflows-private-repos")
+            let get (uri: Uri) =
+                response transport
+                    (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                            ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers
+                         |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:private-fork-workflow-link")
+                    else Ok result.Body)
+            let readIdentity () =
+                get identityUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredInt64 "id" document.RootElement,
+                                  requiredString "full_name" document.RootElement,
+                                  requiredString "visibility" document.RootElement with
+                            | Ok id, Ok name, Ok "private" when id = options.ExpectedRepositoryId
+                                                          && name = $"{options.Owner}/{options.Repository}" -> Ok body
+                            | Ok id, Ok name, Ok _ when id <> options.ExpectedRepositoryId
+                                                       || name <> $"{options.Owner}/{options.Repository}" ->
+                                Error MigrationReadFailure.IdentityDrift
+                            | Ok _, Ok _, Ok _ ->
+                                Error(MigrationReadFailure.MalformedResponse "invalid:private-fork-workflow-visibility")
+                            | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)))
+            readIdentity ()
+            |> Result.bind (fun firstIdentity ->
+                get policyUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredBool "run_workflows_from_fork_pull_requests" document.RootElement,
+                                  requiredBool "send_write_tokens_to_workflows" document.RootElement,
+                                  requiredBool "send_secrets_and_variables" document.RootElement,
+                                  requiredBool "require_approval_for_fork_pr_workflows" document.RootElement with
+                            | Ok runFork, Ok sendWrite, Ok sendSecrets, Ok approval ->
+                                readIdentity ()
+                                |> Result.bind (fun finalIdentity ->
+                                    if finalIdentity <> firstIdentity then
+                                        Error(MigrationReadFailure.SnapshotMismatch "fork-workflow-identity")
+                                    else
+                                        Ok { RepositoryId=options.ExpectedRepositoryId
+                                             RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                             IdentityUri=identityUri.AbsoluteUri
+                                             IdentityPayloadJson=firstIdentity
+                                             IdentityPayloadSha256=sha firstIdentity
+                                             PolicyUri=policyUri.AbsoluteUri
+                                             PolicyPayloadJson=body
+                                             PolicyPayloadSha256=sha body
+                                             RunWorkflowsFromForkPullRequests=runFork
+                                             SendWriteTokensToWorkflows=sendWrite
+                                             SendSecretsAndVariables=sendSecrets
+                                             RequireApprovalForForkPrWorkflows=approval })
+                            | Error failure, _, _, _ | _, Error failure, _, _
+                            | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))))
 
     let readReceiverSnapshot (options: MigrationGitHubReadOptions) receiverName expectedNodeId refName expectedHead
                              (transport: IMigrationGitHubReadTransport) =

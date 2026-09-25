@@ -2004,3 +2004,104 @@ let ``Actions policy brackets workflow defaults and refuses cross-surface drift`
     Assert.Equal(Error "changed:settings-cross-surface",
                  MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
                      (hash repositoryCore) actionsDigest workflowDigest options changedCore)
+
+[<Fact>]
+let ``private fork workflow policy requires four explicit booleans and exact identity`` () =
+    let policy = """{"run_workflows_from_fork_pull_requests":true,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false,"require_approval_for_fork_pr_workflows":true}"""
+    let transport = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty repositoryCore ]
+    match MigrationGitHubRead.readPrivateForkWorkflowSettings options transport with
+    | Error failure -> failwithf "private fork policy refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.True(observed.RunWorkflowsFromForkPullRequests)
+        Assert.False(observed.SendWriteTokensToWorkflows)
+        Assert.False(observed.SendSecretsAndVariables)
+        Assert.True(observed.RequireApprovalForForkPrWorkflows)
+        Assert.Equal(policy, observed.PolicyPayloadJson)
+        Assert.Equal(3, transport.Requests.Length)
+        let uris = transport.Requests |> List.map (function
+            | Rest request ->
+                Assert.Equal(Get, request.Method)
+                Assert.True(request.Body.IsNone)
+                request.Uri.AbsoluteUri
+            | _ -> failwith "fork workflow reader issued GraphQL")
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/copy"
+              "https://api.github.test/repos/FS-GG/copy/actions/permissions/fork-pr-workflows-private-repos"
+              "https://api.github.test/repos/FS-GG/copy" ], uris)
+    for malformed in
+        [ """{"run_workflows_from_fork_pull_requests":true,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false}"""
+          policy.Replace("\"send_secrets_and_variables\":false", "\"send_secrets_and_variables\":null")
+          policy.Replace("\"send_write_tokens_to_workflows\":false,", "\"send_write_tokens_to_workflows\":false,\"send_write_tokens_to_workflows\":true,") ] do
+        let refused = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty malformed ]
+        match MigrationGitHubRead.readPrivateForkWorkflowSettings options refused with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete private fork policy accepted"
+        Assert.Equal(2, refused.Requests.Length)
+    let publicIdentity = repositoryCore.Replace("\"visibility\":\"private\"", "\"visibility\":\"public\"")
+    let publicRepo = FakeTransport [ ok Map.empty publicIdentity ]
+    match MigrationGitHubRead.readPrivateForkWorkflowSettings options publicRepo with
+    | Error _ -> Assert.Single(publicRepo.Requests) |> ignore
+    | Ok _ -> failwith "public repository accepted for private fork policy"
+    let drift = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty (" " + repositoryCore) ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "fork-workflow-identity"),
+                 MigrationGitHubRead.readPrivateForkWorkflowSettings options drift)
+    let unexpectedLink = FakeTransport [ ok Map.empty repositoryCore
+                                         ok (Map.ofList [ "Link", "<https://api.github.test/next>; rel=\"next\"" ]) policy ]
+    match MigrationGitHubRead.readPrivateForkWorkflowSettings options unexpectedLink with
+    | Error(MigrationReadFailure.PaginationRefused _) -> ()
+    | other -> failwithf "fork policy pagination was not refused: %A" other
+    for status in [ 403; 404 ] do
+        let denied =
+            match ok Map.empty "" with
+            | Response response -> Response { response with StatusCode=status }
+            | _ -> failwith "invalid response fixture"
+        let unavailable = FakeTransport [ ok Map.empty repositoryCore; denied ]
+        Assert.Equal(Error(MigrationReadFailure.HttpRefused status),
+                     MigrationGitHubRead.readPrivateForkWorkflowSettings options unavailable)
+
+[<Fact>]
+let ``rollback private fork workflow policy is raw bound and remains partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let policy = """{"run_workflows_from_fork_pull_requests":true,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false,"require_approval_for_fork_pr_workflows":true}"""
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expected =
+        [ "fsgg.gs2-09.7.private-fork-workflow-raw/v1"; "42"; "FS-GG/copy"
+          "https://api.github.test/repos/FS-GG/copy/actions/permissions/fork-pr-workflows-private-repos"
+          hash repositoryCore; hash policy ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty repositoryCore
+          ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty repositoryCore
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expected options transport with
+    | Error failure -> failwithf "fork workflow readback refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(expected, proof.PrivateForkWorkflowSha256)
+        Assert.Equal(9, transport.Requests.Length)
+    let changedPolicy = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 6 then ok Map.empty (policy.Replace("true", "false")) else response))
+    Assert.Equal(Error "changed:private-fork-workflow-raw",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changedPolicy)
+    let stalePin = FakeTransport responses
+    Assert.Equal(Error "changed:private-fork-workflow-state",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options stalePin)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changedCore)
+    let foreign = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expected options foreign)
+    Assert.Empty(foreign.Requests)

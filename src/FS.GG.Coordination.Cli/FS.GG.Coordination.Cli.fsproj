@@ -43,6 +43,8 @@
     <Compile Include="MigrationRollbackWorkflowPermissionsReadback.fs" />
     <Compile Include="MigrationRollbackActionsWorkflowReadback.fsi" />
     <Compile Include="MigrationRollbackActionsWorkflowReadback.fs" />
+    <Compile Include="MigrationRollbackPrivateForkWorkflowReadback.fsi" />
+    <Compile Include="MigrationRollbackPrivateForkWorkflowReadback.fs" />
     <Compile Include="MigrationSandboxFixtureSeed.fsi" />
     <Compile Include="MigrationSandboxFixtureSeed.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
