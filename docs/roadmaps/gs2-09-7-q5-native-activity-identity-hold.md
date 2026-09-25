@@ -29,6 +29,16 @@ prove the initial census belongs to an admitted sandbox or that page hashes
 match retained raw response bytes. The provider reader and future
 raw-to-typed inspect adapter still owe those proofs.
 
+A fourth independent control found that the scoped typed capture still
+accepted `per_page=1`, a skipped continuation page number and a census query
+for `state=open`. It was red before the repair. Reconciliation now applies
+the native reader's exact query shape to each census and stream page:
+`state=all&per_page=100` for issue/PR censuses, `per_page=100` for streams,
+and the exact page ordinal for continuations. It refuses duplicate query keys
+and a first-page cursor. This prevents an undersized or filtered page from
+masquerading as the complete typed capture; retained provider bytes and
+initial sandbox identity are still separate authority obligations.
+
 The native activity capture remains a precursor only. The
 `claim-and-event-streams` Q5 authority still lacks protected claim journal,
 custom receipt, exact scope and raw-to-typed adapter proof. Its current

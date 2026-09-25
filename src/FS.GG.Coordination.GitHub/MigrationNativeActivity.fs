@@ -61,6 +61,30 @@ module MigrationNativeActivity =
                 (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f')))))
         && linked pages
 
+    let private exactPageQuery census pageIndex (uri: Uri) =
+        let entries =
+            uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map (fun part -> part.Split('=', 2))
+        let expected =
+            [ if census then "state", "all"
+              "per_page", "100"
+              if pageIndex > 0 then "page", string (pageIndex + 1) ]
+            |> Map.ofList
+        let decoded =
+            entries
+            |> Array.choose (fun parts ->
+                if parts.Length = 2 then
+                    Some(Uri.UnescapeDataString parts.[0], Uri.UnescapeDataString parts.[1])
+                else None)
+        let keys = decoded |> Array.map fst |> Set.ofArray
+        decoded.Length = entries.Length && keys.Count = entries.Length
+        && (expected |> Map.forall (fun name value ->
+            decoded |> Array.exists (fun (observedName, observedValue) ->
+                observedName = name && observedValue = value)))
+        && (decoded |> Array.forall (fun (name, value) ->
+            Map.containsKey name expected
+            || (pageIndex > 0 && name = "after" && not (String.IsNullOrWhiteSpace value))))
+
     let private pagesWithinCensusScope (input: MigrationNativeActivityInput) =
         match input.Issues.Pages with
         | [] -> false
@@ -76,29 +100,31 @@ module MigrationNativeActivity =
                    || String.IsNullOrWhiteSpace segments.[segments.Length - 1] then false
                 else
                     let origin = censusUri.GetLeftPart(UriPartial.Authority)
-                    let scoped pages path alternate =
-                        pages |> List.forall (fun page ->
+                    let scoped pages path alternate census =
+                        pages |> List.mapi (fun index page ->
                             let mutable uri = Unchecked.defaultof<Uri>
                             Uri.TryCreate(page.RequestedUri, UriKind.Absolute, &uri)
                             && uri.Scheme = Uri.UriSchemeHttps
                             && uri.GetLeftPart(UriPartial.Authority) = origin
                             && uri.Fragment = ""
-                            && (uri.AbsolutePath = path || alternate = Some uri.AbsolutePath))
+                            && (uri.AbsolutePath = path || alternate = Some uri.AbsolutePath)
+                            && exactPageQuery census index uri)
+                        |> List.forall id
                     let issuePath = rootPath + "/issues"
                     let pullPath = rootPath + "/pulls"
-                    scoped input.Issues.Pages issuePath (Some $"/repositories/{input.Issues.RepositoryId}/issues")
+                    scoped input.Issues.Pages issuePath (Some $"/repositories/{input.Issues.RepositoryId}/issues") true
                     && scoped input.PullRequests.Pages pullPath
-                        (Some $"/repositories/{input.PullRequests.RepositoryId}/pulls")
+                        (Some $"/repositories/{input.PullRequests.RepositoryId}/pulls") true
                     && (input.IssueComments |> List.forall (fun stream ->
-                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None))
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None false))
                     && (input.IssueEvents |> List.forall (fun stream ->
-                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/events" None))
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/events" None false))
                     && (input.PullRequestComments |> List.forall (fun stream ->
-                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None))
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None false))
                     && (input.PullRequestReviews |> List.forall (fun stream ->
-                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/reviews" None))
+                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/reviews" None false))
                     && (input.PullRequestInlineComments |> List.forall (fun stream ->
-                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/comments" None))
+                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/comments" None false))
 
     let private framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
