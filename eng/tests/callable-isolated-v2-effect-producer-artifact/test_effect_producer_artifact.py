@@ -172,6 +172,24 @@ class ProducerArtifactTests(unittest.TestCase):
         self.refuses(lambda _p, _t, _s, r, _b: r.run.__setitem__("completedAt", "2026-09-25T11:54:00Z"))
         self.refuses(lambda _p, _t, s, _r, _b: s.__setitem__("workflowPath", "../other.yml"))
 
+    def test_reused_reader_scope_mutated_during_bundle_read_refuses(self):
+        for changed_port in ("producer", "bundle"):
+            with self.subTest(changed_port=changed_port):
+                preflight, tree, selected, run_port, bundle_port = fixture()
+                port = run_port if changed_port == "producer" else bundle_port
+                shared = copy.deepcopy(port.scopes[0])
+                port.scopes = [shared, shared]
+                original_download = bundle_port.download_bundle
+                def drift(artifact_id, url):
+                    raw = original_download(artifact_id, url)
+                    shared["credentialId"] = "f" * 64
+                    return raw
+                bundle_port.download_bundle = drift
+                with self.assertRaises(producer.Refused):
+                    producer.qualify(preflight, tree, run_port, bundle_port,
+                                     selected, NOW,
+                                     workflow_source=source_result(preflight, selected))
+
     def test_symlink_mode_artifact_member_was_a_false_green(self):
         preflight, tree, selected, run_port, bundle_port = fixture()
         with zipfile.ZipFile(io.BytesIO(bundle_port.bundle)) as zipped:
