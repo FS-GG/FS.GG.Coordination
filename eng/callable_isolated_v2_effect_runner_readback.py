@@ -17,7 +17,8 @@ RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/1"
 REFUSAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-scaffold-refusal/1"
 IDENTITY = {"runId", "runAttempt", "coordinationRevision", "sourceTree",
             "artifactId", "manifestSha256", "archiveSha256", "installPath"}
-SELECTION = {"runId", "runAttempt", "runnerActorId", "auditEventId",
+SELECTION = {"runId", "runAttempt", "runnerActorId", "auditActorId",
+             "auditEventId",
              "imageDigest", "attestationDigest", "interpreterSha256",
              "runtimeClosureSha256", "installPath"}
 COUNTS = {"tokenReads", "journalReads", "journalWrites", "casWrites",
@@ -46,6 +47,7 @@ class ReadbackResult:
     archive_sha256: str
     run_id: int
     audit_event_id: int
+    audit_actor_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -121,7 +123,9 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
             or runner_port is None or audit_port is None
             or runner_port is audit_port
             or not all(_positive(selection[key]) for key in
-                       ("runId", "runAttempt", "runnerActorId", "auditEventId"))
+                       ("runId", "runAttempt", "runnerActorId",
+                        "auditActorId", "auditEventId"))
+            or selection["auditActorId"] == selection["runnerActorId"]
             or not all(candidate._hex(selection[key], candidate.HEX64) for key in
                        ("imageDigest", "attestationDigest", "interpreterSha256",
                         "runtimeClosureSha256"))
@@ -195,7 +199,8 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
         raise Refused("readback-refusal-binding")
     if (type(audit["eventId"]) is not int
             or audit["eventId"] != selection["auditEventId"]
-            or not _positive(audit["auditActorId"])
+            or type(audit["auditActorId"]) is not int
+            or audit["auditActorId"] != selection["auditActorId"]
             or type(audit["runnerActorId"]) is not int
             or audit["runnerActorId"] != selection["runnerActorId"]
             or audit["auditActorId"] == selection["runnerActorId"]
@@ -214,4 +219,5 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
         raise Refused("readback-scope-drift")
     return ReadbackResult(preflight.coordination_revision,
                           preflight.artifact_id, preflight.archive_sha256,
-                          selection["runId"], selection["auditEventId"])
+                          selection["runId"], selection["auditEventId"],
+                          selection["auditActorId"])

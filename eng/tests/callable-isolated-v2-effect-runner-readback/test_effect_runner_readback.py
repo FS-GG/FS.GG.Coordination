@@ -48,6 +48,7 @@ def fixture():
     result = release.PreflightResult("a" * 40, "b" * 40,
         "c" * 64, 404, SHA(ARCHIVE))
     selected = {"runId": 707, "runAttempt": 1, "runnerActorId": 808,
+        "auditActorId": 1001,
         "auditEventId": 909, "imageDigest": "d" * 64,
         "attestationDigest": "e" * 64, "interpreterSha256": "f" * 64,
         "runtimeClosureSha256": "1" * 64, "installPath": PATH}
@@ -105,6 +106,7 @@ class RunnerReadbackTests(unittest.TestCase):
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
+        self.assertEqual(result.audit_actor_id, 1001)
         self.assertFalse(hasattr(readback, "dispatch"))
 
     def test_selected_source_runtime_and_object_drift_refuse(self):
@@ -139,7 +141,16 @@ class RunnerReadbackTests(unittest.TestCase):
         self.refuses(lambda _p, _s, r, _a: r.record.__setitem__("imageDigest", "0" * 64))
         self.refuses(lambda _p, _s, r, _a: r.record.__setitem__("argv", ["python3", PATH]))
         self.refuses(lambda _p, _s, _r, a: a.record.__setitem__("auditActorId", 808))
+        self.refuses(lambda _p, _s, _r, a: a.record.__setitem__("auditActorId", 1002))
+        self.refuses(lambda _p, s, _r, _a: s.__setitem__("auditActorId", 1002))
         self.refuses(lambda _p, _s, _r, a: a.record.__setitem__("eventId", 910))
+
+    def test_foreign_positive_audit_actor_was_a_false_green(self):
+        result, selection, runner, audit = fixture()
+        selection.pop("auditActorId")  # The old selector omitted the actor.
+        audit.record["auditActorId"] = 1002
+        with self.assertRaises(readback.Refused):
+            readback.qualify(result, runner, audit, selection, NOW)
 
     def test_unavailable_or_drifting_independent_port_refuses_without_leak(self):
         result, selection, runner, audit = fixture()
