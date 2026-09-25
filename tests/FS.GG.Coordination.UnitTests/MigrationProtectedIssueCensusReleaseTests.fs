@@ -563,3 +563,36 @@ let ``protected native attempt recovery refuses incomplete or stale sealed snaps
     Assert.Equal(Error "protected-census-attempt-seal",
                  inspect { exact with Records=[tamperedRecord] }
                          (Some exact.Head) (Some exact.Head))
+
+[<Fact>]
+let ``protected native attempt recovery refuses marker lost or replaced during snapshot`` () =
+    let f = fixture ()
+    let marker = capturedMarker f
+    let record =
+        { Request=marker; ProviderAttemptId=marker.NativeAttemptId
+          VaultResourceId=handoffPins.VaultResourceId; Phase=InvocationUnknown
+          TokenFingerprintSha256=None; RevocationReceiptSha256=None }
+    let inspect after =
+        let snapshot = sealedSnapshot marker.NativeAttemptId true [record]
+        let mutable currentMarker = Some marker
+        let mutable markerReads = 0
+        let handoff =
+            { new IProtectedIssueCensusHandoffPort with
+                member _.Describe() = handoffDescription
+                member _.MarkOnce _ = failwith "recovery must not mark again"
+                member _.ReadMarker _ =
+                    markerReads <- markerReads + 1
+                    currentMarker }
+        let native =
+            { new IProtectedIssueCensusNativeAttemptPort with
+                member _.Describe() = nativeDescription
+                member _.ReadHead() = Some snapshot.Head
+                member _.ReadAttempts _ =
+                    currentMarker <- after
+                    Some snapshot }
+        let result =
+            inspectAttempt marker (Some handoff) (Some native)
+        result, markerReads
+    Assert.Equal((Error "protected-census-attempt-unknown", 2), inspect None)
+    let foreign = { marker with ClaimId=String.replicate 64 "0" }
+    Assert.Equal((Error "protected-census-attempt-binding", 2), inspect (Some foreign))
