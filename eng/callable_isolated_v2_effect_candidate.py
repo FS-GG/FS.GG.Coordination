@@ -111,7 +111,8 @@ def verify_candidate(raw: bytes, payload_sha256: str, expected: dict[str, Any],
     source = _exact(packet["source"], {"coordinationRevision", "sourceTree",
                                         "operatorSha256", "controlsSha256",
                                         "effectArchiveSha256", "workflowRevision",
-                                        "workflowPath", "workflowSha256"},
+                                        "workflowPath", "workflowSha256",
+                                        "producerRunId", "artifactId", "producerActorId"},
                     "candidate-source-shape")
     if (not _hex(source["coordinationRevision"], HEX40)
             or not _hex(source["sourceTree"], HEX40)
@@ -120,7 +121,10 @@ def verify_candidate(raw: bytes, payload_sha256: str, expected: dict[str, Any],
             or any(not _hex(source[key], HEX64) for key in
                    ("operatorSha256", "controlsSha256", "effectArchiveSha256",
                     "workflowSha256"))
-            or source["effectArchiveSha256"] == INSPECT_ONLY_ARCHIVE):
+            or any(not _positive(source[key]) for key in
+                   ("producerRunId", "artifactId", "producerActorId"))):
+        raise Refused("candidate-source")
+    if source["effectArchiveSha256"] == INSPECT_ONLY_ARCHIVE:
         raise Refused("candidate-source")
 
     runtime = _exact(packet["runtime"], {"runnerImage", "imageAttestationSha256",
@@ -144,7 +148,9 @@ def verify_candidate(raw: bytes, payload_sha256: str, expected: dict[str, Any],
             or any(not _positive(review[key]) for key in
                    ("runId", "runAttempt", "environmentId", "dispatchActorId",
                     "reviewerId", "reviewEventId"))
-            or review["dispatchActorId"] == review["reviewerId"]):
+            or review["dispatchActorId"] == review["reviewerId"]
+            or source["producerActorId"] == review["reviewerId"]
+            or source["producerRunId"] == review["runId"]):
         raise Refused("candidate-review")
     reviewed = _time(review["reviewedAt"])
     expires = _time(review["expiresAt"])
