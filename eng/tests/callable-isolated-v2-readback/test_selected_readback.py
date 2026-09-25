@@ -95,6 +95,9 @@ def selection_fixture(packet: dict) -> dict:
 
 def controls_fixture(selected: dict, interpreter_path: str = INTERPRETER_PATH) -> dict:
     command = [interpreter_path, "-I", "-S", INSTALLED_PATH]
+    archive_identity = {"path": INSTALLED_PATH, "realPath": INSTALLED_PATH,
+                        "kind": "regular", "device": 401, "inode": 402,
+                        "sha256": selected["archiveSha256"]}
     return {
         "schema": readback.CONTROLS_SCHEMA, "complete": True,
         "runId": selected["runId"], "runAttempt": selected["runAttempt"],
@@ -111,6 +114,8 @@ def controls_fixture(selected: dict, interpreter_path: str = INTERPRETER_PATH) -
         "interpreterPostSha256": selected["interpreterSha256"],
         "closurePostSha256": selected["closureManifestSha256"],
         "installedArchivePath": INSTALLED_PATH,
+        "installedArchiveBefore": copy.deepcopy(archive_identity),
+        "installedArchiveAfter": copy.deepcopy(archive_identity),
         "noGrant": {"argv": command + ["inspect-grant"], "exitCode": 2,
                     "stdoutSha256": readback.EMPTY_SHA256,
                     "stderrSha256": readback.NO_GRANT_STDERR_SHA256},
@@ -188,6 +193,32 @@ def verify(packet: dict, selected: dict | None = None, controls: dict | None = N
 
 
 class SelectedReadbackTests(unittest.TestCase):
+    def test_installed_refusal_requires_same_regular_archive_before_and_after(self):
+        packet = packet_fixture()
+        selected = selection_fixture(packet)
+        controls = controls_fixture(selected)
+        # A command path and a matching post-hash alone do not identify the
+        # filesystem object opened during either refusal probe.
+        del controls["installedArchiveBefore"]
+        with self.assertRaisesRegex(readback.Refused, "controls-shape"):
+            verify(packet, controls=controls)
+        for stage, key, replacement in (
+                ("installedArchiveBefore", "kind", "symlink"),
+                ("installedArchiveAfter", "realPath", "/tmp/foreign.pyz"),
+                ("installedArchiveAfter", "path", "/tmp/foreign.pyz"),
+                ("installedArchiveAfter", "sha256", "9" * 64),
+                ("installedArchiveAfter", "device", True),
+                ("installedArchiveAfter", "inode", 0)):
+            with self.subTest(stage=stage, key=key):
+                controls = controls_fixture(selected)
+                controls[stage][key] = replacement
+                with self.assertRaisesRegex(readback.Refused, "archive-identity"):
+                    verify(packet, controls=controls)
+        controls = controls_fixture(selected)
+        controls["installedArchiveAfter"]["inode"] += 1
+        with self.assertRaisesRegex(readback.Refused, "archive-replaced"):
+            verify(packet, controls=controls)
+
     def test_installed_refusal_names_exact_interpreter_and_archive(self):
         packet = packet_fixture()
         selected = selection_fixture(packet)

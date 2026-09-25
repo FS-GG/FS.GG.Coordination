@@ -43,7 +43,9 @@ CONTROL_KEYS = frozenset({
     "interpreterPostSha256", "closurePostSha256", "noGrant", "unknownCommand",
     "executionTokenPresent", "providerRequestCount", "journalWriteCount",
     "workingDirectoryWriteCount", "observedAt", "installedArchivePath",
+    "installedArchiveBefore", "installedArchiveAfter",
 })
+ARCHIVE_IDENTITY_KEYS = frozenset({"path", "realPath", "kind", "device", "inode", "sha256"})
 REVIEW_KEYS = frozenset({"schema", "complete", "selectionSha256", "bindings",
                          "reviewerId", "reviewerMembership", "reviewEventId",
                          "reviewedAt", "repository", "workflowPath",
@@ -158,6 +160,21 @@ def _refusal(value: Any, argv: list[str], stderr_sha256: str) -> None:
         raise Refused("readback-control-refusal")
 
 
+def _archive_identity(value: Any, installed_path: str, selected_sha256: str
+                      ) -> tuple[int, int]:
+    _exact(value, ARCHIVE_IDENTITY_KEYS, "readback-archive-identity-shape")
+    if (type(value["path"]) is not str or value["path"] != installed_path
+            or type(value["realPath"]) is not str
+            or value["realPath"] != installed_path
+            or value["kind"] != "regular"
+            or type(value["device"]) is not int or value["device"] <= 0
+            or type(value["inode"]) is not int or value["inode"] <= 0
+            or type(value["sha256"]) is not str
+            or value["sha256"] != selected_sha256):
+        raise Refused("readback-archive-identity")
+    return value["device"], value["inode"]
+
+
 def _controls(value: Any, selected: dict[str, Any], packet: dict[str, Any],
               now: dt.datetime) -> dt.datetime:
     _exact(value, CONTROL_KEYS, "readback-controls-shape")
@@ -168,6 +185,12 @@ def _controls(value: Any, selected: dict[str, Any], packet: dict[str, Any],
             or any(ord(character) < 33 or ord(character) > 126
                    for character in installed_path)):
         raise Refused("readback-controls-archive-path")
+    before = _archive_identity(value["installedArchiveBefore"], installed_path,
+                               selected["archiveSha256"])
+    after = _archive_identity(value["installedArchiveAfter"], installed_path,
+                              selected["archiveSha256"])
+    if before != after:
+        raise Refused("readback-archive-replaced")
     if (value["schema"] != CONTROLS_SCHEMA or value["complete"] is not True
             or any(type(value[key]) is not type(selected[other])
                    or value[key] != selected[other] for key, other in
