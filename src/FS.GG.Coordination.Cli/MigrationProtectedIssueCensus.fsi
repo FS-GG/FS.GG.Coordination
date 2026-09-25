@@ -67,9 +67,18 @@ type ProtectedIssueCensusStoreDescription =
       CandidateMayWrite: bool
       ImmutableObjects: bool }
 
+type ProtectedIssueCensusStoreInventory =
+    { Selection: ProtectedIssueCensusSelection
+      CustodyStoreResourceId: string
+      Complete: bool
+      HighWaterOrdinal: int64
+      SealSha256: string
+      ObjectIds: string list }
+
 /// An independent candidate-inaccessible store port must back this source contract.
 type IProtectedIssueCensusStorePort =
     abstract Describe: unit -> ProtectedIssueCensusStoreDescription
+    abstract ReadInventory: ProtectedIssueCensusSelection -> ProtectedIssueCensusStoreInventory option
     abstract ReadObject: ProtectedIssueCensusSelection * string -> ProtectedIssueCensusStoredRead option
 
 type ProtectedIssueCensusProof =
