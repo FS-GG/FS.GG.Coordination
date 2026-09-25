@@ -83,13 +83,26 @@ def plan_audience(sealed_plan: bytes, nonce: str) -> str:
 @dataclasses.dataclass(frozen=True)
 class NativeJobIdentity:
     workflow_path: str
-    workflow_head: str
+    run_head: str
+    workflow_sha: str
     run_id: int
     run_attempt: int
     actor_id: int
     check_run_id: int
     environment_name: str
     environment_node_id: str
+
+
+@dataclasses.dataclass(frozen=True)
+class RegisteredServicePolicy:
+    """Main-host installed policy, never sourced from a service request."""
+
+    workflow_path: str
+    workflow_sha: str
+    actor_id: int
+    environment_name: str
+    environment_node_id: str
+    subject: str
 
 
 @dataclasses.dataclass(frozen=True)
@@ -145,14 +158,16 @@ def verify_signed_job(
     compact: str,
     jwks_bytes: bytes,
     native: NativeJobIdentity,
+    registered: RegisteredServicePolicy,
     audience: str,
     now: int,
 ) -> SignedJobProof:
     """Verify one signed token; the caller must separately validate native evidence.
 
-    NativeJobIdentity is an expected value supplied by the future fixed Main
-    native reader, never by a request body. This function does not consume jti
-    or plan nonce; durable one-shot consumption is a separate issuer gate.
+    NativeJobIdentity is supplied by the future fixed Main native reader and
+    RegisteredServicePolicy by its installed policy, never by a request body.
+    This function does not consume jti or plan nonce; durable one-shot
+    consumption is a separate issuer gate.
     """
     require(isinstance(compact, str) and len(compact) <= 16384
             and compact.count(".") == 2, "oidc-token-shape")
@@ -171,6 +186,7 @@ def verify_signed_job(
         header["kid"],
     )
     require(isinstance(native, NativeJobIdentity)
+            and isinstance(registered, RegisteredServicePolicy)
             and type(now) is int and now > 0
             and isinstance(audience, str)
             and re.fullmatch(r"urn:fsgg:v1-admission:[0-9a-f]{64}:[0-9a-f]{32}", audience) is not None,
@@ -188,9 +204,9 @@ def verify_signed_job(
         "repository": REPOSITORY,
         "repository_id": REPOSITORY_ID,
         "ref": REF,
-        "sha": native.workflow_head,
+        "sha": native.run_head,
         "workflow_ref": f"{REPOSITORY}/{native.workflow_path}@{REF}",
-        "workflow_sha": native.workflow_head,
+        "workflow_sha": native.workflow_sha,
         "run_id": str(native.run_id),
         "run_attempt": str(native.run_attempt),
         "actor_id": str(native.actor_id),
@@ -203,16 +219,24 @@ def verify_signed_job(
             "oidc-job-binding")
     require(native.workflow_path.startswith(".github/workflows/")
             and native.workflow_path.endswith(".yml")
-            and len(native.workflow_head) == 40
-            and HEX.fullmatch(native.workflow_head) is not None
+            and native.workflow_path == registered.workflow_path
+            and len(native.run_head) == 40
+            and HEX.fullmatch(native.run_head) is not None
+            and len(native.workflow_sha) == 40
+            and HEX.fullmatch(native.workflow_sha) is not None
+            and native.workflow_sha == registered.workflow_sha
             and native.run_id > 0 and native.run_attempt == 1
-            and native.actor_id > 0 and native.check_run_id > 0
+            and native.actor_id == registered.actor_id
+            and native.check_run_id > 0
+            and native.environment_name == registered.environment_name
+            and native.environment_node_id == registered.environment_node_id
             and bool(native.environment_name) and bool(native.environment_node_id),
             "oidc-native-identity-shape")
     jti = payload.get("jti")
     require(isinstance(jti, str) and 0 < len(jti) <= 128
             and all(32 <= ord(char) < 127 for char in jti), "oidc-token-id")
-    require(isinstance(payload.get("sub"), str) and bool(payload["sub"]),
+    require(isinstance(registered.subject, str) and bool(registered.subject)
+            and payload.get("sub") == registered.subject,
             "oidc-subject")
     return SignedJobProof(
         token_id=jti,
