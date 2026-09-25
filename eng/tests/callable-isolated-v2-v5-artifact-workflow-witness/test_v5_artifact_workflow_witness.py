@@ -44,7 +44,10 @@ def fixture():
         "source-reader", "a" * 64, "review-reader", "b" * 64)
     readback = installed.Readback(selection.archive_sha256,
         selection.manifest_sha256, selection.revision, selection.artifact_id,
-        700, 702)
+        700, 702, selection.source_tree, selection.repository_id, 701, 703,
+        "3" * 64, "4" * 64, "5" * 64,
+        "/opt/fsgg/v5/fsgg-callable-isolated-v2-v5-no-grant.pyz",
+        "2026-09-25T11:58:00Z", "2026-09-25T11:58:01Z")
     artifact_scope = {"principalId": "artifact-reader",
         "credentialId": "6" * 64, "repository": candidate.REPOSITORY,
         "repositoryId": 100, "permissions": ["actions:read"],
