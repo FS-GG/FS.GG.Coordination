@@ -170,7 +170,7 @@ def gh_request(path, method="GET", body=None, allow_not_found=False):
         if allow_not_found and ("HTTP 404" in detail or "status code 404" in detail):
             value = {"status": "absent", "httpStatus": 404}
             return value, {}, canonical(value)
-        raise UnknownEffect(f"github-{method.lower()}-unknown:{path}:{detail}")
+        raise UnknownEffect(f"github-{method.lower()}-unknown:{path}")
     payload = completed.stdout
     try:
         value = json.loads(payload) if payload.strip() else None
@@ -630,7 +630,7 @@ def advance_retirement_head(config, value):
     if snapshot["pullRequestDisposition"] == "merged-exact-before-retirement":
         return value, snapshot
     if result is not None and result.returncode != 0:
-        raise Refused("retirement-head-push-refused:" + result.stderr.decode(errors="replace")[:200])
+        raise Refused("retirement-head-push-refused")
     raise UnknownEffect("retirement-head-push-outcome-unknown")
 
 
