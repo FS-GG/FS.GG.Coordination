@@ -418,7 +418,8 @@ class NativeReadAdapter:
                 or not _branch_protection_url_matches(terminal_branch, expected)):
             raise Refused("native-protection-terminal-branch-drift")
         terminal_policy_status, _, terminal_policy = self._get(f"{branch_path}/protection")
-        if terminal_policy_status != status or terminal_policy != policy:
+        if (terminal_policy_status != status
+                or _digest(terminal_policy) != _digest(policy)):
             raise Refused("native-protection-terminal-policy-drift")
         return ProtectionReadback(True, expected.repository_id, branch, sha,
                                   protected, policy if protected else {},
