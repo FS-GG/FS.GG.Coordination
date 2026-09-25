@@ -148,3 +148,39 @@ type CodexAppServerUsageTruthTests() =
             Error "app-server-usage-candidate-identity-mismatch",
             assess [ UpstreamResponseCompleted(scope.ThreadId, binding.TurnId, "", snapshot.Last) ]
         )
+
+    [<Fact>]
+    member _.``equal but invalid repository and issue scope cannot be canonical``() =
+        let invalid = { scope with Repository = "FS-GG"; IssueRef = "FS-GG#123" }
+        let candidate =
+            { terminal with
+                Reservation = { terminal.Reservation with Request = { request with Scope = invalid } }
+                Binding = { binding with Scope = invalid } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )
+
+    [<Fact>]
+    member _.``equal but malformed binding digest cannot be canonical``() =
+        let invalid = { scope with BindingDigest = "not-a-digest" }
+        let candidate =
+            { terminal with
+                Reservation = { terminal.Reservation with Request = { request with Scope = invalid } }
+                Binding = { binding with Scope = invalid } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )
+
+    [<Fact>]
+    member _.``equal but blank workspace cannot be canonical``() =
+        let invalid = { scope with WorkspaceId = " " }
+        let candidate =
+            { terminal with
+                Reservation = { terminal.Reservation with Request = { request with Scope = invalid } }
+                Binding = { binding with Scope = invalid } }
+        Assert.Equal(
+            Error "app-server-usage-correlation-invalid",
+            CodexAppServerUsageTruth.assess candidate []
+        )

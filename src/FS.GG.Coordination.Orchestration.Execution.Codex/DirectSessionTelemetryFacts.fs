@@ -72,7 +72,7 @@ module DirectSessionTelemetryFacts =
     let private optional (target: JsonObject) (name: string) (value: string option) =
         target[name] <- value |> Option.map JsonValue.Create |> Option.defaultValue null
 
-    let private validScope (scope: DirectSessionTurnScope) =
+    let internal validScope (scope: DirectSessionTurnScope) =
         text 128 scope.WorkspaceId
         && text 128 scope.Repository
         && repositoryName.IsMatch scope.Repository

@@ -101,7 +101,9 @@ turn status but no usage; `thread/tokenUsage/updated` carries `last` and cumulat
 schema's internal raw-response completion describes one upstream Responses API completion, not a
 turn aggregate. A matching `codex exec` child turn is a different session provenance. The policy
 keeps all three evidence classes out of completed-turn telemetry and refuses candidates with
-foreign IDs. A future native per-turn usage contract and trusted current-session source are still
+foreign IDs. Its correlation also uses the telemetry mapper's exact scope grammar, so equal
+but malformed repository, issue, workspace or binding fields cannot become canonical.
+A future native per-turn usage contract and trusted current-session source are still
 required before this correlation can yield usage or an applied Host receipt.
 
 `CodexAppServerSdkCapability` checks generated v2 schema bytes from the pinned Codex CLI 0.156.1.
