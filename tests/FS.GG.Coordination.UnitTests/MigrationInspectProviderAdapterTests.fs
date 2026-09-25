@@ -81,9 +81,12 @@ let private protectedCensusFixture () =
         calls |> List.mapi (fun index (request, outcome) ->
             match request, outcome with
             | Rest request, Response response ->
-                { ReadOrdinal=int64 (index + 1); RequestUri=request.Uri.AbsoluteUri
+                { ReadOrdinal=int64 (index + 1); RequestMethod="GET"
+                  RequestUri=request.Uri.AbsoluteUri; ResponseUri=request.Uri.AbsoluteUri
                   StatusCode=response.StatusCode; LinkHeader=Map.tryFind "link" response.Headers
-                  RawBody=response.Body; CustodyObjectId=$"object:{index + 1}" }
+                  RawBody=response.Body
+                  RawBodyBytesBase64=response.Body |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
+                  CustodyObjectId=$"object:{index + 1}" }
             | _ -> failwith "Expected REST response")
     let batch =
         { Selection=protectedCensusSelection
@@ -170,12 +173,29 @@ let ``protected issue census refuses byte drift and duplicate or stale objects``
         |> Result.map ignore
     let page = batch.Pages.Head
     for changed in
-        [ { batch with Pages=[ { page with RawBody=page.RawBody + " " } ] }
+        [ { batch with Pages=[ { page with RawBody=page.RawBody + " "
+                                           RawBodyBytesBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes (page.RawBody + " ")) } ] }
           { batch with Pages=[ { page with CustodyObjectId=batch.Identity.CustodyObjectId } ] }
           { batch with Pages=[ { page with ReadOrdinal=batch.Identity.ReadOrdinal } ] }
           { batch with Pages=[ { page with ReadOrdinal=3L } ] }
           { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\"" } ] } ] do
         Assert.Equal(Error "protected-census-object-or-page", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses captured write redirect and body byte substitution`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value))) options population
+        |> Result.map ignore
+    let page = batch.Pages.Head
+    for changed in
+        [ { batch with Pages=[ { page with RequestMethod="POST" } ] }
+          { batch with Pages=[ { page with ResponseUri="https://foreign.example/issues" } ] }
+          { batch with Pages=[ { page with RawBodyBytesBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes (page.RawBody + " ")) } ] }
+          { batch with Pages=[ { page with RawBodyBytesBase64=Convert.ToBase64String([| 0xffuy |]) } ] }
+          { batch with Pages=[ { page with RawBodyBytesBase64="not-base64" } ] } ] do
+        Assert.Equal(Error "protected-census-capture-shape", bind changed)
 
 [<Fact>]
 let ``protected issue census unknown fake-port result refuses without retry`` () =

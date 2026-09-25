@@ -22,10 +22,13 @@ type ProtectedIssueCensusPins =
 
 type ProtectedIssueCensusRead =
     { ReadOrdinal: int64
+      RequestMethod: string
       RequestUri: string
+      ResponseUri: string
       StatusCode: int
       LinkHeader: string option
       RawBody: string
+      RawBodyBytesBase64: string
       CustodyObjectId: string }
 
 type ProtectedIssueCensusBatch =

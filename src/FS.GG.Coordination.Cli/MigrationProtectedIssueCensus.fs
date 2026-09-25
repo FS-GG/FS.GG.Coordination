@@ -24,10 +24,13 @@ type ProtectedIssueCensusPins =
 
 type ProtectedIssueCensusRead =
     { ReadOrdinal: int64
+      RequestMethod: string
       RequestUri: string
+      ResponseUri: string
       StatusCode: int
       LinkHeader: string option
       RawBody: string
+      RawBodyBytesBase64: string
       CustodyObjectId: string }
 
 type ProtectedIssueCensusBatch =
@@ -61,6 +64,16 @@ module MigrationProtectedIssueCensus =
         |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let private framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+
+    let private validCapture (read: ProtectedIssueCensusRead) =
+        try
+            let bytes = Convert.FromBase64String read.RawBodyBytesBase64
+            let text = UTF8Encoding(false, true).GetString bytes
+            read.RequestMethod = "GET"
+            && read.ResponseUri = read.RequestUri
+            && Convert.ToBase64String bytes = read.RawBodyBytesBase64
+            && text = read.RawBody
+        with _ -> false
 
     let private validSelection (selection: ProtectedIssueCensusSelection)
                                (options: MigrationInspectProviderOptions) =
@@ -127,6 +140,7 @@ module MigrationProtectedIssueCensus =
                                     && exactAtom read.CustodyObjectId
                                     && exactAtom read.RawBody
                                     && read.StatusCode = 200)
+                            let capturesValid = reads |> List.forall validCapture
                             let ordered =
                                 ordinals |> List.mapi (fun index ordinal -> ordinal = int64 (index + 1))
                                          |> List.forall id
@@ -139,7 +153,8 @@ module MigrationProtectedIssueCensus =
                                     read.RequestUri = page.RequestedUri
                                     && sha read.RawBody = page.PayloadSha256
                                     && next = Ok page.NextUri)
-                            if not readShape || not ordered
+                            if not capturesValid then Error "protected-census-capture-shape"
+                            elif not readShape || not ordered
                                || objectIds.Length <> (objectIds |> Set.ofList |> Set.count)
                                || batch.Identity.RequestUri <> expectedIdentity.AbsoluteUri
                                || batch.Identity.LinkHeader.IsSome
@@ -159,7 +174,8 @@ module MigrationProtectedIssueCensus =
                                           string batch.SealedPageCount ]
                                         @ (reads |> List.collect (fun read ->
                                             [ string read.ReadOrdinal; read.CustodyObjectId
-                                              read.RequestUri; sha read.RawBody
+                                              read.RequestMethod; read.RequestUri; read.ResponseUri
+                                              sha read.RawBody
                                               defaultArg read.LinkHeader "" ]))
                                     { Inspect=inspect; CustodyObjectIds=objectIds
                                       CorpusSha256=parts |> List.map framed |> String.concat "" |> sha })
