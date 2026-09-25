@@ -47,8 +47,14 @@ class Fixture:
             f"{PREFIX}/pulls/{PR}/reviews?per_page=100&page=1": [
                 {"id": 9, "state": "APPROVED", "body": "reviewed"},
             ],
-            f"{PREFIX}/commits/{HEAD}/check-runs?per_page=100&filter=all&page=1": {
-                "total_count": 1, "check_runs": [{"id": 10, "name": "required"}],
+            f"{PREFIX}/commits/{HEAD}/check-suites?per_page=100&page=1": {
+                "total_count": 1, "check_suites": [{"id": 7, "head_sha": HEAD}],
+            },
+            f"{PREFIX}/check-suites/7/check-runs?per_page=100&filter=all&page=1": {
+                "total_count": 1, "check_runs": [
+                    {"id": 10, "name": "required", "head_sha": HEAD,
+                     "check_suite": {"id": 7}},
+                ],
             },
             f"{PREFIX}/commits/{HEAD}/statuses?per_page=100&page=1": [],
         }
@@ -71,6 +77,9 @@ class TargetTests(unittest.TestCase):
                          (1, 1, 1))
         self.assertEqual(fixture.calls.count(f"{PREFIX}/pulls/{PR}"), 2)
         self.assertEqual(fixture.calls.count(f"{PREFIX}/pulls/{PR}/files?per_page=100&page=2"), 2)
+        self.assertEqual(fixture.calls.count(
+            f"{PREFIX}/check-suites/7/check-runs?per_page=100&filter=all&page=1"), 2)
+        self.assertFalse(any(f"/commits/{HEAD}/check-runs?" in path for path in fixture.calls))
 
     def test_moved_main_source_and_incomplete_file_count_refuse(self):
         for mutate in (
@@ -113,6 +122,18 @@ class TargetTests(unittest.TestCase):
         fixture = Fixture()
         fixture.data[f"{PREFIX}/pulls/{PR}"]["commits"] = 251
         with self.assertRaisesRegex(TARGET.NATIVE.Refused, "native-target-census-size"):
+            TARGET.collect_once(fixture.read, PR)
+
+    def test_incomplete_or_foreign_check_suite_refuses(self):
+        fixture = Fixture()
+        path = f"{PREFIX}/commits/{HEAD}/check-suites?per_page=100&page=1"
+        fixture.data[path]["total_count"] = 2
+        with self.assertRaisesRegex(TARGET.NATIVE.Refused, "native-job-page-total"):
+            TARGET.collect_once(fixture.read, PR)
+        fixture = Fixture()
+        path = f"{PREFIX}/check-suites/7/check-runs?per_page=100&filter=all&page=1"
+        fixture.data[path]["check_runs"][0]["check_suite"]["id"] = 8
+        with self.assertRaisesRegex(TARGET.NATIVE.Refused, "native-target-check-runs"):
             TARGET.collect_once(fixture.read, PR)
 
 

@@ -37,6 +37,35 @@ def _sha(value) -> bool:
     return isinstance(value, str) and HEX40.fullmatch(value) is not None
 
 
+def complete_check_runs(recorded, commit_sha: str) -> list:
+    """Enumerate suites first; by-ref check runs silently cap at 1,000 suites."""
+    require(_sha(commit_sha), "native-target-check-ref")
+    suites = NATIVE._pages(
+        recorded, f"{PREFIX}/commits/{commit_sha}/check-suites?per_page=100",
+        "check_suites",
+    )
+    require(all(isinstance(suite, dict) and type(suite.get("id")) is int
+                and suite.get("head_sha") == commit_sha
+                for suite in suites)
+            and len({suite["id"] for suite in suites}) == len(suites),
+            "native-target-check-suites")
+    runs = []
+    for suite in suites:
+        batch = NATIVE._pages(
+            recorded,
+            f"{PREFIX}/check-suites/{suite['id']}/check-runs?per_page=100&filter=all",
+            "check_runs",
+        )
+        require(all(isinstance(item, dict) and type(item.get("id")) is int
+                    and item.get("head_sha") == commit_sha
+                    and (item.get("check_suite") or {}).get("id") == suite["id"]
+                    for item in batch), "native-target-check-runs")
+        runs.extend(batch)
+    require(len({item["id"] for item in runs}) == len(runs),
+            "native-target-check-duplicate")
+    return runs
+
+
 def collect_once(read_json, pr_number: int) -> dict:
     """Observe one bounded complete PR/target census without authorization."""
     require(type(pr_number) is int and pr_number > 0, "native-target-lookup")
@@ -111,14 +140,7 @@ def collect_once(read_json, pr_number: int) -> dict:
                 for item in reviews)
             and len({item["id"] for item in reviews}) == len(reviews),
             "native-target-reviews")
-    checks = NATIVE._pages(
-        recorded, f"{PREFIX}/commits/{head['sha']}/check-runs?per_page=100&filter=all",
-        "check_runs",
-    )
-    require(all(isinstance(item, dict) and type(item.get("id")) is int
-                for item in checks)
-            and len({item["id"] for item in checks}) == len(checks),
-            "native-target-checks")
+    checks = complete_check_runs(recorded, head["sha"])
     statuses = NATIVE._pages(recorded,
                              f"{PREFIX}/commits/{head['sha']}/statuses?per_page=100")
     require(all(isinstance(item, dict) and type(item.get("id")) is int
