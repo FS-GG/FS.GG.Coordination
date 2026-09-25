@@ -1954,3 +1954,53 @@ let ``rollback workflow token defaults are raw bound and settings remain partial
                  MigrationRollbackWorkflowPermissionsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
                      (hash repositoryCore) expected options foreign)
     Assert.Empty(foreign.Requests)
+
+[<Fact>]
+let ``Actions policy brackets workflow defaults and refuses cross-surface drift`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let identityBody = """{"id":42,"full_name":"FS-GG/copy"}"""
+    let workflow = """{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}"""
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let actionsDigest =
+        [ "fsgg.gs2-09.7.actions-policy-raw/v1"; hash identityBody
+          hash actionsAll; "unselected"; ""; "" ]
+        |> List.map frame |> String.concat "" |> hash
+    let workflowDigest =
+        [ "fsgg.gs2-09.7.workflow-permissions-raw/v1"; "42"; "FS-GG/copy"
+          "https://api.github.test/repos/FS-GG/copy/actions/permissions/workflow"
+          hash identityBody; hash workflow ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty actionsAll
+          repo; ok Map.empty workflow; repo
+          repo; ok Map.empty workflow; repo
+          repo; ok Map.empty actionsAll
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) actionsDigest workflowDigest options transport with
+    | Error failure -> failwithf "cross-surface bracket refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(13, transport.Requests.Length)
+        Assert.Equal(actionsDigest, proof.ActionsPolicySha256)
+        Assert.Equal(workflowDigest, proof.WorkflowPermissionsSha256)
+    let changedActions = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 11 then ok Map.empty (" " + actionsAll) else response))
+    Assert.Equal(Error "changed:actions-policy-cross-surface",
+                 MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) actionsDigest workflowDigest options changedActions)
+    let changedWorkflow = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (workflow.Replace("false", "true")) else response))
+    Assert.Equal(Error "changed:workflow-permissions-raw",
+                 MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) actionsDigest workflowDigest options changedWorkflow)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 12 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) actionsDigest workflowDigest options changedCore)
