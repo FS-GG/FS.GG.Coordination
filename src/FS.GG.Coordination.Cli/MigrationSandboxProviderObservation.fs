@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.Cli
 
 open System
 open System.Collections.Generic
+open System.Globalization
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -132,6 +133,8 @@ module private SandboxProviderHelpers =
     let digest values =
         values |> List.map (fun (v: string) -> $"{Encoding.UTF8.GetByteCount v}:{v}")
         |> String.concat "" |> sha
+    let validSha (value: string) =
+        value.Length = 64 && (value |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f'))
     let proof identity body next =
         { RequestIdentity=identity; RawSha256=sha body; NextIdentity=next }
     let header name (headers: Map<string,string>) =
@@ -325,6 +328,74 @@ type MigrationSandboxProviderObservation(options: MigrationSandboxProviderOption
     member this.ObserveScope() : Result<MigrationSandboxScopeObservation, MigrationSandboxProviderFailure> =
         this.ReadScopeIdentity()
         |> Result.bind (fun _ -> Error MigrationSandboxProviderFailure.GrantUnavailable)
+
+    member this.ObserveMintedScope(mintProofJson: string, atUtc: DateTimeOffset)
+        : Result<MigrationSandboxScopeObservation, MigrationSandboxProviderFailure> =
+        // The caller must obtain these bytes from the protected workflow's mint artifact.
+        // A candidate-supplied file is not an authority source.
+        if String.IsNullOrWhiteSpace mintProofJson || atUtc.Offset <> TimeSpan.Zero || not validOptions then
+            Error MigrationSandboxProviderFailure.GrantUnavailable
+        else
+            let checkedProof =
+                parse mintProofJson (fun root ->
+                    let require condition = if not condition then refuse MigrationSandboxProviderFailure.GrantUnavailable
+                    let actor = prop "actor" root
+                    let repository = prop "repository" root
+                    let permissions = prop "permissions" root
+                    require (permissions.ValueKind = JsonValueKind.Object)
+                    let grants =
+                        permissions.EnumerateObject()
+                        |> Seq.map (fun item ->
+                            require (item.Value.ValueKind = JsonValueKind.String)
+                            let level = item.Value.GetString()
+                            require (level = "read" || level = "write")
+                            item.Name, level)
+                        |> Map.ofSeq
+                    let required =
+                        [ "administration"; "contents"; "issues"; "pull_requests"; "organization_projects" ]
+                        |> Set.ofList
+                    require (required |> Set.forall (fun name -> Map.tryFind name grants = Some "write"))
+                    require (grants |> Map.forall (fun name level -> level <> "write" || Set.contains name required))
+                    let expiryText = str "expiresAt" root
+                    let mutable expiry = DateTimeOffset.MinValue
+                    require (expiryText.EndsWith("Z", StringComparison.Ordinal)
+                             && DateTimeOffset.TryParse(expiryText, CultureInfo.InvariantCulture,
+                                                        DateTimeStyles.AdjustToUniversal, &expiry)
+                             && expiry.Offset = TimeSpan.Zero && expiry > atUtc)
+                    let tokenHash = str "tokenSha256" root
+                    let mintHash = str "mintResponseSha256" root
+                    let viewerHash = str "viewerResponseSha256" root
+                    require (validSha tokenHash && validSha mintHash && validSha viewerHash
+                             && tokenHash = sha options.Token)
+                    require (str "schema" root = "fsgg.github-substrate-v2.sandbox-mint-grants/1"
+                             && str "appSlug" root = "fs-gg-cross-repo-dispatch"
+                             && number "appId" root > 0L
+                             && number "installationId" root > 0L
+                             && str "repositorySelection" root = "selected"
+                             && str "login" actor = "fs-gg-cross-repo-dispatch[bot]"
+                             && number "databaseId" actor = 297630107L
+                             && number "id" repository = repoId
+                             && str "nodeId" repository = repoNodeId
+                             && str "fullName" repository = repoName)
+                    grants)
+            checkedProof
+            |> Result.bind (fun grants ->
+                this.ReadScopeIdentity()
+                |> Result.bind (fun identity ->
+                    if identity.TokenSha256 <> sha options.Token
+                       || not identity.TokenRepositorySelectionComplete then
+                        Error MigrationSandboxProviderFailure.GrantUnavailable
+                    else
+                        Ok { Complete=true; ActorLogin=identity.ActorLogin
+                             ActorDatabaseId=identity.ActorDatabaseId; RepositoryId=identity.RepositoryId
+                             RepositoryNodeId=identity.RepositoryNodeId; RepositoryFullName=identity.RepositoryFullName
+                             RepositoryPrivate=identity.RepositoryPrivate
+                             RepositoryDescription=identity.RepositoryDescription
+                             ProjectOrganization=identity.ProjectOrganization
+                             ProjectNumber=identity.ProjectNumber; ProjectNodeId=identity.ProjectNodeId
+                             ProjectTitle=identity.ProjectTitle; ProjectPrivate=identity.ProjectPrivate
+                             ProjectClosed=identity.ProjectClosed
+                             GrantedPermissions=grants |> Map.toSeq |> Seq.map (fun (name, level) -> $"{name}:{level}") |> Set.ofSeq }))
 
     member _.ReadFixture(nonce) =
         let validNonce =

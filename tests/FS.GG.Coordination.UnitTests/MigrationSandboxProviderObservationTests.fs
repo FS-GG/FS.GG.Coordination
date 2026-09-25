@@ -58,6 +58,12 @@ let private adapter responses =
 let private tokenSha =
     options.Token |> Encoding.UTF8.GetBytes |> SHA256.HashData
     |> Convert.ToHexString |> _.ToLowerInvariant()
+let private observedAt = DateTimeOffset(2026, 9, 25, 10, 0, 0, TimeSpan.Zero)
+let private mintProof =
+    """{"schema":"fsgg.github-substrate-v2.sandbox-mint-grants/1","appId":4166418,"appSlug":"fs-gg-cross-repo-dispatch","actor":{"login":"fs-gg-cross-repo-dispatch[bot]","databaseId":297630107},"installationId":143110413,"repositorySelection":"selected","repository":{"id":1353050537,"nodeId":"R_kgDOUKXpqQ","fullName":"FS-GG/FS.GG.GitHub.Substrate.Sandbox"},"permissions":{"administration":"write","contents":"write","issues":"write","pull_requests":"write","organization_projects":"write","metadata":"read"},"expiresAt":"2026-09-25T11:00:00Z","tokenSha256":"TOKEN_SHA","mintResponseSha256":"MINT_SHA","viewerResponseSha256":"VIEWER_SHA"}"""
+        .Replace("TOKEN_SHA", tokenSha)
+        .Replace("MINT_SHA", String.replicate 64 "a")
+        .Replace("VIEWER_SHA", String.replicate 64 "b")
 
 [<Fact>]
 let ``scope binds four exact raw provider identities but installation grant remains unavailable`` () =
@@ -101,6 +107,38 @@ let ``scope refuses partial GraphQL errors foreign identities missing selection 
     Assert.Equal(Error MigrationSandboxProviderFailure.ForeignIdentity, selected.ReadScopeIdentity())
     let denied, _ = adapter [ reply viewer; forbidden ]
     Assert.Equal(Error(MigrationSandboxProviderFailure.HttpRefused 403), denied.ReadScopeIdentity())
+
+[<Fact>]
+let ``protected mint proof binds effective grants to the same token and live scope`` () =
+    let reader, transport = adapter [ reply viewer; reply repo; reply projectScope; reply installationRepositories ]
+    match reader.ObserveMintedScope(mintProof, observedAt) with
+    | Error failure -> failwithf "minted scope refused: %A" failure
+    | Ok scope ->
+        Assert.True(scope.Complete)
+        Assert.Equal(1353050537L, scope.RepositoryId)
+        Assert.Equal("PVT_kwDOEYAWY84BiESo", scope.ProjectNodeId)
+        Assert.Contains("issues:write", scope.GrantedPermissions)
+        Assert.Contains("organization_projects:write", scope.GrantedPermissions)
+        Assert.Contains("metadata:read", scope.GrantedPermissions)
+        Assert.Equal(4, transport.Calls.Length)
+
+[<Fact>]
+let ``mint proof refuses missing or widened grants token drift expiry and foreign provider identity`` () =
+    let candidates =
+        [ mintProof.Replace("\"issues\":\"write\"", "\"issues\":\"read\"")
+          mintProof.Replace("\"metadata\":\"read\"", "\"metadata\":\"write\"")
+          mintProof.Replace(tokenSha, String.replicate 64 "c")
+          mintProof.Replace("2026-09-25T11:00:00Z", "2026-09-25T09:59:59Z")
+          mintProof.Replace("\"repositorySelection\":\"selected\"", "\"repositorySelection\":\"all\"")
+          mintProof.Replace("\"actor\":", "\"actor\":{},\"actor\":") ]
+    for proof in candidates do
+        let reader, transport = adapter []
+        Assert.True(reader.ObserveMintedScope(proof, observedAt).IsError)
+        Assert.Empty(transport.Calls)
+    let foreign, transport = adapter [ reply viewer; reply (repo.Replace("R_kgDOUKXpqQ", "FOREIGN")) ]
+    Assert.Equal(Error MigrationSandboxProviderFailure.ForeignIdentity,
+                 foreign.ObserveMintedScope(mintProof, observedAt))
+    Assert.Equal(2, transport.Calls.Length)
 
 [<Fact>]
 let ``fixture parses terminal issue and Project censuses with exact ETag and raw proofs`` () =
