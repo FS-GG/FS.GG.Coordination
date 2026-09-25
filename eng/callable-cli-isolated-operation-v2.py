@@ -357,7 +357,11 @@ class NativeReadAdapter:
                         or type(listed_repo.get("id")) is not int
                         or type(detail_repo.get("id")) is not int
                         or listed_repo.get("id") != detail_repo.get("id")
-                        or listed_repo.get("full_name") != detail_repo.get("full_name")):
+                        or listed_repo.get("full_name") != detail_repo.get("full_name")
+                        or ("url" in listed_repo) != ("url" in detail_repo)
+                        or ("url" in listed_repo and
+                            (type(listed_repo["url"]) is not str
+                             or listed_repo["url"] != detail_repo["url"]))):
                     raise Refused("native-pull-list-detail-repo-drift")
             if detail.get("body") == pull_request_body(expected)["body"]:
                 selected.append(detail)
@@ -604,7 +608,10 @@ def _complete_digest(value: object) -> bool:
 def _same_repo(value: object, expected: ExpectedPull) -> bool:
     return (type(value) is dict and type(value.get("id")) is int
             and value["id"] == expected.repository_id
-            and value.get("full_name") == expected.repository)
+            and value.get("full_name") == expected.repository
+            and ("url" not in value or
+                 (type(value["url"]) is str and value["url"] ==
+                  f"https://api.github.com/repos/{expected.repository}")))
 
 
 def _two(read: Callable[[], object]):

@@ -330,6 +330,52 @@ class VersionedReadbackTests(unittest.TestCase):
                             else:
                                 reader.read_protection(expected)
 
+    def test_exact_pull_refuses_foreign_nested_repository_url(self):
+        root = "https://api.github.com/repos/FS-GG/disposable"
+        for side in ("head", "base"):
+            for url in ("https://api.github.com/repos/FS-GG/foreign",
+                        root + "?alias=1", None, root):
+                with self.subTest(side=side, url=url):
+                    pull = copy.deepcopy(pull_observed().pulls[0])
+                    pull[side]["repo"]["url"] = url
+                    observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+                    result = operator.classify_pull_after_one_attempt(
+                        pull_expected(), lambda: observed)
+                    if url == root:
+                        self.assertIsInstance(result, operator.ExactPull)
+                    else:
+                        self.assert_unknown(result)
+
+    def test_native_pull_list_detail_refuses_nested_repository_url_drift(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        for side in ("head", "base"):
+            with self.subTest(side=side):
+                events = pull_read_events((pull,))
+                events[3]["response"]["json"][0][side]["repo"]["url"] = (
+                    "https://api.github.com/repos/FS-GG/foreign")
+                events[5]["response"]["json"][side]["repo"]["url"] = (
+                    "https://api.github.com/repos/FS-GG/disposable")
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events))
+                with self.assertRaisesRegex(
+                        operator.Refused, "native-pull-list-detail-repo-drift"):
+                    reader.read_pull_census(pull_expected())
+
+    def test_lost_response_foreign_nested_repository_url_stays_unknown(self):
+        expected = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["base"]["repo"]["url"] = (
+            "https://api.github.com/repos/FS-GG/foreign")
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
