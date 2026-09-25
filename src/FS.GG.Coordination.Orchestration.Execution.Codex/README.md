@@ -104,6 +104,14 @@ keeps all three evidence classes out of completed-turn telemetry and refuses can
 foreign IDs. A future native per-turn usage contract and trusted current-session source are still
 required before this correlation can yield usage or an applied Host receipt.
 
+`CodexAppServerSdkCapability` checks generated v2 schema bytes from the pinned Codex CLI 0.156.1.
+Both the ordinary and experimental schema bundles show a `turn/completed` object without usage,
+separate thread `last`/cumulative snapshots, and an internal notification scoped to one upstream
+response. The `thread/resume` schema describes rejoining a running app-server thread, but a schema
+cannot authenticate attachment to this direct CLI process or prove notification custody. The
+probe reports those limits separately and refuses version or shape drift; it never enables usage
+mapping or live capture.
+
 `CodexExecution.supervisedActorProps` composes the concrete provider, neutral durable coordinator,
 and thin Akka actor. The caller must provide a digest-addressed input reader, candidate inspector,
 and durable journal. The production Host still needs to bind those interfaces to its PostgreSQL
