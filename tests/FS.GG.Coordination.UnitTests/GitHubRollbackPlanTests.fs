@@ -17,10 +17,11 @@ let private steps =
     [ step 5 "restore-authority" AuthoritySnapshot; step 4 "restore-schedules" Schedule
       step 3 "restore-v1-projections" V1Projection; step 2 "restore-receiver-pins" ReceiverPin
       step 1 "restore-settings" Settings ]
-let private withSteps candidateSteps =
-    qualify "rollback-gs2-09-6-fixture" (revision "a") (digest "b") (digest "c") (digest "d")
+let private withIdentityAndSteps identity candidateSteps =
+    qualify identity (revision "a") (digest "b") (digest "c") (digest "d")
         (digest "e") (digest "f") (digest "1") (digest "2") "VerifiedV2" candidateSteps
         (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+let private withSteps candidateSteps = withIdentityAndSteps "rollback-gs2-09-6-fixture" candidateSteps
 let private baseline () = withSteps steps
 let private get = function Ok value -> value | Error findings -> failwithf "unexpected refusal: %A" findings
 let private refusal = function Error findings -> findings | Ok _ -> failwith "invalid rollback plan qualified"
@@ -51,6 +52,25 @@ let ``resealed five-domain plan refuses a swapped restoration sequence`` () =
 let ``resealed plan refuses a sixth repeated domain despite contiguous reverse order`` () =
     let repeated = step 6 "restore-authority-twice" AuthoritySnapshot :: steps
     Assert.Contains(InvalidStepPopulation, withSteps repeated |> refusal)
+
+[<Fact>]
+let ``two distinct rollback targets cannot share a normalized seal through pipe injection`` () =
+    let original = { steps[0] with StepId="unit"; TargetIdentity="left|authority-snapshot|right" }
+    let altered = { original with StepId="unit|authority-snapshot|left"; TargetIdentity="right" }
+    match withSteps (original :: steps.Tail) with
+    | Error findings -> Assert.Contains(InvalidStep original.StepId, findings)
+    | Ok plan ->
+        let forged = { plan with Steps=altered :: plan.Steps.Tail }
+        Assert.True(verify plan.Seal forged |> Result.isError)
+
+[<Fact>]
+let ``rollback step identity refuses embedded record separators`` () =
+    let malformed = { steps[0] with StepId="restore-authority\nforged-step" }
+    Assert.Contains(InvalidStep malformed.StepId, withSteps (malformed :: steps.Tail) |> refusal)
+
+[<Fact>]
+let ``rollback plan identity refuses an embedded field separator`` () =
+    Assert.Contains(InvalidIdentity, withIdentityAndSteps "rollback\nforeign-plan" steps |> refusal)
 
 [<Fact>]
 let ``receipt prefix resumes at exactly the next reverse step`` () =
