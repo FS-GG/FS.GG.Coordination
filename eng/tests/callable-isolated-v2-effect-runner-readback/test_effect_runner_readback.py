@@ -14,6 +14,7 @@ from unittest import mock
 ENG = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ENG))
 import callable_isolated_v2_effect_runner_readback as readback
+import callable_isolated_v2_effect_approval_identity as approval
 import callable_isolated_v2_effect_release_preflight as release
 
 NOW = dt.datetime(2026, 9, 25, 12, tzinfo=dt.timezone.utc)
@@ -49,7 +50,9 @@ def fixture():
         "c" * 64, 404, SHA(ARCHIVE), 202, 1, 303, 606, 505, 101)
     selected = {"runId": 707, "runAttempt": 1, "runnerActorId": 808,
         "auditActorId": 1001,
-        "auditEventId": 909, "imageDigest": "d" * 64,
+        "auditEventId": 909, "repositoryId": 77,
+        "identityEventId": 808, "approvalEventId": 505,
+        "imageDigest": "d" * 64,
         "attestationDigest": "e" * 64, "interpreterSha256": "f" * 64,
         "runtimeClosureSha256": "1" * 64, "installPath": PATH}
     runner_scope = {"principalId": "runner-reader", "credentialId": "2" * 64,
@@ -61,7 +64,9 @@ def fixture():
     identity = {"runId": 707, "runAttempt": 1,
         "coordinationRevision": "a" * 40, "sourceTree": "b" * 40,
         "artifactId": 404, "manifestSha256": "c" * 64,
-        "archiveSha256": SHA(ARCHIVE), "installPath": PATH}
+        "archiveSha256": SHA(ARCHIVE), "installPath": PATH,
+        "repositoryId": 77, "identityEventId": 808,
+        "sourceRecordId": 101, "approvalEventId": 505}
     obj = {"device": 11, "inode": 12, "size": len(ARCHIVE),
         "sha256": SHA(ARCHIVE)}
     probe = {"schema": readback.PROBE_SCHEMA, "complete": True,
@@ -86,12 +91,23 @@ def fixture():
     return result, selected, Port(runner_scope, probe), Port(audit_scope, audit)
 
 
+def reviewed(preflight):
+    return approval.ApprovalWitnessResult(
+        preflight.coordination_revision, preflight.source_tree,
+        preflight.producer_run_id, preflight.producer_run_attempt,
+        preflight.artifact_id, preflight.reviewer_actor_id,
+        preflight.approval_event_id, "a" * 64,
+        preflight.manifest_sha256, "b" * 64,
+        preflight.source_record_id, preflight.producer_actor_id, 77, 808)
+
+
 class RunnerReadbackTests(unittest.TestCase):
     def observe(self, change=None):
         result, selection, runner, audit = fixture()
         if change:
             change(result, selection, runner, audit)
-        return readback.qualify(result, runner, audit, selection, NOW)
+        return readback.qualify(result, runner, audit, selection, NOW,
+                                approval_witness=reviewed(result))
 
     def refuses(self, change):
         with self.assertRaises(readback.Refused):
@@ -107,7 +123,29 @@ class RunnerReadbackTests(unittest.TestCase):
         self.assertFalse(result.can_dispatch)
         self.assertEqual(result.live_effects, 0)
         self.assertEqual(result.audit_actor_id, 1001)
+        self.assertEqual(result.approval_event_id, 505)
         self.assertFalse(hasattr(readback, "dispatch"))
+
+    def test_installed_refusal_without_immutable_review_witness_refuses(self):
+        preflight, selection, runner, audit = fixture()
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW)
+        self.assertEqual(runner.reads, [])
+        self.assertEqual(audit.reads, [])
+
+    def test_foreign_review_or_installed_approval_event_refuses(self):
+        preflight, selection, runner, audit = fixture()
+        checked = reviewed(preflight)
+        object.__setattr__(checked, "source_record_id", 102)
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=checked)
+        self.assertEqual(runner.reads, [])
+        preflight, selection, runner, audit = fixture()
+        runner.record["approvalEventId"] = 506
+        with self.assertRaises(readback.Refused):
+            readback.qualify(preflight, runner, audit, selection, NOW,
+                             approval_witness=reviewed(preflight))
 
     def test_selected_source_runtime_and_object_drift_refuse(self):
         for key, value in (("runId", 708), ("runAttempt", 2),
@@ -150,20 +188,23 @@ class RunnerReadbackTests(unittest.TestCase):
         selection.pop("auditActorId")  # The old selector omitted the actor.
         audit.record["auditActorId"] = 1002
         with self.assertRaises(readback.Refused):
-            readback.qualify(result, runner, audit, selection, NOW)
+            readback.qualify(result, runner, audit, selection, NOW,
+                             approval_witness=reviewed(result))
 
     def test_unavailable_or_drifting_independent_port_refuses_without_leak(self):
         result, selection, runner, audit = fixture()
         audit.scopes[1]["credentialId"] = "4" * 64
         with self.assertRaisesRegex(readback.Refused, "readback-scope-drift"):
-            readback.qualify(result, runner, audit, selection, NOW)
+            readback.qualify(result, runner, audit, selection, NOW,
+                             approval_witness=reviewed(result))
         result, selection, runner, audit = fixture()
         class Broken(Port):
             def read_audit(self, event_id):
                 raise OSError("SYNTHETIC_SECRET_SENTINEL")
         audit = Broken(audit.scopes[0], audit.record)
         with self.assertRaises(readback.Refused) as caught:
-            readback.qualify(result, runner, audit, selection, NOW)
+            readback.qualify(result, runner, audit, selection, NOW,
+                             approval_witness=reviewed(result))
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
         self.refuses(lambda p, _s, _r, _a: object.__setattr__(p, "live_effects", False))
 
@@ -181,7 +222,8 @@ class RunnerReadbackTests(unittest.TestCase):
                     return shared
                 port.scope = scope
                 with self.assertRaises(readback.Refused):
-                    readback.qualify(preflight, runner, audit, selection, NOW)
+                    readback.qualify(preflight, runner, audit, selection, NOW,
+                                     approval_witness=reviewed(preflight))
 
 
 if __name__ == "__main__":

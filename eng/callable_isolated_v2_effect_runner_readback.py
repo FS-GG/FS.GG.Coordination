@@ -10,16 +10,20 @@ import copy
 from typing import Any, Protocol
 
 import callable_isolated_v2_effect_candidate as candidate
+import callable_isolated_v2_effect_approval_identity as approval
 import callable_isolated_v2_effect_release_preflight as release
 
 PROBE_SCHEMA = "fsgg.coordination.callable-isolated-v2-installed-refusal/1"
 AUDIT_SCHEMA = "fsgg.coordination.callable-isolated-v2-no-effect-audit/1"
-RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/1"
+RESULT_SCHEMA = "fsgg.coordination.callable-isolated-v2-runner-readback/2"
 REFUSAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-effect-scaffold-refusal/1"
 IDENTITY = {"runId", "runAttempt", "coordinationRevision", "sourceTree",
-            "artifactId", "manifestSha256", "archiveSha256", "installPath"}
+            "artifactId", "manifestSha256", "archiveSha256", "installPath",
+            "repositoryId", "identityEventId", "sourceRecordId",
+            "approvalEventId"}
 SELECTION = {"runId", "runAttempt", "runnerActorId", "auditActorId",
-             "auditEventId",
+             "auditEventId", "repositoryId", "identityEventId",
+             "approvalEventId",
              "imageDigest", "attestationDigest", "interpreterSha256",
              "runtimeClosureSha256", "installPath"}
 COUNTS = {"tokenReads", "journalReads", "journalWrites", "casWrites",
@@ -49,6 +53,10 @@ class ReadbackResult:
     run_id: int
     audit_event_id: int
     audit_actor_id: int
+    approval_event_id: int
+    source_record_id: int
+    repository_id: int
+    identity_event_id: int
     schema: str = RESULT_SCHEMA
     authorized: bool = False
     can_dispatch: bool = False
@@ -107,25 +115,54 @@ def _object(value: Any, archive_sha256: str, archive_size: int) -> dict[str, Any
 
 def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
             audit_port: AuditPort, selection: dict[str, Any],
-            now: dt.datetime) -> ReadbackResult:
+            now: dt.datetime,
+            approval_witness: approval.ApprovalWitnessResult | None = None
+            ) -> ReadbackResult:
     """Compare exact fake observations; never authenticate or dispatch."""
     selection = _exact(selection, SELECTION, "readback-selection-shape")
     if (type(preflight) is not release.PreflightResult
+            or type(approval_witness) is not approval.ApprovalWitnessResult
             or preflight.schema != release.RESULT_SCHEMA
+            or approval_witness.schema != approval.RESULT_SCHEMA
             or preflight.authorized is not False
             or preflight.can_dispatch is not False
             or type(preflight.live_effects) is not int
             or preflight.live_effects != 0
+            or approval_witness.authorized is not False
+            or approval_witness.can_dispatch is not False
+            or type(approval_witness.live_effects) is not int
+            or approval_witness.live_effects != 0
+            or approval_witness.coordination_revision != preflight.coordination_revision
+            or approval_witness.source_tree != preflight.source_tree
+            or approval_witness.artifact_id != preflight.artifact_id
+            or approval_witness.manifest_sha256 != preflight.manifest_sha256
+            or approval_witness.source_record_id != preflight.source_record_id
+            or approval_witness.producer_run_id != preflight.producer_run_id
+            or approval_witness.producer_run_attempt != preflight.producer_run_attempt
+            or approval_witness.producer_actor_id != preflight.producer_actor_id
+            or approval_witness.reviewer_actor_id != preflight.reviewer_actor_id
+            or approval_witness.approval_event_id != preflight.approval_event_id
+            or not candidate._hex(approval_witness.approval_event_sha256,
+                                  candidate.HEX64)
+            or not candidate._hex(approval_witness.bundle_sha256,
+                                  candidate.HEX64)
             or not candidate._hex(preflight.coordination_revision, candidate.HEX40)
             or not candidate._hex(preflight.source_tree, candidate.HEX40)
             or not candidate._hex(preflight.manifest_sha256, candidate.HEX64)
             or not candidate._hex(preflight.archive_sha256, candidate.HEX64)
             or not _positive(preflight.artifact_id)
+            or not all(_positive(value) for value in
+                       (preflight.source_record_id, approval_witness.repository_id,
+                        approval_witness.identity_event_id))
             or runner_port is None or audit_port is None
             or runner_port is audit_port
             or not all(_positive(selection[key]) for key in
                        ("runId", "runAttempt", "runnerActorId",
-                        "auditActorId", "auditEventId"))
+                        "auditActorId", "auditEventId", "repositoryId",
+                        "identityEventId", "approvalEventId"))
+            or selection["repositoryId"] != approval_witness.repository_id
+            or selection["identityEventId"] != approval_witness.identity_event_id
+            or selection["approvalEventId"] != approval_witness.approval_event_id
             or selection["auditActorId"] == selection["runnerActorId"]
             or not all(candidate._hex(selection[key], candidate.HEX64) for key in
                        ("imageDigest", "attestationDigest", "interpreterSha256",
@@ -160,7 +197,11 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
               "artifactId": preflight.artifact_id,
               "manifestSha256": preflight.manifest_sha256,
               "archiveSha256": preflight.archive_sha256,
-              "installPath": selection["installPath"]}
+              "installPath": selection["installPath"],
+              "repositoryId": selection["repositoryId"],
+              "identityEventId": selection["identityEventId"],
+              "sourceRecordId": preflight.source_record_id,
+              "approvalEventId": selection["approvalEventId"]}
     for record, scope, schema in ((probe, runner_scope, PROBE_SCHEMA),
                                   (audit, audit_scope, AUDIT_SCHEMA)):
         if (record["schema"] != schema or record["complete"] is not True
@@ -168,7 +209,8 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
                 or record["credentialId"] != scope["credentialId"]
                 or record["repository"] != release.REPOSITORY
                 or any(type(record[key]) is not int for key in
-                       ("runId", "runAttempt", "artifactId"))
+                       ("runId", "runAttempt", "artifactId", "repositoryId",
+                        "identityEventId", "sourceRecordId", "approvalEventId"))
                 or any(record[key] != value for key, value in shared.items())):
             raise Refused("readback-identity-binding")
     if (type(probe["runnerActorId"]) is not int
@@ -221,4 +263,6 @@ def qualify(preflight: release.PreflightResult, runner_port: RunnerPort,
     return ReadbackResult(preflight.coordination_revision,
                           preflight.artifact_id, preflight.archive_sha256,
                           selection["runId"], selection["auditEventId"],
-                          selection["auditActorId"])
+                          selection["auditActorId"], preflight.approval_event_id,
+                          preflight.source_record_id, approval_witness.repository_id,
+                          approval_witness.identity_event_id)
