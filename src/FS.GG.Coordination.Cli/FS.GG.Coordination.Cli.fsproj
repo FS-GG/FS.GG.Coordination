@@ -39,6 +39,8 @@
     <Compile Include="MigrationProtectedIssueCensusHandoff.fs" />
     <Compile Include="MigrationProtectedIssueCensusAttemptRecovery.fsi" />
     <Compile Include="MigrationProtectedIssueCensusAttemptRecovery.fs" />
+    <Compile Include="MigrationProtectedIssueCensusNativeAttestation.fsi" />
+    <Compile Include="MigrationProtectedIssueCensusNativeAttestation.fs" />
     <Compile Include="MigrationReceiverCapture.fsi" />
     <Compile Include="MigrationReceiverCapture.fs" />
     <Compile Include="MigrationRollbackReceiverReadback.fsi" />

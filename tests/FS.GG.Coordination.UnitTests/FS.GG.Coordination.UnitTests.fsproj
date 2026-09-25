@@ -66,6 +66,7 @@
     <Compile Include="MigrationInspectProviderAdapterTests.fs" />
     <Compile Include="MigrationProtectedIssueCensusAttestationTests.fs" />
     <Compile Include="MigrationProtectedIssueCensusReleaseTests.fs" />
+    <Compile Include="MigrationProtectedIssueCensusNativeAttestationTests.fs" />
     <Compile Include="MigrationSandboxFixtureSeedTests.fs" />
     <Compile Include="MigrationSandboxProviderObservationTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />
