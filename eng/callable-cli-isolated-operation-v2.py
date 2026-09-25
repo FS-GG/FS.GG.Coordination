@@ -16,6 +16,7 @@ import dataclasses
 import hashlib
 import http.client
 import json
+import math
 import os
 import pathlib
 import re
@@ -58,9 +59,16 @@ def _finite_constant(_value: str):
     raise Refused("json-nonfinite")
 
 
+def _finite_float(raw: str) -> float:
+    value = float(raw)
+    if not math.isfinite(value):
+        raise Refused("json-nonfinite")
+    return value
+
+
 def _strict_json(raw: bytes):
     return json.loads(raw, object_pairs_hook=_unique_object,
-                      parse_constant=_finite_constant)
+                      parse_constant=_finite_constant, parse_float=_finite_float)
 
 
 @dataclasses.dataclass(frozen=True)

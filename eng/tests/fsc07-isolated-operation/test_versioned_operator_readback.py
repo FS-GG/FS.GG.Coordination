@@ -521,6 +521,29 @@ class VersionedReadbackTests(unittest.TestCase):
             expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
+    def test_native_json_refuses_exponent_overflow(self):
+        for raw in (b'{"value":1e999}', b'{"value":-1e999}'):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(operator.Refused, "json-nonfinite"):
+                    operator._strict_json(raw)
+        self.assertEqual(operator._strict_json(b'{"value":1.5}'), {"value": 1.5})
+
+    def test_lost_response_nonfinite_repository_extra_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        raw = '{"id":44,"full_name":"FS-GG/disposable","extra":1e999}'
+        for index in (0, 4):
+            post[index]["response"]["rawBody"] = raw
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
