@@ -233,6 +233,23 @@ class SourceReleaseTests(unittest.TestCase):
                 "f" * 64, NOW).observe_source_release()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
 
+    def test_reused_source_reader_scope_mutated_at_final_read_refuses(self):
+        scope, responses, raw, attestation = fixture()
+        transport = FakeTransport(scope, responses)
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "8" * 64
+            return shared
+        transport.scope = reused_scope
+        with self.assertRaises(source.Refused):
+            source.SourceReleaseReadAdapter(transport, FakeBundle(raw),
+                FakeAttestor(attestation), REV, 50, 100, 1, 101, 102,
+                ".github/workflows/callable-isolated-v2-effect-release.yml",
+                "f" * 64, NOW).observe_source_release()
+
 
 if __name__ == "__main__":
     unittest.main()
