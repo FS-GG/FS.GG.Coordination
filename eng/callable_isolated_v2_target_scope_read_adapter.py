@@ -129,7 +129,7 @@ class TargetScopeReadAdapter:
             raise Refused("target-selection-invalid")
         self.transport = transport
         self.attestor = attestor
-        self.selected = selected
+        self.selected = copy.deepcopy(selected)
         self.candidate_sha256 = candidate_sha256
         self.now = now
 
