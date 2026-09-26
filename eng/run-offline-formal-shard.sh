@@ -76,6 +76,7 @@ timeout --kill-after=30s 90m podman run --rm \
   --env FSGG_QUINT_SHARD_ROOT=/evidence \
   --env FSGG_QUINT_TOOLCHAIN_ARCHIVE=/inputs/toolchain.tar.gz \
   --env NUGET_PACKAGES=/inputs/nuget \
+  --env NuGetAudit=false \
   "$image" \
   bash -c 'mkdir -p "$RUNNER_TEMP" && exec bash eng/bootstrap-gates/canonical-quint-shard.sh' \
   3<&-

@@ -46,6 +46,8 @@ uses `git ls-files`; the staged tree must equal the requested commit tree before
 Podman resolves the policy-pinned local image manifest digest before launch and uses `--pull=never`.
 `NUGET_CACHE_COPY` is a disposable writable copy; candidate code never sees the host's persistent
 cache and cannot fetch missing packages over the network. The
+container sets `NuGetAudit=false` because network-disabled restore cannot fetch vulnerability
+metadata; the package lock and preseeded cache still govern package resolution. The
 supervisor creates evidence timestamps from its host clock only after the shard exits.
 Receipt transport is public signed evidence; no registration token, GitHub token or signing key
 crosses the candidate-container boundary.
