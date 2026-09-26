@@ -2,7 +2,9 @@ namespace FS.GG.Coordination.GitHub
 
 open System
 open System.Globalization
+open System.Text
 open System.Text.Json
+open System.Text.Json.Nodes
 
 type private GenesisGitReadData =
     {
@@ -153,6 +155,59 @@ module V1AdmissionGenesisGitRead =
             Error [ "genesis-git-evidence-invalid" ]
 
     let observedAt (GenesisGitRead evidence) = evidence.ObservedAt
+
+    let decodeOperating (asOf: DateTimeOffset) (raw: ReadOnlyMemory<byte>) =
+        try
+            if raw.Length = 0 || raw.Length > 32768 then
+                Error [ "operating-git-evidence-size" ]
+            else
+                use document = JsonDocument.Parse raw
+                let root = document.RootElement
+                let operation = root.GetProperty("operation")
+                let fields = [ "schema"; "observedAt"; "repository"; "repositoryId"; "cutover"; "operation" ]
+                let operationFields = [ "ref"; "firstHead"; "secondHead"; "observation" ]
+                let observed = time (root.GetProperty("observedAt").GetString())
+                let installedHead = operation.GetProperty("firstHead").GetString() |> oid
+                if not (exactProperties fields root)
+                   || not (exactProperties operationFields operation)
+                   || root.GetProperty("schema").GetString() <> "fsgg.v1-admission-operating-git-read/1"
+                   || operation.GetProperty("ref").GetString() <> "refs/heads/fsgg/v2/journal/operation/79"
+                   || operation.GetProperty("observation").GetString() <> "present"
+                   || installedHead <> (operation.GetProperty("secondHead").GetString() |> oid)
+                   || observed > asOf.AddSeconds(30.)
+                   || observed < asOf.AddMinutes(-2.) then
+                    Error [ "operating-git-evidence-binding-or-freshness" ]
+                else
+                    // Reuse the strict cutover object decoder. Its genesis-only operation
+                    // absence check is satisfied only in this private copy, after the
+                    // installed ref and stable census above have been checked.
+                    let copy = JsonNode.Parse(Encoding.UTF8.GetString raw.Span)
+                    copy["schema"] <- JsonValue.Create("fsgg.v1-admission-genesis-git-read/1")
+                    let operationCopy = copy["operation"]
+                    operationCopy["firstHead"] <- null
+                    operationCopy["secondHead"] <- null
+                    operationCopy["observation"] <- JsonValue.Create("deleted")
+                    decode (ReadOnlyMemory(Encoding.UTF8.GetBytes(copy.ToJsonString())))
+                    |> Result.map (fun read ->
+                        let (GenesisGitRead evidence) = read
+                        evidence.Authority, evidence.SecondHead, installedHead)
+        with _ ->
+            Error [ "operating-git-evidence-invalid" ]
+
+    let createOperatingPort (now: unit -> DateTimeOffset) (readRaw: unit -> Result<byte array, string>) =
+        let read () =
+            try
+                readRaw()
+                |> Result.mapError (fun _ -> "operating-git-native-unavailable")
+                |> Result.bind (fun raw ->
+                    decodeOperating (now()) (ReadOnlyMemory raw)
+                    |> Result.mapError (String.concat ","))
+            with _ ->
+                Error "operating-git-native-exception"
+        { ReadObjects =
+            fun () -> read () |> Result.map (fun (authority, _, _) -> authority)
+          RereadHead =
+            fun () -> read () |> Result.map (fun (_, cutoverHead, _) -> cutoverHead) }
 
     let authorityPort (GenesisGitRead evidence) =
         { ReadObjects =
