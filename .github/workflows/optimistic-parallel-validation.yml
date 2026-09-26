@@ -84,6 +84,9 @@ jobs:
   classify-reuse:
     needs: prepare
     runs-on: ubuntu-latest
+    outputs:
+      profile: ${{ steps.profile.outputs.profile }}
+      matrix: ${{ steps.profile.outputs.matrix }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with: { ref: '${{ needs.prepare.outputs.candidate }}', fetch-depth: 0 }
@@ -97,10 +100,16 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: bash eng/bootstrap-gates/optimistic-classify.sh
+      - name: Select exact-head CI profile
+        id: profile
+        env:
+          FSGG_READY_PR: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
+          FSGG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: python3 eng/optimistic-profile.py "${{ runner.temp }}/optimistic-selection/selection.json" "${{ runner.temp }}/optimistic-validation/candidate-obligation.json" "${{ runner.temp }}/optimistic-selection/profile.json"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: qualification-selection-${{ needs.prepare.outputs.candidate }}
-          path: ${{ runner.temp }}/optimistic-selection/selection.json
+          path: ${{ runner.temp }}/optimistic-selection
           retention-days: 90
           if-no-files-found: error
 
@@ -146,37 +155,12 @@ jobs:
 
   run-partition:
     name: coherent-execution (${{ matrix.kind }}-${{ matrix.partition }}${{ matrix.shard }})
-    needs: [prepare, shared-build, formal-prepare]
+    needs: [prepare, classify-reuse, shared-build, formal-prepare]
+    if: ${{ always() && needs.shared-build.result == 'success' && needs.formal-prepare.result == 'success' }}
     strategy:
       fail-fast: false
       max-parallel: 6
-      matrix:
-        include:
-          - { kind: formal, shard: base }
-          - { kind: partition, partition: 0 }
-          - { kind: partition, partition: 2 }
-          - { kind: partition, partition: 3 }
-          - { kind: partition, partition: 4 }
-          - { kind: partition, partition: 5 }
-          - { kind: formal, shard: authority-reconciliation }
-          - { kind: formal, shard: claim-election }
-          - { kind: formal, shard: cutover-observation }
-          - { kind: formal, shard: hosted-writer-fault-safety }
-          - { kind: formal, shard: hosted-writer-progress }
-          - { kind: formal, shard: journal-fencing }
-          - { kind: formal, shard: journal-reconciliation }
-          - { kind: formal, shard: lifecycle }
-          - { kind: formal, shard: operation-saga }
-          - { kind: formal, shard: pilot-permit-fault-safety }
-          - { kind: formal, shard: pilot-permit-major-action-coverage }
-          - { kind: formal, shard: pilot-permit-transfer }
-          - { kind: formal, shard: relation-mutation }
-          - { kind: formal, shard: review-epoch }
-          - { kind: formal, shard: rollback }
-          - { kind: formal, shard: administrative-retirement-closure }
-          - { kind: formal, shard: administrative-retirement-race }
-          - { kind: formal, shard: administrative-retirement-old-plan-counterexample }
-          - { kind: formal, shard: epoch }
+      matrix: ${{ fromJSON(needs.classify-reuse.outputs.matrix) }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -270,8 +254,8 @@ jobs:
           if-no-files-found: error
 
   formal-aggregate:
-    needs: [prepare, run-partition]
-    if: ${{ always() && needs.prepare.result != 'skipped' }}
+    needs: [prepare, classify-reuse, run-partition]
+    if: ${{ always() && needs.prepare.result != 'skipped' && needs.run-partition.result != 'skipped' && needs.classify-reuse.outputs.profile == 'full' }}
     runs-on: ubuntu-latest
     env:
       FSGG_FORMAL_FRAGMENT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-formal-fragments
@@ -315,11 +299,30 @@ jobs:
         with:
           name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
           path: ${{ runner.temp }}/optimistic-validation
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: qualification-selection-${{ needs.prepare.outputs.candidate }}
+          path: ${{ runner.temp }}/optimistic-selection
       - name: Aggregate complete deterministic coverage
+        env:
+          FSGG_CI_PROFILE: ${{ needs.classify-reuse.outputs.profile }}
+          FSGG_READY_PR: ${{ github.event_name == 'pull_request' && !github.event.pull_request.draft }}
+          FSGG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          GH_TOKEN: ${{ github.token }}
         run: bash eng/bootstrap-gates/optimistic-aggregate.sh "${{ runner.temp }}/coherent-partitions" "${{ runner.temp }}/optimistic-validation"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ needs.classify-reuse.outputs.profile == 'full' }}
         with:
           name: coherent-aggregate-${{ needs.prepare.outputs.candidate }}
           path: ${{ runner.temp }}/optimistic-validation
+          retention-days: 90
+          if-no-files-found: error
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: ${{ needs.classify-reuse.outputs.profile == 'scoped' }}
+        with:
+          name: scoped-aggregate-${{ needs.prepare.outputs.candidate }}
+          path: |
+            ${{ runner.temp }}/optimistic-validation/scoped-aggregate-receipt.json
+            ${{ runner.temp }}/optimistic-selection/profile.json
           retention-days: 90
           if-no-files-found: error

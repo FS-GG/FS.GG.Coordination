@@ -609,6 +609,8 @@ let private inspectOptimisticProjection root =
             let selection = plan.RootElement.GetProperty("selection")
             let coherent = plan.RootElement.GetProperty("coherent")
             let formalFanout = plan.RootElement.GetProperty("formalFanout")
+            let profiles = plan.RootElement.GetProperty("profiles")
+            let scoped = profiles.GetProperty("scoped")
 
             use quintPlan =
                 JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "eng/quint-qualification.json")))
@@ -659,6 +661,18 @@ let private inspectOptimisticProjection root =
                     || boolProperty "cancelInProgress" coherent <> Some false
                 then
                     yield violation "optimistic-continuation" "coherent validation must continue completely"
+                if
+                    stringProperty "default" profiles <> Some "full"
+                    || stringProperty "event" scoped <> Some "ready-pull-request"
+                    || stringProperty "requiredDisposition" scoped <> Some "reused"
+                    || stringProperty "donor" scoped <> Some "authentic-complete-unexpired-full-six-partition-aggregate"
+                    || (scoped.GetProperty("exactModifiedPaths").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+                       <> [ "README.md"; "src/FS.GG.Coordination.Cli/ObserverViewCommand.fs" ]
+                    || (scoped.GetProperty("executions").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList)
+                       <> [ "formal:base"; "partition:0"; "partition:2"; "partition:3"; "partition:4"; "partition:5" ]
+                    || stringProperty "aggregateArtifactPrefix" scoped <> Some "scoped-aggregate-"
+                then
+                    yield violation "optimistic-scoped-profile" "pilot requires full donor and the audited exact execution and path set"
                 for token in
                     [
                         "cancel-in-progress: false"
@@ -669,30 +683,15 @@ let private inspectOptimisticProjection root =
                         "  run-partition:"
                         "  formal-aggregate:"
                         "  aggregate:"
-                        "shard: base"
-                        "shard: epoch"
+                        "matrix: ${{ fromJSON(needs.classify-reuse.outputs.matrix) }}"
+                        "name: scoped-aggregate-${{ needs.prepare.outputs.candidate }}"
+                        "python3 eng/optimistic-profile.py"
+                        "FSGG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}"
                     ] do
                     if not (workflow.Contains token) then
                         yield violation "optimistic-workflow-projection" token
-                for shard in semanticShards @ [ performanceShard ] do
-                    if
-                        workflow.Split($"- {{ kind: formal, shard: %s{shard} }}", StringSplitOptions.None).Length
-                        <> 2
-                    then
-                        yield violation "optimistic-workflow-formal-schedule" shard
-                for partition in [ 0; 2; 3; 4; 5 ] do
-                    if
-                        workflow
-                            .Split($"- {{ kind: partition, partition: %d{partition} }}", StringSplitOptions.None)
-                            .Length
-                        <> 2
-                    then
-                        yield violation "optimistic-workflow-partition-schedule" (string partition)
-                if workflow.Contains("kind: partition, partition: 1") then
-                    yield
-                        violation
-                            "optimistic-workflow-formal-partition"
-                            "partition one must be emitted by formal aggregation"
+                if workflow.Contains("- { kind: formal, shard:") || workflow.Contains("- { kind: partition, partition:") then
+                    yield violation "optimistic-workflow-matrix" "matrix must derive from selected plan profile"
             ]
         with error ->
             [ violation "optimistic-plan-invalid" error.Message ]
