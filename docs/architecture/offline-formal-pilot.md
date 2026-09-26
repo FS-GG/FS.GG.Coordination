@@ -8,7 +8,7 @@ signs its exact payload only after the container exits successfully. The signing
 supervisor by file descriptor and is never mounted into candidate code.
 
 `eng/offline-formal-pilot.json` keeps this slice in `shadow` mode. The existing hosted shard and
-the `canonical-quint` check remain authoritative. The policy pins the image ID and full Main
+the `canonical-quint` check remain authoritative. The policy pins the image manifest digest and full Main
 toolchain archive observed in `.github#3851`; a different local image or caller-selected archive
 is refused. Signed evidence is valid for at most six hours so the current saturated hosted queue
 can start its verifier without asking Main to regenerate an unchanged exact-head result. Exact
@@ -42,7 +42,7 @@ FSGG_OFFLINE_SIGNING_KEY_FD=3 \
 The wrapper is intentionally host-invoked and does not register a GitHub Actions runner. It exports
 the exact candidate tree into a temporary minimal Git repository because the canonical validator
 uses `git ls-files`; the staged tree must equal the requested commit tree before Podman starts.
-Podman resolves the policy-pinned local image ID before launch and uses `--pull=never`. The
+Podman resolves the policy-pinned local image manifest digest before launch and uses `--pull=never`. The
 supervisor creates evidence timestamps from its host clock only after the shard exits.
 Receipt transport is public signed evidence; no registration token, GitHub token or signing key
 crosses the candidate-container boundary.
