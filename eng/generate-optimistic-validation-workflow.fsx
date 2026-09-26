@@ -70,13 +70,13 @@ if fanout.GetProperty("performanceShard").GetString() <> "epoch" then
     failwith "formal performance shard must remain epoch"
 
 let shadow = plan.GetProperty("offlineFormalShadow")
+let offlineEnabled = shadow.GetProperty("enabled").GetBoolean()
 
 if
     shadow.GetProperty("shard").GetString() <> "authority-reconciliation"
-    || shadow.GetProperty("enabled").GetBoolean()
     || shadow.GetProperty("fragmentArtifact").GetString() <> "coherent-formal-fragment"
 then
-    failwith "offline formal shadow must remain disabled for the named shard"
+    failwith "offline formal pilot must retain the named shard and fragment artifact"
 
 let workflow =
     Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")
@@ -111,11 +111,30 @@ for required in
         "shard: base"
         "shard: epoch"
         "offline-formal-shadow:"
-        "if: ${{ false && github.event_name == 'pull_request' }}"
         "bash \"$FSGG_TRUSTED_ROOT/eng/offline-formal-join.sh\""
     ] do
     if not (text.Contains required) then
         failwith $"workflow projection missing {required}"
+
+let offlineRouteChecks =
+    if offlineEnabled then
+        [
+            "if: ${{ github.event_name == 'pull_request' }}"
+            "needs: [prepare, run-partition, offline-formal-shadow]"
+            "matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request')"
+            "always() && matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request')"
+        ]
+    else
+        [
+            "if: ${{ false && github.event_name == 'pull_request' }}"
+            "needs: [prepare, run-partition]"
+            "if: ${{ matrix.kind == 'formal' }}"
+            "if: ${{ always() && matrix.kind == 'formal' }}"
+        ]
+
+for required in offlineRouteChecks do
+    if not (text.Contains required) then
+        failwith $"offline formal route missing {required}"
 
 for shard in semanticShards @ [ performanceShard ] do
     let token = $"- {{ kind: formal, shard: %s{shard} }}"
