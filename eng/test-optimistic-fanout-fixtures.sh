@@ -215,10 +215,10 @@ export RECOVERY_QUEUE=1
 (cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null
 test "$(cat "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt")" = "$pending_candidate"
 test "$(jq -r '.[0].candidate' "$RUNNER_TEMP/optimistic-validation/pending-candidates.json")" = "$pending_candidate"
-test "$(rg -F -c 'actions/artifacts?name=coherent-aggregate-' "$RECOVERY_MOCK_ROOT/calls")" -eq 2
+test "$(grep -F -c 'actions/artifacts?name=coherent-aggregate-' "$RECOVERY_MOCK_ROOT/calls")" -eq 2
 (cd "$repo" && bash eng/bootstrap-gates/optimistic-dispatch-recovery.sh "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt") >/dev/null
 test "$(wc -l < "$RECOVERY_MOCK_ROOT/dispatches")" -eq 1
-test "$(rg -F -c 'status=queued&per_page=1' "$RECOVERY_MOCK_ROOT/calls")" -eq 1
+test "$(grep -F -c 'status=queued&per_page=1' "$RECOVERY_MOCK_ROOT/calls")" -eq 1
 python3 - "$RECOVERY_MOCK_ROOT/pulls.json" <<'PY'
 import json, sys
 rows = [{"created_at": "2026-09-20T00:00:00Z", "head": {"sha": f"{i:040x}"}} for i in range(1, 102)]
@@ -228,7 +228,7 @@ PY
 export RECOVERY_ALL_PASSED=1
 rm "$RECOVERY_MOCK_ROOT/calls"
 (cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null 2>&1
-test "$(rg -F -c 'actions/artifacts?name=coherent-aggregate-' "$RECOVERY_MOCK_ROOT/calls")" -eq 100
+test "$(grep -F -c 'actions/artifacts?name=coherent-aggregate-' "$RECOVERY_MOCK_ROOT/calls")" -eq 100
 test ! -s "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt"
 test "$(jq -r '.candidate' "$RUNNER_TEMP/optimistic-validation/recovery-cursor.json")" = "$(printf '%040x' 100)"
 python3 - "$RUNNER_TEMP/optimistic-validation/recovery-cursor.json" "$RECOVERY_MOCK_ROOT/cursor.zip" <<'PY'
@@ -244,7 +244,7 @@ export RECOVERY_CURSOR_FORGED=1
 rm "$RECOVERY_MOCK_ROOT/calls"
 (cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null 2>&1
 test ! -s "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt"
-if rg -Fq 'actions/artifacts/999/zip' "$RECOVERY_MOCK_ROOT/calls"; then
+if grep -Fq 'actions/artifacts/999/zip' "$RECOVERY_MOCK_ROOT/calls"; then
   echo 'untrusted cursor artifact was downloaded' >&2
   exit 1
 fi
