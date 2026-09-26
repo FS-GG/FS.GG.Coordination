@@ -130,7 +130,8 @@ let private inspectSignedWithHeadAndClock (pins: ProtectedIssueCensusNativeAttes
                                           (attestation: ProtectedIssueCensusNativeSnapshotAttestation option)
                                           (now: DateTimeOffset)
                                           handoffClockResource handoffClockArtifact
-                                          readMarker readHead clockPort =
+                                          alterRecoveryDescription
+                                          readMarker readHead readAuthority clockPort =
     let nativePins: ProtectedIssueCensusNativeAttemptPins =
         { AttemptResourceId=pins.NativeAttemptResourceId
           AttemptArtifactSha256=pins.NativeAttemptArtifactSha256 }
@@ -166,16 +167,29 @@ let private inspectSignedWithHeadAndClock (pins: ProtectedIssueCensusNativeAttes
                   AuthoritativeCompleteReadback=true }
             member _.ReadHead() = readHead ()
             member _.ReadAttempts _ = Some snapshot }
+    let recoveryRead =
+        { new IProtectedIssueCensusSignedRecoveryReadPort with
+            member _.Describe() =
+                { HandoffResourceId=handoffPins.HandoffResourceId
+                  HandoffArtifactSha256=handoffPins.HandoffArtifactSha256
+                  NativeAttemptResourceId=nativePins.AttemptResourceId
+                  NativeAttemptArtifactSha256=nativePins.AttemptArtifactSha256
+                  CandidateMayRead=false; CandidateMayWrite=false
+                  AtomicMarkerAndNativeHeadReadback=true }
+                |> alterRecoveryDescription
+            member _.ReadAuthority _ = readAuthority () }
     MigrationProtectedIssueCensusSignedRecovery.inspectSigned
         pins attestation (Some clockPort)
-        handoffPins nativePins marker (Some handoff) (Some native)
+        handoffPins nativePins marker (Some handoff) (Some native) (Some recoveryRead)
 
 let private inspectSignedWithHandoffClock pins marker snapshot attestation now
                                           handoffClockResource handoffClockArtifact =
     inspectSignedWithHeadAndClock pins marker snapshot attestation now
         handoffClockResource handoffClockArtifact
+        id
         (fun () -> Some marker)
         (fun () -> Some snapshot.Head)
+        (fun () -> Some { Marker=marker; NativeHead=snapshot.Head })
         (clock pins.ClockResourceId pins.ClockArtifactSha256 now)
 
 let private inspectSigned pins marker snapshot attestation now =
@@ -208,7 +222,11 @@ let ``signed recovery refuses native head advancing during attestation clock rea
     Assert.Equal(Error "protected-census-attempt-head",
                  inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
                      pins.ClockResourceId pins.ClockArtifactSha256
-                     (fun () -> Some marker) readHead advancingClock)
+                     id (fun () -> Some marker) readHead
+                     (fun () ->
+                         readHead ()
+                         |> Option.map (fun head -> { Marker=marker; NativeHead=head }))
+                     advancingClock)
     Assert.True(headReads >= 3)
 
 [<Fact>]
@@ -232,40 +250,77 @@ let ``signed recovery refuses handoff marker changing during attestation clock r
     Assert.Equal(Error "protected-census-attempt-binding",
                  inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
                      pins.ClockResourceId pins.ClockArtifactSha256
-                     readMarker (fun () -> Some snapshot.Head) advancingClock)
+                     id readMarker (fun () -> Some snapshot.Head)
+                     (fun () ->
+                         readMarker ()
+                         |> Option.map (fun current ->
+                             { Marker=current; NativeHead=snapshot.Head }))
+                     advancingClock)
     Assert.Equal(3, markerReads)
+
+[<Fact>]
+let ``signed recovery refuses handoff marker changing during final native head read`` () =
+    let pins, marker, snapshot, attestation, now = fixture ()
+    let mutable markerChanged = false
+    let mutable headReads = 0
+    let changedMarker =
+        { marker with SignedExpiresAtUtc=marker.SignedExpiresAtUtc.AddSeconds 1 }
+    let readMarker () =
+        if markerChanged then Some changedMarker else Some marker
+    let readHead () =
+        headReads <- headReads + 1
+        Some snapshot.Head
+    let readAuthority () =
+        headReads <- headReads + 1
+        markerChanged <- true
+        Some { Marker=changedMarker; NativeHead=snapshot.Head }
+    Assert.Equal(Error "protected-census-attempt-binding",
+                 inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
+                     pins.ClockResourceId pins.ClockArtifactSha256
+                     id readMarker readHead readAuthority
+                     (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
+    Assert.Equal(3, headReads)
 
 [<Fact>]
 let ``signed recovery refuses lost final handoff marker after signature validation`` () =
     let pins, marker, snapshot, attestation, now = fixture ()
     for readFinal in [ (fun () -> None)
                        (fun () -> failwith "handoff read lost") ] do
-        let mutable markerReads = 0
-        let readMarker () =
-            markerReads <- markerReads + 1
-            if markerReads < 3 then Some marker else readFinal ()
         Assert.Equal(Error "protected-census-attempt-unknown",
                      inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
                          pins.ClockResourceId pins.ClockArtifactSha256
-                         readMarker (fun () -> Some snapshot.Head)
+                         id (fun () -> Some marker) (fun () -> Some snapshot.Head)
+                         (fun () ->
+                             readFinal ()
+                             |> Option.map (fun current ->
+                                 { Marker=current; NativeHead=snapshot.Head }))
                          (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
-        Assert.Equal(3, markerReads)
 
 [<Fact>]
 let ``signed recovery refuses lost final native head after signature validation`` () =
     let pins, marker, snapshot, attestation, now = fixture ()
     for readFinal in [ (fun () -> None)
                        (fun () -> failwith "native read lost") ] do
-        let mutable headReads = 0
-        let readHead () =
-            headReads <- headReads + 1
-            if headReads < 3 then Some snapshot.Head else readFinal ()
         Assert.Equal(Error "protected-census-attempt-unknown",
                      inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
                          pins.ClockResourceId pins.ClockArtifactSha256
-                         (fun () -> Some marker) readHead
+                         id (fun () -> Some marker) (fun () -> Some snapshot.Head)
+                         (fun () ->
+                             readFinal ()
+                             |> Option.map (fun head -> { Marker=marker; NativeHead=head }))
                          (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
-        Assert.Equal(3, headReads)
+
+[<Fact>]
+let ``signed recovery requires atomic protected authority readback`` () =
+    let pins, marker, snapshot, attestation, now = fixture ()
+    Assert.Equal(Error "protected-census-attempt-installation",
+                 inspectSignedWithHeadAndClock pins marker snapshot (Some attestation) now
+                     pins.ClockResourceId pins.ClockArtifactSha256
+                     (fun description ->
+                         { description with AtomicMarkerAndNativeHeadReadback=false })
+                     (fun () -> Some marker) (fun () -> Some snapshot.Head)
+                     (fun () -> Some { Marker=marker; NativeHead=snapshot.Head })
+                     (clock pins.ClockResourceId pins.ClockArtifactSha256 now))
 
 [<Fact>]
 let ``native snapshot verifier refuses forged stale and foreign evidence`` () =
