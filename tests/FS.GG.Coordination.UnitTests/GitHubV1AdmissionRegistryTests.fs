@@ -1038,7 +1038,7 @@ let ``exact proposal remains reconciled when a later append advances the head`` 
     let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
     let harness, registry, handle = admitted snapshot commit manifest "op-1"
     let inFlight, _, intentProposal = prepare harness snapshot handle registry "worker-a" (mutationRequest commit 1L "effect-1" "one")
-    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderPartial "pending") }
+    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok(ProviderPartial "pending") }
     let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
     let laterCandidate = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
     let later, _, _ = harness.Confirm(laterCandidate, ReceiveAccepted)
@@ -1074,7 +1074,7 @@ let ``restored inflight has no permit and fresh journal movement refuses old fen
     let harness, registry, handle = admitted snapshot commit manifest "op-1"
     let inFlight, permit, _ = prepare harness snapshot handle registry "worker-a" (mutationRequest commit 1L "effect-1" "one")
     let fence = Registry.refreshDispatch harness.ReadPort authorityPort permit handle "worker-a" "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
-    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderPartial "provider-pending") }
+    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok(ProviderPartial "provider-pending") }
     let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
     let settlement = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
     let settled, _, _ = harness.Confirm(settlement, ReceiveAccepted)
@@ -1110,10 +1110,18 @@ let ``retry requires provider proof that binds and excludes delayed original`` (
     let harness, registry, handle = admitted snapshot commit manifest "op-1"
     let request = mutationRequest commit 1L "effect-1" "one"
     let inFlight, _, _ = prepare harness snapshot handle registry "worker-a" request
-    let wrong: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderStronglyAbsent(ProviderIdempotencyExclusion(digest "f", digest "e"))) }
+    let wrong: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok(ProviderStronglyAbsent(ProviderIdempotencyExclusion(digest "f", digest "e"))) }
     Assert.True(Registry.reconcileEffect wrong handle "effect-1" inFlight |> Result.isError)
     let requestDigest = match request with MutationRequest value -> value.RequestDigest | _ -> failwith "mutation"
-    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderStronglyAbsent(ConditionalFenceExclusion(requestDigest, digest "e"))) }
+    let provider: ProviderReconciliationPort =
+        { Read = fun operation generation effect attempt bytes ->
+            Assert.Equal("op-1", operation)
+            Assert.Equal(1L, generation)
+            Assert.Equal("effect-1", effect)
+            Assert.Equal(1L, attempt)
+            let expectedBytes = match request with MutationRequest value -> value.CanonicalRequestBytes | _ -> failwith "mutation"
+            Assert.Equal(expectedBytes, bytes)
+            Ok(ProviderStronglyAbsent(ConditionalFenceExclusion(requestDigest, digest "e"))) }
     let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
     let settledCandidate = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
     let settled, _, _ = harness.Confirm(settledCandidate, ReceiveAccepted)
@@ -1168,7 +1176,7 @@ let ``settlement decoder refuses unknown and duplicate fields`` () =
     let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
     let harness, registry, handle = admitted snapshot commit manifest "op-1"
     let inFlight, _, _ = prepare harness snapshot handle registry "worker-a" (mutationRequest commit 1L "effect-1" "one")
-    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderApplied(digest "f")) }
+    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok(ProviderApplied(digest "f")) }
     let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
     let candidate = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
     let eventBytes = Registry.proposalObjects (harness.Plan candidate) |> _.EventBytes
@@ -1185,7 +1193,7 @@ let ``replay refuses self-consistent strong absence bound to another request`` (
     let request = mutationRequest commit 1L "effect-1" "one"
     let requestDigest = match request with MutationRequest value -> value.RequestDigest | _ -> failwith "mutation"
     let inFlight, _, _ = prepare harness snapshot handle registry "worker-a" request
-    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderStronglyAbsent(ConditionalFenceExclusion(requestDigest, digest "e"))) }
+    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok(ProviderStronglyAbsent(ConditionalFenceExclusion(requestDigest, digest "e"))) }
     let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
     let candidate = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
     let settled, _, proposal = harness.Confirm(candidate, ReceiveAccepted)
@@ -1211,7 +1219,7 @@ let ``settlement response loss is idempotent and terminal state survives restart
     let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
     let harness, registry, handle = admitted snapshot commit manifest "op-1"
     let inFlight, _, _ = prepare harness snapshot handle registry "worker-a" (mutationRequest commit 1L "effect-1" "one")
-    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok(ProviderApplied(digest "f")) }
+    let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok(ProviderApplied(digest "f")) }
     let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
     let candidate = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
     let proposal = harness.Plan candidate
@@ -1230,7 +1238,7 @@ let ``partial and indeterminate effects survive replay and block replacement and
         let snapshot, commit, manifest, _, _ = authority "OperatingV1" 1L None id
         let harness, registry, handle = admitted snapshot commit manifest "op-1"
         let inFlight, _, _ = prepare harness snapshot handle registry "worker-a" (mutationRequest commit 1L "effect-1" "one")
-        let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ -> Ok observation }
+        let provider: ProviderReconciliationPort = { Read = fun _ _ _ _ _ -> Ok observation }
         let proof = Registry.reconcileEffect provider handle "effect-1" inFlight |> Result.defaultWith (String.concat "," >> failwith)
         let candidate = match Registry.settleEffect (Registry.head inFlight) "worker-a" "effect-1" proof inFlight with RegistryAppended value -> value | other -> failwithf "%A" other
         let durable, _, _ = harness.Confirm(candidate, ReceiveAccepted)

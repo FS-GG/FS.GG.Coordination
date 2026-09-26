@@ -223,7 +223,7 @@ type ProviderEffectObservation =
 
 type ProviderReconciliationPort =
     {
-        Read: string -> string -> int64 -> byte array -> Result<ProviderEffectObservation, string>
+        Read: string -> int64 -> string -> int64 -> byte array -> Result<ProviderEffectObservation, string>
     }
 
 type private ProviderProof =
@@ -2356,7 +2356,7 @@ module V1AdmissionRegistry =
                 ->
                 Error [ "effect-operation-binding" ]
             | Some effect ->
-                match port.Read effect.OperationId effectId effect.Attempt (Array.copy effect.RequestBytes) with
+                match port.Read effect.OperationId effect.OperationGeneration effectId effect.Attempt (Array.copy effect.RequestBytes) with
                 | Error reason -> Error [ "provider-reconciliation:" + reason ]
                 | Ok observation ->
                     let settlement, binding =

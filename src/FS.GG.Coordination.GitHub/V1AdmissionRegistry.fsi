@@ -120,7 +120,7 @@ type ProviderEffectObservation =
 
 type ProviderReconciliationPort =
     {
-        Read: string -> string -> int64 -> byte array -> Result<ProviderEffectObservation, string>
+        Read: string -> int64 -> string -> int64 -> byte array -> Result<ProviderEffectObservation, string>
     }
 
 type VerifiedProviderObservation
