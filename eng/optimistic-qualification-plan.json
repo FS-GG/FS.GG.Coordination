@@ -28,7 +28,7 @@
   },
   "offlineFormalShadow": {
     "shard": "authority-reconciliation",
-    "enabled": true,
+    "enabled": false,
     "fragmentArtifact": "coherent-formal-fragment"
   },
   "obligations": ["unit", "architecture", "formal", "security", "package", "recovery"]
