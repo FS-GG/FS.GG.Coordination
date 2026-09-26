@@ -28,8 +28,8 @@ requires these facts:
 The workflow derives its trusted root, candidate root, exact head and base from protected workflow
 context. The verifier refuses a policy, verifier or public key outside the protected root,
 and reads the hosted verification time from the runner clock. It fetches only the public
-signed envelope from the evidence ref, compare the candidate head/base/tree, policy, toolchain and
-bound script digests, then publish the normal `canonical-quint-shard-<id>` artifact. The unchanged
+signed envelope from the evidence ref, compares the candidate head/base/tree, policy, toolchain and
+bound script digests, then publishes the normal `coherent-formal-fragment` artifact. The unchanged
 hosted aggregate remains the GitHub check producer and rejects a missing or invalid shard. Rollback
 restores the shard to the hosted matrix and disables the join in the same workflow change; the
 policy may then return to `shadow`.
@@ -75,3 +75,7 @@ depends on both jobs and requires the complete set of 20 fragments. A missing or
 fails the join and aggregate; it cannot silently fall back to an unverified result. The join
 refuses a `shadow` policy. Rollback re-enables the hosted shard and disables the join in one
 workflow change.
+
+A draft pull request does not start this coherent route until it becomes ready for review;
+explicit exact-candidate dispatch remains available. This lets Main publish the exact signed
+envelope before the ready event starts the hosted verifier.
