@@ -1,0 +1,1187 @@
+namespace FS.GG.Coordination.Orchestration.Execution.Codex.Tests
+
+open System
+open System.IO
+open System.Text
+open FS.GG.Coordination.Orchestration.Execution.Codex
+open Xunit
+
+type CodexAppServerContinuityTests() =
+    let scope: DirectSessionTurnScope =
+        {
+            WorkspaceId = "main-fsharp-dev"
+            Repository = "FS-GG/.github"
+            ItemId = "work-item-v1-" + String.replicate 64 "b"
+            IssueRef = "FS-GG/.github#123"
+            AttemptId = "attempt-1"
+            InvocationId = "invocation-" + String.replicate 64 "a"
+            ThreadId = "native-thread"
+            SourceIdentity = "coordination"
+            ProducerId = "fsharp-dev-main"
+            BindingDigest = String.replicate 64 "c"
+        }
+    let transport = "authenticated-local-app-server"
+    let binding =
+        {
+            Scope = scope
+            TurnId = "native-turn"
+            TransportIdentity = transport
+            ConnectionId = "connection-1"
+            SubscriptionDigest = String.replicate 64 "d"
+            ProtocolVersion = "codex-app-server-v2/0.156.1"
+        }
+    let fixture name =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "app-server", name)
+        |> File.ReadAllBytes
+    let started = fixture "turn-started.json"
+    let usage = fixture "usage-updated.json"
+    let completed = fixture "turn-completed.json"
+
+    let authenticator result =
+        { new ICodexAppServerSubscriptionAuthenticator with
+            member _.ReadBoundSubscription() = result }
+    let beginBound () =
+        match CodexAppServerContinuity.beginWindow scope "native-turn" transport (authenticator (Ok binding)) with
+        | Ok state -> state
+        | Error code -> failwithf "unexpected subscription refusal %s" code
+    let frame ordinal bytes =
+        { TransportIdentity = transport
+          ConnectionId = binding.ConnectionId
+          Ordinal = ordinal
+          Payload = bytes }
+    let status = CodexAppServerContinuity.status
+    let replace (bytes: byte array) oldText newText =
+        let original = Encoding.UTF8.GetString bytes
+        Encoding.UTF8.GetBytes(original.Replace(oldText, newText, StringComparison.Ordinal))
+    let completedWithItems items =
+        replace completed "\"items\":[]" ("\"items\":" + items)
+    let completedWithCommandActions actions =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":"
+             + actions + ",\"cwd\":\"/tmp\",\"status\":\"completed\"}]")
+    let completedWithCommandMetadata fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\""
+             + fields + "}]")
+    let completedWithFileChange fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"fileChange\"" + fields + "}]")
+    let completedWithMcpToolCall fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"mcpToolCall\"" + fields + "}]")
+    let completedWithMcpMetadata fields =
+        completedWithMcpToolCall
+            (",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":\"completed\"" + fields)
+    let completedWithDynamicToolCall fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"dynamicToolCall\"" + fields + "}]")
+    let completedWithDynamicMetadata fields =
+        completedWithDynamicToolCall
+            (",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\"" + fields)
+    let completedWithCollabToolCall fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"collabAgentToolCall\"" + fields + "}]")
+    let completedWithCollabMetadata fields =
+        completedWithCollabToolCall
+            (",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\"" + fields)
+    let completedWithWebSearch fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"webSearch\"" + fields + "}]")
+    let completedWithWebSearchMetadata fields =
+        completedWithWebSearch (",\"query\":\"q\"" + fields)
+    let completedWithSubAgentActivity fields =
+        completedWithItems
+            ("[{\"id\":\"item-1\",\"type\":\"subAgentActivity\"" + fields + "}]")
+    let withTurnFields (bytes: byte array) fields =
+        replace bytes "\"items\":[]" ("\"items\":[]" + fields)
+    let withEmission (bytes: byte array) value =
+        replace bytes "\"params\":" ("\"emittedAtMs\":" + value + ",\"params\":")
+    let failedWithCodexErrorInfo info =
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        withTurnFields failed (",\"error\":{\"message\":\"x\",\"codexErrorInfo\":" + info + "}")
+    let failedWithMisalignment misalignment =
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        withTurnFields failed (",\"error\":{\"message\":\"x\",\"misalignment\":" + misalignment + "}")
+
+    [<Fact>]
+    member _.``exact subscribed start usage terminal order retains only continuity metadata``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        Assert.Equal(InTurn 0, status first)
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        Assert.Equal(InTurn 1, status second)
+        let third = CodexAppServerContinuity.apply second (frame 3L completed)
+        Assert.Equal(TerminalObserved("completed", 1), status third)
+
+    [<Fact>]
+    member _.``schema emitted timestamp on native notifications preserves continuity``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started "1000"))
+        Assert.Equal(InTurn 0, status first)
+        let second = CodexAppServerContinuity.apply first (frame 2L (withEmission usage "1001"))
+        Assert.Equal(InTurn 1, status second)
+        let third = CodexAppServerContinuity.apply second (frame 3L (withEmission completed "1002"))
+        Assert.Equal(TerminalObserved("completed", 1), status third)
+
+    [<Fact>]
+    member _.``regressing native emission timestamp latches a continuity gap``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started "1000"))
+        let usageRegressed =
+            CodexAppServerContinuity.apply first (frame 2L (withEmission usage "999"))
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-emission-time-regressed",
+            status usageRegressed
+        )
+        let second = CodexAppServerContinuity.apply first (frame 2L (withEmission usage "1001"))
+        let terminalRegressed =
+            CodexAppServerContinuity.apply second (frame 3L (withEmission completed "1000"))
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-emission-time-regressed",
+            status terminalRegressed
+        )
+
+    [<Fact>]
+    member _.``missing and equal emission timestamps do not invent a gap``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started "1000"))
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        Assert.Equal(InTurn 1, status second)
+        let third = CodexAppServerContinuity.apply second (frame 3L (withEmission completed "1000"))
+        Assert.Equal(TerminalObserved("completed", 1), status third)
+
+    [<Fact>]
+    member _.``malformed native emitted timestamp refuses start usage and terminal``() =
+        for value in [ "null"; "\"1000\""; "1.5"; "9223372036854775808" ] do
+            let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+            Assert.Equal(
+                ContinuityGap "app-server-continuity-emitted-at-invalid",
+                status (CodexAppServerContinuity.apply (beginBound ()) (frame 1L (withEmission started value)))
+            )
+            for payload in [ usage; completed ] do
+                Assert.Equal(
+                    ContinuityGap "app-server-continuity-emitted-at-invalid",
+                    status (CodexAppServerContinuity.apply first (frame 2L (withEmission payload value)))
+                )
+
+    [<Fact>]
+    member _.``terminal with incomplete native items view cannot close continuity``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for view in [ "summary"; "notLoaded" ] do
+            let terminal =
+                replace completed "\"items\":[]" ("\"items\":[],\"itemsView\":\"" + view + "\"")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-items-view-incomplete",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``foreign native items view refuses start and terminal frames``() =
+        for frameBytes in [ started; completed ] do
+            for view in [ "null"; "17"; "\"foreign\"" ] do
+                let payload = replace frameBytes "\"items\":[]" ("\"items\":[],\"itemsView\":" + view)
+                let state =
+                    if obj.ReferenceEquals(frameBytes, started) then beginBound ()
+                    else CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+                let ordinal = if obj.ReferenceEquals(frameBytes, started) then 1L else 2L
+                Assert.Equal(
+                    ContinuityGap "app-server-turn-items-view-invalid",
+                    status (CodexAppServerContinuity.apply state (frame ordinal payload))
+                )
+
+    [<Fact>]
+    member _.``schema full terminal and summary start items views retain status``() =
+        let summaryStart =
+            replace started "\"items\":[]" "\"items\":[],\"itemsView\":\"summary\""
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L summaryStart)
+        Assert.Equal(InTurn 0, status first)
+        let fullTerminal =
+            replace completed "\"items\":[]" "\"items\":[],\"itemsView\":\"full\""
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L fullTerminal))
+        )
+
+    [<Fact>]
+    member _.``native turn timestamp metadata requires nullable int64 values``() =
+        for frameBytes in [ started; completed ] do
+            for fields in
+                [ ",\"startedAt\":\"1\""
+                  ",\"completedAt\":1.5"
+                  ",\"durationMs\":true"
+                  ",\"durationMs\":9223372036854775808" ] do
+                let payload = withTurnFields frameBytes fields
+                let isStart = obj.ReferenceEquals(frameBytes, started)
+                let state =
+                    if isStart then beginBound ()
+                    else CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+                let ordinal = if isStart then 1L else 2L
+                Assert.Equal(
+                    ContinuityGap "app-server-turn-time-invalid",
+                    status (CodexAppServerContinuity.apply state (frame ordinal payload))
+                )
+
+    [<Fact>]
+    member _.``native terminal cannot close with regressed or negative duration``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"startedAt\":200,\"completedAt\":199"
+              ",\"durationMs\":-1" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-time-regressed",
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed fields)))
+            )
+
+    [<Fact>]
+    member _.``schema nullable and ordered native turn times retain continuity``() =
+        let startPayload = withTurnFields started ",\"startedAt\":null,\"completedAt\":null,\"durationMs\":null"
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L startPayload)
+        Assert.Equal(InTurn 0, status first)
+        for fields in
+            [ ",\"startedAt\":null,\"completedAt\":null,\"durationMs\":null"
+              ",\"startedAt\":200,\"completedAt\":200,\"durationMs\":0"
+              ",\"startedAt\":200,\"completedAt\":201,\"durationMs\":9223372036854775807" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed fields)))
+            )
+
+    [<Fact>]
+    member _.``terminal with conflicting native start timestamp cannot close same turn``() =
+        let observedStart = withTurnFields started ",\"startedAt\":200"
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L observedStart)
+        Assert.Equal(InTurn 0, status first)
+        let conflictingTerminal =
+            withTurnFields completed ",\"startedAt\":201,\"completedAt\":202"
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-start-time-mismatch",
+            status (CodexAppServerContinuity.apply first (frame 2L conflictingTerminal))
+        )
+
+    [<Fact>]
+    member _.``matching or unavailable native start timestamp retains terminal status``() =
+        let observedStart = withTurnFields started ",\"startedAt\":200"
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L observedStart)
+        for fields in
+            [ ",\"startedAt\":200,\"completedAt\":202"
+              ",\"startedAt\":null,\"completedAt\":202"
+              ",\"completedAt\":202" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed fields)))
+            )
+
+    [<Fact>]
+    member _.``failed native turn error requires object string message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        for error in
+            [ "\"failed\""
+              "{}"
+              "{\"message\":null}"
+              "{\"message\":17}"
+              "{\"message\":\"x\",\"additionalDetails\":17}"
+              "{\"message\":\"x\",\"message\":\"y\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields failed (",\"error\":" + error))))
+            )
+
+    [<Fact>]
+    member _.``nonfailed native turn cannot carry populated error``() =
+        let startedWithError = withTurnFields started ",\"error\":{\"message\":\"x\"}"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-error-status-mismatch",
+            status (CodexAppServerContinuity.apply (beginBound ()) (frame 1L startedWithError))
+        )
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for terminal in
+            [ completed
+              replace completed "\"status\":\"completed\"" "\"status\":\"interrupted\"" ] do
+            let withError = withTurnFields terminal ",\"error\":{\"message\":\"x\"}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-status-mismatch",
+                status (CodexAppServerContinuity.apply first (frame 2L withError))
+            )
+
+    [<Fact>]
+    member _.``failed error and nullable nonfailed error retain terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let failed = replace completed "\"status\":\"completed\"" "\"status\":\"failed\""
+        for fields in
+            [ ",\"error\":{\"message\":\"\",\"additionalDetails\":null}"
+              ",\"error\":{\"message\":\"x\",\"additionalDetails\":\"detail\",\"codexErrorInfo\":\"other\",\"misalignment\":null}" ] do
+            Assert.Equal(
+                TerminalObserved("failed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields failed fields)))
+            )
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L (withTurnFields completed ",\"error\":null")))
+        )
+
+    [<Fact>]
+    member _.``codex error info refuses foreign union variants``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for info in
+            [ "true"
+              "17"
+              "\"foreign\""
+              "{}"
+              "{\"httpConnectionFailed\":{},\"responseStreamDisconnected\":{}}"
+              "{\"httpConnectionFailed\":{},\"extra\":true}"
+              "{\"httpConnectionFailed\":{},\"httpConnectionFailed\":{}}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``codex error HTTP subtype requires nullable uint16 status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for payload in
+            [ "null"
+              "{\"httpStatusCode\":-1}"
+              "{\"httpStatusCode\":65536}"
+              "{\"httpStatusCode\":\"503\"}"
+              "{\"httpStatusCode\":200,\"httpStatusCode\":503}" ] do
+            let info = "{\"responseStreamDisconnected\":" + payload + "}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``codex error active turn subtype requires known turn kind``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for payload in [ "{}"; "{\"turnKind\":null}"; "{\"turnKind\":\"foreign\"}" ] do
+            let info = "{\"activeTurnNotSteerable\":" + payload + "}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``codex error info schema variants retain failed terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for info in
+            [ "null"
+              "\"contextWindowExceeded\""
+              "\"other\""
+              "{\"httpConnectionFailed\":{}}"
+              "{\"responseStreamConnectionFailed\":{\"httpStatusCode\":null}}"
+              "{\"responseStreamDisconnected\":{\"httpStatusCode\":0}}"
+              "{\"responseTooManyFailedAttempts\":{\"httpStatusCode\":65535}}"
+              "{\"activeTurnNotSteerable\":{\"turnKind\":\"review\"}}"
+              "{\"activeTurnNotSteerable\":{\"turnKind\":\"compact\"}}" ] do
+            Assert.Equal(
+                TerminalObserved("failed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithCodexErrorInfo info)))
+            )
+
+    [<Fact>]
+    member _.``misalignment error details refuse foreign member shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for details in
+            [ "false"
+              "[]"
+              "{\"detailedExplanation\":17}"
+              "{\"errorType\":true}"
+              "{\"errorType\":\"a\",\"errorType\":\"b\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithMisalignment details)))
+            )
+
+    [<Fact>]
+    member _.``misalignment steer requires object with string message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for steer in
+            [ "true"
+              "{}"
+              "{\"message\":null}"
+              "{\"message\":17}"
+              "{\"message\":\"a\",\"message\":\"b\"}" ] do
+            let details = "{\"steer\":" + steer + "}"
+            Assert.Equal(
+                ContinuityGap "app-server-turn-error-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithMisalignment details)))
+            )
+
+    [<Fact>]
+    member _.``misalignment nullable details and steer retain failed terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for details in
+            [ "null"
+              "{}"
+              "{\"detailedExplanation\":null,\"errorType\":null,\"steer\":null}"
+              "{\"detailedExplanation\":\"detail\",\"errorType\":\"new-category\",\"steer\":{\"message\":\"\"}}" ] do
+            Assert.Equal(
+                TerminalObserved("failed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (failedWithMisalignment details)))
+            )
+
+    [<Fact>]
+    member _.``subscription refuses wrong workspace item turn and transport``() =
+        for wrong in
+            [ { binding with Scope = { scope with WorkspaceId = "other-workspace" } }
+              { binding with Scope = { scope with ItemId = "other-item" } }
+              { binding with TurnId = "other-turn" }
+              { binding with TransportIdentity = "untrusted-proxy" } ] do
+            Assert.Equal(
+                Error "app-server-subscription-binding-mismatch",
+                CodexAppServerContinuity.beginWindow scope "native-turn" transport (authenticator (Ok wrong))
+            )
+        Assert.Equal(
+            Error "app-server-subscription-unavailable",
+            CodexAppServerContinuity.beginWindow scope "native-turn" transport
+                (authenticator (Error "no-authenticated-subscription"))
+        )
+        for invalid in
+            [ { binding with SubscriptionDigest = "not-a-digest" }
+              { binding with ProtocolVersion = "codex-app-server-v1" }
+              { binding with ConnectionId = "" } ] do
+            Assert.Equal(
+                Error "app-server-subscription-binding-invalid",
+                CodexAppServerContinuity.beginWindow scope "native-turn" transport
+                    (authenticator (Ok invalid))
+            )
+
+    [<Fact>]
+    member _.``equal malformed expected and bound scopes refuse before source read``() =
+        let malformedScopes =
+            [ { scope with Repository = "FS-GG"; IssueRef = "FS-GG#123" }
+              { scope with IssueRef = "FS-GG/other#123" }
+              { scope with BindingDigest = "not-a-digest" }
+              { scope with WorkspaceId = " " } ]
+        for malformed in malformedScopes do
+            let mutable reads = 0
+            let source =
+                { new ICodexAppServerSubscriptionAuthenticator with
+                    member _.ReadBoundSubscription() =
+                        reads <- reads + 1
+                        Ok { binding with Scope = malformed } }
+            Assert.Equal(
+                Error "app-server-subscription-input-invalid",
+                CodexAppServerContinuity.beginWindow malformed "native-turn" transport source
+            )
+            Assert.Equal(0, reads)
+
+    [<Fact>]
+    member _.``missing start and duplicate start are permanent gaps``() =
+        let missing = CodexAppServerContinuity.apply (beginBound ()) (frame 1L usage)
+        Assert.Equal(ContinuityGap "app-server-continuity-start-missing", status missing)
+        let later = CodexAppServerContinuity.apply missing (frame 1L started)
+        Assert.Equal(status missing, status later)
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let duplicate = CodexAppServerContinuity.apply first (frame 2L started)
+        Assert.Equal(ContinuityGap "app-server-continuity-start-duplicate", status duplicate)
+
+    [<Fact>]
+    member _.``sequence loss and source substitution latch gaps``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let skipped = CodexAppServerContinuity.apply first (frame 3L usage)
+        Assert.Equal(ContinuityGap "app-server-continuity-sequence-gap", status skipped)
+        let replayed = CodexAppServerContinuity.apply first (frame 1L usage)
+        Assert.Equal(ContinuityGap "app-server-continuity-sequence-gap", status replayed)
+        let foreign = { frame 2L usage with ConnectionId = "borrowed-connection" }
+        let substituted = CodexAppServerContinuity.apply first foreign
+        Assert.Equal(ContinuityGap "app-server-continuity-source-mismatch", status substituted)
+
+    [<Fact>]
+    member _.``native thread turn and malformed terminal cannot be substituted``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let badThread = replace usage "native-thread" "other-thread"
+        Assert.Equal(
+            ContinuityGap "app-server-usage-identity-mismatch",
+            status (CodexAppServerContinuity.apply first (frame 2L badThread))
+        )
+        let badTurn = replace completed "native-turn" "other-turn"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-identity-mismatch",
+            status (CodexAppServerContinuity.apply first (frame 2L badTurn))
+        )
+        let badStatus = replace completed "\"status\":\"completed\"" "\"status\":\"inProgress\""
+        Assert.Equal(
+            ContinuityGap "app-server-turn-status-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L badStatus))
+        )
+        let duplicateId = replace completed "\"id\":\"native-turn\"" "\"id\":\"native-turn\",\"id\":\"native-turn\""
+        Assert.Equal(
+            ContinuityGap "app-server-turn-shape-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L duplicateId))
+        )
+        let malformed = Encoding.UTF8.GetBytes("{\"method\":\"turn/completed\",")
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-json-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L malformed))
+        )
+
+    [<Fact>]
+    member _.``nonobject turn item cannot mark a native terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for items in [ "[null]"; "[42]"; "[\"text\"]" ] do
+            let terminal = completedWithItems items
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``missing or foreign turn item discriminator cannot mark a terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for items in
+            [ "[{}]"
+              "[{\"id\":\"item-1\",\"type\":\"foreignItem\"}]"
+              "[{\"id\":\"\",\"type\":\"reasoning\"}]" ] do
+            let terminal = completedWithItems items
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``duplicate turn item identity key cannot mark a terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"id\":\"item-1\",\"type\":\"reasoning\"}]"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-item-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``supported common turn item identity retains terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal = completedWithItems "[{\"id\":\"item-1\",\"type\":\"reasoning\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``agent message item without string text cannot mark a native terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for item in
+            [ "{\"id\":\"item-1\",\"type\":\"agentMessage\"}"
+              "{\"id\":\"item-1\",\"type\":\"agentMessage\",\"text\":null}"
+              "{\"id\":\"item-1\",\"type\":\"agentMessage\",\"text\":42}" ] do
+            let terminal = completedWithItems ("[" + item + "]")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``agent message item with schema string text retains terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"type\":\"agentMessage\",\"text\":\"\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``command item missing or malformed action collection cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for item in
+            [ "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"cwd\":\"/tmp\",\"status\":\"completed\"}"
+              "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":null,\"cwd\":\"/tmp\",\"status\":\"completed\"}" ] do
+            let terminal = completedWithItems ("[" + item + "]")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``command item wrong primitive fields cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for item in
+            [ "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":7,\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\"}"
+              "{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":null,\"status\":\"completed\"}" ] do
+            let terminal = completedWithItems ("[" + item + "]")
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``command item foreign status cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"foreign\"}]"
+        Assert.Equal(
+            ContinuityGap "app-server-turn-item-invalid",
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``command item with required payload retains terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let terminal =
+            completedWithItems "[{\"id\":\"item-1\",\"type\":\"commandExecution\",\"command\":\"echo ok\",\"commandActions\":[],\"cwd\":\"/tmp\",\"status\":\"completed\"}]"
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``nonobject or foreign nested command action cannot mark terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for actions in
+            [ "[null]"
+              "[{}]"
+              "[{\"command\":\"echo ok\",\"type\":\"foreign\"}]" ] do
+            let terminal = completedWithCommandActions actions
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``read command action requires string name and path``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for actions in
+            [ "[{\"command\":\"cat x\",\"type\":\"read\",\"name\":\"x\"}]"
+              "[{\"command\":\"cat x\",\"type\":\"read\",\"name\":42,\"path\":\"/tmp/x\"}]" ] do
+            let terminal = completedWithCommandActions actions
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``search command action optional path and query have bounded shape``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for actions in
+            [ "[{\"command\":\"rg x\",\"type\":\"search\",\"path\":42}]"
+              "[{\"command\":\"rg x\",\"type\":\"search\",\"query\":42}]" ] do
+            let terminal = completedWithCommandActions actions
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``supported nested command actions retain terminal status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let actions =
+            "[{\"command\":\"cat x\",\"type\":\"read\",\"name\":\"x\",\"path\":\"/tmp/x\"},"
+            + "{\"command\":\"ls\",\"type\":\"listFiles\",\"path\":null},"
+            + "{\"command\":\"rg x\",\"type\":\"search\",\"query\":null},"
+            + "{\"command\":\"echo ok\",\"type\":\"unknown\"}]"
+        let terminal = completedWithCommandActions actions
+        Assert.Equal(
+            TerminalObserved("completed", 0),
+            status (CodexAppServerContinuity.apply first (frame 2L terminal))
+        )
+
+    [<Fact>]
+    member _.``command item optional numeric metadata must be signed schema integers``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"exitCode\":\"0\""
+              ",\"exitCode\":1.5"
+              ",\"exitCode\":2147483648"
+              ",\"durationMs\":\"1\""
+              ",\"durationMs\":9223372036854775808" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``command item optional nullable strings refuse foreign value shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"aggregatedOutput\":{}"
+              ",\"pluginId\":false"
+              ",\"processId\":[]"
+              ",\"scriptPath\":17" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``command item source must be a known schema enum``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in [ ",\"source\":\"foreign\""; ",\"source\":null"; ",\"source\":1" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``command item schema optional nulls integer bounds and source retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"aggregatedOutput\":null,\"pluginId\":null,\"processId\":null,\"scriptPath\":null,\"durationMs\":null,\"exitCode\":null"
+              ",\"exitCode\":2147483647,\"durationMs\":9223372036854775807,\"source\":\"unifiedExecInteraction\""
+              ",\"exitCode\":-2147483648,\"durationMs\":-9223372036854775808,\"source\":\"agent\"" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCommandMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``file change item requires changes collection and schema status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"status\":\"completed\""
+              ",\"changes\":null,\"status\":\"completed\""
+              ",\"changes\":[],\"status\":null"
+              ",\"changes\":[],\"status\":\"foreign\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``file change entries require string diff path and typed kind``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for change in
+            [ "{}"
+              "{\"diff\":null,\"path\":\"a\",\"kind\":{\"type\":\"add\"}}"
+              "{\"diff\":\"+a\",\"path\":1,\"kind\":{\"type\":\"add\"}}"
+              "{\"diff\":\"+a\",\"path\":\"a\",\"kind\":null}" ] do
+            let fields = ",\"changes\":[" + change + "],\"status\":\"completed\""
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``file change kind refuses missing foreign and duplicate discriminator``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for kind in
+            [ "{}"
+              "{\"type\":\"foreign\"}"
+              "{\"type\":\"add\",\"type\":\"delete\"}"
+              "{\"type\":\"update\",\"move_path\":17}" ] do
+            let fields =
+                ",\"changes\":[{\"diff\":\"+a\",\"path\":\"a\",\"kind\":"
+                + kind + "}],\"status\":\"completed\""
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``schema file change kinds and statuses retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for kind in
+            [ "{\"type\":\"add\"}"
+              "{\"type\":\"delete\"}"
+              "{\"type\":\"update\"}"
+              "{\"type\":\"update\",\"move_path\":null}"
+              "{\"type\":\"update\",\"move_path\":\"b\"}" ] do
+            let fields =
+                ",\"changes\":[{\"diff\":\"+a\",\"path\":\"a\",\"kind\":"
+                + kind + "}],\"status\":\"completed\""
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithFileChange fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool call requires arguments server tool and status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"server\":\"s\",\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool call server tool and status require schema types``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"arguments\":{},\"server\":null,\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":17,\"status\":\"completed\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":\"declined\""
+              ",\"arguments\":{},\"server\":\"s\",\"tool\":\"t\",\"status\":null" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool call accepts schema statuses and unconstrained arguments``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for arguments, callStatus in
+            [ "null", "inProgress"
+              "[]", "completed"
+              "{\"q\":1}", "failed" ] do
+            let fields =
+                ",\"arguments\":" + arguments
+                + ",\"server\":\"s\",\"tool\":\"t\",\"status\":\"" + callStatus + "\""
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool result requires object with content array``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"result\":[]"
+              ",\"result\":{}"
+              ",\"result\":{\"content\":null}"
+              ",\"result\":{\"content\":\"text\"}"
+              ",\"result\":{\"content\":[],\"content\":[]}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool error requires object with string message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"error\":false"
+              ",\"error\":{}"
+              ",\"error\":{\"message\":null}"
+              ",\"error\":{\"message\":17}"
+              ",\"error\":{\"message\":\"x\",\"message\":\"y\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp tool nullable and unconstrained result content retains terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"result\":null,\"error\":null"
+              ",\"result\":{\"content\":[]},\"error\":{\"message\":\"\"}"
+              ",\"result\":{\"content\":[null,17,{\"type\":\"text\"}],\"structuredContent\":false,\"_meta\":null},\"error\":{\"message\":\"x\"}" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp app context requires connector and nullable text fields``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"appContext\":[]"
+              ",\"appContext\":{}"
+              ",\"appContext\":{\"connectorId\":null}"
+              ",\"appContext\":{\"connectorId\":\"c\",\"actionName\":17}"
+              ",\"appContext\":{\"connectorId\":\"c\",\"connectorId\":\"d\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp app UI requires resource and known display mode``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"mcpAppUi\":false"
+              ",\"mcpAppUi\":{}"
+              ",\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"foreign\"}"
+              ",\"mcpAppUi\":{\"resourceUri\":null,\"preferredModelDisplayMode\":\"inline\"}"
+              ",\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"inline\",\"resourceUri\":\"v\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp optional scalar metadata refuses wrong types and duration overflow``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"readOnlyHint\":\"true\""
+              ",\"durationMs\":1.5"
+              ",\"durationMs\":9223372036854775808"
+              ",\"mcpAppResourceUri\":17"
+              ",\"pluginId\":false" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``mcp optional context UI and scalar metadata accept schema values``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"appContext\":null,\"mcpAppUi\":null,\"readOnlyHint\":null,\"durationMs\":null,\"mcpAppResourceUri\":null,\"pluginId\":null"
+              ",\"appContext\":{\"connectorId\":\"c\",\"appName\":null,\"actionName\":\"a\",\"linkId\":null,\"resourceUri\":\"u\"},\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"inline\"},\"readOnlyHint\":true,\"durationMs\":9223372036854775807,\"mcpAppResourceUri\":\"u\",\"pluginId\":\"p\""
+              ",\"mcpAppUi\":{\"resourceUri\":\"u\",\"preferredModelDisplayMode\":\"fullscreen\"},\"readOnlyHint\":false,\"durationMs\":-9223372036854775808" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithMcpMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool call requires arguments tool and schema status``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"tool\":\"t\",\"status\":\"completed\""
+              ",\"arguments\":{},\"status\":\"completed\""
+              ",\"arguments\":{},\"tool\":\"t\""
+              ",\"arguments\":{},\"tool\":null,\"status\":\"completed\""
+              ",\"arguments\":{},\"tool\":\"t\",\"status\":\"declined\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool call nullable metadata rejects foreign shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"namespace\":17"
+              ",\"success\":\"true\""
+              ",\"durationMs\":1.5"
+              ",\"durationMs\":9223372036854775808"
+              ",\"contentItems\":{}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool content items require known discriminator and text or URL``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for content in
+            [ "null"
+              "{}"
+              "{\"type\":\"foreign\",\"text\":\"x\"}"
+              "{\"type\":\"inputText\"}"
+              "{\"type\":\"inputImage\",\"imageUrl\":null}"
+              "{\"type\":\"inputAudio\",\"audioUrl\":17}"
+              "{\"type\":\"inputText\",\"text\":\"a\",\"text\":\"b\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicMetadata (",\"contentItems\":[" + content + "]"))))
+            )
+
+    [<Fact>]
+    member _.``dynamic tool schema payload retains terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"arguments\":null,\"tool\":\"\",\"status\":\"inProgress\""
+              ",\"arguments\":[],\"tool\":\"t\",\"status\":\"failed\",\"namespace\":null,\"success\":null,\"durationMs\":null,\"contentItems\":null"
+              ",\"arguments\":{},\"tool\":\"t\",\"status\":\"completed\",\"namespace\":\"n\",\"success\":true,\"durationMs\":9223372036854775807,\"contentItems\":[{\"type\":\"inputText\",\"text\":\"\"},{\"type\":\"inputImage\",\"imageUrl\":\"u\"},{\"type\":\"inputAudio\",\"audioUrl\":\"u\"}]" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithDynamicToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab tool call requires its state receivers sender status and tool``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab tool call refuses foreign required shapes and enum values``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"agentsStates\":[],\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[17],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":null,\"status\":\"completed\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"foreign\",\"tool\":\"spawnAgent\""
+              ",\"agentsStates\":{},\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"foreign\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab agent states require typed status and nullable message``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for states in
+            [ "{\"a\":null}"
+              "{\"a\":{}}"
+              "{\"a\":{\"status\":\"foreign\"}}"
+              "{\"a\":{\"status\":\"running\",\"message\":17}}"
+              "{\"a\":{\"status\":\"running\",\"status\":\"completed\"}}"
+              "{\"a\":{\"status\":\"running\"},\"a\":{\"status\":\"completed\"}}" ] do
+            let fields =
+                ",\"agentsStates\":" + states
+                + ",\"receiverThreadIds\":[],\"senderThreadId\":\"s\",\"status\":\"completed\",\"tool\":\"spawnAgent\""
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabToolCall fields)))
+            )
+
+    [<Fact>]
+    member _.``collab optional model prompt and effort retain schema shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"model\":17"
+              ",\"prompt\":false"
+              ",\"reasoningEffort\":\"\""
+              ",\"reasoningEffort\":17" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithCollabMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``collab tool call schema state and optional values retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"model\":null,\"prompt\":null,\"reasoningEffort\":null"
+              ",\"agentsStates\":{\"a\":{\"status\":\"running\",\"message\":null}},\"receiverThreadIds\":[\"r\"],\"senderThreadId\":\"s\",\"status\":\"interrupted\",\"tool\":\"followupTask\",\"model\":\"gpt-6-sol\",\"prompt\":\"x\",\"reasoningEffort\":\"high\"" ] do
+            let terminal =
+                if fields.StartsWith(",\"agentsStates\":", StringComparison.Ordinal) then
+                    completedWithCollabToolCall fields
+                else completedWithCollabMetadata fields
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L terminal))
+            )
+
+    [<Fact>]
+    member _.``web search item requires string query``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in [ ""; ",\"query\":null"; ",\"query\":17" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearch fields)))
+            )
+
+    [<Fact>]
+    member _.``web search results and action reject foreign shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"results\":{}"
+              ",\"action\":[]"
+              ",\"action\":{}"
+              ",\"action\":{\"type\":\"foreign\"}"
+              ",\"action\":{\"type\":\"search\",\"type\":\"other\"}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``web search action optional fields retain variant shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for action in
+            [ "{\"type\":\"search\",\"query\":17}"
+              "{\"type\":\"search\",\"queries\":[\"a\",17]}"
+              "{\"type\":\"search\",\"queries\":{}}"
+              "{\"type\":\"openPage\",\"url\":17}"
+              "{\"type\":\"findInPage\",\"url\":17}"
+              "{\"type\":\"findInPage\",\"pattern\":17}" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata (",\"action\":" + action))))
+            )
+
+    [<Fact>]
+    member _.``web search schema actions and nullable results retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"action\":null,\"results\":null"
+              ",\"action\":{\"type\":\"search\",\"query\":null,\"queries\":[\"q\"]},\"results\":[null,17,{}]"
+              ",\"action\":{\"type\":\"openPage\",\"url\":null}"
+              ",\"action\":{\"type\":\"findInPage\",\"url\":\"u\",\"pattern\":null}"
+              ",\"action\":{\"type\":\"other\"}" ] do
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithWebSearchMetadata fields)))
+            )
+
+    [<Fact>]
+    member _.``subagent activity requires path thread and kind``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"agentThreadId\":\"thread\",\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\"" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithSubAgentActivity fields)))
+            )
+
+    [<Fact>]
+    member _.``subagent activity refuses foreign path thread and kind shapes``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for fields in
+            [ ",\"agentPath\":null,\"agentThreadId\":\"thread\",\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":17,\"kind\":\"started\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\",\"kind\":\"foreign\""
+              ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\",\"kind\":null" ] do
+            Assert.Equal(
+                ContinuityGap "app-server-turn-item-invalid",
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithSubAgentActivity fields)))
+            )
+
+    [<Fact>]
+    member _.``subagent activity schema kinds retain terminal``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        for activityKind in [ "started"; "interacted"; "interrupted"; "completed" ] do
+            let fields =
+                ",\"agentPath\":\"/root/child\",\"agentThreadId\":\"thread\",\"kind\":\""
+                + activityKind + "\""
+            Assert.Equal(
+                TerminalObserved("completed", 0),
+                status (CodexAppServerContinuity.apply first (frame 2L (completedWithSubAgentActivity fields)))
+            )
+
+    [<Fact>]
+    member _.``cumulative usage regression and duplicate wire bytes refuse``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        let duplicate = CodexAppServerContinuity.apply second (frame 3L usage)
+        Assert.Equal(ContinuityGap "app-server-continuity-usage-duplicate", status duplicate)
+        let original = Encoding.UTF8.GetString usage
+        let lessInput = original.Replace("\"inputTokens\":100", "\"inputTokens\":90", StringComparison.Ordinal)
+        let regressed =
+            lessInput.Replace("\"totalTokens\":140", "\"totalTokens\":130", StringComparison.Ordinal)
+            |> Encoding.UTF8.GetBytes
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-usage-regressed",
+            status (CodexAppServerContinuity.apply second (frame 3L regressed))
+        )
+
+    [<Fact>]
+    member _.``same native usage snapshot with different wire whitespace refuses duplicate``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        let reserialized =
+            replace usage "\"method\":\"thread/tokenUsage/updated\""
+                "\"method\": \"thread/tokenUsage/updated\""
+        Assert.NotEqual<byte array>(usage, reserialized)
+        Assert.Equal(
+            ContinuityGap "app-server-continuity-usage-duplicate",
+            status (CodexAppServerContinuity.apply second (frame 3L reserialized))
+        )
+
+    [<Fact>]
+    member _.``progressed native cumulative usage remains a second update``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let second = CodexAppServerContinuity.apply first (frame 2L usage)
+        let progressed =
+            replace usage "\"inputTokens\":100" "\"inputTokens\":101"
+            |> fun bytes -> replace bytes "\"totalTokens\":140" "\"totalTokens\":141"
+        Assert.Equal(
+            InTurn 2,
+            status (CodexAppServerContinuity.apply second (frame 3L progressed))
+        )
+
+    [<Fact>]
+    member _.``terminal without usage stays explicit and disconnect before terminal is a gap``() =
+        let first = CodexAppServerContinuity.apply (beginBound ()) (frame 1L started)
+        let noUsage = CodexAppServerContinuity.apply first (frame 2L completed)
+        Assert.Equal(TerminalObserved("completed", 0), status noUsage)
+        let afterTerminal = CodexAppServerContinuity.apply noUsage (frame 3L usage)
+        Assert.Equal(ContinuityGap "app-server-continuity-after-terminal", status afterTerminal)
+        let lost = CodexAppServerContinuity.disconnected first
+        Assert.Equal(ContinuityGap "app-server-continuity-disconnected", status lost)
