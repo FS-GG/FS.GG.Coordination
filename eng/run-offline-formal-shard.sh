@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 8 ]]; then
-  printf 'usage: %s CHECKOUT HEAD_SHA BASE_SHA TOOLCHAIN_ARCHIVE IMAGE_DIGEST PUBLIC_KEY KEY_ID OUTPUT\n' "$0" >&2
+if [[ $# -ne 9 ]]; then
+  printf 'usage: %s CHECKOUT HEAD_SHA BASE_SHA TOOLCHAIN_ARCHIVE IMAGE_DIGEST PUBLIC_KEY KEY_ID OUTPUT NUGET_CACHE_COPY\n' "$0" >&2
   exit 64
 fi
 : "${FSGG_OFFLINE_SIGNING_KEY_FD:?FSGG_OFFLINE_SIGNING_KEY_FD is required}"
@@ -20,6 +20,7 @@ image="$5"
 public_key="$(realpath "$6")"
 key_id="$7"
 output="$(realpath -m "$8")"
+nuget_cache="$(realpath "$9")"
 policy="$supervisor_root/eng/offline-formal-pilot.json"
 shard="$(jq -er '.pilotShard' "$policy")"
 configured_key_id="$(jq -er '.signer.keyId' "$policy")"
@@ -28,6 +29,7 @@ configured_key_id="$(jq -er '.signer.keyId' "$policy")"
 git -C "$checkout" merge-base --is-ancestor "$base_sha" "$head_sha"
 test -f "$toolchain"
 test -f "$public_key"
+test -d "$nuget_cache"
 actual_toolchain_sha="$(sha256sum "$toolchain" | cut -d' ' -f1)"
 expected_toolchain_sha="$(jq -er '.toolchainArchiveSha256' "$policy")"
 [[ "$actual_toolchain_sha" == "$expected_toolchain_sha" ]] || {
@@ -66,12 +68,14 @@ timeout --kill-after=30s 90m podman run --rm \
   --mount "type=bind,src=$scratch/source,dst=/workspace,rw" \
   --mount "type=bind,src=$scratch/output,dst=/evidence,rw" \
   --mount "type=bind,src=$toolchain,dst=/inputs/toolchain.tar.gz,ro" \
+  --mount "type=bind,src=$nuget_cache,dst=/inputs/nuget,rw" \
   --workdir /workspace \
   --env HOME=/home/runner \
   --env RUNNER_TEMP=/tmp/runner \
   --env FSGG_QUINT_SHARD="$shard" \
   --env FSGG_QUINT_SHARD_ROOT=/evidence \
   --env FSGG_QUINT_TOOLCHAIN_ARCHIVE=/inputs/toolchain.tar.gz \
+  --env NUGET_PACKAGES=/inputs/nuget \
   "$image" \
   bash -c 'mkdir -p "$RUNNER_TEMP" && exec bash eng/bootstrap-gates/canonical-quint-shard.sh' \
   3<&-

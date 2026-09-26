@@ -7,8 +7,8 @@
   "imageSha256": "2a5eaffe1150b8ea5dada7f9a25805c75d649d897ed675e6ef10dcd188abb2ad",
   "toolchainArchiveSha256": "926ec060018ad5d3a7d51b332b32468d1d2a5f53b39a5d7df14254696bd7e0b8",
   "signer": {
-    "keyId": "main-offline-formal-pilot-pending",
-    "publicKeySpkiSha256": null
+    "keyId": "main-systemadmin-offline-formal-20260926",
+    "publicKeySpkiSha256": "e938d5eb45e60fbd79deae59ecb70a0a33d3c6d512fef7e19f97ecd12cefdbd9"
   },
   "transport": {
     "kind": "git-ref",
