@@ -69,6 +69,15 @@ then
 if fanout.GetProperty("performanceShard").GetString() <> "epoch" then
     failwith "formal performance shard must remain epoch"
 
+let shadow = plan.GetProperty("offlineFormalShadow")
+
+if
+    shadow.GetProperty("shard").GetString() <> "authority-reconciliation"
+    || shadow.GetProperty("enabled").GetBoolean()
+    || shadow.GetProperty("fragmentArtifact").GetString() <> "coherent-formal-fragment"
+then
+    failwith "offline formal shadow must remain disabled for the named shard"
+
 let workflow =
     Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")
 
@@ -101,6 +110,9 @@ for required in
         "aggregate:"
         "shard: base"
         "shard: epoch"
+        "offline-formal-shadow:"
+        "if: ${{ false && github.event_name == 'pull_request' }}"
+        "bash \"$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-join.sh\""
     ] do
     if not (text.Contains required) then
         failwith $"workflow projection missing {required}"

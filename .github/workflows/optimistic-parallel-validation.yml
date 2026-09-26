@@ -222,6 +222,55 @@ jobs:
           path: ${{ runner.temp }}/coherent-formal-fragment-${{ matrix.shard }}
           if-no-files-found: error
 
+  offline-formal-shadow:
+    # This job is deliberately unreachable until the protected signer and
+    # evidence transport are confirmed. The hosted authority shard remains in
+    # run-partition, and formal-aggregate retains its existing dependencies.
+    if: ${{ false && github.event_name == 'pull_request' }}
+    needs: [prepare, classify-reuse, shared-build, formal-prepare]
+    runs-on: ubuntu-latest
+    env:
+      FSGG_CANDIDATE_SHA: ${{ needs.prepare.outputs.candidate }}
+      FSGG_BASE_SHA: ${{ needs.prepare.outputs.base }}
+      FSGG_CANDIDATE_ROOT: ${{ github.workspace }}/candidate
+      FSGG_TRUSTED_ROOT: ${{ github.workspace }}/trusted
+      FSGG_OFFLINE_PUBLIC_KEY: ${{ github.workspace }}/trusted/eng/offline-formal-public.pem
+      FSGG_OFFLINE_TOOLCHAIN_ARCHIVE: /tmp/fsgg-${{ github.run_id }}-offline-toolchain/toolchain.tar.gz
+      FSGG_CANDIDATE_OBLIGATION: /tmp/fsgg-${{ github.run_id }}-offline-obligation/candidate-obligation.json
+      FSGG_PARTITION_PLAN: /tmp/fsgg-${{ github.run_id }}-offline-obligation/partition-plan.json
+      FSGG_OFFLINE_EVIDENCE: /tmp/fsgg-${{ github.run_id }}-offline-formal-envelope.json
+      FSGG_OFFLINE_FRAGMENT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-formal-fragment-authority-reconciliation
+    steps:
+      - name: Check out the exact candidate separately
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.prepare.outputs.candidate }}
+          path: candidate
+          fetch-depth: 0
+      - name: Check out the protected base verifier separately
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ needs.prepare.outputs.base }}
+          path: trusted
+          fetch-depth: 0
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
+          path: /tmp/fsgg-${{ github.run_id }}-offline-obligation
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: coherent-formal-toolchain-${{ needs.prepare.outputs.candidate }}
+          path: /tmp/fsgg-${{ github.run_id }}-offline-toolchain
+      - name: Fetch the exact public signed envelope
+        run: bash "$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-fetch.sh"
+      - name: Verify and assemble the normal formal fragment
+        run: bash "$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-join.sh"
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: coherent-formal-fragment-${{ needs.prepare.outputs.candidate }}-authority-reconciliation
+          path: ${{ env.FSGG_OFFLINE_FRAGMENT_ROOT }}
+          if-no-files-found: error
+
   formal-aggregate:
     needs: [prepare, run-partition]
     if: ${{ always() }}

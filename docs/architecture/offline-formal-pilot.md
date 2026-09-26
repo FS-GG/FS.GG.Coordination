@@ -47,7 +47,26 @@ supervisor creates evidence timestamps from its host clock only after the shard 
 Receipt transport is public signed evidence; no registration token, GitHub token or signing key
 crosses the candidate-container boundary.
 
-The declared evidence ref has no fetcher or writer in this shadow slice. The tests use a fabricated
+The declared evidence ref has no writer in this shadow slice. The tests use a fabricated
 schema-valid passing receipt to exercise envelope and trust-boundary refusals; they are not formal
-execution proof. A real Podman run, protected key installation, immutable per-head transport and
-current-head hosted workflow join remain activation gates owned by Main and the follow-up PR.
+execution proof. A real Podman run, protected key installation, immutable per-head publication and
+current-head hosted rehearsal remain activation gates owned by Main and the follow-up PR.
+
+The Optimistic workflow now carries a hard-disabled `offline-formal-shadow` join. It schedules no
+hosted job while the policy is `shadow`, leaves the `authority-reconciliation` hosted matrix shard
+in place, and does not alter `formal-aggregate` dependencies. After activation, its protected-base
+fetcher reads only `envelope.json` from
+`refs/heads/evidence/coordination-offline-formal-pilot/<head>/<base>/authority-reconciliation`
+in `FS-GG/.github`. The verifier and policy come from a separate checkout at the event's protected
+base; the candidate checkout supplies only source identity. A valid signed envelope is converted
+to the existing `coherent-formal-fragment-<head>-authority-reconciliation` artifact containing
+exactly `candidate-obligation.json`, `partition-plan.json`, and `receipt.json`. The first two files
+come from the current hosted `prepare` artifact and are checked against the expected head, base,
+and formal partition; the receipt is emitted only after protected-base signature verification.
+The existing formal aggregate keeps its complete-fragment validation and is unchanged.
+
+Activation must atomically disable the hosted matrix entry for this one shard, enable the join,
+add it as a `formal-aggregate` dependency, and install Main's anchored public key on protected
+main. The evidence writer must create the per-head ref once without force, publish the fixed
+envelope path, and read back its object ID. The join currently refuses a `shadow` policy even if
+someone removes its false workflow condition. Other event types continue with hosted execution.

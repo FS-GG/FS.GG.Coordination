@@ -315,6 +315,11 @@ def verify(args: argparse.Namespace) -> None:
     except (KeyError, ValueError) as error:
         raise Refused("signature-encoding") from error
     verify_signature(public_key, canonical(payload), signature_bytes)
+    if args.receipt_output is not None:
+        output = pathlib.Path(args.receipt_output)
+        if output.is_symlink() or output.exists():
+            raise Refused("receipt-output-exists")
+        output.write_bytes(canonical(receipt) + b"\n")
     print(canonical({"outcome": "verified", "headSha": args.expected_head, "shard": policy["pilotShard"], "receiptSha256": payload["receiptSha256"]}).decode())
 
 
@@ -329,6 +334,7 @@ def parser() -> argparse.ArgumentParser:
     verify_parser = commands.add_parser("verify")
     for name in ("root", "policy", "evidence", "expected-head", "expected-base", "toolchain-archive", "public-key", "now"):
         verify_parser.add_argument("--" + name, required=True)
+    verify_parser.add_argument("--receipt-output")
     verify_parser.set_defaults(run=verify)
     return root
 

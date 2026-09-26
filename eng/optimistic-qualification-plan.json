@@ -25,5 +25,10 @@
     "performanceShard": "epoch",
     "fragmentEnvelope": ["candidate-obligation.json", "partition-plan.json", "receipt.json"]
   },
+  "offlineFormalShadow": {
+    "shard": "authority-reconciliation",
+    "enabled": false,
+    "fragmentArtifact": "coherent-formal-fragment"
+  },
   "obligations": ["unit", "architecture", "formal", "security", "package", "recovery"]
 }

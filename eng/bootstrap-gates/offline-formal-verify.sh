@@ -26,6 +26,10 @@ case "$public_key" in
 esac
 test -f "$public_key" && ! test -L "$public_key" || refuse public-key-shape
 verification_time="$(date --utc +%Y-%m-%dT%H:%M:%SZ)"
+receipt_args=()
+if [[ -n "${FSGG_OFFLINE_RECEIPT_OUTPUT:-}" ]]; then
+  receipt_args=(--receipt-output "$FSGG_OFFLINE_RECEIPT_OUTPUT")
+fi
 
 python3 "$verifier" verify \
   --root "$candidate_root" \
@@ -35,4 +39,5 @@ python3 "$verifier" verify \
   --expected-base "$FSGG_BASE_SHA" \
   --toolchain-archive "$FSGG_OFFLINE_TOOLCHAIN_ARCHIVE" \
   --public-key "$public_key" \
-  --now "$verification_time"
+  --now "$verification_time" \
+  "${receipt_args[@]}"

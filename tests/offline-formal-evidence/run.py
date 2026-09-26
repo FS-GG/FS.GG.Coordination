@@ -124,6 +124,9 @@ def main():
             ]
 
         run(verify_arguments())
+        joined_receipt = scratch / "joined-receipt.json"
+        run([*verify_arguments(), "--receipt-output", str(joined_receipt)])
+        assert joined_receipt.read_bytes() == receipt_path.read_bytes()
         run(verify_arguments(expected_head="0" * 40), expected=1)
 
         original = json.loads(evidence.read_text())
@@ -140,6 +143,9 @@ def main():
         tampered_path = scratch / "tampered.json"
         tampered_path.write_bytes(canonical(tampered) + b"\n")
         run(verify_arguments(evidence_path=tampered_path), expected=1)
+        rejected_receipt = scratch / "rejected-receipt.json"
+        run([*verify_arguments(evidence_path=tampered_path), "--receipt-output", str(rejected_receipt)], expected=1)
+        assert not rejected_receipt.exists()
 
         run(verify_arguments(now=expires + dt.timedelta(seconds=1)), expected=1)
 
@@ -203,7 +209,7 @@ def main():
         candidate_verifier.write_text("#!/usr/bin/env python3\nraise SystemExit(0)\n")
         wrapper_refuses(candidate, candidate_key, "protected-base-drift")
 
-    print("OFFLINE_FORMAL_EVIDENCE_TESTS_OK envelopeCases=5 policyPinCases=2 trustBoundaryCases=3 sourceExportCases=1")
+    print("OFFLINE_FORMAL_EVIDENCE_TESTS_OK envelopeCases=7 policyPinCases=2 trustBoundaryCases=3 sourceExportCases=1")
 
 
 if __name__ == "__main__":
