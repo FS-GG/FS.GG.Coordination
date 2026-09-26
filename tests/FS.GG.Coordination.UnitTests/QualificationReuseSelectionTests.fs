@@ -468,7 +468,9 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("git rev-list origin/main", recovery)
     Assert.Contains("sort -k1,1 -k2,2", recovery)
     Assert.Contains("active-candidates.txt", recovery)
-    Assert.Contains("passed-candidates.txt", recovery)
+    Assert.Contains("artifacts?name=coherent-aggregate-", recovery)
+    Assert.Contains("queued + running >= 2", recovery)
+    Assert.DoesNotContain("actions/artifacts?per_page=100", recovery)
     Assert.Contains("coherentRunPending:true", recovery)
     Assert.Contains("max-parallel: 6", workflow)
     Assert.Contains("formal-aggregate:", workflow)
@@ -479,8 +481,9 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("shared-build:\n    # Cheap reuse classification is the admission boundary", workflow)
     Assert.Contains("needs: [prepare, classify-reuse]", workflow)
     Assert.Contains("optimistic-dispatch-recovery.sh", workflow)
-    Assert.Contains("gh api --paginate --slurp", dispatch)
-    Assert.Contains("| jq", dispatch)
+    Assert.Contains("status=queued&per_page=1", dispatch)
+    Assert.Contains("status=in_progress&per_page=1", dispatch)
+    Assert.DoesNotContain("gh api --paginate", dispatch)
 
     Assert.DoesNotContain(
         "--slurp \"repos/$repo/actions/workflows/optimistic-parallel-validation.yml/runs?per_page=100\" --jq",

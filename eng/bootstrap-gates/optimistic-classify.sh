@@ -12,7 +12,30 @@ skip_prior() {
   fi
   stale_diagnostics=$((stale_diagnostics + 1))
 }
-gh api --paginate --slurp "repos/$repository/actions/artifacts?per_page=100" > "$root/artifact-pages.json"
+# Discovery is an optimization, not authority. An unavailable or truncated
+# repository listing can only forgo reuse; the current candidate still runs its
+# complete coherent qualification. Keep the API budget independent of the
+# repository's artifact retention history.
+artifact_pages="$root/artifact-pages.jsonl"
+: > "$artifact_pages"
+discovery_ok=true
+candidate_count=0
+for page in {1..10}; do
+  page_file="$root/artifact-page-$page.json"
+  if ! gh api "repos/$repository/actions/artifacts?per_page=100&page=$page" > "$page_file" \
+      || ! jq -e '(.artifacts | type == "array") and all(.artifacts[]; (.name|type == "string") and (.expired|type == "boolean") and (if (.name|startswith("coherent-aggregate-")) then ((.id|type == "number") and (.workflow_run.id|type == "number") and (.workflow_run.head_sha|type == "string") and (.expires_at|type == "string") and (.created_at|type == "string")) else true end))' "$page_file" >/dev/null; then
+    echo "qualification prior discovery unavailable; validating current candidate" >&2
+    discovery_ok=false
+    break
+  fi
+  cat "$page_file" >> "$artifact_pages"
+  printf '\n' >> "$artifact_pages"
+  page_candidates="$(jq --arg candidate "$candidate" '[.artifacts[] | select(.expired == false and (.name|startswith("coherent-aggregate-")) and .workflow_run.head_sha != $candidate)] | length' "$page_file")"
+  candidate_count=$((candidate_count + page_candidates))
+  if [[ "$candidate_count" -ge "$candidate_limit" ]]; then break; fi
+  if [[ "$(jq '.artifacts | length' "$page_file")" -lt 100 ]]; then break; fi
+done
+if [[ "$discovery_ok" != true ]]; then : > "$artifact_pages"; fi
 while IFS=$'\t' read -r artifact_id run_id expires_at; do
   archive="$root/prior-$artifact_id.zip"; prior="$root/prior-$artifact_id"
   gh api "repos/$repository/actions/artifacts/$artifact_id/zip" > "$archive" || continue
@@ -43,5 +66,5 @@ while IFS=$'\t' read -r artifact_id run_id expires_at; do
   fi
   args+=("${prior_args[@]}")
   break
-done < <(jq -r --arg candidate "$candidate" --argjson limit "$candidate_limit" '[.[].artifacts[] | select(.expired == false and (.name|startswith("coherent-aggregate-")) and .workflow_run.head_sha != $candidate)] | sort_by(.created_at,.id) | reverse | .[:$limit][] | [.id,.workflow_run.id,.expires_at] | @tsv' "$root/artifact-pages.json")
+done < <(jq -sr --arg candidate "$candidate" --argjson limit "$candidate_limit" '[.[].artifacts[] | select(.expired == false and (.name|startswith("coherent-aggregate-")) and .workflow_run.head_sha != $candidate)] | sort_by(.created_at,.id) | reverse | .[:$limit][] | [.id,.workflow_run.id,.expires_at] | @tsv' "$artifact_pages")
 dotnet fsi eng/optimistic-validation.fsx -- "${args[@]}"

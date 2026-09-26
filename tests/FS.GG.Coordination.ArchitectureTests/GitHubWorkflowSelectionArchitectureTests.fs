@@ -590,6 +590,7 @@ let ``sentinel consumes the typed Q7 missed-obligation decision and disables sel
             [
                 "RUNNER_TEMP", Path.Combine(failedProvisionRoot, "runner")
                 "PATH", fakeBin + ":/usr/bin:/bin"
+                "FSGG_QUINT_TOOLCHAIN_ARCHIVE", ""
             ]
             [
                 "eng/workflow-selection-sentinel.sh"

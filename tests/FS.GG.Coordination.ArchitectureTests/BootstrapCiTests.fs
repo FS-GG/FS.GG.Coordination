@@ -1117,9 +1117,9 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
-    // Complete run/attempt pagination adds explicit census handling to the economics observer.
-    Assert.InRange(gateLines, 1, 750)
-    Assert.InRange(uniqueGateLines, 1, 555)
+    // Bounded artifact discovery and resumable recovery add guarded shell paths.
+    Assert.InRange(gateLines, 1, 850)
+    Assert.InRange(uniqueGateLines, 1, 630)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
