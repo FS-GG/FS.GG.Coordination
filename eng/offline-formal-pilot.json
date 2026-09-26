@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.coordination.offline-formal-pilot-policy/1",
-  "mode": "shadow",
+  "mode": "active",
   "repository": "FS-GG/FS.GG.Coordination",
   "pilotShard": "authority-reconciliation",
   "maximumAgeSeconds": 21600,

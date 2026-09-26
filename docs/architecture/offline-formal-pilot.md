@@ -7,14 +7,15 @@ persistent workspace or privileged mount. The host supervisor validates the shar
 signs its exact payload only after the container exits successfully. The signing key enters the
 supervisor by file descriptor and is never mounted into candidate code.
 
-`eng/offline-formal-pilot.json` keeps this slice in `shadow` mode. The existing hosted shard and
-the `canonical-quint` check remain authoritative. The policy pins the image manifest digest and full Main
+`eng/offline-formal-pilot.json` now pins an active signer and transport contract, while the hosted
+join job remains disabled. The existing hosted shard and the `canonical-quint` check remain
+authoritative. The policy pins the image manifest digest and full Main
 toolchain archive observed in `.github#3851`; a different local image or caller-selected archive
 is refused. Signed evidence is valid for at most six hours so the current saturated hosted queue
 can start its verifier without asking Main to regenerate an unchanged exact-head result. Exact
 head/base/tree bindings and the planned immutable per-head transport prevent reuse for another
-candidate; expiry still refuses an old result for the same head. Activation requires a second reviewed change
-after all of these facts exist:
+candidate; expiry still refuses an old result for the same head. Routing one shard to the hosted
+join requires a separate reviewed workflow change after all of these facts exist:
 
 1. this verifier is present on protected `main`, so a pull request cannot replace its verifier;
 2. the committed Main public key and SPKI digest are verified from protected `main`;
@@ -29,7 +30,8 @@ and reads the hosted verification time from the runner clock. It will fetch only
 signed envelope from the evidence ref, compare the candidate head/base/tree, policy, toolchain and
 bound script digests, then publish the normal `canonical-quint-shard-<id>` artifact. The unchanged
 hosted aggregate remains the GitHub check producer and rejects a missing or invalid shard. Rollback
-is the policy-only return to `shadow`, which restores that shard to the existing hosted matrix.
+restores the shard to the hosted matrix and disables the join in the same workflow change; the
+policy may then return to `shadow`.
 
 Main can rehearse the executor with its protected signing key, a digest-pinned image and a
 fresh private copy of the preseeded NuGet cache:
