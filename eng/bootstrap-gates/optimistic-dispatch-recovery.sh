@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 set -euo pipefail
 pending="${1:?pending candidate census required}"
+[[ -s "$pending" ]] || exit 0
 repo="${GITHUB_REPOSITORY:?repository required}"
 base="$(git rev-parse origin/main)"
-active="$(gh api --paginate --slurp "repos/$repo/actions/workflows/optimistic-parallel-validation.yml/runs?per_page=100" \
-  | jq '[.[].workflow_runs[] | select(.status == "queued" or .status == "in_progress") | .head_sha] | unique | length')"
+queued="$(gh api "repos/$repo/actions/workflows/optimistic-parallel-validation.yml/runs?status=queued&per_page=1" --jq '.total_count')"
+running="$(gh api "repos/$repo/actions/workflows/optimistic-parallel-validation.yml/runs?status=in_progress&per_page=1" --jq '.total_count')"
+active=$((queued + running))
 available=$((2 - active))
 if (( available <= 0 )); then exit 0; fi
 count=0

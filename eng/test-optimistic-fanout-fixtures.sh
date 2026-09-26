@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+trap 'status=$?; printf "fixture failed at line %s (status %s): %s\n" "$LINENO" "$status" "$BASH_COMMAND" >&2' ERR
 repo="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 scratch="$(mktemp -d)"
 trap 'rm -rf "$scratch"' EXIT
@@ -100,10 +101,12 @@ with zipfile.ZipFile(target, "w") as archive:
     for path in source.glob("*.json"):
         archive.write(path, path.name)
 PY
-jq -n --arg head "$(printf 'f%.0s' {1..40})" '[{artifacts:[range(1;31) | {id:.,expired:false,name:("coherent-aggregate-" + ($head)),workflow_run:{id:.,head_sha:$head},created_at:"2026-09-15T00:00:00Z",expires_at:"2026-12-15T00:00:00Z"}]}]' > "$CLASSIFY_MOCK_ROOT/artifact-pages.json"
+jq -n --arg head "$(printf 'f%.0s' {1..40})" '{artifacts:[range(1;31) | {id:.,expired:false,name:("coherent-aggregate-" + ($head)),workflow_run:{id:.,head_sha:$head},created_at:"2026-09-15T00:00:00Z",expires_at:"2026-12-15T00:00:00Z"}]}' > "$CLASSIFY_MOCK_ROOT/artifact-page.json"
 gh() {
   if [[ "$*" == *"actions/artifacts?per_page=100"* ]]; then
-    /usr/bin/cat "$CLASSIFY_MOCK_ROOT/artifact-pages.json"
+    printf 'page\n' >> "$CLASSIFY_MOCK_ROOT/pages"
+    if [[ "${CLASSIFY_MOCK_FAIL:-}" == 1 ]]; then return 1; fi
+    /usr/bin/cat "$CLASSIFY_MOCK_ROOT/artifact-page.json"
   elif [[ "$*" == *"/zip"* ]]; then
     printf 'download\n' >> "$CLASSIFY_MOCK_ROOT/downloads"
     /usr/bin/cat "$CLASSIFY_MOCK_ROOT/prior.zip"
@@ -134,7 +137,121 @@ export -f gh dotnet
 export GH_TOKEN=fixture GITHUB_REPOSITORY=FS-GG/FS.GG.Coordination GITHUB_RUN_ID=999
 (cd "$repo" && bash eng/bootstrap-gates/optimistic-classify.sh) >/dev/null 2>&1
 test "$(wc -l < "$CLASSIFY_MOCK_ROOT/downloads")" -eq 25
+test "$(wc -l < "$CLASSIFY_MOCK_ROOT/pages")" -eq 1
 test ! -e "$CLASSIFY_MOCK_ROOT/forbidden"
 test "$(jq -r '.disposition' "$RUNNER_TEMP/optimistic-selection/selection.json")" = current
+rm "$CLASSIFY_MOCK_ROOT/downloads" "$RUNNER_TEMP/optimistic-selection/selection.json"
+export CLASSIFY_MOCK_FAIL=1
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-classify.sh) >/dev/null 2>&1
+test ! -e "$CLASSIFY_MOCK_ROOT/downloads"
+test "$(jq -r '.disposition' "$RUNNER_TEMP/optimistic-selection/selection.json")" = current
 
-printf 'OPTIMISTIC_FANOUT_FIXTURES_OK complete=1 delegated-aggregate=1 missing=1 foreign=1 failed=1 stale-envelope=1 stale-base=1 census-empty=1 census-failed=1 census-stale=1 census-missing=1 bounded-old-plan-fallback=25\n'
+export RECOVERY_MOCK_ROOT="$scratch/recovery-mock"
+mkdir -p "$RECOVERY_MOCK_ROOT"
+export RECOVERY_MAIN="$(printf 'a%.0s' {1..40})"
+passed_candidate="$(printf '1%.0s' {1..40})"
+pending_candidate="$(printf '2%.0s' {1..40})"
+active_candidate="$(printf '3%.0s' {1..40})"
+jq -n --arg passed "$passed_candidate" --arg pending "$pending_candidate" --arg active "$active_candidate" \
+  '[[{created_at:"2026-09-20T00:00:00Z",head:{sha:$passed}},
+     {created_at:"2026-09-21T00:00:00Z",head:{sha:$pending}},
+     {created_at:"2026-09-22T00:00:00Z",head:{sha:$active}}]]' > "$RECOVERY_MOCK_ROOT/pulls.json"
+printf '[{"workflow_runs":[]}]\n' > "$RECOVERY_MOCK_ROOT/pending-runs.json"
+jq -n --arg active "$active_candidate" '{total_count:1,workflow_runs:[{status:"queued",head_sha:$active}]}' > "$RECOVERY_MOCK_ROOT/queued-runs.json"
+export RECOVERY_QUEUE=2
+gh() {
+  printf '%s\n' "$*" >> "$RECOVERY_MOCK_ROOT/calls"
+  case "$*" in
+    *"status=queued&per_page=2"*)
+      if [[ "$RECOVERY_QUEUE" == 1 ]]; then cat "$RECOVERY_MOCK_ROOT/queued-runs.json"
+      else printf '{"total_count":2,"workflow_runs":[]}\n'; fi ;;
+    *"status=in_progress&per_page=2"*) printf '{"total_count":0,"workflow_runs":[]}\n' ;;
+    *"status=queued&per_page=1"*) printf '%s\n' "$RECOVERY_QUEUE" ;;
+    *"status=in_progress&per_page=1"*) printf '0\n' ;;
+    *"pulls?state=open"*) cat "$RECOVERY_MOCK_ROOT/pulls.json" ;;
+    *"actions/runs?status=pending"*) cat "$RECOVERY_MOCK_ROOT/pending-runs.json" ;;
+    *"optimistic-parallel-validation.yml/runs?event=schedule&per_page=100"*)
+      if [[ -n "${RECOVERY_CURSOR_ZIP:-}" && "${RECOVERY_CURSOR_FORGED:-}" != 1 ]]; then
+        printf '{"workflow_runs":[{"id":99,"event":"schedule","status":"completed","head_branch":"main","head_sha":"%s"}]}\n' "$RECOVERY_MAIN"
+      else printf '{"workflow_runs":[]}\n'; fi ;;
+    *"actions/artifacts?name=optimistic-recovery-cursor"*)
+      if [[ -n "${RECOVERY_CURSOR_ZIP:-}" ]]; then
+        printf '{"artifacts":[{"id":999,"name":"optimistic-recovery-cursor","expired":false,"created_at":"2026-09-25T00:00:00Z","workflow_run":{"id":99,"head_sha":"%s"}}]}\n' "$RECOVERY_MAIN"
+      else printf '{"artifacts":[]}\n'; fi ;;
+    *"actions/artifacts/999/zip"*) cat "$RECOVERY_CURSOR_ZIP" ;;
+    *"actions/artifacts?name=coherent-aggregate-"*)
+      local matched="${2#*coherent-aggregate-}"
+      matched="${matched%%&*}"
+      if [[ -n "${RECOVERY_UNPASSED:-}" && "$matched" == "$RECOVERY_UNPASSED" ]]; then
+        printf '{"artifacts":[]}\n'
+      elif [[ "${RECOVERY_ALL_PASSED:-}" == 1 ]]; then
+        printf '{"artifacts":[{"name":"coherent-aggregate-%s","expired":false}]}\n' "$matched"
+      elif [[ "$*" == *"$RECOVERY_PASSED"* ]]; then
+        printf '{"artifacts":[{"name":"coherent-aggregate-%s","expired":false}]}\n' "$RECOVERY_PASSED"
+      else printf '{"artifacts":[]}\n'; fi ;;
+    *"workflow run optimistic-parallel-validation.yml"*) printf '%s\n' "$*" >> "$RECOVERY_MOCK_ROOT/dispatches" ;;
+    *) echo "unexpected recovery API call: $*" >&2; return 1 ;;
+  esac
+}
+git() {
+  case "$1" in
+    fetch) return 0 ;;
+    rev-list|rev-parse) printf '%s\n' "$RECOVERY_MAIN" ;;
+    merge-base) return 0 ;;
+    cat-file) return 0 ;;
+    *) echo "unexpected recovery git call: $*" >&2; return 1 ;;
+  esac
+}
+export -f gh git
+export RECOVERY_PASSED="$passed_candidate"
+export RUNNER_TEMP="$scratch/recovery-runner"
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null
+test ! -s "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt"
+test "$(wc -l < "$RECOVERY_MOCK_ROOT/calls")" -eq 2
+before="$(wc -l < "$RECOVERY_MOCK_ROOT/calls")"
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-dispatch-recovery.sh "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt") >/dev/null
+test "$(wc -l < "$RECOVERY_MOCK_ROOT/calls")" -eq "$before"
+export RECOVERY_QUEUE=1
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null
+test "$(cat "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt")" = "$pending_candidate"
+test "$(jq -r '.[0].candidate' "$RUNNER_TEMP/optimistic-validation/pending-candidates.json")" = "$pending_candidate"
+test "$(grep -F -c 'actions/artifacts?name=coherent-aggregate-' "$RECOVERY_MOCK_ROOT/calls")" -eq 2
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-dispatch-recovery.sh "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt") >/dev/null
+test "$(wc -l < "$RECOVERY_MOCK_ROOT/dispatches")" -eq 1
+test "$(grep -F -c 'status=queued&per_page=1' "$RECOVERY_MOCK_ROOT/calls")" -eq 1
+python3 - "$RECOVERY_MOCK_ROOT/pulls.json" <<'PY'
+import json, sys
+rows = [{"created_at": "2026-09-20T00:00:00Z", "head": {"sha": f"{i:040x}"}} for i in range(1, 102)]
+with open(sys.argv[1], "w") as output:
+    json.dump([rows], output)
+PY
+export RECOVERY_ALL_PASSED=1
+rm "$RECOVERY_MOCK_ROOT/calls"
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null 2>&1
+test "$(grep -F -c 'actions/artifacts?name=coherent-aggregate-' "$RECOVERY_MOCK_ROOT/calls")" -eq 100
+test ! -s "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt"
+test "$(jq -r '.candidate' "$RUNNER_TEMP/optimistic-validation/recovery-cursor.json")" = "$(printf '%040x' 100)"
+python3 - "$RUNNER_TEMP/optimistic-validation/recovery-cursor.json" "$RECOVERY_MOCK_ROOT/cursor.zip" <<'PY'
+import sys, zipfile
+with zipfile.ZipFile(sys.argv[2], "w") as archive:
+    archive.write(sys.argv[1], "recovery-cursor.json")
+PY
+export RECOVERY_CURSOR_ZIP="$RECOVERY_MOCK_ROOT/cursor.zip"
+export RECOVERY_UNPASSED="$(printf '%040x' 101)"
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null 2>&1
+test "$(cat "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt")" = "$RECOVERY_UNPASSED"
+export RECOVERY_CURSOR_FORGED=1
+rm "$RECOVERY_MOCK_ROOT/calls"
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null 2>&1
+test ! -s "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt"
+if grep -Fq 'actions/artifacts/999/zip' "$RECOVERY_MOCK_ROOT/calls"; then
+  echo 'untrusted cursor artifact was downloaded' >&2
+  exit 1
+fi
+unset RECOVERY_CURSOR_FORGED
+printf 'invalid archive\n' > "$RECOVERY_MOCK_ROOT/invalid-cursor.zip"
+export RECOVERY_CURSOR_ZIP="$RECOVERY_MOCK_ROOT/invalid-cursor.zip"
+(cd "$repo" && bash eng/bootstrap-gates/optimistic-recovery.sh) >/dev/null 2>&1
+test ! -s "$RUNNER_TEMP/optimistic-validation/pending-candidates.txt"
+
+printf 'OPTIMISTIC_FANOUT_FIXTURES_OK complete=1 delegated-aggregate=1 missing=1 foreign=1 failed=1 stale-envelope=1 stale-base=1 census-empty=1 census-failed=1 census-stale=1 census-missing=1 bounded-old-plan-fallback=25 unavailable-discovery-current=1 recovery-full-skip=1 recovery-exact-name=1 recovery-bounded-dispatch=1 recovery-resume-after-100=1 recovery-forged-cursor=1 recovery-malformed-cursor=1\n'
