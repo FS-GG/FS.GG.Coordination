@@ -234,7 +234,7 @@ jobs:
       FSGG_BASE_SHA: ${{ needs.prepare.outputs.base }}
       FSGG_CANDIDATE_ROOT: ${{ github.workspace }}/candidate
       FSGG_TRUSTED_ROOT: ${{ github.workspace }}/trusted
-      FSGG_OFFLINE_PUBLIC_KEY: ${{ github.workspace }}/trusted/eng/offline-formal-public.pem
+      FSGG_OFFLINE_PUBLIC_KEY: ${{ github.workspace }}/trusted/eng/offline-formal-pilot.pub.pem
       FSGG_OFFLINE_TOOLCHAIN_ARCHIVE: /tmp/fsgg-${{ github.run_id }}-offline-toolchain/toolchain.tar.gz
       FSGG_CANDIDATE_OBLIGATION: /tmp/fsgg-${{ github.run_id }}-offline-obligation/candidate-obligation.json
       FSGG_PARTITION_PLAN: /tmp/fsgg-${{ github.run_id }}-offline-obligation/partition-plan.json

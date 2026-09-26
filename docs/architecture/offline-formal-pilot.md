@@ -69,7 +69,7 @@ and formal partition; the receipt is emitted only after protected-base signature
 The existing formal aggregate keeps its complete-fragment validation and is unchanged.
 
 Activation must atomically disable the hosted matrix entry for this one shard, enable the join,
-add it as a `formal-aggregate` dependency, and install Main's anchored public key on protected
+and add it as a `formal-aggregate` dependency after Main's anchored public key reaches protected
 main. The evidence writer must create the per-head ref once without force, publish the fixed
 envelope path, and read back its object ID. The join currently refuses a `shadow` policy even if
 someone removes its false workflow condition. Other event types continue with hosted execution.

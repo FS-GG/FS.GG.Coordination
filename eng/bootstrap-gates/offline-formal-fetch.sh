@@ -7,11 +7,18 @@ set -euo pipefail
 
 trusted_root="$(realpath "$FSGG_TRUSTED_ROOT")"
 policy="$trusted_root/eng/offline-formal-pilot.json"
-[[ "$FSGG_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ && "$FSGG_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
-  echo "OFFLINE_FORMAL_FETCH_REFUSED reason=revision-shape" >&2; exit 1;
-}
 [[ "$(git -C "$trusted_root" rev-parse HEAD)" == "$FSGG_BASE_SHA" ]] || {
   echo "OFFLINE_FORMAL_FETCH_REFUSED reason=protected-base-head" >&2; exit 1;
+}
+for relative in eng/offline-formal-pilot.json eng/bootstrap-gates/offline-formal-fetch.sh; do
+  git -C "$trusted_root" ls-files --error-unmatch -- "$relative" >/dev/null 2>&1 &&
+    git -C "$trusted_root" diff --quiet "$FSGG_BASE_SHA" -- "$relative" &&
+    test -f "$trusted_root/$relative" && ! test -L "$trusted_root/$relative" || {
+      echo "OFFLINE_FORMAL_FETCH_REFUSED reason=protected-file-drift" >&2; exit 1;
+    }
+done
+[[ "$FSGG_CANDIDATE_SHA" =~ ^[0-9a-f]{40}$ && "$FSGG_BASE_SHA" =~ ^[0-9a-f]{40}$ ]] || {
+  echo "OFFLINE_FORMAL_FETCH_REFUSED reason=revision-shape" >&2; exit 1;
 }
 jq -e '.mode == "active" and .signer.publicKeySpkiSha256 != null and
        .transport.kind == "git-ref" and .transport.repository == "FS-GG/.github" and
