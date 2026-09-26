@@ -574,6 +574,6 @@ let ``optimistic formal fanout and test census adversarial fixtures pass`` () =
     let output = child.StandardOutput.ReadToEnd()
     let error = child.StandardError.ReadToEnd()
     child.WaitForExit()
-    Assert.Equal(0, child.ExitCode)
+    Assert.True(child.ExitCode = 0, $"fixture exit {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
     Assert.Contains("OPTIMISTIC_FANOUT_FIXTURES_OK", output)
     Assert.Equal("", error)
