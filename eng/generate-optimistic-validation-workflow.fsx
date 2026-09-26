@@ -112,7 +112,7 @@ for required in
         "shard: epoch"
         "offline-formal-shadow:"
         "if: ${{ false && github.event_name == 'pull_request' }}"
-        "bash \"$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-join.sh\""
+        "bash \"$FSGG_TRUSTED_ROOT/eng/offline-formal-join.sh\""
     ] do
     if not (text.Contains required) then
         failwith $"workflow projection missing {required}"

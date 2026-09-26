@@ -180,7 +180,7 @@ def main():
         candidate_key = candidate / "candidate-public.pem"
         shutil.copyfile(public_key, trusted_key)
         shutil.copyfile(public_key, candidate_key)
-        wrapper = ROOT / "eng/bootstrap-gates/offline-formal-verify.sh"
+        wrapper = ROOT / "eng/offline-formal-verify.sh"
 
         def wrapper_refuses(trusted_root, selected_key, reason):
             environment = os.environ.copy()

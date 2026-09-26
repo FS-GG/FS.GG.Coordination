@@ -15,7 +15,7 @@ policy="$trusted_root/eng/offline-formal-pilot.json"
 
 refuse() { printf 'OFFLINE_FORMAL_VERIFY_REFUSED reason=%s\n' "$1" >&2; exit 1; }
 [[ "$(git -C "$trusted_root" rev-parse HEAD 2>/dev/null)" == "$FSGG_BASE_SHA" ]] || refuse protected-base-head
-for relative in eng/offline-formal-evidence.py eng/offline-formal-pilot.json eng/bootstrap-gates/offline-formal-verify.sh; do
+for relative in eng/offline-formal-evidence.py eng/offline-formal-pilot.json eng/offline-formal-verify.sh; do
   test -f "$trusted_root/$relative" && ! test -L "$trusted_root/$relative" || refuse protected-file-shape
   git -C "$trusted_root" diff --quiet "$FSGG_BASE_SHA" -- "$relative" || refuse protected-base-drift
 done

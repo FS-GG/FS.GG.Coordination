@@ -257,9 +257,9 @@ jobs:
           name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
           path: /tmp/fsgg-${{ github.run_id }}-offline-obligation
       - name: Fetch the exact public signed envelope
-        run: bash "$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-fetch.sh"
+        run: bash "$FSGG_TRUSTED_ROOT/eng/offline-formal-fetch.sh"
       - name: Verify and assemble the normal formal fragment
-        run: bash "$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-join.sh"
+        run: bash "$FSGG_TRUSTED_ROOT/eng/offline-formal-join.sh"
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: coherent-formal-fragment-${{ needs.prepare.outputs.candidate }}-authority-reconciliation

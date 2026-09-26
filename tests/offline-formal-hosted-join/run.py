@@ -114,7 +114,7 @@ def main():
                             "FSGG_CANDIDATE_OBLIGATION": str(obligation),
                             "FSGG_PARTITION_PLAN": str(plan),
                             "FSGG_OFFLINE_FRAGMENT_ROOT": str(scratch / "fragment")})
-        call(["bash", str(trusted / "eng/bootstrap-gates/offline-formal-join.sh")], env=environment)
+        call(["bash", str(trusted / "eng/offline-formal-join.sh")], env=environment)
         fragment = scratch / "fragment"
         assert sorted(path.name for path in fragment.iterdir()) == [
             "candidate-obligation.json", "partition-plan.json", "receipt.json"]
@@ -124,7 +124,7 @@ def main():
 
         wrong_head = dict(environment, FSGG_CANDIDATE_SHA="0" * 40,
                           FSGG_OFFLINE_FRAGMENT_ROOT=str(scratch / "wrong-head-fragment"))
-        call(["bash", str(trusted / "eng/bootstrap-gates/offline-formal-join.sh")],
+        call(["bash", str(trusted / "eng/offline-formal-join.sh")],
              env=wrong_head, expected=1)
         assert not (scratch / "wrong-head-fragment").exists()
         tampered = json.loads(evidence.read_text())
@@ -133,7 +133,7 @@ def main():
         tampered_path.write_bytes(canonical(tampered))
         altered = dict(environment, FSGG_OFFLINE_EVIDENCE=str(tampered_path),
                        FSGG_OFFLINE_FRAGMENT_ROOT=str(scratch / "tampered-fragment"))
-        call(["bash", str(trusted / "eng/bootstrap-gates/offline-formal-join.sh")],
+        call(["bash", str(trusted / "eng/offline-formal-join.sh")],
              env=altered, expected=1)
         assert not (scratch / "tampered-fragment/receipt.json").exists()
 
@@ -153,7 +153,7 @@ def main():
                          GIT_CONFIG_COUNT="1",
                          GIT_CONFIG_KEY_0="url.file://" + str(remote) + ".insteadOf",
                          GIT_CONFIG_VALUE_0="https://github.com/FS-GG/.github.git")
-        call(["bash", str(trusted / "eng/bootstrap-gates/offline-formal-fetch.sh")],
+        call(["bash", str(trusted / "eng/offline-formal-fetch.sh")],
              env=fetch_env)
         assert fetched.read_bytes() == evidence.read_bytes()
 
