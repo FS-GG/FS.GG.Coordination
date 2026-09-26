@@ -235,7 +235,6 @@ jobs:
       FSGG_CANDIDATE_ROOT: ${{ github.workspace }}/candidate
       FSGG_TRUSTED_ROOT: ${{ github.workspace }}/trusted
       FSGG_OFFLINE_PUBLIC_KEY: ${{ github.workspace }}/trusted/eng/offline-formal-pilot.pub.pem
-      FSGG_OFFLINE_TOOLCHAIN_ARCHIVE: /tmp/fsgg-${{ github.run_id }}-offline-toolchain/toolchain.tar.gz
       FSGG_CANDIDATE_OBLIGATION: /tmp/fsgg-${{ github.run_id }}-offline-obligation/candidate-obligation.json
       FSGG_PARTITION_PLAN: /tmp/fsgg-${{ github.run_id }}-offline-obligation/partition-plan.json
       FSGG_OFFLINE_EVIDENCE: /tmp/fsgg-${{ github.run_id }}-offline-formal-envelope.json
@@ -257,10 +256,6 @@ jobs:
         with:
           name: candidate-obligation-${{ needs.prepare.outputs.candidate }}
           path: /tmp/fsgg-${{ github.run_id }}-offline-obligation
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          name: coherent-formal-toolchain-${{ needs.prepare.outputs.candidate }}
-          path: /tmp/fsgg-${{ github.run_id }}-offline-toolchain
       - name: Fetch the exact public signed envelope
         run: bash "$FSGG_TRUSTED_ROOT/eng/bootstrap-gates/offline-formal-fetch.sh"
       - name: Verify and assemble the normal formal fragment

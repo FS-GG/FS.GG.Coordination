@@ -6,7 +6,6 @@ set -euo pipefail
 : "${FSGG_BASE_SHA:?exact protected base required}"
 : "${FSGG_OFFLINE_EVIDENCE:?signed envelope required}"
 : "${FSGG_OFFLINE_PUBLIC_KEY:?protected public key required}"
-: "${FSGG_OFFLINE_TOOLCHAIN_ARCHIVE:?same-run toolchain required}"
 : "${FSGG_CANDIDATE_OBLIGATION:?same-run obligation required}"
 : "${FSGG_PARTITION_PLAN:?same-run plan required}"
 : "${FSGG_OFFLINE_FRAGMENT_ROOT:?fragment output required}"

@@ -61,7 +61,9 @@ in place, and does not alter `formal-aggregate` dependencies. After activation, 
 fetcher reads only `envelope.json` from
 `refs/heads/evidence/coordination-offline-formal-pilot/<head>/<base>/authority-reconciliation`
 in `FS-GG/.github`. The verifier and policy come from a separate checkout at the event's protected
-base; the candidate checkout supplies only source identity. A valid signed envelope is converted
+base; the candidate checkout supplies only source identity. The signed archive digest must match
+the protected policy pin; the hosted shard aggregate separately compares semantic toolchain and
+input digests to the hosted base shard. A valid signed envelope is converted
 to the existing `coherent-formal-fragment-<head>-authority-reconciliation` artifact containing
 exactly `candidate-obligation.json`, `partition-plan.json`, and `receipt.json`. The first two files
 come from the current hosted `prepare` artifact and are checked against the expected head, base,

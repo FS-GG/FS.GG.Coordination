@@ -285,10 +285,10 @@ def verify(args: argparse.Namespace) -> None:
     if git(root, "rev-parse", "HEAD") != args.expected_head or git(root, "rev-parse", f"{args.expected_head}^{{tree}}") != payload["treeSha"]:
         raise Refused("checkout-binding")
     git(root, "merge-base", "--is-ancestor", args.expected_base, args.expected_head)
-    if payload["toolchainArchiveSha256"] != digest(read_regular(args.toolchain_archive)):
-        raise Refused("toolchain-binding")
     if payload["toolchainArchiveSha256"] != policy["toolchainArchiveSha256"]:
         raise Refused("toolchain-policy-pin")
+    if args.toolchain_archive is not None and payload["toolchainArchiveSha256"] != digest(read_regular(args.toolchain_archive)):
+        raise Refused("toolchain-binding")
     container = payload["container"]
     if not isinstance(container, dict) or container.get("network") != "none" or container.get("exitCode") != 0 or not re.fullmatch(r"(?:[^@\s]+@)?sha256:[0-9a-f]{64}", str(container.get("imageDigest", ""))):
         raise Refused("container-binding")
@@ -332,8 +332,9 @@ def parser() -> argparse.ArgumentParser:
     seal_parser.add_argument("--private-key-fd", required=True, type=int)
     seal_parser.set_defaults(run=seal)
     verify_parser = commands.add_parser("verify")
-    for name in ("root", "policy", "evidence", "expected-head", "expected-base", "toolchain-archive", "public-key", "now"):
+    for name in ("root", "policy", "evidence", "expected-head", "expected-base", "public-key", "now"):
         verify_parser.add_argument("--" + name, required=True)
+    verify_parser.add_argument("--toolchain-archive")
     verify_parser.add_argument("--receipt-output")
     verify_parser.set_defaults(run=verify)
     return root

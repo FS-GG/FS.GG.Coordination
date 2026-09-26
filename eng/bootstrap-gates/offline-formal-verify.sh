@@ -4,7 +4,6 @@ set -euo pipefail
 : "${FSGG_CANDIDATE_ROOT:?FSGG_CANDIDATE_ROOT is required}"
 : "${FSGG_OFFLINE_EVIDENCE:?FSGG_OFFLINE_EVIDENCE is required}"
 : "${FSGG_OFFLINE_PUBLIC_KEY:?FSGG_OFFLINE_PUBLIC_KEY is required}"
-: "${FSGG_OFFLINE_TOOLCHAIN_ARCHIVE:?FSGG_OFFLINE_TOOLCHAIN_ARCHIVE is required}"
 : "${FSGG_CANDIDATE_SHA:?FSGG_CANDIDATE_SHA is required}"
 : "${FSGG_BASE_SHA:?FSGG_BASE_SHA is required}"
 
@@ -30,6 +29,10 @@ receipt_args=()
 if [[ -n "${FSGG_OFFLINE_RECEIPT_OUTPUT:-}" ]]; then
   receipt_args=(--receipt-output "$FSGG_OFFLINE_RECEIPT_OUTPUT")
 fi
+toolchain_args=()
+if [[ -n "${FSGG_OFFLINE_TOOLCHAIN_ARCHIVE:-}" ]]; then
+  toolchain_args=(--toolchain-archive "$FSGG_OFFLINE_TOOLCHAIN_ARCHIVE")
+fi
 
 python3 "$verifier" verify \
   --root "$candidate_root" \
@@ -37,7 +40,7 @@ python3 "$verifier" verify \
   --evidence "$FSGG_OFFLINE_EVIDENCE" \
   --expected-head "$FSGG_CANDIDATE_SHA" \
   --expected-base "$FSGG_BASE_SHA" \
-  --toolchain-archive "$FSGG_OFFLINE_TOOLCHAIN_ARCHIVE" \
   --public-key "$public_key" \
   --now "$verification_time" \
+  "${toolchain_args[@]}" \
   "${receipt_args[@]}"
