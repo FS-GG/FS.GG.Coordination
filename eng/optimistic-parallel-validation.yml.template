@@ -4,6 +4,7 @@ name: Optimistic parallel validation
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches: [main]
@@ -33,6 +34,9 @@ concurrency:
 
 jobs:
   prepare:
+    # Draft source heads are not admitted coherent candidates. Explicit dispatch,
+    # protected-main, merge-queue and nightly obligations remain admitted.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     outputs:
       candidate: ${{ steps.identity.outputs.candidate }}
@@ -267,7 +271,7 @@ jobs:
 
   formal-aggregate:
     needs: [prepare, run-partition, offline-formal-shadow]
-    if: ${{ always() }}
+    if: ${{ always() && needs.prepare.result != 'skipped' }}
     runs-on: ubuntu-latest
     env:
       FSGG_FORMAL_FRAGMENT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-formal-fragments
@@ -296,7 +300,7 @@ jobs:
 
   aggregate:
     needs: [prepare, classify-reuse, run-partition, formal-aggregate]
-    if: ${{ always() }}
+    if: ${{ always() && needs.prepare.result != 'skipped' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1

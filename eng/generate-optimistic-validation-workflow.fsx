@@ -26,6 +26,12 @@ then
     failwith "prior aggregate candidate search bound must be twenty-five"
 
 if
+    plan.GetProperty("coherent").GetProperty("pullRequestAdmission").GetString()
+    <> "ready-only-with-explicit-dispatch"
+then
+    failwith "coherent pull request admission must defer drafts and retain explicit dispatch"
+
+if
     plan.GetProperty("coherent").GetProperty("maxPartitionsPerCandidate").GetInt32()
     <> 6
 then
@@ -100,6 +106,9 @@ for required in
     [
         "group: optimistic-coherent-${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}"
         "cancel-in-progress: false"
+        "types: [opened, synchronize, reopened, ready_for_review]"
+        "if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}"
+        "if: ${{ always() && needs.prepare.result != 'skipped' }}"
         "fail-fast: false"
         "max-parallel: 6"
         "cron: '17 3 * * *'"
@@ -135,6 +144,11 @@ let offlineRouteChecks =
 for required in offlineRouteChecks do
     if not (text.Contains required) then
         failwith $"offline formal route missing {required}"
+
+let skippedPrepareGuard = "if: ${{ always() && needs.prepare.result != 'skipped' }}"
+
+if text.Split(skippedPrepareGuard, StringSplitOptions.None).Length <> 3 then
+    failwith "both coherent aggregates must skip unadmitted draft pull requests"
 
 for shard in semanticShards @ [ performanceShard ] do
     let token = $"- {{ kind: formal, shard: %s{shard} }}"

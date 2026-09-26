@@ -9,6 +9,7 @@
     "dispositions": ["current", "reused", "deferred", "failed"]
   },
   "coherent": {
+    "pullRequestAdmission": "ready-only-with-explicit-dispatch",
     "maxPartitionsPerCandidate": 6,
     "failFast": false,
     "cancelInProgress": false,

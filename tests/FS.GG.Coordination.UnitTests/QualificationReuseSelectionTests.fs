@@ -461,6 +461,13 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
 
     Assert.DoesNotContain("github.event.pull_request.number", workflow)
     Assert.Contains("cancel-in-progress: false", workflow)
+    Assert.Contains("\"pullRequestAdmission\": \"ready-only-with-explicit-dispatch\"", plan)
+    Assert.Contains("types: [opened, synchronize, reopened, ready_for_review]", workflow)
+    Assert.Contains("if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}", workflow)
+    Assert.Equal(
+        2,
+        workflow.Split("if: ${{ always() && needs.prepare.result != 'skipped' }}", StringSplitOptions.None).Length - 1
+    )
     Assert.Contains("fail-fast: false", workflow)
     Assert.Contains("cron: '17 3 * * *'", workflow)
     Assert.True(String.Equals(workflow, template, StringComparison.Ordinal))
