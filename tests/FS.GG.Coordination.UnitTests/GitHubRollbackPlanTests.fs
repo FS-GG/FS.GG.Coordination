@@ -17,10 +17,12 @@ let private steps =
     [ step 5 "restore-authority" AuthoritySnapshot; step 4 "restore-schedules" Schedule
       step 3 "restore-v1-projections" V1Projection; step 2 "restore-receiver-pins" ReceiverPin
       step 1 "restore-settings" Settings ]
-let private baseline () =
-    qualify "rollback-gs2-09-6-fixture" (revision "a") (digest "b") (digest "c") (digest "d")
-        (digest "e") (digest "f") (digest "1") (digest "2") "VerifiedV2" steps
+let private withIdentityAndSteps identity candidateSteps =
+    qualify identity (revision "a") (digest "b") (digest "c") (digest "d")
+        (digest "e") (digest "f") (digest "1") (digest "2") "VerifiedV2" candidateSteps
         (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+let private withSteps candidateSteps = withIdentityAndSteps "rollback-gs2-09-6-fixture" candidateSteps
+let private baseline () = withSteps steps
 let private get = function Ok value -> value | Error findings -> failwithf "unexpected refusal: %A" findings
 let private refusal = function Error findings -> findings | Ok _ -> failwith "invalid rollback plan qualified"
 
@@ -40,6 +42,44 @@ let ``missing domain forward order and altered seal refuse`` () =
     Assert.Equal(Error [ AlteredSeal ], verify (digest "9") plan)
 
 [<Fact>]
+let ``resealed five-domain plan refuses a swapped restoration sequence`` () =
+    let swapped =
+        [ { steps[0] with Domain=Schedule }; { steps[1] with Domain=AuthoritySnapshot } ]
+        @ (steps |> List.skip 2)
+    Assert.Contains(InvalidStepPopulation, withSteps swapped |> refusal)
+
+[<Fact>]
+let ``resealed plan refuses a sixth repeated domain despite contiguous reverse order`` () =
+    let repeated = step 6 "restore-authority-twice" AuthoritySnapshot :: steps
+    Assert.Contains(InvalidStepPopulation, withSteps repeated |> refusal)
+
+[<Fact>]
+let ``distinct rollback domains cannot alias one target identity`` () =
+    let aliased = { steps[1] with TargetIdentity=steps[0].TargetIdentity }
+    Assert.NotEqual(steps[0].RestorePayloadSha256, aliased.RestorePayloadSha256)
+    let candidate = steps[0] :: aliased :: (steps |> List.skip 2)
+    Assert.Contains(InvalidStepPopulation, withSteps candidate |> refusal)
+
+[<Fact>]
+let ``two distinct rollback targets cannot share a normalized seal through pipe injection`` () =
+    let original = { steps[0] with StepId="unit"; TargetIdentity="left|authority-snapshot|right" }
+    let altered = { original with StepId="unit|authority-snapshot|left"; TargetIdentity="right" }
+    match withSteps (original :: steps.Tail) with
+    | Error findings -> Assert.Contains(InvalidStep original.StepId, findings)
+    | Ok plan ->
+        let forged = { plan with Steps=altered :: plan.Steps.Tail }
+        Assert.True(verify plan.Seal forged |> Result.isError)
+
+[<Fact>]
+let ``rollback step identity refuses embedded record separators`` () =
+    let malformed = { steps[0] with StepId="restore-authority\nforged-step" }
+    Assert.Contains(InvalidStep malformed.StepId, withSteps (malformed :: steps.Tail) |> refusal)
+
+[<Fact>]
+let ``rollback plan identity refuses an embedded field separator`` () =
+    Assert.Contains(InvalidIdentity, withIdentityAndSteps "rollback\nforeign-plan" steps |> refusal)
+
+[<Fact>]
 let ``receipt prefix resumes at exactly the next reverse step`` () =
     let plan = baseline () |> get
     Assert.Equal(Ok(Some plan.Steps[0]), resume plan [])
@@ -47,6 +87,14 @@ let ``receipt prefix resumes at exactly the next reverse step`` () =
     Assert.Equal(Ok(Some plan.Steps[1]), resume plan [ first ])
     let second = createReceipt plan (Some first) plan.Steps[1] (sha "result:4")
     Assert.Equal(Ok(Some plan.Steps[2]), resume plan [ first; second ])
+
+[<Fact>]
+let ``Q6 pinned resume refuses a validly resealed substitute plan`` () =
+    let accepted = baseline () |> get
+    let substituted = withIdentityAndSteps "rollback-foreign" steps |> get
+    Assert.NotEqual(accepted.Seal, substituted.Seal)
+    Assert.Contains(AlteredSeal, resumePinned accepted.Seal substituted [] |> refusal)
+    Assert.Equal(Ok(Some accepted.Steps[0]), resumePinned accepted.Seal accepted [])
 
 [<Fact>]
 let ``every interrupted rollback prefix resumes deterministically and a completed replay is inert`` () =

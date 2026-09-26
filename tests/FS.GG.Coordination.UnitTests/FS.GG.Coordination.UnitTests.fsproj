@@ -59,11 +59,15 @@
     <Compile Include="GitHubLiveOperationTests.fs" />
     <Compile Include="GitHubSealedHistoryTests.fs" />
     <Compile Include="GitHubRollbackPlanTests.fs" />
+    <Compile Include="GitHubRollbackReadbackTests.fs" />
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureTests.fs" />
     <Compile Include="MigrationNativeActivityTests.fs" />
     <Compile Include="MigrationInspectProviderAdapterTests.fs" />
+    <Compile Include="MigrationProtectedIssueCensusAttestationTests.fs" />
+    <Compile Include="MigrationProtectedIssueCensusReleaseTests.fs" />
+    <Compile Include="MigrationProtectedIssueCensusNativeAttestationTests.fs" />
     <Compile Include="MigrationSandboxFixtureSeedTests.fs" />
     <Compile Include="MigrationSandboxProviderObservationTests.fs" />
     <Compile Include="AdministrativeRetirementTests.fs" />

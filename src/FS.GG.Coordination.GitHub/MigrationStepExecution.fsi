@@ -86,7 +86,15 @@ type MigrationDispatchOutcome =
     | Unknown
 
 [<RequireQualifiedAccess>]
-type MigrationAdvanceCut = NoCut | StopAfterIntent | StopAfterInFlight | StopAfterDispatch | StopAfterEffect
+type MigrationAdvanceCut =
+    | NoCut
+    | StopBeforeIntent
+    | StopAfterIntent
+    | StopAfterInFlight
+    | StopAfterDispatch
+    | StopAfterReadback
+    | StopBeforeReceipt
+    | StopAfterEffect
 
 [<RequireQualifiedAccess>]
 type MigrationAdvanceResult =

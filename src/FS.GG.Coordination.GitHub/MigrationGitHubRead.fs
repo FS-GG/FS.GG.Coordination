@@ -38,7 +38,8 @@ type MigrationIssuePopulation =
       Terminal: bool
       Pages: MigrationRestPageEvidence list
       Issues: MigrationIssueRecord list
-      PullRequestCount: int }
+      PullRequestCount: int
+      PullRequestMarkerNumbers: int list }
 
 type MigrationRepositoryCoreSettings =
     { RepositoryId: int64
@@ -112,6 +113,32 @@ type MigrationRepositoryActionsPolicy =
       GitHubOwnedAllowed: bool option
       VerifiedAllowed: bool option
       PatternsAllowed: string list option }
+
+type MigrationRepositoryWorkflowPermissions =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PermissionsUri: string
+      PermissionsPayloadJson: string
+      PermissionsPayloadSha256: string
+      DefaultWorkflowPermissions: string
+      CanApprovePullRequestReviews: bool }
+
+type MigrationPrivateForkWorkflowSettings =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PolicyUri: string
+      PolicyPayloadJson: string
+      PolicyPayloadSha256: string
+      RunWorkflowsFromForkPullRequests: bool
+      SendWriteTokensToWorkflows: bool
+      SendSecretsAndVariables: bool
+      RequireApprovalForForkPrWorkflows: bool }
 
 type MigrationReceiverObjectEvidence =
     { RequestUri: string
@@ -609,12 +636,44 @@ module MigrationGitHubRead =
             | Some(name, _) -> Error(MigrationReadFailure.DuplicateIdentity $"json-member:{name}")
             | None -> Ok()
 
+    let rec private uniqueJsonMembers (element: JsonElement) =
+        match element.ValueKind with
+        | JsonValueKind.Object ->
+            uniqueObjectMembers element
+            |> Result.bind (fun () ->
+                element.EnumerateObject()
+                |> Seq.fold (fun result property ->
+                    result |> Result.bind (fun () -> uniqueJsonMembers property.Value)) (Ok()))
+        | JsonValueKind.Array ->
+            element.EnumerateArray()
+            |> Seq.fold (fun result value ->
+                result |> Result.bind (fun () -> uniqueJsonMembers value)) (Ok())
+        | _ -> Ok()
+
+    let private parseUniqueGraphQLResponse body =
+        parse body
+        |> Result.bind (fun document ->
+            match uniqueJsonMembers document.RootElement with
+            | Ok () -> Ok document
+            | Error failure ->
+                document.Dispose()
+                Error failure)
+
+    let private parseUniqueRootResponse body =
+        parse body
+        |> Result.bind (fun document ->
+            match uniqueObjectMembers document.RootElement with
+            | Ok () -> Ok document
+            | Error failure ->
+                document.Dispose()
+                Error failure)
+
     let private readRepository (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         let path = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
         let uri = Uri(options.ApiBase, path)
         response transport (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
                                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
-        |> Result.bind (fun result -> parse result.Body)
+        |> Result.bind (fun result -> parseUniqueRootResponse result.Body)
         |> Result.bind (fun document ->
             use document = document
             match requiredInt64 "id" document.RootElement, requiredString "full_name" document.RootElement with
@@ -632,7 +691,9 @@ module MigrationGitHubRead =
                        Headers=headers options.Token options.UserAgent; Body=None
                        ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
             response transport request
-            |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result.Body, document))
+            |> Result.bind (fun result ->
+                parseUniqueRootResponse result.Body
+                |> Result.map (fun document -> result.Body, document))
             |> Result.bind (fun (payload, document) ->
                 use document = document
                 let root = document.RootElement
@@ -996,6 +1057,139 @@ module MigrationGitHubRead =
                                           PatternsAllowed=patterns })
                             | Ok _, Ok _, Ok _, Ok _ ->
                                 Error(MigrationReadFailure.MalformedResponse "invalid:allowed-actions")
+                            | Error failure, _, _, _ | _, Error failure, _, _
+                            | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))))
+
+    let readRepositoryWorkflowPermissions (options: MigrationGitHubReadOptions)
+                                          (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let identityUri = Uri(options.ApiBase, repositoryPath)
+            let permissionsUri = Uri(options.ApiBase, $"{repositoryPath}/actions/permissions/workflow")
+            let get (uri: Uri) =
+                response transport
+                    (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                            ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers
+                         |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:workflow-permissions-link")
+                    else Ok result.Body)
+            let readIdentity () =
+                get identityUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredInt64 "id" document.RootElement,
+                                  requiredString "full_name" document.RootElement with
+                            | Ok id, Ok name when id = options.ExpectedRepositoryId
+                                                  && name = $"{options.Owner}/{options.Repository}" -> Ok body
+                            | Ok _, Ok _ -> Error MigrationReadFailure.IdentityDrift
+                            | Error failure, _ | _, Error failure -> Error failure)))
+            readIdentity ()
+            |> Result.bind (fun firstIdentity ->
+                get permissionsUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredString "default_workflow_permissions" document.RootElement,
+                                  requiredBool "can_approve_pull_request_reviews" document.RootElement with
+                            | Ok permission, Ok canApprove when
+                                permission = "read" || permission = "write" ->
+                                readIdentity ()
+                                |> Result.bind (fun finalIdentity ->
+                                    if finalIdentity <> firstIdentity then
+                                        Error(MigrationReadFailure.SnapshotMismatch "workflow-permissions-identity")
+                                    else
+                                        Ok { RepositoryId=options.ExpectedRepositoryId
+                                             RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                             IdentityUri=identityUri.AbsoluteUri
+                                             IdentityPayloadJson=firstIdentity
+                                             IdentityPayloadSha256=sha firstIdentity
+                                             PermissionsUri=permissionsUri.AbsoluteUri
+                                             PermissionsPayloadJson=body
+                                             PermissionsPayloadSha256=sha body
+                                             DefaultWorkflowPermissions=permission
+                                             CanApprovePullRequestReviews=canApprove })
+                            | Ok _, Ok _ ->
+                                Error(MigrationReadFailure.MalformedResponse "invalid:workflow-permissions")
+                            | Error failure, _ | _, Error failure -> Error failure))))
+
+    let readPrivateForkWorkflowSettings (options: MigrationGitHubReadOptions)
+                                        (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        else
+            let repositoryPath = $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}"
+            let identityUri = Uri(options.ApiBase, repositoryPath)
+            let policyUri = Uri(options.ApiBase, $"{repositoryPath}/actions/permissions/fork-pr-workflows-private-repos")
+            let get (uri: Uri) =
+                response transport
+                    (Rest { Method=Get; Uri=uri; Headers=headers options.Token options.UserAgent; Body=None
+                            ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                |> Result.bind (fun result ->
+                    if result.StatusCode <> 200 then Error(MigrationReadFailure.HttpRefused result.StatusCode)
+                    elif result.Headers
+                         |> Map.exists (fun key _ -> String.Equals(key, "link", StringComparison.OrdinalIgnoreCase)) then
+                        Error(MigrationReadFailure.PaginationRefused "unexpected:private-fork-workflow-link")
+                    else Ok result.Body)
+            let readIdentity () =
+                get identityUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredInt64 "id" document.RootElement,
+                                  requiredString "full_name" document.RootElement,
+                                  requiredString "visibility" document.RootElement with
+                            | Ok id, Ok name, Ok "private" when id = options.ExpectedRepositoryId
+                                                          && name = $"{options.Owner}/{options.Repository}" -> Ok body
+                            | Ok id, Ok name, Ok _ when id <> options.ExpectedRepositoryId
+                                                       || name <> $"{options.Owner}/{options.Repository}" ->
+                                Error MigrationReadFailure.IdentityDrift
+                            | Ok _, Ok _, Ok _ ->
+                                Error(MigrationReadFailure.MalformedResponse "invalid:private-fork-workflow-visibility")
+                            | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)))
+            readIdentity ()
+            |> Result.bind (fun firstIdentity ->
+                get policyUri
+                |> Result.bind (fun body ->
+                    parse body
+                    |> Result.bind (fun document ->
+                        use document = document
+                        uniqueObjectMembers document.RootElement
+                        |> Result.bind (fun () ->
+                            match requiredBool "run_workflows_from_fork_pull_requests" document.RootElement,
+                                  requiredBool "send_write_tokens_to_workflows" document.RootElement,
+                                  requiredBool "send_secrets_and_variables" document.RootElement,
+                                  requiredBool "require_approval_for_fork_pr_workflows" document.RootElement with
+                            | Ok runFork, Ok sendWrite, Ok sendSecrets, Ok approval ->
+                                readIdentity ()
+                                |> Result.bind (fun finalIdentity ->
+                                    if finalIdentity <> firstIdentity then
+                                        Error(MigrationReadFailure.SnapshotMismatch "fork-workflow-identity")
+                                    else
+                                        Ok { RepositoryId=options.ExpectedRepositoryId
+                                             RepositoryFullName=$"{options.Owner}/{options.Repository}"
+                                             IdentityUri=identityUri.AbsoluteUri
+                                             IdentityPayloadJson=firstIdentity
+                                             IdentityPayloadSha256=sha firstIdentity
+                                             PolicyUri=policyUri.AbsoluteUri
+                                             PolicyPayloadJson=body
+                                             PolicyPayloadSha256=sha body
+                                             RunWorkflowsFromForkPullRequests=runFork
+                                             SendWriteTokensToWorkflows=sendWrite
+                                             SendSecretsAndVariables=sendSecrets
+                                             RequireApprovalForForkPrWorkflows=approval })
                             | Error failure, _, _, _ | _, Error failure, _, _
                             | _, _, Error failure, _ | _, _, _, Error failure -> Error failure))))
 
@@ -1406,7 +1600,9 @@ module MigrationGitHubRead =
 
     let private rulesetConditions (element: JsonElement) =
         property "conditions" element
-        |> Result.bind (property "ref_name")
+        |> Result.bind (fun conditions ->
+            uniqueObjectMembers conditions
+            |> Result.bind (fun () -> property "ref_name" conditions))
         |> Result.bind (fun refName ->
             uniqueObjectMembers refName
             |> Result.bind (fun () ->
@@ -1458,7 +1654,7 @@ module MigrationGitHubRead =
                 let parametersJson =
                     if not (element.TryGetProperty("parameters", &parameters)) then Ok None
                     elif parameters.ValueKind = JsonValueKind.Object then
-                        uniqueObjectMembers parameters
+                        uniqueJsonMembers parameters
                         |> Result.map (fun () -> Some(parameters.GetRawText()))
                     else Error(MigrationReadFailure.MalformedResponse "invalid:rule-parameters")
                 parametersJson
@@ -1619,7 +1815,9 @@ module MigrationGitHubRead =
               requiredString "state" value, requiredString "updated_at" value with
         | Ok number, Ok databaseId, Ok nodeId, Ok state, Ok updated ->
             let mutable timestamp = DateTimeOffset.MinValue
-            if not (DateTimeOffset.TryParse(updated, &timestamp)) then
+            if state <> "open" && state <> "closed" then
+                Error(MigrationReadFailure.MalformedResponse "invalid:issue-state")
+            elif not (DateTimeOffset.TryParse(updated, &timestamp)) then
                 Error(MigrationReadFailure.MalformedResponse "invalid:updated_at")
             else
                 let payload = value.GetRawText()
@@ -1660,7 +1858,7 @@ module MigrationGitHubRead =
                 let start = Uri(options.ApiBase, path)
                 let allowedPath = start.AbsolutePath
                 let rec pages (seen: Set<string>) (count: int) (issues: MigrationIssueRecord list)
-                              (pullRequests: int) (evidence: MigrationRestPageEvidence list) (current: Uri) =
+                              (pullRequestMarkers: int list) (evidence: MigrationRestPageEvidence list) (current: Uri) =
                     if count >= 1000 || Set.contains current.AbsoluteUri seen then
                         Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
                     elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
@@ -1685,37 +1883,47 @@ module MigrationGitHubRead =
                                             if item.ValueKind <> JsonValueKind.Object then
                                                 Error(MigrationReadFailure.MalformedResponse "invalid:issue-item")
                                             else
-                                                let mutable marker = Unchecked.defaultof<JsonElement>
-                                                if item.TryGetProperty("pull_request", &marker) then
-                                                    if marker.ValueKind = JsonValueKind.Object then Ok None
-                                                    else Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-marker")
-                                                else parseIssue item |> Result.map Some)
+                                                uniqueObjectMembers item
+                                                |> Result.bind (fun () ->
+                                                    let mutable marker = Unchecked.defaultof<JsonElement>
+                                                    if item.TryGetProperty("pull_request", &marker) then
+                                                        if marker.ValueKind = JsonValueKind.Object then
+                                                            requiredInt "number" item |> Result.map Choice2Of2
+                                                        else Error(MigrationReadFailure.MalformedResponse "invalid:pull-request-marker")
+                                                    else parseIssue item |> Result.map Choice1Of2))
                                     let firstError = classified |> List.tryPick (function Error error -> Some error | _ -> None)
                                     match firstError with
                                     | Some error -> Error error
                                     | None ->
-                                        let records = classified |> List.choose (function Ok(Some value) -> Some value | _ -> None)
+                                        let records = classified |> List.choose (function Ok(Choice1Of2 value) -> Some value | _ -> None)
+                                        let markerNumbers = classified |> List.choose (function Ok(Choice2Of2 value) -> Some value | _ -> None)
                                         let link = linkHeader result.Headers
                                         match Transport.tryNextLink link with
                                         | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
                                         | Ok next ->
                                             let accumulated = issues @ records
-                                            let prCount = pullRequests + items.Length - records.Length
+                                            let allMarkers = pullRequestMarkers @ markerNumbers
                                             let page =
                                                 { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
                                                   NextUri=next |> Option.map _.AbsoluteUri }
                                             let allPages = evidence @ [ page ]
                                             match next with
-                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) accumulated prCount allPages uri
+                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) accumulated allMarkers allPages uri
                                             | None ->
-                                                collectUnique (fun (issue: MigrationIssueRecord) -> issue.NodeId) accumulated
+                                                collectUnique string allMarkers
+                                                |> Result.bind (fun markers ->
+                                                    if accumulated |> List.exists (fun issue -> List.contains issue.Number markers) then
+                                                        Error(MigrationReadFailure.SnapshotMismatch "issue-pr-number-overlap")
+                                                    else Ok markers)
+                                                |> Result.bind (fun _ -> collectUnique (fun (issue: MigrationIssueRecord) -> issue.NodeId) accumulated)
                                                 |> Result.bind (collectUnique (fun issue -> string issue.DatabaseId))
                                                 |> Result.bind (collectUnique (fun issue -> string issue.Number))
                                                 |> Result.map (fun complete ->
                                                     { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
                                                       Pages=allPages; Issues=List.sortBy _.Number complete
-                                                      PullRequestCount=prCount })))
-                pages Set.empty 0 [] 0 [] start)
+                                                      PullRequestCount=allMarkers.Length
+                                                      PullRequestMarkerNumbers=List.sort allMarkers })))
+                pages Set.empty 0 [] [] [] start)
 
     let private parsePullRequest repositoryId (value: JsonElement) =
         let baseRepositoryId = property "base" value |> Result.bind (property "repo")
@@ -1749,7 +1957,11 @@ module MigrationGitHubRead =
                          (transport: IMigrationGitHubReadTransport) =
         if not (valid options) then Error MigrationReadFailure.InvalidOptions
         elif not issues.Terminal || issues.PageCount < 1 || issues.RepositoryId <> options.ExpectedRepositoryId
-             || issues.PullRequestCount < 0 then
+             || issues.PullRequestCount <> issues.PullRequestMarkerNumbers.Length
+             || (issues.PullRequestMarkerNumbers |> List.exists (fun number -> number <= 0))
+             || issues.PullRequestMarkerNumbers <> List.sort issues.PullRequestMarkerNumbers
+             || (issues.PullRequestMarkerNumbers |> Set.ofList |> Set.count) <> issues.PullRequestMarkerNumbers.Length
+             || (issues.Issues |> List.exists (fun issue -> List.contains issue.Number issues.PullRequestMarkerNumbers)) then
             Error(MigrationReadFailure.SnapshotMismatch "issue-census")
         else
             readRepository options transport
@@ -1774,9 +1986,21 @@ module MigrationGitHubRead =
                             if document.RootElement.ValueKind <> JsonValueKind.Array then
                                 Error(MigrationReadFailure.MalformedResponse "pull-requests-not-array")
                             else
+                                let parseUniquePullRequest value =
+                                    uniqueObjectMembers value
+                                    |> Result.bind (fun () ->
+                                        property "head" value |> Result.bind uniqueObjectMembers)
+                                    |> Result.bind (fun () ->
+                                        property "base" value
+                                        |> Result.bind (fun baseValue ->
+                                            uniqueObjectMembers baseValue
+                                            |> Result.bind (fun () ->
+                                                property "repo" baseValue
+                                                |> Result.bind uniqueObjectMembers)))
+                                    |> Result.bind (fun () -> parsePullRequest repositoryId value)
                                 let parsed =
                                     document.RootElement.EnumerateArray()
-                                    |> Seq.map (parsePullRequest repositoryId) |> Seq.toList
+                                    |> Seq.map parseUniquePullRequest |> Seq.toList
                                 match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                 | Some failure -> Error failure
                                 | None ->
@@ -1798,9 +2022,12 @@ module MigrationGitHubRead =
                                             collectUnique (fun (value: MigrationPullRequestRecord) -> value.NodeId) all
                                             |> Result.bind (collectUnique (fun value -> string value.DatabaseId))
                                             |> Result.bind (collectUnique (fun value -> string value.Number))
-                                            |> Result.map (fun complete ->
-                                                { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
-                                                  Pages=allPages; PullRequests=List.sortBy _.Number complete }))
+                                            |> Result.bind (fun complete ->
+                                                if (complete |> List.map _.Number |> List.sort) <> issues.PullRequestMarkerNumbers then
+                                                    Error(MigrationReadFailure.SnapshotMismatch "pull-request-marker-set")
+                                                else
+                                                    Ok { RepositoryId=repositoryId; PageCount=count + 1; Terminal=true
+                                                         Pages=allPages; PullRequests=List.sortBy _.Number complete }))
                 pages Set.empty 0 [] [] start)
 
     let private exactCommentPageQuery pageIndex (uri: Uri) =
@@ -1874,9 +2101,15 @@ module MigrationGitHubRead =
                         if document.RootElement.ValueKind <> JsonValueKind.Array then
                             Error(MigrationReadFailure.MalformedResponse "comments-not-array")
                         else
+                            let parseUniqueComment value =
+                                uniqueObjectMembers value
+                                |> Result.bind (fun () ->
+                                    property "user" value |> Result.bind uniqueObjectMembers)
+                                |> Result.bind (fun () ->
+                                    parseIssueComment expectedIssueUrl subjectNumber value)
                             let parsed =
                                 document.RootElement.EnumerateArray()
-                                |> Seq.map (parseIssueComment expectedIssueUrl subjectNumber) |> Seq.toList
+                                |> Seq.map parseUniqueComment |> Seq.toList
                             match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                             | Some failure -> Error failure
                             | None ->
@@ -1993,9 +2226,18 @@ module MigrationGitHubRead =
                                 if document.RootElement.ValueKind <> JsonValueKind.Array then
                                     Error(MigrationReadFailure.MalformedResponse "reviews-not-array")
                                 else
+                                    let parseUniqueReview value =
+                                        uniqueObjectMembers value
+                                        |> Result.bind (fun () ->
+                                            property "user" value
+                                            |> Result.bind (fun actor ->
+                                                if actor.ValueKind = JsonValueKind.Null then Ok ()
+                                                else uniqueObjectMembers actor))
+                                        |> Result.bind (fun () ->
+                                            parsePullRequestReview expectedUrl pullRequestNumber value)
                                     let parsed =
                                         document.RootElement.EnumerateArray()
-                                        |> Seq.map (parsePullRequestReview expectedUrl pullRequestNumber) |> Seq.toList
+                                        |> Seq.map parseUniqueReview |> Seq.toList
                                     match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                     | Some failure -> Error failure
                                     | None ->
@@ -2089,9 +2331,13 @@ module MigrationGitHubRead =
                                 if document.RootElement.ValueKind <> JsonValueKind.Array then
                                     Error(MigrationReadFailure.MalformedResponse "review-comments-not-array")
                                 else
+                                    let parseUniqueReviewComment value =
+                                        uniqueObjectMembers value
+                                        |> Result.bind (fun () ->
+                                            parsePullRequestReviewComment expectedUrl pullRequestNumber value)
                                     let parsed =
                                         document.RootElement.EnumerateArray()
-                                        |> Seq.map (parsePullRequestReviewComment expectedUrl pullRequestNumber)
+                                        |> Seq.map parseUniqueReviewComment
                                         |> Seq.toList
                                     match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                     | Some failure -> Error failure
@@ -2170,9 +2416,17 @@ module MigrationGitHubRead =
                                 if document.RootElement.ValueKind <> JsonValueKind.Array then
                                     Error(MigrationReadFailure.MalformedResponse "events-not-array")
                                 else
+                                    let parseUniqueEvent value =
+                                        uniqueObjectMembers value
+                                        |> Result.bind (fun () ->
+                                            property "actor" value
+                                            |> Result.bind (fun actor ->
+                                                if actor.ValueKind = JsonValueKind.Null then Ok ()
+                                                else uniqueObjectMembers actor))
+                                        |> Result.bind (fun () -> parseIssueEvent issueNumber value)
                                     let parsed =
                                         document.RootElement.EnumerateArray()
-                                        |> Seq.map (parseIssueEvent issueNumber) |> Seq.toList
+                                        |> Seq.map parseUniqueEvent |> Seq.toList
                                     match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
                                     | Some failure -> Error failure
                                     | None ->
@@ -2217,7 +2471,7 @@ module MigrationGitHubRead =
                         GraphQL { Uri=options.GraphQLUri; Document=issueTypeQuery; Variables=variables
                                   Headers=headers options.Token options.UserAgent; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2348,7 +2602,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2418,7 +2672,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2589,7 +2843,7 @@ module MigrationGitHubRead =
                                   Variables=variables; Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2725,7 +2979,7 @@ module MigrationGitHubRead =
                                   Variables=variables; Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement
@@ -2897,7 +3151,7 @@ module MigrationGitHubRead =
                                   Headers=headers options.Token options.UserAgent
                                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
                     response transport request
-                    |> Result.bind (fun result -> parse result.Body)
+                    |> Result.bind (fun result -> parseUniqueGraphQLResponse result.Body)
                     |> Result.bind (fun document ->
                         use document = document
                         let root = document.RootElement

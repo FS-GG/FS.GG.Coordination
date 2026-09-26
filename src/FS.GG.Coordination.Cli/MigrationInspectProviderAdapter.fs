@@ -144,12 +144,25 @@ module MigrationInspectProviderAdapter =
         && (parameters |> Array.exists (fun parts -> parts.[0] = "state" && parts.[1] = "all"))
         && (parameters |> Array.exists (fun parts -> parts.[0] = "per_page" && parts.[1] = "100"))
 
+    let rec private requireUniqueMembers (value: JsonElement) =
+        match value.ValueKind with
+        | JsonValueKind.Object ->
+            let properties = value.EnumerateObject() |> Seq.toList
+            let names = properties |> List.map _.Name
+            if names.Length <> (names |> Set.ofList |> Set.count) then
+                failwith "duplicate-json-member"
+            properties |> List.iter (fun property -> requireUniqueMembers property.Value)
+        | JsonValueKind.Array ->
+            value.EnumerateArray() |> Seq.iter requireUniqueMembers
+        | _ -> ()
+
     let private parseIssuePages repositoryId (raw: string list) =
         try
             raw
             |> List.map (fun body ->
                 use document = JsonDocument.Parse body
                 if document.RootElement.ValueKind <> JsonValueKind.Array then failwith "issue-page-array"
+                requireUniqueMembers document.RootElement
                 let items = document.RootElement.EnumerateArray() |> Seq.toList
                 let isPullRequest (item: JsonElement) =
                     let mutable marker = Unchecked.defaultof<JsonElement>
@@ -157,7 +170,9 @@ module MigrationInspectProviderAdapter =
                         if marker.ValueKind <> JsonValueKind.Object then failwith "pr-marker"
                         true
                     else false
-                let pullRequestCount = items |> List.filter isPullRequest |> List.length
+                let pullRequestNumbers =
+                    items |> List.filter isPullRequest
+                    |> List.map (fun item -> item.GetProperty("number").GetInt32())
                 let issues =
                     items |> List.choose (fun item ->
                       if isPullRequest item then None else
@@ -171,7 +186,7 @@ module MigrationInspectProviderAdapter =
                         Some(record,
                              subject $"repository:{repositoryId}:issue:{number}"
                                  (updated.ToUniversalTime().ToString("O")) payload))
-                issues, pullRequestCount)
+                issues, pullRequestNumbers)
             |> Ok
         with _ -> Error "raw-issue-parse"
 
@@ -191,6 +206,7 @@ module MigrationInspectProviderAdapter =
                     | Ok body ->
                         try
                             use document = JsonDocument.Parse body
+                            requireUniqueMembers document.RootElement
                             document.RootElement.GetProperty("id").GetInt64() = options.Repository.ExpectedRepositoryId
                             && document.RootElement.GetProperty("full_name").GetString()
                                = $"{options.Repository.Owner}/{options.Repository.Repository}"
@@ -233,13 +249,26 @@ module MigrationInspectProviderAdapter =
                         | Ok parsed ->
                             let rawRecords = parsed |> List.collect (fst >> List.map fst)
                                                     |> List.sortBy (fun (number, _, _, _, _, _) -> number)
-                            let rawPullRequestCount = parsed |> List.sumBy snd
+                            let rawPullRequestNumbers = parsed |> List.collect snd |> List.sort
                             let typedRecords =
                                 population.Issues
                                 |> List.map (fun item ->
                                     item.Number, item.DatabaseId, item.NodeId, item.State,
                                     item.UpdatedAt, item.PayloadJson)
-                            if rawPullRequestCount <> population.PullRequestCount then Error "issue-pr-count"
+                            let issueNumbers = rawRecords |> List.map (fun (number, _, _, _, _, _) -> number)
+                            let databaseIds = rawRecords |> List.map (fun (_, databaseId, _, _, _, _) -> databaseId)
+                            let nodeIds = rawRecords |> List.map (fun (_, _, nodeId, _, _, _) -> nodeId)
+                            let issueNumberSet = Set.ofList issueNumbers
+                            let uniqueCensus =
+                                issueNumbers.Length = issueNumberSet.Count
+                                && databaseIds.Length = (databaseIds |> Set.ofList |> Set.count)
+                                && nodeIds.Length = (nodeIds |> Set.ofList |> Set.count)
+                                && rawPullRequestNumbers.Length = (rawPullRequestNumbers |> Set.ofList |> Set.count)
+                                && (rawPullRequestNumbers |> List.forall (fun number ->
+                                    not (Set.contains number issueNumberSet)))
+                            if rawPullRequestNumbers.Length <> population.PullRequestCount then Error "issue-pr-count"
+                            elif rawPullRequestNumbers <> population.PullRequestMarkerNumbers then Error "issue-pr-markers"
+                            elif not uniqueCensus then Error "issue-duplicate-identity"
                             elif rawRecords <> typedRecords then Error "issue-raw-typed-mismatch"
                             else
                                 let pages =
@@ -270,6 +299,7 @@ module MigrationInspectProviderAdapter =
         try
             use document = JsonDocument.Parse body
             let root = document.RootElement
+            requireUniqueMembers root
             let mutable errors = Unchecked.defaultof<JsonElement>
             if root.TryGetProperty("errors", &errors) then failwith "partial-graphql-errors"
             let project = root.GetProperty("data").GetProperty("organization").GetProperty("projectV2")
@@ -350,11 +380,15 @@ module MigrationInspectProviderAdapter =
                         let sameTotals = pages |> List.forall (fun (total, _, _) -> total = population.TotalCount)
                         let rows = pages |> List.collect (fun (_, _, values) -> values)
                         let rawRecords = rows |> List.map fst |> List.sortBy (fun (id, _, _, _, _) -> id)
+                        let itemIds = rows |> List.map (fun ((id, _, _, _, _), _) -> id)
                         let typedRecords =
                             population.Items |> List.map (fun item ->
                                 item.ItemNodeId, item.Archived, item.UpdatedAt, item.Content, item.PayloadJson)
                         if not correctCursors || not terminal then Error "project-page-chain"
                         elif not sameTotals || rows.Length <> population.TotalCount then Error "project-total"
+                        elif itemIds |> List.exists String.IsNullOrWhiteSpace
+                             || itemIds.Length <> (itemIds |> Set.ofList |> Set.count) then
+                            Error "project-duplicate-identity"
                         elif rawRecords <> typedRecords then Error "project-raw-typed-mismatch"
                         else
                             let evidence =
@@ -381,6 +415,7 @@ module MigrationInspectProviderAdapter =
         try
             use document = JsonDocument.Parse body
             let root = document.RootElement
+            requireUniqueMembers root
             let mutable errors = Unchecked.defaultof<JsonElement>
             if root.TryGetProperty("errors", &errors) then failwith "graphql-errors"
             let project = root.GetProperty("data").GetProperty("organization").GetProperty("projectV2")
@@ -668,7 +703,8 @@ module MigrationInspectProviderAdapter =
                         List.zip pages issueProof.Pages
                         |> List.forall (fun ((rows, _), proof) -> proof.Subjects = (rows |> List.map snd))
                     pageFacts && subjectFacts && rawRecords = typedRecords
-                    && (pages |> List.sumBy snd) = issues.PullRequestCount
+                    && (pages |> List.collect snd |> List.sort) = issues.PullRequestMarkerNumbers
+                    && issues.PullRequestMarkerNumbers.Length = issues.PullRequestCount
         if options.Cohort.Repositories.Length <> 1
            || options.Cohort.Repositories.Head.Id <> repositoryId
            || not population.CompleteForRepository || population.RepositoryId <> repositoryId
@@ -711,6 +747,7 @@ module MigrationInspectProviderAdapter =
                     stage <- "response"
                     use document = JsonDocument.Parse body
                     let root = document.RootElement
+                    requireUniqueMembers root
                     let mutable errors = Unchecked.defaultof<JsonElement>
                     require (not (root.TryGetProperty("errors", &errors)))
                     let item = root.GetProperty("data").GetProperty("node")

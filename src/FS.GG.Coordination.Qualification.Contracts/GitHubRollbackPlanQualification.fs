@@ -82,6 +82,13 @@ module GitHubRollbackPlanQualification =
     let private isRevision value =
         not (isNull value) && Regex.IsMatch(value, "^[0-9a-f]{40}$", RegexOptions.CultureInvariant)
 
+    // These atoms enter pipe- and newline-delimited seal material. Reject the
+    // delimiters rather than changing the encoding of previously valid plans.
+    let private isSealAtom (value: string) =
+        not (String.IsNullOrWhiteSpace value)
+        && value = value.Trim()
+        && (value |> Seq.forall (fun ch -> ch <> '|' && not (Char.IsControl ch)))
+
     let private domainName (domain: GitHubRollbackDomain) =
         match domain with
         | Settings -> "settings"
@@ -107,7 +114,7 @@ module GitHubRollbackPlanQualification =
     let private seal normalizedDigest = sha256 $"fsgg.github-rollback-plan/1\n{normalizedDigest}"
 
     let private findings (plan: GitHubRollbackPlan) =
-        [ if String.IsNullOrWhiteSpace plan.Identity then InvalidIdentity
+        [ if not (isSealAtom plan.Identity) then InvalidIdentity
           if not (isRevision plan.RoadmapRevision)
              || [ plan.RoadmapSha256; plan.UnitContractSha256; plan.PredecessorReceiptDigest
                   plan.ManifestNormalizedDigest; plan.ManifestSeal; plan.HistoryNormalizedDigest; plan.HistorySeal ]
@@ -115,9 +122,11 @@ module GitHubRollbackPlanQualification =
           if plan.StartEpoch <> "VerifiedV2" || plan.TerminalEpoch <> "OperatingV1" then InvalidEpochBoundary
           if plan.Steps.IsEmpty
              || (plan.Steps |> List.map _.Order) <> [ plan.Steps.Length .. -1 .. 1 ]
-             || (plan.Steps |> List.map _.StepId |> Set.ofList |> Set.count) <> plan.Steps.Length then InvalidStepPopulation
+             || (plan.Steps |> List.map _.Domain) <> List.rev requiredDomains
+             || (plan.Steps |> List.map _.StepId |> Set.ofList |> Set.count) <> plan.Steps.Length
+             || (plan.Steps |> List.map _.TargetIdentity |> Set.ofList |> Set.count) <> plan.Steps.Length then InvalidStepPopulation
           for step in plan.Steps do
-              if String.IsNullOrWhiteSpace step.StepId || String.IsNullOrWhiteSpace step.TargetIdentity
+              if not (isSealAtom step.StepId) || not (isSealAtom step.TargetIdentity)
                  || not (isSha step.CapturedStateSha256) || not (isSha step.RestorePayloadSha256) then
                   InvalidStep step.StepId
           let domains = plan.Steps |> List.map _.Domain |> Set.ofList
@@ -177,6 +186,13 @@ module GitHubRollbackPlanQualification =
             if not errors.IsEmpty then Error errors
             elif receipts.Length = plan.Steps.Length then Ok None
             else Ok(Some plan.Steps[receipts.Length])
+
+    // The accepted GS2-09.6 fixture keeps the historical self-pinned resume.
+    // A Q6 interpreter must supply its independently admitted plan seal here.
+    let resumePinned expectedSeal (plan: GitHubRollbackPlan) (receipts: GitHubRollbackReceipt list) =
+        match verify expectedSeal plan with
+        | Error findings -> Error findings
+        | Ok _ -> resume plan receipts
 
     let validateControls (primary: GitHubRollbackPlanControlResult list) (recovery: GitHubRollbackPlanControlResult list) =
         let validate name (values: GitHubRollbackPlanControlResult list) =

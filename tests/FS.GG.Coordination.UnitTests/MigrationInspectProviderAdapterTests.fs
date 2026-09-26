@@ -2,6 +2,8 @@ module FS.GG.Coordination.MigrationInspectProviderAdapterTests
 
 open System
 open System.Collections.Generic
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Cli
@@ -60,6 +62,375 @@ let private readIssues responses =
     match MigrationGitHubRead.readIssues options.Repository transport with
     | Ok population -> population, transport.Calls
     | Error failure -> failwithf "Expected issue population: %A" failure
+
+let private protectedCensusPins =
+    { ReaderResourceId="protected-reader:fixture"
+      ReaderArtifactSha256=String.replicate 64 "a"
+      ProviderResourceId="provider:fixture"
+      CustodyStoreResourceId="protected-store:fixture"
+      CustodyStoreArtifactSha256=String.replicate 64 "d"
+      CustodyStoreAclPolicySha256=String.replicate 64 "e"
+      CustodyReaderPrincipalId="host-reader:fixture"
+      CustodyWriterPrincipalId="host-writer:fixture"
+      CandidatePrincipalId="candidate:fixture" }
+
+let private protectedCensusStoreDescription =
+    { ResourceId=protectedCensusPins.CustodyStoreResourceId
+      ArtifactSha256=protectedCensusPins.CustodyStoreArtifactSha256
+      AclPolicySha256=protectedCensusPins.CustodyStoreAclPolicySha256
+      ReaderPrincipalId=protectedCensusPins.CustodyReaderPrincipalId
+      WriterPrincipalId=protectedCensusPins.CustodyWriterPrincipalId
+      CandidatePrincipalId=protectedCensusPins.CandidatePrincipalId
+      CandidateMayRead=false; CandidateMayWrite=false; ImmutableObjects=true }
+
+let private protectedCensusSelection =
+    { RunId=101L; RunAttempt=2; RunNonce="nonce:fixture"
+      CandidateSha=String.replicate 40 "b"; WorkflowSha=String.replicate 40 "c"
+      ApiOrigin="https://api.github.test"; Owner="FS-GG"; Repository="copy"
+      RepositoryId=42L }
+
+let private protectedCensusFixture () =
+    let population, calls =
+        readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
+    let reads =
+        calls |> List.mapi (fun index (request, outcome) ->
+            match request, outcome with
+            | Rest request, Response response ->
+                { ReadOrdinal=int64 (index + 1); RequestMethod="GET"
+                  RequestUri=request.Uri.AbsoluteUri; ResponseUri=request.Uri.AbsoluteUri
+                  StatusCode=response.StatusCode
+                  ProviderResourceId=protectedCensusPins.ProviderResourceId
+                  ResponseHeaders=[ "content-type", "application/json" ]
+                  LinkHeader=Map.tryFind "link" response.Headers
+                  RawBody=response.Body
+                  RawBodyBytesBase64=response.Body |> Encoding.UTF8.GetBytes |> Convert.ToBase64String
+                  CustodyObjectId=$"object:{index + 1}" }
+            | _ -> failwith "Expected REST response")
+    let batch =
+        { Selection=protectedCensusSelection
+          CustodyStoreResourceId=protectedCensusPins.CustodyStoreResourceId
+          Complete=true; SealedPageCount=population.PageCount
+          Identity=reads.Head; Pages=reads.Tail }
+    population, batch
+
+let private protectedCensusPort descriptor batch =
+    { new IProtectedIssueCensusPort with
+        member _.Describe() = descriptor
+        member _.Read _ = batch }
+
+let private protectedCensusInventory (batch: ProtectedIssueCensusBatch) =
+    let reads = batch.Identity :: batch.Pages
+    let objectIds = reads |> List.map _.CustodyObjectId
+    { Selection=batch.Selection; CustodyStoreResourceId=batch.CustodyStoreResourceId
+      Complete=true; HighWaterOrdinal=int64 objectIds.Length
+      SealSha256=MigrationProtectedIssueCensus.expectedInventoryCommitment
+                     protectedCensusPins batch.Selection reads
+      ObjectIds=objectIds }
+
+let private protectedCensusStore (batch: ProtectedIssueCensusBatch) =
+    let objects =
+        batch.Identity :: batch.Pages
+        |> List.map (fun read ->
+            read.CustodyObjectId,
+            { Selection=batch.Selection; CustodyStoreResourceId=batch.CustodyStoreResourceId
+              Read=read })
+        |> Map.ofList
+    { new IProtectedIssueCensusStorePort with
+        member _.Describe() = protectedCensusStoreDescription
+        member _.ReadInventory _ = Some (protectedCensusInventory batch)
+        member _.ReadObject(_, objectId) = Map.tryFind objectId objects }
+
+[<Fact>]
+let ``protected issue census binds retained raw bytes through exact selected fake port`` () =
+    let population, batch = protectedCensusFixture ()
+    let port = protectedCensusPort protectedCensusPins (Some batch)
+    match MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+              (Some port) (Some (protectedCensusStore batch)) options population with
+    | Error reason -> failwithf "Expected source-only protected census proof: %s" reason
+    | Ok proof ->
+        Assert.True(proof.Inspect.ScopeVerified)
+        Assert.True(proof.Inspect.SubjectsParsedFromRaw)
+        Assert.Equal([ "object:1"; "object:2" ], proof.CustodyObjectIds)
+        Assert.Equal(64, proof.CorpusSha256.Length)
+
+[<Fact>]
+let ``protected issue census refuses absent or drifted installation and read`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind pins selection port =
+        MigrationProtectedIssueCensus.bind pins selection port
+            (Some (protectedCensusStore batch)) options population
+        |> Result.map ignore
+    Assert.Equal(Error "protected-census-pins",
+                 bind { protectedCensusPins with ReaderResourceId="" }
+                      protectedCensusSelection None)
+    Assert.Equal(Error "protected-census-pins",
+                 bind { protectedCensusPins with ProviderResourceId="" }
+                      protectedCensusSelection None)
+    Assert.Equal(Error "protected-census-port-unavailable",
+                 bind protectedCensusPins protectedCensusSelection None)
+    Assert.Equal(Error "protected-census-installation",
+                 bind protectedCensusPins protectedCensusSelection
+                      (Some (protectedCensusPort { protectedCensusPins with
+                                                    ReaderArtifactSha256=String.replicate 64 "d" }
+                                (Some batch))))
+    Assert.Equal(Error "protected-census-read-unavailable",
+                 bind protectedCensusPins protectedCensusSelection
+                      (Some (protectedCensusPort protectedCensusPins None)))
+
+[<Fact>]
+let ``protected issue census refuses foreign run and custody store`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
+        |> Result.map ignore
+    Assert.Equal(Error "protected-census-selection",
+                 MigrationProtectedIssueCensus.bind protectedCensusPins
+                     { protectedCensusSelection with RepositoryId=43L }
+                     (Some (protectedCensusPort protectedCensusPins (Some batch)))
+                     (Some (protectedCensusStore batch)) options population
+                 |> Result.map ignore)
+    for changed in
+        [ { batch with Selection={ batch.Selection with RunNonce="stale" } }
+          { batch with Selection={ batch.Selection with RunAttempt=3 } }
+          { batch with CustodyStoreResourceId="candidate-store" } ] do
+        Assert.Equal(Error "protected-census-binding", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses partial seal and omitted page`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
+        |> Result.map ignore
+    for changed in
+        [ { batch with Complete=false }
+          { batch with SealedPageCount=2 }
+          { batch with Pages=[] } ] do
+        Assert.Equal(Error "protected-census-incomplete", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses byte drift and duplicate or stale objects`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
+        |> Result.map ignore
+    let page = batch.Pages.Head
+    for changed in
+        [ { batch with Pages=[ { page with RawBody=page.RawBody + " "
+                                           RawBodyBytesBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes (page.RawBody + " ")) } ] }
+          { batch with Pages=[ { page with CustodyObjectId=batch.Identity.CustodyObjectId } ] }
+          { batch with Pages=[ { page with ReadOrdinal=batch.Identity.ReadOrdinal } ] }
+          { batch with Pages=[ { page with ReadOrdinal=3L } ] }
+          { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\""
+                                           ResponseHeaders=[ "link", "<https://api.github.test/next>; rel=\"next\"" ] } ] } ] do
+        Assert.Equal(Error "protected-census-object-or-page", bind changed)
+
+[<Fact>]
+let ``protected issue census refuses foreign provider and unbound or ambiguous headers`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
+        |> Result.map ignore
+    let page = batch.Pages.Head
+    for changed in
+        [ { batch with Pages=[ { page with ProviderResourceId="foreign-provider" } ] }
+          { batch with Pages=[ { page with LinkHeader=Some "<https://api.github.test/next>; rel=\"next\"" } ] }
+          { batch with Pages=[ { page with ResponseHeaders=[ "link", "one"; "Link", "two" ] } ] }
+          { batch with Pages=[ { page with ResponseHeaders=[ "bad\nname", "value" ] } ] }
+          { batch with Pages=[ { page with ResponseHeaders=[ "content-type", "value\r\nX: injected" ] } ] } ] do
+        Assert.Equal(Error "protected-census-header-or-provider", bind changed)
+
+[<Fact>]
+let ``protected issue census corpus digest binds all recorded headers`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
+    let original = bind batch |> Result.defaultWith failwith
+    let page = batch.Pages.Head
+    let changed =
+        { batch with Pages=[ { page with ResponseHeaders=page.ResponseHeaders @ [ "x-github-request-id", "trace-2" ] } ] }
+    let updated = bind changed |> Result.defaultWith failwith
+    Assert.NotEqual(original.CorpusSha256, updated.CorpusSha256)
+
+[<Fact>]
+let ``protected issue census refuses captured write redirect and body byte substitution`` () =
+    let population, batch = protectedCensusFixture ()
+    let bind value =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some (protectedCensusPort protectedCensusPins (Some value)))
+            (Some (protectedCensusStore value)) options population
+        |> Result.map ignore
+    let page = batch.Pages.Head
+    for changed in
+        [ { batch with Pages=[ { page with RequestMethod="POST" } ] }
+          { batch with Pages=[ { page with ResponseUri="https://foreign.example/issues" } ] }
+          { batch with Pages=[ { page with RawBodyBytesBase64=Convert.ToBase64String(Encoding.UTF8.GetBytes (page.RawBody + " ")) } ] }
+          { batch with Pages=[ { page with RawBodyBytesBase64=Convert.ToBase64String([| 0xffuy |]) } ] }
+          { batch with Pages=[ { page with RawBodyBytesBase64="not-base64" } ] } ] do
+        Assert.Equal(Error "protected-census-capture-shape", bind changed)
+
+[<Fact>]
+let ``protected issue census unknown fake-port result refuses without retry`` () =
+    let population, batch = protectedCensusFixture ()
+    let mutable reads = 0
+    let port =
+        { new IProtectedIssueCensusPort with
+            member _.Describe() = protectedCensusPins
+            member _.Read _ =
+                reads <- reads + 1
+                raise (InvalidOperationException "unknown protected read") }
+    Assert.Equal(Error "protected-census-read-unavailable",
+                 MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+                     (Some port) (Some (protectedCensusStore batch)) options population
+                 |> Result.map ignore)
+    Assert.Equal(1, reads)
+
+[<Fact>]
+let ``protected issue census refuses missing foreign or changed stored object`` () =
+    let population, batch = protectedCensusFixture ()
+    let reader = protectedCensusPort protectedCensusPins (Some batch)
+    let bind store =
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some reader) store options population |> Result.map ignore
+    let stored = protectedCensusStore batch
+    Assert.Equal(Error "protected-census-store-unavailable", bind None)
+    let mutable readerCalls = 0
+    let countedReader =
+        { new IProtectedIssueCensusPort with
+            member _.Describe() = protectedCensusPins
+            member _.Read _ =
+                readerCalls <- readerCalls + 1
+                Some batch }
+    Assert.Equal(Error "protected-census-store-unavailable",
+                 MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+                     (Some countedReader) None options population |> Result.map ignore)
+    Assert.Equal(0, readerCalls)
+    let missing =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
+            member _.ReadObject(_, _) = None }
+    Assert.Equal(Error "protected-census-store-unavailable", bind (Some missing))
+    let foreign =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = { protectedCensusStoreDescription with ResourceId="candidate-writable-store" }
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
+            member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
+    Assert.Equal(Error "protected-census-store-installation", bind (Some foreign))
+    let bindCounted description =
+        readerCalls <- 0
+        let driftedStore =
+            { new IProtectedIssueCensusStorePort with
+                member _.Describe() = description
+                member _.ReadInventory _ = Some (protectedCensusInventory batch)
+                member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
+        let result =
+            MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+                (Some countedReader) (Some driftedStore) options population |> Result.map ignore
+        Assert.Equal(Error "protected-census-store-installation", result)
+        Assert.Equal(0, readerCalls)
+    for description in
+        [ { protectedCensusStoreDescription with CandidateMayWrite=true }
+          { protectedCensusStoreDescription with CandidateMayRead=true }
+          { protectedCensusStoreDescription with ImmutableObjects=false }
+          { protectedCensusStoreDescription with AclPolicySha256=String.replicate 64 "f" }
+          { protectedCensusStoreDescription with ArtifactSha256=String.replicate 64 "f" }
+          { protectedCensusStoreDescription with CandidatePrincipalId="foreign-candidate" }
+          { protectedCensusStoreDescription with ReaderPrincipalId=protectedCensusPins.CandidatePrincipalId } ] do
+        bindCounted description
+    let mutable describes = 0
+    let mutable objectReads = 0
+    let drifting =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() =
+                describes <- describes + 1
+                if describes = 1 then protectedCensusStoreDescription
+                else { protectedCensusStoreDescription with CandidateMayWrite=true }
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
+            member _.ReadObject(_, _) =
+                objectReads <- objectReads + 1
+                None }
+    Assert.Equal(Error "protected-census-store-installation", bind (Some drifting))
+    Assert.Equal(2, describes)
+    Assert.Equal(0, objectReads)
+    let changed =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
+            member _.ReadObject(selection, objectId) =
+                stored.ReadObject(selection, objectId)
+                |> Option.map (fun value ->
+                    if objectId = "object:2"
+                    then { value with Read={ value.Read with RawBody=value.Read.RawBody + " " } }
+                    else value) }
+    Assert.Equal(Error "protected-census-store-binding", bind (Some changed))
+    let stale =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
+            member _.ReadObject(selection, objectId) =
+                stored.ReadObject(selection, objectId)
+                |> Option.map (fun value ->
+                    { value with Selection={ value.Selection with RunNonce="stale" } }) }
+    Assert.Equal(Error "protected-census-store-binding", bind (Some stale))
+    let mutable attempts = 0
+    let unknown =
+        { new IProtectedIssueCensusStorePort with
+            member _.Describe() = protectedCensusStoreDescription
+            member _.ReadInventory _ = Some (protectedCensusInventory batch)
+            member _.ReadObject(_, _) =
+                attempts <- attempts + 1
+                raise (InvalidOperationException "unknown protected store read") }
+    Assert.Equal(Error "protected-census-store-unavailable", bind (Some unknown))
+    Assert.Equal(1, attempts)
+
+[<Fact>]
+let ``protected issue census refuses omitted extra duplicate or drifting store inventory`` () =
+    let population, batch = protectedCensusFixture ()
+    let reader = protectedCensusPort protectedCensusPins (Some batch)
+    let stored = protectedCensusStore batch
+    let inventory = protectedCensusInventory batch
+    let bind inventoryRead =
+        let store =
+            { new IProtectedIssueCensusStorePort with
+                member _.Describe() = protectedCensusStoreDescription
+                member _.ReadInventory _ = inventoryRead ()
+                member _.ReadObject(selection, objectId) = stored.ReadObject(selection, objectId) }
+        MigrationProtectedIssueCensus.bind protectedCensusPins protectedCensusSelection
+            (Some reader) (Some store) options population |> Result.map ignore
+    for changed in
+        [ { inventory with ObjectIds=[ "object:1" ] }
+          { inventory with ObjectIds=inventory.ObjectIds @ [ "object:3" ] }
+          { inventory with ObjectIds=[ "object:1"; "object:1" ] }
+          { inventory with Complete=false }
+          { inventory with HighWaterOrdinal=3L }
+          { inventory with SealSha256="unsealed" }
+          { inventory with SealSha256=String.replicate 64 "f" }
+          { inventory with Selection={ inventory.Selection with RunNonce="stale" } } ] do
+        Assert.Equal(Error "protected-census-store-inventory",
+                     bind (fun () -> Some changed))
+    let mutable inventoryReads = 0
+    Assert.Equal(Error "protected-census-store-inventory",
+                 bind (fun () ->
+                     inventoryReads <- inventoryReads + 1
+                     if inventoryReads = 1 then Some inventory
+                     else Some { inventory with SealSha256=String.replicate 64 "a" }))
+    Assert.Equal(2, inventoryReads)
+    inventoryReads <- 0
+    Assert.Equal(Error "protected-census-store-unavailable",
+                 bind (fun () ->
+                     inventoryReads <- inventoryReads + 1
+                     if inventoryReads = 1 then Some inventory else None))
+    Assert.Equal(2, inventoryReads)
 
 let private readProjectItems responses =
     let transport = FakeTransport responses
@@ -134,6 +505,65 @@ let ``issue adapter refuses a captured continuation omitted by typed page proof`
                  MigrationInspectProviderAdapter.bindIssues options population changed)
 
 [<Fact>]
+let ``issue adapter refuses duplicate raw repository identity members`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let population, calls = readIssues [ repository; reply issueBody ]
+    for ambiguous in
+        [ """{"id":43,"id":42,"full_name":"FS-GG/copy"}"""
+          """{"id":42,"full_name":"FS-GG/foreign","full_name":"FS-GG/copy"}""" ] do
+        let changedCalls =
+            calls |> List.mapi (fun index (request, outcome) ->
+                if index = 0 then request, reply ambiguous else request, outcome)
+        Assert.Equal(Error "issue-capture-shape",
+                     MigrationInspectProviderAdapter.bindIssues options population changedCalls)
+
+[<Fact>]
+let ``issue adapter independently refuses duplicate census identities`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let second = """{"number":2,"id":102,"node_id":"ISSUE_2","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+    let body = $"[{issueBody.TrimStart('[').TrimEnd(']')},{second}]"
+    let population, calls = readIssues [ repository; reply body ]
+    let digest (value: string) =
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
+    let cases: (string * string * (MigrationIssueRecord -> MigrationIssueRecord)) list =
+        [ "\"node_id\":\"ISSUE_2\"", "\"node_id\":\"ISSUE_1\"", (fun item -> { item with NodeId="ISSUE_1" })
+          "\"id\":102", "\"id\":101", (fun item -> { item with DatabaseId=101L })
+          "\"number\":2", "\"number\":1", (fun item -> { item with Number=1 }) ]
+    for needle, replacement, change in cases do
+        let changedBody = body.Replace(needle, replacement)
+        let changedSecond = second.Replace(needle, replacement)
+        let item = change population.Issues.[1]
+        let item = { item with PayloadJson=changedSecond; PayloadSha256=digest changedSecond }
+        let changedPopulation =
+            { population with Issues=[ population.Issues.Head; item ]
+                              Pages=[ { population.Pages.Head with PayloadSha256=digest changedBody } ] }
+        let changedCalls =
+            calls |> List.mapi (fun index (request, outcome) ->
+                if index = 1 then request, reply changedBody else request, outcome)
+        Assert.Equal(Error "issue-duplicate-identity",
+                     MigrationInspectProviderAdapter.bindIssues options changedPopulation changedCalls)
+
+[<Fact>]
+let ``issue adapter independently refuses PR marker duplicates and overlap`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let population, calls = readIssues [ repository; reply issueBody ]
+    let digest (value: string) =
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
+    for markers, numbers in
+        [ """{"number":1,"pull_request":{}}""", [ 1 ]
+          """{"number":3,"pull_request":{}},{"number":3,"pull_request":{}}""", [ 3; 3 ] ] do
+        let body = issueBody.TrimEnd(']') + "," + markers + "]"
+        let changedPopulation =
+            { population with PullRequestCount=numbers.Length
+                              PullRequestMarkerNumbers=numbers
+                              Pages=[ { population.Pages.Head with PayloadSha256=digest body } ] }
+        let changedCalls =
+            calls |> List.mapi (fun index (request, outcome) ->
+                if index = 1 then request, reply body else request, outcome)
+        Assert.Equal(Error "issue-duplicate-identity",
+                     MigrationInspectProviderAdapter.bindIssues options changedPopulation changedCalls)
+
+[<Fact>]
 let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
     let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply issueBody ]
     let extra =
@@ -144,6 +574,9 @@ let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
                  MigrationInspectProviderAdapter.bindIssues options population (calls @ [ extra, reply "{}" ]))
     Assert.Equal(Error "issue-pr-count",
                  MigrationInspectProviderAdapter.bindIssues options { population with PullRequestCount=1 } calls)
+    Assert.Equal(Error "issue-pr-markers",
+                 MigrationInspectProviderAdapter.bindIssues options
+                     { population with PullRequestMarkerNumbers=[ 3 ] } calls)
     let getWithBody =
         calls |> List.mapi (fun index (request, outcome) ->
             match request with
@@ -151,6 +584,31 @@ let ``extra non-GET capture and unreconciled PR marker count refuse`` () =
             | _ -> request, outcome)
     Assert.Equal(Error "issue-capture-shape",
                  MigrationInspectProviderAdapter.bindIssues options population getWithBody)
+
+[<Fact>]
+let ``issue adapter binds exact PR marker numbers from raw pages`` () =
+    let marker = """{"number":3,"pull_request":{}}"""
+    let body = issueBody.TrimEnd(']') + "," + marker + "]"
+    let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply body ]
+    Assert.Equal([ 3 ], population.PullRequestMarkerNumbers)
+    Assert.True(MigrationInspectProviderAdapter.bindIssues options population calls |> Result.isOk)
+    Assert.Equal(Error "issue-pr-markers",
+                 MigrationInspectProviderAdapter.bindIssues options
+                     { population with PullRequestMarkerNumbers=[ 4 ] } calls)
+
+[<Fact>]
+let ``issue adapter refuses ambiguous raw PR marker members`` () =
+    let clean = """[{"number":3,"pull_request":{}}]"""
+    let ambiguous = """[{"number":3,"pull_request":{},"pull_request":{}}]"""
+    let population, calls = readIssues [ reply """{"id":42,"full_name":"FS-GG/copy"}"""; reply clean ]
+    let digest = ambiguous |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                 |> Convert.ToHexString |> _.ToLowerInvariant()
+    let changed = { population with Pages=[ { population.Pages.Head with PayloadSha256=digest } ] }
+    let changedCalls =
+        calls |> List.mapi (fun index (request, outcome) ->
+            if index = 1 then request, reply ambiguous else request, outcome)
+    Assert.Equal(Error "raw-issue-parse",
+                 MigrationInspectProviderAdapter.bindIssues options changed changedCalls)
 
 [<Fact>]
 let ``adapter transport refuses write shaped requests before dispatch`` () =
@@ -235,6 +693,32 @@ let ``wrong GraphQL owner variables and changed typed Project item refuse`` () =
                  MigrationInspectProviderAdapter.bindProjectItems options changed calls)
 
 [<Fact>]
+let ``Project item adapter refuses duplicate raw pagination members`` () =
+    let body = projectPage 1 "false" "null" $"[{projectItem}]"
+    let population, calls = readProjectItems [ reply body ]
+    let ambiguous = body.Replace("\"hasNextPage\":false", "\"hasNextPage\":true,\"hasNextPage\":false")
+    let changedCalls = calls |> List.map (fun (request, _) -> request, reply ambiguous)
+    Assert.Equal(Error "raw-project-parse-or-scope",
+                 MigrationInspectProviderAdapter.bindProjectItems options population changedCalls)
+
+[<Fact>]
+let ``Project item adapter independently refuses duplicate item identities`` () =
+    let second =
+        """{"id":"ITEM_2","isArchived":false,"updatedAt":"2026-09-25T10:00:00Z","content":{"__typename":"Issue","id":"ISSUE_2","number":2,"repository":{"databaseId":42}}}"""
+    let body = projectPage 2 "false" "null" $"[{projectItem},{second}]"
+    let population, calls = readProjectItems [ reply body ]
+    let changedSecond = second.Replace("\"ITEM_2\"", "\"ITEM_1\"")
+    let changedBody = projectPage 2 "false" "null" $"[{projectItem},{changedSecond}]"
+    let digest = Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes changedSecond)).ToLowerInvariant()
+    let changedItem =
+        { population.Items.[1] with ItemNodeId="ITEM_1"
+                                    PayloadJson=changedSecond; PayloadSha256=digest }
+    let changedPopulation = { population with Items=[ population.Items.Head; changedItem ] }
+    let changedCalls = calls |> List.map (fun (request, _) -> request, reply changedBody)
+    Assert.Equal(Error "project-duplicate-identity",
+                 MigrationInspectProviderAdapter.bindProjectItems options changedPopulation changedCalls)
+
+[<Fact>]
 let ``foreign Project identity and wrong GraphQL continuation refuse`` () =
     let first = projectPage 2 "true" "\"cursor-1\"" $"[{projectItem}]"
     let second = projectPage 2 "false" "null"
@@ -302,6 +786,16 @@ let ``Project field adapter binds raw declarations and terminal cursor chain`` (
                  MigrationInspectProviderAdapter.bindProjectFields options population forged)
     Assert.True((MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource).ReadAuthority(2, "project-fields") |> Result.isError)
+
+[<Fact>]
+let ``Project field adapter refuses duplicate raw pagination members`` () =
+    let field = """{"__typename":"ProjectV2Field","id":"FIELD_1","name":"Title","dataType":"TITLE"}"""
+    let body = projectFieldPage 1 "false" "null" $"[{field}]"
+    let population, calls = readProjectFields [ reply body ]
+    let ambiguous = body.Replace("\"hasNextPage\":false", "\"hasNextPage\":true,\"hasNextPage\":false")
+    let changedCalls = calls |> List.map (fun (request, _) -> request, reply ambiguous)
+    Assert.Equal(Error "project-raw-page-or-scope",
+                 MigrationInspectProviderAdapter.bindProjectFields options population changedCalls)
 
 [<Fact>]
 let ``Project value adapter binds raw values and refuses typed or nested drift`` () =
@@ -509,6 +1003,27 @@ let ``native relation adapter binds census and reciprocal raw edges`` () =
     Assert.Equal(Error "relation-request-scope",
                  MigrationInspectProviderAdapter.bindNativeRelations
                      options issues issueProof population extraMutation)
+
+[<Fact>]
+let ``native relation adapter refuses duplicate raw response envelope`` () =
+    let repository = reply """{"id":42,"full_name":"FS-GG/copy"}"""
+    let issues, issueCalls = readIssues [ repository; reply issueBody ]
+    let issueProof =
+        match MigrationInspectProviderAdapter.bindIssues options issues issueCalls with
+        | Ok proof -> proof | Error reason -> failwithf "Issue proof refused: %s" reason
+    let body = relationReply "ISSUE_1" 1 None None None None
+    let relationTransport = FakeTransport [ reply body ]
+    let population =
+        match MigrationGitHubRead.readNativeRelations options.Repository issues relationTransport with
+        | Ok value -> value | Error failure -> failwithf "Relation reader refused: %A" failure
+    Assert.True(MigrationInspectProviderAdapter.bindNativeRelations
+                    options issues issueProof population relationTransport.Calls |> Result.isOk)
+    let ambiguous = body.Replace("{\"data\":", "{\"data\":null,\"data\":")
+    let changedCalls = relationTransport.Calls |> List.map (fun (request, _) -> request, reply ambiguous)
+    match MigrationInspectProviderAdapter.bindNativeRelations
+              options issues issueProof population changedCalls with
+    | Error reason -> Assert.StartsWith("relation-raw-or-scope:", reason)
+    | Ok _ -> failwith "Duplicate raw relation response envelope was accepted"
 
 [<Fact>]
 let ``native relation continuation contributes linked raw page evidence`` () =

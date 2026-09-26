@@ -331,6 +331,74 @@ let ``receiver pin two pass remains preparatory and refuses raw drift`` () =
     let noCalls = FakeTransport []
     Assert.Equal(Error "invalid:receiver-pin-declaration",
                  MigrationReceiverCapture.capturePinBytesTwoPass cohort Map.empty options noCalls)
+
+let private receiverRollbackCohort : GitHubMigrationCopyCohort =
+    { Repositories=[ { Id=42L; NodeId="REPO_42"; FullName="FS-GG/copy"
+                       SourceHead=String.replicate 40 "d"; TargetHead=receiverHead } ]
+      Receivers=[ { Receiver="receiver-a"; RepositoryId=42L
+                    RefName="refs/heads/main"; ExpectedHead=receiverHead } ]
+      ProjectOrganization="FS-GG"; ProjectNumber=1; ProjectNodeId="PROJECT_1"
+      SourceRevision=String.replicate 40 "e"; Isolated=true }
+
+let private receiverRollbackPlan cohortSha stateSha =
+    let sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let steps =
+        [ 5, AuthoritySnapshot, "authority"; 4, Schedule, "schedules"
+          3, V1Projection, "v1"; 2, ReceiverPin, "receivers"; 1, Settings, "settings" ]
+        |> List.map (fun (order, domain, name) ->
+            { Order=order; StepId=$"restore-{name}"; Domain=domain
+              TargetIdentity=(if domain = ReceiverPin then $"receiver-cohort:{cohortSha}" else $"target:{name}")
+              CapturedStateSha256=(if domain = ReceiverPin then stateSha else sha $"captured:{name}")
+              RestorePayloadSha256=sha $"payload:{name}" })
+    GitHubRollbackPlanQualification.qualify "accepted-rollback" (String.replicate 40 "a")
+        (String.replicate 64 "b") (String.replicate 64 "c") (String.replicate 64 "d")
+        (String.replicate 64 "e") (String.replicate 64 "f") (String.replicate 64 "1")
+        (String.replicate 64 "2") "VerifiedV2" steps
+        (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+    |> function Ok value -> value | Error failures -> failwithf "invalid fixture plan: %A" failures
+
+[<Fact>]
+let ``declared receiver rollback readback binds raw two pass digest yet stays partial`` () =
+    let declarations = Map [ "receiver-a", pinDeclaration ]
+    let preliminary =
+        MigrationReceiverCapture.capturePinBytesTwoPass receiverRollbackCohort declarations options
+            (FakeTransport (pinResponses @ pinResponses))
+        |> function Ok value -> value | Error reason -> failwith reason
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedState =
+        [ "fsgg.gs2-09.7.receiver-pin-declared-state/v1"
+          preliminary.CohortSha256; "receiver-a"; preliminary.First.Head.PinSnapshotSha256 ]
+        |> List.map frame |> String.concat "" |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let selected = receiverRollbackPlan preliminary.CohortSha256 expectedState
+    let transport = FakeTransport (pinResponses @ pinResponses)
+    match MigrationRollbackReceiverReadback.captureDeclared selected.Seal selected
+              receiverRollbackCohort declarations options transport with
+    | Error reason -> failwithf "declared readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedState, proof.StateSha256)
+        Assert.Equal(selected.Seal, proof.PlanSeal)
+        Assert.False(proof.InventoryBound)
+        Assert.Equal(14, transport.Requests.Length)
+    let wrongState = receiverRollbackPlan preliminary.CohortSha256 (String.replicate 64 "9")
+    Assert.Equal(Error "changed:receiver-pin-rollback-state",
+                 MigrationRollbackReceiverReadback.captureDeclared wrongState.Seal wrongState
+                     receiverRollbackCohort declarations options (FakeTransport (pinResponses @ pinResponses)))
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:receiver-cohort",
+                 MigrationRollbackReceiverReadback.captureDeclared selected.Seal selected
+                     { receiverRollbackCohort with Receivers=[] } declarations options noCalls)
+    Assert.Empty(noCalls.Requests)
+    let foreignCohort =
+        { receiverRollbackCohort with Receivers=[ { receiverRollbackCohort.Receivers.Head with Receiver="foreign" } ] }
+    Assert.Equal(Error "invalid:receiver-pin-rollback-target",
+                 MigrationRollbackReceiverReadback.captureDeclared selected.Seal selected
+                     foreignCohort declarations options noCalls)
+    Assert.Empty(noCalls.Requests)
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackReceiverReadback.captureDeclared (String.replicate 64 "8") selected
+                     receiverRollbackCohort declarations options noCalls)
+    Assert.Empty(noCalls.Requests)
     Assert.Empty(noCalls.Requests)
 
 type private RedirectedHandler() =
@@ -388,6 +456,18 @@ let ``repository core settings refuse identity drift and unknown visibility`` ()
                  MigrationGitHubRead.readRepositoryCoreSettings options unknown)
 
 [<Fact>]
+let ``repository identity and core settings refuse duplicate raw root members`` () =
+    let ambiguousIdentity = """{"id":43,"id":42,"full_name":"FS-GG/copy"}"""
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:id"),
+                 MigrationGitHubRead.readIssues options
+                     (FakeTransport [ ok Map.empty ambiguousIdentity; ok Map.empty "[]" ]))
+    let ambiguousBranch = repositoryCore.Replace("\"default_branch\":\"main\"",
+                                                 "\"default_branch\":\"other\",\"default_branch\":\"main\"")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:default_branch"),
+                 MigrationGitHubRead.readRepositoryCoreSettings options
+                     (FakeTransport [ ok Map.empty ambiguousBranch ]))
+
+[<Fact>]
 let ``repository core settings refuse missing and malformed fields without another request`` () =
     for changed in
         [ repositoryCore.Replace("\"allow_merge_commit\":false,", "")
@@ -410,11 +490,104 @@ let ``repository core settings refuse invalid options and unavailable provider``
     Assert.Equal(Error MigrationReadFailure.TransportUnavailable,
                  MigrationGitHubRead.readRepositoryCoreSettings options unavailable)
 
+let private settingsRollbackPlan settingsTarget =
+    let sha (value: string) = value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let steps =
+        [ 5, AuthoritySnapshot, "authority"; 4, Schedule, "schedules"
+          3, V1Projection, "v1"; 2, ReceiverPin, "receivers"; 1, Settings, "settings" ]
+        |> List.map (fun (order, domain, name) ->
+            { Order=order; StepId=$"restore-{name}"; Domain=domain
+              TargetIdentity=(if domain = Settings then settingsTarget else $"target:{name}")
+              CapturedStateSha256=sha $"captured-full:{name}"
+              RestorePayloadSha256=sha $"payload:{name}" })
+    GitHubRollbackPlanQualification.qualify "accepted-rollback" (String.replicate 40 "a")
+        (String.replicate 64 "b") (String.replicate 64 "c") (String.replicate 64 "d")
+        (String.replicate 64 "e") (String.replicate 64 "f") (String.replicate 64 "1")
+        (String.replicate 64 "2") "VerifiedV2" steps
+        (DateTimeOffset.Parse "2026-09-23T10:00:00Z")
+    |> function Ok value -> value | Error failures -> failwithf "invalid fixture plan: %A" failures
+
+[<Fact>]
+let ``rollback settings core readback is raw bound yet explicitly partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let expectedCore = repositoryCore |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                       |> Convert.ToHexString |> _.ToLowerInvariant()
+    let transport = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty repositoryCore ]
+    match MigrationRollbackSettingsReadback.captureCorePartial selected.Seal selected "REPO_42" expectedCore options transport with
+    | Error reason -> failwithf "core settings readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(selected.Seal, proof.PlanSeal)
+        Assert.Equal(expectedCore, proof.CorePayloadSha256)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(2, transport.Requests.Length)
+    let changedRaw = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty (" " + repositoryCore) ]
+    Assert.Equal(Error "changed:settings-core-raw",
+                 MigrationRollbackSettingsReadback.captureCorePartial selected.Seal selected "REPO_42" expectedCore options changedRaw)
+    Assert.Equal(Error "changed:settings-core-state",
+                 MigrationRollbackSettingsReadback.captureCorePartial selected.Seal selected "REPO_42" (String.replicate 64 "9")
+                     options (FakeTransport [ ok Map.empty repositoryCore; ok Map.empty repositoryCore ]))
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:settings-rollback-target",
+                 MigrationRollbackSettingsReadback.captureCorePartial
+                     (settingsRollbackPlan "repository-settings:43:REPO_43").Seal
+                     (settingsRollbackPlan "repository-settings:43:REPO_43") "REPO_42" expectedCore options noCalls)
+    Assert.Empty(noCalls.Requests)
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackSettingsReadback.captureCorePartial (String.replicate 64 "8")
+                     selected "REPO_42" expectedCore options noCalls)
+    Assert.Empty(noCalls.Requests)
+
 let private propertySchema =
     """[{"property_name":"environment","source_type":"organization","value_type":"single_select","required":true,"require_explicit_values":true,"values_editable_by":"org_actors","default_value":"production","allowed_values":["production","development"]},{"property_name":"teams","source_type":"organization","value_type":"multi_select","required":false,"values_editable_by":null,"allowed_values":["backend","frontend"]},{"property_name":"approved","source_type":"organization","value_type":"true_false","required":false}]"""
 
 let private propertyValues =
     """[{"property_name":"environment","value":"production"},{"property_name":"teams","value":["backend"]},{"property_name":"approved","value":true}]"""
+
+[<Fact>]
+let ``rollback custom properties bridge binds two raw surfaces but remains partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedCustom =
+        [ "fsgg.gs2-09.7.custom-properties-raw/v1"
+          hash """{"id":42,"full_name":"FS-GG/copy"}"""
+          hash propertySchema; hash propertyValues ]
+        |> List.map frame |> String.concat "" |> hash
+    let responseSet =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty propertySchema; ok Map.empty propertyValues
+          repo; ok Map.empty propertySchema; ok Map.empty propertyValues
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responseSet
+    match MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedCustom options transport with
+    | Error reason -> failwithf "custom properties readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedCustom, proof.CustomPropertiesSha256)
+        Assert.Equal(selected.Seal, proof.PlanSeal)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(9, transport.Requests.Length)
+    let alteredValues = FakeTransport (responseSet |> List.mapi (fun i response ->
+        if i = 7 then ok Map.empty (" " + propertyValues) else response))
+    Assert.Equal(Error "changed:custom-properties-raw",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedCustom options alteredValues)
+    Assert.Equal(Error "changed:custom-properties-state",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responseSet))
+    let changedCoreAfterProperties =
+        FakeTransport (responseSet |> List.mapi (fun i response ->
+            if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedCustom options changedCoreAfterProperties)
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackCustomPropertiesReadback.capturePartial (String.replicate 64 "8") selected
+                     "REPO_42" (hash repositoryCore) expectedCustom options noCalls)
+    Assert.Empty(noCalls.Requests)
 
 [<Fact>]
 let ``custom properties bind exact organization schema and repository values without writes`` () =
@@ -605,6 +778,28 @@ let ``repository rulesets refuse hidden bypass and malformed detail`` () =
         | Ok _ -> failwith "hidden bypass or malformed ruleset accepted"
 
 [<Fact>]
+let ``repository ruleset detail refuses duplicate raw ref name condition`` () =
+    let row = rulesetSummary 91 "main" (Some "branch") "active"
+    let source = rulesetDetail 91 "main" "branch"
+    let detail =
+        source.Replace("\"conditions\":{\"ref_name\":",
+                       "\"conditions\":{\"ref_name\":{\"include\":[\"refs/heads/other\"],\"exclude\":[]},\"ref_name\":")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:ref_name"),
+                 MigrationGitHubRead.readRepositoryBranchTagRulesets options
+                     (FakeTransport [ repo; ok Map.empty $"[{row}]"; ok Map.empty detail ]))
+
+[<Fact>]
+let ``repository ruleset detail refuses duplicate nested rule parameter`` () =
+    let row = rulesetSummary 91 "main" (Some "branch") "active"
+    let source = rulesetDetail 91 "main" "branch"
+    let detail =
+        source.Replace("\"rules\":[{\"type\":\"required_signatures\"}]",
+                       "\"rules\":[{\"type\":\"required_status_checks\",\"parameters\":{\"required_status_checks\":[{\"context\":\"build\",\"context\":\"bypass\"}]}}]")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:context"),
+                 MigrationGitHubRead.readRepositoryBranchTagRulesets options
+                     (FakeTransport [ repo; ok Map.empty $"[{row}]"; ok Map.empty detail ]))
+
+[<Fact>]
 let ``repository rulesets refuse incomplete pages and provider failures`` () =
     let row = rulesetSummary 91 "main" (Some "branch") "active"
     let next = "https://api.github.test/repos/FS-GG/copy/rulesets?per_page=100&page=2&includes_parents=true"
@@ -638,6 +833,68 @@ let ``repository ruleset page evidence detects changed raw bytes across reads`` 
         | Error failure -> failwithf "unexpected empty ruleset refusal: %A" failure
     Assert.NotEqual(read "[]", read " [ ] ")
 
+[<Fact>]
+let ``rollback repository-owned rulesets are raw bound but settings remain partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let firstRow = rulesetSummary 91 "main" None "enabled"
+    let secondRow = rulesetSummary 92 "release" (Some "tag") "active"
+    let next = "https://api.github.test/repos/FS-GG/copy/rulesets?per_page=100&page=2&includes_parents=true"
+    let firstPass =
+        [ repo
+          ok (Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ]) $"[{firstRow}]"
+          ok Map.empty $"[{secondRow}]"
+          ok Map.empty (rulesetDetail 91 "main" "branch")
+          ok Map.empty (rulesetDetail 92 "release" "tag") ]
+    let preliminary =
+        MigrationGitHubRead.readRepositoryBranchTagRulesets options (FakeTransport firstPass)
+        |> function Ok value -> value | Error failure -> failwithf "invalid ruleset fixture: %A" failure
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedRulesets =
+        [ yield "fsgg.gs2-09.7.repository-rulesets-raw/v1"
+          yield string preliminary.RepositoryId
+          yield string preliminary.PageCount
+          for page in preliminary.ListPages do
+              yield page.ListRequestedUri
+              yield page.ListPayloadSha256
+              yield page.ListNextUri |> Option.defaultValue ""
+          for rule in preliminary.Rulesets do
+              yield string rule.RulesetId
+              yield rule.DetailUri
+              yield rule.PayloadSha256 ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses = [ ok Map.empty repositoryCore; ok Map.empty repositoryCore ]
+                    @ firstPass @ firstPass @ [ ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedRulesets options transport with
+    | Error reason -> failwithf "ruleset readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedRulesets, proof.RepositoryRulesetsSha256)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(2, proof.First.Rulesets.Length)
+        Assert.Equal(13, transport.Requests.Length)
+    let changedPage = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 9 then ok Map.empty ($" [{secondRow}] ") else response))
+    Assert.Equal(Error "changed:repository-rulesets-raw",
+                 MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedRulesets options changedPage)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 12 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedRulesets options changedCore)
+    Assert.Equal(Error "changed:repository-rulesets-state",
+                 MigrationRollbackRulesetsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responses))
+    let foreignPlan = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackRulesetsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expectedRulesets options foreignPlan)
+    Assert.Empty(foreignPlan.Requests)
+
 let private actionsAll =
     """{"enabled":true,"allowed_actions":"all","selected_actions_url":null,"sha_pinning_required":false}"""
 
@@ -646,6 +903,59 @@ let private actionsSelected =
 
 let private selectedActions =
     """{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":["FS-GG/*@*"]}"""
+
+[<Fact>]
+let ``rollback selected Actions policy remains partial and brackets repository identity`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expectedActions =
+        [ "fsgg.gs2-09.7.actions-policy-raw/v1"
+          hash """{"id":42,"full_name":"FS-GG/copy"}"""
+          hash actionsSelected
+          "selected"
+          "https://api.github.test/repositories/42/actions/permissions/selected-actions"
+          hash selectedActions ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty actionsSelected; ok Map.empty selectedActions
+          repo; ok Map.empty actionsSelected; ok Map.empty selectedActions
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedActions options transport with
+    | Error reason -> failwithf "Actions readback refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(expectedActions, proof.ActionsPolicySha256)
+        Assert.Equal(Some [ "FS-GG/*@*" ], proof.First.PatternsAllowed)
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(9, transport.Requests.Length)
+    let changedSelected = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 7 then ok Map.empty (" " + selectedActions) else response))
+    Assert.Equal(Error "changed:actions-policy-raw",
+                 MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedActions options changedSelected)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expectedActions options changedCore)
+    Assert.Equal(Error "changed:actions-policy-state",
+                 MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responses))
+    let noCalls = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackActionsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expectedActions options noCalls)
+    Assert.Empty(noCalls.Requests)
+    let missingSelected = FakeTransport (responses |> List.take 4)
+    match MigrationRollbackActionsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expectedActions options missingSelected with
+    | Error _ -> ()
+    | Ok _ -> failwith "missing selected Actions allowlist was accepted"
 
 [<Fact>]
 let ``repository Actions core policy reads only exact identity and policy GETs`` () =
@@ -776,7 +1086,7 @@ let private pullRequest number nodeId =
     $"""{{"number":{number},"id":{number + 200},"node_id":"{nodeId}","state":"open","updated_at":"2026-09-23T10:00:00Z","head":{{"sha":"{head}"}},"base":{{"sha":"{baseRevision}","repo":{{"id":42}}}}}}"""
 
 let private issuesWithPullRequests count =
-    { issueCensus () with PullRequestCount=count }
+    { issueCensus () with PullRequestCount=count; PullRequestMarkerNumbers=[ 3 .. 2 + count ] }
 
 [<Fact>]
 let ``pull request census binds terminal pages to the issue count and raw page bytes`` () =
@@ -804,6 +1114,30 @@ let ``pull request census binds terminal pages to the issue count and raw page b
             | Rest value -> Assert.Equal(Get, value.Method)
             | _ -> failwith "pull request census issued a non-REST request")
     | Error failure -> failwithf "unexpected pull request census refusal: %A" failure
+
+[<Fact>]
+let ``pull request census refuses same count with a different issue marker number`` () =
+    let marker = """{"number":3,"pull_request":{}}"""
+    let issues =
+        MigrationGitHubRead.readIssues options
+            (FakeTransport [ repo; ok Map.empty $"[{marker}]" ])
+        |> function Ok value -> value | Error failure -> failwithf "unexpected issue marker refusal: %A" failure
+    let foreign = pullRequest 4 "PR_4"
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "pull-request-marker-set"),
+                 MigrationGitHubRead.readPullRequests options issues
+                     (FakeTransport [ repo; ok Map.empty $"[{foreign}]" ]))
+    let matching = pullRequest 3 "PR_3"
+    match MigrationGitHubRead.readPullRequests options issues
+              (FakeTransport [ repo; ok Map.empty $"[{matching}]" ]) with
+    | Ok population -> Assert.Equal([ 3 ], population.PullRequests |> List.map _.Number)
+    | Error failure -> failwithf "matching marker refused: %A" failure
+
+[<Fact>]
+let ``issue census refuses duplicate PR marker numbers`` () =
+    let marker = """{"number":3,"pull_request":{}}"""
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "3"),
+                 MigrationGitHubRead.readIssues options
+                     (FakeTransport [ repo; ok Map.empty $"[{marker},{marker}]" ]))
 
 [<Fact>]
 let ``pull request census refuses missing skipped and escaped terminal pages`` () =
@@ -834,6 +1168,24 @@ let ``pull request census refuses changed population duplicate and wrong base re
                  MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) drift)
 
 [<Fact>]
+let ``pull request census refuses duplicate raw members in identity and revision`` () =
+    let record = pullRequest 3 "PR_3"
+    let duplicateState = record.Replace("\"state\":\"open\"", "\"state\":\"open\",\"state\":\"closed\"")
+    let stateTransport = FakeTransport [ repo; ok Map.empty $"[{duplicateState}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:state"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) stateTransport)
+    let head = String.replicate 40 "a"
+    let duplicateHead = record.Replace($"\"head\":{{\"sha\":\"{head}\"}}",
+                                       $"\"head\":{{\"sha\":\"{head}\",\"sha\":\"{head}\"}}")
+    let headTransport = FakeTransport [ repo; ok Map.empty $"[{duplicateHead}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:sha"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) headTransport)
+    let duplicateBase = record.Replace("\"repo\":{\"id\":42}", "\"repo\":{\"id\":42,\"id\":43}")
+    let baseTransport = FakeTransport [ repo; ok Map.empty $"[{duplicateBase}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:id"),
+                 MigrationGitHubRead.readPullRequests options (issuesWithPullRequests 1) baseTransport)
+
+[<Fact>]
 let ``pull request census refuses malformed revisions and a nonterminal issue census`` () =
     let malformed = (pullRequest 3 "PR_3").Replace(String.replicate 40 "a", "not-a-sha")
     let transport = FakeTransport [ repo; ok Map.empty $"[{malformed}]" ]
@@ -843,6 +1195,10 @@ let ``pull request census refuses malformed revisions and a nonterminal issue ce
     let nonterminal = { issuesWithPullRequests 1 with Terminal=false }
     Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "issue-census"),
                  MigrationGitHubRead.readPullRequests options nonterminal noRequests)
+    Assert.Empty(noRequests.Requests)
+    let overlap = { issuesWithPullRequests 1 with PullRequestMarkerNumbers=[ 1 ] }
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "issue-census"),
+                 MigrationGitHubRead.readPullRequests options overlap noRequests)
     Assert.Empty(noRequests.Requests)
 
 let private issueComment id nodeId issueNumber =
@@ -937,6 +1293,20 @@ let ``pull request reviews refuse foreign subject unknown state and duplicates``
                      (FakeTransport [ repo; ok Map.empty $"[{first},{first}]" ]))
 
 [<Fact>]
+let ``pull request reviews refuse duplicate raw state revision and actor members`` () =
+    let record = pullRequestReview 601 "REVIEW_601" "APPROVED" 3
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readPullRequestReviews options (pullRequestCensus ()) 3
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    check (record.Replace("\"state\":\"APPROVED\"", "\"state\":\"APPROVED\",\"state\":\"DISMISSED\"")) "state"
+    let commit = String.replicate 40 "a"
+    let otherCommit = String.replicate 40 "b"
+    check (record.Replace($"\"commit_id\":\"{commit}\"",
+                          $"\"commit_id\":\"{commit}\",\"commit_id\":\"{otherCommit}\"")) "commit_id"
+    check (record.Replace("\"login\":\"reviewer\"", "\"login\":\"reviewer\",\"login\":\"other\"")) "login"
+
+[<Fact>]
 let ``pull request reviews refuse missing continuation and nonterminal source`` () =
     let next = "https://api.github.test/repos/FS-GG/copy/pulls/3/reviews?per_page=100&page=2"
     let first = ok (Map.ofList [ "link", $"<{next}>; rel=\"next\"" ]) "[]"
@@ -1003,6 +1373,20 @@ let ``inline review comments refuse missing page duplicate and nonterminal PR ce
     Assert.Empty(noRequests.Requests)
 
 [<Fact>]
+let ``inline review comments refuse duplicate raw parent path and body members`` () =
+    let record = pullRequestReviewComment 701 "REVIEW_COMMENT_701" 3
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readPullRequestReviewComments options (pullRequestCensus ()) 3
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    check (record.Replace("\"pull_request_review_id\":601",
+                          "\"pull_request_review_id\":601,\"pull_request_review_id\":602")) "pull_request_review_id"
+    check (record.Replace("\"path\":\"src/Program.fs\"",
+                          "\"path\":\"src/Program.fs\",\"path\":\"other/Program.fs\"")) "path"
+    check (record.Replace("\"body\":\"please guard this\"",
+                          "\"body\":\"please guard this\",\"body\":\"looks good\"")) "body"
+
+[<Fact>]
 let ``issue comment stream binds a censused subject and terminal raw pages`` () =
     let next = "https://api.github.test/repos/FS-GG/copy/issues/1/comments?per_page=100&page=2"
     let firstRecord = issueComment 301 "COMMENT_301" 1
@@ -1062,6 +1446,21 @@ let ``issue comment stream refuses unavailable body and uncensused source`` () =
                  MigrationGitHubRead.readIssueComments options (issueCensus ()) 99 noRequests)
     Assert.Empty(noRequests.Requests)
 
+[<Fact>]
+let ``issue comment stream refuses duplicate raw subject body and actor members`` () =
+    let record = issueComment 301 "COMMENT_301" 1
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readIssueComments options (issueCensus ()) 1
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    let subject = "https://api.github.test/repos/FS-GG/copy/issues/1"
+    let foreign = "https://api.github.test/repos/FS-GG/copy/issues/2"
+    check (record.Replace($"\"issue_url\":\"{subject}\"",
+                          $"\"issue_url\":\"{subject}\",\"issue_url\":\"{foreign}\"")) "issue_url"
+    check (record.Replace("\"body\":\"fsgg:claim payload\"",
+                          "\"body\":\"fsgg:claim payload\",\"body\":\"other claim\"")) "body"
+    check (record.Replace("\"login\":\"reviewer\"", "\"login\":\"reviewer\",\"login\":\"other\"")) "login"
+
 let private issueEvent id nodeId kind =
     $"""{{"id":{id},"node_id":"{nodeId}","event":"{kind}","created_at":"2026-09-23T10:00:00Z","actor":null}}"""
 
@@ -1117,6 +1516,19 @@ let ``issue event stream refuses duplicates malformed actor and uncensused issue
     Assert.Empty(noRequests.Requests)
 
 [<Fact>]
+let ``issue event stream refuses duplicate raw kind revision and actor members`` () =
+    let record = issueEvent 401 "EVENT_401" "labeled"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readIssueEvents options (issueCensus ()) 1
+                         (FakeTransport [ repo; ok Map.empty $"[{duplicate}]" ]))
+    check (record.Replace("\"event\":\"labeled\"", "\"event\":\"labeled\",\"event\":\"unlabeled\"")) "event"
+    check (record.Replace("\"created_at\":\"2026-09-23T10:00:00Z\"",
+                          "\"created_at\":\"2026-09-23T10:00:00Z\",\"created_at\":\"2026-09-24T10:00:00Z\"")) "created_at"
+    let actor = record.Replace("\"actor\":null", "\"actor\":{\"login\":\"reviewer\",\"login\":\"other\"}")
+    check actor "login"
+
+[<Fact>]
 let ``native relation reader proves reciprocal parent and blocking directions`` () =
     let first = relationReply "ISSUE_1" 1 None [relationNode "ISSUE_2" 42L] [] [relationNode "ISSUE_2" 42L]
     let second = relationReply "ISSUE_2" 2 (Some(relationNode "ISSUE_1" 42L)) [] [relationNode "ISSUE_1" 42L] []
@@ -1150,6 +1562,22 @@ let ``native relation reader refuses missing reciprocal edge`` () =
     let transport = FakeTransport [ ok Map.empty first; ok Map.empty second ]
     Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "relation-reciprocity-or-census"),
                  MigrationGitHubRead.readNativeRelations options (issueCensus ()) transport)
+
+[<Fact>]
+let ``native relation reader refuses duplicate raw initial and continuation identities`` () =
+    let first = relationReply "ISSUE_1" 1 None [] [] []
+    let duplicateRepository =
+        first.Replace("\"repository\":{\"databaseId\":42}",
+                      "\"repository\":{\"databaseId\":42,\"databaseId\":77}")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:databaseId"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ())
+                     (FakeTransport [ ok Map.empty duplicateRepository ]))
+    let initial = relationInitialBlocking (relationPage [relationNode "EXTERNAL_A" 77L] 2 true (Some "cursor-1"))
+    let continuationSource = relationContinuationBlocking (relationPage [relationNode "EXTERNAL_B" 77L] 2 false None)
+    let continuation = continuationSource.Replace("\"totalCount\":2", "\"totalCount\":2,\"totalCount\":3")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:totalCount"),
+                 MigrationGitHubRead.readNativeRelations options (issueCensus ())
+                     (FakeTransport [ ok Map.empty initial; ok Map.empty continuation ]))
 
 [<Fact>]
 let ``native relation reader refuses nested truncation and partial GraphQL data`` () =
@@ -1361,6 +1789,26 @@ let ``duplicate issue identity and repository drift refuse`` () =
     Assert.Single(drift.Requests) |> ignore
 
 [<Fact>]
+let ``issue census refuses unknown native state before subject evidence`` () =
+    let unknown = (issue 1 "ISSUE_1").Replace("\"state\":\"open\"", "\"state\":\"unknown\"")
+    let transport = FakeTransport [ repo; ok Map.empty $"[{unknown}]" ]
+    Assert.Equal(Error(MigrationReadFailure.MalformedResponse "invalid:issue-state"),
+                 MigrationGitHubRead.readIssues options transport)
+    Assert.Equal(2, transport.Requests.Length)
+
+[<Fact>]
+let ``issue census refuses duplicate raw members before issue or PR classification`` () =
+    let ambiguousState =
+        (issue 1 "ISSUE_1").Replace("\"state\":\"open\"", "\"state\":\"open\",\"state\":\"closed\"")
+    let issueTransport = FakeTransport [ repo; ok Map.empty $"[{ambiguousState}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:state"),
+                 MigrationGitHubRead.readIssues options issueTransport)
+    let ambiguousMarker = """{"number":2,"pull_request":null,"pull_request":{}}"""
+    let prTransport = FakeTransport [ repo; ok Map.empty $"[{ambiguousMarker}]" ]
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:pull_request"),
+                 MigrationGitHubRead.readIssues options prTransport)
+
+[<Fact>]
 let ``GraphQL partial data with an authorization error is never a complete type census`` () =
     let partial =
         """{"data":{"repository":{"databaseId":42,"issueTypes":{"nodes":[{"id":"IT_1","name":"Task"}],"pageInfo":{"hasNextPage":false,"endCursor":"NA"}}}},"errors":[{"type":"FORBIDDEN","message":"not accessible"}]}"""
@@ -1384,6 +1832,17 @@ let ``issue type census accepts GitHub terminal cursor and rejects missing conti
         """{"data":{"repository":{"databaseId":42,"issueTypes":{"nodes":[],"pageInfo":{"hasNextPage":true,"endCursor":null}}}}}"""
     Assert.Equal(Error(MigrationReadFailure.PaginationRefused "missing-end-cursor"),
                  MigrationGitHubRead.readIssueTypes options (FakeTransport [ ok Map.empty missingCursor ]))
+
+[<Fact>]
+let ``issue type census refuses duplicate raw type name and page completeness`` () =
+    let terminal =
+        """{"data":{"repository":{"databaseId":42,"issueTypes":{"nodes":[{"id":"IT_1","name":"Task"}],"pageInfo":{"hasNextPage":false,"endCursor":"NA"}}}}}"""
+    let duplicateName = terminal.Replace("\"name\":\"Task\"", "\"name\":\"Task\",\"name\":\"Bug\"")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:name"),
+                 MigrationGitHubRead.readIssueTypes options (FakeTransport [ ok Map.empty duplicateName ]))
+    let duplicateTerminal = terminal.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")
+    Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity "json-member:hasNextPage"),
+                 MigrationGitHubRead.readIssueTypes options (FakeTransport [ ok Map.empty duplicateTerminal ]))
 
 [<Fact>]
 let ``HTTP migration read transport refuses mutation-shaped requests before network send`` () =
@@ -1451,6 +1910,19 @@ let ``Project census rejects duplicate items and a missing cursor`` () =
                  MigrationGitHubRead.readProjectItems projectOptions
                      (FakeTransport [ ok Map.empty missingCursor ]))
 
+[<Fact>]
+let ``Project item census refuses duplicate raw content identity and page completeness`` () =
+    let item =
+        """{"id":"ITEM_1","isArchived":false,"updatedAt":"2026-09-23T10:00:00Z","content":{"__typename":"Issue","id":"ISSUE_1","number":7,"repository":{"databaseId":42}}}"""
+    let page = projectPage 1 "false" "null" $"[{item}]"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readProjectItems projectOptions
+                         (FakeTransport [ ok Map.empty duplicate ]))
+    check (page.Replace("\"__typename\":\"Issue\"", "\"__typename\":\"Issue\",\"__typename\":\"DraftIssue\"")) "__typename"
+    check (page.Replace("\"databaseId\":42", "\"databaseId\":42,\"databaseId\":77")) "databaseId"
+    check (page.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")) "hasNextPage"
+
 let private fieldPage total hasNext cursor nodes =
     sprintf """{"data":{"organization":{"projectV2":{"id":"PROJECT_1","number":1,"fields":{"totalCount":%d,"nodes":%s,"pageInfo":{"hasNextPage":%s,"endCursor":%s}}}}}}"""
         total nodes hasNext cursor
@@ -1499,6 +1971,20 @@ let ``Project field census refuses unsupported kind duplicate option and populat
     Assert.Equal(Error MigrationReadFailure.PopulationDrift,
                  MigrationGitHubRead.readProjectFields projectOptions
                      (FakeTransport [ ok Map.empty first; ok Map.empty changed ]))
+
+[<Fact>]
+let ``Project field census refuses duplicate raw type option and page members`` () =
+    let field =
+        """{"__typename":"ProjectV2SingleSelectField","id":"FIELD_1","name":"Status","dataType":"SINGLE_SELECT","options":[{"id":"OPT_1","name":"Ready"}]}"""
+    let page = fieldPage 1 "false" "null" $"[{field}]"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readProjectFields projectOptions
+                         (FakeTransport [ ok Map.empty duplicate ]))
+    check (page.Replace("\"dataType\":\"SINGLE_SELECT\"",
+                        "\"dataType\":\"SINGLE_SELECT\",\"dataType\":\"TEXT\"")) "dataType"
+    check (page.Replace("\"name\":\"Ready\"", "\"name\":\"Ready\",\"name\":\"Done\"")) "name"
+    check (page.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")) "hasNextPage"
 
 let private valuePage total hasNext cursor nodes =
     sprintf """{"data":{"organization":{"projectV2":{"id":"PROJECT_1","number":1,"items":{"totalCount":%d,"nodes":%s,"pageInfo":{"hasNextPage":%s,"endCursor":%s}}}}}}"""
@@ -1568,6 +2054,19 @@ let ``Project values refuse a missing outer page and duplicate field identity`` 
                      (FakeTransport [ ok Map.empty (valuePage 1 "false" "null" $"[{duplicateItem}]") ]))
 
 [<Fact>]
+let ``Project values refuse duplicate raw field option and nested page members`` () =
+    let item = valueItem $"[{selectedValue}]" 1 "false"
+    let check duplicate expectedMember =
+        Assert.Equal(Error(MigrationReadFailure.DuplicateIdentity $"json-member:{expectedMember}"),
+                     MigrationGitHubRead.readProjectValues projectOptions
+                         (FakeTransport [ ok Map.empty (valuePage 1 "false" "null" $"[{duplicate}]") ]))
+    check (item.Replace("\"field\":{\"id\":\"FIELD_1\"}",
+                        "\"field\":{\"id\":\"FIELD_1\",\"id\":\"FIELD_2\"}")) "id"
+    check (item.Replace("\"optionId\":\"OPTION_1\"",
+                        "\"optionId\":\"OPTION_1\",\"optionId\":\"OPTION_2\"")) "optionId"
+    check (item.Replace("\"hasNextPage\":false", "\"hasNextPage\":false,\"hasNextPage\":true")) "hasNextPage"
+
+[<Fact>]
 let ``Project snapshot reconciles exact membership revisions declarations and bytes`` () =
     let membership =
         """{"id":"ITEM_1","isArchived":false,"updatedAt":"2026-09-23T10:00:00Z","content":{"__typename":"DraftIssue","id":"DRAFT_1"}}"""
@@ -1607,3 +2106,245 @@ let ``Project snapshot reconciles exact membership revisions declarations and by
         { items with Items=[ { items.Items.Head with PayloadJson="{}" } ] }
     Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "payload-digest"),
                  MigrationGitHubRead.reconcileProject altered fields values)
+
+[<Fact>]
+let ``workflow token defaults read exact repository identity and refuse incomplete or drifting policy`` () =
+    let policy = """{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}"""
+    let transport = FakeTransport [ repo; ok Map.empty policy; repo ]
+    match MigrationGitHubRead.readRepositoryWorkflowPermissions options transport with
+    | Error failure -> failwithf "workflow permissions refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.Equal("read", observed.DefaultWorkflowPermissions)
+        Assert.False(observed.CanApprovePullRequestReviews)
+        Assert.Equal(policy, observed.PermissionsPayloadJson)
+        Assert.Equal(3, transport.Requests.Length)
+        let uris =
+            transport.Requests |> List.map (function
+                | Rest request ->
+                    Assert.Equal(Get, request.Method)
+                    Assert.True(request.Body.IsNone)
+                    request.Uri.AbsoluteUri
+                | _ -> failwith "workflow permission reader issued GraphQL")
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/copy"
+              "https://api.github.test/repos/FS-GG/copy/actions/permissions/workflow"
+              "https://api.github.test/repos/FS-GG/copy" ], uris)
+    for malformed in
+        [ policy.Replace("\"read\"", "\"admin\"")
+          """{"default_workflow_permissions":"read"}"""
+          policy.Replace("false", "null")
+          """{"default_workflow_permissions":"read","default_workflow_permissions":"write","can_approve_pull_request_reviews":false}""" ] do
+        let refused = FakeTransport [ repo; ok Map.empty malformed ]
+        match MigrationGitHubRead.readRepositoryWorkflowPermissions options refused with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete or duplicated workflow policy accepted"
+        Assert.Equal(2, refused.Requests.Length)
+    let drift = FakeTransport [ repo; ok Map.empty policy; ok Map.empty """{"id":43,"full_name":"FS-GG/copy"}""" ]
+    Assert.Equal(Error MigrationReadFailure.IdentityDrift,
+                 MigrationGitHubRead.readRepositoryWorkflowPermissions options drift)
+    let rawDrift = FakeTransport [ repo; ok Map.empty policy; ok Map.empty """{ "id":42,"full_name":"FS-GG/copy" }""" ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "workflow-permissions-identity"),
+                 MigrationGitHubRead.readRepositoryWorkflowPermissions options rawDrift)
+    let link = FakeTransport [ repo; ok (Map.ofList [ "Link", "<https://api.github.test/next>; rel=\"next\"" ]) policy ]
+    match MigrationGitHubRead.readRepositoryWorkflowPermissions options link with
+    | Error(MigrationReadFailure.PaginationRefused _) -> ()
+    | other -> failwithf "workflow policy pagination was not refused: %A" other
+
+[<Fact>]
+let ``rollback workflow token defaults are raw bound and settings remain partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let policy = """{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}"""
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expected =
+        [ "fsgg.gs2-09.7.workflow-permissions-raw/v1"
+          "42"; "FS-GG/copy"
+          "https://api.github.test/repos/FS-GG/copy/actions/permissions/workflow"
+          hash """{"id":42,"full_name":"FS-GG/copy"}"""
+          hash policy ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty policy; repo
+          repo; ok Map.empty policy; repo
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expected options transport with
+    | Error failure -> failwithf "workflow permissions readback refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(expected, proof.WorkflowPermissionsSha256)
+        Assert.Equal(9, transport.Requests.Length)
+    let changed = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 6 then ok Map.empty (policy.Replace("false", "true")) else response))
+    Assert.Equal(Error "changed:workflow-permissions-raw",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changed)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changedCore)
+    Assert.Equal(Error "changed:workflow-permissions-state",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options (FakeTransport responses))
+    let foreign = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackWorkflowPermissionsReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expected options foreign)
+    Assert.Empty(foreign.Requests)
+
+[<Fact>]
+let ``Actions policy brackets workflow defaults and refuses cross-surface drift`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let identityBody = """{"id":42,"full_name":"FS-GG/copy"}"""
+    let workflow = """{"default_workflow_permissions":"read","can_approve_pull_request_reviews":false}"""
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let actionsDigest =
+        [ "fsgg.gs2-09.7.actions-policy-raw/v1"; hash identityBody
+          hash actionsAll; "unselected"; ""; "" ]
+        |> List.map frame |> String.concat "" |> hash
+    let workflowDigest =
+        [ "fsgg.gs2-09.7.workflow-permissions-raw/v1"; "42"; "FS-GG/copy"
+          "https://api.github.test/repos/FS-GG/copy/actions/permissions/workflow"
+          hash identityBody; hash workflow ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          repo; ok Map.empty actionsAll
+          repo; ok Map.empty workflow; repo
+          repo; ok Map.empty workflow; repo
+          repo; ok Map.empty actionsAll
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) actionsDigest workflowDigest options transport with
+    | Error failure -> failwithf "cross-surface bracket refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(13, transport.Requests.Length)
+        Assert.Equal(actionsDigest, proof.ActionsPolicySha256)
+        Assert.Equal(workflowDigest, proof.WorkflowPermissionsSha256)
+    let changedActions = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 11 then ok Map.empty (" " + actionsAll) else response))
+    Assert.Equal(Error "changed:actions-policy-cross-surface",
+                 MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) actionsDigest workflowDigest options changedActions)
+    let changedWorkflow = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (workflow.Replace("false", "true")) else response))
+    Assert.Equal(Error "changed:workflow-permissions-raw",
+                 MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) actionsDigest workflowDigest options changedWorkflow)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 12 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackActionsWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) actionsDigest workflowDigest options changedCore)
+
+[<Fact>]
+let ``private fork workflow policy requires four explicit booleans and exact identity`` () =
+    let policy = """{"run_workflows_from_fork_pull_requests":true,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false,"require_approval_for_fork_pr_workflows":true}"""
+    let transport = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty repositoryCore ]
+    match MigrationGitHubRead.readPrivateForkWorkflowSettings options transport with
+    | Error failure -> failwithf "private fork policy refused: %A" failure
+    | Ok observed ->
+        Assert.Equal(42L, observed.RepositoryId)
+        Assert.True(observed.RunWorkflowsFromForkPullRequests)
+        Assert.False(observed.SendWriteTokensToWorkflows)
+        Assert.False(observed.SendSecretsAndVariables)
+        Assert.True(observed.RequireApprovalForForkPrWorkflows)
+        Assert.Equal(policy, observed.PolicyPayloadJson)
+        Assert.Equal(3, transport.Requests.Length)
+        let uris = transport.Requests |> List.map (function
+            | Rest request ->
+                Assert.Equal(Get, request.Method)
+                Assert.True(request.Body.IsNone)
+                request.Uri.AbsoluteUri
+            | _ -> failwith "fork workflow reader issued GraphQL")
+        Assert.Equal<string list>(
+            [ "https://api.github.test/repos/FS-GG/copy"
+              "https://api.github.test/repos/FS-GG/copy/actions/permissions/fork-pr-workflows-private-repos"
+              "https://api.github.test/repos/FS-GG/copy" ], uris)
+    for malformed in
+        [ """{"run_workflows_from_fork_pull_requests":true,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false}"""
+          policy.Replace("\"send_secrets_and_variables\":false", "\"send_secrets_and_variables\":null")
+          policy.Replace("\"send_write_tokens_to_workflows\":false,", "\"send_write_tokens_to_workflows\":false,\"send_write_tokens_to_workflows\":true,") ] do
+        let refused = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty malformed ]
+        match MigrationGitHubRead.readPrivateForkWorkflowSettings options refused with
+        | Error _ -> ()
+        | Ok _ -> failwith "incomplete private fork policy accepted"
+        Assert.Equal(2, refused.Requests.Length)
+    let publicIdentity = repositoryCore.Replace("\"visibility\":\"private\"", "\"visibility\":\"public\"")
+    let publicRepo = FakeTransport [ ok Map.empty publicIdentity ]
+    match MigrationGitHubRead.readPrivateForkWorkflowSettings options publicRepo with
+    | Error _ -> Assert.Single(publicRepo.Requests) |> ignore
+    | Ok _ -> failwith "public repository accepted for private fork policy"
+    let drift = FakeTransport [ ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty (" " + repositoryCore) ]
+    Assert.Equal(Error(MigrationReadFailure.SnapshotMismatch "fork-workflow-identity"),
+                 MigrationGitHubRead.readPrivateForkWorkflowSettings options drift)
+    let unexpectedLink = FakeTransport [ ok Map.empty repositoryCore
+                                         ok (Map.ofList [ "Link", "<https://api.github.test/next>; rel=\"next\"" ]) policy ]
+    match MigrationGitHubRead.readPrivateForkWorkflowSettings options unexpectedLink with
+    | Error(MigrationReadFailure.PaginationRefused _) -> ()
+    | other -> failwithf "fork policy pagination was not refused: %A" other
+    for status in [ 403; 404 ] do
+        let denied =
+            match ok Map.empty "" with
+            | Response response -> Response { response with StatusCode=status }
+            | _ -> failwith "invalid response fixture"
+        let unavailable = FakeTransport [ ok Map.empty repositoryCore; denied ]
+        Assert.Equal(Error(MigrationReadFailure.HttpRefused status),
+                     MigrationGitHubRead.readPrivateForkWorkflowSettings options unavailable)
+
+[<Fact>]
+let ``rollback private fork workflow policy is raw bound and remains partial`` () =
+    let selected = settingsRollbackPlan "repository-settings:42:REPO_42"
+    let policy = """{"run_workflows_from_fork_pull_requests":true,"send_write_tokens_to_workflows":false,"send_secrets_and_variables":false,"require_approval_for_fork_pr_workflows":true}"""
+    let hash (body: string) =
+        body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let frame (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
+    let expected =
+        [ "fsgg.gs2-09.7.private-fork-workflow-raw/v1"; "42"; "FS-GG/copy"
+          "https://api.github.test/repos/FS-GG/copy/actions/permissions/fork-pr-workflows-private-repos"
+          hash repositoryCore; hash policy ]
+        |> List.map frame |> String.concat "" |> hash
+    let responses =
+        [ ok Map.empty repositoryCore; ok Map.empty repositoryCore
+          ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty repositoryCore
+          ok Map.empty repositoryCore; ok Map.empty policy; ok Map.empty repositoryCore
+          ok Map.empty repositoryCore ]
+    let transport = FakeTransport responses
+    match MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+              (hash repositoryCore) expected options transport with
+    | Error failure -> failwithf "fork workflow readback refused: %s" failure
+    | Ok proof ->
+        Assert.False(proof.SettingsAuthorityComplete)
+        Assert.Equal(expected, proof.PrivateForkWorkflowSha256)
+        Assert.Equal(9, transport.Requests.Length)
+    let changedPolicy = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 6 then ok Map.empty (policy.Replace("true", "false")) else response))
+    Assert.Equal(Error "changed:private-fork-workflow-raw",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changedPolicy)
+    let stalePin = FakeTransport responses
+    Assert.Equal(Error "changed:private-fork-workflow-state",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) (String.replicate 64 "9") options stalePin)
+    let changedCore = FakeTransport (responses |> List.mapi (fun i response ->
+        if i = 8 then ok Map.empty (" " + repositoryCore) else response))
+    Assert.Equal(Error "changed:settings-cross-surface",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial selected.Seal selected "REPO_42"
+                     (hash repositoryCore) expected options changedCore)
+    let foreign = FakeTransport []
+    Assert.Equal(Error "invalid:rollback-plan",
+                 MigrationRollbackPrivateForkWorkflowReadback.capturePartial (String.replicate 64 "8") selected "REPO_42"
+                     (hash repositoryCore) expected options foreign)
+    Assert.Empty(foreign.Requests)

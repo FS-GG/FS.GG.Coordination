@@ -1,0 +1,77 @@
+namespace FS.GG.Coordination.Cli
+
+open System
+
+type ProtectedIssueCensusReleasePins =
+    { ReleaseResourceId: string
+      ReleaseArtifactSha256: string }
+
+type ProtectedIssueCensusReleaseDescription =
+    { ReleaseResourceId: string
+      ReleaseArtifactSha256: string
+      StoreResourceId: string
+      StoreArtifactSha256: string
+      JournalResourceId: string
+      JournalArtifactSha256: string
+      ClockResourceId: string
+      ClockArtifactSha256: string
+      SignerPublicKeySha256: string
+      SignerArtifactSha256: string
+      CandidateMayRead: bool
+      CandidateMayWrite: bool
+      AtomicCompareAndConsume: bool
+      AtomicExpiryCompare: bool }
+
+type ProtectedIssueCensusReleaseRequest =
+    { ReservationId: string
+      Selection: ProtectedIssueCensusSelection
+      ClaimId: string
+      AttestationPayloadSha256: string
+      ClockResourceId: string
+      ClockArtifactSha256: string
+      SignerPublicKeySha256: string
+      SignerArtifactSha256: string
+      SignedIssuedAtUtc: DateTimeOffset
+      SignedExpiresAtUtc: DateTimeOffset
+      StoreResourceId: string
+      StoreGeneration: int64
+      StoreCorpusSha256: string
+      ExpectedStoreHeadSha256: string
+      JournalResourceId: string
+      ExpectedJournalGeneration: int64
+      ExpectedJournalHeadSha256: string }
+
+type ProtectedIssueCensusReleaseOutcome =
+    | ReleaseReserved
+    | ReleaseDuplicate
+    | ReleaseConflict
+    | ReleaseUnknown
+
+/// A protected installation must compare both heads and consume the claim in one
+/// durable transaction, checking the signed expiry with its protected clock there.
+/// This source contract contains no token or provider adapter.
+type IProtectedIssueCensusReleasePort =
+    abstract Describe: unit -> ProtectedIssueCensusReleaseDescription
+    abstract ReserveOnce: ProtectedIssueCensusReleaseRequest -> ProtectedIssueCensusReleaseOutcome
+    abstract ReadReservation: string -> ProtectedIssueCensusReleaseRequest option
+
+[<RequireQualifiedAccess>]
+module MigrationProtectedIssueCensusRelease =
+    /// Stable one-use identity for the exact claimed journal successor head.
+    val reservationId:
+        claimId:string ->
+        journalHead:ProtectedIssueCensusClaimHead -> string
+
+    /// Fake-port reservation only. A successful result does not release a token.
+    val reserve:
+        attestationPins:ProtectedIssueCensusAttestationPins ->
+        claimPins:ProtectedIssueCensusClaimPins ->
+        storePins:ProtectedIssueCensusStoreHeadPins ->
+        releasePins:ProtectedIssueCensusReleasePins ->
+        selection:ProtectedIssueCensusSelection ->
+        proof:ProtectedIssueCensusProof ->
+        attestation:ProtectedIssueCensusSealAttestation option ->
+        clock:IProtectedIssueCensusClockPort option ->
+        storePort:IProtectedIssueCensusStoreHeadPort option ->
+        claimPort:IProtectedIssueCensusClaimPort option ->
+        releasePort:IProtectedIssueCensusReleasePort option -> Result<unit, string>

@@ -32,7 +32,8 @@ type MigrationIssuePopulation =
       Terminal: bool
       Pages: MigrationRestPageEvidence list
       Issues: MigrationIssueRecord list
-      PullRequestCount: int }
+      PullRequestCount: int
+      PullRequestMarkerNumbers: int list }
 
 /// One explicitly partial repository-settings surface, bound to the raw provider response.
 type MigrationRepositoryCoreSettings =
@@ -111,6 +112,34 @@ type MigrationRepositoryActionsPolicy =
       GitHubOwnedAllowed: bool option
       VerifiedAllowed: bool option
       PatternsAllowed: string list option }
+
+/// Repository GITHUB_TOKEN defaults only; organization inheritance and other Actions policy remain unobserved.
+type MigrationRepositoryWorkflowPermissions =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PermissionsUri: string
+      PermissionsPayloadJson: string
+      PermissionsPayloadSha256: string
+      DefaultWorkflowPermissions: string
+      CanApprovePullRequestReviews: bool }
+
+/// Private-repository fork PR workflow flags only; inherited settings remain unobserved.
+type MigrationPrivateForkWorkflowSettings =
+    { RepositoryId: int64
+      RepositoryFullName: string
+      IdentityUri: string
+      IdentityPayloadJson: string
+      IdentityPayloadSha256: string
+      PolicyUri: string
+      PolicyPayloadJson: string
+      PolicyPayloadSha256: string
+      RunWorkflowsFromForkPullRequests: bool
+      SendWriteTokensToWorkflows: bool
+      SendSecretsAndVariables: bool
+      RequireApprovalForForkPrWorkflows: bool }
 
 /// One exact receiver ref/commit/recursive-tree observation. Blob pin bytes are not read here.
 type MigrationReceiverObjectEvidence =
@@ -474,6 +503,16 @@ module MigrationGitHubRead =
     val readRepositoryActionsPolicy:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryActionsPolicy, MigrationReadFailure>
+
+    /// Read-only repository GITHUB_TOKEN defaults, closed by a second exact identity read.
+    val readRepositoryWorkflowPermissions:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryWorkflowPermissions, MigrationReadFailure>
+
+    /// Read-only private repository fork PR workflow flags, closed by a second exact identity read.
+    val readPrivateForkWorkflowSettings:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationPrivateForkWorkflowSettings, MigrationReadFailure>
 
     /// Exact branch ref, commit and complete recursive-tree read, closed by a second ref read.
     val readReceiverSnapshot:

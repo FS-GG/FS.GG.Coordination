@@ -73,5 +73,8 @@ module GitHubRollbackPlanQualification =
         plan:GitHubRollbackPlan -> previous:GitHubRollbackReceipt option -> step:GitHubRollbackStep -> resultSha256:string -> GitHubRollbackReceipt
     val resume:
         plan:GitHubRollbackPlan -> receipts:GitHubRollbackReceipt list -> Result<GitHubRollbackStep option, GitHubRollbackPlanFinding list>
+    val resumePinned:
+        expectedSeal:string -> plan:GitHubRollbackPlan -> receipts:GitHubRollbackReceipt list ->
+            Result<GitHubRollbackStep option, GitHubRollbackPlanFinding list>
     val validateControls:
         primary:GitHubRollbackPlanControlResult list -> recovery:GitHubRollbackPlanControlResult list -> Result<unit, string list>

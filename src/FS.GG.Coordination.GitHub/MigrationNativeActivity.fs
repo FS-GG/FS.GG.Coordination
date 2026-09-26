@@ -61,14 +61,100 @@ module MigrationNativeActivity =
                 (value >= '0' && value <= '9') || (value >= 'a' && value <= 'f')))))
         && linked pages
 
+    let private exactPageQuery census pageIndex (uri: Uri) =
+        let entries =
+            uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map (fun part -> part.Split('=', 2))
+        let expected =
+            [ if census then "state", "all"
+              "per_page", "100"
+              if pageIndex > 0 then "page", string (pageIndex + 1) ]
+            |> Map.ofList
+        let decoded =
+            entries
+            |> Array.choose (fun parts ->
+                if parts.Length = 2 then
+                    Some(Uri.UnescapeDataString parts.[0], Uri.UnescapeDataString parts.[1])
+                else None)
+        let keys = decoded |> Array.map fst |> Set.ofArray
+        decoded.Length = entries.Length && keys.Count = entries.Length
+        && (expected |> Map.forall (fun name value ->
+            decoded |> Array.exists (fun (observedName, observedValue) ->
+                observedName = name && observedValue = value)))
+        && (decoded |> Array.forall (fun (name, value) ->
+            Map.containsKey name expected
+            || (pageIndex > 0 && name = "after" && not (String.IsNullOrWhiteSpace value))))
+
+    let private pagesWithinCensusScope (input: MigrationNativeActivityInput) =
+        match input.Issues.Pages with
+        | [] -> false
+        | first :: _ ->
+            let mutable censusUri = Unchecked.defaultof<Uri>
+            if not (Uri.TryCreate(first.RequestedUri, UriKind.Absolute, &censusUri))
+               || not (censusUri.AbsolutePath.EndsWith("/issues", StringComparison.Ordinal)) then false
+            else
+                let rootPath = censusUri.AbsolutePath.Substring(0, censusUri.AbsolutePath.Length - "/issues".Length)
+                let segments = rootPath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+                if segments.Length < 3 || segments.[segments.Length - 3] <> "repos"
+                   || String.IsNullOrWhiteSpace segments.[segments.Length - 2]
+                   || String.IsNullOrWhiteSpace segments.[segments.Length - 1] then false
+                else
+                    let origin = censusUri.GetLeftPart(UriPartial.Authority)
+                    let scoped pages path alternate census =
+                        pages |> List.mapi (fun index page ->
+                            let mutable uri = Unchecked.defaultof<Uri>
+                            Uri.TryCreate(page.RequestedUri, UriKind.Absolute, &uri)
+                            && uri.Scheme = Uri.UriSchemeHttps
+                            && uri.GetLeftPart(UriPartial.Authority) = origin
+                            && uri.Fragment = ""
+                            && (uri.AbsolutePath = path || alternate = Some uri.AbsolutePath)
+                            && exactPageQuery census index uri)
+                        |> List.forall id
+                    let issuePath = rootPath + "/issues"
+                    let pullPath = rootPath + "/pulls"
+                    scoped input.Issues.Pages issuePath (Some $"/repositories/{input.Issues.RepositoryId}/issues") true
+                    && scoped input.PullRequests.Pages pullPath
+                        (Some $"/repositories/{input.PullRequests.RepositoryId}/pulls") true
+                    && (input.IssueComments |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None false))
+                    && (input.IssueEvents |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/events" None false))
+                    && (input.PullRequestComments |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None false))
+                    && (input.PullRequestReviews |> List.forall (fun stream ->
+                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/reviews" None false))
+                    && (input.PullRequestInlineComments |> List.forall (fun stream ->
+                        scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/comments" None false))
+
     let private framed (value: string) = $"{Encoding.UTF8.GetByteCount value}:{value}"
 
-    let reconcile (input: MigrationNativeActivityInput) =
+    let private initialCensusWithinOptions (options: MigrationGitHubReadOptions)
+                                          (input: MigrationNativeActivityInput) =
+        try
+            match input.Issues.Pages with
+            | [] -> false
+            | first :: _ ->
+                let mutable actual = Unchecked.defaultof<Uri>
+                let expected =
+                    Uri(options.ApiBase,
+                        $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}/issues")
+                input.Issues.RepositoryId = options.ExpectedRepositoryId
+                && options.ExpectedRepositoryId > 0L
+                && Uri.TryCreate(first.RequestedUri, UriKind.Absolute, &actual)
+                && actual.Scheme = Uri.UriSchemeHttps
+                && actual.GetLeftPart(UriPartial.Authority) = expected.GetLeftPart(UriPartial.Authority)
+                && actual.AbsolutePath = expected.AbsolutePath
+        with _ -> false
+
+    let reconcile (options: MigrationGitHubReadOptions) (input: MigrationNativeActivityInput) =
         let fail reason = Error(MigrationReadFailure.SnapshotMismatch reason)
         let issues = input.Issues
         let pullRequests = input.PullRequests
         let issueNumbers = issues.Issues |> List.map _.Number |> Set.ofList
         let pullRequestNumbers = pullRequests.PullRequests |> List.map _.Number |> Set.ofList
+        let censusNodes =
+            (issues.Issues |> List.map _.NodeId)
+            @ (pullRequests.PullRequests |> List.map _.NodeId)
         let issueNodes = issues.Issues |> List.map (fun issue -> issue.Number, issue.NodeId) |> Map.ofList
         let pullRequestNodes = pullRequests.PullRequests |> List.map (fun pullRequest -> pullRequest.Number, pullRequest.NodeId) |> Map.ofList
         let matchingIssue number nodeId = Map.tryFind number issueNodes = Some nodeId
@@ -130,6 +216,12 @@ module MigrationNativeActivity =
               yield! input.PullRequestComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId)
               yield! input.PullRequestReviews |> List.collect (fun stream -> stream.Reviews |> List.map _.NodeId)
               yield! input.PullRequestInlineComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId) ]
+        let activityDatabaseIds =
+            [ [ yield! input.IssueComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId)
+                yield! input.PullRequestComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId) ]
+              input.IssueEvents |> List.collect (fun stream -> stream.Events |> List.map _.DatabaseId)
+              input.PullRequestReviews |> List.collect (fun stream -> stream.Reviews |> List.map _.DatabaseId)
+              input.PullRequestInlineComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId) ]
         let orphanReviewComment =
             input.PullRequestInlineComments
             |> List.exists (fun inlineStream ->
@@ -141,22 +233,31 @@ module MigrationNativeActivity =
                 |> List.exists (fun comment ->
                     comment.ReviewId |> Option.exists (fun parent ->
                         parentReviews |> Option.forall (fun reviews -> not (Set.contains parent reviews)))))
-        if issues.RepositoryId <= 0L || issues.RepositoryId <> pullRequests.RepositoryId
+        if not (initialCensusWithinOptions options input) then
+            fail "census-scope"
+        elif issues.RepositoryId <= 0L || issues.RepositoryId <> pullRequests.RepositoryId
            || not issues.Terminal || issues.PageCount < 1
-           || not pullRequests.Terminal || issues.PullRequestCount <> pullRequests.PullRequests.Length then
+           || not pullRequests.Terminal || issues.PullRequestCount <> pullRequests.PullRequests.Length
+           || issues.PullRequestMarkerNumbers <> (pullRequests.PullRequests |> List.map _.Number |> List.sort) then
             fail "census"
         elif issues.Issues.Length <> issueNumbers.Count
              || pullRequests.PullRequests.Length <> pullRequestNumbers.Count
-             || not (Set.isEmpty (Set.intersect issueNumbers pullRequestNumbers)) then
+             || not (Set.isEmpty (Set.intersect issueNumbers pullRequestNumbers))
+             || not (unique censusNodes)
+             || (censusNodes |> List.exists String.IsNullOrWhiteSpace) then
             fail "subject-identity"
         elif issues.Issues |> List.exists (fun issue -> not (payloadValid issue.PayloadJson issue.PayloadSha256))
              || pullRequests.PullRequests |> List.exists (fun pullRequest ->
                  not (payloadValid pullRequest.PayloadJson pullRequest.PayloadSha256)) then
             fail "census-payload"
         elif not inputPopulations then fail "stream-population"
-        elif not allPageSets || not allStreamsTerminal then fail "stream-pages"
+        elif not allPageSets || not allStreamsTerminal || not (pagesWithinCensusScope input) then
+            fail "stream-pages"
         elif not allStreamsBound then fail "stream-binding-or-payload"
-        elif not (unique activityNodes) then fail "duplicate-activity"
+        elif not (unique (censusNodes @ activityNodes))
+             || (activityDatabaseIds |> List.exists (unique >> not))
+             || (activityNodes |> List.exists String.IsNullOrWhiteSpace) then
+            fail "duplicate-activity"
         elif orphanReviewComment then fail "orphan-review-comment"
         else
             let pageParts (pages: MigrationRestPageEvidence list) =
@@ -237,7 +338,7 @@ module MigrationNativeActivity =
                                                       PullRequestComments=pullRequestComments
                                                       PullRequestReviews=pullRequestReviews
                                                       PullRequestInlineComments=inlineComments }
-                                                reconcile input
+                                                reconcile options input
                                                 |> Result.map (fun snapshot -> { Input=input; Snapshot=snapshot }))))))))))
 
     let captureStable (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =

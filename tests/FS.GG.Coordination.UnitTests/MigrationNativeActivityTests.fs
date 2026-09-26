@@ -16,7 +16,8 @@ let private raw = "{}"
 let private rawDigest = digest raw
 
 let private page path =
-    { RequestedUri="https://api.github.test/" + path
+    let query = if path = "issues" || path = "pulls" then "?state=all&per_page=100" else "?per_page=100"
+    { RequestedUri="https://api.github.test/repos/FS-GG/copy/" + path + query
       PayloadSha256=rawDigest; NextUri=None }
 
 let private issue =
@@ -52,7 +53,7 @@ let private inlineComment =
 
 let private sample () : MigrationNativeActivityInput =
     { Issues={ RepositoryId=42L; PageCount=1; Terminal=true; Pages=[ page "issues" ]
-               Issues=[ issue ]; PullRequestCount=1 }
+               Issues=[ issue ]; PullRequestCount=1; PullRequestMarkerNumbers=[ 2 ] }
       PullRequests={ RepositoryId=42L; PageCount=1; Terminal=true
                      Pages=[ page "pulls" ]; PullRequests=[ pullRequest ] }
       IssueComments=[ { RepositoryId=42L; SubjectNumber=1; SubjectNodeId="I_1"
@@ -71,8 +72,14 @@ let private sample () : MigrationNativeActivityInput =
                                     PageCount=1; Terminal=true; Pages=[ page "pulls/2/comments" ]
                                     Comments=[ inlineComment ] } ] }
 
+let private options =
+    { ApiBase=Uri "https://api.github.test/"
+      GraphQLUri=Uri "https://api.github.test/graphql"
+      Token="controlled-test-token"; UserAgent="migration-capture-test"
+      Owner="FS-GG"; Repository="copy"; ExpectedRepositoryId=42L }
+
 let private assertRefused expected input =
-    match MigrationNativeActivity.reconcile input with
+    match MigrationNativeActivity.reconcile options input with
     | Error(MigrationReadFailure.SnapshotMismatch actual) -> Assert.Equal(expected, actual)
     | other -> failwithf "Expected %s refusal; got %A" expected other
 
@@ -81,11 +88,24 @@ let private requireOk result =
     | Ok value -> value
     | Error reason -> failwithf "Unexpected refusal: %A" reason
 
-let private options =
-    { ApiBase=Uri "https://api.github.test/"
-      GraphQLUri=Uri "https://api.github.test/graphql"
-      Token="controlled-test-token"; UserAgent="migration-capture-test"
-      Owner="FS-GG"; Repository="copy"; ExpectedRepositoryId=42L }
+[<Fact>]
+let ``native activity refuses an issue and pull request sharing one node identity`` () =
+    let input = sample ()
+    let issueNode = input.Issues.Issues.Head.NodeId
+    let duplicate =
+        { input with
+            PullRequests={ input.PullRequests with
+                            PullRequests=[ { input.PullRequests.PullRequests.Head with NodeId=issueNode } ] }
+            PullRequestComments=[ { input.PullRequestComments.Head with SubjectNodeId=issueNode } ]
+            PullRequestReviews=[ { input.PullRequestReviews.Head with PullRequestNodeId=issueNode } ]
+            PullRequestInlineComments=[ { input.PullRequestInlineComments.Head with PullRequestNodeId=issueNode } ] }
+    assertRefused "subject-identity" duplicate
+    let missing =
+        { input with
+            Issues={ input.Issues with Issues=[ { input.Issues.Issues.Head with NodeId="" } ] }
+            IssueComments=[ { input.IssueComments.Head with SubjectNodeId="" } ]
+            IssueEvents=[ { input.IssueEvents.Head with SubjectNodeId="" } ] }
+    assertRefused "subject-identity" missing
 
 let private response body =
     Response
@@ -107,7 +127,7 @@ let private emptyCensusResponses =
 [<Fact>]
 let ``complete native activity binds every censused subject and raw item`` () =
     let input = sample ()
-    match MigrationNativeActivity.reconcile input with
+    match MigrationNativeActivity.reconcile options input with
     | Error reason -> failwithf "Unexpected refusal: %A" reason
     | Ok snapshot ->
         Assert.Equal(42L, snapshot.RepositoryId)
@@ -119,7 +139,13 @@ let ``complete native activity binds every censused subject and raw item`` () =
         Assert.Equal(1, snapshot.ReviewCount)
         Assert.Equal(1, snapshot.InlineCommentCount)
         Assert.Equal(64, snapshot.NormalizedSha256.Length)
-        Assert.Equal(snapshot, MigrationNativeActivity.reconcile input |> requireOk)
+        Assert.Equal(snapshot, MigrationNativeActivity.reconcile options input |> requireOk)
+
+[<Fact>]
+let ``native activity refuses a PR population outside issue marker set`` () =
+    let input = sample ()
+    assertRefused "census"
+        { input with Issues={ input.Issues with PullRequestMarkerNumbers=[ 3 ] } }
 
 [<Fact>]
 let ``missing subject stream refuses without trying to find an absent review stream`` () =
@@ -136,13 +162,75 @@ let ``nonterminal and disconnected page chains refuse`` () =
     assertRefused "stream-pages" { input with IssueComments=[ { first with Pages=[ badPage ] } ] }
 
 [<Fact>]
+let ``native activity refuses a stream page from another repository`` () =
+    let input = sample ()
+    let stream = input.IssueEvents.Head
+    for foreign in
+        [ "https://api.github.test/repos/FS-GG/other/issues/1/events?per_page=100"
+          "https://foreign.example/repos/FS-GG/copy/issues/1/events?per_page=100"
+          "https://api.github.test/repos/FS-GG/copy/issues/2/events?per_page=100" ] do
+        let foreignPage = { stream.Pages.Head with RequestedUri=foreign }
+        assertRefused "stream-pages"
+            { input with IssueEvents=[ { stream with Pages=[ foreignPage ] } ] }
+
+[<Fact>]
+let ``native activity refuses self consistent foreign initial census`` () =
+    let input = sample ()
+    let move page =
+        { page with RequestedUri=page.RequestedUri.Replace("/repos/FS-GG/copy/", "/repos/Other/foreign/") }
+    let pages rows = rows |> List.map move
+    let foreign =
+        { input with
+            Issues={ input.Issues with Pages=pages input.Issues.Pages }
+            PullRequests={ input.PullRequests with Pages=pages input.PullRequests.Pages }
+            IssueComments=input.IssueComments |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            IssueEvents=input.IssueEvents |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            PullRequestComments=input.PullRequestComments |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            PullRequestReviews=input.PullRequestReviews |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            PullRequestInlineComments=input.PullRequestInlineComments |> List.map (fun stream -> { stream with Pages=pages stream.Pages }) }
+    assertRefused "census-scope" foreign
+    for changed in
+        [ { options with ApiBase=Uri "https://foreign.example/" }
+          { options with Owner="Other" }
+          { options with Repository="other" }
+          { options with ExpectedRepositoryId=43L } ] do
+        match MigrationNativeActivity.reconcile changed input with
+        | Error(MigrationReadFailure.SnapshotMismatch "census-scope") -> ()
+        | other -> failwithf "Expected configured census scope refusal; got %A" other
+
+[<Fact>]
+let ``native activity refuses undersized and misnumbered stream page queries`` () =
+    let input = sample ()
+    let stream = input.IssueEvents.Head
+    let undersized =
+        { stream.Pages.Head with
+            RequestedUri="https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=1" }
+    assertRefused "stream-pages"
+        { input with IssueEvents=[ { stream with Pages=[ undersized ] } ] }
+    let secondUri = "https://api.github.test/repos/FS-GG/copy/issues/1/events?per_page=100&page=3"
+    let twoPages =
+        [ { stream.Pages.Head with NextUri=Some secondUri }
+          { stream.Pages.Head with RequestedUri=secondUri } ]
+    assertRefused "stream-pages"
+        { input with IssueEvents=[ { stream with PageCount=2; Pages=twoPages } ] }
+    for query in
+        [ "?state=open&per_page=100"
+          "?state=all&per_page=100&per_page=100"
+          "?state=all&per_page=100&after=cursor" ] do
+        let alteredPage =
+            { input.Issues.Pages.Head with
+                RequestedUri="https://api.github.test/repos/FS-GG/copy/issues" + query }
+        assertRefused "stream-pages"
+            { input with Issues={ input.Issues with Pages=[ alteredPage ] } }
+
+[<Fact>]
 let ``missing issue census page proof refuses and changed proof changes digest`` () =
     let input = sample ()
-    assertRefused "stream-pages" { input with Issues={ input.Issues with Pages=[] } }
-    let first = MigrationNativeActivity.reconcile input |> requireOk
+    assertRefused "census-scope" { input with Issues={ input.Issues with Pages=[] } }
+    let first = MigrationNativeActivity.reconcile options input |> requireOk
     let alteredPage = { input.Issues.Pages.Head with PayloadSha256=digest "changed issue page" }
     let altered = { input with Issues={ input.Issues with Pages=[ alteredPage ] } }
-    let second = MigrationNativeActivity.reconcile altered |> requireOk
+    let second = MigrationNativeActivity.reconcile options altered |> requireOk
     Assert.NotEqual(first.NormalizedSha256, second.NormalizedSha256)
 
 [<Fact>]
@@ -165,13 +253,36 @@ let ``orphan inline review comment and duplicate native node refuse`` () =
         { input with IssueEvents=[ { eventStream with Events=[ { issueEvent with NodeId="IC_201" } ] } ] }
 
 [<Fact>]
+let ``native activity refuses one node identity used as both subject and event`` () =
+    let input = sample ()
+    let issueNode = input.Issues.Issues.Head.NodeId
+    let eventStream = input.IssueEvents.Head
+    assertRefused "duplicate-activity"
+        { input with IssueEvents=[ { eventStream with Events=[ { issueEvent with NodeId=issueNode } ] } ] }
+    assertRefused "duplicate-activity"
+        { input with IssueComments=[ { input.IssueComments.Head with
+                                        Comments=[ { issueComment with NodeId="" } ] } ] }
+
+[<Fact>]
+let ``native activity refuses one database identity counted twice`` () =
+    let input = sample ()
+    let eventStream = input.IssueEvents.Head
+    let duplicateEvent = { issueEvent with NodeId="IE_203" }
+    assertRefused "duplicate-activity"
+        { input with IssueEvents=[ { eventStream with Events=[ issueEvent; duplicateEvent ] } ] }
+    let prStream = input.PullRequestComments.Head
+    let duplicateComment = { pullRequestComment with DatabaseId=issueComment.DatabaseId }
+    assertRefused "duplicate-activity"
+        { input with PullRequestComments=[ { prStream with Comments=[ duplicateComment ] } ] }
+
+[<Fact>]
 let ``changed page digest changes the full activity snapshot`` () =
     let input = sample ()
-    let first = MigrationNativeActivity.reconcile input |> requireOk
+    let first = MigrationNativeActivity.reconcile options input |> requireOk
     let stream = input.IssueEvents.Head
     let changed =
         { input with IssueEvents=[ { stream with Pages=[ { stream.Pages.Head with PayloadSha256=digest "other page" } ] } ] }
-    let second = MigrationNativeActivity.reconcile changed |> requireOk
+    let second = MigrationNativeActivity.reconcile options changed |> requireOk
     Assert.NotEqual(first.NormalizedSha256, second.NormalizedSha256)
 
 [<Fact>]
