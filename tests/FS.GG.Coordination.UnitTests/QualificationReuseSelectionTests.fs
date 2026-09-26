@@ -464,10 +464,8 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("\"pullRequestAdmission\": \"ready-only-with-explicit-dispatch\"", plan)
     Assert.Contains("types: [opened, synchronize, reopened, ready_for_review]", workflow)
     Assert.Contains("if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}", workflow)
-    Assert.Equal(
-        2,
-        workflow.Split("if: ${{ always() && needs.prepare.result != 'skipped' }}", StringSplitOptions.None).Length - 1
-    )
+    Assert.Contains("if: ${{ always() && needs.prepare.result != 'skipped' && needs.run-partition.result != 'skipped' && needs.classify-reuse.outputs.profile == 'full' }}", workflow)
+    Assert.Contains("if: ${{ always() && needs.prepare.result != 'skipped' }}", workflow)
     Assert.Contains("fail-fast: false", workflow)
     Assert.Contains("cron: '17 3 * * *'", workflow)
     Assert.True(String.Equals(workflow, template, StringComparison.Ordinal))
@@ -481,9 +479,11 @@ let ``workflow recovery is paginated non mutating and never cancels coherent val
     Assert.Contains("coherentRunPending:true", recovery)
     Assert.Contains("max-parallel: 6", workflow)
     Assert.Contains("formal-aggregate:", workflow)
-    Assert.Contains("- { kind: formal, shard: base }", workflow)
-    Assert.Contains("- { kind: formal, shard: epoch }", workflow)
-    Assert.Contains("needs: [prepare, shared-build, formal-prepare]", workflow)
+    Assert.Contains("matrix: ${{ fromJSON(needs.classify-reuse.outputs.matrix) }}", workflow)
+    Assert.Contains("needs: [prepare, classify-reuse, shared-build, formal-prepare]", workflow)
+    Assert.Contains("\"exactModifiedPaths\": [\"README.md\", \"src/FS.GG.Coordination.Cli/ObserverViewCommand.fs\"]", plan)
+    Assert.Contains("scoped-aggregate-${{ needs.prepare.outputs.candidate }}", workflow)
+    Assert.DoesNotContain("- { kind: formal, shard:", workflow)
     Assert.DoesNotContain("partition: [0, 1, 2, 3, 4, 5]", workflow)
     Assert.Contains("shared-build:\n    # Cheap reuse classification is the admission boundary", workflow)
     Assert.Contains("needs: [prepare, classify-reuse]", workflow)
@@ -524,6 +524,7 @@ let ``hosted partition scripts use typed receipts and complete suites`` () =
     Assert.Contains("eng/optimistic-parallel-validation.yml.template", prepare)
     Assert.Contains("eng/generate-optimistic-validation-workflow.fsx", prepare)
     Assert.Contains("eng/bootstrap-gates/optimistic-classify.sh", prepare)
+    Assert.Contains("eng/optimistic-profile.py", prepare)
     Assert.Contains("eng/optimistic-aggregate-formal.sh", prepare)
     Assert.Contains("eng/validate-test-census.py", prepare)
     Assert.Contains("eng/bootstrap-gates/canonical-quint-prepare.sh", prepare)
@@ -583,4 +584,39 @@ let ``optimistic formal fanout and test census adversarial fixtures pass`` () =
     child.WaitForExit()
     Assert.True(child.ExitCode = 0, $"fixture exit {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
     Assert.Contains("OPTIMISTIC_FANOUT_FIXTURES_OK", output)
+    Assert.Equal("", error)
+
+[<Fact>]
+let ``optimistic profile admission fixtures reject unknown and forged inputs`` () =
+    let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let startInfo = ProcessStartInfo("python3")
+    startInfo.WorkingDirectory <- root
+    startInfo.ArgumentList.Add("-B")
+    startInfo.ArgumentList.Add("eng/test-optimistic-profile.py")
+    startInfo.UseShellExecute <- false
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, $"profile fixture exit {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
+    Assert.Contains("optimistic CI profile: scoped", output)
+    Assert.Contains("optimistic CI profile: full", output)
+
+[<Fact>]
+let ``scoped aggregate fixture rejects incomplete receipts and full donor use`` () =
+    let root = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
+    let startInfo = ProcessStartInfo("bash")
+    startInfo.WorkingDirectory <- root
+    startInfo.ArgumentList.Add("eng/test-optimistic-scoped-aggregate.sh")
+    startInfo.UseShellExecute <- false
+    startInfo.RedirectStandardOutput <- true
+    startInfo.RedirectStandardError <- true
+    use child = Process.Start startInfo
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, $"scoped fixture exit {child.ExitCode}\nstdout:\n{output}\nstderr:\n{error}")
+    Assert.Contains("OPTIMISTIC_SCOPED_AGGREGATE_OK", output)
     Assert.Equal("", error)
