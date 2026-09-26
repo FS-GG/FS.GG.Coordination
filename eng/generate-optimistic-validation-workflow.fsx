@@ -77,6 +77,34 @@ if fanout.GetProperty("performanceShard").GetString() <> "epoch" then
 
 let shadow = plan.GetProperty("offlineFormalShadow")
 let offlineEnabled = shadow.GetProperty("enabled").GetBoolean()
+let profiles = plan.GetProperty("profiles")
+let scoped = profiles.GetProperty("scoped")
+
+if profiles.GetProperty("default").GetString() <> "full" then
+    failwith "unknown events must default to full CI"
+
+let scopedPaths =
+    scoped.GetProperty("exactModifiedPaths").EnumerateArray()
+    |> Seq.map _.GetString()
+    |> Seq.toList
+
+if
+    scoped.GetProperty("event").GetString() <> "ready-pull-request"
+    || scoped.GetProperty("requiredDisposition").GetString() <> "reused"
+    || scoped.GetProperty("donor").GetString() <> "authentic-complete-unexpired-full-six-partition-aggregate"
+    || scopedPaths <> [ "README.md"; "src/FS.GG.Coordination.Cli/ObserverViewCommand.fs" ]
+    || scoped.GetProperty("aggregateArtifactPrefix").GetString() <> "scoped-aggregate-"
+then
+    failwith "scoped profile must remain confined to audited paths and full prior evidence"
+
+let scopedExecutions =
+    scoped.GetProperty("executions").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+
+if
+    scopedExecutions
+    <> [ "formal:base"; "partition:0"; "partition:2"; "partition:3"; "partition:4"; "partition:5" ]
+then
+    failwith "scoped execution must retain formal base and all five nonformal partitions"
 
 if
     shadow.GetProperty("shard").GetString() <> "authority-reconciliation"
@@ -117,10 +145,12 @@ for required in
         "run-partition:"
         "formal-aggregate:"
         "aggregate:"
-        "shard: base"
-        "shard: epoch"
         "offline-formal-shadow:"
         "bash \"$FSGG_TRUSTED_ROOT/eng/offline-formal-join.sh\""
+        "matrix: ${{ fromJSON(needs.classify-reuse.outputs.matrix) }}"
+        "python3 eng/optimistic-profile.py"
+        "FSGG_PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}"
+        "name: scoped-aggregate-${{ needs.prepare.outputs.candidate }}"
     ] do
     if not (text.Contains required) then
         failwith $"workflow projection missing {required}"
@@ -129,14 +159,14 @@ let offlineRouteChecks =
     if offlineEnabled then
         [
             "if: ${{ github.event_name == 'pull_request' }}"
-            "needs: [prepare, run-partition, offline-formal-shadow]"
+            "needs: [prepare, classify-reuse, run-partition, offline-formal-shadow]"
             "matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request')"
             "always() && matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request')"
         ]
     else
         [
             "if: ${{ false && github.event_name == 'pull_request' }}"
-            "needs: [prepare, run-partition]"
+            "needs: [prepare, classify-reuse, run-partition]"
             "if: ${{ matrix.kind == 'formal' }}"
             "if: ${{ always() && matrix.kind == 'formal' }}"
         ]
@@ -145,24 +175,13 @@ for required in offlineRouteChecks do
     if not (text.Contains required) then
         failwith $"offline formal route missing {required}"
 
-let skippedPrepareGuard = "if: ${{ always() && needs.prepare.result != 'skipped' }}"
-
-if text.Split(skippedPrepareGuard, StringSplitOptions.None).Length <> 3 then
+if
+    not (text.Contains("if: ${{ always() && needs.prepare.result != 'skipped' && needs.run-partition.result != 'skipped' && needs.classify-reuse.outputs.profile == 'full' }}"))
+    || not (text.Contains("if: ${{ always() && needs.prepare.result != 'skipped' }}"))
+then
     failwith "both coherent aggregates must skip unadmitted draft pull requests"
 
-for shard in semanticShards @ [ performanceShard ] do
-    let token = $"- {{ kind: formal, shard: %s{shard} }}"
-
-    if text.Split(token, StringSplitOptions.None).Length <> 2 then
-        failwith $"workflow projection must schedule formal shard exactly once: %s{shard}"
-
-for partition in [ 0; 2; 3; 4; 5 ] do
-    let token = $"- {{ kind: partition, partition: %d{partition} }}"
-
-    if text.Split(token, StringSplitOptions.None).Length <> 2 then
-        failwith $"workflow projection must schedule nonformal partition exactly once: %d{partition}"
-
-if text.Contains("kind: partition, partition: 1") then
-    failwith "workflow must reserve logical partition one for formal aggregation"
+if text.Contains("- { kind: formal, shard:") || text.Contains("- { kind: partition, partition:") then
+    failwith "workflow must use plan-derived profile matrix"
 
 printfn "optimistic validation projection is current"

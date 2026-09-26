@@ -19,6 +19,17 @@
     "nightlyEnumeration": "complete-protected-main-ancestry-and-pending-candidates",
     "nightlyRecovery": "dispatch-up-to-available-two-candidate-capacity"
   },
+  "profiles": {
+    "default": "full",
+    "scoped": {
+      "event": "ready-pull-request",
+      "requiredDisposition": "reused",
+      "donor": "authentic-complete-unexpired-full-six-partition-aggregate",
+      "exactModifiedPaths": ["README.md", "src/FS.GG.Coordination.Cli/ObserverViewCommand.fs"],
+      "executions": ["formal:base", "partition:0", "partition:2", "partition:3", "partition:4", "partition:5"],
+      "aggregateArtifactPrefix": "scoped-aggregate-"
+    }
+  },
   "formalFanout": {
     "logicalPartition": 1,
     "maxConcurrentExecutions": 6,
