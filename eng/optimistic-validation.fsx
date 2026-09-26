@@ -226,4 +226,73 @@ match args.Head with
         printfn "coherent aggregate passed: %s" plan.PlanSha256
     | Ok _ -> failwith "coherent aggregate contains a failed partition"
     | Error error -> failwith error
+| "aggregate-scoped" ->
+    let obligation =
+        File.ReadAllBytes(required "--obligation")
+        |> parseCandidateObligation
+        |> Result.defaultWith failwith
+
+    let plan =
+        File.ReadAllBytes(required "--plan")
+        |> parsePartitionPlan obligation
+        |> Result.defaultWith failwith
+
+    let receipts =
+        Directory.GetFiles(required "--receipts", "receipt.json", SearchOption.AllDirectories)
+        |> Array.map (File.ReadAllBytes >> parsePartitionReceipt >> Result.defaultWith failwith)
+        |> Array.sortBy _.Partition
+        |> Array.toList
+
+    if plan.PartitionCount <> 6 || (receipts |> List.map _.Partition) <> [ 0; 2; 3; 4; 5 ] then
+        failwith "scoped receipt coverage must be exactly the five nonformal partitions"
+
+    for receipt in receipts do
+        let expected = plan.Partitions |> List.find (fst >> (=) receipt.Partition) |> snd
+
+        if receipt.PlanSha256 <> plan.PlanSha256 || receipt.Obligations <> expected || not receipt.Passed then
+            failwith "scoped receipt is stale, substituted, or failed"
+
+    use profileDocument = JsonDocument.Parse(File.ReadAllBytes(required "--profile"))
+    let profile = profileDocument.RootElement
+    let get (key: string) = profile.GetProperty(key).GetString()
+
+    if
+        get "schema" <> "fsgg.coordination.optimistic-profile/1"
+        || get "profile" <> "scoped"
+        || get "candidate" <> obligation.Candidate
+        || get "baseRevision" <> obligation.BaseRevision
+        || get "candidateObligationSha256" <> obligation.ObligationSha256
+    then
+        failwith "scoped profile does not bind the candidate"
+
+    let payloadBytes =
+        use stream = new MemoryStream()
+        use writer = new Utf8JsonWriter(stream)
+        writer.WriteStartObject()
+        writer.WriteString("schema", "fsgg.coordination.scoped-aggregate-receipt/1")
+        writer.WriteString("candidateObligationSha256", obligation.ObligationSha256)
+        writer.WriteString("planSha256", plan.PlanSha256)
+        writer.WriteString("profileSha256", get "profileSha256")
+        writer.WriteString("selectionSha256", get "selectionSha256")
+        writer.WriteString("fullDonorReceiptSha256", get "fullDonorReceiptSha256")
+        writer.WriteStartArray("partitionReceiptSha256")
+        receipts |> List.iter (fun receipt -> writer.WriteStringValue receipt.ReceiptSha256)
+        writer.WriteEndArray()
+        writer.WriteBoolean("passed", true)
+        writer.WriteEndObject()
+        writer.Flush()
+        stream.ToArray()
+
+    use payloadDocument = JsonDocument.Parse payloadBytes
+    use output = new MemoryStream()
+    use writer = new Utf8JsonWriter(output)
+    writer.WriteStartObject()
+
+    for property in payloadDocument.RootElement.EnumerateObject() do
+        property.WriteTo writer
+
+    writer.WriteString("receiptSha256", sha256 payloadBytes)
+    writer.WriteEndObject()
+    writer.Flush()
+    File.WriteAllBytes(required "--output", Array.append (output.ToArray()) [| byte '\n' |])
 | mode -> failwith $"unsupported optimistic validation phase: {mode}"
