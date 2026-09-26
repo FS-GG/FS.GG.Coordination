@@ -197,6 +197,8 @@ module GitHubMigrationInspect =
             || not (validSha 64 page.PayloadSha256)
             || sha page.RawBody <> page.PayloadSha256) then
             fail "raw-page"
+        elif pages |> List.exists (fun page -> sha page.RequestedUri <> page.RequestIdentitySha256) then
+            fail "request-identity"
         elif (pages |> List.collect _.Subjects |> List.sortBy _.Identity) <> read.Subjects then
             fail "page-subjects"
         else Ok value
