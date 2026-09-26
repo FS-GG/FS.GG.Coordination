@@ -14,7 +14,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/optimistic-parallel-validation.yml",
-      "sha256": "d74fa2cdf1470f94317961f2b75978c2b186c0ab612e709cbcc82563bed29b19",
+      "sha256": "a7ea0d3a24906b03d291f89b96e6c5c4bb6ddf09cefa4efdd0c3b8e301ddb948",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
