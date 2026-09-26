@@ -17,7 +17,7 @@ candidate; expiry still refuses an old result for the same head. Activation requ
 after all of these facts exist:
 
 1. this verifier is present on protected `main`, so a pull request cannot replace its verifier;
-2. Main's public key and SPKI digest replace the pending signer anchor;
+2. the committed Main public key and SPKI digest are verified from protected `main`;
 3. Main and fdev agree the dedicated evidence ref from `.github#3854`, including bounded polling
    and immutable per-head paths; and
 4. a hosted test accepts one current exact-head envelope and refuses wrong-head, wrong-shard,
@@ -31,18 +31,21 @@ bound script digests, then publish the normal `canonical-quint-shard-<id>` artif
 hosted aggregate remains the GitHub check producer and rejects a missing or invalid shard. Rollback
 is the policy-only return to `shadow`, which restores that shard to the existing hosted matrix.
 
-Main can rehearse the executor after supplying a digest-pinned image and a throwaway key:
+Main can rehearse the executor with its protected signing key, a digest-pinned image and a
+fresh private copy of the preseeded NuGet cache:
 
 ```text
 FSGG_OFFLINE_SIGNING_KEY_FD=3 \
-  eng/run-offline-formal-shard.sh CHECKOUT HEAD BASE TOOLCHAIN IMAGE PUBLIC_KEY KEY_ID OUTPUT \
+  eng/run-offline-formal-shard.sh CHECKOUT HEAD BASE TOOLCHAIN IMAGE PUBLIC_KEY KEY_ID OUTPUT NUGET_CACHE_COPY \
   3<PRIVATE_KEY
 ```
 
 The wrapper is intentionally host-invoked and does not register a GitHub Actions runner. It exports
 the exact candidate tree into a temporary minimal Git repository because the canonical validator
 uses `git ls-files`; the staged tree must equal the requested commit tree before Podman starts.
-Podman resolves the policy-pinned local image manifest digest before launch and uses `--pull=never`. The
+Podman resolves the policy-pinned local image manifest digest before launch and uses `--pull=never`.
+`NUGET_CACHE_COPY` is a disposable writable copy; candidate code never sees the host's persistent
+cache and cannot fetch missing packages over the network. The
 supervisor creates evidence timestamps from its host clock only after the shard exits.
 Receipt transport is public signed evidence; no registration token, GitHub token or signing key
 crosses the candidate-container boundary.
