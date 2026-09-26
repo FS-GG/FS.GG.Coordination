@@ -38,9 +38,9 @@ expected_toolchain_sha="$(jq -er '.toolchainArchiveSha256' "$policy")"
   printf 'rootless Podman is required\n' >&2
   exit 1
 }
-resolved_image_id="$(podman image inspect --format '{{.Id}}' "$image")"
-expected_image_id="sha256:$(jq -er '.imageSha256' "$policy")"
-[[ "$resolved_image_id" == "$expected_image_id" ]] || {
+resolved_image_digest="$(podman image inspect --format '{{.Digest}}' "$image")"
+expected_image_digest="sha256:$(jq -er '.imageSha256' "$policy")"
+[[ "$resolved_image_digest" == "$expected_image_digest" ]] || {
   printf 'offline image does not match the policy pin\n' >&2
   exit 1
 }
@@ -48,7 +48,7 @@ expected_image_id="sha256:$(jq -er '.imageSha256' "$policy")"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/fsgg-offline-formal-XXXXXX")"
 cleanup() { rm -rf -- "$scratch"; }
 trap cleanup EXIT
-mkdir -p "$scratch/source" "$scratch/output"
+mkdir -p "$scratch/output"
 "$supervisor_root/eng/prepare-offline-formal-source.sh" "$checkout" "$head_sha" "$scratch/source"
 
 timeout --kill-after=30s 90m podman run --rm \
@@ -85,7 +85,7 @@ python3 "$supervisor_root/eng/offline-formal-evidence.py" seal \
   --head-sha "$head_sha" \
   --base-sha "$base_sha" \
   --toolchain-archive "$toolchain" \
-  --image-digest "$resolved_image_id" \
+  --image-digest "$resolved_image_digest" \
   --created-at "$created_at" \
   --expires-at "$expires_at" \
   --public-key "$public_key" \
