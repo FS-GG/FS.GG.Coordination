@@ -26,6 +26,12 @@ then
     failwith "prior aggregate candidate search bound must be twenty-five"
 
 if
+    plan.GetProperty("coherent").GetProperty("pullRequestAdmission").GetString()
+    <> "ready-only-with-explicit-dispatch"
+then
+    failwith "coherent pull request admission must defer drafts and retain explicit dispatch"
+
+if
     plan.GetProperty("coherent").GetProperty("maxPartitionsPerCandidate").GetInt32()
     <> 6
 then
@@ -70,13 +76,13 @@ if fanout.GetProperty("performanceShard").GetString() <> "epoch" then
     failwith "formal performance shard must remain epoch"
 
 let shadow = plan.GetProperty("offlineFormalShadow")
+let offlineEnabled = shadow.GetProperty("enabled").GetBoolean()
 
 if
     shadow.GetProperty("shard").GetString() <> "authority-reconciliation"
-    || shadow.GetProperty("enabled").GetBoolean()
     || shadow.GetProperty("fragmentArtifact").GetString() <> "coherent-formal-fragment"
 then
-    failwith "offline formal shadow must remain disabled for the named shard"
+    failwith "offline formal pilot must retain the named shard and fragment artifact"
 
 let workflow =
     Path.Combine(root, ".github/workflows/optimistic-parallel-validation.yml")
@@ -100,6 +106,9 @@ for required in
     [
         "group: optimistic-coherent-${{ inputs.candidate_sha || github.event.pull_request.head.sha || github.event.merge_group.head_sha || github.sha }}"
         "cancel-in-progress: false"
+        "types: [opened, synchronize, reopened, ready_for_review]"
+        "if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}"
+        "if: ${{ always() && needs.prepare.result != 'skipped' }}"
         "fail-fast: false"
         "max-parallel: 6"
         "cron: '17 3 * * *'"
@@ -111,11 +120,35 @@ for required in
         "shard: base"
         "shard: epoch"
         "offline-formal-shadow:"
-        "if: ${{ false && github.event_name == 'pull_request' }}"
         "bash \"$FSGG_TRUSTED_ROOT/eng/offline-formal-join.sh\""
     ] do
     if not (text.Contains required) then
         failwith $"workflow projection missing {required}"
+
+let offlineRouteChecks =
+    if offlineEnabled then
+        [
+            "if: ${{ github.event_name == 'pull_request' }}"
+            "needs: [prepare, run-partition, offline-formal-shadow]"
+            "matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request')"
+            "always() && matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request')"
+        ]
+    else
+        [
+            "if: ${{ false && github.event_name == 'pull_request' }}"
+            "needs: [prepare, run-partition]"
+            "if: ${{ matrix.kind == 'formal' }}"
+            "if: ${{ always() && matrix.kind == 'formal' }}"
+        ]
+
+for required in offlineRouteChecks do
+    if not (text.Contains required) then
+        failwith $"offline formal route missing {required}"
+
+let skippedPrepareGuard = "if: ${{ always() && needs.prepare.result != 'skipped' }}"
+
+if text.Split(skippedPrepareGuard, StringSplitOptions.None).Length <> 3 then
+    failwith "both coherent aggregates must skip unadmitted draft pull requests"
 
 for shard in semanticShards @ [ performanceShard ] do
     let token = $"- {{ kind: formal, shard: %s{shard} }}"

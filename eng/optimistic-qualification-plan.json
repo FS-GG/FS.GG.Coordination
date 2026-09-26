@@ -9,6 +9,7 @@
     "dispositions": ["current", "reused", "deferred", "failed"]
   },
   "coherent": {
+    "pullRequestAdmission": "ready-only-with-explicit-dispatch",
     "maxPartitionsPerCandidate": 6,
     "failFast": false,
     "cancelInProgress": false,
@@ -27,7 +28,7 @@
   },
   "offlineFormalShadow": {
     "shard": "authority-reconciliation",
-    "enabled": false,
+    "enabled": true,
     "fragmentArtifact": "coherent-formal-fragment"
   },
   "obligations": ["unit", "architecture", "formal", "security", "package", "recovery"]

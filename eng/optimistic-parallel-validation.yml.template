@@ -4,6 +4,7 @@ name: Optimistic parallel validation
 
 on:
   pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
   merge_group:
   push:
     branches: [main]
@@ -33,6 +34,9 @@ concurrency:
 
 jobs:
   prepare:
+    # Draft source heads are not admitted coherent candidates. Explicit dispatch,
+    # protected-main, merge-queue and nightly obligations remain admitted.
+    if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
     runs-on: ubuntu-latest
     outputs:
       candidate: ${{ steps.identity.outputs.candidate }}
@@ -203,7 +207,7 @@ jobs:
           NUGET_PACKAGES: ${{ runner.temp }}/nuget-${{ matrix.partition }}
         run: bash eng/bootstrap-gates/optimistic-run-partition.sh
       - name: Run one independently isolated formal shard
-        if: ${{ matrix.kind == 'formal' }}
+        if: ${{ matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request') }}
         env:
           FSGG_QUINT_SHARD: ${{ matrix.shard }}
           FSGG_QUINT_TOOLCHAIN_ARCHIVE: ${{ runner.temp }}/canonical-quint-toolchain/toolchain.tar.gz
@@ -216,17 +220,16 @@ jobs:
           path: ${{ runner.temp }}/coherent-partition-${{ matrix.partition }}
           if-no-files-found: error
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        if: ${{ always() && matrix.kind == 'formal' }}
+        if: ${{ always() && matrix.kind == 'formal' && (matrix.shard != 'authority-reconciliation' || github.event_name != 'pull_request') }}
         with:
           name: coherent-formal-fragment-${{ needs.prepare.outputs.candidate }}-${{ matrix.shard }}
           path: ${{ runner.temp }}/coherent-formal-fragment-${{ matrix.shard }}
           if-no-files-found: error
 
   offline-formal-shadow:
-    # This job is deliberately unreachable until the protected signer and
-    # evidence transport are confirmed. The hosted authority shard remains in
-    # run-partition, and formal-aggregate retains its existing dependencies.
-    if: ${{ false && github.event_name == 'pull_request' }}
+    # Only pull requests use signed offline evidence for this pilot. Push,
+    # merge-group, schedule and dispatch retain the hosted authority shard.
+    if: ${{ github.event_name == 'pull_request' }}
     needs: [prepare, classify-reuse, shared-build, formal-prepare]
     runs-on: ubuntu-latest
     env:
@@ -267,8 +270,8 @@ jobs:
           if-no-files-found: error
 
   formal-aggregate:
-    needs: [prepare, run-partition]
-    if: ${{ always() }}
+    needs: [prepare, run-partition, offline-formal-shadow]
+    if: ${{ always() && needs.prepare.result != 'skipped' }}
     runs-on: ubuntu-latest
     env:
       FSGG_FORMAL_FRAGMENT_ROOT: /tmp/fsgg-${{ github.run_id }}-coherent-formal-fragments
@@ -297,7 +300,7 @@ jobs:
 
   aggregate:
     needs: [prepare, classify-reuse, run-partition, formal-aggregate]
-    if: ${{ always() }}
+    if: ${{ always() && needs.prepare.result != 'skipped' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
