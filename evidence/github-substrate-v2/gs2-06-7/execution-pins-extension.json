@@ -130,6 +130,23 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/callable-isolated-v2-effect-release.yml",
+      "sha256": "cb0183fe19b6b3a06e27f5112e4e65bbd8d7ceeac1c0d6693bcf260cb0be1820",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/callable-isolated-v2-execute.yml",
+      "sha256": "7406efeabb5aca0504e8ae39a514038d7473b6fd97a66d2e4efcc5b2c94799db",
+      "externalReferences": [],
+      "localReferences": []
     }
   ]
 }
