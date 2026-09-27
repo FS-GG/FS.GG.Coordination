@@ -282,6 +282,24 @@ let ``producer claim record is hash bound and walked to root in both passes`` ()
         Assert.Equal(14, transport.Requests.Length)
 
 [<Fact>]
+let ``two pass contract refuses typed operation identity changed after raw capture`` () =
+    let fixture = claimFixture 1L (fun address _ -> address)
+    let capture =
+        MigrationClaimJournalCapture.captureTwoPass options (FakeTransport(fixtureRoute fixture))
+        |> Result.defaultWith failwith
+    let first = capture.ClaimFirst
+    let history = first.ClaimHistories.Head
+    let entry = history.ClaimEntries.Head
+    let changedEntry =
+        { entry with ClaimRecord={ entry.ClaimRecord with OperationId=Some "forged-operation" } }
+    let changedHistory = { history with ClaimEntries=[ changedEntry ] }
+    let changed = { first with ClaimHistories=[ changedHistory ]; ClaimFingerprint="" }
+    let changed = { changed with ClaimFingerprint=MigrationClaimEventCaptureContract.passFingerprint changed }
+    Assert.Equal(Error "claim-journal-history",
+                 MigrationClaimEventCaptureContract.validateTwoPass
+                     { ClaimFirst=changed; ClaimSecond=changed })
+
+[<Fact>]
 let ``producer conflict claim address is classified from a declared touch`` () =
     let fixture =
         claimFixture 1L (fun _ authority ->

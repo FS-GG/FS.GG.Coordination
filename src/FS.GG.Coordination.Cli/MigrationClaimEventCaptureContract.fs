@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Cli
 open System
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open FS.GG.Coordination.GitHub
 
 type MigrationClaimJournalNamespace =
@@ -144,6 +145,91 @@ module MigrationClaimEventCaptureContract =
         && read.RequestSha256 = MigrationReviewDeliveryCaptureContract.requestSha256 read.Request
         && read.RawSha256 = sha read.RawBody
 
+    let private rawTypedEntry (entry: MigrationClaimJournalHistoryEntry) =
+        let property (name: string) (value: JsonElement) =
+            let mutable found = Unchecked.defaultof<JsonElement>
+            if value.ValueKind <> JsonValueKind.Object || not (value.TryGetProperty(name, &found)) then
+                invalidOp $"missing:{name}"
+            found
+        let text name value =
+            let found = property name value
+            if found.ValueKind <> JsonValueKind.String then invalidOp $"invalid:{name}"
+            found.GetString()
+        let number name value =
+            let found = property name value
+            let mutable parsed = 0L
+            if found.ValueKind <> JsonValueKind.Number || not (found.TryGetInt64(&parsed)) then
+                invalidOp $"invalid:{name}"
+            parsed
+        let decodeBlob (read: MigrationReviewDeliveryRead) =
+            use response = JsonDocument.Parse read.RawBody
+            let root = response.RootElement
+            let oid = text "sha" root
+            let bytes = Convert.FromBase64String((text "content" root).Replace("\n", ""))
+            let gitBytes = Array.append (Encoding.ASCII.GetBytes($"blob {bytes.LongLength}\u0000")) bytes
+            let actualOid = gitBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+            let requestUri = Uri read.Request.Uri
+            if text "encoding" root <> "base64" || oid <> actualOid
+               || not (requestUri.AbsolutePath.EndsWith($"/git/blobs/{oid}", StringComparison.Ordinal)) then
+                invalidOp "blob-identity"
+            bytes
+        let canonicalIds family (event: JsonElement) =
+            match family with
+            | ClaimSchemaFamily ->
+                let subject = text "subject" event
+                let primary = ClaimTouchSetAdapter.claimAddress subject |> Result.toOption |> Option.map _.CanonicalId
+                let conflicts =
+                    property "touches" event |> _.EnumerateArray()
+                    |> Seq.choose (fun touch ->
+                        ClaimTouchSetAdapter.conflictAddress
+                            { Repository=text "repository" touch; Path=text "path" touch }
+                        |> Result.toOption |> Option.map _.CanonicalId)
+                    |> Seq.toList
+                primary |> Option.toList |> List.append conflicts
+            | AdmissionSchemaFamily -> [ "fleet-v1-admission:fs-gg-production" ]
+            | OrdinarySchemaFamily -> [ entry.ClaimRecord.CanonicalId ]
+            | ReviewSchemaFamily ->
+                ReviewDeliveryAdapter.deliveryAddress (text "subject" event)
+                |> Result.toOption |> Option.map _.CanonicalId |> Option.toList
+        try
+            if entry.ClaimReads.Length <> 4 && entry.ClaimReads.Length <> 5 then false
+            else
+                let eventBytes = decodeBlob entry.ClaimReads.[2]
+                let headBytes = decodeBlob entry.ClaimReads.[3]
+                use eventDocument = JsonDocument.Parse eventBytes
+                use headDocument = JsonDocument.Parse headBytes
+                let event, head = eventDocument.RootElement, headDocument.RootElement
+                let familyMatches =
+                    match entry.ClaimRecord.Family with
+                    | ClaimSchemaFamily ->
+                        number "schemaVersion" event = 1L
+                        && entry.ClaimRecord.Schema = "fsgg.coordination.claim-authority/1"
+                        && entry.ClaimRecord.OperationId = Some(text "operationId" event)
+                    | AdmissionSchemaFamily ->
+                        text "schema" event = entry.ClaimRecord.Schema
+                        && entry.ClaimRecord.OperationId = Some(text "commandId" event)
+                    | OrdinarySchemaFamily ->
+                        text "schema" event = entry.ClaimRecord.Schema
+                        && entry.ClaimRecord.OperationId = Some(text "operationId" event)
+                        && number "generation" event = entry.ClaimRecord.Generation
+                    | ReviewSchemaFamily ->
+                        number "schemaVersion" event = 1L
+                        && entry.ClaimRecord.Schema = "fsgg.coordination.delivery-authority/1"
+                        && entry.ClaimRecord.OperationId = Some(text "operationId" event)
+                let expectedKind =
+                    match entry.ClaimRecord.Namespace with
+                    | ClaimJournalNamespace -> "claim"
+                    | OperationJournalNamespace -> "operation"
+                familyMatches
+                && text "journalKind" head = expectedKind
+                && text "aggregateId" head = entry.ClaimRecord.CanonicalId
+                && number "generation" head = entry.ClaimRecord.Generation
+                && text "eventDigest" head =
+                    (eventBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant())
+                && List.contains entry.ClaimRecord.CanonicalId (canonicalIds entry.ClaimRecord.Family event)
+        with
+        | :? InvalidOperationException | :? JsonException | :? FormatException | :? UriFormatException -> false
+
     let private validNamespaceRead (repository: MigrationReviewDeliveryRepository) census =
         match census.ClaimNamespaceReads with
         | [ read ] ->
@@ -197,7 +283,8 @@ module MigrationClaimEventCaptureContract =
                         && not (String.IsNullOrWhiteSpace entry.ClaimRecord.Schema)
                         && not (String.IsNullOrWhiteSpace entry.ClaimRecord.CanonicalId)
                         && Some entry.ClaimRecord.Namespace = historyNamespace
-                        && schemaFamilyAllowed entry.ClaimRecord.Namespace entry.ClaimRecord.Family)
+                        && schemaFamilyAllowed entry.ClaimRecord.Namespace entry.ClaimRecord.Family
+                        && rawTypedEntry entry)
                     && entries
                        |> List.pairwise
                        |> List.forall (fun (current, next) ->
