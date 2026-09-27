@@ -16,6 +16,45 @@ let private sha (value: string) =
     |> Convert.ToHexString
     |> _.ToLowerInvariant()
 
+let private shaBytes (value: byte array) =
+    SHA256.HashData value |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let private gitOid kind (value: byte array) =
+    let header = Encoding.UTF8.GetBytes($"{kind} {value.Length}\000")
+
+    SHA1.HashData(Array.append header value)
+    |> Convert.ToHexString
+    |> _.ToLowerInvariant()
+
+let private rebuildSnapshot (snapshot: MigrationSandboxSeedJournalSnapshot) stateBytes =
+    let blob = gitOid "blob" stateBytes
+
+    let treeBytes =
+        Array.append (Encoding.UTF8.GetBytes("100644 state.json\000")) (Convert.FromHexString blob)
+
+    let tree = gitOid "tree" treeBytes
+    let stateSha = shaBytes stateBytes
+
+    let parentLine =
+        snapshot.ParentOid
+        |> Option.map (fun oid -> $"parent {oid}\n")
+        |> Option.defaultValue ""
+
+    let commitBytes =
+        Encoding.UTF8.GetBytes(
+            $"tree {tree}\n{parentLine}author FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> {snapshot.JournalGeneration} +0000\ncommitter FS.GG Q4 Seed Journal <q4-seed-journal@fs.gg> {snapshot.JournalGeneration} +0000\n\nfsgg Q4 seed journal generation {snapshot.JournalGeneration}\nstate-sha256 {stateSha}\n"
+        )
+
+    { snapshot with
+        StateBytes = stateBytes
+        StateSha256 = stateSha
+        BlobOid = blob
+        TreeBytes = treeBytes
+        TreeOid = tree
+        CommitBytes = commitBytes
+        CommitOid = gitOid "commit" commitBytes
+    }
+
 let private candidate = String.replicate 40 "a"
 
 let private mint, host, seedPlan, corpus =
@@ -179,6 +218,13 @@ let ``genesis persists exact executor state and survives a fresh reader`` () =
 
         Assert.Equal(plan.CommitOid, first.CommitOid)
         Assert.Equal(first, restarted)
+
+        let restored =
+            MigrationSandboxSeedJournal.restore None restarted
+            |> Result.defaultWith (fun e -> failwithf "%A" e)
+
+        Assert.Equal(initial (), restored.State)
+        Assert.False(restored.RecoveryOnly)
         Assert.Contains("\"kind\":\"create-nonce-issue\"", Encoding.UTF8.GetString first.StateBytes)
         Assert.Contains("\"stage\":\"planned\"", Encoding.UTF8.GetString first.StateBytes))
 
@@ -346,14 +392,29 @@ let ``journal retains in flight recovery result and reverse compensation custody
 
         let issue = state.Effects.Head
         persist (advance (String.replicate 40 "d") (MigrationSandboxSeedAction.PersistIntent issue.EffectId) state)
+        let intentSnapshot = snapshot
         persist (advance (String.replicate 40 "e") (MigrationSandboxSeedAction.MarkInFlight issue.EffectId) state)
         Assert.Contains("\"stage\":\"in-flight\"", Encoding.UTF8.GetString snapshot.StateBytes)
+
+        let inFlight =
+            MigrationSandboxSeedJournal.restore (Some intentSnapshot) snapshot
+            |> Result.defaultWith (fun e -> failwithf "%A" e)
+
+        Assert.True(inFlight.RecoveryOnly)
+        Assert.Equal(Some issue.EffectId, inFlight.ActiveEffectId)
+        let inFlightSnapshot = snapshot
 
         persist (
             advance (String.replicate 40 "f") (MigrationSandboxSeedAction.RecordResponseUnknown issue.EffectId) state
         )
 
         Assert.Contains("\"stage\":\"recovery-pending\"", Encoding.UTF8.GetString snapshot.StateBytes)
+
+        let pending =
+            MigrationSandboxSeedJournal.restore (Some inFlightSnapshot) snapshot
+            |> Result.defaultWith (fun e -> failwithf "%A" e)
+
+        Assert.True(pending.RecoveryOnly)
 
         let issueOwned =
             {
@@ -403,9 +464,92 @@ let ``journal retains in flight recovery result and reverse compensation custody
                 state
             |> Result.defaultWith (fun e -> failwithf "%A" e)
 
+        let completeSnapshot = snapshot
         persist compensation
+
+        let restoredCompensation =
+            MigrationSandboxSeedJournal.restore (Some completeSnapshot) snapshot
+            |> Result.defaultWith (fun e -> failwithf "%A" e)
+
+        Assert.Equal(compensation, restoredCompensation.State)
+        Assert.False(restoredCompensation.RecoveryOnly)
         let retained = Encoding.UTF8.GetString snapshot.StateBytes
         Assert.Contains("\"kind\":\"remove-project-membership\"", retained)
         Assert.Contains("\"kind\":\"delete-nonce-issue\"", retained)
         Assert.Contains("\"resourceId\":\"ITEM_NONCE\"", retained)
         Assert.Contains("\"resourceId\":\"ISSUE_NONCE\"", retained))
+
+[<Fact>]
+let ``typed restore rejects extra missing forged and broken chain snapshots`` () =
+    let plan =
+        MigrationSandboxSeedJournal.plan None (initial ())
+        |> Result.defaultWith (fun e -> failwithf "%A" e)
+
+    let snapshot =
+        {
+            RefName = plan.RefName
+            JournalGeneration = plan.JournalGeneration
+            StateGeneration = plan.StateGeneration
+            RunNonce = plan.RunNonce
+            BindingSeal = plan.BindingSeal
+            CommitOid = plan.CommitOid
+            ParentOid = plan.ExpectedParent
+            StateSha256 = plan.StateSha256
+            StateBytes = plan.StateBytes
+            BlobOid = plan.BlobOid
+            TreeOid = plan.TreeOid
+            TreeBytes = plan.TreeBytes
+            CommitBytes = plan.CommitBytes
+        }
+
+    let json = Encoding.UTF8.GetString snapshot.StateBytes
+
+    let extra =
+        rebuildSnapshot snapshot (Encoding.UTF8.GetBytes(json.Substring(0, json.Length - 1) + ",\"extra\":true}"))
+
+    let missing =
+        rebuildSnapshot snapshot (Encoding.UTF8.GetBytes(json.Replace("\"activeIndex\":0,", "")))
+
+    let forged =
+        rebuildSnapshot
+            snapshot
+            (Encoding.UTF8.GetBytes(json.Replace((initial ()).Effects.Head.EffectId, String.replicate 64 "f")))
+
+    for value in [ extra; missing; forged ] do
+        Assert.Equal(
+            Error MigrationSandboxSeedJournalFailure.InvalidState,
+            MigrationSandboxSeedJournal.restore None value
+        )
+
+    let wrongPrevious =
+        { snapshot with
+            CommitOid = String.replicate 40 "f"
+        }
+
+    let nextState = nextWith (String.replicate 40 "d") (initial ())
+
+    let nextPlan =
+        MigrationSandboxSeedJournal.plan (Some snapshot) nextState
+        |> Result.defaultWith (fun e -> failwithf "%A" e)
+
+    let nextSnapshot =
+        {
+            RefName = nextPlan.RefName
+            JournalGeneration = nextPlan.JournalGeneration
+            StateGeneration = nextPlan.StateGeneration
+            RunNonce = nextPlan.RunNonce
+            BindingSeal = nextPlan.BindingSeal
+            CommitOid = nextPlan.CommitOid
+            ParentOid = nextPlan.ExpectedParent
+            StateSha256 = nextPlan.StateSha256
+            StateBytes = nextPlan.StateBytes
+            BlobOid = nextPlan.BlobOid
+            TreeOid = nextPlan.TreeOid
+            TreeBytes = nextPlan.TreeBytes
+            CommitBytes = nextPlan.CommitBytes
+        }
+
+    Assert.Equal(
+        Error MigrationSandboxSeedJournalFailure.BrokenChain,
+        MigrationSandboxSeedJournal.restore (Some wrongPrevious) nextSnapshot
+    )

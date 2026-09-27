@@ -1,6 +1,7 @@
 namespace FS.GG.Coordination.Cli
 
 open System
+open System.Collections.Generic
 open System.Diagnostics
 open System.Globalization
 open System.IO
@@ -43,6 +44,13 @@ type MigrationSandboxSeedJournalSnapshot =
         CommitBytes: byte array
     }
 
+type MigrationSandboxSeedJournalRestore =
+    {
+        State: MigrationSandboxSeedExecution
+        RecoveryOnly: bool
+        ActiveEffectId: string option
+    }
+
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedJournalRead =
     | Missing
@@ -61,6 +69,8 @@ type MigrationSandboxSeedJournalFailure =
     | InvalidState
     | InvalidPrevious
     | StaleGeneration
+    | InvalidSnapshot
+    | BrokenChain
     | GitUnavailable of reason: string
 
 [<RequireQualifiedAccess>]
@@ -74,6 +84,11 @@ module MigrationSandboxSeedJournal =
 
     let private sha256 (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private shaText (value: string) = utf8.GetBytes value |> sha256
+
+    let private frame (value: string) =
+        $"{Encoding.UTF8.GetByteCount value}:{value}"
 
     let private gitOid kind (bytes: byte array) =
         let header = utf8.GetBytes($"{kind} {bytes.Length}\000")
@@ -295,6 +310,421 @@ module MigrationSandboxSeedJournal =
         && snapshot.CommitBytes =
             commitBytes snapshot.JournalGeneration snapshot.TreeOid snapshot.ParentOid snapshot.StateSha256
         && metadata snapshot.StateBytes = Some(snapshot.StateGeneration, snapshot.RunNonce, snapshot.BindingSeal)
+
+    let private exactProperties (expected: string list) (value: JsonElement) =
+        value.ValueKind = JsonValueKind.Object
+        && (value.EnumerateObject() |> Seq.map _.Name |> Seq.toList) = expected
+
+    let private requiredString (name: string) (value: JsonElement) =
+        let property = value.GetProperty name
+
+        if property.ValueKind <> JsonValueKind.String || isNull (property.GetString()) then
+            invalidOp name
+
+        property.GetString()
+
+    let private optionalString (name: string) (value: JsonElement) =
+        let property = value.GetProperty name
+
+        match property.ValueKind with
+        | JsonValueKind.Null -> None
+        | JsonValueKind.String when not (isNull (property.GetString())) -> Some(property.GetString())
+        | _ -> invalidOp name
+
+    let private parseEffectKind =
+        function
+        | "create-nonce-issue" -> MigrationSandboxSeedEffectKind.CreateNonceIssue
+        | "add-project-membership" -> MigrationSandboxSeedEffectKind.AddProjectMembership
+        | "remove-project-membership" -> MigrationSandboxSeedEffectKind.RemoveProjectMembership
+        | "delete-nonce-issue" -> MigrationSandboxSeedEffectKind.DeleteNonceIssue
+        | value -> invalidOp value
+
+    let private parseStage =
+        function
+        | "planned" -> MigrationSandboxSeedEffectStage.Planned
+        | "intent-persisted" -> MigrationSandboxSeedEffectStage.IntentPersisted
+        | "in-flight" -> MigrationSandboxSeedEffectStage.InFlight
+        | "recovery-pending" -> MigrationSandboxSeedEffectStage.RecoveryPending
+        | "settled" -> MigrationSandboxSeedEffectStage.Settled
+        | value -> invalidOp value
+
+    let private parseMode =
+        function
+        | "forward" -> MigrationSandboxSeedExecutionMode.Forward
+        | "compensation" -> MigrationSandboxSeedExecutionMode.Compensation
+        | "complete" -> MigrationSandboxSeedExecutionMode.Complete
+        | "compensated" -> MigrationSandboxSeedExecutionMode.Compensated
+        | value -> invalidOp value
+
+    let private parseState (bytes: byte array) =
+        try
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+
+            if
+                not (
+                    exactProperties
+                        [
+                            "schema"
+                            "stateGeneration"
+                            "stateHead"
+                            "mode"
+                            "activeIndex"
+                            "binding"
+                            "effects"
+                        ]
+                        root
+                )
+            then
+                invalidOp "root"
+
+            if requiredString "schema" root <> "fsgg.gs2-09-7.sandbox-seed-execution/1" then
+                invalidOp "schema"
+
+            let binding = root.GetProperty "binding"
+
+            if
+                not (
+                    exactProperties
+                        [
+                            "candidateSha"
+                            "workflowRunId"
+                            "workflowRunAttempt"
+                            "runNonce"
+                            "requestCorpusSha256"
+                            "workflowPath"
+                            "workflowRef"
+                            "workflowSha"
+                            "repositoryId"
+                            "repositoryNodeId"
+                            "projectNodeId"
+                            "mintProofSha256"
+                            "protectedHostReceiptSha256"
+                            "seedPlanSha256"
+                            "corpusSha256"
+                            "prestate"
+                            "admittedEffects"
+                            "seal"
+                        ]
+                        binding
+                )
+            then
+                invalidOp "binding"
+
+            let prestate = binding.GetProperty "prestate"
+
+            if
+                not (
+                    exactProperties
+                        [
+                            "complete"
+                            "repositoryId"
+                            "projectNodeId"
+                            "nonceIssueCount"
+                            "nonceProjectItemCount"
+                            "snapshotSha256"
+                        ]
+                        prestate
+                )
+            then
+                invalidOp "prestate"
+
+            let admitted =
+                binding.GetProperty("admittedEffects").EnumerateArray()
+                |> Seq.map (fun item ->
+                    if item.ValueKind <> JsonValueKind.String || isNull (item.GetString()) then
+                        invalidOp "admitted-effect"
+
+                    item.GetString() |> parseEffectKind)
+                |> Seq.toList
+
+            let request =
+                {
+                    CandidateSha = requiredString "candidateSha" binding
+                    WorkflowRunId = binding.GetProperty("workflowRunId").GetInt64()
+                    WorkflowRunAttempt = binding.GetProperty("workflowRunAttempt").GetInt32()
+                    RunNonce = requiredString "runNonce" binding
+                    CorpusSha256 = requiredString "requestCorpusSha256" binding
+                }
+
+            let parsedBinding =
+                {
+                    Request = request
+                    WorkflowPath = requiredString "workflowPath" binding
+                    WorkflowRef = requiredString "workflowRef" binding
+                    WorkflowSha = requiredString "workflowSha" binding
+                    RepositoryId = binding.GetProperty("repositoryId").GetInt64()
+                    RepositoryNodeId = requiredString "repositoryNodeId" binding
+                    ProjectNodeId = requiredString "projectNodeId" binding
+                    MintProofSha256 = requiredString "mintProofSha256" binding
+                    ProtectedHostReceiptSha256 = requiredString "protectedHostReceiptSha256" binding
+                    SeedPlanSha256 = requiredString "seedPlanSha256" binding
+                    CorpusSha256 = requiredString "corpusSha256" binding
+                    Prestate =
+                        {
+                            Complete = prestate.GetProperty("complete").GetBoolean()
+                            RepositoryId = prestate.GetProperty("repositoryId").GetInt64()
+                            ProjectNodeId = requiredString "projectNodeId" prestate
+                            NonceIssueCount = prestate.GetProperty("nonceIssueCount").GetInt32()
+                            NonceProjectItemCount = prestate.GetProperty("nonceProjectItemCount").GetInt32()
+                            SnapshotSha256 = requiredString "snapshotSha256" prestate
+                        }
+                    AdmittedEffects = admitted
+                    Seal = requiredString "seal" binding
+                }
+
+            let parseOwnership (value: JsonElement) =
+                match value.ValueKind with
+                | JsonValueKind.Null -> None
+                | JsonValueKind.Object ->
+                    if
+                        not (
+                            exactProperties
+                                [
+                                    "effectId"
+                                    "kind"
+                                    "resourceId"
+                                    "parentResourceId"
+                                    "runNonce"
+                                    "readbackSha256"
+                                ]
+                                value
+                        )
+                    then
+                        invalidOp "ownership"
+
+                    Some
+                        {
+                            EffectId = requiredString "effectId" value
+                            Kind = requiredString "kind" value
+                            ResourceId = requiredString "resourceId" value
+                            ParentResourceId = optionalString "parentResourceId" value
+                            RunNonce = requiredString "runNonce" value
+                            ReadbackSha256 = requiredString "readbackSha256" value
+                        }
+                | _ -> invalidOp "ownership"
+
+            let effects =
+                root.GetProperty("effects").EnumerateArray()
+                |> Seq.map (fun value ->
+                    if
+                        not (
+                            exactProperties
+                                [
+                                    "effectId"
+                                    "idempotencyKey"
+                                    "kind"
+                                    "originalEffectId"
+                                    "stage"
+                                    "ownership"
+                                ]
+                                value
+                        )
+                    then
+                        invalidOp "effect"
+
+                    {
+                        EffectId = requiredString "effectId" value
+                        IdempotencyKey = requiredString "idempotencyKey" value
+                        Kind = requiredString "kind" value |> parseEffectKind
+                        OriginalEffectId = optionalString "originalEffectId" value
+                        Stage = requiredString "stage" value |> parseStage
+                        Ownership = parseOwnership (value.GetProperty "ownership")
+                    })
+                |> Seq.toList
+
+            Some
+                {
+                    Binding = parsedBinding
+                    Mode = requiredString "mode" root |> parseMode
+                    Effects = effects
+                    ActiveIndex = root.GetProperty("activeIndex").GetInt32()
+                    Generation = root.GetProperty("stateGeneration").GetInt64()
+                    Head = requiredString "stateHead" root
+                }
+        with
+        | :? JsonException
+        | :? InvalidOperationException
+        | :? FormatException
+        | :? KeyNotFoundException -> None
+
+    let private bindingSeal (binding: MigrationSandboxSeedExecutionBinding) =
+        [
+            binding.Request.CandidateSha
+            string binding.Request.WorkflowRunId
+            string binding.Request.WorkflowRunAttempt
+            binding.Request.RunNonce
+            binding.WorkflowPath
+            binding.WorkflowRef
+            binding.WorkflowSha
+            string binding.RepositoryId
+            binding.RepositoryNodeId
+            binding.ProjectNodeId
+            binding.MintProofSha256
+            binding.ProtectedHostReceiptSha256
+            binding.SeedPlanSha256
+            binding.CorpusSha256
+            binding.Prestate.SnapshotSha256
+            string binding.Prestate.NonceIssueCount
+            string binding.Prestate.NonceProjectItemCount
+            yield! binding.AdmittedEffects |> List.map string
+        ]
+        |> List.map frame
+        |> String.concat ""
+        |> shaText
+
+    let private expectedEffect binding index kind original =
+        let identity = shaText $"{binding.Seal}:{index}:{kind}:{binding.Request.RunNonce}"
+        identity, shaText $"idempotency:{identity}", original
+
+    let private stable expected (effect: MigrationSandboxSeedEffectState) =
+        let effectId, idempotency, original = expected
+
+        effect.EffectId = effectId
+        && effect.IdempotencyKey = idempotency
+        && effect.OriginalEffectId = original
+
+    let private ordered active effects =
+        effects
+        |> List.mapi (fun index effect ->
+            if index < active then
+                effect.Stage = MigrationSandboxSeedEffectStage.Settled
+            elif index = active then
+                effect.Stage <> MigrationSandboxSeedEffectStage.Settled
+            else
+                effect.Stage = MigrationSandboxSeedEffectStage.Planned)
+        |> List.forall id
+
+    let private receiptShape nonce effectId kind parent (receipt: MigrationSandboxOwnedResource) =
+        receipt.EffectId = effectId
+        && receipt.Kind = kind
+        && receipt.RunNonce = nonce
+        && not (String.IsNullOrWhiteSpace receipt.ResourceId)
+        && hex 64 receipt.ReadbackSha256
+        && match parent with
+           | None -> receipt.ParentResourceId.IsNone
+           | Some value -> receipt.ParentResourceId = Some value
+
+    let private validRestoredState (state: MigrationSandboxSeedExecution) =
+        if not (stateShape state) || state.Binding.Seal <> bindingSeal state.Binding then
+            false
+        else
+            let issueId, _, _ =
+                expectedEffect state.Binding 0 MigrationSandboxSeedEffectKind.CreateNonceIssue None
+
+            let itemId, _, _ =
+                expectedEffect state.Binding 1 MigrationSandboxSeedEffectKind.AddProjectMembership None
+
+            let modeComplete activeMode completeMode =
+                match state.Mode with
+                | mode when mode = activeMode ->
+                    state.ActiveIndex >= 0
+                    && state.ActiveIndex < 2
+                    && ordered state.ActiveIndex state.Effects
+                | mode when mode = completeMode ->
+                    state.ActiveIndex = 2
+                    && state.Effects
+                       |> List.forall (fun effect -> effect.Stage = MigrationSandboxSeedEffectStage.Settled)
+                | _ -> false
+
+            match state.Mode with
+            | MigrationSandboxSeedExecutionMode.Forward
+            | MigrationSandboxSeedExecutionMode.Complete ->
+                List.forall2
+                    stable
+                    [
+                        expectedEffect state.Binding 0 MigrationSandboxSeedEffectKind.CreateNonceIssue None
+                        expectedEffect state.Binding 1 MigrationSandboxSeedEffectKind.AddProjectMembership None
+                    ]
+                    state.Effects
+                && (state.Effects
+                    |> List.mapi (fun index effect ->
+                        match effect.Stage, effect.Ownership with
+                        | MigrationSandboxSeedEffectStage.Settled, Some receipt when index = 0 ->
+                            receiptShape state.Binding.Request.RunNonce issueId "issue" None receipt
+                        | MigrationSandboxSeedEffectStage.Settled, Some receipt when index = 1 ->
+                            match state.Effects[0].Ownership with
+                            | Some issue ->
+                                receiptShape
+                                    state.Binding.Request.RunNonce
+                                    itemId
+                                    "project-item"
+                                    (Some issue.ResourceId)
+                                    receipt
+                            | None -> false
+                        | MigrationSandboxSeedEffectStage.Settled, None -> false
+                        | _, None -> true
+                        | _, Some _ -> false)
+                    |> List.forall id)
+                && modeComplete MigrationSandboxSeedExecutionMode.Forward MigrationSandboxSeedExecutionMode.Complete
+            | MigrationSandboxSeedExecutionMode.Compensation
+            | MigrationSandboxSeedExecutionMode.Compensated ->
+                let expected =
+                    [
+                        expectedEffect
+                            state.Binding
+                            2
+                            MigrationSandboxSeedEffectKind.RemoveProjectMembership
+                            (Some itemId)
+                        expectedEffect state.Binding 3 MigrationSandboxSeedEffectKind.DeleteNonceIssue (Some issueId)
+                    ]
+
+                List.forall2 stable expected state.Effects
+                && match state.Effects[0].Ownership, state.Effects[1].Ownership with
+                   | Some item, Some issue ->
+                       receiptShape state.Binding.Request.RunNonce issueId "issue" None issue
+                       && receiptShape state.Binding.Request.RunNonce itemId "project-item" (Some issue.ResourceId) item
+                       && modeComplete
+                           MigrationSandboxSeedExecutionMode.Compensation
+                           MigrationSandboxSeedExecutionMode.Compensated
+                   | _ -> false
+
+    let restore previous current =
+        if not (snapshotValid current) then
+            Error MigrationSandboxSeedJournalFailure.InvalidSnapshot
+        else
+            let chain =
+                match current.JournalGeneration, previous with
+                | 0L, None when current.ParentOid.IsNone -> true
+                | generation, Some prior when generation > 0L && snapshotValid prior ->
+                    current.ParentOid = Some prior.CommitOid
+                    && generation = prior.JournalGeneration + 1L
+                    && current.StateGeneration = prior.StateGeneration + 1L
+                    && current.RefName = prior.RefName
+                    && current.RunNonce = prior.RunNonce
+                    && current.BindingSeal = prior.BindingSeal
+                | _ -> false
+
+            if not chain then
+                Error MigrationSandboxSeedJournalFailure.BrokenChain
+            else
+                match parseState current.StateBytes with
+                | Some state when
+                    state.Generation = current.StateGeneration
+                    && state.Binding.Request.RunNonce = current.RunNonce
+                    && state.Binding.Seal = current.BindingSeal
+                    && encodeState state = current.StateBytes
+                    && validRestoredState state
+                    ->
+                    let active =
+                        if state.ActiveIndex >= 0 && state.ActiveIndex < state.Effects.Length then
+                            Some state.Effects[state.ActiveIndex]
+                        else
+                            None
+
+                    let recoveryOnly =
+                        active
+                        |> Option.exists (fun effect ->
+                            effect.Stage = MigrationSandboxSeedEffectStage.InFlight
+                            || effect.Stage = MigrationSandboxSeedEffectStage.RecoveryPending)
+
+                    Ok
+                        {
+                            State = state
+                            RecoveryOnly = recoveryOnly
+                            ActiveEffectId = active |> Option.map _.EffectId
+                        }
+                | _ -> Error MigrationSandboxSeedJournalFailure.InvalidState
 
     let plan previous state =
         if not (stateShape state) then

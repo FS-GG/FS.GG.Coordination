@@ -38,6 +38,15 @@ type MigrationSandboxSeedJournalSnapshot =
         CommitBytes: byte array
     }
 
+/// A typed restart projection. RecoveryOnly is true for a restored InFlight or
+/// RecoveryPending active effect; that effect may be reread and settled but never redispatched.
+type MigrationSandboxSeedJournalRestore =
+    {
+        State: MigrationSandboxSeedExecution
+        RecoveryOnly: bool
+        ActiveEffectId: string option
+    }
+
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedJournalRead =
     | Missing
@@ -56,6 +65,8 @@ type MigrationSandboxSeedJournalFailure =
     | InvalidState
     | InvalidPrevious
     | StaleGeneration
+    | InvalidSnapshot
+    | BrokenChain
     | GitUnavailable of reason: string
 
 [<RequireQualifiedAccess>]
@@ -70,6 +81,13 @@ module MigrationSandboxSeedJournal =
     /// Read and independently validate an exact local bare-Git snapshot. This qualification reader
     /// performs no ref or object mutation and does not establish access to the protected remote.
     val readLocalBare: repositoryPath: string -> requestedRef: string -> MigrationSandboxSeedJournalRead
+
+    /// Strictly parse a canonical snapshot after validating its exact Git objects and predecessor.
+    /// Generation zero requires no predecessor; later generations require the exact prior snapshot.
+    val restore:
+        previous: MigrationSandboxSeedJournalSnapshot option ->
+        current: MigrationSandboxSeedJournalSnapshot ->
+            Result<MigrationSandboxSeedJournalRestore, MigrationSandboxSeedJournalFailure>
 
     /// Reconcile a possibly lost write response only from the independently reread exact objects.
     val reconcile:
