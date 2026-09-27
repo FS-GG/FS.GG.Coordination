@@ -70,6 +70,7 @@ type MigrationEnvironmentSettingsCompositionFailure =
     | CensusDrift
     | IdentityDrift
     | RosterDrift
+    | EvidenceInvalid of reason:string
 
 type MigrationEnvironmentSettingsComposition =
     { OpeningCensus: EnvironmentCensusCapture
@@ -526,30 +527,103 @@ module MigrationEnvironmentSettingsRead =
               yield environment.CustomRulesUri
               yield environment.CustomRulesPayloadSha256
               for rule in environment.ProtectionRules do
+                  yield string rule.RuleId
+                  yield rule.RuleNodeId
+                  yield rule.Kind
+                  yield rule.WaitMinutes |> Option.map string |> Option.defaultValue "-"
+                  yield rule.PreventSelfReview |> Option.map string |> Option.defaultValue "-"
+                  for reviewer in rule.Reviewers do
+                      yield reviewer.Kind
+                      yield string reviewer.DatabaseId
+                      yield reviewer.NodeId
+                      yield reviewer.Name
                   yield rule.PayloadSha256
               for page in environment.BranchPolicyPages do
                   yield page.EnvironmentRequestedUri
                   yield page.EnvironmentPayloadSha256
                   yield page.EnvironmentNextUri |> Option.defaultValue "-"
               for policy in environment.BranchPolicies do
+                  yield string policy.PolicyId
+                  yield policy.PolicyNodeId
+                  yield policy.Name
+                  yield policy.Kind
                   yield policy.PayloadSha256
               for rule in environment.CustomRules do
+                  yield string rule.RuleId
+                  yield rule.RuleNodeId
+                  yield string rule.Enabled
+                  yield string rule.AppId
+                  yield rule.AppNodeId
+                  yield rule.AppSlug
                   yield rule.PayloadSha256
               for page in environment.SecretPages do
                   yield page.EnvironmentRequestedUri
                   yield page.EnvironmentPayloadSha256
                   yield page.EnvironmentNextUri |> Option.defaultValue "-"
               for secret in environment.Secrets do
+                  yield secret.Name
+                  yield secret.CreatedAt.ToString("O", CultureInfo.InvariantCulture)
+                  yield secret.UpdatedAt.ToString("O", CultureInfo.InvariantCulture)
                   yield secret.PayloadSha256
               for page in environment.VariablePages do
                   yield page.EnvironmentRequestedUri
                   yield page.EnvironmentPayloadSha256
                   yield page.EnvironmentNextUri |> Option.defaultValue "-"
               for variable in environment.Variables do
+                  yield variable.Name
                   yield variable.PayloadSha256
-                  yield variable.ValueSha256 ]
+                  yield variable.ValueSha256
+                  yield variable.CreatedAt.ToString("O", CultureInfo.InvariantCulture)
+                  yield variable.UpdatedAt.ToString("O", CultureInfo.InvariantCulture) ]
         |> String.concat "\n"
         |> sha
+
+    let private rawHashesValid (observed: MigrationEnvironmentSettings) =
+        observed.IdentityPayloadSha256 = sha observed.IdentityPayloadJson
+        && observed.TerminalIdentityPayloadSha256 = sha observed.TerminalIdentityPayloadJson
+        && (observed.Pages |> List.forall (fun page -> page.EnvironmentPayloadSha256 = sha page.EnvironmentPayloadJson))
+        && (observed.Environments
+            |> List.forall (fun environment ->
+                environment.ListPayloadSha256 = sha environment.ListPayloadJson
+                && environment.DetailPayloadSha256 = sha environment.DetailPayloadJson
+                && environment.CustomRulesPayloadSha256 = sha environment.CustomRulesPayloadJson
+                && (environment.ProtectionRules |> List.forall (fun item -> item.PayloadSha256 = sha item.PayloadJson))
+                && (environment.BranchPolicyPages |> List.forall (fun page -> page.EnvironmentPayloadSha256 = sha page.EnvironmentPayloadJson))
+                && (environment.BranchPolicies |> List.forall (fun item -> item.PayloadSha256 = sha item.PayloadJson))
+                && (environment.CustomRules |> List.forall (fun item -> item.PayloadSha256 = sha item.PayloadJson))
+                && (environment.SecretPages |> List.forall (fun page -> page.EnvironmentPayloadSha256 = sha page.EnvironmentPayloadJson))
+                && (environment.Secrets |> List.forall (fun item -> item.PayloadSha256 = sha item.PayloadJson))
+                && (environment.VariablePages |> List.forall (fun page -> page.EnvironmentPayloadSha256 = sha page.EnvironmentPayloadJson))
+                && (environment.Variables |> List.forall (fun item -> item.PayloadSha256 = sha item.PayloadJson))))
+
+    let validateCapture (options: MigrationGitHubReadOptions) (captured: MigrationEnvironmentSettingsCapture) =
+        let first = captured.EnvironmentSettingsFirst
+        let duplicateIdentity projection =
+            let values = first.Environments |> List.map projection
+            values.Length <> (values |> Set.ofList |> Set.count)
+        if not (validOptions options) then Error MigrationReadFailure.InvalidOptions
+        elif first.RepositoryId <> options.ExpectedRepositoryId
+             || first.RepositoryFullName <> $"{options.Owner}/{options.Repository}"
+             || String.IsNullOrWhiteSpace first.RepositoryNodeId then
+            Error MigrationReadFailure.IdentityDrift
+        elif captured.EnvironmentSettingsFirst <> captured.EnvironmentSettingsSecond then
+            Error MigrationReadFailure.PopulationDrift
+        elif captured.EnvironmentSurfaceComplete then
+            Error(MigrationReadFailure.SnapshotMismatch "environment-surface-completion-unproven")
+        elif not first.Terminal || first.TotalCount <> first.Environments.Length || first.Pages.IsEmpty
+             || duplicateIdentity _.EnvironmentId
+             || duplicateIdentity _.EnvironmentNodeId
+             || duplicateIdentity _.Name then
+            Error(MigrationReadFailure.SnapshotMismatch "environment-capture-shape")
+        elif not (rawHashesValid first) || not (rawHashesValid captured.EnvironmentSettingsSecond) then
+            Error(MigrationReadFailure.SnapshotMismatch "environment-raw-hash-drift")
+        else
+            let firstFingerprint = fingerprint first
+            let secondFingerprint = fingerprint captured.EnvironmentSettingsSecond
+            if firstFingerprint <> secondFingerprint
+               || captured.EnvironmentSettingsFingerprint <> firstFingerprint then
+                Error(MigrationReadFailure.SnapshotMismatch "environment-capture-fingerprint-drift")
+            else Ok captured
 
     let captureTwoPass (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         read options transport
@@ -561,10 +635,11 @@ module MigrationEnvironmentSettingsRead =
                 if first <> second || firstFingerprint <> secondFingerprint then
                     Error MigrationReadFailure.PopulationDrift
                 else
-                    Ok { EnvironmentSettingsFirst=first
-                         EnvironmentSettingsSecond=second
-                         EnvironmentSettingsFingerprint=firstFingerprint
-                         EnvironmentSurfaceComplete=false }))
+                    { EnvironmentSettingsFirst=first
+                      EnvironmentSettingsSecond=second
+                      EnvironmentSettingsFingerprint=firstFingerprint
+                      EnvironmentSurfaceComplete=false }
+                    |> validateCapture options))
 
     let private censusRoster (capture: EnvironmentCensusCapture) =
         capture.EnvironmentFirst.Environments
@@ -576,6 +651,51 @@ module MigrationEnvironmentSettingsRead =
         |> List.map (fun item -> item.EnvironmentId, item.EnvironmentNodeId, item.Name)
         |> List.sort
 
+    let private censusCaptureValid options (capture: EnvironmentCensusCapture) =
+        MigrationEnvironmentCensusRead.validatePass options capture.EnvironmentFirst
+        |> Result.bind (fun first ->
+            MigrationEnvironmentCensusRead.validatePass options capture.EnvironmentSecond
+            |> Result.bind (fun second ->
+                if first <> second then Error "environment-census-pass-drift"
+                elif capture.EnvironmentCaptureFingerprint
+                     <> sha (first.EnvironmentFingerprint + "\n" + second.EnvironmentFingerprint) then
+                    Error "environment-census-capture-fingerprint-drift"
+                else Ok capture))
+
+    let validateComposition options (composed: MigrationEnvironmentSettingsComposition) =
+        censusCaptureValid options composed.OpeningCensus
+        |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.OpeningCensusRefused
+        |> Result.bind (fun opening ->
+            validateCapture options composed.Settings
+            |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.SettingsRefused
+            |> Result.bind (fun settings ->
+                censusCaptureValid options composed.ClosingCensus
+                |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.ClosingCensusRefused
+                |> Result.bind (fun closing ->
+                    let censusIdentity = opening.EnvironmentFirst.EnvironmentRepository
+                    let settingsIdentity = settings.EnvironmentSettingsFirst
+                    let expectedFingerprint =
+                        [ opening.EnvironmentCaptureFingerprint
+                          settings.EnvironmentSettingsFingerprint
+                          closing.EnvironmentCaptureFingerprint ]
+                        |> String.concat "\n"
+                        |> sha
+                    if opening <> closing then
+                        Error MigrationEnvironmentSettingsCompositionFailure.CensusDrift
+                    elif censusIdentity.EnvironmentRepositoryId <> settingsIdentity.RepositoryId
+                         || censusIdentity.EnvironmentRepositoryNodeId <> settingsIdentity.RepositoryNodeId
+                         || censusIdentity.EnvironmentRepositoryFullName <> settingsIdentity.RepositoryFullName then
+                        Error MigrationEnvironmentSettingsCompositionFailure.IdentityDrift
+                    elif censusRoster opening <> settingsRoster settings then
+                        Error MigrationEnvironmentSettingsCompositionFailure.RosterDrift
+                    elif composed.EnvironmentSurfaceComplete then
+                        Error(MigrationEnvironmentSettingsCompositionFailure.EvidenceInvalid
+                            "environment-surface-completion-unproven")
+                    elif composed.CompositionFingerprint <> expectedFingerprint then
+                        Error(MigrationEnvironmentSettingsCompositionFailure.EvidenceInvalid
+                            "environment-composition-fingerprint-drift")
+                    else Ok composed)))
+
     let captureBracketed (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         MigrationEnvironmentCensusRead.captureTwoPass options transport
         |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.OpeningCensusRefused
@@ -586,23 +706,13 @@ module MigrationEnvironmentSettingsRead =
                 MigrationEnvironmentCensusRead.captureTwoPass options transport
                 |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.ClosingCensusRefused
                 |> Result.bind (fun closing ->
-                    let censusIdentity = opening.EnvironmentFirst.EnvironmentRepository
-                    let settingsIdentity = settings.EnvironmentSettingsFirst
-                    if opening <> closing then
-                        Error MigrationEnvironmentSettingsCompositionFailure.CensusDrift
-                    elif censusIdentity.EnvironmentRepositoryId <> settingsIdentity.RepositoryId
-                         || censusIdentity.EnvironmentRepositoryNodeId <> settingsIdentity.RepositoryNodeId
-                         || censusIdentity.EnvironmentRepositoryFullName <> settingsIdentity.RepositoryFullName then
-                        Error MigrationEnvironmentSettingsCompositionFailure.IdentityDrift
-                    elif censusRoster opening <> settingsRoster settings then
-                        Error MigrationEnvironmentSettingsCompositionFailure.RosterDrift
-                    else
-                        let fingerprint =
-                            [ opening.EnvironmentCaptureFingerprint
-                              settings.EnvironmentSettingsFingerprint
-                              closing.EnvironmentCaptureFingerprint ]
-                            |> String.concat "\n"
-                            |> sha
-                        Ok { OpeningCensus=opening; Settings=settings; ClosingCensus=closing
-                             CompositionFingerprint=fingerprint
-                             EnvironmentSurfaceComplete=false })))
+                    let fingerprint =
+                        [ opening.EnvironmentCaptureFingerprint
+                          settings.EnvironmentSettingsFingerprint
+                          closing.EnvironmentCaptureFingerprint ]
+                        |> String.concat "\n"
+                        |> sha
+                    { OpeningCensus=opening; Settings=settings; ClosingCensus=closing
+                      CompositionFingerprint=fingerprint
+                      EnvironmentSurfaceComplete=false }
+                    |> validateComposition options)))

@@ -279,6 +279,31 @@ let ``environment settings require two complete raw stable passes`` () =
         Assert.Equal(64, captured.EnvironmentSettingsFingerprint.Length)
         Assert.False(captured.EnvironmentSurfaceComplete)
         Assert.Equal(16, transport.Requests.Length)
+        Assert.Equal(Ok captured, MigrationEnvironmentSettingsRead.validateCapture options captured)
+
+        let renameSecret (observed: MigrationEnvironmentSettings) =
+            let environment = observed.Environments.Head
+            let secret = environment.Secrets.Head
+            { observed with
+                Environments =
+                    [ { environment with Secrets = [ { secret with Name="RENAMED_TOKEN" } ] } ] }
+        let changed =
+            { captured with
+                EnvironmentSettingsFirst=renameSecret captured.EnvironmentSettingsFirst
+                EnvironmentSettingsSecond=renameSecret captured.EnvironmentSettingsSecond }
+        Assert.Equal(
+            Error(MigrationReadFailure.SnapshotMismatch "environment-capture-fingerprint-drift"),
+            MigrationEnvironmentSettingsRead.validateCapture options changed)
+
+        let changeRaw (observed: MigrationEnvironmentSettings) =
+            { observed with IdentityPayloadJson=observed.IdentityPayloadJson + " " }
+        let rawChanged =
+            { captured with
+                EnvironmentSettingsFirst=changeRaw captured.EnvironmentSettingsFirst
+                EnvironmentSettingsSecond=changeRaw captured.EnvironmentSettingsSecond }
+        Assert.Equal(
+            Error(MigrationReadFailure.SnapshotMismatch "environment-raw-hash-drift"),
+            MigrationEnvironmentSettingsRead.validateCapture options rawChanged)
 
     let rawDrift = repository.Replace("}", ",\"extra\":true}")
     let changedSecond =
@@ -302,6 +327,17 @@ let ``environment settings composition brackets details with an exhaustive stabl
         Assert.False(composed.EnvironmentSurfaceComplete)
         Assert.False(composed.Settings.EnvironmentSurfaceComplete)
         Assert.Equal(24, transport.Requests.Length)
+        Assert.Equal(Ok composed, MigrationEnvironmentSettingsRead.validateComposition options composed)
+        Assert.Equal(
+            Error(MigrationEnvironmentSettingsCompositionFailure.EvidenceInvalid
+                "environment-composition-fingerprint-drift"),
+            MigrationEnvironmentSettingsRead.validateComposition options
+                { composed with CompositionFingerprint=String.replicate 64 "0" })
+        Assert.Equal(
+            Error(MigrationEnvironmentSettingsCompositionFailure.EvidenceInvalid
+                "environment-surface-completion-unproven"),
+            MigrationEnvironmentSettingsRead.validateComposition options
+                { composed with EnvironmentSurfaceComplete=true })
 
 [<Fact>]
 let ``environment settings composition refuses census drift around details`` () =
