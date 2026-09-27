@@ -78,6 +78,24 @@ let ``repository core inspect slice binds exact raw settings without completing 
                  source.ReadAuthority(1, "repository-settings"))
 
 [<Fact>]
+let ``incomplete authority families remain unavailable without provider calls`` () =
+    let transport = FakeTransport []
+    let source = MigrationInspectProviderAdapter(options, transport)
+                 :> IGitHubMigrationInspectSource
+    let incomplete =
+        [ "claim-and-event-streams"
+          "review-delivery-release-records"
+          "repository-settings"
+          "workflow-pins"
+          "receiver-identities" ]
+
+    for authority in incomplete do
+        Assert.Equal(Error $"authority-adapter-unavailable:{authority}",
+                     source.ReadAuthority(1, authority))
+
+    Assert.Empty(transport.Calls)
+
+[<Fact>]
 let ``repository core inspect slice refuses typed raw and request drift`` () =
     let settings, calls = readRepositoryCore [ reply repositoryCore ]
     Assert.Equal(Error "repository-core-raw-typed-mismatch",
