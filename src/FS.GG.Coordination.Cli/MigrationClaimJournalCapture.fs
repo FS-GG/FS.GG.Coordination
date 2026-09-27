@@ -62,6 +62,23 @@ module MigrationClaimJournalCapture =
         | JsonValueKind.String when nonblank (found.GetString()) -> Some(found.GetString())
         | _ -> refuse $"invalid:{name}"
 
+    let private jsonString (name: string) (value: JsonElement) =
+        let found = property name value
+
+        if found.ValueKind <> JsonValueKind.String || isNull (found.GetString()) then
+            refuse $"invalid:{name}"
+
+        found.GetString()
+
+    let private positiveNullableInt64 (name: string) (value: JsonElement) =
+        let found = property name value
+        let mutable parsed = 0L
+
+        match found.ValueKind with
+        | JsonValueKind.Null -> None
+        | JsonValueKind.Number when found.TryGetInt64(&parsed) && parsed > 0L -> Some parsed
+        | _ -> refuse $"invalid:{name}"
+
     let private int64 (name: string) (value: JsonElement) =
         let found = property name value
         let mutable parsed = 0L
@@ -214,7 +231,7 @@ module MigrationClaimJournalCapture =
             document.RootElement
             |> array
             |> List.map (fun item ->
-                exactObject [ "ref"; "object" ] item
+                exactObject [ "node_id"; "object"; "ref"; "url" ] item
                 let name = requiredString "ref" item
 
                 if
@@ -224,7 +241,7 @@ module MigrationClaimJournalCapture =
                     refuse "invalid-journal-ref"
 
                 let target = property "object" item
-                exactObject [ "type"; "sha" ] target
+                exactObject [ "sha"; "type"; "url" ] target
 
                 if requiredString "type" target <> "commit" then
                     refuse "invalid-ref-object"
@@ -233,6 +250,21 @@ module MigrationClaimJournalCapture =
 
                 if not (lowerHex 40 head) then
                     refuse "invalid-ref-head"
+
+                let relativeName = name.Substring("refs/".Length)
+
+                let expectedRefUrl =
+                    Uri(options.ApiBase, $"{repositoryPath options}/git/refs/{relativeName}").AbsoluteUri
+
+                let expectedObjectUrl =
+                    Uri(options.ApiBase, $"{repositoryPath options}/git/commits/{head}").AbsoluteUri
+
+                if
+                    requiredString "url" item <> expectedRefUrl
+                    || requiredString "url" target <> expectedObjectUrl
+                    || not (nonblank (requiredString "node_id" item))
+                then
+                    refuse "ref-metadata-drift"
 
                 {
                     ClaimRefName = name
@@ -305,8 +337,10 @@ module MigrationClaimJournalCapture =
 
                 mode, path, sha)
 
-        if entries |> List.map (fun (_, path, _) -> path) <> [ "event.json"; "head.json" ] then
-            refuse "unsupported-journal-tree"
+        match entries |> List.map (fun (_, path, _) -> path) with
+        | [ "event.json"; "head.json" ]
+        | [ "checkpoint.json"; "event.json"; "head.json" ] -> ()
+        | _ -> refuse "unsupported-journal-tree"
 
         if gitTreeSha entries <> oid then
             refuse "tree-hash-drift"
@@ -399,6 +433,28 @@ module MigrationClaimJournalCapture =
             UTF8Encoding(false, true).GetString bytes |> ShardedJournalAdapter.canonicalJson = Ok bytes
         with :? DecoderFallbackException ->
             false
+
+    let private checkpointRecord (bytes: byte array) =
+        use document = parseBytes bytes
+        let root = document.RootElement
+        exactObject [ "aggregateDigest"; "highWaterGeneration" ] root
+        let aggregateDigest = requiredString "aggregateDigest" root
+        let highWaterGeneration = int64 "highWaterGeneration" root
+
+        if
+            not (canonicalBytes bytes)
+            || not (lowerHex 64 aggregateDigest)
+            || highWaterGeneration < 1L
+        then
+            refuse "invalid-journal-checkpoint"
+
+        {
+            Blob = { Bytes = bytes; Digest = sha256 bytes }
+            HighWaterGeneration = highWaterGeneration
+            EventDigests = []
+            AggregateDigest = aggregateDigest
+            ReplayAggregateDigest = aggregateDigest
+        }
 
     let private claimRecord (address: AggregateAddress) eventBytes =
         use document = parseBytes eventBytes
@@ -524,6 +580,68 @@ module MigrationClaimJournalCapture =
             Generation = generation
         }
 
+    let private deliveryRecord (address: AggregateAddress) eventBytes =
+        use document = parseBytes eventBytes
+        let root = document.RootElement
+
+        exactObject
+            [
+                "kind"
+                "mergeCommit"
+                "operationId"
+                "protectedRunCommit"
+                "protectedRunConclusion"
+                "protectedRunId"
+                "reviewChainId"
+                "reviewEpochKey"
+                "reviewSeat"
+                "schemaVersion"
+                "subject"
+            ]
+            root
+
+        let kind =
+            match requiredString "kind" root with
+            | "genesis" -> DeliveryGenesis
+            | "delivery" -> DeliveryReceipt
+            | "done" -> DoneReceipt
+            | _ -> refuse "unknown-delivery-kind"
+
+        let record: DeliveryAuthorityRecord =
+            {
+                SchemaVersion = int (int64 "schemaVersion" root)
+                Subject = requiredString "subject" root
+                Kind = kind
+                ReviewChainId = jsonString "reviewChainId" root
+                ReviewEpochKey = jsonString "reviewEpochKey" root
+                ReviewSeat = jsonString "reviewSeat" root
+                MergeCommit = jsonString "mergeCommit" root
+                ProtectedRunId = positiveNullableInt64 "protectedRunId" root
+                ProtectedRunCommit = nullableString "protectedRunCommit" root
+                ProtectedRunConclusion = nullableString "protectedRunConclusion" root
+                OperationId = requiredString "operationId" root
+            }
+
+        match ReviewDeliveryAdapter.deliveryAuthorityBytes record with
+        | Ok canonical when canonical = eventBytes -> ()
+        | _ -> refuse "invalid-delivery-record"
+
+        let expected =
+            ReviewDeliveryAdapter.deliveryAddress record.Subject
+            |> Result.defaultWith (fun _ -> refuse "invalid-delivery-address")
+
+        if address <> expected then
+            refuse "delivery-address-drift"
+
+        {
+            Namespace = OperationJournalNamespace
+            Schema = "fsgg.coordination.delivery-authority/1"
+            Family = ReviewSchemaFamily
+            CanonicalId = address.CanonicalId
+            OperationId = Some record.OperationId
+            Generation = 0L
+        }
+
     let private decodeRecord namespace' address eventBytes =
         match namespace' with
         | ClaimJournalNamespace -> claimRecord address eventBytes
@@ -533,15 +651,24 @@ module MigrationClaimJournalCapture =
             let mutable schema = Unchecked.defaultof<JsonElement>
 
             if
-                not (root.TryGetProperty("schema", &schema))
-                || schema.ValueKind <> JsonValueKind.String
+                root.TryGetProperty("schema", &schema)
+                && schema.ValueKind = JsonValueKind.String
             then
-                refuse "unknown-operation-schema"
+                match schema.GetString() with
+                | "fsgg.github-substrate.admission-event/1" -> admissionRecord address eventBytes
+                | "fsgg.coordination.ordinary-delivery-journal/1" -> ordinaryRecord address eventBytes
+                | _ -> refuse "unknown-operation-schema"
+            else
+                let mutable schemaVersion = Unchecked.defaultof<JsonElement>
+                let mutable subject = Unchecked.defaultof<JsonElement>
 
-            match schema.GetString() with
-            | "fsgg.github-substrate.admission-event/1" -> admissionRecord address eventBytes
-            | "fsgg.coordination.ordinary-delivery-journal/1" -> ordinaryRecord address eventBytes
-            | _ -> refuse "unknown-operation-schema"
+                if
+                    root.TryGetProperty("schemaVersion", &schemaVersion)
+                    && root.TryGetProperty("subject", &subject)
+                then
+                    deliveryRecord address eventBytes
+                else
+                    refuse "unknown-operation-schema"
 
     let private headAndRecord namespace' refName headBytes eventBytes =
         use document = parseBytes headBytes
@@ -577,8 +704,7 @@ module MigrationClaimJournalCapture =
         let generation, eventDigest =
             int64 "generation" root, requiredString "eventDigest" root
 
-        if nullableString "snapshotDigest" root |> Option.isSome then
-            refuse "unsupported-journal-checkpoint"
+        let snapshotDigest = nullableString "snapshotDigest" root
 
         if
             address.Ref <> refName
@@ -596,7 +722,7 @@ module MigrationClaimJournalCapture =
                 Address = address
                 Generation = generation
                 EventDigest = eventDigest
-                SnapshotDigest = None
+                SnapshotDigest = snapshotDigest
                 Terminal = boolean "terminal" root
                 PriorHeadDigest = nullableString "priorHeadDigest" root
                 HeadDigest = String.replicate 64 "0"
@@ -637,6 +763,21 @@ module MigrationClaimJournalCapture =
             let head, record =
                 headAndRecord namespace' journalRef.ClaimRefName headBytes eventBytes
 
+            let checkpointEntry =
+                entries |> List.tryFind (fun (_, path, _) -> path = "checkpoint.json")
+
+            let checkpointRead, checkpoint =
+                match head.SnapshotDigest, checkpointEntry with
+                | None, None -> None, None
+                | Some expected, Some(_, _, oid) ->
+                    let read, bytes = blob options transport oid
+
+                    if sha256 bytes <> expected then
+                        refuse "checkpoint-digest-drift"
+
+                    Some read, Some(checkpointRecord bytes)
+                | _ -> refuse "checkpoint-layout-drift"
+
             if record.OperationId.IsNone then
                 refuse "missing-operation-id"
 
@@ -653,7 +794,7 @@ module MigrationClaimJournalCapture =
                             Bytes = eventBytes
                             Digest = sha256 eventBytes
                         }
-                    Checkpoint = None
+                    Checkpoint = checkpoint
                 }
 
             let entry =
@@ -661,7 +802,9 @@ module MigrationClaimJournalCapture =
                     ClaimCommitSha = current
                     ClaimParentSha = parent
                     ClaimTreeSha = treeSha
-                    ClaimReads = [ commitRead; treeRead; eventRead; headRead ]
+                    ClaimReads =
+                        [ commitRead; treeRead; eventRead; headRead ]
+                        @ (checkpointRead |> Option.toList)
                     ClaimRecord = record
                 }
 
@@ -670,7 +813,23 @@ module MigrationClaimJournalCapture =
             | Some value -> walk (Set.add current seen) value ((entry, journalCommit) :: acc)
 
         let rootFirst = walk Set.empty journalRef.ClaimHeadSha []
-        let commits = rootFirst |> List.map snd
+
+        let completed =
+            rootFirst
+            |> List.mapi (fun index (entry, commit) ->
+                let eventDigests =
+                    rootFirst |> List.take (index + 1) |> List.map (snd >> _.Event.Digest)
+
+                let checkpoint =
+                    commit.Checkpoint
+                    |> Option.map (fun value ->
+                        { value with
+                            EventDigests = eventDigests
+                        })
+
+                entry, { commit with Checkpoint = checkpoint })
+
+        let commits = completed |> List.map snd
 
         match
             ShardedJournalAdapter.validate commits.Head.Head.Address (JournalComplete(journalRef.ClaimHeadSha, commits))
@@ -682,7 +841,7 @@ module MigrationClaimJournalCapture =
         {
             ClaimHistoryRefName = journalRef.ClaimRefName
             ClaimHistoryHeadSha = journalRef.ClaimHeadSha
-            ClaimEntries = rootFirst |> List.map fst |> List.rev
+            ClaimEntries = completed |> List.map fst |> List.rev
         }
 
     let private capturePass options transport =

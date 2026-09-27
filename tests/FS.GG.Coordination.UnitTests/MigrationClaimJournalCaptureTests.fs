@@ -117,8 +117,71 @@ type private Fixture =
         EventOid: string
         HeadBytes: byte array
         HeadOid: string
+        CheckpointBytes: byte array option
+        CheckpointOid: string option
         Tree: string
         Commit: string
+    }
+
+let private journalFixture address generation eventBytes checkpointBytes =
+    let eventOid = gitSha "blob" eventBytes
+    let checkpointOid = checkpointBytes |> Option.map (gitSha "blob")
+
+    let unsigned: JournalHead =
+        {
+            SchemaVersion = 1
+            Address = address
+            Generation = generation
+            EventDigest = ShardedJournalAdapter.sha256 eventBytes
+            SnapshotDigest = checkpointBytes |> Option.map ShardedJournalAdapter.sha256
+            Terminal = checkpointBytes.IsSome
+            PriorHeadDigest = None
+            HeadDigest = String.replicate 64 "0"
+        }
+
+    let firstHeadBytes = ShardedJournalAdapter.journalHeadBytes unsigned
+
+    let head =
+        { unsigned with
+            HeadDigest = ShardedJournalAdapter.sha256 firstHeadBytes
+        }
+
+    let headBytes = ShardedJournalAdapter.journalHeadBytes head
+    let headOid = gitSha "blob" headBytes
+
+    let treeEntries =
+        [
+            match checkpointOid with
+            | Some oid -> yield "checkpoint.json", oid
+            | None -> ()
+            yield "event.json", eventOid
+            yield "head.json", headOid
+        ]
+
+    let tree = treeSha treeEntries
+
+    let commitBytes =
+        String.concat
+            "\n"
+            [
+                $"tree {tree}"
+                "author Test <test@example.com> 0 +0000"
+                "committer Test <test@example.com> 0 +0000"
+                ""
+                "claim journal"
+            ]
+        |> Encoding.UTF8.GetBytes
+
+    {
+        Address = address
+        EventBytes = eventBytes
+        EventOid = eventOid
+        HeadBytes = headBytes
+        HeadOid = headOid
+        CheckpointBytes = checkpointBytes
+        CheckpointOid = checkpointOid
+        Tree = tree
+        Commit = gitSha "commit" commitBytes
     }
 
 let private claimFixture generation addressTransform =
@@ -148,74 +211,57 @@ let private claimFixture generation addressTransform =
         ClaimTouchSetAdapter.authorityBytes authority
         |> Result.defaultWith (failwithf "%A")
 
-    let eventOid = gitSha "blob" eventBytes
-
-    let unsigned: JournalHead =
-        {
-            SchemaVersion = 1
-            Address = address
-            Generation = generation
-            EventDigest = ShardedJournalAdapter.sha256 eventBytes
-            SnapshotDigest = None
-            Terminal = false
-            PriorHeadDigest = None
-            HeadDigest = String.replicate 64 "0"
-        }
-
-    let firstHeadBytes = ShardedJournalAdapter.journalHeadBytes unsigned
-
-    let head =
-        { unsigned with
-            HeadDigest = ShardedJournalAdapter.sha256 firstHeadBytes
-        }
-
-    let headBytes = ShardedJournalAdapter.journalHeadBytes head
-    let headOid = gitSha "blob" headBytes
-    let tree = treeSha [ "event.json", eventOid; "head.json", headOid ]
-
-    let commitBytes =
-        String.concat
-            "\n"
-            [
-                $"tree {tree}"
-                "author Test <test@example.com> 0 +0000"
-                "committer Test <test@example.com> 0 +0000"
-                ""
-                "claim journal"
-            ]
-        |> Encoding.UTF8.GetBytes
-
-    {
-        Address = address
-        EventBytes = eventBytes
-        EventOid = eventOid
-        HeadBytes = headBytes
-        HeadOid = headOid
-        Tree = tree
-        Commit = gitSha "commit" commitBytes
-    }
+    journalFixture address generation eventBytes None
 
 let private blobBody oid (bytes: byte array) =
     $"""{{"sha":"{oid}","encoding":"base64","content":"{Convert.ToBase64String bytes}","size":{bytes.Length}}}"""
 
 let private fixtureRoute (fixture: Fixture) request =
+    let refBody =
+        let relative = fixture.Address.Ref.Substring("refs/".Length)
+        let refUrl = $"https://api.github.test/repos/FS-GG/copy/git/refs/{relative}"
+
+        let objectUrl =
+            $"https://api.github.test/repos/FS-GG/copy/git/commits/{fixture.Commit}"
+
+        $"""[{{"ref":"{fixture.Address.Ref}","node_id":"REF_fixture","url":"{refUrl}","object":{{"type":"commit","sha":"{fixture.Commit}","url":"{objectUrl}"}}}}]"""
+
+    let treeBody =
+        let checkpoint =
+            match fixture.CheckpointOid with
+            | Some oid -> $"""{{"path":"checkpoint.json","mode":"100644","type":"blob","sha":"{oid}"}},"""
+            | None -> ""
+
+        $"""{{"sha":"{fixture.Tree}","truncated":false,"tree":[{checkpoint}{{"path":"event.json","mode":"100644","type":"blob","sha":"{fixture.EventOid}"}},{{"path":"head.json","mode":"100644","type":"blob","sha":"{fixture.HeadOid}"}}]}}"""
+
     match path request with
     | "/repos/FS-GG/copy" -> ok Map.empty """{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}"""
-    | value when value.EndsWith("/claim/", StringComparison.Ordinal) ->
-        ok Map.empty $"""[{{"ref":"{fixture.Address.Ref}","object":{{"type":"commit","sha":"{fixture.Commit}"}}}}]"""
+    | value when
+        value.EndsWith("/claim/", StringComparison.Ordinal)
+        && fixture.Address.Kind = JournalKind.Claim
+        ->
+        ok Map.empty refBody
+    | value when value.EndsWith("/claim/", StringComparison.Ordinal) -> ok Map.empty "[]"
+    | value when
+        value.EndsWith("/operation/", StringComparison.Ordinal)
+        && fixture.Address.Kind = JournalKind.Operation
+        ->
+        ok Map.empty refBody
     | value when value.EndsWith("/operation/", StringComparison.Ordinal) -> ok Map.empty "[]"
     | value when value.EndsWith("/git/commits/" + fixture.Commit, StringComparison.Ordinal) ->
         ok
             Map.empty
             $"""{{"sha":"{fixture.Commit}","tree":{{"sha":"{fixture.Tree}"}},"parents":[],"author":{{"name":"Test","email":"test@example.com","date":"1970-01-01T00:00:00Z"}},"committer":{{"name":"Test","email":"test@example.com","date":"1970-01-01T00:00:00Z"}},"message":"claim journal"}}"""
-    | value when value.EndsWith("/git/trees/" + fixture.Tree, StringComparison.Ordinal) ->
-        ok
-            Map.empty
-            $"""{{"sha":"{fixture.Tree}","truncated":false,"tree":[{{"path":"event.json","mode":"100644","type":"blob","sha":"{fixture.EventOid}"}},{{"path":"head.json","mode":"100644","type":"blob","sha":"{fixture.HeadOid}"}}]}}"""
+    | value when value.EndsWith("/git/trees/" + fixture.Tree, StringComparison.Ordinal) -> ok Map.empty treeBody
     | value when value.EndsWith("/git/blobs/" + fixture.EventOid, StringComparison.Ordinal) ->
         ok Map.empty (blobBody fixture.EventOid fixture.EventBytes)
     | value when value.EndsWith("/git/blobs/" + fixture.HeadOid, StringComparison.Ordinal) ->
         ok Map.empty (blobBody fixture.HeadOid fixture.HeadBytes)
+    | value when
+        fixture.CheckpointOid
+        |> Option.exists (fun oid -> value.EndsWith("/git/blobs/" + oid, StringComparison.Ordinal))
+        ->
+        ok Map.empty (blobBody fixture.CheckpointOid.Value fixture.CheckpointBytes.Value)
     | value -> failwithf "unexpected request %s" value
 
 [<Fact>]
@@ -246,6 +292,95 @@ let ``producer conflict claim address is classified from a declared touch`` () =
     | Error failure -> failwithf "conflict claim capture refused: %s" failure
     | Ok capture ->
         Assert.StartsWith("conflict:", capture.ClaimFirst.ClaimHistories.Head.ClaimEntries.Head.ClaimRecord.CanonicalId)
+
+[<Fact>]
+let ``provider ref metadata is retained and mismatched metadata refuses`` () =
+    let fixture = claimFixture 1L (fun address _ -> address)
+
+    let corrupt request =
+        match path request with
+        | value when value.EndsWith("/claim/", StringComparison.Ordinal) ->
+            match fixtureRoute fixture request with
+            | Response response ->
+                Response
+                    { response with
+                        Body = response.Body.Replace("/git/refs/heads/", "/git/refs/wrong/heads/")
+                    }
+            | outcome -> outcome
+        | _ -> fixtureRoute fixture request
+
+    Assert.Equal(
+        Error "ref-metadata-drift",
+        MigrationClaimJournalCapture.captureTwoPass options (FakeTransport corrupt)
+    )
+
+[<Fact>]
+let ``conditional checkpoint blob is hash bound decoded and validated`` () =
+    let basic = claimFixture 1L (fun address _ -> address)
+    let aggregateDigest = String.replicate 64 "f"
+
+    let checkpointBytes =
+        ShardedJournalAdapter.canonicalJson $"{{\"aggregateDigest\":\"{aggregateDigest}\",\"highWaterGeneration\":1}}"
+        |> Result.defaultWith failwith
+
+    let fixture =
+        journalFixture basic.Address 1L basic.EventBytes (Some checkpointBytes)
+
+    let transport = FakeTransport(fixtureRoute fixture)
+
+    match MigrationClaimJournalCapture.captureTwoPass options transport with
+    | Error failure -> failwithf "checkpoint capture refused: %s" failure
+    | Ok capture ->
+        let entry = capture.ClaimFirst.ClaimHistories.Head.ClaimEntries.Head
+        Assert.Equal(5, entry.ClaimReads.Length)
+        Assert.Equal(16, transport.Requests.Length)
+
+[<Fact>]
+let ``delivery authority is classified as review family and wrong address refuses`` () =
+    let subject = "fs-gg/copy#7"
+
+    let record: DeliveryAuthorityRecord =
+        {
+            SchemaVersion = 1
+            Subject = subject
+            Kind = DeliveryGenesis
+            ReviewChainId = ""
+            ReviewEpochKey = ""
+            ReviewSeat = ""
+            MergeCommit = ""
+            ProtectedRunId = None
+            ProtectedRunCommit = None
+            ProtectedRunConclusion = None
+            OperationId = "delivery-root"
+        }
+
+    let eventBytes =
+        ReviewDeliveryAdapter.deliveryAuthorityBytes record
+        |> Result.defaultWith (failwithf "%A")
+
+    let address =
+        ReviewDeliveryAdapter.deliveryAddress subject
+        |> Result.defaultWith (failwithf "%A")
+
+    let fixture = journalFixture address 1L eventBytes None
+
+    match MigrationClaimJournalCapture.captureTwoPass options (FakeTransport(fixtureRoute fixture)) with
+    | Error failure -> failwithf "delivery capture refused: %s" failure
+    | Ok capture ->
+        let decoded = capture.ClaimFirst.ClaimHistories.Head.ClaimEntries.Head.ClaimRecord
+        Assert.Equal(ReviewSchemaFamily, decoded.Family)
+        Assert.Equal("fsgg.coordination.delivery-authority/1", decoded.Schema)
+
+    let wrongAddress =
+        ShardedJournalAdapter.address JournalKind.Operation "ordinary:42:PR_7"
+        |> Result.defaultWith (failwithf "%A")
+
+    let wrong = journalFixture wrongAddress 1L eventBytes None
+
+    Assert.Equal(
+        Error "delivery-address-drift",
+        MigrationClaimJournalCapture.captureTwoPass options (FakeTransport(fixtureRoute wrong))
+    )
 
 [<Fact>]
 let ``wrong claim shard and root generation fail closed`` () =
