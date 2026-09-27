@@ -48,6 +48,13 @@ let private successPass () =
       response 200 (next "releases") $"[{releaseOne}]"
       response 200 Map.empty $"[{releaseTwo}]" ]
 
+let private securityConfiguration =
+    "{\"status\":\"attached\",\"configuration\":{\"id\":1325,\"target_type\":\"organization\",\"name\":\"sandbox security\",\"advanced_security\":\"enabled\",\"code_security\":\"enabled\",\"code_scanning_default_setup\":\"enabled\",\"code_scanning_default_setup_options\":{\"runner_type\":\"standard\",\"runner_label\":null},\"code_scanning_options\":{\"allow_advanced\":false},\"code_scanning_delegated_alert_dismissal\":\"disabled\",\"secret_protection\":\"enabled\",\"secret_scanning\":\"enabled\",\"secret_scanning_push_protection\":\"enabled\",\"secret_scanning_delegated_bypass\":\"disabled\",\"secret_scanning_delegated_bypass_options\":null,\"secret_scanning_validity_checks\":\"enabled\",\"secret_scanning_non_provider_patterns\":\"disabled\",\"secret_scanning_generic_secrets\":\"disabled\",\"secret_scanning_delegated_alert_dismissal\":\"disabled\",\"secret_scanning_extended_metadata\":\"disabled\",\"private_vulnerability_reporting\":\"enabled\",\"enforcement\":\"enforced\",\"url\":\"https://api.github.test/orgs/FS-GG/code-security/configurations/1325\",\"updated_at\":\"2026-09-28T01:00:00Z\"}}"
+
+let private securityPass () =
+    [ response 200 Map.empty (repository true)
+      response 200 Map.empty securityConfiguration ]
+
 type private FakeTransport(outcomes: TransportOutcome list) =
     let mutable remaining = outcomes
     let requests = ResizeArray<GitHubRequest>()
@@ -83,7 +90,7 @@ let ``releases and tags reader retains terminal raw streams and draft visibility
 type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvider) =
     interface IMigrationRepositorySettingsSurfaceProvider with
         member _.Read(actualIdentity, actualRevision, surface) =
-            if surface = ReleasesAndTags then
+            if surface = ReleasesAndTags || surface = CodeSecurity then
                 concrete.Read(actualIdentity, actualRevision, surface)
             else
                 let body = $"{{\"surface\":\"{RepositorySettingsAdapter.surfaceId surface}\"}}"
@@ -104,7 +111,7 @@ type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvide
 
 [<Fact>]
 let ``release provider pages join the eleven-surface two-pass composer`` () =
-    let transport = FakeTransport(successPass() @ successPass())
+    let transport = FakeTransport(successPass() @ securityPass() @ successPass() @ securityPass())
     let concrete =
         MigrationRepositorySettingsGitHubProvider(options, transport)
         :> IMigrationRepositorySettingsSurfaceProvider
@@ -112,7 +119,7 @@ let ``release provider pages join the eleven-surface two-pass composer`` () =
     match MigrationRepositorySettingsRead.captureTwoPass identity revision provider with
     | Error failure -> failwithf "two-pass provider capture refused: %A" failure
     | Ok captured ->
-        Assert.Equal(10, transport.Requests.Length)
+        Assert.Equal(14, transport.Requests.Length)
         Assert.Equal(
             Ok captured,
             MigrationRepositorySettingsRead.validateCapture captured)
@@ -124,6 +131,90 @@ let ``release provider pages join the eleven-surface two-pass composer`` () =
                 Assert.Equal(revision, actualRevision)
                 Assert.Equal(17, settings.Length)
             | state -> failwithf "unexpected releases surface: %A" state
+            match observation.Surfaces[CodeSecurity] with
+            | Supported(actualRevision, true, settings) ->
+                Assert.Equal(revision, actualRevision)
+                Assert.Equal(22, settings.Length)
+            | state -> failwithf "unexpected code security surface: %A" state
+
+[<Fact>]
+let ``code security reader binds attached configuration provenance and explicit values`` () =
+    let transport = FakeTransport(securityPass())
+    match MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision transport with
+    | Error refusal -> failwithf "code security refused: %A" refusal
+    | Ok captured ->
+        Assert.Equal(2, transport.Requests.Length)
+        Assert.Equal(1325L, captured.ConfigurationId)
+        Assert.Equal("organization", captured.ConfigurationTargetType)
+        Assert.Equal("enforced", captured.Enforcement)
+        Assert.Equal(identity, captured.SurfaceRead.RepositoryIdentity)
+        Assert.Equal(revision, captured.SurfaceRead.RepositoryRevision)
+        Assert.Equal<string list>(
+            [ "repository-identity"; "code-security-configuration" ],
+            captured.SurfaceRead.Pages |> List.map _.SettingsStream)
+        Assert.Equal(securityConfiguration, captured.SurfaceRead.Pages[1].SettingsPayloadJson)
+        Assert.Equal(22, captured.SurfaceRead.Settings.Length)
+        Assert.All(captured.SurfaceRead.Settings, fun setting -> Assert.Equal(CodeSecurity, setting.Surface))
+        Assert.All(
+            captured.SurfaceRead.Pages,
+            fun page -> Assert.Equal(64, page.SettingsPayloadSha256.Length))
+
+[<Fact>]
+let ``code security reader refuses absent inherited forbidden and unknown configuration`` () =
+    let absent =
+        FakeTransport([ response 200 Map.empty (repository true); response 204 Map.empty null ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+            "no-attached-configuration-effective-settings-unproven"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision absent)
+
+    let forbidden =
+        FakeTransport([ response 200 Map.empty (repository true); response 403 Map.empty "{}" ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:403"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision forbidden)
+
+    let inherited = securityConfiguration.Replace(
+        "\"secret_scanning\":\"enabled\"", "\"secret_scanning\":\"not_set\"")
+    let partial =
+        FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty inherited ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial "inherited-or-unset:secret_scanning"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision partial)
+
+    let enabledBypass = securityConfiguration.Replace(
+        "\"secret_scanning_delegated_bypass\":\"disabled\"",
+        "\"secret_scanning_delegated_bypass\":\"enabled\"")
+    let missingBypassReviewers =
+        FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty enabledBypass ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "enabled-delegated-bypass-reviewers-unproven"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision missingBypassReviewers)
+
+    let unknown = securityConfiguration.Replace("\"status\":\"attached\"", "\"status\":\"pending\"")
+    let unreadable =
+        FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty unknown ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "unsupported:attachment-status:pending"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision unreadable)
+
+    let unknownOptionShape = securityConfiguration.Replace(
+        "\"code_scanning_options\":{\"allow_advanced\":false}",
+        "\"code_scanning_options\":{\"allow_advanced\":false,\"future_option\":true}")
+    let unsupportedShape =
+        FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty unknownOptionShape ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "unsupported:code_scanning_options-shape"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision unsupportedShape)
+
+    let revisionDrift =
+        FakeTransport(
+            [ response 200 Map.empty ((repository true).Replace(revision, "2026-09-28T01:02:04Z")) ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "repository-identity-drift"),
+        MigrationRepositorySettingsProviderRead.readCodeSecurity options identity revision revisionDrift)
 
 [<Fact>]
 let ``concrete provider leaves every unimplemented or partial surface unavailable`` () =
@@ -137,6 +228,10 @@ let ``concrete provider leaves every unimplemented or partial surface unavailabl
         Error(MigrationRepositorySettingsSurfaceRefusal.Partial
             "environment-secrets-variables-and-plan-conditions-remain-unbound"),
         source.Read(identity, revision, Environments))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
+            "surface-reader-not-installed:dependency-controls"),
+        source.Read(identity, revision, DependencyControls))
     Assert.Equal(
         Error(MigrationRepositorySettingsReadFailure.ProviderRefused(
             SettingsSurface.Repository,

@@ -20,6 +20,14 @@ type MigrationRepositoryReleasesAndTagsRead =
       Tags: MigrationRepositoryTagSetting list
       Releases: MigrationRepositoryReleaseSetting list }
 
+type MigrationRepositoryCodeSecurityRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      ConfigurationId: int64
+      ConfigurationTargetType: string
+      ConfigurationName: string
+      Enforcement: string
+      ConfigurationUpdatedAt: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -149,7 +157,7 @@ module MigrationRepositorySettingsProviderRead =
             |> Result.bind (fun source -> text "node_id" source)
             |> Result.map Some
 
-    let private repositoryEvidence
+    let private repositoryResponse
         (options: MigrationGitHubReadOptions)
         (identity: RepositoryIdentity)
         (revision: string)
@@ -161,9 +169,8 @@ module MigrationRepositorySettingsProviderRead =
             parse response.Body
             |> Result.bind (fun root ->
                 match positive "id" root, text "node_id" root, text "full_name" root,
-                      text "default_branch" root, text "updated_at" root, sourceNodeId root,
-                      prop "permissions" root |> Result.bind (flag "push") with
-                | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok updatedAt, Ok source, Ok canPush when
+                      text "default_branch" root, text "updated_at" root, sourceNodeId root with
+                | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok updatedAt, Ok source when
                     id = options.ExpectedRepositoryId
                     && id = identity.DatabaseId
                     && nodeId = identity.NodeId
@@ -172,22 +179,30 @@ module MigrationRepositorySettingsProviderRead =
                     && defaultBranch = identity.DefaultBranch
                     && source = identity.SourceRepositoryNodeId
                     && updatedAt = revision ->
-                    if not canPush then
-                        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
-                            "draft-release-visibility-unproven")
-                    else
-                        Ok
-                            { SettingsStream="repository-identity"
-                              SettingsRequestedUri=uri.AbsoluteUri
-                              SettingsPayloadJson=response.Body
-                              SettingsPayloadSha256=hashText response.Body
-                              SettingsNextUri=None }
-                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                    Ok(response, root)
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
                     Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "repository-identity-drift")
-                | Error failure, _, _, _, _, _, _ | _, Error failure, _, _, _, _, _
-                | _, _, Error failure, _, _, _, _ | _, _, _, Error failure, _, _, _
-                | _, _, _, _, Error failure, _, _ | _, _, _, _, _, Error failure, _
-                | _, _, _, _, _, _, Error failure -> Error failure))
+                | Error failure, _, _, _, _, _ | _, Error failure, _, _, _, _
+                | _, _, Error failure, _, _, _ | _, _, _, Error failure, _, _
+                | _, _, _, _, Error failure, _ | _, _, _, _, _, Error failure -> Error failure))
+
+    let private identityPage (options: MigrationGitHubReadOptions) (response: ResponseEnvelope) =
+        { SettingsStream="repository-identity"
+          SettingsRequestedUri=Uri(options.ApiBase, repoPath options).AbsoluteUri
+          SettingsPayloadJson=response.Body
+          SettingsPayloadSha256=hashText response.Body
+          SettingsNextUri=None }
+
+    let private repositoryEvidence options identity revision transport =
+        repositoryResponse options identity revision transport
+        |> Result.bind (fun (response, root) ->
+            prop "permissions" root
+            |> Result.bind (flag "push")
+            |> Result.bind (fun canPush ->
+                if canPush then Ok(identityPage options response)
+                else
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                        "draft-release-visibility-unproven")))
 
     let private validPageUri (options: MigrationGitHubReadOptions) (suffix: string) (uri: Uri) =
         let named = $"/{repoPath options}/{suffix}"
@@ -313,6 +328,243 @@ module MigrationRepositorySettingsProviderRead =
         | Some name -> core @ [ { Surface=ReleasesAndTags; Subject=subject; Name="name"; Value=SettingValue.Text name } ]
         | None -> core
 
+    let private explicitSecurityStatus name value =
+        text name value
+        |> Result.bind (fun status ->
+            match status with
+            | "enabled" | "disabled" -> Ok status
+            | "not_set" ->
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial $"inherited-or-unset:{name}")
+            | _ -> refuse $"unsupported:{name}:{status}")
+
+    let private advancedSecurity value =
+        text "advanced_security" value
+        |> Result.bind (fun status ->
+            match status with
+            | "enabled" | "disabled" | "code_security" | "secret_protection" -> Ok status
+            | _ -> refuse $"unsupported:advanced_security:{status}")
+
+    let private exactMembers name allowed (value: JsonElement) =
+        let names = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+        if names = Set.ofList allowed then Ok value else refuse $"unsupported:{name}-shape"
+
+    let private defaultSetupOptions value =
+        prop "code_scanning_default_setup_options" value
+        |> Result.bind (fun item ->
+            match item.ValueKind with
+            | JsonValueKind.Null -> Ok "null"
+            | JsonValueKind.Object ->
+                exactMembers "code_scanning_default_setup_options" [ "runner_type"; "runner_label" ] item
+                |> Result.bind (fun options ->
+                    text "runner_type" options
+                    |> Result.bind (fun runnerType ->
+                        let label = prop "runner_label" options
+                        match runnerType, label with
+                        | "standard", Ok label when label.ValueKind = JsonValueKind.Null -> Ok(item.GetRawText())
+                        | "labeled", Ok label when
+                            label.ValueKind = JsonValueKind.String && validText (label.GetString()) ->
+                            Ok(item.GetRawText())
+                        | "not_set", _ ->
+                            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                "inherited-or-unset:code_scanning_default_setup_options")
+                        | _, Error failure -> Error failure
+                        | _ -> refuse "invalid:code_scanning_default_setup_options"))
+            | _ -> refuse "invalid:code_scanning_default_setup_options")
+
+    let private codeScanningOptions value =
+        prop "code_scanning_options" value
+        |> Result.bind (fun item ->
+            match item.ValueKind with
+            | JsonValueKind.Null -> Ok "null"
+            | JsonValueKind.Object ->
+                exactMembers "code_scanning_options" [ "allow_advanced" ] item
+                |> Result.bind (fun options ->
+                    prop "allow_advanced" options
+                    |> Result.bind (fun allow ->
+                        match allow.ValueKind with
+                        | JsonValueKind.True | JsonValueKind.False | JsonValueKind.Null -> Ok(item.GetRawText())
+                        | _ -> refuse "invalid:code_scanning_options"))
+            | _ -> refuse "invalid:code_scanning_options")
+
+    let private delegatedBypassOptions value =
+        prop "secret_scanning_delegated_bypass_options" value
+        |> Result.bind (fun item ->
+            match item.ValueKind with
+            | JsonValueKind.Null -> Ok "null"
+            | JsonValueKind.Object ->
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                    "secret-scanning-delegated-bypass-reviewers-not-modeled")
+            | _ -> refuse "invalid:secret_scanning_delegated_bypass_options")
+
+    let private advancedSecurityIsConsistent advanced statuses =
+        let status name = statuses |> List.find (fst >> (=) name) |> snd
+        match advanced, status "code_security", status "secret_protection" with
+        | "enabled", "enabled", "enabled"
+        | "disabled", "disabled", "disabled"
+        | "code_security", "enabled", "disabled"
+        | "secret_protection", "disabled", "enabled" -> true
+        | _ -> false
+
+    let private configurationUrl
+        (options: MigrationGitHubReadOptions)
+        (targetType: string)
+        (configurationId: int64)
+        (configuration: JsonElement)
+        =
+        text "url" configuration
+        |> Result.bind (fun value ->
+            let mutable uri = Unchecked.defaultof<Uri>
+            let suffix = $"/code-security/configurations/{configurationId}"
+            if not (Uri.TryCreate(value, UriKind.Absolute, &uri))
+               || uri.Scheme <> options.ApiBase.Scheme
+               || uri.Authority <> options.ApiBase.Authority
+               || not (uri.AbsolutePath.EndsWith(suffix, StringComparison.Ordinal)) then
+                refuse "configuration-url-drift"
+            elif targetType = "organization"
+                 && not (uri.AbsolutePath.StartsWith(
+                     $"/orgs/{Uri.EscapeDataString options.Owner}/", StringComparison.Ordinal)) then
+                refuse "configuration-owner-drift"
+            elif targetType = "enterprise"
+                 && not (uri.AbsolutePath.StartsWith("/enterprises/", StringComparison.Ordinal)) then
+                refuse "configuration-owner-drift"
+            else Ok value)
+
+    let private codeSecurityRequest (options: MigrationGitHubReadOptions) =
+        let uri = Uri(options.ApiBase, $"{repoPath options}/code-security-configuration")
+        uri,
+        Rest
+            { Method=Get; Uri=uri; Headers=headers options; Body=None
+              ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+
+    let readCodeSecurity
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) then refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            repositoryResponse options identity repositoryRevision transport
+            |> Result.bind (fun (repository, _) ->
+                let uri, request = codeSecurityRequest options
+                match transport.Send request with
+                | NetworkFailure | TimedOut ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "transport-unavailable")
+                | Response response when response.StatusCode = 401 || response.StatusCode = 403 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized $"http:{response.StatusCode}")
+                | Response response when response.StatusCode = 404 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "http:404")
+                | Response response when response.StatusCode = 204 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                        "no-attached-configuration-effective-settings-unproven")
+                | Response response when response.StatusCode <> 200 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable $"http:{response.StatusCode}")
+                | Response response when responseHeader "link" response.Headers |> Option.isSome ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial "unexpected-continuation")
+                | Response response ->
+                    parse response.Body
+                    |> Result.bind (fun root ->
+                        match text "status" root, prop "configuration" root with
+                        | Ok "attached", Ok configuration ->
+                            let fields =
+                                [ "code_security"
+                                  "code_scanning_default_setup"
+                                  "code_scanning_delegated_alert_dismissal"
+                                  "secret_protection"
+                                  "secret_scanning"
+                                  "secret_scanning_push_protection"
+                                  "secret_scanning_delegated_bypass"
+                                  "secret_scanning_validity_checks"
+                                  "secret_scanning_non_provider_patterns"
+                                  "secret_scanning_generic_secrets"
+                                  "secret_scanning_delegated_alert_dismissal"
+                                  "secret_scanning_extended_metadata"
+                                  "private_vulnerability_reporting" ]
+                            match positive "id" configuration, text "target_type" configuration,
+                                  text "name" configuration, text "enforcement" configuration,
+                                  text "updated_at" configuration, advancedSecurity configuration with
+                            | Ok id, Ok targetType, Ok name, Ok enforcement, Ok updatedAt, Ok advanced when
+                                (targetType = "organization" || targetType = "enterprise")
+                                && (enforcement = "enforced" || enforcement = "unenforced"
+                                    || enforcement = "enterprise_enforced") ->
+                                configurationUrl options targetType id configuration
+                                |> Result.bind (fun _ ->
+                                    fields
+                                    |> List.fold (fun state field ->
+                                        state
+                                        |> Result.bind (fun values ->
+                                            explicitSecurityStatus field configuration
+                                            |> Result.map (fun value -> (field, value)::values))) (Ok [])
+                                    |> Result.map List.rev
+                                    |> Result.bind (fun statuses ->
+                                        if not (advancedSecurityIsConsistent advanced statuses) then
+                                            refuse "contradictory:advanced-security"
+                                        else
+                                            let delegatedBypassStatus =
+                                                statuses
+                                                |> List.find (fst >> (=) "secret_scanning_delegated_bypass")
+                                                |> snd
+                                            let parsedOptions =
+                                                match defaultSetupOptions configuration,
+                                                      codeScanningOptions configuration,
+                                                      delegatedBypassOptions configuration with
+                                                | Ok defaults, Ok scanning, Ok "null" when delegatedBypassStatus = "enabled" ->
+                                                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                                        "enabled-delegated-bypass-reviewers-unproven")
+                                                | Ok defaults, Ok scanning, Ok bypass ->
+                                                    Ok
+                                                        [ "code_scanning_default_setup_options", defaults
+                                                          "code_scanning_options", scanning
+                                                          "secret_scanning_delegated_bypass_options", bypass ]
+                                                | Error failure, _, _ | _, Error failure, _ | _, _, Error failure ->
+                                                    Error failure
+                                            parsedOptions
+                                            |> Result.map (fun optionsValues ->
+                                                let subject = $"configuration:{id}"
+                                                let metadata =
+                                                    [ { Surface=CodeSecurity; Subject=subject; Name="configuration-id"
+                                                        Value=SettingValue.Integer id }
+                                                      { Surface=CodeSecurity; Subject=subject; Name="target-type"
+                                                        Value=SettingValue.Text targetType }
+                                                      { Surface=CodeSecurity; Subject=subject; Name="configuration-name"
+                                                        Value=SettingValue.Text name }
+                                                      { Surface=CodeSecurity; Subject=subject; Name="enforcement"
+                                                        Value=SettingValue.Text enforcement }
+                                                      { Surface=CodeSecurity; Subject=subject; Name="configuration-updated-at"
+                                                        Value=SettingValue.Text updatedAt }
+                                                      { Surface=CodeSecurity; Subject=subject; Name="advanced-security"
+                                                        Value=SettingValue.Text advanced } ]
+                                                let settings =
+                                                    metadata
+                                                    @ ([ statuses; optionsValues ]
+                                                       |> List.concat
+                                                       |> List.map (fun (field, value) ->
+                                                           { Surface=CodeSecurity; Subject=subject; Name=field
+                                                             Value=SettingValue.Text value }))
+                                                let configurationPage =
+                                                    { SettingsStream="code-security-configuration"
+                                                      SettingsRequestedUri=uri.AbsoluteUri
+                                                      SettingsPayloadJson=response.Body
+                                                      SettingsPayloadSha256=hashText response.Body
+                                                      SettingsNextUri=None }
+                                                { SurfaceRead=
+                                                    { RepositoryIdentity=identity; RepositoryRevision=repositoryRevision
+                                                      Surface=CodeSecurity; Complete=true
+                                                      Pages=[ identityPage options repository; configurationPage ]
+                                                      Settings=settings }
+                                                  ConfigurationId=id; ConfigurationTargetType=targetType
+                                                  ConfigurationName=name; Enforcement=enforcement
+                                                  ConfigurationUpdatedAt=updatedAt })))
+                            | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> refuse "unsupported:configuration-provenance"
+                            | Error failure, _, _, _, _, _ | _, Error failure, _, _, _, _
+                            | _, _, Error failure, _, _, _ | _, _, _, Error failure, _, _
+                            | _, _, _, _, Error failure, _ | _, _, _, _, _, Error failure -> Error failure
+                        | Ok status, Ok _ -> refuse $"unsupported:attachment-status:{status}"
+                        | Error failure, _ | _, Error failure -> Error failure))
+
     let readReleasesAndTags
         (options: MigrationGitHubReadOptions)
         (identity: RepositoryIdentity)
@@ -356,6 +608,10 @@ type MigrationRepositorySettingsGitHubProvider
             match surface with
             | ReleasesAndTags ->
                 MigrationRepositorySettingsProviderRead.readReleasesAndTags
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | CodeSecurity ->
+                MigrationRepositorySettingsProviderRead.readCodeSecurity
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | Environments ->

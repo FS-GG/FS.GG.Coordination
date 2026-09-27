@@ -25,6 +25,16 @@ type MigrationRepositoryReleasesAndTagsRead =
       Tags: MigrationRepositoryTagSetting list
       Releases: MigrationRepositoryReleaseSetting list }
 
+/// One attached organization or enterprise configuration with every selected
+/// CodeSecurity value explicit. `not_set` never becomes an effective value.
+type MigrationRepositoryCodeSecurityRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      ConfigurationId: int64
+      ConfigurationTargetType: string
+      ConfigurationName: string
+      Enforcement: string
+      ConfigurationUpdatedAt: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -37,8 +47,17 @@ module MigrationRepositorySettingsProviderRead =
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryReleasesAndTagsRead, MigrationRepositorySettingsSurfaceRefusal>
 
-/// Concrete partial provider. ReleasesAndTags is implemented. Environments and
-/// every other unimplemented surface refuse and cannot complete canonical settings.
+    /// GET-only read of the attached configuration managing repository code
+    /// security. A missing attachment or any inherited/unset value refuses.
+    val readCodeSecurity:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryCodeSecurityRead, MigrationRepositorySettingsSurfaceRefusal>
+
+/// Concrete partial provider. ReleasesAndTags and CodeSecurity are implemented.
+/// Every other incomplete surface refuses and cannot complete canonical settings.
 type MigrationRepositorySettingsGitHubProvider =
     new:
         options:MigrationGitHubReadOptions * transport:IMigrationGitHubReadTransport ->
