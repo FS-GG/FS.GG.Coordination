@@ -29,6 +29,8 @@
     <Compile Include="MigrationReviewDeliveryCaptureContract.fs" />
     <Compile Include="MigrationClaimEventCaptureContract.fsi" />
     <Compile Include="MigrationClaimEventCaptureContract.fs" />
+    <Compile Include="MigrationLegacyReceiptParser.fsi" />
+    <Compile Include="MigrationLegacyReceiptParser.fs" />
     <Compile Include="MigrationHistoricalClaimParser.fsi" />
     <Compile Include="MigrationHistoricalClaimParser.fs" />
     <Compile Include="MigrationClaimJournalCapture.fsi" />
