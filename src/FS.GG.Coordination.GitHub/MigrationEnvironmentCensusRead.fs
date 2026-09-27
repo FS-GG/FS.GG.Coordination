@@ -199,16 +199,22 @@ module MigrationEnvironmentCensusRead =
     let private int64Property (name: string) (value: JsonElement) =
         property name value
         |> Result.bind (fun item ->
-            match item.TryGetInt64() with
-            | true, number when number > 0L -> Ok number
-            | _ -> Error $"invalid:{name}")
+            if item.ValueKind <> JsonValueKind.Number then
+                Error $"invalid:{name}"
+            else
+                match item.TryGetInt64() with
+                | true, number when number > 0L -> Ok number
+                | _ -> Error $"invalid:{name}")
 
     let private intProperty (name: string) (value: JsonElement) =
         property name value
         |> Result.bind (fun item ->
-            match item.TryGetInt32() with
-            | true, number when number >= 0 -> Ok number
-            | _ -> Error $"invalid:{name}")
+            if item.ValueKind <> JsonValueKind.Number then
+                Error $"invalid:{name}"
+            else
+                match item.TryGetInt32() with
+                | true, number when number >= 0 -> Ok number
+                | _ -> Error $"invalid:{name}")
 
     let private rootObject (body: string) (parser: JsonElement -> Result<'a, string>) =
         parse body
