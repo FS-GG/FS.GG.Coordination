@@ -35,6 +35,16 @@ module MigrationReceiverCopyGitTransport =
     let private blobSha1 (bytes: byte array) =
         let header = Encoding.UTF8.GetBytes($"blob {bytes.Length}\000")
         SHA1.HashData(Array.append header bytes) |> Convert.ToHexString |> _.ToLowerInvariant()
+    let private makePrivate (root: string) =
+        if not (OperatingSystem.IsWindows()) then
+            let directoryMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+            let fileMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+            let rec walk (directory: string) =
+                for path in Directory.EnumerateFileSystemEntries directory do
+                    require (isNull (FileInfo(path).LinkTarget)) "receiver-copy-git-verification-link"
+                    if Directory.Exists path then File.SetUnixFileMode(path, directoryMode); walk path
+                    else File.SetUnixFileMode(path, fileMode)
+            File.SetUnixFileMode(root, directoryMode); walk root
     let private configure (info: ProcessStartInfo) =
         info.UseShellExecute <- false; info.RedirectStandardInput <- true
         info.RedirectStandardOutput <- true; info.RedirectStandardError <- true; info.CreateNoWindow <- true
@@ -71,9 +81,11 @@ module MigrationReceiverCopyGitTransport =
             let parent = Directory.GetParent root
             require (not (isNull parent) && parent.Exists && isNull parent.LinkTarget) "receiver-copy-git-verification-parent"
             Directory.CreateDirectory root |> ignore
-            match git root [ "init"; "--bare"; "--object-format=sha1"; "." ] with | Error error -> failwith error | Ok _ -> ()
+            makePrivate root
+            match git root [ "init"; "--bare"; "--object-format=sha1"; "--shared=0600"; "." ] with | Error error -> failwith error | Ok _ -> ()
             let refspecs = [ for row in manifest.DerivedRefs -> $"+{row.DerivedRef}:{row.DerivedRef}" ]
-            match git root ([ "fetch"; "--no-tags"; targetPath ] @ refspecs) with | Error error -> failwith error | Ok _ -> ()
+            match git root ([ "-c"; "maintenance.auto=false"; "-c"; "gc.auto=0"; "fetch"; "--no-tags"; targetPath ] @ refspecs) with | Error error -> failwith error | Ok _ -> ()
+            makePrivate root
             let refs = readAll root |> function Ok value -> value | Error error -> failwith error
             let expected = manifest.DerivedRefs |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
             require (refs |> Map.filter (fun name _ -> name.StartsWith($"refs/heads/gs2-09-7/{manifest.RunIdentity.RunNonce}/receivers/", StringComparison.Ordinal)) = expected) "receiver-copy-git-verification-refs"

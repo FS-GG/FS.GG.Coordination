@@ -42,6 +42,7 @@ module MigrationReceiverCopyTransfer =
             Result<MigrationReceiverCopyTransferManifest, string>
 
     val internal verifiedManifest: verified:MigrationReceiverCopyVerifiedTransfer -> MigrationReceiverCopyTransferManifest
+    val internal validateVerifiedStore: verified:MigrationReceiverCopyVerifiedTransfer -> Result<unit, string>
 
     val verify:
         acceptedEvidence:MigrationReceiverCopyAcceptedEvidence ->

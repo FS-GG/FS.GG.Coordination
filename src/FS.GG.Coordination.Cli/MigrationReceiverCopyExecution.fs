@@ -143,6 +143,9 @@ module MigrationReceiverCopyExecution =
         cutAfterReservation =
         try
             let manifest = MigrationReceiverCopyTransfer.verifiedManifest verifiedTransfer
+            match MigrationReceiverCopyTransfer.validateVerifiedStore verifiedTransfer with
+            | Error error -> failwith error
+            | Ok() -> ()
             validateAuthority authority; validateManifest manifest
             require transport.SupportsAtomic "receiver-copy-execution-atomic-unsupported"
             let root = ensureRoot attemptRoot

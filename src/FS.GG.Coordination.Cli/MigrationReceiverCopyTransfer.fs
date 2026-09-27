@@ -6,6 +6,8 @@ open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text
+open System.Runtime.InteropServices
+open Microsoft.Win32.SafeHandles
 
 type MigrationReceiverCopyDerivedRef =
     { ReceiverCopyId: string
@@ -36,6 +38,70 @@ module MigrationReceiverCopyTransfer =
     let private target = "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox.git"
     let private utf8 = UTF8Encoding(false, true)
     let private require condition code = if not condition then failwith code
+    module private Native =
+        [<Literal>]
+        let O_RDONLY = 0
+        [<Literal>]
+        let O_DIRECTORY = 0x10000
+        [<Literal>]
+        let O_NOFOLLOW = 0x20000
+        [<Literal>]
+        let O_CLOEXEC = 0x80000
+        [<Literal>]
+        let EEXIST = 17
+        [<DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+        extern int openNative(string path, int flags, uint32 mode)
+        [<DllImport("libc", SetLastError = true)>]
+        extern int mkdirat(int directory, string path, uint32 mode)
+        [<DllImport("libc", SetLastError = true)>]
+        extern int fsync(int descriptor)
+        [<DllImport("libc")>]
+        extern uint32 getuid()
+    let private descriptor (handle: SafeFileHandle) = handle.DangerousGetHandle().ToInt32()
+    let private privateDirectoryMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+    let private privateFileMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+    let private publicMode =
+        UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute
+        ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
+
+    let private statUid path =
+        use child = new Process()
+        let info = ProcessStartInfo("/usr/bin/stat")
+        for argument in [ "--format=%u"; "--"; path ] do info.ArgumentList.Add argument
+        info.UseShellExecute <- false; info.RedirectStandardInput <- true; info.RedirectStandardOutput <- true; info.RedirectStandardError <- true; info.CreateNoWindow <- true
+        child.StartInfo <- info
+        require (child.Start()) "receiver-copy-transfer-stat-start"; child.StandardInput.Close()
+        let output, error = child.StandardOutput.ReadToEndAsync(), child.StandardError.ReadToEndAsync()
+        require (child.WaitForExit(5000) && child.ExitCode = 0) $"receiver-copy-transfer-stat:{error.GetAwaiter().GetResult().Trim()}"
+        UInt32.Parse(output.GetAwaiter().GetResult().Trim(), Globalization.CultureInfo.InvariantCulture)
+
+    let private verifyPrivateStore root =
+        require (Directory.Exists root && isNull (DirectoryInfo(root).LinkTarget)) "receiver-copy-transfer-store-link"
+        if not (OperatingSystem.IsWindows()) then
+            require (File.GetUnixFileMode(root) = privateDirectoryMode) "receiver-copy-transfer-store-mode"
+            require (statUid root = Native.getuid()) "receiver-copy-transfer-store-owner"
+            let rec walk directory =
+                for path in Directory.EnumerateFileSystemEntries directory do
+                    let info = FileInfo path
+                    require (isNull info.LinkTarget) "receiver-copy-transfer-store-nested-link"
+                    let mode = File.GetUnixFileMode path
+                    require ((mode &&& publicMode) = enum 0) "receiver-copy-transfer-store-nested-mode"
+                    if Directory.Exists path then
+                        require ((mode &&& privateDirectoryMode) = privateDirectoryMode) "receiver-copy-transfer-store-directory-mode"
+                        walk path
+                    else require ((mode &&& UnixFileMode.UserRead) = UnixFileMode.UserRead) "receiver-copy-transfer-store-file-mode"
+            walk root
+
+    let private makeStorePrivate (root: string) =
+        if not (OperatingSystem.IsWindows()) then
+            let rec walk (directory: string) =
+                for path in Directory.EnumerateFileSystemEntries directory do
+                    require (isNull (FileInfo(path).LinkTarget)) "receiver-copy-transfer-store-nested-link"
+                    if Directory.Exists path then
+                        File.SetUnixFileMode(path, privateDirectoryMode); walk path
+                    else File.SetUnixFileMode(path, privateFileMode)
+            File.SetUnixFileMode(root, privateDirectoryMode)
+            walk root
     let private sha256 (bytes: byte array) = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
     let private blobSha1 (bytes: byte array) =
         let header = utf8.GetBytes($"blob {bytes.LongLength}\000")
@@ -153,8 +219,20 @@ module MigrationReceiverCopyTransfer =
         require (not (Directory.Exists full) && not (File.Exists full)) "receiver-copy-transfer-store-exists"
         let parent = Directory.GetParent full
         require (not (isNull parent) && parent.Exists && isNull parent.LinkTarget) "receiver-copy-transfer-store-parent"
-        Directory.CreateDirectory full |> ignore
-        git full [ "init"; "--bare"; "--object-format=sha1"; "." ] |> ignore
+        if OperatingSystem.IsWindows() then
+            Directory.CreateDirectory full |> ignore
+        else
+            let parentDescriptor = Native.openNative(parent.FullName, Native.O_RDONLY ||| Native.O_DIRECTORY ||| Native.O_NOFOLLOW ||| Native.O_CLOEXEC, 0u)
+            require (parentDescriptor >= 0) "receiver-copy-transfer-store-parent-open"
+            use parentHandle = new SafeFileHandle(nativeint parentDescriptor, true)
+            let created = Native.mkdirat(descriptor parentHandle, Path.GetFileName full, 0x1C0u)
+            let error = Marshal.GetLastPInvokeError()
+            require (created = 0) (if error = Native.EEXIST then "receiver-copy-transfer-store-exists" else $"receiver-copy-transfer-store-create:{error}")
+            require (Native.fsync(descriptor parentHandle) = 0) "receiver-copy-transfer-store-parent-fsync"
+        verifyPrivateStore full
+        git full [ "init"; "--bare"; "--object-format=sha1"; "--shared=0600"; "." ] |> ignore
+        makeStorePrivate full
+        verifyPrivateStore full
         full
 
     let private tree repository (entries: (string * string * string) list) =
@@ -244,6 +322,8 @@ module MigrationReceiverCopyTransfer =
             let rows = derived |> Seq.sortBy _.ReceiverCopyId |> List.ofSeq
             require (rows.Length = (rows |> List.map _.DerivedRef |> Set.ofList |> Set.count)) "receiver-copy-transfer-ref-duplicate"
             require (rows = (predicted |> Map.values |> List.ofSeq)) "receiver-copy-transfer-predicted-rows"
+            makeStorePrivate repository
+            verifyPrivateStore repository
             let digest = manifestFingerprint target run.RunNonce planFingerprint coverageFingerprint coverageDigests repository rows
             Ok { Schema = "fsgg.receiver-copy-transfer-manifest/1"; TargetRepository = target; RunIdentity = run
                  PlanFingerprint = planFingerprint; BlobCoverageFingerprint = coverageFingerprint; BlobSha256BySha1 = coverageDigests
@@ -293,27 +373,32 @@ module MigrationReceiverCopyTransfer =
     let verify acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage observed =
         verifiedInputs acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage
         |> Result.bind (fun (verifiedPlan, verifiedCoverage) ->
-            MigrationReceiverCopyBlobCapture.createVerifiedCompleteObjectSource acceptedEvidence runIdentity verifiedPlan batches artifacts verifiedCoverage
-            |> Result.bind (fun source ->
-                use source = source
-                try
-                    let receiverBytes = loadReceivers source verifiedPlan verifiedCoverage
-                    let expectedRows = predictRows runIdentity verifiedPlan.ReceiverCopyFingerprint receiverBytes
-                    let expectedPath = canonicalObjectStore runIdentity
-                    require (observed.Schema = "fsgg.receiver-copy-transfer-manifest/1" && observed.TargetRepository = target) "receiver-copy-transfer-manifest-shape"
-                    require (observed.RunIdentity = runIdentity && observed.PlanFingerprint = verifiedPlan.ReceiverCopyFingerprint && observed.BlobCoverageFingerprint = verifiedCoverage.ReceiverCopyBlobCoverageFingerprint) "receiver-copy-transfer-manifest-binding"
-                    require (observed.BlobSha256BySha1 = verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1) "receiver-copy-transfer-blob-coverage"
-                    require (observed.ObjectStorePath = expectedPath && Directory.Exists expectedPath && isNull (DirectoryInfo(expectedPath).LinkTarget)) "receiver-copy-transfer-store-identity"
-                    require (observed.DerivedRefs = expectedRows) "receiver-copy-transfer-derived-refs"
-                    let expectedFingerprint = manifestFingerprint target runIdentity.RunNonce verifiedPlan.ReceiverCopyFingerprint verifiedCoverage.ReceiverCopyBlobCoverageFingerprint verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1 expectedPath expectedRows
-                    require (observed.Fingerprint = expectedFingerprint) "receiver-copy-transfer-manifest-fingerprint"
-                    require (git expectedPath [ "rev-parse"; "--is-bare-repository" ] = "true") "receiver-copy-transfer-store-bare"
-                    for row in expectedRows do
-                        require (git expectedPath [ "rev-parse"; row.DerivedRef ] = row.DerivedCommit) "receiver-copy-transfer-ref-drift"
-                        require (git expectedPath [ "rev-parse"; $"{row.DerivedCommit}^{{tree}}" ] = row.DerivedTree) "receiver-copy-transfer-tree-readback"
-                        require (git expectedPath [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ] = row.DerivedCommit) "receiver-copy-transfer-parent-readback"
-                    Ok(MigrationReceiverCopyVerifiedTransfer observed)
-                with ex -> Error ex.Message))
+            let expectedPath = canonicalObjectStore runIdentity
+            try
+                require (observed.ObjectStorePath = expectedPath) "receiver-copy-transfer-store-identity"
+                verifyPrivateStore expectedPath
+                Ok()
+            with ex -> Error ex.Message
+            |> Result.bind (fun () ->
+                MigrationReceiverCopyBlobCapture.createVerifiedCompleteObjectSource acceptedEvidence runIdentity verifiedPlan batches artifacts verifiedCoverage
+                |> Result.bind (fun source ->
+                    use source = source
+                    try
+                        let receiverBytes = loadReceivers source verifiedPlan verifiedCoverage
+                        let expectedRows = predictRows runIdentity verifiedPlan.ReceiverCopyFingerprint receiverBytes
+                        require (observed.Schema = "fsgg.receiver-copy-transfer-manifest/1" && observed.TargetRepository = target) "receiver-copy-transfer-manifest-shape"
+                        require (observed.RunIdentity = runIdentity && observed.PlanFingerprint = verifiedPlan.ReceiverCopyFingerprint && observed.BlobCoverageFingerprint = verifiedCoverage.ReceiverCopyBlobCoverageFingerprint) "receiver-copy-transfer-manifest-binding"
+                        require (observed.BlobSha256BySha1 = verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1) "receiver-copy-transfer-blob-coverage"
+                        require (observed.DerivedRefs = expectedRows) "receiver-copy-transfer-derived-refs"
+                        let expectedFingerprint = manifestFingerprint target runIdentity.RunNonce verifiedPlan.ReceiverCopyFingerprint verifiedCoverage.ReceiverCopyBlobCoverageFingerprint verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1 expectedPath expectedRows
+                        require (observed.Fingerprint = expectedFingerprint) "receiver-copy-transfer-manifest-fingerprint"
+                        require (git expectedPath [ "rev-parse"; "--is-bare-repository" ] = "true") "receiver-copy-transfer-store-bare"
+                        for row in expectedRows do
+                            require (git expectedPath [ "rev-parse"; row.DerivedRef ] = row.DerivedCommit) "receiver-copy-transfer-ref-drift"
+                            require (git expectedPath [ "rev-parse"; $"{row.DerivedCommit}^{{tree}}" ] = row.DerivedTree) "receiver-copy-transfer-tree-readback"
+                            require (git expectedPath [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ] = row.DerivedCommit) "receiver-copy-transfer-parent-readback"
+                        Ok(MigrationReceiverCopyVerifiedTransfer observed)
+                    with ex -> Error ex.Message)))
 
     let internal prepareSyntheticForTests runIdentity planFingerprint coverageFingerprint objectStoreRoot receivers =
         let digests =
@@ -328,6 +413,7 @@ module MigrationReceiverCopyTransfer =
             require (observed.Schema = "fsgg.receiver-copy-transfer-manifest/1" && observed.TargetRepository = target) "receiver-copy-transfer-manifest-shape"
             require (observed.RunIdentity = runIdentity && observed.PlanFingerprint = planFingerprint && observed.BlobCoverageFingerprint = coverageFingerprint) "receiver-copy-transfer-manifest-binding"
             require (observed.ObjectStorePath = Path.GetFullPath objectStoreRoot) "receiver-copy-transfer-store-identity"
+            verifyPrivateStore observed.ObjectStorePath
             require (observed.BlobSha256BySha1 = digests && observed.DerivedRefs = rows) "receiver-copy-transfer-derived-refs"
             let expectedFingerprint = manifestFingerprint target runIdentity.RunNonce planFingerprint coverageFingerprint digests (Path.GetFullPath objectStoreRoot) rows
             require (observed.Fingerprint = expectedFingerprint) "receiver-copy-transfer-manifest-fingerprint"
@@ -340,3 +426,11 @@ module MigrationReceiverCopyTransfer =
                         Fingerprint = manifestFingerprint observed.TargetRepository observed.RunIdentity.RunNonce observed.PlanFingerprint observed.BlobCoverageFingerprint observed.BlobSha256BySha1 observed.ObjectStorePath rows }
 
     let internal verifiedManifest (MigrationReceiverCopyVerifiedTransfer manifest) = manifest
+
+    let internal validateVerifiedStore (MigrationReceiverCopyVerifiedTransfer manifest) =
+        try
+            verifyPrivateStore manifest.ObjectStorePath
+            for row in manifest.DerivedRefs do
+                require (git manifest.ObjectStorePath [ "rev-parse"; row.DerivedRef ] = row.DerivedCommit) "receiver-copy-transfer-ref-drift"
+            Ok()
+        with ex -> Error ex.Message

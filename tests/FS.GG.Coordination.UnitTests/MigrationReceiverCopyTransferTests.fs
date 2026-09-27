@@ -180,6 +180,28 @@ type private ControlledTransport(initial: Map<string, string>) =
             Ok()
 
 [<Fact>]
+let ``permissive or swapped local object store refuses verification and execution`` () =
+    withTemp (fun root ->
+        let modeRoot = Path.Combine(root, "mode")
+        Directory.CreateDirectory modeRoot |> ignore
+        let manifest, verified = prepare modeRoot
+        File.SetUnixFileMode(manifest.ObjectStorePath, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.OtherRead)
+        Assert.True(MigrationReceiverCopyTransfer.verifySyntheticForTests run (String.replicate 64 "c") (String.replicate 64 "d") manifest.ObjectStorePath receivers manifest |> Result.isError)
+        let modeTransport = ControlledTransport Map.empty
+        Assert.True(MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies (Path.Combine(modeRoot, "attempts")) (modeTransport :> IMigrationReceiverCopyGitTransport) |> Result.isError)
+        Assert.Equal(0, modeTransport.Pushes)
+
+        let swapRoot = Path.Combine(root, "swap")
+        Directory.CreateDirectory swapRoot |> ignore
+        let swappedManifest, swappedVerified = prepare swapRoot
+        let saved = swappedManifest.ObjectStorePath + ".saved"
+        Directory.Move(swappedManifest.ObjectStorePath, saved)
+        Directory.CreateSymbolicLink(swappedManifest.ObjectStorePath, saved) |> ignore
+        let swapTransport = ControlledTransport Map.empty
+        Assert.True(MigrationReceiverCopyExecution.execute authority swappedVerified CreateReceiverCopies (Path.Combine(swapRoot, "attempts")) (swapTransport :> IMigrationReceiverCopyGitTransport) |> Result.isError)
+        Assert.Equal(0, swapTransport.Pushes))
+
+[<Fact>]
 let ``mixed wrong and unknown receiver refs refuse with zero dispatch`` () =
     withTemp (fun root ->
         let manifest, verified = prepare root
