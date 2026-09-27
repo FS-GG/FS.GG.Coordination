@@ -2,6 +2,8 @@ module FS.GG.Coordination.MigrationEnvironmentCensusReadTests
 
 open System
 open System.Collections.Generic
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coordination.GitHub
 
@@ -67,6 +69,61 @@ let private expectError expected (result: Result<'a, string>) =
 
 let private capturePass responses =
     MigrationEnvironmentCensusRead.capturePass options (FakeTransport responses)
+
+let private invalidNumericPayloads value =
+    [
+        0, identity.Replace("\"id\":42", "\"id\":" + value), "environment-repository-identity-shape"
+        1, $"""{{"total_count":{value},"environments":[]}}""", "environment-page-shape"
+        1,
+        page 1 [ $"""{{"id":{value},"node_id":"ENV_7","name":"preview"}}""" ],
+        "environment-identity-shape"
+    ]
+
+[<Theory>]
+[<InlineData("\"42\"")>]
+[<InlineData("null")>]
+[<InlineData("true")>]
+[<InlineData("false")>]
+[<InlineData("[]")>]
+[<InlineData("{}")>]
+[<InlineData("1.5")>]
+[<InlineData("-1")>]
+[<InlineData("9223372036854775808")>]
+let ``invalid numeric provider fields refuse without throwing or continuing capture`` value =
+    for index, body, expected in invalidNumericPayloads value do
+        let responses = if index = 0 then [ ok body ] else [ ok identity; ok body ]
+        let transport = FakeTransport responses
+        expectError expected (MigrationEnvironmentCensusRead.capturePass options transport)
+        Assert.Equal(index + 1, transport.Calls.Length)
+
+[<Theory>]
+[<InlineData("\"42\"")>]
+[<InlineData("null")>]
+[<InlineData("true")>]
+[<InlineData("false")>]
+[<InlineData("[]")>]
+[<InlineData("{}")>]
+[<InlineData("1.5")>]
+[<InlineData("-1")>]
+[<InlineData("9223372036854775808")>]
+let ``invalid numeric retained fields refuse after raw digest is recomputed`` value =
+    match capturePass [ ok identity; ok (page 0 []) ] with
+    | Error reason -> Assert.Fail reason
+    | Ok observed ->
+        for index, body, expected in invalidNumericPayloads value do
+            let pages =
+                observed.EnvironmentPages
+                |> List.mapi (fun pageIndex evidence ->
+                    if pageIndex <> index then evidence
+                    else
+                        { evidence with
+                            EnvironmentRawBody = body
+                            EnvironmentRawSha256 =
+                                body |> Encoding.UTF8.GetBytes |> SHA256.HashData
+                                |> Convert.ToHexString |> _.ToLowerInvariant() })
+            expectError expected
+                (MigrationEnvironmentCensusRead.validatePass options
+                    { observed with EnvironmentPages = pages })
 
 [<Fact>]
 let ``two independent terminal empty passes prove supported empty`` () =
