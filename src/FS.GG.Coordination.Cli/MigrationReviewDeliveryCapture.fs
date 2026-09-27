@@ -347,6 +347,24 @@ module MigrationReviewDeliveryCapture =
                 let mergeRead, merge =
                     singleton options transport ($"{basePath}/commits/{commit}") (parseMerge pull.Number commit)
                 streams <- stream "merge-object" subject [ mergeRead ] [ merge ] :: streams
+                if commit <> pull.HeadSha then
+                    let mergeCheckPath = MigrationReviewDeliveryCaptureContract.checkRunsPath basePath commit
+                    let mutable mergeTotal = None
+                    let mergeCheckReads, mergeChecks =
+                        paged options transport mergeCheckPath [ "filter", "all"; "per_page", "100" ] (fun body ->
+                            let observed, records = parseChecks pull.Number commit body
+                            match mergeTotal with
+                            | Some previous when previous <> observed -> fail "changed:merge-check-total"
+                            | _ -> mergeTotal <- Some observed
+                            records)
+                    if mergeChecks.Length <> Option.defaultValue -1 mergeTotal then
+                        fail "incomplete:merge-check-runs"
+                    streams <- stream "check-runs" subject mergeCheckReads mergeChecks :: streams
+                    let mergeStatusPath = MigrationReviewDeliveryCaptureContract.statusesPath basePath commit
+                    let mergeStatusReads, mergeStatuses =
+                        paged options transport mergeStatusPath [ "per_page", "100" ]
+                            (parseStatuses options pull.Number commit)
+                    streams <- stream "statuses" subject mergeStatusReads mergeStatuses :: streams
         let tagReads, tags =
             paged options transport ($"{basePath}/tags?per_page=100") [ "per_page", "100" ] parseTags
         streams <- stream "tags" "repository" tagReads tags :: streams

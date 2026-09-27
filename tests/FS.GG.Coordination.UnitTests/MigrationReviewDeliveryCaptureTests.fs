@@ -55,6 +55,11 @@ let private responseForPull request =
             ok Map.empty ($"""{{"number":2,"node_id":"P_2","head":{{"sha":"{head}"}},"merged_at":"2026-09-24T10:00:00Z","merge_commit_sha":"{merge}"}}""")
         | p when p.EndsWith($"/commits/{merge}", StringComparison.Ordinal) ->
             ok Map.empty ($"""{{"sha":"{merge}"}}""")
+        | p when p.EndsWith($"/commits/{merge}/check-runs", StringComparison.Ordinal)
+                 && query.Contains("filter=all") && query.Contains("per_page=100") ->
+            ok Map.empty ($"""{{"total_count":1,"check_runs":[{{"id":601,"name":"protected-delivery","status":"completed","conclusion":"success","head_sha":"{merge}"}}]}}""")
+        | p when p.EndsWith($"/commits/{merge}/statuses", StringComparison.Ordinal) ->
+            ok Map.empty ($"""[{{"id":701,"url":"{api}repos/FS-GG/copy/statuses/{merge}","context":"delivery/protected","state":"success"}}]""")
         | "/repos/FS-GG/copy/tags" ->
             ok Map.empty ($"""[{{"name":"v1","commit":{{"sha":"{merge}"}}}}]""")
         | "/repos/FS-GG/copy/releases" ->
@@ -84,6 +89,23 @@ let ``two fresh passes capture exact GET evidence and bind nonempty statuses to 
         let statuses = result.First.Streams |> List.find (fun stream -> stream.Kind = "statuses")
         Assert.Equal<MigrationReviewDeliveryRecord list>(
             [ CommitStatus(2, head, 401L, "ci/build", "success") ], statuses.Records)
+        let mergeChecks =
+            result.First.Streams
+            |> List.find (fun stream ->
+                stream.Records |> List.exists (function CheckRun(_, commit, _, _, _, _) -> commit = merge | _ -> false))
+        Assert.Equal<MigrationReviewDeliveryRecord list>(
+            [ CheckRun(2, merge, 601L, "protected-delivery", "completed", Some "success") ],
+            mergeChecks.Records)
+        Assert.Contains(mergeChecks.Reads, fun read ->
+            read.Request.Uri.Contains($"/commits/{merge}/check-runs")
+            && read.Request.Uri.Contains("filter=all"))
+        let mergeStatuses =
+            result.First.Streams
+            |> List.find (fun stream ->
+                stream.Records |> List.exists (function CommitStatus(_, commit, _, _, _) -> commit = merge | _ -> false))
+        Assert.Equal<MigrationReviewDeliveryRecord list>(
+            [ CommitStatus(2, merge, 701L, "delivery/protected", "success") ],
+            mergeStatuses.Records)
         Assert.All(transport.Requests, fun request ->
             match request with
             | Rest rest -> Assert.Equal(Get, rest.Method)
@@ -156,6 +178,33 @@ let ``check record with a different head refuses typed correspondence`` () =
             ok Map.empty ($"""{{"total_count":1,"check_runs":[{{"id":301,"name":"build","status":"completed","conclusion":"success","head_sha":"{otherHead}"}}]}}""")
         | _ -> responseForPull request
     assertError "changed:check-head" (capture (FakeTransport route))
+
+[<Fact>]
+let ``merge commit check record cannot be inferred from pull head evidence`` () =
+    let route request =
+        match request with
+        | Rest rest when rest.Uri.AbsolutePath.EndsWith($"/commits/{merge}/check-runs", StringComparison.Ordinal) ->
+            ok Map.empty ($"""{{"total_count":1,"check_runs":[{{"id":601,"name":"protected-delivery","status":"completed","conclusion":"success","head_sha":"{head}"}}]}}""")
+        | _ -> responseForPull request
+    assertError "changed:check-head" (capture (FakeTransport route))
+
+[<Fact>]
+let ``missing merge commit check page population refuses`` () =
+    let route request =
+        match request with
+        | Rest rest when rest.Uri.AbsolutePath.EndsWith($"/commits/{merge}/check-runs", StringComparison.Ordinal) ->
+            ok Map.empty """{"total_count":1,"check_runs":[]}"""
+        | _ -> responseForPull request
+    assertError "incomplete:merge-check-runs" (capture (FakeTransport route))
+
+[<Fact>]
+let ``merge commit status URL for pull head refuses`` () =
+    let route request =
+        match request with
+        | Rest rest when rest.Uri.AbsolutePath.EndsWith($"/commits/{merge}/statuses", StringComparison.Ordinal) ->
+            ok Map.empty ($"""[{{"id":701,"url":"{api}repos/FS-GG/copy/statuses/{head}","context":"delivery/protected","state":"success"}}]""")
+        | _ -> responseForPull request
+    assertError "changed:status-url" (capture (FakeTransport route))
 
 [<Fact>]
 let ``invalid options refuse before provider dispatch`` () =
