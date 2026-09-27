@@ -796,6 +796,170 @@ module MigrationInspectProviderAdapter =
                      Pages=pages }
             with failure -> Error $"receiver-declared-raw-or-scope:{failure.Message}"
 
+    let bindDeclaredWorkflowPins
+        (options: MigrationInspectProviderOptions)
+        (pinsByReceiver: Map<string, MigrationReceiverPinDeclaration list>)
+        (first: MigrationReceiverPinSnapshot list)
+        (second: MigrationReceiverPinSnapshot list) =
+        let receivers = options.Cohort.Receivers |> List.sortBy _.Receiver
+        let receiverNames = receivers |> List.map _.Receiver
+        let declaredNames = pinsByReceiver |> Map.toList |> List.map fst |> List.sort
+        if not (GitHubMigrationInspect.validCohort options.Cohort)
+           || declaredNames <> (receiverNames |> List.sort)
+           || pinsByReceiver |> Map.exists (fun _ pins -> isNull (box pins) || pins.IsEmpty) then
+            Error "workflow-pins-declaration"
+        else
+            match bindDeclaredReceiverIdentities options
+                      (first |> List.map _.Receiver) (second |> List.map _.Receiver) with
+            | Error reason -> Error $"workflow-pins-receiver:{reason}"
+            | Ok _ ->
+                try
+                    let bytesSha (value: byte array) =
+                        value |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                    let isWorkflow (path: string) =
+                        path.StartsWith(".github/workflows/", StringComparison.Ordinal)
+                    let packageNames =
+                        set [ "global.json"; "Directory.Packages.props"; "packages.lock.json"
+                              "package.json"; "package-lock.json"; "pnpm-lock.yaml"
+                              "yarn.lock"; "nuget.config" ]
+                    let isPackage (path: string) = path.Split('/') |> Array.last |> packageNames.Contains
+                    let validDeclaration (pin: MigrationReceiverPinDeclaration) =
+                        not (String.IsNullOrWhiteSpace pin.EntryPath)
+                        && (pin.PinKind = "workflow" && isWorkflow pin.EntryPath
+                            || pin.PinKind = "package" && isPackage pin.EntryPath
+                               && not (isWorkflow pin.EntryPath))
+                    let stringProperty (name: string) (root: JsonElement) =
+                        let value = root.GetProperty(name)
+                        if value.ValueKind <> JsonValueKind.String then failwith $"string:{name}"
+                        value.GetString()
+                    let validateBlob (receiver: MigrationReceiverSnapshot)
+                                     (declaration: MigrationReceiverPinDeclaration)
+                                     (pin: MigrationReceiverPinBlob) =
+                        let entry =
+                            receiver.TreeEntries
+                            |> List.tryFind (fun item -> item.EntryPath = declaration.EntryPath)
+                            |> Option.defaultWith (fun () -> failwith "pin-tree-entry")
+                        if pin.EntryPath <> declaration.EntryPath || pin.PinKind <> declaration.PinKind
+                           || entry.EntryKind <> "blob" || entry.EntryMode <> pin.EntryMode
+                           || entry.EntrySha <> pin.EntrySha || entry.EntrySize <> Some pin.EntrySize
+                           || not (Set.contains pin.EntryMode (set [ "100644"; "100755" ])) then
+                            failwith "pin-binding"
+                        let parts = receiver.RepositoryFullName.Split('/')
+                        if parts.Length <> 2 then failwith "pin-repository"
+                        let uri =
+                            Uri(options.Repository.ApiBase,
+                                $"repos/{Uri.EscapeDataString parts.[0]}/{Uri.EscapeDataString parts.[1]}/git/blobs/{pin.EntrySha}")
+                                .AbsoluteUri
+                        if pin.RequestUri <> uri || pin.RequestSha256 <> sha $"GET\n{uri}"
+                           || pin.RawSha256 <> sha pin.RawBody || pin.BytesSha256 <> bytesSha pin.Bytes
+                           || int64 pin.Bytes.LongLength <> pin.EntrySize then
+                            failwith "pin-evidence"
+                        use document = JsonDocument.Parse pin.RawBody
+                        let root = document.RootElement
+                        requireUniqueMembers root
+                        let encoded = stringProperty "content" root
+                        let rawBytes =
+                            let compact = encoded.Replace("\r", "").Replace("\n", "")
+                            if compact |> Seq.exists (fun c ->
+                                not (Char.IsAsciiLetterOrDigit c || c = '+' || c = '/' || c = '=')) then
+                                failwith "pin-base64"
+                            Convert.FromBase64String compact
+                        if stringProperty "sha" root <> pin.EntrySha
+                           || stringProperty "encoding" root <> "base64"
+                           || stringProperty "url" root <> uri
+                           || root.GetProperty("size").GetInt64() <> pin.EntrySize
+                           || rawBytes <> pin.Bytes then
+                            failwith "pin-raw-typed"
+                        let gitBytes =
+                            Array.append
+                                (Encoding.ASCII.GetBytes($"blob {rawBytes.LongLength}\u0000")) rawBytes
+                        let gitSha =
+                            gitBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                        if gitSha <> pin.EntrySha then failwith "pin-git-object"
+                    let validatePass (snapshots: MigrationReceiverPinSnapshot list) =
+                        if snapshots |> List.map (fun item -> item.Receiver.ReceiverName) <> receiverNames then
+                            failwith "pin-receiver-population"
+                        snapshots
+                        |> List.map (fun snapshot ->
+                            let receiverName = snapshot.Receiver.ReceiverName
+                            let declarations = pinsByReceiver.[receiverName] |> List.sortBy _.EntryPath
+                            if declarations |> List.exists (validDeclaration >> not)
+                               || declarations.Length
+                                  <> (declarations |> List.map _.EntryPath |> Set.ofList |> Set.count)
+                               || snapshot.Pins |> List.map _.EntryPath
+                                  <> (declarations |> List.map _.EntryPath) then
+                                failwith "pin-population"
+                            let relevantPaths =
+                                snapshot.Receiver.TreeEntries
+                                |> List.filter (fun entry -> isWorkflow entry.EntryPath || isPackage entry.EntryPath)
+                                |> List.map _.EntryPath |> Set.ofList
+                            if relevantPaths <> (declarations |> List.map _.EntryPath |> Set.ofList) then
+                                failwith "pin-tree-census"
+                            List.iter2 (validateBlob snapshot.Receiver) declarations snapshot.Pins
+                            let terminal = snapshot.TerminalRefEvidence
+                            if terminal.RequestUri <> snapshot.Receiver.TerminalRefEvidence.RequestUri
+                               || terminal.RawBody <> snapshot.Receiver.TerminalRefEvidence.RawBody
+                               || terminal.RawSha256 <> sha terminal.RawBody then
+                                failwith "pin-terminal-ref"
+                            let expectedDigest =
+                                [ yield snapshot.Receiver.SnapshotSha256
+                                  for pin in snapshot.Pins do
+                                      yield pin.EntryPath
+                                      yield pin.PinKind
+                                      yield pin.EntryMode
+                                      yield pin.EntrySha
+                                      yield string pin.EntrySize
+                                      yield pin.RequestUri
+                                      yield pin.RequestSha256
+                                      yield pin.RawSha256
+                                      yield pin.BytesSha256
+                                  yield terminal.RequestUri
+                                  yield terminal.RawSha256 ]
+                                |> digestParts
+                            if snapshot.PinSnapshotSha256 <> expectedDigest then
+                                failwith "pin-snapshot-digest"
+                            snapshot)
+                    let firstValidated = validatePass first
+                    let secondValidated = validatePass second
+                    if firstValidated <> secondValidated then failwith "pin-two-pass-drift"
+                    let rows =
+                        firstValidated
+                        |> List.collect (fun snapshot ->
+                            [ for pin in snapshot.Pins do
+                                let observed =
+                                    subject
+                                        $"receiver:{snapshot.Receiver.ReceiverName}:workflow-pin:{pin.EntryPath}"
+                                        pin.BytesSha256 pin.RawBody
+                                yield pin.RequestUri, pin.RawBody, observed
+                              let terminal = snapshot.TerminalRefEvidence
+                              let terminalSubject =
+                                  subject
+                                      $"receiver:{snapshot.Receiver.ReceiverName}:workflow-pin:terminal-ref"
+                                      terminal.RawSha256 terminal.RawBody
+                              yield terminal.RequestUri, terminal.RawBody, terminalSubject ])
+                    let pages =
+                        rows
+                        |> List.mapi (fun index (uri, body, observed) ->
+                            let next =
+                                if index + 1 < rows.Length then
+                                    let nextUri, _, _ = rows.[index + 1]
+                                    Some(sha nextUri)
+                                else None
+                            { RequestedUri=uri; RequestIdentitySha256=sha uri
+                              RawBody=body; PayloadSha256=sha body
+                              NextRequestIdentitySha256=next; Subjects=[ observed ] })
+                    let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
+                    Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                         ScopeVerified=true; SubjectsParsedFromRaw=true
+                         Read={ Authority="workflow-pins/declared"
+                                ObservedAt=DateTimeOffset.UtcNow
+                                PageCount=pages.Length; ItemCount=subjects.Length
+                                Terminal=true; NextCursor=None
+                                HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                                Subjects=subjects }
+                         Pages=pages }
+                with failure -> Error $"workflow-pins-raw-or-scope:{failure.Message}"
+
     let bindIssues (options: MigrationInspectProviderOptions) (population: MigrationIssuePopulation)
                    (captures: (GitHubRequest * TransportOutcome) list) =
         if not (repositoryBinding options) || population.RepositoryId <> options.Repository.ExpectedRepositoryId

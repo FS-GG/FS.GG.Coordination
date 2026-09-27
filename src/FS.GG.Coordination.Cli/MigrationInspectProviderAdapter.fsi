@@ -84,6 +84,15 @@ module MigrationInspectProviderAdapter =
         second:MigrationReceiverSnapshot list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Revalidates declared workflow/package blob bytes over two stable receiver snapshots.
+    /// The declaration roster remains caller supplied, so canonical workflow-pins stays unavailable.
+    val bindDeclaredWorkflowPins:
+        options:MigrationInspectProviderOptions ->
+        pinsByReceiver:Map<string, MigrationReceiverPinDeclaration list> ->
+        first:MigrationReceiverPinSnapshot list ->
+        second:MigrationReceiverPinSnapshot list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
     val bindNativeRelations:
         options:MigrationInspectProviderOptions ->

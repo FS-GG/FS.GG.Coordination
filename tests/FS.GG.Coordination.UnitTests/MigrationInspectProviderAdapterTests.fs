@@ -345,6 +345,78 @@ let ``declared receiver inspect slice refuses typed raw URI population and pass 
     | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
     | Ok _ -> failwith "Changed receiver second pass was accepted"
 
+let private pinBytes = Encoding.UTF8.GetBytes "name: controlled\n"
+let private pinSha =
+    Array.append (Encoding.ASCII.GetBytes($"blob {pinBytes.LongLength}\u0000")) pinBytes
+    |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private pinPath = ".github/workflows/check.yml"
+let private pinTreeResponse =
+    reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"{pinPath}","mode":"100644","type":"blob","sha":"{pinSha}","size":{pinBytes.Length}}}]}}"""
+let private pinUri = $"https://api.github.test/repos/FS-GG/copy/git/blobs/{pinSha}"
+let private pinBody =
+    reply $"""{{"sha":"{pinSha}","url":"{pinUri}","encoding":"base64","content":"{Convert.ToBase64String pinBytes}","size":{pinBytes.Length}}}"""
+let private pinResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; pinTreeResponse; receiverRef
+      pinBody; receiverRef ]
+let private pinDeclarations =
+    Map [ "copy-receiver", [ { EntryPath=pinPath; PinKind="workflow" } ] ]
+
+let private readWorkflowPinsTwoPass () =
+    let transport = FakeTransport (pinResponses @ pinResponses)
+    match MigrationReceiverCapture.capturePinBytesTwoPass
+              cohort pinDeclarations options.Repository transport with
+    | Ok proof -> proof
+    | Error failure -> failwithf "Expected workflow pin two-pass proof: %s" failure
+
+[<Fact>]
+let ``declared workflow pin inspect slice binds exact tree blob bytes and stable ref`` () =
+    let captured = readWorkflowPinsTwoPass ()
+    Assert.False(captured.InventoryBound)
+    match MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+              options pinDeclarations captured.First captured.Second with
+    | Error reason -> failwithf "Declared workflow pin proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("workflow-pins/declared", proof.Read.Authority)
+        Assert.Equal(2, proof.Read.PageCount)
+        Assert.Equal(2, proof.Read.ItemCount)
+        let expectedPinBody =
+            match pinBody with
+            | Response value -> value.Body
+            | _ -> failwith "Expected pin response"
+        Assert.Equal(expectedPinBody, proof.Pages.Head.RawBody)
+        Assert.Equal(pinBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant(),
+                     proof.Read.Subjects.Head.Revision)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:workflow-pins",
+                 source.ReadAuthority(1, "workflow-pins"))
+
+[<Fact>]
+let ``declared workflow pin inspect slice refuses missing pins changed source and raw typed drift`` () =
+    let captured = readWorkflowPinsTwoPass ()
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations captured.First [] |> Result.isError)
+    let first = captured.First.Head
+    let missingPins = [ { first with Pins=[] } ]
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations missingPins captured.Second |> Result.isError)
+    let changedReceiver =
+        { first.Receiver with CommitSha=String.replicate 40 "f" }
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations [ { first with Receiver=changedReceiver } ] captured.Second
+                    |> Result.isError)
+    let changedBytes =
+        { first.Pins.Head with Bytes=Encoding.UTF8.GetBytes "name: changed\n" }
+    match MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+              options pinDeclarations [ { first with Pins=[ changedBytes ] } ] captured.Second with
+    | Error reason -> Assert.Contains("raw-or-scope", reason)
+    | Ok _ -> failwith "Changed typed pin bytes were accepted"
+    let changedSecond =
+        [ { captured.Second.Head with PinSnapshotSha256=String.replicate 64 "f" } ]
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations captured.First changedSecond |> Result.isError)
+
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""
 
