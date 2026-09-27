@@ -244,6 +244,39 @@ class ProtectedAdapterTests(unittest.TestCase):
             self.assertEqual(len(authority.posts), 1)
             self.assertEqual(authority.token_calls, 1)
 
+    def test_durable_contradictory_201_with_uncertain_ack_cannot_be_exact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            runtime = adapters.compose_installed(authority)
+            def contradictory_persist(operation_id, binding_sha256,
+                                      grant_sha256, _outcome):
+                authority.attempt = dataclasses.replace(authority.attempt,
+                    outcome=coordinator.operator.HttpResponse(
+                        201, (), b'{"number":999}'))
+                return False
+            authority.persist_attempt_outcome = contradictory_persist
+            def swallowed_then_exact(expected, transport, reserve):
+                self.assertTrue(reserve("key"))
+                try:
+                    transport.request("POST", f"repos/{expected.repository}/pulls",
+                        coordinator.operator.pull_request_body(expected))
+                except Exception:
+                    pass
+                return coordinator.operator.ExactPull(8, "PR_8", "f" * 64)
+            with (mock.patch.object(coordinator, "_prestate_matches", return_value=True),
+                  mock.patch.object(coordinator.operator, "run_pull_once",
+                                    side_effect=swallowed_then_exact)):
+                result = coordinator.execute_pull(runtime.binding, runtime.expected,
+                    runtime.raw_grant, runtime.key_reader, runtime.read_port,
+                    runtime.write_port, runtime.token_port, runtime.journal,
+                    runtime.clock_port)
+            self.assertIsInstance(result, coordinator.operator.Unknown)
+            self.assertEqual(result.reason, "runtime-outcome-unacknowledged")
+            self.assertEqual(len(authority.posts), 1)
+            self.assertEqual(authority.attempt.outcome.body, b'{"number":999}')
+            self.assertFalse(runtime.journal.reserve(runtime.binding,
+                authority.grant_record.grant_sha256))
+
     def test_lost_response_keeps_committed_fence_and_recovery_has_no_token(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))

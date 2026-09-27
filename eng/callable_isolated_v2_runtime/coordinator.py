@@ -127,6 +127,7 @@ class _Transport:
         self.read_port, self.write_port, self.token_port = read_port, write_port, token_port
         self.clock_port, self.binding, self.raw_grant = clock_port, binding, raw_grant
         self.key_reader, self.journal, self.grant_sha = key_reader, journal, grant_sha
+        self.outcome_acknowledged = False
 
     def request(self, method, path, body):
         if method == "GET" and body is None:
@@ -156,10 +157,12 @@ class _Transport:
             try:
                 response = self.write_port.post_pull(path, self.binding.canonical_request, token)
             except Exception:
-                self.journal.record_outcome(self.binding, self.grant_sha, "lost")
+                self.outcome_acknowledged = self.journal.record_outcome(
+                    self.binding, self.grant_sha, "lost") is True
                 raise
             if not self.journal.record_outcome(self.binding, self.grant_sha, response):
                 raise Refused("runtime-outcome-unacknowledged")
+            self.outcome_acknowledged = True
             return response
         raise Refused("runtime-method")
 
@@ -227,8 +230,16 @@ def execute_pull(binding: Binding, expected, raw_grant: bytes, key_reader,
         outcome = journal.outcome(binding, grant_sha)
         if outcome is None:
             return operator.Unknown("runtime-outcome-unproved")
-        if type(result) is operator.ExactPull and not operator._response_allows_readback(outcome):
-            return operator.Unknown("runtime-outcome-ineligible")
+        if type(result) is operator.ExactPull:
+            if not transport.outcome_acknowledged:
+                return operator.Unknown("runtime-outcome-unacknowledged")
+            if not operator._response_allows_readback(outcome):
+                return operator.Unknown("runtime-outcome-ineligible")
+            adapter = operator.NativeReadAdapter(read_port)
+            confirmed = operator.classify_pull_after_one_attempt(
+                expected, lambda: adapter.read_pull_census(expected), outcome)
+            if confirmed != result:
+                return operator.Unknown("runtime-outcome-contradiction")
         return result
     except Exception:
         return operator.Unknown("runtime-unavailable")
