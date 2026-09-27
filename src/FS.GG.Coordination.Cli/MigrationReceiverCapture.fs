@@ -36,14 +36,22 @@ type MigrationReceiverWorkflowToolIdentity =
       Revision: string
       Kind: ImmutableExecutionReferenceKind }
 
+type MigrationReceiverPinEvidenceOrigin =
+    private
+    | CallerDeclared
+    | ProviderTreeSignedTools
+    static member internal CreateCallerDeclared() = CallerDeclared
+    static member internal CreateProviderTreeSignedTools() = ProviderTreeSignedTools
+
 type MigrationReceiverPinTwoPass =
     { CohortSha256: string
-      InventoryBound: bool
-      SignedToolIdentitiesBound: bool
+      EvidenceOrigin: MigrationReceiverPinEvidenceOrigin
       SignedHeads: MigrationReceiverSignedHeadIdentity list
       WorkflowTools: MigrationReceiverWorkflowToolIdentity list
       First: MigrationReceiverPinSnapshot list
       Second: MigrationReceiverPinSnapshot list }
+    member this.InventoryBound = this.EvidenceOrigin.IsProviderTreeSignedTools
+    member this.SignedToolIdentitiesBound = this.EvidenceOrigin.IsProviderTreeSignedTools
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverCapture =
@@ -269,9 +277,10 @@ module MigrationReceiverCapture =
                     if List.map _.PinSnapshotSha256 first <> List.map _.PinSnapshotSha256 second then
                         Error "changed:receiver-pin-snapshot"
                     else
-                        Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 cohort
-                             InventoryBound=false; SignedToolIdentitiesBound=false
-                             SignedHeads=[]; WorkflowTools=[]; First=first; Second=second }))
+                        Ok
+                            { CohortSha256=GitHubMigrationInspect.cohortSha256 cohort
+                              EvidenceOrigin=MigrationReceiverPinEvidenceOrigin.CreateCallerDeclared()
+                              SignedHeads=[]; WorkflowTools=[]; First=first; Second=second }))
 
     let captureWorkflowPinsTwoPass (cohort: GitHubMigrationCopyCohort)
                                    (template: MigrationGitHubReadOptions)
@@ -304,8 +313,9 @@ module MigrationReceiverCapture =
                               deriveSignedToolIdentities captured.Second with
                         | Ok(firstSigned, firstTools), Ok(secondSigned, secondTools) when
                             firstSigned = secondSigned && firstTools = secondTools ->
-                            Ok { captured with InventoryBound=true; SignedToolIdentitiesBound=true
-                                               SignedHeads=firstSigned; WorkflowTools=firstTools }
+                            Ok
+                                { captured with EvidenceOrigin=MigrationReceiverPinEvidenceOrigin.CreateProviderTreeSignedTools()
+                                                SignedHeads=firstSigned; WorkflowTools=firstTools }
                         | Ok _, Ok _ -> Error "changed:receiver-signed-tool-identities"
                         | Error reason, _ | _, Error reason -> Error reason))
 
