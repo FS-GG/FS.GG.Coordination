@@ -10,6 +10,8 @@ import pathlib
 import subprocess
 import sys
 import tempfile
+import threading
+from concurrent.futures import ThreadPoolExecutor
 import unittest
 from unittest import mock
 
@@ -80,7 +82,7 @@ class Authority:
             adapters.CONFIG_SCHEMA, True, True, self.authority_id,
             adapters.API_ORIGIN, 77, self.binding.source_revision,
             self.binding.source_tree, expected.source_ref, expected.base_ref,
-            str(root / "runtime.db"), self.binding, expected, scopes,
+            "", self.binding, expected, scopes,
             provenance(self.authority_id, "configuration", 1))
         self.grant_record = adapters.GrantRecord(
             self.binding.operation_id, self.binding_sha,
@@ -102,9 +104,12 @@ class Authority:
             self.binding.operation_id, self.binding.target_repository,
             self.binding.target_repository_id, 77, "e" * 64, b"secret",
             NOW - dt.timedelta(minutes=1), NOW + dt.timedelta(minutes=5),
-            provenance(self.authority_id, "token", 8))
+            provenance(self.authority_id, "token", 9))
         self.gets = []
         self.posts = []
+        self.token_calls = 0
+        self.attempt = None
+        self.journal_lock = threading.Lock()
 
     def scope(self, role): return self.scopes[role]
     def read_installed_configuration(self): return self.configuration
@@ -112,17 +117,162 @@ class Authority:
     def read_issuer(self, operation_id): return self.issuer
     def read_active_key(self, key_id, issuer_actor_id): return self.key
     def read_parent(self, repository, ref, path): return self.parent
+    def reserve_attempt(self, binding, grant_sha256):
+        with self.journal_lock:
+            if self.attempt is not None or binding != self.binding:
+                return False
+            self.attempt = adapters.CommittedAttempt(
+                binding.operation_id, binding.journal_repository,
+                binding.journal_ref, binding.journal_path,
+                binding.journal_prior_generation, binding.journal_prior_head,
+                self.binding_sha, grant_sha256, True, None,
+                provenance(self.authority_id, "journal", 6))
+            return True
+    def read_committed_attempt(self, operation_id):
+        with self.journal_lock:
+            return self.attempt
+    def persist_attempt_outcome(self, operation_id, binding_sha256,
+                                grant_sha256, outcome):
+        with self.journal_lock:
+            if (self.attempt is None or self.attempt.operation_id != operation_id
+                    or self.attempt.binding_sha256 != binding_sha256
+                    or self.attempt.grant_sha256 != grant_sha256
+                    or self.attempt.outcome is not None):
+                return False
+            self.attempt = dataclasses.replace(self.attempt, outcome=outcome)
+            return True
     def trusted_now(self): return self.now
     def native_get(self, path):
         self.gets.append(path)
         return coordinator.operator.HttpResponse(200, (), b"{}")
-    def issue_execution_token(self, operation_id): return self.token
+    def issue_execution_token(self, operation_id):
+        self.token_calls += 1
+        return self.token
     def native_post(self, path, body, token):
         self.posts.append((path, body, token))
         return coordinator.operator.HttpResponse(201, (), b"{}")
 
 
 class ProtectedAdapterTests(unittest.TestCase):
+    def test_installed_requires_host_journal_and_rejects_local_path(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            authority.configuration = dataclasses.replace(
+                authority.configuration, journal_database_path=str(
+                    pathlib.Path(temp) / "runtime.db"))
+            self.assertIsInstance(adapters.execute_installed(authority),
+                                  coordinator.operator.Unknown)
+            self.assertFalse((pathlib.Path(temp) / "runtime.db").exists())
+            authority.configuration = dataclasses.replace(
+                authority.configuration, journal_database_path="")
+            authority.reserve_attempt = None
+            self.assertIsInstance(adapters.execute_installed(authority),
+                                  coordinator.operator.Unknown)
+            self.assertEqual(authority.posts, [])
+
+    def test_concurrent_host_reservations_admit_only_one(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            journals = [adapters.compose_installed(authority).journal
+                        for _ in range(12)]
+            with ThreadPoolExecutor(max_workers=12) as pool:
+                admitted = list(pool.map(lambda journal: journal.reserve(
+                    authority.binding, authority.grant_record.grant_sha256),
+                    journals))
+            self.assertEqual(admitted.count(True), 1)
+            self.assertEqual(admitted.count(False), 11)
+            self.assertTrue(all(journal.read(authority.binding,
+                authority.grant_record.grant_sha256) for journal in journals))
+            self.assertEqual(authority.posts, [])
+
+    def test_missing_or_mismatched_committed_replay_never_mints_token(self):
+        for mode in ("missing", "binding", "grant"):
+            with self.subTest(mode=mode), tempfile.TemporaryDirectory() as temp:
+                authority = Authority(pathlib.Path(temp))
+                runtime = adapters.compose_installed(authority)
+                if mode == "missing":
+                    authority.read_committed_attempt = lambda _operation: None
+                elif mode == "binding":
+                    original = authority.read_committed_attempt
+                    authority.read_committed_attempt = lambda operation: (
+                        dataclasses.replace(original(operation),
+                            binding_sha256="f" * 64))
+                else:
+                    original = authority.read_committed_attempt
+                    authority.read_committed_attempt = lambda operation: (
+                        dataclasses.replace(original(operation),
+                            grant_sha256="f" * 64))
+                def attempt(expected, transport, reserve):
+                    if not reserve("key"):
+                        return coordinator.operator.Unknown("reserve-refused")
+                    return transport.request("POST", f"repos/{expected.repository}/pulls",
+                        coordinator.operator.pull_request_body(expected))
+                with (mock.patch.object(coordinator, "_prestate_matches", return_value=True),
+                      mock.patch.object(coordinator.operator, "run_pull_once", side_effect=attempt)):
+                    result = coordinator.execute_pull(runtime.binding, runtime.expected,
+                        runtime.raw_grant, runtime.key_reader, runtime.read_port,
+                        runtime.write_port, runtime.token_port, runtime.journal,
+                        runtime.clock_port)
+                self.assertIsInstance(result, coordinator.operator.Unknown)
+                self.assertEqual(authority.posts, [])
+                self.assertIsNone(runtime.token_port._lease)
+
+    def test_unacknowledged_outcome_keeps_fence_and_recovery_read_only(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            runtime = adapters.compose_installed(authority)
+            authority.persist_attempt_outcome = lambda *_args: False
+            def attempt(expected, transport, reserve):
+                if not reserve("key"):
+                    return coordinator.operator.Unknown("reserve-refused")
+                return transport.request("POST", f"repos/{expected.repository}/pulls",
+                    coordinator.operator.pull_request_body(expected))
+            with (mock.patch.object(coordinator, "_prestate_matches", return_value=True),
+                  mock.patch.object(coordinator.operator, "run_pull_once", side_effect=attempt)):
+                result = coordinator.execute_pull(runtime.binding, runtime.expected,
+                    runtime.raw_grant, runtime.key_reader, runtime.read_port,
+                    runtime.write_port, runtime.token_port, runtime.journal,
+                    runtime.clock_port)
+            self.assertIsInstance(result, coordinator.operator.Unknown)
+            self.assertEqual(len(authority.posts), 1)
+            self.assertIsNotNone(authority.attempt)
+            self.assertIsNone(authority.attempt.outcome)
+            self.assertFalse(runtime.journal.reserve(
+                runtime.binding, authority.grant_record.grant_sha256))
+            recovered = adapters.recover_installed(authority)
+            self.assertIsInstance(recovered, coordinator.operator.Unknown)
+            self.assertEqual(len(authority.posts), 1)
+            self.assertEqual(authority.token_calls, 1)
+
+    def test_lost_response_keeps_committed_fence_and_recovery_has_no_token(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            runtime = adapters.compose_installed(authority)
+            def lost_post(path, body, token):
+                authority.posts.append((path, body, token))
+                raise OSError("lost after send")
+            authority.native_post = lost_post
+            def attempt(expected, transport, reserve):
+                if not reserve("key"):
+                    return coordinator.operator.Unknown("reserve-refused")
+                return transport.request("POST", f"repos/{expected.repository}/pulls",
+                    coordinator.operator.pull_request_body(expected))
+            with (mock.patch.object(coordinator, "_prestate_matches", return_value=True),
+                  mock.patch.object(coordinator.operator, "run_pull_once", side_effect=attempt)):
+                result = coordinator.execute_pull(runtime.binding, runtime.expected,
+                    runtime.raw_grant, runtime.key_reader, runtime.read_port,
+                    runtime.write_port, runtime.token_port, runtime.journal,
+                    runtime.clock_port)
+            self.assertIsInstance(result, coordinator.operator.Unknown)
+            self.assertEqual(runtime.journal.outcome(runtime.binding,
+                authority.grant_record.grant_sha256), {"status": "lost"})
+            self.assertIsInstance(adapters.recover_installed(authority),
+                                  coordinator.operator.Unknown)
+            self.assertEqual(len(authority.posts), 1)
+            self.assertEqual(authority.token_calls, 1)
+            self.assertFalse(runtime.journal.reserve(runtime.binding,
+                authority.grant_record.grant_sha256))
+
     def test_compose_uses_stored_parent_and_separate_scoped_ports(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))
@@ -165,8 +315,7 @@ class ProtectedAdapterTests(unittest.TestCase):
                     adapters.compose_installed(authority)
                 self.assertEqual(authority.posts, [])
                 self.assertEqual(authority.gets, [])
-                self.assertFalse(pathlib.Path(
-                    authority.configuration.journal_database_path).exists())
+                self.assertIsNone(authority.attempt)
 
     def test_role_scope_drift_and_role_reuse_fail_closed(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -242,9 +391,7 @@ class ProtectedAdapterTests(unittest.TestCase):
                 grant_sha256=contracts.digest(invalid))
             with self.assertRaises(adapters.Refused):
                 adapters.compose_installed(authority)
-            database = pathlib.Path(
-                authority.configuration.journal_database_path)
-            self.assertFalse(database.exists())
+            self.assertIsNone(authority.attempt)
             authority.raw_grant = valid_grant
             authority.grant_record = valid_record
             authority.issuer = valid_issuer
@@ -258,8 +405,7 @@ class ProtectedAdapterTests(unittest.TestCase):
                 authority.issuer, expires_at=NOW)
             with self.assertRaises(adapters.Refused):
                 adapters.compose_installed(authority)
-            self.assertFalse(pathlib.Path(
-                authority.configuration.journal_database_path).exists())
+            self.assertIsNone(authority.attempt)
 
     def test_parent_expiring_during_authority_read_refuses_bootstrap(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -282,8 +428,7 @@ class ProtectedAdapterTests(unittest.TestCase):
             with self.assertRaises(adapters.Refused):
                 adapters.compose_installed(authority)
             self.assertEqual(reads, 2)
-            self.assertFalse(pathlib.Path(
-                authority.configuration.journal_database_path).exists())
+            self.assertIsNone(authority.attempt)
 
     def test_recovery_composes_only_from_existing_qualified_parent(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -298,8 +443,8 @@ class ProtectedAdapterTests(unittest.TestCase):
             self.assertEqual(authority.posts, [])
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))
-            with self.assertRaises(adapters.Refused):
-                adapters.compose_recovery(authority)
+            adapters.compose_recovery(authority)
+            self.assertIsNone(authority.attempt)
 
     def test_write_edge_rechecks_key_after_token_acquisition(self):
         with tempfile.TemporaryDirectory() as temp:

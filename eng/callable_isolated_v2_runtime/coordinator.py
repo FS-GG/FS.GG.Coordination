@@ -14,7 +14,7 @@ operator = operator_module()
 
 
 class AttemptJournal:
-    """SQLite durable attempt fence; competing processes share one operation key."""
+    """Local SQLite qualification backend; never selected by the installed composer."""
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -151,12 +151,15 @@ class _Transport:
                       self.clock_port.now(),
                       postcheck_clock=self.clock_port) != self.grant_sha:
                 raise Refused("runtime-grant-drift")
+            if not self.journal.read(self.binding, self.grant_sha):
+                raise Refused("runtime-fence-drift")
             try:
                 response = self.write_port.post_pull(path, self.binding.canonical_request, token)
             except Exception:
                 self.journal.record_outcome(self.binding, self.grant_sha, "lost")
                 raise
-            self.journal.record_outcome(self.binding, self.grant_sha, response)
+            if not self.journal.record_outcome(self.binding, self.grant_sha, response):
+                raise Refused("runtime-outcome-unacknowledged")
             return response
         raise Refused("runtime-method")
 
