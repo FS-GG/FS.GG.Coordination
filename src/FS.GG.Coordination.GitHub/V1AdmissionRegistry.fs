@@ -1476,6 +1476,11 @@ module V1AdmissionRegistry =
                         }
                 )
 
+    let operationContext (OperationHandle handle) = handle.Context
+
+    let authorityCoordinates (VerifiedAuthoritySnapshot snapshot) =
+        snapshot.Commit, snapshot.Generation, snapshot.Manifest
+
     let private treeBytes eventOid headOid =
         use stream = new IO.MemoryStream()
 

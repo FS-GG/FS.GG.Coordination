@@ -1,9 +1,14 @@
 namespace FS.GG.Coordination.GitHub
 
 open System
+open System.IO
+open System.Net.Http
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
+open System.Text.Json.Nodes
 open System.Text.RegularExpressions
+open System.Threading.Tasks
 
 [<RequireQualifiedAccess>]
 type MigrationEffect =
@@ -400,3 +405,522 @@ module MigrationStepExecution =
                         | Ok(Some authority) when cut = MigrationAdvanceCut.StopAfterIntent ->
                             Ok(MigrationAdvanceResult.Interrupted "after-intent-before-dispatch")
                         | Ok(Some authority) -> continueFrom authority
+
+type MigrationStepAuthorityPort =
+    { ObserveEpoch: unit -> Result<MigrationEpochObservation, string>
+      ObserveAuthorityFence: unit -> Result<MigrationFenceObservation, string>
+      ObserveJournal: string -> Result<MigrationJournalAuthority option, string>
+      PersistIntent: int64 -> string -> string -> string -> MigrationCasOutcome
+      MarkInFlight: int64 -> string -> string -> MigrationCasOutcome
+      PersistSettlement: int64 -> string -> string -> string -> MigrationCasOutcome }
+
+type IMigrationStepProviderTransport =
+    abstract Send: GitHubRequest -> TransportOutcome
+
+type HttpMigrationStepProviderTransport() =
+    let maxResponseBytes = 1024 * 1024
+    let handler = new HttpClientHandler(AllowAutoRedirect=false)
+    let client = new HttpClient(handler, true)
+
+    let readBoundedBody (content: HttpContent) =
+        match content.Headers.ContentLength with
+        | value when value.HasValue && value.Value > int64 maxResponseBytes ->
+            raise (HttpRequestException "migration-step-response-too-large")
+        | _ -> ()
+        use source = content.ReadAsStream()
+        use collected = new MemoryStream()
+        let buffer = Array.zeroCreate<byte> 8192
+        let mutable finished = false
+        while not finished do
+            let count = source.Read(buffer, 0, buffer.Length)
+            if count = 0 then
+                finished <- true
+            elif collected.Length + int64 count > int64 maxResponseBytes then
+                raise (HttpRequestException "migration-step-response-too-large")
+            else
+                collected.Write(buffer, 0, count)
+        Encoding.UTF8.GetString(collected.ToArray())
+
+    interface IMigrationStepProviderTransport with
+        member _.Send request =
+            match Transport.validateRequest request with
+            | Error _ -> NetworkFailure
+            | Ok () ->
+                try
+                    let uri, headers, body =
+                        match request with
+                        | GraphQL value ->
+                            let payload = JsonObject()
+                            payload.Add("query", value.Document)
+                            let variables = JsonObject()
+                            for KeyValue(name, item) in value.Variables do
+                                variables.Add(name, item)
+                            payload.Add("variables", variables)
+                            value.Uri, value.Headers, payload.ToJsonString()
+                        | Rest _ -> invalidArg (nameof request) "migration step provider accepts GraphQL only"
+                    use message = new HttpRequestMessage(HttpMethod.Post, uri)
+                    for KeyValue(name, value) in headers do
+                        message.Headers.TryAddWithoutValidation(name, value) |> ignore
+                    message.Content <- new StringContent(body, Encoding.UTF8, "application/json")
+                    use response = client.Send message
+                    if isNull response.RequestMessage
+                       || isNull response.RequestMessage.RequestUri
+                       || response.RequestMessage.RequestUri.AbsoluteUri <> uri.AbsoluteUri then
+                        raise (HttpRequestException "redirected-migration-step-uri")
+                    let responseHeaders =
+                        Seq.append response.Headers response.Content.Headers
+                        |> Seq.map (fun item -> item.Key.ToLowerInvariant(), String.concat "," item.Value)
+                        |> Map.ofSeq
+                    let tryInt name =
+                        Map.tryFind name responseHeaders
+                        |> Option.bind (fun value -> match Int32.TryParse value with true, parsed -> Some parsed | _ -> None)
+                    let tryDate name =
+                        Map.tryFind name responseHeaders
+                        |> Option.bind (fun value ->
+                            match Int64.TryParse value with
+                            | true, parsed -> Some(DateTimeOffset.FromUnixTimeSeconds parsed)
+                            | _ -> None)
+                    Response
+                        { StatusCode=int response.StatusCode
+                          Headers=responseHeaders
+                          Body=readBoundedBody response.Content
+                          ETag=Map.tryFind "etag" responseHeaders
+                          RateBudget=
+                            { Limit=tryInt "x-ratelimit-limit"
+                              Remaining=tryInt "x-ratelimit-remaining"
+                              ResetAt=tryDate "x-ratelimit-reset"
+                              Cost=Some 1 } }
+                with
+                | :? TaskCanceledException -> TimedOut
+                | :? HttpRequestException -> NetworkFailure
+                | :? ArgumentException -> NetworkFailure
+
+    interface IDisposable with
+        member _.Dispose() = client.Dispose()
+
+type MigrationStepProviderOptions =
+    { GraphQLUri: Uri
+      Headers: Map<string, string> }
+
+[<RequireQualifiedAccess>]
+module MigrationIssueTypeStepRuntime =
+    let private sha (value: string) =
+        value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let targetSha256 (issueNodeId: string) (typeNodeId: string option) =
+        let typePart =
+            match typeNodeId with
+            | None -> "none"
+            | Some value -> $"some:{Encoding.UTF8.GetByteCount value}:{value}"
+        sha $"issue:{Encoding.UTF8.GetByteCount issueNodeId}:{issueNodeId}\ntype:{Encoding.UTF8.GetByteCount typePart}:{typePart}"
+
+    let private query =
+        "query($issueId:ID!) { node(id:$issueId) { __typename ... on Issue { id updatedAt repository { databaseId } issueType { id } } } }"
+
+    let private mutation =
+        "mutation($issueId:ID!,$typeId:ID!,$clientMutationId:String!) { updateIssueIssueType(input:{issueId:$issueId,issueTypeId:$typeId,clientMutationId:$clientMutationId}) { clientMutationId issue { __typename id updatedAt repository { databaseId } issueType { id } } } }"
+
+    let private tryProperty (name: string) (node: JsonNode) =
+        match node with
+        | :? JsonObject as value ->
+            let property: JsonNode = value[name]
+            if isNull property then None else Some property
+        | _ -> None
+
+    let private tryString (name: string) (node: JsonNode) =
+        tryProperty name node
+        |> Option.bind (fun (value: JsonNode) ->
+            try Some(value.GetValue<string>())
+            with _ -> None)
+
+    let private parseRoot (body: string) =
+        try
+            let root: JsonNode = JsonNode.Parse body
+            let hasErrors =
+                tryProperty "errors" root
+                |> Option.exists (fun (node: JsonNode) ->
+                    match node with
+                    | :? JsonArray as errors -> errors.Count > 0
+                    | _ -> true)
+            if hasErrors then Error "provider-graphql-errors" else Ok root
+        with
+        | :? JsonException -> Error "provider-malformed-response"
+
+    let private responseBody outcome =
+        match outcome with
+        | Response response when response.StatusCode = 200 -> parseRoot response.Body
+        | Response response -> Error $"provider-http-{response.StatusCode}"
+        | NetworkFailure -> Error "provider-network-failure"
+        | TimedOut -> Error "provider-timeout"
+
+    let private parseIssue repositoryId (node: JsonNode) =
+        let observedRepository =
+            tryProperty "repository" node
+            |> Option.bind (fun repository ->
+                tryProperty "databaseId" repository
+                |> Option.bind (fun value -> try Some(value.GetValue<int64>()) with _ -> None))
+        match tryString "__typename" node, tryString "id" node,
+              tryString "updatedAt" node, observedRepository, node with
+        | Some "Issue", Some issueId, Some revision, Some observedRepositoryId, (:? JsonObject as issue)
+            when observedRepositoryId = repositoryId
+                 && not (String.IsNullOrWhiteSpace issueId)
+                 && issueId = issueId.Trim()
+                 && not (String.IsNullOrWhiteSpace revision) ->
+            if not (issue.ContainsKey "issueType") then Error "provider-malformed-issue-type"
+            else
+                match issue["issueType"] with
+                | null -> Ok(issueId, revision, None)
+                | :? JsonObject as issueType ->
+                    match tryString "id" issueType with
+                    | Some typeId when not (String.IsNullOrWhiteSpace typeId)
+                                       && typeId = typeId.Trim() -> Ok(issueId, revision, Some typeId)
+                    | _ -> Error "provider-malformed-issue-type"
+                | _ -> Error "provider-malformed-issue-type"
+        | _ -> Error "provider-malformed-issue"
+
+    let private readIssue repositoryId issueNodeId options (transport: IMigrationStepProviderTransport) =
+        let request =
+            GraphQL
+                { Uri=options.GraphQLUri
+                  Document=query
+                  Variables=Map.ofList [ "issueId", issueNodeId ]
+                  Headers=options.Headers
+                  ApiVersion=ApiVersion.required
+                  Idempotency=ReplaySafe }
+        match transport.Send request |> responseBody with
+        | Error reason -> Error reason
+        | Ok root ->
+            match tryProperty "data" root |> Option.bind (tryProperty "node") with
+            | Some issue -> parseIssue repositoryId issue
+            | None -> Error "provider-missing-issue"
+
+    let private dispatch repositoryId issueNodeId typeNodeId operationId options
+                         (transport: IMigrationStepProviderTransport) =
+        let request =
+            GraphQL
+                { Uri=options.GraphQLUri
+                  Document=mutation
+                  Variables=
+                    Map.ofList
+                        [ "issueId", issueNodeId
+                          "typeId", typeNodeId
+                          "clientMutationId", operationId ]
+                  Headers=options.Headers
+                  ApiVersion=ApiVersion.required
+                  Idempotency=NeverReplay }
+        match transport.Send request with
+        | NetworkFailure | TimedOut -> MigrationDispatchOutcome.Unknown
+        | outcome ->
+            match responseBody outcome with
+            | Error _ -> MigrationDispatchOutcome.Unknown
+            | Ok root ->
+                match tryProperty "data" root |> Option.bind (tryProperty "updateIssueIssueType") with
+                | None -> MigrationDispatchOutcome.Unknown
+                | Some update ->
+                    match tryString "clientMutationId" update, tryProperty "issue" update with
+                    | Some clientId, Some issue when clientId = operationId ->
+                        match parseIssue repositoryId issue with
+                        | Ok(observedIssue, _, Some observedType)
+                            when observedIssue = issueNodeId && observedType = typeNodeId ->
+                            MigrationDispatchOutcome.Applied
+                        | _ -> MigrationDispatchOutcome.Unknown
+                    | _ -> MigrationDispatchOutcome.Unknown
+
+    let create step options authority transport =
+        match MigrationStepExecution.sealStep step, step.Effect with
+        | Ok sealedStep, MigrationEffect.SetIssueType(repositoryId, issueNodeId, typeNodeId)
+            when sealedStep.Seal = step.Seal
+                 && step.DesiredTargetSha256 = targetSha256 issueNodeId (Some typeNodeId)
+                 && not (isNull options.GraphQLUri)
+                 && options.GraphQLUri.IsAbsoluteUri
+                 && options.GraphQLUri.Scheme = Uri.UriSchemeHttps ->
+            { new IMigrationStepRuntime with
+                member _.ObserveEpoch() = authority.ObserveEpoch()
+                member _.ObserveAuthorityFence() = authority.ObserveAuthorityFence()
+                member _.ObserveJournal operationId = authority.ObserveJournal operationId
+                member _.PersistIntent(generation, head, operationId, seal) =
+                    authority.PersistIntent generation head operationId seal
+                member _.MarkInFlight(generation, head, operationId) =
+                    authority.MarkInFlight generation head operationId
+                member _.PersistSettlement(generation, head, operationId, result) =
+                    authority.PersistSettlement generation head operationId result
+                member _.ObserveTarget effect =
+                    if effect <> step.Effect then Error "unsupported-or-cross-step-effect"
+                    else
+                        readIssue repositoryId issueNodeId options transport
+                        |> Result.map (fun (observedIssue, revision, observedType) ->
+                            { Identity=$"repository:{repositoryId}/issue:{observedIssue}/type"
+                              Revision=revision
+                              Sha256=targetSha256 observedIssue observedType
+                              Complete=true
+                              Authorized=true })
+                member _.ObserveEffect(operationId, effect) =
+                    if operationId <> step.OperationId || effect <> step.Effect then
+                        Error "unsupported-or-cross-step-effect"
+                    else
+                        readIssue repositoryId issueNodeId options transport
+                        |> Result.map (fun (observedIssue, _, observedType) ->
+                            if observedIssue <> issueNodeId then MigrationEffectObservation.Unknown
+                            elif observedType = Some typeNodeId then
+                                MigrationEffectObservation.Applied step.DesiredTargetSha256
+                            elif targetSha256 issueNodeId observedType = step.ExpectedTargetSha256 then
+                                MigrationEffectObservation.ProvenAbsent
+                            else MigrationEffectObservation.Partial "provider-state-neither-expected-nor-desired")
+                member _.Dispatch(candidate, generation, commit) =
+                    if candidate <> step then MigrationDispatchOutcome.Refused "cross-step-dispatch"
+                    else
+                        match authority.ObserveJournal step.OperationId with
+                        | Ok(Some observed)
+                            when observed.OperationId = step.OperationId
+                                 && observed.StepSeal = step.Seal
+                                 && observed.Stage = MigrationJournalStage.InFlight
+                                 && observed.Generation = generation
+                                 && observed.Commit = commit ->
+                            dispatch repositoryId issueNodeId typeNodeId step.OperationId options transport
+                        | _ -> MigrationDispatchOutcome.Refused "missing-fresh-in-flight-grant" }
+            |> Ok
+        | Ok _, MigrationEffect.SetIssueType _ -> Error "invalid-issue-type-binding"
+        | Ok _, _ -> Error "unsupported-migration-effect"
+        | _ -> Error "invalid-migration-step"
+
+[<RequireQualifiedAccess>]
+module MigrationBlockingEdgeStepRuntime =
+    let private sha (value: string) =
+        value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let targetSha256 (repositoryId: int64) blockerNodeId blockedNodeId blockingNodeIds blockedByNodeIds =
+        ([ "repository"; string repositoryId; "blocker"; blockerNodeId; "blocked"; blockedNodeId
+           "blocking" ] @ List.sort blockingNodeIds @ [ "blocked-by" ] @ List.sort blockedByNodeIds)
+        |> List.map (fun value -> $"{Encoding.UTF8.GetByteCount value}:{value}")
+        |> String.concat ""
+        |> sha
+
+    let private connectionQuery connection =
+        $"query($id:ID!,$after:String) {{ node(id:$id) {{ __typename ... on Issue {{ id updatedAt repository {{ databaseId }} {connection}(first:100,after:$after) {{ totalCount nodes {{ __typename id repository {{ databaseId }} }} pageInfo {{ hasNextPage endCursor }} }} }} }} }}"
+
+    let private mutation =
+        "mutation($blockedId:ID!,$blockerId:ID!,$clientMutationId:String!) { addBlockedBy(input:{issueId:$blockedId,blockingIssueId:$blockerId,clientMutationId:$clientMutationId}) { clientMutationId issue { __typename id repository { databaseId } } blockingIssue { __typename id repository { databaseId } } } }"
+
+    let private tryProperty (name: string) (node: JsonNode) =
+        match node with
+        | :? JsonObject as value ->
+            let property: JsonNode = value[name]
+            if isNull property then None else Some property
+        | _ -> None
+
+    let private tryString name node =
+        tryProperty name node
+        |> Option.bind (fun (value: JsonNode) -> try Some(value.GetValue<string>()) with _ -> None)
+
+    let private tryInt64 name node =
+        tryProperty name node
+        |> Option.bind (fun (value: JsonNode) -> try Some(value.GetValue<int64>()) with _ -> None)
+
+    let private tryInt name node =
+        tryProperty name node
+        |> Option.bind (fun (value: JsonNode) -> try Some(value.GetValue<int>()) with _ -> None)
+
+    let private tryBool name node =
+        tryProperty name node
+        |> Option.bind (fun (value: JsonNode) -> try Some(value.GetValue<bool>()) with _ -> None)
+
+    let private parseRoot (body: string) =
+        try
+            let root: JsonNode = JsonNode.Parse body
+            let hasErrors =
+                tryProperty "errors" root
+                |> Option.exists (fun node -> match node with :? JsonArray as errors -> errors.Count > 0 | _ -> true)
+            if hasErrors then Error "provider-graphql-errors" else Ok root
+        with
+        | :? JsonException -> Error "provider-malformed-response"
+
+    let private body = function
+        | Response response when response.StatusCode = 200 -> parseRoot response.Body
+        | Response response -> Error $"provider-http-{response.StatusCode}"
+        | NetworkFailure -> Error "provider-network-failure"
+        | TimedOut -> Error "provider-timeout"
+
+    let private readConnection repositoryId issueNodeId connection options
+                               (transport: IMigrationStepProviderTransport) =
+        let rec loop cursor seen pageCount expectedRevision expectedTotal accumulated =
+            if pageCount >= 1000 || (cursor |> Option.exists (fun value -> Set.contains value seen)) then
+                Error "provider-pagination-refused"
+            else
+                let variables =
+                    [ "id", issueNodeId
+                      match cursor with Some value -> "after", value | None -> () ]
+                    |> Map.ofList
+                let request =
+                    GraphQL
+                        { Uri=options.GraphQLUri; Document=connectionQuery connection
+                          Variables=variables; Headers=options.Headers
+                          ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+                match transport.Send request |> body with
+                | Error reason -> Error reason
+                | Ok root ->
+                    match tryProperty "data" root |> Option.bind (tryProperty "node") with
+                    | None -> Error "provider-missing-issue"
+                    | Some issue ->
+                        let observedRepository =
+                            tryProperty "repository" issue |> Option.bind (tryInt64 "databaseId")
+                        match tryString "__typename" issue, tryString "id" issue,
+                              tryString "updatedAt" issue, observedRepository, tryProperty connection issue with
+                        | Some "Issue", Some observedId, Some revision, Some observedRepositoryId, Some page
+                            when observedId = issueNodeId && observedRepositoryId = repositoryId ->
+                            match tryInt "totalCount" page, tryProperty "nodes" page,
+                                  tryProperty "pageInfo" page with
+                            | Some total, Some (:? JsonArray as nodes), Some pageInfo when total >= 0 ->
+                                let parsed =
+                                    nodes
+                                    |> Seq.map (fun node ->
+                                        let endpointRepository =
+                                            tryProperty "repository" node |> Option.bind (tryInt64 "databaseId")
+                                        match tryString "__typename" node, tryString "id" node, endpointRepository with
+                                        | Some "Issue", Some id, Some endpointRepositoryId
+                                            when endpointRepositoryId = repositoryId -> Ok id
+                                        | _ -> Error "provider-cross-scope-relation")
+                                    |> Seq.toList
+                                match parsed |> List.tryPick (function Error reason -> Some reason | Ok _ -> None) with
+                                | Some reason -> Error reason
+                                | None ->
+                                    let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
+                                    let all = accumulated @ values
+                                    let hasNext = tryBool "hasNextPage" pageInfo
+                                    let next =
+                                        match hasNext, tryProperty "endCursor" pageInfo with
+                                        | Some true, Some value ->
+                                            try
+                                                let cursor = value.GetValue<string>()
+                                                if String.IsNullOrWhiteSpace cursor || cursor <> cursor.Trim() then None
+                                                else Some cursor
+                                            with _ -> None
+                                        | Some false, _ -> None
+                                        | _ -> None
+                                    let validPage =
+                                        hasNext.IsSome
+                                        && (expectedRevision |> Option.forall ((=) revision))
+                                        && (expectedTotal |> Option.forall ((=) total))
+                                        && all.Length <= total
+                                        && (if hasNext = Some true then next.IsSome else all.Length = total)
+                                    if not validPage then Error "provider-relation-population-drift"
+                                    elif next.IsSome then
+                                        loop next (cursor |> Option.fold (fun state value -> Set.add value state) seen)
+                                             (pageCount + 1) (Some revision) (Some total) all
+                                    elif all.Length <> total || (all |> Set.ofList |> Set.count) <> all.Length then
+                                        Error "provider-relation-population-drift"
+                                    else Ok(revision, List.sort all)
+                            | _ -> Error "provider-malformed-connection"
+                        | _ -> Error "provider-cross-scope-issue"
+        loop None Set.empty 0 None None []
+
+    let private observeOnce repositoryId blocker blocked options transport =
+        match readConnection repositoryId blocker "blocking" options transport,
+              readConnection repositoryId blocked "blockedBy" options transport with
+        | Ok(blockerRevision, blocking), Ok(blockedRevision, blockedBy) ->
+            let digest = targetSha256 repositoryId blocker blocked blocking blockedBy
+            Ok(blockerRevision, blockedRevision, blocking, blockedBy, digest)
+        | Error reason, _ | _, Error reason -> Error reason
+
+    let private observe repositoryId blocker blocked options transport =
+        match observeOnce repositoryId blocker blocked options transport,
+              observeOnce repositoryId blocker blocked options transport with
+        | Ok first, Ok second when first = second -> Ok first
+        | Ok _, Ok _ -> Error "provider-relation-population-drift"
+        | Error reason, _ | _, Error reason -> Error reason
+
+    let private parseEndpoint repositoryId expectedId node =
+        let observedRepository = tryProperty "repository" node |> Option.bind (tryInt64 "databaseId")
+        match tryString "__typename" node, tryString "id" node, observedRepository with
+        | Some "Issue", Some id, Some observedRepositoryId
+            when id = expectedId && observedRepositoryId = repositoryId -> true
+        | _ -> false
+
+    let private dispatch repositoryId blocker blocked operationId desiredSha options
+                         (transport: IMigrationStepProviderTransport) =
+        let reconcileAmbiguous () =
+            match observe repositoryId blocker blocked options transport with
+            | Ok(_, _, blocking, blockedBy, digest)
+                when List.contains blocked blocking
+                     && List.contains blocker blockedBy
+                     && digest = desiredSha -> MigrationDispatchOutcome.Applied
+            | _ -> MigrationDispatchOutcome.Unknown
+        let request =
+            GraphQL
+                { Uri=options.GraphQLUri; Document=mutation
+                  Variables=Map.ofList [ "blockedId", blocked; "blockerId", blocker; "clientMutationId", operationId ]
+                  Headers=options.Headers; ApiVersion=ApiVersion.required; Idempotency=NeverReplay }
+        match transport.Send request with
+        | NetworkFailure | TimedOut -> reconcileAmbiguous ()
+        | outcome ->
+            match body outcome with
+            | Error _ -> reconcileAmbiguous ()
+            | Ok root ->
+                match tryProperty "data" root |> Option.bind (tryProperty "addBlockedBy") with
+                | Some result when tryString "clientMutationId" result = Some operationId ->
+                    match tryProperty "blockingIssue" result, tryProperty "issue" result with
+                    | Some observedBlocker, Some observedBlocked
+                        when parseEndpoint repositoryId blocker observedBlocker
+                             && parseEndpoint repositoryId blocked observedBlocked ->
+                        MigrationDispatchOutcome.Applied
+                    | _ -> reconcileAmbiguous ()
+                | _ -> reconcileAmbiguous ()
+
+    let create step options authority transport =
+        match MigrationStepExecution.sealStep step, step.Effect with
+        | Ok sealedStep, MigrationEffect.AddBlockingEdge(repositoryId, blocker, blocked)
+            when sealedStep.Seal = step.Seal
+                 && step.ExpectedTargetRevision = step.ExpectedTargetSha256
+                 && not (isNull options.GraphQLUri)
+                 && options.GraphQLUri.IsAbsoluteUri
+                 && options.GraphQLUri.Scheme = Uri.UriSchemeHttps ->
+            let observeTarget () =
+                observe repositoryId blocker blocked options transport
+                |> Result.map (fun (_, _, blocking, blockedBy, digest) ->
+                    let sourceHasEdge = List.contains blocked blocking
+                    let targetHasEdge = List.contains blocker blockedBy
+                    let absent = not sourceHasEdge && not targetHasEdge
+                    let desiredFromExpected =
+                        targetSha256 repositoryId blocker blocked (blocked :: blocking) (blocker :: blockedBy)
+                    { Identity=$"repository:{repositoryId}/blocks:{blocker}:{blocked}"
+                      Revision=digest; Sha256=digest; Complete=true
+                      Authorized=sourceHasEdge = targetHasEdge
+                                 && (not absent || desiredFromExpected = step.DesiredTargetSha256) })
+            { new IMigrationStepRuntime with
+                member _.ObserveEpoch() = authority.ObserveEpoch()
+                member _.ObserveAuthorityFence() = authority.ObserveAuthorityFence()
+                member _.ObserveJournal operationId = authority.ObserveJournal operationId
+                member _.PersistIntent(generation, head, operationId, seal) =
+                    authority.PersistIntent generation head operationId seal
+                member _.MarkInFlight(generation, head, operationId) =
+                    authority.MarkInFlight generation head operationId
+                member _.PersistSettlement(generation, head, operationId, result) =
+                    authority.PersistSettlement generation head operationId result
+                member _.ObserveTarget effect =
+                    if effect <> step.Effect then Error "unsupported-or-cross-step-effect" else observeTarget ()
+                member _.ObserveEffect(operationId, effect) =
+                    if operationId <> step.OperationId || effect <> step.Effect then
+                        Error "unsupported-or-cross-step-effect"
+                    else
+                        observe repositoryId blocker blocked options transport
+                        |> Result.map (fun (_, _, blocking, blockedBy, digest) ->
+                            match List.contains blocked blocking, List.contains blocker blockedBy with
+                            | true, true -> MigrationEffectObservation.Applied digest
+                            | false, false -> MigrationEffectObservation.ProvenAbsent
+                            | _ -> MigrationEffectObservation.Partial "provider-reciprocal-edge-partial")
+                member _.Dispatch(candidate, generation, commit) =
+                    if candidate <> step then MigrationDispatchOutcome.Refused "cross-step-dispatch"
+                    else
+                        match authority.ObserveJournal step.OperationId with
+                        | Ok(Some observed)
+                            when observed.OperationId = step.OperationId
+                                 && observed.StepSeal = step.Seal
+                                 && observed.Stage = MigrationJournalStage.InFlight
+                                 && observed.Generation = generation
+                                 && observed.Commit = commit ->
+                            dispatch repositoryId blocker blocked step.OperationId
+                                     step.DesiredTargetSha256 options transport
+                        | _ -> MigrationDispatchOutcome.Refused "missing-fresh-in-flight-grant" }
+            |> Ok
+        | Ok _, MigrationEffect.AddBlockingEdge _ -> Error "invalid-blocking-edge-binding"
+        | Ok _, _ -> Error "unsupported-migration-effect"
+        | _ -> Error "invalid-migration-step"

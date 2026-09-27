@@ -1,5 +1,7 @@
 namespace FS.GG.Coordination.GitHub
 
+open System
+
 [<RequireQualifiedAccess>]
 type MigrationEffect =
     | SetIssueType of repositoryId:int64 * issueNodeId:string * typeNodeId:string
@@ -140,3 +142,52 @@ module MigrationStepExecution =
     val advance:
         step:MigrationExecutionStep -> cut:MigrationAdvanceCut -> runtime:IMigrationStepRuntime ->
             Result<MigrationAdvanceResult, MigrationExecutionFailure list>
+
+type MigrationStepAuthorityPort =
+    { ObserveEpoch: unit -> Result<MigrationEpochObservation, string>
+      ObserveAuthorityFence: unit -> Result<MigrationFenceObservation, string>
+      ObserveJournal: string -> Result<MigrationJournalAuthority option, string>
+      PersistIntent: int64 -> string -> string -> string -> MigrationCasOutcome
+      MarkInFlight: int64 -> string -> string -> MigrationCasOutcome
+      PersistSettlement: int64 -> string -> string -> string -> MigrationCasOutcome }
+
+type IMigrationStepProviderTransport =
+    abstract Send: GitHubRequest -> TransportOutcome
+
+type HttpMigrationStepProviderTransport =
+    new: unit -> HttpMigrationStepProviderTransport
+    interface IMigrationStepProviderTransport
+    interface IDisposable
+
+type MigrationStepProviderOptions =
+    { GraphQLUri: Uri
+      Headers: Map<string, string> }
+
+[<RequireQualifiedAccess>]
+module MigrationIssueTypeStepRuntime =
+    /// Digest used by the execution step for an issue's exact native type state.
+    val targetSha256: issueNodeId:string -> typeNodeId:string option -> string
+
+    /// Bind one sealed SetIssueType step to durable journal authority and the GitHub provider.
+    /// Every other effect and any mismatched desired digest is refused before transport use.
+    val create:
+        step:MigrationExecutionStep ->
+        options:MigrationStepProviderOptions ->
+        authority:MigrationStepAuthorityPort ->
+        transport:IMigrationStepProviderTransport ->
+            Result<IMigrationStepRuntime, string>
+
+[<RequireQualifiedAccess>]
+module MigrationBlockingEdgeStepRuntime =
+    /// Digest of both complete reciprocal local relation populations for one edge target.
+    val targetSha256:
+        repositoryId:int64 -> blockerNodeId:string -> blockedNodeId:string ->
+        blockingNodeIds:string list -> blockedByNodeIds:string list -> string
+
+    /// Bind one sealed AddBlockingEdge step to durable authority and paginated native readback.
+    val create:
+        step:MigrationExecutionStep ->
+        options:MigrationStepProviderOptions ->
+        authority:MigrationStepAuthorityPort ->
+        transport:IMigrationStepProviderTransport ->
+            Result<IMigrationStepRuntime, string>
