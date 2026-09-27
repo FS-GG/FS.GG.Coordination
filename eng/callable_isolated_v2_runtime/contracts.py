@@ -9,6 +9,7 @@ import hashlib
 import importlib
 import importlib.util
 import pathlib
+import zipimport
 
 
 @dataclass(frozen=True)
@@ -60,11 +61,8 @@ def digest(raw: bytes) -> str:
 def operator_module():
     """Load the retained /5 parser and classifier without editing its identity."""
     module_name = "callable_isolated_v2_retained_operator"
-    try:
+    if isinstance(globals().get("__loader__"), zipimport.zipimporter):
         return importlib.import_module(module_name)
-    except ModuleNotFoundError as error:
-        if error.name != module_name:
-            raise
     path = pathlib.Path(__file__).resolve().parents[1] / "callable-cli-isolated-operation-v2.py"
     spec = importlib.util.spec_from_file_location(module_name, path)
     if spec is None or spec.loader is None:

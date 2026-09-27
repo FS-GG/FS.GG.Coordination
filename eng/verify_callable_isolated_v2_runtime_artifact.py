@@ -98,21 +98,32 @@ def verify(archive: bytes, manifest_raw: bytes) -> dict:
         builder_sha = _sha(builder.source_blob(builder.BUILDER_SOURCE))
     except ValueError:
         raise Refused("runtime-source-unavailable") from None
-    if (manifest["schema"] != builder.SCHEMA
-            or HEX40.fullmatch(manifest["sourceRevision"] or "") is None
+    requirements = manifest["runtimeRequirements"]
+    if (type(manifest["schema"]) is not str
+            or manifest["schema"] != builder.SCHEMA
+            or type(manifest["sourceRevision"]) is not str
+            or HEX40.fullmatch(manifest["sourceRevision"]) is None
             or manifest["sourceRevision"] != revision
-            or HEX40.fullmatch(manifest["sourceTree"] or "") is None
+            or type(manifest["sourceTree"]) is not str
+            or HEX40.fullmatch(manifest["sourceTree"]) is None
             or manifest["sourceTree"] != tree
-            or HEX64.fullmatch(manifest["builderSha256"] or "") is None
+            or type(manifest["builderSha256"]) is not str
+            or HEX64.fullmatch(manifest["builderSha256"]) is None
             or manifest["builderSha256"] != builder_sha
-            or HEX64.fullmatch(manifest["retainedOperatorSha256"] or "") is None
+            or type(manifest["retainedOperatorSha256"]) is not str
+            or HEX64.fullmatch(manifest["retainedOperatorSha256"]) is None
             or manifest["retainedOperatorSha256"] != _sha(sources[
                 "callable_isolated_v2_retained_operator.py"])
-            or HEX64.fullmatch(manifest["archiveSha256"] or "") is None
+            or type(manifest["archiveSha256"]) is not str
+            or HEX64.fullmatch(manifest["archiveSha256"]) is None
             or manifest["archiveSha256"] != _sha(archive)
-            or manifest["runtimeRequirements"] != builder.RUNTIME_REQUIREMENTS
-            or set(manifest["runtimeRequirements"])
-            != {"pythonMin", "sqlite", "opensslEd25519Pkeyutl"}):
+            or type(requirements) is not dict
+            or set(requirements) !=
+               {"pythonMin", "sqlite", "opensslEd25519Pkeyutl"}
+            or type(requirements.get("pythonMin")) is not str
+            or type(requirements.get("sqlite")) is not bool
+            or type(requirements.get("opensslEd25519Pkeyutl")) is not bool
+            or requirements != builder.RUNTIME_REQUIREMENTS):
         raise Refused("runtime-manifest-binding")
 
     members = _members(archive)
@@ -124,7 +135,8 @@ def verify(archive: bytes, manifest_raw: bytes) -> dict:
         raw = members.get(path)
         if (type(entry) is not dict or set(entry) != {"path", "sha256", "size"}
                 or entry["path"] != path
-                or HEX64.fullmatch(entry["sha256"] or "") is None
+                or type(entry["sha256"]) is not str
+                or HEX64.fullmatch(entry["sha256"]) is None
                 or type(entry["size"]) is not int
                 or entry["size"] != len(sources[path])
                 or entry["sha256"] != _sha(sources[path])
