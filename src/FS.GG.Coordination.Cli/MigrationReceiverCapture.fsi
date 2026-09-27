@@ -10,7 +10,8 @@ type MigrationReceiverTwoPass =
       First: MigrationReceiverSnapshot list
       Second: MigrationReceiverSnapshot list }
 
-/// Two stable reads of declared pin bytes. InventoryBound is always false until a separate provider proof exists.
+/// Two stable reads of pin bytes. InventoryBound distinguishes caller declarations from a
+/// provider-tree-derived workflow/package census.
 type MigrationReceiverPinTwoPass =
     { CohortSha256: string
       InventoryBound: bool
@@ -28,6 +29,14 @@ module MigrationReceiverCapture =
     val capturePinBytesTwoPass:
         cohort:GitHubMigrationCopyCohort ->
         pinsByReceiver:Map<string, MigrationReceiverPinDeclaration list> ->
+        template:MigrationGitHubReadOptions ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationReceiverPinTwoPass, string>
+
+    /// Derives every supported workflow/package path from two stable recursive provider trees,
+    /// then captures and revalidates every corresponding blob in two further stable passes.
+    val captureWorkflowPinsTwoPass:
+        cohort:GitHubMigrationCopyCohort ->
         template:MigrationGitHubReadOptions ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationReceiverPinTwoPass, string>

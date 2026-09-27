@@ -384,6 +384,8 @@ let private pinBody =
 let private pinResponses =
     [ receiverIdentity; receiverRef; receiverCommit; pinTreeResponse; receiverRef
       pinBody; receiverRef ]
+let private pinReceiverResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; pinTreeResponse; receiverRef ]
 let private pinDeclarations =
     Map [ "copy-receiver", [ { EntryPath=pinPath; PinKind="workflow" } ] ]
 
@@ -393,6 +395,12 @@ let private readWorkflowPinsTwoPass () =
               cohort pinDeclarations options.Repository transport with
     | Ok proof -> proof
     | Error failure -> failwithf "Expected workflow pin two-pass proof: %s" failure
+
+let private readProviderWorkflowPinsTwoPass () =
+    let transport = FakeTransport (pinReceiverResponses @ pinReceiverResponses @ pinResponses @ pinResponses)
+    match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport with
+    | Ok proof -> proof
+    | Error failure -> failwithf "Expected provider workflow pin proof: %s" failure
 
 [<Fact>]
 let ``declared workflow pin inspect slice binds exact tree blob bytes and stable ref`` () =
@@ -442,6 +450,56 @@ let ``declared workflow pin inspect slice refuses missing pins changed source an
         [ { captured.Second.Head with PinSnapshotSha256=String.replicate 64 "f" } ]
     Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
                     options pinDeclarations captured.First changedSecond |> Result.isError)
+
+[<Fact>]
+let ``provider tree workflow pin census binds raw trees and blobs without claiming canonical closure`` () =
+    let captured = readProviderWorkflowPinsTwoPass ()
+    Assert.True(captured.InventoryBound)
+    match MigrationInspectProviderAdapter.bindProviderWorkflowPins options captured with
+    | Error reason -> failwithf "Provider workflow pin proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("workflow-pins/provider-tree", proof.Read.Authority)
+        Assert.Equal(12, proof.Read.PageCount)
+        Assert.Equal(12, proof.Read.ItemCount)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+        let expectedTreeBody =
+            match pinTreeResponse with
+            | Response value -> value.Body
+            | _ -> failwith "Expected receiver tree response"
+        Assert.Contains(proof.Pages, fun page -> page.RawBody = expectedTreeBody)
+        let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                     :> IGitHubMigrationInspectSource
+        Assert.Equal(Error "authority-adapter-unavailable:workflow-pins",
+                     source.ReadAuthority(1, "workflow-pins"))
+
+[<Fact>]
+let ``provider workflow pin binder refuses an unbound caller declared inventory`` () =
+    let declared = readWorkflowPinsTwoPass ()
+    Assert.False(declared.InventoryBound)
+    Assert.Equal(Error "workflow-pins-provider-inventory-unbound",
+                 MigrationInspectProviderAdapter.bindProviderWorkflowPins options declared)
+
+[<Fact>]
+let ``provider workflow pin census refuses a changed preliminary tree`` () =
+    let changedTree =
+        reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"package.json","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
+    let changedPass =
+        [ receiverIdentity; receiverRef; receiverCommit; changedTree; receiverRef ]
+    let transport = FakeTransport (receiverResponses @ changedPass)
+    match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport with
+    | Error "changed:receiver-snapshot" -> ()
+    | Error other -> failwithf "Unexpected refusal: %s" other
+    | Ok _ -> failwith "Changed provider tree was accepted"
+
+[<Fact>]
+let ``provider workflow pin census refuses an empty inferred inventory`` () =
+    let emptyTree =
+        reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[]}}"""
+    let emptyPass =
+        [ receiverIdentity; receiverRef; receiverCommit; emptyTree; receiverRef ]
+    let transport = FakeTransport (emptyPass @ emptyPass)
+    Assert.Equal(Error "missing:receiver-pin-inventory",
+                 MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport)
 
 let private nativeIssue =
     """{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""

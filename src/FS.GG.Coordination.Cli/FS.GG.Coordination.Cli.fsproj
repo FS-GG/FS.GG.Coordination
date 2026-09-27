@@ -37,6 +37,8 @@
     <Compile Include="MigrationJournalCapture.fs" />
     <Compile Include="MigrationReviewDeliveryInspectBinder.fsi" />
     <Compile Include="MigrationReviewDeliveryInspectBinder.fs" />
+    <Compile Include="MigrationReceiverCapture.fsi" />
+    <Compile Include="MigrationReceiverCapture.fs" />
     <Compile Include="MigrationInspectProviderAdapter.fsi" />
     <Compile Include="MigrationInspectProviderAdapter.fs" />
     <Compile Include="MigrationProtectedIssueCensus.fsi" />
@@ -55,8 +57,6 @@
     <Compile Include="MigrationProtectedIssueCensusNativeAttestation.fs" />
     <Compile Include="MigrationProtectedIssueCensusSignedRecovery.fsi" />
     <Compile Include="MigrationProtectedIssueCensusSignedRecovery.fs" />
-    <Compile Include="MigrationReceiverCapture.fsi" />
-    <Compile Include="MigrationReceiverCapture.fs" />
     <Compile Include="MigrationRollbackReceiverReadback.fsi" />
     <Compile Include="MigrationRollbackReceiverReadback.fs" />
     <Compile Include="MigrationRollbackSettingsReadback.fsi" />

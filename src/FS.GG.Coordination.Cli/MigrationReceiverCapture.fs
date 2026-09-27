@@ -17,6 +17,17 @@ type MigrationReceiverPinTwoPass =
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverCapture =
+    let private pinDeclaration (entry: MigrationReceiverTreeEntry) =
+        let workflow = entry.EntryPath.StartsWith(".github/workflows/", StringComparison.Ordinal)
+        let packageNames =
+            set [ "global.json"; "Directory.Packages.props"; "packages.lock.json"
+                  "package.json"; "package-lock.json"; "pnpm-lock.yaml"
+                  "yarn.lock"; "nuget.config" ]
+        let package = entry.EntryPath.Split('/') |> Array.last |> packageNames.Contains
+        if workflow then Some { EntryPath=entry.EntryPath; PinKind="workflow" }
+        elif package then Some { EntryPath=entry.EntryPath; PinKind="package" }
+        else None
+
     let captureTwoPass (cohort: GitHubMigrationCopyCohort) (template: MigrationGitHubReadOptions)
                        (transport: IMigrationGitHubReadTransport) =
         let repositories = cohort.Repositories |> List.map (fun (item: GitHubMigrationCopyRepository) -> item.Id, item) |> Map.ofList
@@ -94,3 +105,32 @@ module MigrationReceiverCapture =
                     else
                         Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 cohort
                              InventoryBound=false; First=first; Second=second }))
+
+    let captureWorkflowPinsTwoPass (cohort: GitHubMigrationCopyCohort)
+                                   (template: MigrationGitHubReadOptions)
+                                   (transport: IMigrationGitHubReadTransport) =
+        let inventory (snapshots: MigrationReceiverSnapshot list) =
+            snapshots
+            |> List.map (fun snapshot ->
+                snapshot.ReceiverName,
+                (snapshot.TreeEntries
+                 |> List.choose pinDeclaration
+                 |> List.sortBy _.EntryPath))
+            |> Map.ofList
+        captureTwoPass cohort template transport
+        |> Result.bind (fun census ->
+            let firstInventory = inventory census.First
+            let secondInventory = inventory census.Second
+            if firstInventory <> secondInventory then
+                Error "changed:receiver-pin-inventory"
+            elif firstInventory |> Map.exists (fun _ pins -> pins.IsEmpty) then
+                Error "missing:receiver-pin-inventory"
+            else
+                capturePinBytesTwoPass cohort firstInventory template transport
+                |> Result.bind (fun captured ->
+                    let firstReceivers = captured.First |> List.map _.Receiver
+                    let secondReceivers = captured.Second |> List.map _.Receiver
+                    if firstReceivers <> census.First || secondReceivers <> census.Second then
+                        Error "changed:receiver-pin-provider-tree"
+                    else
+                        Ok { captured with InventoryBound=true }))

@@ -980,6 +980,48 @@ module MigrationInspectProviderAdapter =
                          Pages=pages }
                 with failure -> Error $"workflow-pins-raw-or-scope:{failure.Message}"
 
+    let bindProviderWorkflowPins
+        (options: MigrationInspectProviderOptions)
+        (captured: MigrationReceiverPinTwoPass) =
+        if not captured.InventoryBound
+           || captured.CohortSha256 <> GitHubMigrationInspect.cohortSha256 options.Cohort then
+            Error "workflow-pins-provider-inventory-unbound"
+        else
+            let declarations =
+                captured.First
+                |> List.map (fun snapshot ->
+                    snapshot.Receiver.ReceiverName,
+                    (snapshot.Pins
+                     |> List.map (fun pin ->
+                         { EntryPath=pin.EntryPath; PinKind=pin.PinKind })
+                     |> List.sortBy _.EntryPath))
+                |> Map.ofList
+            match bindDeclaredReceiverIdentities options
+                      (captured.First |> List.map _.Receiver)
+                      (captured.Second |> List.map _.Receiver),
+                  bindDeclaredWorkflowPins options declarations captured.First captured.Second with
+            | Ok receiverProof, Ok pinProof ->
+                let unlinked = receiverProof.Pages @ pinProof.Pages
+                let pages =
+                    unlinked
+                    |> List.mapi (fun index page ->
+                        let next =
+                            if index + 1 < unlinked.Length then
+                                Some(sha unlinked.[index + 1].RequestedUri)
+                            else None
+                        { page with NextRequestIdentitySha256=next })
+                let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
+                Ok { pinProof with
+                         Pages=pages
+                         Read={ pinProof.Read with
+                                    Authority="workflow-pins/provider-tree"
+                                    PageCount=pages.Length
+                                    ItemCount=subjects.Length
+                                    HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                                    Subjects=subjects } }
+            | Error reason, _ -> Error $"workflow-pins-receiver:{reason}"
+            | _, Error reason -> Error reason
+
     let private allowedNativeActivityRequest (options: MigrationInspectProviderOptions) request =
         match request with
         | GraphQL _ -> false
