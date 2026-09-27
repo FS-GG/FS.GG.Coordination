@@ -1,9 +1,9 @@
 #r "../../src/FS.GG.Coordination.GitHub/bin/Debug/net10.0/FS.GG.Coordination.GitHub.dll"
-#load "../../src/FS.GG.Coordination.GitHub/MigrationEffectAuthority.fs"
 
 open System
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open FS.GG.Coordination.GitHub
 
 module Registry = V1AdmissionRegistry
@@ -20,8 +20,6 @@ let treeBytes entries =
         @ (Registry.gitObjectIdValue value |> Convert.FromHexString |> Array.toList)) |> List.toArray
 
 let candidate = digest (String.replicate 64 "a")
-let artifactBytes = Encoding.UTF8.GetBytes "selected-provider-request"
-let artifact = digest (hex artifactBytes)
 let authorityPort () =
     let trust = digest (String.replicate 64 "b")
     let eventBytes = Encoding.UTF8.GetBytes($"{{\"fleetId\":\"fs-gg-production\",\"manifestSha256\":\"{Registry.sha256Value candidate}\",\"phase\":\"OperatingV1\",\"schema\":\"fsgg.github-substrate.epoch-event/1\",\"trustAnchorSha256\":\"{Registry.sha256Value trust}\"}}")
@@ -86,7 +84,7 @@ let setup () =
     let context =
         { Round=1L; Manifest=candidate; OperationId="migration-copy-op"; OperationGeneration=1L
           Actor="recovery-owner"; Receiver="sandbox-copy"; Kind="issue-edit"
-          CanonicalTarget="FS-GG/copy#17"; Claim=NoClaimRequired
+          CanonicalTarget="repository:999/name:FS-GG/copy/project:PVT_copy"; Claim=NoClaimRequired
           IntentDigest=digest (String.replicate 64 "d"); TouchSetDigest=digest (String.replicate 64 "e")
           OriginatingEpochCommit=commit; OriginatingEpochGeneration=1L }
     let admitted =
@@ -104,39 +102,45 @@ let setup () =
     authority, commit, current, registry
 
 let authority, epochCommit, admittedRead, admittedRegistry = setup ()
-let binding =
+let admissionCommit = oid (String.replicate 40 "a")
+let operationCommit = oid (String.replicate 40 "b")
+let sealCommit = oid (String.replicate 40 "d")
+let baseSelection =
     { Repository="FS-GG/copy"; RepositoryId=999L; ProjectNodeId="PVT_copy"
-      CandidateSha256=candidate; ArtifactSha256=artifact
-      ManifestSeal=Registry.sha256Value candidate; OperationId="migration-copy-op"
-      OperationGeneration=1L; ClaimGeneration=None; EpochCommit=epochCommit; EpochGeneration=1L
-      RegistryHead=Registry.head admittedRegistry; RegistryGeneration=Registry.generation admittedRegistry
-      RecoveryOwner="recovery-owner" }
+      CandidateSha256=candidate; ArtifactSha256=digest (String.replicate 64 "0")
+      RecoveryOwner="recovery-owner"; AdmissionCommit=admissionCommit
+      AdmissionGeneration=Registry.generation admittedRegistry
+      OperationCommit=operationCommit; OperationGeneration=1L; SealCommit=sealCommit }
 let step =
-    { OperationId=binding.OperationId; IdempotencyKey="effect-1"; ManifestSeal=binding.ManifestSeal
+    { OperationId="migration-copy-op"; IdempotencyKey="effect-1"
+      ManifestSeal=Registry.sha256Value candidate
       Effect=MigrationEffect.SetIssueType(999L, "ISSUE_copy", "TYPE_copy")
       TargetIdentity="repository:999/issue:ISSUE_copy/type"
       ExpectedTargetRevision="revision-1"; ExpectedTargetSha256=String.replicate 64 "1"
       DesiredTargetSha256=String.replicate 64 "2"
       EpochGeneration=1L; EpochCommit=Registry.gitObjectIdValue epochCommit
-      AuthorityFence={ AdmissionGeneration=binding.RegistryGeneration
-                       AdmissionCommit=Registry.gitObjectIdValue binding.RegistryHead
-                       OperationGeneration=1L; OperationCommit=Registry.gitObjectIdValue binding.RegistryHead
-                       Claim=None; SealCommit=Registry.gitObjectIdValue binding.RegistryHead
-                       RegistryCommit=Registry.gitObjectIdValue binding.RegistryHead }
+      AuthorityFence={ AdmissionGeneration=baseSelection.AdmissionGeneration
+                       AdmissionCommit=Registry.gitObjectIdValue admissionCommit
+                       OperationGeneration=1L; OperationCommit=Registry.gitObjectIdValue operationCommit
+                       Claim=None; SealCommit=Registry.gitObjectIdValue sealCommit
+                       RegistryCommit=Registry.gitObjectIdValue (Registry.head admittedRegistry) }
       JournalGeneration=0L; JournalHead=String.replicate 40 "c"; Seal="" }
     |> MigrationStepExecution.sealStep |> Result.defaultWith (sprintf "%A" >> failwith)
+let selectedArtifact = MigrationEffectAuthority.canonicalRequest baseSelection step |> hex |> digest
+let selection = { baseSelection with ArtifactSha256=selectedArtifact }
 
 let mutable writes = 0
 let mutable current = admittedRead
-let ports outcome =
-    { Authority=authority
-      Journal={ Read=(fun _ -> current)
-                Write=(fun proposal ->
-                    writes <- writes + 1
-                    match outcome with
-                    | ReceiveAccepted | ReceiveResponseUnknown -> current <- appendRead current proposal
-                    | _ -> ()
-                    outcome) } }
+let ports selected outcome =
+    { ReadVerifiedSelection=(fun () -> Ok selected)
+      Admission={ Authority=authority
+                  Journal={ Read=(fun _ -> current)
+                            Write=(fun proposal ->
+                                writes <- writes + 1
+                                match outcome with
+                                | ReceiveAccepted | ReceiveResponseUnknown -> current <- appendRead current proposal
+                                | _ -> ()
+                                outcome) } } }
 let expectRefusal reason result =
     match result with
     | EffectIntentRefused reasons when List.contains reason reasons -> ()
@@ -146,50 +150,96 @@ let expectIndeterminate reason result =
     | EffectIntentIndeterminate reasons when List.contains reason reasons -> ()
     | other -> failwithf "expected %s indeterminate result, got %A" reason other
 
-let run b s bytes outcome = MigrationEffectAuthority.prepare (ports outcome) b s "effect-1" bytes
-expectRefusal "sandbox-target" (run binding { step with Effect=MigrationEffect.SetIssueType(1000L, "ISSUE_copy", "TYPE_copy") } artifactBytes ReceiveAccepted)
-expectRefusal "sandbox-target" (run binding { step with Effect=MigrationEffect.SetProjectField("PVT_other", "ITEM", "FIELD", "VALUE") } artifactBytes ReceiveAccepted)
-expectRefusal "manifest-seal" (run { binding with ManifestSeal=String.replicate 64 "f" } step artifactBytes ReceiveAccepted)
-expectRefusal "artifact-digest" (run binding step (Encoding.UTF8.GetBytes "altered") ReceiveAccepted)
-expectRefusal "recovery-owner" (run { binding with RecoveryOwner="" } step artifactBytes ReceiveAccepted)
-expectRefusal "claim-binding" (run { binding with ClaimGeneration=Some 2L } step artifactBytes ReceiveAccepted)
-expectRefusal "epoch-binding" (run { binding with EpochGeneration=2L } step artifactBytes ReceiveAccepted)
-expectRefusal "registry-binding" (run { binding with RegistryHead=oid (String.replicate 40 "f") } step artifactBytes ReceiveAccepted)
+let run selected s outcome = MigrationEffectAuthority.prepare (ports selected outcome) s
+expectRefusal "sandbox-target" (run selection { step with Effect=MigrationEffect.SetIssueType(1000L, "ISSUE_copy", "TYPE_copy") } ReceiveAccepted)
+expectRefusal "sandbox-target" (run selection { step with Effect=MigrationEffect.SetProjectField("PVT_other", "ITEM", "FIELD", "VALUE") } ReceiveAccepted)
+expectRefusal "manifest-seal" (run { selection with CandidateSha256=digest (String.replicate 64 "f") } step ReceiveAccepted)
+expectRefusal "artifact-digest" (run { selection with ArtifactSha256=digest (String.replicate 64 "f") } step ReceiveAccepted)
+expectRefusal "recovery-owner-admission-binding" (run { selection with RecoveryOwner="foreign-owner" } step ReceiveAccepted)
+expectRefusal "operation-binding" (run { selection with OperationGeneration=2L } step ReceiveAccepted)
+expectRefusal "authority-commit-alias" (run { selection with SealCommit=operationCommit } step ReceiveAccepted)
+expectRefusal "admission-binding" (run { selection with AdmissionCommit=oid (String.replicate 40 "f") } step ReceiveAccepted)
+let rebound selected selectedStep =
+    { selected with ArtifactSha256=MigrationEffectAuthority.canonicalRequest selected selectedStep |> hex |> digest }
+let differentName = rebound { selection with Repository="FS-GG/other" } step
+expectRefusal "copy-admission-binding" (run differentName step ReceiveAccepted)
+let differentOwner = rebound { selection with RecoveryOwner="foreign-owner" } step
+expectRefusal "recovery-owner-admission-binding" (run differentOwner step ReceiveAccepted)
+let differentRepositoryStep =
+    { step with Effect=MigrationEffect.SetIssueType(1000L, "ISSUE_copy", "TYPE_copy")
+                TargetIdentity="repository:1000/issue:ISSUE_copy/type" }
+    |> MigrationStepExecution.sealStep |> Result.defaultWith (sprintf "%A" >> failwith)
+let differentRepository = rebound { selection with RepositoryId=1000L } differentRepositoryStep
+expectRefusal "copy-admission-binding" (run differentRepository differentRepositoryStep ReceiveAccepted)
+let differentProjectStep =
+    { step with Effect=MigrationEffect.SetProjectField("PVT_other", "ITEM", "FIELD", "VALUE")
+                TargetIdentity="project:PVT_other/item:ITEM/field:FIELD" }
+    |> MigrationStepExecution.sealStep |> Result.defaultWith (sprintf "%A" >> failwith)
+let differentProject = rebound { selection with ProjectNodeId="PVT_other" } differentProjectStep
+expectRefusal "copy-admission-binding" (run differentProject differentProjectStep ReceiveAccepted)
+let differentId =
+    { step with IdempotencyKey="effect-foreign" }
+    |> MigrationStepExecution.sealStep |> Result.defaultWith (sprintf "%A" >> failwith)
+expectRefusal "artifact-digest" (run selection differentId ReceiveAccepted)
 check (writes = 0) "invalid preflight reached journal writer"
+let mutable selectionReads = 0
+let movingPorts =
+    { ports selection ReceiveAccepted with
+        ReadVerifiedSelection=(fun () ->
+            selectionReads <- selectionReads + 1
+            Ok(if selectionReads = 1 then selection else differentName)) }
+expectIndeterminate "effect-authority-moved" (MigrationEffectAuthority.prepare movingPorts step)
+check (selectionReads = 2 && writes = 0) "moved selection reached journal writer"
 
-match run binding step artifactBytes ReceiveAccepted with
+match run selection step ReceiveAccepted with
 | EffectIntentDurable _ -> ()
 | other -> failwithf "expected durable effect intent: %A" other
 check (writes = 1) "durable intent was not appended once"
-expectIndeterminate "stale-admission-head" (run binding step artifactBytes ReceiveAccepted)
+let encodedIntent =
+    match current.Observation with
+    | JournalComplete(_, commits) -> commits |> List.last |> _.Event.Bytes
+    | _ -> failwith "intent journal not complete"
+let intentDoc = JsonDocument.Parse encodedIntent
+let intentPayload = intentDoc.RootElement.GetProperty("payload").GetProperty("intent")
+check (intentPayload.GetProperty("effectId").GetString() = step.IdempotencyKey)
+      "persisted effect id differs from sealed step key"
+let persistedBytes = intentPayload.GetProperty("canonicalRequestBase64").GetString() |> Convert.FromBase64String
+check (persistedBytes = MigrationEffectAuthority.canonicalRequest selection step)
+      "persisted replay bytes differ from sealed selection and step"
+let replayDoc = JsonDocument.Parse persistedBytes
+let replayFields = replayDoc.RootElement.EnumerateArray() |> Seq.map _.GetString() |> Seq.toArray
+check (Array.contains selection.Repository replayFields && Array.contains step.Seal replayFields
+       && Array.contains (Registry.gitObjectIdValue sealCommit) replayFields)
+      "encoded replay lost copy or authority coordinates"
+expectRefusal "registry-binding" (run selection step ReceiveAccepted)
 check (writes = 1) "stale admission reached journal writer"
 let currentRegistry = Registry.restore current |> Result.defaultWith (String.concat "," >> failwith)
-let repeatedBinding = { binding with RegistryHead=Registry.head currentRegistry; RegistryGeneration=Registry.generation currentRegistry }
 let repeatedStep =
     { step with AuthorityFence=
-                    { step.AuthorityFence with RegistryCommit=Registry.gitObjectIdValue repeatedBinding.RegistryHead
-                                               AdmissionGeneration=repeatedBinding.RegistryGeneration } }
+                    { step.AuthorityFence with RegistryCommit=Registry.gitObjectIdValue (Registry.head currentRegistry) } }
     |> MigrationStepExecution.sealStep |> Result.defaultWith (sprintf "%A" >> failwith)
-expectRefusal "effect-already-in-flight" (run repeatedBinding repeatedStep artifactBytes ReceiveAccepted)
+let repeatedSelection =
+    { selection with ArtifactSha256=MigrationEffectAuthority.canonicalRequest selection repeatedStep |> hex |> digest }
+expectRefusal "effect-id-request-conflict" (run repeatedSelection repeatedStep ReceiveAccepted)
 check (writes = 1) "reused effect reached journal writer"
 
 current <- { admittedRead with Repository="FS-GG/foreign" }
 writes <- 0
-expectIndeterminate "admission-journal-identity" (run binding step artifactBytes ReceiveAccepted)
+expectIndeterminate "admission-journal-identity" (run selection step ReceiveAccepted)
 check (writes = 0) "wrong authority repository reached journal writer"
 
 current <- admittedRead
 writes <- 0
-match run binding step artifactBytes ReceiveParentConflict with
+match run selection step ReceiveParentConflict with
 | EffectIntentParentConflict -> ()
 | other -> failwithf "expected parent conflict: %A" other
 check (writes = 1) "parent conflict wrote more than once"
 
 current <- admittedRead
 writes <- 0
-match run binding step artifactBytes ReceiveResponseUnknown with
+match run selection step ReceiveResponseUnknown with
 | EffectIntentIndeterminate [ "effect-permit-unavailable" ] -> ()
 | other -> failwithf "expected ambiguous append refusal: %A" other
 check (writes = 1) "ambiguous append wrote more than once"
 
-printfn "MigrationEffectAuthorityTests: PASS (copy, manifest, artifact, epoch, claim, owner, reuse, parent, ambiguous)"
+printfn "MigrationEffectAuthorityTests: PASS"

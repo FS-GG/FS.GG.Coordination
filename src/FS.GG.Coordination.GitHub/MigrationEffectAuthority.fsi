@@ -1,22 +1,23 @@
 namespace FS.GG.Coordination.GitHub
 
-/// Exact Q5/Q6 copy and admission coordinates. These are supplied by the protected
-/// sandbox selection, never inferred from the diagnostic Q4 repository.
-type MigrationEffectBinding =
+/// A copy selection read and verified by the source adapter. Its independent
+/// admission, operation and seal commits are not the current journal head.
+type MigrationVerifiedEffectSelection =
     { Repository: string
       RepositoryId: int64
       ProjectNodeId: string
       CandidateSha256: Sha256Digest
       ArtifactSha256: Sha256Digest
-      ManifestSeal: string
-      OperationId: string
+      RecoveryOwner: string
+      AdmissionCommit: GitObjectId
+      AdmissionGeneration: int64
+      OperationCommit: GitObjectId
       OperationGeneration: int64
-      ClaimGeneration: int64 option
-      EpochCommit: GitObjectId
-      EpochGeneration: int64
-      RegistryHead: GitObjectId
-      RegistryGeneration: int64
-      RecoveryOwner: string }
+      SealCommit: GitObjectId }
+
+type MigrationEffectAuthorityPorts =
+    { Admission: AdmissionServicePorts
+      ReadVerifiedSelection: unit -> Result<MigrationVerifiedEffectSelection, string list> }
 
 type MigrationEffectAuthorityDecision =
     | EffectIntentDurable of head:GitObjectId * generation:int64
@@ -26,13 +27,8 @@ type MigrationEffectAuthorityDecision =
 
 [<RequireQualifiedAccess>]
 module MigrationEffectAuthority =
-    /// Check the exact copy, selected bytes, admission, claim and epoch, then
-    /// append one effect intent through the existing durable CAS/reconciliation.
-    /// No provider transport or dispatch permit is exposed by this boundary.
-    val prepare:
-        ports:AdmissionServicePorts ->
-        binding:MigrationEffectBinding ->
-        step:MigrationExecutionStep ->
-        effectId:string ->
-        canonicalRequestBytes:byte array ->
-            MigrationEffectAuthorityDecision
+    /// Encode the complete copy and step binding used as durable replay bytes.
+    val canonicalRequest: MigrationVerifiedEffectSelection -> MigrationExecutionStep -> byte array
+    /// Recover selection and admission, then append one copy-bound effect intent.
+    /// This boundary exposes no provider transport or dispatch permit.
+    val prepare: MigrationEffectAuthorityPorts -> MigrationExecutionStep -> MigrationEffectAuthorityDecision

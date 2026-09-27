@@ -65,6 +65,8 @@
     <Compile Include="OrdinarySettlementGitAuthority.fs" />
     <Compile Include="MigrationStepExecution.fsi" />
     <Compile Include="MigrationStepExecution.fs" />
+    <Compile Include="MigrationEffectAuthority.fsi" />
+    <Compile Include="MigrationEffectAuthority.fs" />
     <Compile Include="MigrationGitHubRead.fsi" />
     <Compile Include="MigrationGitHubRead.fs" />
     <Compile Include="MigrationProjectStatusStepRuntime.fsi" />

@@ -185,6 +185,9 @@ module V1AdmissionRegistry =
     val recoverCommand:
         commandId: string -> expectedEventBytes: byte array -> RegistryJournalRead -> Result<AdmissionRegistry, string list>
     val recoverOperation: operationId: string -> AdmissionRegistry -> Result<OperationHandle, string list>
+    /// The context is recovered from the verified, durable admission journal.
+    val operationContext: OperationHandle -> MutationContext
+    val authorityCoordinates: VerifiedAuthoritySnapshot -> GitObjectId * int64 * Sha256Digest
 
     /// Produce exact genesis objects only after a verified OperatingV1 authority read and two
     /// absent journal heads. This is a plan, not permission to create the protected ref.
