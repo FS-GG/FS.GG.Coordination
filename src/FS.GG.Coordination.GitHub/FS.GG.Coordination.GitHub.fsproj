@@ -69,6 +69,8 @@
     <Compile Include="MigrationGitHubRead.fs" />
     <Compile Include="MigrationImmutableReleasesRead.fsi" />
     <Compile Include="MigrationImmutableReleasesRead.fs" />
+    <Compile Include="MigrationEnvironmentCensusRead.fsi" />
+    <Compile Include="MigrationEnvironmentCensusRead.fs" />
     <Compile Include="MigrationNativeActivity.fsi" />
     <Compile Include="MigrationNativeActivity.fs" />
     <Compile Include="LifecycleProjectionAdapter.fsi" />
