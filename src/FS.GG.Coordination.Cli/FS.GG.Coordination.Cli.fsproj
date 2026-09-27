@@ -89,6 +89,8 @@
     <Compile Include="MigrationReceiverCopyBlobCapture.fs" />
     <Compile Include="MigrationReceiverAuthorityComposer.fsi" />
     <Compile Include="MigrationReceiverAuthorityComposer.fs" />
+    <Compile Include="MigrationReceiverCohortOrchestration.fsi" />
+    <Compile Include="MigrationReceiverCohortOrchestration.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
     <Compile Include="MigrationSandboxProviderObservation.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />

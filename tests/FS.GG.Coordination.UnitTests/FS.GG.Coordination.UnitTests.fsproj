@@ -83,6 +83,7 @@
     <Compile Include="MigrationNativeActivityTests.fs" />
     <Compile Include="MigrationInspectProviderAdapterTests.fs" />
     <Compile Include="MigrationReceiverAuthorityComposerTests.fs" />
+    <Compile Include="MigrationReceiverCohortOrchestrationTests.fs" />
     <Compile Include="MigrationProtectedIssueCensusAttestationTests.fs" />
     <Compile Include="MigrationProtectedIssueCensusReleaseTests.fs" />
     <Compile Include="MigrationProtectedIssueCensusNativeAttestationTests.fs" />
