@@ -21,8 +21,8 @@ module MigrationHistoricalClaimParser =
     let sourceSha256 = "ce2f01a5bf7983ff98cced126c13a6c8bf7dd7a13198c8b7fda85372b4d9868f"
 
     let private prefix = "<!-- fsgg:claim "
-    let private renewedField = "renewed="
-    let private suffix = " -->\nheld"
+    let private markerClose = " -->"
+    let private historicalTail = "\nheld"
 
     let private sha256 (value: string) =
         value
@@ -56,41 +56,53 @@ module MigrationHistoricalClaimParser =
             Error "historical-claim-body-null"
         elif not (body.StartsWith(prefix, StringComparison.Ordinal)) then
             Ok None
-        elif body.Contains(renewedField, StringComparison.Ordinal) then
-            Ok None
-        elif not (body.EndsWith(suffix, StringComparison.Ordinal)) then
-            Error "historical-claim-wire-shape"
         else
-            let fieldsText = body.Substring(prefix.Length, body.Length - prefix.Length - suffix.Length)
-            let fields = fieldsText.Split(' ', StringSplitOptions.None) |> Array.toList
+            let markerCloseAt = body.IndexOf(markerClose, prefix.Length, StringComparison.Ordinal)
 
-            match fields |> List.map splitField with
-            | [ Some("worker", worker); Some("lease", lease) ] ->
-                match parsePositiveCanonicalInt lease with
-                | Some leaseMinutes when not (String.IsNullOrWhiteSpace worker) ->
-                    Ok(
-                        Some
-                            {
-                                Worker = worker
-                                LeaseMinutes = leaseMinutes
-                                Session = None
-                                BodySha256 = sha256 body
-                            }
-                    )
-                | _ -> Error "historical-claim-field-value"
-            | [ Some("worker", worker); Some("lease", lease); Some("session", session) ] ->
-                match parsePositiveCanonicalInt lease with
-                | Some leaseMinutes
-                    when not (String.IsNullOrWhiteSpace worker)
-                         && not (String.IsNullOrWhiteSpace session) ->
-                    Ok(
-                        Some
-                            {
-                                Worker = worker
-                                LeaseMinutes = leaseMinutes
-                                Session = Some session
-                                BodySha256 = sha256 body
-                            }
-                    )
-                | _ -> Error "historical-claim-field-value"
-            | _ -> Error "historical-claim-field-shape"
+            if markerCloseAt < 0 then
+                Error "historical-claim-wire-shape"
+            else
+                let fieldsText = body.Substring(prefix.Length, markerCloseAt - prefix.Length)
+
+                let fields =
+                    fieldsText.Split(' ', StringSplitOptions.None)
+                    |> Array.toList
+                    |> List.map splitField
+
+                let tail = body.Substring(markerCloseAt + markerClose.Length)
+
+                if fields |> List.exists (function Some("renewed", _) -> true | _ -> false) then
+                    Ok None
+                elif tail <> historicalTail then
+                    Error "historical-claim-wire-shape"
+                else
+                    match fields with
+                    | [ Some("worker", worker); Some("lease", lease) ] ->
+                        match parsePositiveCanonicalInt lease with
+                        | Some leaseMinutes when not (String.IsNullOrWhiteSpace worker) ->
+                            Ok(
+                                Some
+                                    {
+                                        Worker = worker
+                                        LeaseMinutes = leaseMinutes
+                                        Session = None
+                                        BodySha256 = sha256 body
+                                    }
+                            )
+                        | _ -> Error "historical-claim-field-value"
+                    | [ Some("worker", worker); Some("lease", lease); Some("session", session) ] ->
+                        match parsePositiveCanonicalInt lease with
+                        | Some leaseMinutes
+                            when not (String.IsNullOrWhiteSpace worker)
+                                 && not (String.IsNullOrWhiteSpace session) ->
+                            Ok(
+                                Some
+                                    {
+                                        Worker = worker
+                                        LeaseMinutes = leaseMinutes
+                                        Session = Some session
+                                        BodySha256 = sha256 body
+                                    }
+                            )
+                        | _ -> Error "historical-claim-field-value"
+                    | _ -> Error "historical-claim-field-shape"

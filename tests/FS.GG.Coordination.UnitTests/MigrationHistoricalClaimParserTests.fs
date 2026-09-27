@@ -44,6 +44,15 @@ let ``retained C claim session is preserved as opaque producer data`` () =
     | result -> failwithf "unexpected parse result: %A" result
 
 [<Fact>]
+let ``renewed text inside opaque session does not select later marker format`` () =
+    let session = "renewed=opaque"
+    let body = $"<!-- fsgg:claim worker=plover-c71 lease=120 session={session} -->\nheld"
+
+    match MigrationHistoricalClaimParser.tryParse body with
+    | Ok(Some marker) -> Assert.Equal(Some session, marker.Session)
+    | result -> failwithf "unexpected parse result: %A" result
+
+[<Fact>]
 let ``non markers quoted claims and renewed markers are outside historical parser`` () =
     let rows =
         [ "ordinary comment"
@@ -60,6 +69,7 @@ let ``non markers quoted claims and renewed markers are outside historical parse
 [<InlineData("<!-- fsgg:claim worker=ghost lease=0120 -->\nheld")>]
 [<InlineData("<!-- fsgg:claim worker=ghost lease=0 -->\nheld")>]
 [<InlineData("<!-- fsgg:claim worker=ghost lease=120 unknown=x -->\nheld")>]
+[<InlineData("<!-- fsgg:claim worker=ghost lease=120 unknown=renewed=garbage -->\nheld")>]
 [<InlineData("<!-- fsgg:claim worker=ghost lease=120 -->")>]
 [<InlineData("<!-- fsgg:claim worker=ghost lease=120 -->\r\nheld")>]
 let ``anchored pre renewal claims outside retained grammar refuse`` body =
