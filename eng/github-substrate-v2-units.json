@@ -2,9 +2,9 @@
   "schema": "fsgg.coordination.roadmap-index/1",
   "roadmap": {
     "repository": "FS-GG/.github",
-    "revision": "15de6f92e501a4416e782c0d9c111351d697c3a1",
+    "revision": "2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4",
     "path": "docs/github-substrate-v2-roadmap.md",
-    "sha256": "9e9e91383d81b9aa49fb8324a6a621bfc318e41ce5e4b3bb909c18d1e7f403d8"
+    "sha256": "ada495e10996a37067ef0f28991ff72781fc17ce4e5c7020db089b0c99de329c"
   },
   "units": [
     {
@@ -1302,7 +1302,8 @@
       "gateCommands": [
         "github-callable-ordinary-delivery-contract",
         "github-callable-ordinary-delivery-recovery-contract",
-        "github-callable-isolated-operation-preparation-contract",
+        "github-callable-isolated-operation-v2-contract",
+        "github-callable-isolated-operation-v2-recovery-contract",
         "github-callable-protected-operation-acceptance"
       ],
       "gateContracts": [
@@ -1317,9 +1318,14 @@
           "commandSha256": "6c982964b7cd0151a7fd98898d8c14daf8a54b59c12ad20f31abec3dc9c73d18"
         },
         {
-          "id": "github-callable-isolated-operation-preparation-contract",
+          "id": "github-callable-isolated-operation-v2-contract",
           "qGate": "Q3",
-          "commandSha256": "86638e8f2a358503723a24a469553a8127642c275e9fd15aa24e8188fbe9c7c3"
+          "commandSha256": "9b433dfef44750b1c890a061f269792e774fabc653044514d184820ab97c11db"
+        },
+        {
+          "id": "github-callable-isolated-operation-v2-recovery-contract",
+          "qGate": "Q6",
+          "commandSha256": "72e722380033892244d9cd5a53284dee4ae93599fec86587e5129c71ba8e1199"
         },
         {
           "id": "github-callable-protected-operation-acceptance",
@@ -1327,7 +1333,7 @@
           "commandSha256": "5d4ccf0e6c28fa19dfa188c2a03a8efb2f90d18187eb1265fa6d4f5e065b9451"
         }
       ],
-      "contractSha256": "866b227dc10f051b2f9b55832e9c61989e355947b11b4eb82f7720182a2bdeff"
+      "contractSha256": "07c19ec07f8b787c8de8a2ec36235ab8d44811ec2314238585fc89bd43c93141"
     }
   ]
 }
