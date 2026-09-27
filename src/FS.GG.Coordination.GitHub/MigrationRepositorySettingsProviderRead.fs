@@ -143,6 +143,11 @@ type MigrationRepositoryCustomPropertiesRead =
       ExplicitValues: MigrationCustomPropertyValue list
       CaptureFingerprint: string }
 
+type MigrationRepositoryRulesetSurfaceRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      Rulesets: MigrationRepositoryRuleset list
+      CaptureFingerprint: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -2262,6 +2267,225 @@ module MigrationRepositorySettingsProviderRead =
                               ExplicitValues=observed.Values
                               CaptureFingerprint=captureFingerprint }))
 
+    let private rulesetRefusal failure =
+        match failure with
+        | MigrationReadFailure.HttpRefused status when status = 401 || status = 403 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized
+                $"rulesets-http:{status}")
+        | MigrationReadFailure.HttpRefused 404 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "rulesets-http:404")
+        | MigrationReadFailure.TransportUnavailable ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable
+                "rulesets-transport-unavailable")
+        | MigrationReadFailure.PaginationRefused reason ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial $"rulesets-pagination:{reason}")
+        | MigrationReadFailure.PopulationDrift ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial "rulesets-population-drift")
+        | MigrationReadFailure.MalformedResponse reason when
+            reason = "unsupported:inherited-ruleset"
+            || reason = "unsupported:push-ruleset"
+            || reason = "missing:bypass_actors"
+            || reason = "missing:conditions" ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial $"rulesets:{reason}")
+        | MigrationReadFailure.MalformedResponse reason ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable $"rulesets:{reason}")
+        | failure ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable $"rulesets:{failure}")
+
+    let private exactJsonNames required allowed (value: JsonElement) reason =
+        if value.ValueKind <> JsonValueKind.Object then refuse reason
+        else
+            let names = value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+            if Set.isSubset required names && Set.isSubset names allowed then Ok()
+            else refuse reason
+
+    let private validateRulesetRawShape (observed: MigrationRepositoryRulesets) =
+        let summaryRequired =
+            set [ "id"; "node_id"; "name"; "source_type"; "source"; "enforcement"; "updated_at" ]
+        let summaryAllowed =
+            Set.union summaryRequired (set [ "target"; "created_at"; "_links" ])
+        let validateSummaries (page: MigrationRulesetListPage) =
+            parse page.ListPayloadJson
+            |> Result.bind (fun root ->
+                if root.ValueKind <> JsonValueKind.Array then refuse "invalid:ruleset-list-shape"
+                else
+                    root.EnumerateArray()
+                    |> Seq.fold (fun state item ->
+                        state
+                        |> Result.bind (fun () ->
+                            exactJsonNames summaryRequired summaryAllowed item
+                                "unsupported:ruleset-summary-shape")) (Ok()))
+        let noParameterRules =
+            set [ "creation"; "deletion"; "non_fast_forward"
+                  "required_linear_history"; "required_signatures" ]
+        let validateDetail (ruleset: MigrationRepositoryRuleset) =
+            parse ruleset.PayloadJson
+            |> Result.bind (fun root ->
+                let detailRequired =
+                    set [ "id"; "node_id"; "name"; "target"; "source_type"; "source"
+                          "enforcement"; "updated_at"; "conditions"; "bypass_actors"; "rules" ]
+                let detailAllowed = Set.union detailRequired (set [ "created_at"; "_links" ])
+                exactJsonNames detailRequired detailAllowed root "unsupported:ruleset-detail-shape"
+                |> Result.bind (fun () ->
+                    prop "conditions" root
+                    |> Result.bind (fun conditions ->
+                        exactJsonNames (set [ "ref_name" ]) (set [ "ref_name" ]) conditions
+                            "unsupported:ruleset-conditions-shape"
+                        |> Result.bind (fun () ->
+                            prop "ref_name" conditions
+                            |> Result.bind (fun refName ->
+                                exactJsonNames (set [ "include"; "exclude" ])
+                                    (set [ "include"; "exclude" ]) refName
+                                    "unsupported:ruleset-ref-condition-shape"))))
+                |> Result.bind (fun () ->
+                    prop "bypass_actors" root
+                    |> Result.bind (fun actors ->
+                        if actors.ValueKind <> JsonValueKind.Array then
+                            refuse "invalid:ruleset-bypass-actors"
+                        else
+                            actors.EnumerateArray()
+                            |> Seq.fold (fun state actor ->
+                                state
+                                |> Result.bind (fun () ->
+                                    exactJsonNames
+                                        (set [ "actor_id"; "actor_type"; "bypass_mode" ])
+                                        (set [ "actor_id"; "actor_type"; "bypass_mode" ]) actor
+                                        "unsupported:ruleset-bypass-actor-shape")) (Ok())))
+                |> Result.bind (fun () ->
+                    prop "rules" root
+                    |> Result.bind (fun rules ->
+                        if rules.ValueKind <> JsonValueKind.Array then refuse "invalid:ruleset-rules"
+                        else
+                            rules.EnumerateArray()
+                            |> Seq.fold (fun state rule ->
+                                state
+                                |> Result.bind (fun () ->
+                                    text "type" rule
+                                    |> Result.bind (fun ruleType ->
+                                        let names = rule.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+                                        let expected =
+                                            if Set.contains ruleType noParameterRules then set [ "type" ]
+                                            else set [ "type"; "parameters" ]
+                                        if names = expected then Ok()
+                                        else refuse $"unsupported:ruleset-rule-shape:{ruleType}"))) (Ok()))))
+        observed.ListPages
+        |> List.fold (fun state page -> state |> Result.bind (fun () -> validateSummaries page)) (Ok())
+        |> Result.bind (fun () ->
+            observed.Rulesets
+            |> List.fold (fun state ruleset -> state |> Result.bind (fun () -> validateDetail ruleset)) (Ok()))
+
+    let private rulesetListPage stream (page: MigrationRulesetListPage) =
+        { SettingsStream=stream
+          SettingsRequestedUri=page.ListRequestedUri
+          SettingsPayloadJson=page.ListPayloadJson
+          SettingsPayloadSha256=page.ListPayloadSha256
+          SettingsNextUri=page.ListNextUri }
+
+    let private rulesetDetailPage stream (ruleset: MigrationRepositoryRuleset) =
+        { SettingsStream=$"{stream}-detail-{ruleset.RulesetId}"
+          SettingsRequestedUri=ruleset.DetailUri
+          SettingsPayloadJson=ruleset.PayloadJson
+          SettingsPayloadSha256=ruleset.PayloadSha256
+          SettingsNextUri=None }
+
+    let private rulesetSettings surface (ruleset: MigrationRepositoryRuleset) =
+        let subject = $"ruleset:{ruleset.RulesetId}"
+        let setting target name value =
+            { Surface=surface; Subject=target; Name=name; Value=value }
+        [ setting subject "database-id" (SettingValue.Integer ruleset.RulesetId)
+          setting subject "node-id" (SettingValue.Text ruleset.RulesetNodeId)
+          setting subject "name" (SettingValue.Text ruleset.RulesetName)
+          setting subject "target" (SettingValue.Text ruleset.Target)
+          setting subject "enforcement" (SettingValue.Text ruleset.Enforcement)
+          setting subject "updated-at" (SettingValue.Text(ruleset.UpdatedAt.ToString("O")))
+          setting subject "include-refs" (SettingValue.TextList ruleset.IncludeRefs)
+          setting subject "exclude-refs" (SettingValue.TextList ruleset.ExcludeRefs)
+          for index, actor in ruleset.BypassActors |> List.indexed do
+              let actorSubject = $"{subject}:bypass:{index}"
+              setting actorSubject "actor-id-present" (SettingValue.Boolean actor.ActorId.IsSome)
+              match actor.ActorId with
+              | Some actorId -> setting actorSubject "actor-id" (SettingValue.Integer actorId)
+              | None -> ()
+              setting actorSubject "actor-type" (SettingValue.Text actor.ActorType)
+              setting actorSubject "bypass-mode" (SettingValue.Text actor.BypassMode)
+          for index, rule in ruleset.Rules |> List.indexed do
+              let ruleSubject = $"{subject}:rule:{index}"
+              setting ruleSubject "type" (SettingValue.Text rule.RuleType)
+              setting ruleSubject "parameters-present" (SettingValue.Boolean rule.ParametersJson.IsSome)
+              match rule.ParametersJson with
+              | Some parameters -> setting ruleSubject "parameters-json" (SettingValue.Text parameters)
+              | None -> () ]
+
+    let private readRulesetSurface
+        (surface: SettingsSurface)
+        (target: string)
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) || String.IsNullOrWhiteSpace options.Token then
+            refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            let capturePass () =
+                repositoryResponse options identity repositoryRevision transport
+                |> Result.bind (fun (opening, _) ->
+                    MigrationGitHubRead.readRepositoryBranchTagRulesets options transport
+                    |> function
+                        | Error failure -> rulesetRefusal failure
+                        | Ok observed ->
+                            validateRulesetRawShape observed
+                            |> Result.bind (fun () ->
+                                repositoryResponse options identity repositoryRevision transport
+                                |> Result.bind (fun (closing, _) ->
+                                    if opening.Body <> closing.Body then
+                                        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                            "rulesets-repository-boundary-drift")
+                                    else Ok(identityPage options opening, observed))))
+            capturePass ()
+            |> Result.bind (fun first ->
+                capturePass ()
+                |> Result.bind (fun second ->
+                    if first <> second then
+                        Error(MigrationRepositorySettingsSurfaceRefusal.Partial "rulesets-pass-drift")
+                    else
+                        let repositoryPage, observed = first
+                        let selected = observed.Rulesets |> List.filter (fun item -> item.Target = target)
+                        let stream = RepositorySettingsAdapter.surfaceId surface
+                        let pages =
+                            repositoryPage
+                            :: ((observed.ListPages |> List.map (rulesetListPage $"{stream}-list"))
+                                @ (observed.Rulesets |> List.map (rulesetDetailPage stream)))
+                        let settings = selected |> List.collect (rulesetSettings surface)
+                        let fingerprint =
+                            let _, secondObserved = second
+                            [ repositoryPage.SettingsPayloadSha256
+                              yield! observed.ListPages |> List.map _.ListPayloadSha256
+                              yield! observed.Rulesets |> List.map _.PayloadSha256
+                              yield! secondObserved.ListPages |> List.map _.ListPayloadSha256
+                              yield! secondObserved.Rulesets |> List.map _.PayloadSha256 ]
+                            |> String.concat "\n"
+                            |> hashText
+                        Ok
+                            { SurfaceRead=
+                                { RepositoryIdentity=identity
+                                  RepositoryRevision=repositoryRevision
+                                  Surface=surface
+                                  Complete=true
+                                  Pages=pages
+                                  Settings=settings }
+                              Rulesets=selected
+                              CaptureFingerprint=fingerprint }))
+
+    let readBranchRulesets options identity repositoryRevision transport =
+        readRulesetSurface BranchRulesets "branch" options identity repositoryRevision transport
+
+    let readTagRulesets options identity repositoryRevision transport =
+        readRulesetSurface TagRulesets "tag" options identity repositoryRevision transport
+
 type MigrationRepositorySettingsGitHubProvider
     (options: MigrationGitHubReadOptions, transport: IMigrationGitHubReadTransport) =
     interface IMigrationRepositorySettingsSurfaceProvider with
@@ -2273,6 +2497,14 @@ type MigrationRepositorySettingsGitHubProvider
                 |> Result.map _.SurfaceRead
             | CustomProperties ->
                 MigrationRepositorySettingsProviderRead.readCustomProperties
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | BranchRulesets ->
+                MigrationRepositorySettingsProviderRead.readBranchRulesets
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | TagRulesets ->
+                MigrationRepositorySettingsProviderRead.readTagRulesets
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | MergePolicy ->
@@ -2303,6 +2535,3 @@ type MigrationRepositorySettingsGitHubProvider
                 MigrationRepositorySettingsProviderRead.readImmutableReleases
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
-            | _ ->
-                Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
-                    $"surface-reader-not-installed:{RepositorySettingsAdapter.surfaceId surface}")

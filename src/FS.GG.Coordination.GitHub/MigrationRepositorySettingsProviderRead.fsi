@@ -168,6 +168,14 @@ type MigrationRepositoryCustomPropertiesRead =
       ExplicitValues: MigrationCustomPropertyValue list
       CaptureFingerprint: string }
 
+/// One target-specific repository-owned ruleset surface. The shared repository
+/// list is exhaustive and rejects inherited or push rulesets before either
+/// branch or tag output can qualify.
+type MigrationRepositoryRulesetSurfaceRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      Rulesets: MigrationRepositoryRuleset list
+      CaptureFingerprint: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -269,6 +277,26 @@ module MigrationRepositorySettingsProviderRead =
         repositoryRevision:string ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryCustomPropertiesRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only read of all repository-owned branch rulesets, including exact
+    /// conditions, bypass actors and rule payloads. Inherited and push rulesets
+    /// refuse the shared population.
+    val readBranchRulesets:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryRulesetSurfaceRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only read of all repository-owned tag rulesets, including exact
+    /// conditions, bypass actors and rule payloads. Inherited and push rulesets
+    /// refuse the shared population.
+    val readTagRulesets:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryRulesetSurfaceRead, MigrationRepositorySettingsSurfaceRefusal>
 
 /// Concrete partial provider for the implemented repository settings surfaces.
 /// Other incomplete surfaces refuse canonical composition.

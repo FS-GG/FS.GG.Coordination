@@ -166,6 +166,30 @@ let private customPropertiesPass schema values =
       response 200 Map.empty schema
       response 200 Map.empty values ]
 
+let private settingsRulesetSummary id name target sourceType source =
+    $"{{\"id\":{id},\"node_id\":\"RRS_{id}\",\"name\":\"{name}\",\"target\":\"{target}\",\"source_type\":\"{sourceType}\",\"source\":\"{source}\",\"enforcement\":\"active\",\"updated_at\":\"2026-09-28T00:00:00Z\"}}"
+
+let private settingsRulesetDetail id name target includeRef rule =
+    $"{{\"id\":{id},\"node_id\":\"RRS_{id}\",\"name\":\"{name}\",\"target\":\"{target}\",\"source_type\":\"Repository\",\"source\":\"FS-GG/sandbox\",\"enforcement\":\"active\",\"updated_at\":\"2026-09-28T00:00:00Z\",\"conditions\":{{\"ref_name\":{{\"include\":[\"{includeRef}\"],\"exclude\":[]}}}},\"bypass_actors\":[{{\"actor_id\":7,\"actor_type\":\"Team\",\"bypass_mode\":\"always\"}}],\"rules\":[{rule}]}}"
+
+let private branchRulesetSummary =
+    settingsRulesetSummary 91L "main" "branch" "Repository" "FS-GG/sandbox"
+let private tagRulesetSummary =
+    settingsRulesetSummary 92L "release" "tag" "Repository" "FS-GG/sandbox"
+let private branchRulesetDetail =
+    settingsRulesetDetail 91L "main" "branch" "refs/heads/main" "{\"type\":\"required_signatures\"}"
+let private tagRulesetDetail =
+    settingsRulesetDetail 92L "release" "tag" "refs/tags/v*" "{\"type\":\"creation\"}"
+let private settingsRulesetList = $"[{branchRulesetSummary},{tagRulesetSummary}]"
+
+let private rulesetsPass listBody branchDetail tagDetail =
+    [ response 200 Map.empty privateRepository
+      response 200 Map.empty privateRepository
+      response 200 Map.empty listBody
+      response 200 Map.empty branchDetail
+      response 200 Map.empty tagDetail
+      response 200 Map.empty privateRepository ]
+
 let private next suffix =
     Map.ofList
         [ "link",
@@ -847,28 +871,21 @@ let ``dependency controls reader refuses forbidden missing unknown and drifted e
         MigrationRepositorySettingsProviderRead.readDependencyControls options identity revision revisionDrift)
 
 [<Fact>]
-let ``concrete provider leaves remaining unimplemented surfaces unavailable`` () =
-    let transport = FakeTransport([])
-    let provider = MigrationRepositorySettingsGitHubProvider(options, transport)
-    let source = provider :> IMigrationRepositorySettingsSurfaceProvider
-    Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
-            "surface-reader-not-installed:branch-rulesets"),
-        source.Read(identity, revision, BranchRulesets))
-    Assert.Empty(transport.Requests)
-
-    let customPass = customPropertiesPass customPropertySchema customPropertyValues
-    let closureTransport = FakeTransport(repositoryPass() @ customPass @ customPass)
+let ``concrete provider keeps canonical capture closed on conditional provenance`` () =
+    let ambiguousValues =
+        customPropertyValues.Replace("\"value\":\"development\"", "\"value\":\"production\"")
+    let customPass = customPropertiesPass customPropertySchema ambiguousValues
+    let closureTransport = FakeTransport(repositoryPass() @ customPass)
     let closureSource =
         MigrationRepositorySettingsGitHubProvider(options, closureTransport)
         :> IMigrationRepositorySettingsSurfaceProvider
     Assert.Equal(
         Error(MigrationRepositorySettingsReadFailure.ProviderRefused(
-            BranchRulesets,
-            MigrationRepositorySettingsSurfaceRefusal.Unsupported
-                "surface-reader-not-installed:branch-rulesets")),
+            CustomProperties,
+            MigrationRepositorySettingsSurfaceRefusal.Partial
+                "custom-property-explicit-or-default-source-ambiguous:environment")),
         MigrationRepositorySettingsRead.captureTwoPass identity revision closureSource)
-    Assert.Equal(10, closureTransport.Requests.Length)
+    Assert.Equal(6, closureTransport.Requests.Length)
 
 [<Fact>]
 let ``release reader refuses missing push proof and forbidden access`` () =
@@ -1147,3 +1164,128 @@ let ``custom properties reader refuses access unknown shape and two pass drift``
             "custom-properties-repository-identity-or-visibility-drift"),
         MigrationRepositorySettingsProviderRead.readCustomProperties
             options identity revision (FakeTransport(driftedPass @ driftedPass)))
+
+[<Fact>]
+let ``branch and tag ruleset readers bind private target-specific settings`` () =
+    let pass = rulesetsPass settingsRulesetList branchRulesetDetail tagRulesetDetail
+    let cases =
+        [ BranchRulesets, "branch", MigrationRepositorySettingsProviderRead.readBranchRulesets
+          TagRulesets, "tag", MigrationRepositorySettingsProviderRead.readTagRulesets ]
+    for expectedSurface, expectedTarget, read in cases do
+        let transport = FakeTransport(pass @ pass)
+        match read options identity revision transport with
+        | Error refusal -> failwithf "%s rulesets refused: %A" expectedTarget refusal
+        | Ok captured ->
+            Assert.Equal(expectedSurface, captured.SurfaceRead.Surface)
+            Assert.Single(captured.Rulesets) |> ignore
+            Assert.Equal(expectedTarget, captured.Rulesets.Head.Target)
+            Assert.Equal(4, captured.SurfaceRead.Pages.Length)
+            Assert.Equal(14, captured.SurfaceRead.Settings.Length)
+            Assert.Equal(64, captured.CaptureFingerprint.Length)
+            Assert.All(captured.SurfaceRead.Settings, fun setting ->
+                Assert.Equal(expectedSurface, setting.Surface))
+            Assert.Equal(12, transport.Requests.Length)
+
+[<Fact>]
+let ``ruleset readers refuse inherited push and hidden bypass state`` () =
+    let inherited =
+        settingsRulesetList.Replace(
+            "\"source_type\":\"Repository\",\"source\":\"FS-GG/sandbox\"",
+            "\"source_type\":\"Organization\",\"source\":\"FS-GG\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "rulesets:unsupported:inherited-ruleset"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
+                  response 200 Map.empty inherited ])))
+
+    let push = settingsRulesetList.Replace("\"target\":\"branch\"", "\"target\":\"push\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "rulesets:unsupported:push-ruleset"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
+                  response 200 Map.empty push ])))
+
+    let hiddenBypass =
+        branchRulesetDetail.Replace(",\"bypass_actors\":[{\"actor_id\":7,\"actor_type\":\"Team\",\"bypass_mode\":\"always\"}]", "")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial "rulesets:missing:bypass_actors"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
+                  response 200 Map.empty settingsRulesetList
+                  response 200 Map.empty hiddenBypass
+                  response 200 Map.empty tagRulesetDetail ])))
+
+[<Fact>]
+let ``ruleset readers refuse conditions pagination access and drift`` () =
+    let ambiguousConditions =
+        branchRulesetDetail.Replace(
+            "\"conditions\":{\"ref_name\"",
+            "\"conditions\":{\"repository_name\":{\"include\":[\"sandbox\"],\"exclude\":[]},\"ref_name\"")
+    let ambiguousPass = rulesetsPass settingsRulesetList ambiguousConditions tagRulesetDetail
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "unsupported:ruleset-conditions-shape"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision (FakeTransport ambiguousPass))
+
+    let escaped =
+        Map.ofList
+            [ "Link",
+              "<https://api.github.test/repos/FS-GG/foreign/rulesets?per_page=100&page=2&includes_parents=true>; rel=\"next\"" ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "rulesets-pagination:continuation-escaped-scope"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
+                  response 200 escaped settingsRulesetList ])))
+
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "rulesets-http:403"),
+        MigrationRepositorySettingsProviderRead.readTagRulesets
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
+                  response 403 Map.empty "{}" ])))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "rulesets-http:404"),
+        MigrationRepositorySettingsProviderRead.readTagRulesets
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
+                  response 404 Map.empty "{}" ])))
+
+    let first = rulesetsPass settingsRulesetList branchRulesetDetail tagRulesetDetail
+    let changedBranch =
+        branchRulesetDetail.Replace("\"bypass_mode\":\"always\"", "\"bypass_mode\":\"exempt\"")
+    let second = rulesetsPass settingsRulesetList changedBranch tagRulesetDetail
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial "rulesets-pass-drift"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision (FakeTransport(first @ second)))
+
+    let missingParameters =
+        branchRulesetDetail.Replace(
+            "{\"type\":\"required_signatures\"}", "{\"type\":\"pull_request\"}")
+    let missingParametersPass =
+        rulesetsPass settingsRulesetList missingParameters tagRulesetDetail
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "unsupported:ruleset-rule-shape:pull_request"),
+        MigrationRepositorySettingsProviderRead.readBranchRulesets
+            options identity revision (FakeTransport missingParametersPass))
