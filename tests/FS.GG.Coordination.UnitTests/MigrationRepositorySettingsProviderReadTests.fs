@@ -154,6 +154,18 @@ let private immutablePass enabled enforced mode selected =
       response 200 Map.empty (immutableOrganization mode)
       if mode = "selected" then response 200 Map.empty (immutableSelected selected) ]
 
+let private customPropertySchema =
+    "[{\"property_name\":\"environment\",\"url\":\"https://api.github.test/orgs/FS-GG/properties/schema/environment\",\"source_type\":\"organization\",\"value_type\":\"single_select\",\"required\":true,\"default_value\":\"production\",\"description\":\"Deployment environment\",\"allowed_values\":[\"production\",\"development\"],\"values_editable_by\":\"org_actors\",\"require_explicit_values\":true},{\"property_name\":\"teams\",\"url\":\"https://api.github.test/orgs/FS-GG/properties/schema/teams\",\"source_type\":\"organization\",\"value_type\":\"multi_select\",\"required\":false,\"default_value\":null,\"description\":null,\"allowed_values\":[\"backend\",\"frontend\"],\"values_editable_by\":\"org_and_repo_actors\",\"require_explicit_values\":false},{\"property_name\":\"approved\",\"url\":\"https://api.github.test/orgs/FS-GG/properties/schema/approved\",\"source_type\":\"organization\",\"value_type\":\"true_false\",\"required\":false,\"default_value\":null,\"description\":null,\"allowed_values\":null,\"values_editable_by\":null,\"require_explicit_values\":false}]"
+
+let private customPropertyValues =
+    "[{\"property_name\":\"environment\",\"value\":\"development\"},{\"property_name\":\"teams\",\"value\":[\"backend\"]},{\"property_name\":\"approved\",\"value\":true}]"
+
+let private customPropertiesPass schema values =
+    [ response 200 Map.empty actionsOrganizationIdentity
+      response 200 Map.empty privateRepository
+      response 200 Map.empty schema
+      response 200 Map.empty values ]
+
 let private next suffix =
     Map.ofList
         [ "link",
@@ -835,21 +847,28 @@ let ``dependency controls reader refuses forbidden missing unknown and drifted e
         MigrationRepositorySettingsProviderRead.readDependencyControls options identity revision revisionDrift)
 
 [<Fact>]
-let ``concrete provider leaves every unimplemented or partial surface unavailable`` () =
-    let transport = FakeTransport(repositoryPass())
+let ``concrete provider leaves remaining unimplemented surfaces unavailable`` () =
+    let transport = FakeTransport([])
     let provider = MigrationRepositorySettingsGitHubProvider(options, transport)
     let source = provider :> IMigrationRepositorySettingsSurfaceProvider
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
-            "surface-reader-not-installed:custom-properties"),
-        source.Read(identity, revision, CustomProperties))
+            "surface-reader-not-installed:branch-rulesets"),
+        source.Read(identity, revision, BranchRulesets))
+    Assert.Empty(transport.Requests)
+
+    let customPass = customPropertiesPass customPropertySchema customPropertyValues
+    let closureTransport = FakeTransport(repositoryPass() @ customPass @ customPass)
+    let closureSource =
+        MigrationRepositorySettingsGitHubProvider(options, closureTransport)
+        :> IMigrationRepositorySettingsSurfaceProvider
     Assert.Equal(
         Error(MigrationRepositorySettingsReadFailure.ProviderRefused(
-            CustomProperties,
+            BranchRulesets,
             MigrationRepositorySettingsSurfaceRefusal.Unsupported
-                "surface-reader-not-installed:custom-properties")),
-        MigrationRepositorySettingsRead.captureTwoPass identity revision source)
-    Assert.Equal(2, transport.Requests.Length)
+                "surface-reader-not-installed:branch-rulesets")),
+        MigrationRepositorySettingsRead.captureTwoPass identity revision closureSource)
+    Assert.Equal(10, closureTransport.Requests.Length)
 
 [<Fact>]
 let ``release reader refuses missing push proof and forbidden access`` () =
@@ -906,7 +925,7 @@ let ``immutable releases reader binds private none all and selected policies`` (
             Assert.Equal(enforced, captured.EnforcedByOwner)
             Assert.Equal(effective, captured.EffectiveEnabled)
             Assert.Equal(expectedSettings, captured.SurfaceRead.Settings.Length)
-            Assert.Equal(pass.Length * 2, captured.SurfaceRead.Pages.Length)
+            Assert.Equal(pass.Length, captured.SurfaceRead.Pages.Length)
             Assert.Equal(64, captured.CaptureFingerprint.Length)
             Assert.All(captured.SurfaceRead.Pages, fun page ->
                 Assert.Equal(64, page.SettingsPayloadSha256.Length))
@@ -996,4 +1015,135 @@ let ``immutable releases reader refuses access ambiguous absence unknown mode an
         Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
             "immutable-releases-repository-identity-drift"),
         MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport(driftedPass @ driftedPass)))
+
+[<Fact>]
+let ``custom properties reader binds private organization definitions and explicit values`` () =
+    let pass = customPropertiesPass customPropertySchema customPropertyValues
+    let transport = FakeTransport(pass @ pass)
+    match MigrationRepositorySettingsProviderRead.readCustomProperties
+              options identity revision transport with
+    | Error refusal -> failwithf "custom properties refused: %A" refusal
+    | Ok captured ->
+        Assert.Equal(7L, captured.OrganizationDatabaseId)
+        Assert.Equal("ORG_7", captured.OrganizationNodeId)
+        Assert.Equal("private", captured.RepositoryVisibility)
+        Assert.Equal(3, captured.Definitions.Length)
+        Assert.Equal(3, captured.ExplicitValues.Length)
+        Assert.Equal(64, captured.CaptureFingerprint.Length)
+        Assert.Equal(4, captured.SurfaceRead.Pages.Length)
+        Assert.Equal(33, captured.SurfaceRead.Settings.Length)
+        Assert.All(captured.Definitions, fun definition ->
+            Assert.Equal("organization", definition.SourceType)
+            Assert.True(definition.RequireExplicitValues.IsSome)
+            Assert.True(definition.ValuesEditableBy.IsSome)
+            Assert.True(definition.DefaultValue.IsSome))
+        Assert.All(captured.SurfaceRead.Pages, fun page ->
+            Assert.Equal(64, page.SettingsPayloadSha256.Length)
+            Assert.Null(page.SettingsNextUri |> Option.toObj))
+        Assert.Equal(8, transport.Requests.Length)
+
+[<Fact>]
+let ``custom properties reader refuses enterprise and omitted provenance`` () =
+    let enterprise =
+        customPropertySchema.Replace(
+            "\"source_type\":\"organization\"", "\"source_type\":\"enterprise\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "custom-properties-definition-source-or-shape-unproven"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision
+            (FakeTransport(customPropertiesPass enterprise customPropertyValues)))
+
+    let omittedDefinition =
+        customPropertySchema.Replace(",\"require_explicit_values\":false}", "}")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "custom-property-definition-provenance-omitted:teams"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision
+            (FakeTransport(customPropertiesPass omittedDefinition customPropertyValues)))
+
+    let omittedValue =
+        customPropertyValues.Replace(",{\"property_name\":\"approved\",\"value\":true}", "")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "custom-property-explicit-or-default-provenance-omitted"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision
+            (FakeTransport(customPropertiesPass customPropertySchema omittedValue)))
+
+    let ambiguousDefault =
+        customPropertyValues.Replace("\"value\":\"development\"", "\"value\":\"production\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "custom-property-explicit-or-default-source-ambiguous:environment"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision
+            (FakeTransport(customPropertiesPass customPropertySchema ambiguousDefault)))
+
+[<Fact>]
+let ``custom properties reader refuses access unknown shape and two pass drift`` () =
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:401"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision (FakeTransport([ response 401 Map.empty "{}" ])))
+    let forbidden =
+        [ response 200 Map.empty actionsOrganizationIdentity
+          response 200 Map.empty privateRepository
+          response 403 Map.empty "{}" ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "custom-properties-http:403"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision (FakeTransport forbidden))
+
+    let absent = [ response 404 Map.empty "{}" ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "http:404"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision (FakeTransport absent))
+
+    let unknownShape =
+        customPropertySchema.Replace(
+            "\"description\":\"Deployment environment\"",
+            "\"description\":\"Deployment environment\",\"future_visibility\":\"members\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "unsupported:custom-property-definition-shape:environment"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision
+            (FakeTransport(customPropertiesPass unknownShape customPropertyValues)))
+
+    let unknownVisibility =
+        privateRepository.Replace("\"visibility\":\"private\"", "\"visibility\":\"secret\"")
+    let visibilityPass =
+        [ response 200 Map.empty actionsOrganizationIdentity
+          response 200 Map.empty unknownVisibility
+          response 200 Map.empty customPropertySchema
+          response 200 Map.empty customPropertyValues ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "custom-properties-repository-identity-or-visibility-drift"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision (FakeTransport visibilityPass))
+
+    let first = customPropertiesPass customPropertySchema customPropertyValues
+    let changedValues = customPropertyValues.Replace("\"value\":true", "\"value\":false")
+    let second = customPropertiesPass customPropertySchema changedValues
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial "custom-properties-pass-drift"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
+            options identity revision (FakeTransport(first @ second)))
+
+    let driftedRepository =
+        privateRepository.Replace(revision, "2026-09-28T01:02:04Z")
+    let driftedPass =
+        [ response 200 Map.empty actionsOrganizationIdentity
+          response 200 Map.empty driftedRepository
+          response 200 Map.empty customPropertySchema
+          response 200 Map.empty customPropertyValues ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "custom-properties-repository-identity-or-visibility-drift"),
+        MigrationRepositorySettingsProviderRead.readCustomProperties
             options identity revision (FakeTransport(driftedPass @ driftedPass)))

@@ -134,6 +134,15 @@ type MigrationRepositoryImmutableReleasesRead =
       EffectiveEnabled: bool
       CaptureFingerprint: string }
 
+type MigrationRepositoryCustomPropertiesRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      OrganizationDatabaseId: int64
+      OrganizationNodeId: string
+      RepositoryVisibility: string
+      Definitions: MigrationCustomPropertyDefinition list
+      ExplicitValues: MigrationCustomPropertyValue list
+      CaptureFingerprint: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -1939,9 +1948,10 @@ module MigrationRepositorySettingsProviderRead =
                                   setting subject "database-id" (SettingValue.Integer selected.RepositoryId)
                                   setting subject "node-id" (SettingValue.Text selected.RepositoryNodeId)
                                   setting subject "full-name" (SettingValue.Text selected.FullName) ]
-                        let pages =
-                            [ yield! first.ImmutableReleasePages |> List.mapi (immutablePage 1)
-                              yield! second.ImmutableReleasePages |> List.mapi (immutablePage 2) ]
+                        // The inner reader already proved the second pass byte-for-byte
+                        // equal. Retain one pass in canonical evidence so request URIs
+                        // remain unique for MigrationRepositorySettingsRead validation.
+                        let pages = first.ImmutableReleasePages |> List.mapi (immutablePage 1)
                         Ok
                             { SurfaceRead=
                                 { RepositoryIdentity=identity
@@ -1959,6 +1969,299 @@ module MigrationRepositorySettingsProviderRead =
                               CaptureFingerprint=captured.Fingerprint }
                     | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure
 
+    let private customPropertyRefusal failure =
+        match failure with
+        | MigrationReadFailure.HttpRefused status when status = 401 || status = 403 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized
+                $"custom-properties-http:{status}")
+        | MigrationReadFailure.HttpRefused 404 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "custom-properties-http:404")
+        | MigrationReadFailure.TransportUnavailable ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable
+                "custom-properties-transport-unavailable")
+        | MigrationReadFailure.PaginationRefused reason ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                $"custom-properties-pagination:{reason}")
+        | MigrationReadFailure.MalformedResponse "invalid:property-definition" ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                "custom-properties-definition-source-or-shape-unproven")
+        | MigrationReadFailure.MalformedResponse reason ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                $"custom-properties:{reason}")
+        | MigrationReadFailure.IdentityDrift ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                "custom-properties-repository-identity-drift")
+        | failure ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                $"custom-properties:{failure}")
+
+    let private customOrganizationIdentity
+        (options: MigrationGitHubReadOptions)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        let uri = Uri(options.ApiBase, $"orgs/{Uri.EscapeDataString options.Owner}")
+        get options transport uri
+        |> Result.bind (fun response ->
+            if responseHeader "link" response.Headers |> Option.isSome then
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                    "custom-properties-organization-identity-unexpected-continuation")
+            else
+                parse response.Body
+                |> Result.bind (fun root ->
+                    match positive "id" root, text "node_id" root, text "login" root with
+                    | Ok id, Ok nodeId, Ok login when login = options.Owner ->
+                        Ok(id, nodeId,
+                           terminalPage "custom-properties-organization-identity" uri response)
+                    | Ok _, Ok _, Ok _ ->
+                        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                            "custom-properties-organization-identity-drift")
+                    | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure))
+
+    let private validateCustomRepositoryPayload
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (body: string)
+        =
+        parse body
+        |> Result.bind (fun root ->
+            match positive "id" root, text "node_id" root, text "full_name" root,
+                  text "default_branch" root, text "updated_at" root,
+                  text "visibility" root, sourceNodeId root with
+            | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok updatedAt,
+              Ok visibility, Ok source when
+                id = options.ExpectedRepositoryId
+                && id = identity.DatabaseId
+                && nodeId = identity.NodeId
+                && fullName = $"{identity.Owner}/{identity.Name}"
+                && fullName = $"{options.Owner}/{options.Repository}"
+                && defaultBranch = identity.DefaultBranch
+                && updatedAt = repositoryRevision
+                && source = identity.SourceRepositoryNodeId
+                && Set.contains visibility (set [ "public"; "private"; "internal" ]) ->
+                Ok visibility
+            | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                    "custom-properties-repository-identity-or-visibility-drift")
+            | Error failure, _, _, _, _, _, _ | _, Error failure, _, _, _, _, _
+            | _, _, Error failure, _, _, _, _ | _, _, _, Error failure, _, _, _
+            | _, _, _, _, Error failure, _, _ | _, _, _, _, _, Error failure, _
+            | _, _, _, _, _, _, Error failure -> Error failure)
+
+    let private validateCustomSchema
+        (options: MigrationGitHubReadOptions)
+        (observed: MigrationCustomProperties)
+        =
+        parse observed.SchemaPayloadJson
+        |> Result.bind (fun root ->
+            if root.ValueKind <> JsonValueKind.Array then refuse "invalid:custom-property-schema"
+            else
+                let typedByName = observed.Definitions |> List.map (fun item -> item.Name, item) |> Map.ofList
+                root.EnumerateArray()
+                |> Seq.fold (fun state item ->
+                    state
+                    |> Result.bind (fun () ->
+                        text "property_name" item
+                        |> Result.bind (fun name ->
+                            match Map.tryFind name typedByName with
+                            | None -> refuse "custom-property-schema-typed-drift"
+                            | Some definition ->
+                                let names = item.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+                                let required =
+                                    set [ "property_name"; "url"; "source_type"; "value_type"; "required"
+                                          "default_value"; "allowed_values"; "values_editable_by"
+                                          "require_explicit_values" ]
+                                let allowed = Set.add "description" required
+                                if not (Set.isSubset required names) then
+                                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                        $"custom-property-definition-provenance-omitted:{name}")
+                                elif not (Set.isSubset names allowed) then
+                                    refuse $"unsupported:custom-property-definition-shape:{name}"
+                                elif definition.SourceType <> "organization"
+                                     || definition.RequireExplicitValues.IsNone
+                                     || definition.ValuesEditableBy.IsNone
+                                     || definition.DefaultValue.IsNone then
+                                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                        $"custom-property-definition-provenance-omitted:{name}")
+                                else
+                                    text "url" item
+                                    |> Result.bind (fun url ->
+                                        let expected =
+                                            Uri(options.ApiBase,
+                                                $"orgs/{Uri.EscapeDataString options.Owner}/properties/schema/{Uri.EscapeDataString name}")
+                                                .AbsoluteUri
+                                        if url = expected then Ok()
+                                        else
+                                            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                                $"custom-property-definition-source-drift:{name}"))))) (Ok()))
+
+    let private validateCustomValues (observed: MigrationCustomProperties) =
+        parse observed.ValuesPayloadJson
+        |> Result.bind (fun root ->
+            if root.ValueKind <> JsonValueKind.Array then refuse "invalid:custom-property-values"
+            else
+                root.EnumerateArray()
+                |> Seq.fold (fun state item ->
+                    state
+                    |> Result.bind (fun () ->
+                        let names = item.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+                        if names = set [ "property_name"; "value" ] then Ok()
+                        else refuse "unsupported:custom-property-value-shape")) (Ok())
+                |> Result.bind (fun () ->
+                    let definitionNames = observed.Definitions |> List.map _.Name |> Set.ofList
+                    let valueNames = observed.Values |> List.map _.Name |> Set.ofList
+                    if definitionNames <> valueNames then
+                        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                            "custom-property-explicit-or-default-provenance-omitted")
+                    else
+                        let definitions =
+                            observed.Definitions |> List.map (fun item -> item.Name, item) |> Map.ofList
+                        observed.Values
+                        |> List.fold (fun state value ->
+                            state
+                            |> Result.bind (fun () ->
+                                let definition = definitions[value.Name]
+                                match definition.DefaultValue with
+                                | Some(Some defaultValue) when defaultValue = value.Value ->
+                                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                        $"custom-property-explicit-or-default-source-ambiguous:{value.Name}")
+                                | _ -> Ok())) (Ok())))
+
+    let private customDataSetting =
+        function
+        | MigrationCustomPropertyData.PropertyText value -> SettingValue.Text value
+        | MigrationCustomPropertyData.PropertyChoices values -> SettingValue.TextList values
+        | MigrationCustomPropertyData.PropertyFlag value -> SettingValue.Boolean value
+
+    let private customPropertyPages
+        passIndex
+        (organizationPage: MigrationRepositorySettingsPageEvidence)
+        (observed: MigrationCustomProperties)
+        =
+        [ { organizationPage with
+                SettingsStream=$"custom-properties-pass-{passIndex}-organization-identity" }
+          { SettingsStream=$"custom-properties-pass-{passIndex}-repository-identity"
+            SettingsRequestedUri=observed.IdentityUri
+            SettingsPayloadJson=observed.IdentityPayloadJson
+            SettingsPayloadSha256=observed.IdentityPayloadSha256
+            SettingsNextUri=None }
+          { SettingsStream=$"custom-properties-pass-{passIndex}-organization-schema"
+            SettingsRequestedUri=observed.SchemaUri
+            SettingsPayloadJson=observed.SchemaPayloadJson
+            SettingsPayloadSha256=observed.SchemaPayloadSha256
+            SettingsNextUri=None }
+          { SettingsStream=$"custom-properties-pass-{passIndex}-repository-values"
+            SettingsRequestedUri=observed.ValuesUri
+            SettingsPayloadJson=observed.ValuesPayloadJson
+            SettingsPayloadSha256=observed.ValuesPayloadSha256
+            SettingsNextUri=None } ]
+
+    let readCustomProperties
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) || String.IsNullOrWhiteSpace options.Token then
+            refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            let capturePass () =
+                customOrganizationIdentity options transport
+                |> Result.bind (fun (organizationId, organizationNodeId, organizationPage) ->
+                    MigrationGitHubRead.readCustomProperties options transport
+                    |> function
+                        | Error failure -> customPropertyRefusal failure
+                        | Ok observed ->
+                            match validateCustomRepositoryPayload options identity repositoryRevision
+                                      observed.IdentityPayloadJson,
+                                  validateCustomSchema options observed,
+                                  validateCustomValues observed with
+                            | Ok visibility, Ok(), Ok() ->
+                                Ok(organizationId, organizationNodeId, visibility,
+                                   organizationPage, observed)
+                            | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+            capturePass ()
+            |> Result.bind (fun first ->
+                capturePass ()
+                |> Result.bind (fun second ->
+                    if first <> second then
+                        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                            "custom-properties-pass-drift")
+                    else
+                        let organizationId, organizationNodeId, visibility,
+                            organizationPage, observed = first
+                        let _, _, _, secondOrganizationPage, secondObserved = second
+                        let captureFingerprint =
+                            [ organizationPage.SettingsPayloadSha256
+                              observed.IdentityPayloadSha256
+                              observed.SchemaPayloadSha256
+                              observed.ValuesPayloadSha256
+                              secondOrganizationPage.SettingsPayloadSha256
+                              secondObserved.IdentityPayloadSha256
+                              secondObserved.SchemaPayloadSha256
+                              secondObserved.ValuesPayloadSha256 ]
+                            |> String.concat "\n"
+                            |> hashText
+                        let setting subject name value =
+                            { Surface=CustomProperties; Subject=subject; Name=name; Value=value }
+                        let organizationSubject = $"organization:{options.Owner}"
+                        let repositorySubject = $"repository:{options.Owner}/{options.Repository}"
+                        let definitionSettings =
+                            observed.Definitions
+                            |> List.collect (fun definition ->
+                                let subject = $"property:{definition.Name}"
+                                let editable =
+                                    definition.ValuesEditableBy
+                                    |> Option.bind id
+                                    |> Option.defaultValue "null"
+                                [ setting subject "source-type" (SettingValue.Text definition.SourceType)
+                                  setting subject "value-type" (SettingValue.Text definition.ValueType)
+                                  setting subject "required" (SettingValue.Boolean definition.Required)
+                                  setting subject "require-explicit-values"
+                                      (SettingValue.Boolean definition.RequireExplicitValues.Value)
+                                  setting subject "values-editable-by" (SettingValue.Text editable)
+                                  setting subject "default-defined"
+                                      (SettingValue.Boolean definition.DefaultValue.Value.IsSome)
+                                  setting subject "allowed-values-defined"
+                                      (SettingValue.Boolean definition.AllowedValues.IsSome)
+                                  match definition.DefaultValue.Value with
+                                  | Some value -> setting subject "default-value" (customDataSetting value)
+                                  | None -> ()
+                                  match definition.AllowedValues with
+                                  | Some values -> setting subject "allowed-values" (SettingValue.TextList values)
+                                  | None -> () ])
+                        let valueSettings =
+                            observed.Values
+                            |> List.collect (fun value ->
+                                let subject = $"property:{value.Name}"
+                                [ setting subject "effective-value" (customDataSetting value.Value)
+                                  setting subject "effective-value-source"
+                                      (SettingValue.Text "repository-explicit") ])
+                        let settings =
+                            [ setting organizationSubject "database-id" (SettingValue.Integer organizationId)
+                              setting organizationSubject "node-id" (SettingValue.Text organizationNodeId)
+                              setting repositorySubject "visibility" (SettingValue.Text visibility) ]
+                            @ definitionSettings @ valueSettings
+                        Ok
+                            { SurfaceRead=
+                                { RepositoryIdentity=identity
+                                  RepositoryRevision=repositoryRevision
+                                  Surface=CustomProperties
+                                  Complete=true
+                                  // The equal second pass is a capture gate. Canonical
+                                  // evidence retains one copy of each exact request URI.
+                                  Pages=customPropertyPages 1 organizationPage observed
+                                  Settings=settings }
+                              OrganizationDatabaseId=organizationId
+                              OrganizationNodeId=organizationNodeId
+                              RepositoryVisibility=visibility
+                              Definitions=observed.Definitions
+                              ExplicitValues=observed.Values
+                              CaptureFingerprint=captureFingerprint }))
+
 type MigrationRepositorySettingsGitHubProvider
     (options: MigrationGitHubReadOptions, transport: IMigrationGitHubReadTransport) =
     interface IMigrationRepositorySettingsSurfaceProvider with
@@ -1966,6 +2269,10 @@ type MigrationRepositorySettingsGitHubProvider
             match surface with
             | SettingsSurface.Repository ->
                 MigrationRepositorySettingsProviderRead.readRepository
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | CustomProperties ->
+                MigrationRepositorySettingsProviderRead.readCustomProperties
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | MergePolicy ->

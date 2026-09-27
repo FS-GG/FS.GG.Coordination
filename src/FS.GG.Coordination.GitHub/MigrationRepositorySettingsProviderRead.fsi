@@ -156,6 +156,18 @@ type MigrationRepositoryImmutableReleasesRead =
       EffectiveEnabled: bool
       CaptureFingerprint: string }
 
+/// Organization-owned custom-property definitions and repository-explicit
+/// values from two equal provider passes. Missing values are never promoted to
+/// inherited defaults by this bounded source.
+type MigrationRepositoryCustomPropertiesRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      OrganizationDatabaseId: int64
+      OrganizationNodeId: string
+      RepositoryVisibility: string
+      Definitions: MigrationCustomPropertyDefinition list
+      ExplicitValues: MigrationCustomPropertyValue list
+      CaptureFingerprint: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -245,6 +257,18 @@ module MigrationRepositorySettingsProviderRead =
         repositoryRevision:string ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryImmutableReleasesRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only read of organization-owned definitions and complete explicit
+    /// repository values. Enterprise definitions and any omitted value or
+    /// definition provenance refuse rather than being inferred as a default.
+    /// Endpoint contracts: https://docs.github.com/en/rest/orgs/custom-properties
+    /// and https://docs.github.com/en/rest/repos/custom-properties.
+    val readCustomProperties:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryCustomPropertiesRead, MigrationRepositorySettingsSurfaceRefusal>
 
 /// Concrete partial provider for the implemented repository settings surfaces.
 /// Other incomplete surfaces refuse canonical composition.
