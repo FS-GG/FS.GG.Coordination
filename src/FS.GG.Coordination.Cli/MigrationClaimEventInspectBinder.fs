@@ -28,6 +28,33 @@ type MigrationLegacyIntakeMarker =
         PayloadSha256: string
     }
 
+type MigrationHistoricalClaimObservation =
+    {
+        SubjectNumber: int
+        CommentNodeId: string
+        Marker: MigrationHistoricalClaimMarker
+        PayloadSha256: string
+    }
+
+type MigrationLegacyReceiptObservation =
+    {
+        SubjectNumber: int
+        CommentNodeId: string
+        Location: MigrationLegacyReceiptLocation
+        Receipt: MigrationLegacyReceipt
+        PayloadSha256: string
+    }
+
+type MigrationNativeEventObservation =
+    {
+        SubjectKind: MigrationClaimNativeSubjectKind
+        StreamKind: MigrationClaimNativeStreamKind
+        SubjectNumber: int
+        NodeId: string
+        EventKind: string
+        PayloadSha256: string
+    }
+
 type MigrationClaimEventPartialCapture =
     {
         NativeFirst: MigrationNativeActivityCapture
@@ -35,13 +62,20 @@ type MigrationClaimEventPartialCapture =
         Journals: MigrationClaimJournalTwoPass
         LegacyInventory: MigrationLegacyReceiptInventory
         ClaimMarkers: MigrationLegacyClaimMarker list
+        HistoricalClaimMarkers: MigrationHistoricalClaimObservation list
+        LegacyReceipts: MigrationLegacyReceiptObservation list
         IntakeMarkers: MigrationLegacyIntakeMarker list
+        NativeEvents: MigrationNativeEventObservation list
         MissingAuthorities: string list
         Fingerprint: string
     }
 
 [<RequireQualifiedAccess>]
 module MigrationClaimEventInspectBinder =
+    type private ParsedClaimMarker =
+        | CurrentClaim of MigrationLegacyClaimMarker
+        | HistoricalClaim of MigrationHistoricalClaimObservation
+
     let private claimPattern =
         Regex(
             "^<!-- fsgg:claim worker=(?<worker>[^ ]+) lease=(?<lease>[0-9]+) renewed=(?<renewed>[0-9]+)(?: session=(?<session>[a-f0-9]{32}))?(?: prev=(?<prev>[^ ]+))?(?: pathRepo=(?<pathRepo>[^ ]+))?(?: agentContract=(?<agentContract>[^ ]+))? -->$",
@@ -102,7 +136,7 @@ module MigrationClaimEventInspectBinder =
             else
                 None)
 
-    let private parseMarker (comment: MigrationIssueCommentRecord) =
+    let private validateComment (comment: MigrationIssueCommentRecord) =
         try
             if shaText comment.PayloadJson <> comment.PayloadSha256 then
                 Error "claim-event-comment-payload"
@@ -133,12 +167,20 @@ module MigrationClaimEventInspectBinder =
 
                 if not typedMatches then
                     Error "claim-event-comment-raw-typed"
-                elif comment.Body.Contains("fsgg:claim", StringComparison.Ordinal) then
+                else
+                    Ok()
+        with
+        | :? JsonException
+        | :? InvalidOperationException -> Error "claim-event-comment-json"
+
+    let private parseMarker (comment: MigrationIssueCommentRecord) =
+        validateComment comment
+        |> Result.bind (fun () ->
+            try
+                if comment.Body.Contains("fsgg:claim", StringComparison.Ordinal) then
                     let matched = claimPattern.Match comment.Body
 
-                    if not matched.Success then
-                        Error "claim-event-unknown-claim-marker"
-                    else
+                    if matched.Success then
                         let mutable lease = 0
                         let mutable renewed = 0L
 
@@ -167,24 +209,42 @@ module MigrationClaimEventInspectBinder =
                             let session = matched.Groups["session"]
 
                             Ok(
-                                Some
-                                    {
-                                        SubjectNumber = comment.SubjectNumber
-                                        CommentNodeId = comment.NodeId
-                                        Worker = matched.Groups["worker"].Value
-                                        LeaseMinutes = lease
-                                        Renewed = renewed
-                                        SessionOperationId = if session.Success then Some session.Value else None
-                                        PayloadSha256 = comment.PayloadSha256
-                                    }
+                                Some(
+                                    CurrentClaim(
+                                        {
+                                            SubjectNumber = comment.SubjectNumber
+                                            CommentNodeId = comment.NodeId
+                                            Worker = matched.Groups["worker"].Value
+                                            LeaseMinutes = lease
+                                            Renewed = renewed
+                                            SessionOperationId = if session.Success then Some session.Value else None
+                                            PayloadSha256 = comment.PayloadSha256
+                                        }
+                                    )
+                                )
                             )
-                elif comment.Body.Contains("C-claim", StringComparison.Ordinal) then
-                    Error "claim-event-historical-claim-parser-unavailable"
+                    else
+                        MigrationHistoricalClaimParser.tryParse comment.Body
+                        |> Result.mapError (fun reason -> "claim-event-" + reason)
+                        |> Result.bind (function
+                            | Some marker ->
+                                Ok(
+                                    Some(
+                                        HistoricalClaim(
+                                            {
+                                                SubjectNumber = comment.SubjectNumber
+                                                CommentNodeId = comment.NodeId
+                                                Marker = marker
+                                                PayloadSha256 = comment.PayloadSha256
+                                            }
+                                        )
+                                    )
+                                )
+                            | None -> Error "claim-event-unknown-claim-marker")
                 else
                     Ok None
-        with
-        | :? JsonException
-        | :? InvalidOperationException -> Error "claim-event-comment-json"
+            with :? InvalidOperationException ->
+                Error "claim-event-comment-json")
 
     let private allComments (input: MigrationNativeActivityInput) =
         (input.IssueComments @ input.PullRequestComments) |> List.collect _.Comments
@@ -200,7 +260,208 @@ module MigrationClaimEventInspectBinder =
                         | Some value -> value :: values
                         | None -> values)))
             (Ok [])
+        |> Result.map (fun values ->
+            let current =
+                values
+                |> List.choose (function
+                    | CurrentClaim value -> Some value
+                    | _ -> None)
+                |> List.sortBy (fun value -> value.SubjectNumber, value.CommentNodeId)
+
+            let historical =
+                values
+                |> List.choose (function
+                    | HistoricalClaim value -> Some value
+                    | _ -> None)
+                |> List.sortBy (fun value -> value.SubjectNumber, value.CommentNodeId)
+
+            current, historical)
+
+    let private markerPrefix =
+        Regex("<!--\\s*fsgg:(?<prefix>[A-Za-z0-9:._/-]+)", RegexOptions.CultureInvariant ||| RegexOptions.Compiled)
+
+    let private knownNonReceiptPrefixes =
+        Set.ofList
+            [
+                "claim"
+                "intake:v1"
+                "review-decision"
+                "review-decision/v2"
+                "review-wait"
+                "review-wait/v1"
+                "delivery-obligation"
+                "delivery-obligations"
+            ]
+
+    let private receiptText (receipt: MigrationLegacyReceipt) =
+        match receipt with
+        | MigrationLegacyReceipt.DeliveryReceipt(id, head, evidence) ->
+            String.concat "\u001f" [ "delivery"; id; head; evidence ]
+        | MigrationLegacyReceipt.DeliveryCompletion(item, pullRequest, mergeSha, digest) ->
+            String.concat "\u001f" [ "completion"; item; string pullRequest; mergeSha; digest ]
+        | MigrationLegacyReceipt.CompletionCorrection(item, destination, observedAt, digest) ->
+            String.concat
+                "\u001f"
+                [
+                    "correction"
+                    item
+                    destination
+                    observedAt.ToUniversalTime().ToString("O")
+                    digest
+                ]
+        | MigrationLegacyReceipt.LegacyDoneReceipt -> "legacy-done"
+
+    let private parseReceipt location (comment: MigrationIssueCommentRecord) =
+        validateComment comment
+        |> Result.bind (fun () ->
+            MigrationLegacyReceiptParser.tryParse location comment.Body
+            |> Result.mapError (fun reason -> "claim-event-" + reason)
+            |> Result.bind (function
+                | Some receipt ->
+                    Ok(
+                        Some
+                            {
+                                SubjectNumber = comment.SubjectNumber
+                                CommentNodeId = comment.NodeId
+                                Location = location
+                                Receipt = receipt
+                                PayloadSha256 = comment.PayloadSha256
+                            }
+                    )
+                | None ->
+                    let prefixes =
+                        markerPrefix.Matches comment.Body
+                        |> Seq.cast<Match>
+                        |> Seq.map (fun matched -> matched.Groups["prefix"].Value)
+                        |> Seq.distinct
+                        |> Seq.toList
+
+                    match prefixes |> List.tryFind (knownNonReceiptPrefixes.Contains >> not) with
+                    | Some prefix -> Error("claim-event-unknown-marker-prefix:" + prefix)
+                    | None -> Ok None))
+
+    let private parseReceipts native =
+        let located =
+            [
+                yield!
+                    native.Input.IssueComments
+                    |> List.collect (fun stream -> stream.Comments)
+                    |> List.map (fun comment -> WorkItemComment, comment)
+                yield!
+                    native.Input.PullRequestComments
+                    |> List.collect (fun stream -> stream.Comments)
+                    |> List.map (fun comment -> PullRequestComment, comment)
+            ]
+
+        located
+        |> List.fold
+            (fun state (location, comment) ->
+                state
+                |> Result.bind (fun values ->
+                    parseReceipt location comment
+                    |> Result.map (function
+                        | Some value -> value :: values
+                        | None -> values)))
+            (Ok [])
         |> Result.map (List.sortBy (fun value -> value.SubjectNumber, value.CommentNodeId))
+
+    let private validateIssueEvent subjectKind streamKind (event: MigrationIssueEventRecord) =
+        try
+            use document = JsonDocument.Parse event.PayloadJson
+            let root = document.RootElement
+
+            let actor =
+                let mutable value = Unchecked.defaultof<JsonElement>
+
+                if not (root.TryGetProperty("actor", &value)) then
+                    None
+                elif value.ValueKind = JsonValueKind.Null then
+                    Some None
+                elif membersUnique value then
+                    Some(stringProperty "login" value)
+                else
+                    None
+
+            if
+                shaText event.PayloadJson <> event.PayloadSha256
+                || not (membersUnique root)
+                || int64Property "id" root <> Some event.DatabaseId
+                || stringProperty "node_id" root <> Some event.NodeId
+                || stringProperty "event" root <> Some event.EventKind
+                || timestampProperty "created_at" root <> Some event.CreatedAt
+                || actor <> Some event.ActorLogin
+            then
+                Error "claim-event-native-event-raw-typed"
+            else
+                Ok
+                    {
+                        SubjectKind = subjectKind
+                        StreamKind = streamKind
+                        SubjectNumber = event.SubjectNumber
+                        NodeId = event.NodeId
+                        EventKind = event.EventKind
+                        PayloadSha256 = event.PayloadSha256
+                    }
+        with
+        | :? JsonException
+        | :? InvalidOperationException -> Error "claim-event-native-event-json"
+
+    let private validateTimeline subjectKind (event: MigrationTimelineRecord) =
+        try
+            use document = JsonDocument.Parse event.PayloadJson
+            let root = document.RootElement
+
+            if
+                shaText event.PayloadJson <> event.PayloadSha256
+                || not (membersUnique root)
+                || stringProperty "node_id" root <> Some event.NodeId
+                || stringProperty "event" root <> Some event.EventKind
+            then
+                Error "claim-event-native-timeline-raw-typed"
+            else
+                Ok
+                    {
+                        SubjectKind = subjectKind
+                        StreamKind = NativeIssueTimeline
+                        SubjectNumber = event.SubjectNumber
+                        NodeId = event.NodeId
+                        EventKind = event.EventKind
+                        PayloadSha256 = event.PayloadSha256
+                    }
+        with
+        | :? JsonException
+        | :? InvalidOperationException -> Error "claim-event-native-timeline-json"
+
+    let private validateNativeEvents native =
+        let validations =
+            [
+                yield!
+                    native.Input.IssueEvents
+                    |> List.collect (fun stream -> stream.Events)
+                    |> List.map (validateIssueEvent NativeIssue NativeIssueEvents)
+                yield!
+                    native.Input.PullRequestEvents
+                    |> List.collect (fun stream -> stream.Events)
+                    |> List.map (validateIssueEvent NativePullRequest NativeIssueEvents)
+                yield!
+                    native.Input.IssueTimelines
+                    |> List.collect (fun stream -> stream.Records)
+                    |> List.map (validateTimeline NativeIssue)
+                yield!
+                    native.Input.PullRequestTimelines
+                    |> List.collect (fun stream -> stream.Records)
+                    |> List.map (validateTimeline NativePullRequest)
+            ]
+
+        validations
+        |> List.fold
+            (fun state current ->
+                state
+                |> Result.bind (fun values -> current |> Result.map (fun value -> value :: values)))
+            (Ok [])
+        |> Result.map (
+            List.sortBy (fun value -> value.SubjectKind, value.StreamKind, value.SubjectNumber, value.NodeId)
+        )
 
     let private parseIntakeMarker (issue: MigrationIssueRecord) =
         try
@@ -249,7 +510,13 @@ module MigrationClaimEventInspectBinder =
                                     PayloadSha256 = issue.PayloadSha256
                                 }
                         )
-                | true, Some _ -> Ok None
+                | true, Some value ->
+                    let unknown = markerPrefix.Match value
+
+                    if unknown.Success then
+                        Error("claim-event-unknown-marker-prefix:" + unknown.Groups["prefix"].Value)
+                    else
+                        Ok None
         with
         | :? JsonException
         | :? InvalidOperationException -> Error "claim-event-issue-json"
@@ -283,10 +550,14 @@ module MigrationClaimEventInspectBinder =
         // ca6dd7bd's IntakeReceipt.marker formats the marker passed to the issue-body
         // writer in Writes.renderIntake. The identity is the complete audited blob.
         let revision = "ca6dd7bd5d14cd3c44f54c89ee87f602c3a3abce"
+
         let uri =
             "https://api.github.com/repos/FS-GG/.github/contents/src/FS.GG.Coord.Core/IntakeReceipt.fs?ref="
             + revision
-        let identity = uri + "#sha256:6ae65a6b3b48f7f865330efca90e41a1786dd820da01c19f5623698b2761baa6"
+
+        let identity =
+            uri + "#sha256:6ae65a6b3b48f7f865330efca90e41a1786dd820da01c19f5623698b2761baa6"
+
         let intakeSources =
             inventory.Sources
             |> List.filter (fun source ->
@@ -345,7 +616,10 @@ module MigrationClaimEventInspectBinder =
         (journals: MigrationClaimJournalTwoPass)
         (inventory: MigrationLegacyReceiptInventory)
         (markers: MigrationLegacyClaimMarker list)
+        (historicalMarkers: MigrationHistoricalClaimObservation list)
+        (receipts: MigrationLegacyReceiptObservation list)
         (intakeMarkers: MigrationLegacyIntakeMarker list)
+        (nativeEvents: MigrationNativeEventObservation list)
         (missing: string list)
         =
         [
@@ -366,6 +640,28 @@ module MigrationClaimEventInspectBinder =
                         marker.PayloadSha256
                     ])
             yield!
+                historicalMarkers
+                |> List.collect (fun observation ->
+                    [
+                        string observation.SubjectNumber
+                        observation.CommentNodeId
+                        observation.Marker.Worker
+                        string observation.Marker.LeaseMinutes
+                        defaultArg observation.Marker.Session ""
+                        observation.Marker.BodySha256
+                        observation.PayloadSha256
+                    ])
+            yield!
+                receipts
+                |> List.collect (fun observation ->
+                    [
+                        string observation.SubjectNumber
+                        observation.CommentNodeId
+                        string observation.Location
+                        receiptText observation.Receipt
+                        observation.PayloadSha256
+                    ])
+            yield!
                 intakeMarkers
                 |> List.collect (fun marker ->
                     [
@@ -374,6 +670,17 @@ module MigrationClaimEventInspectBinder =
                         marker.DraftId
                         marker.DraftDigest
                         marker.PayloadSha256
+                    ])
+            yield!
+                nativeEvents
+                |> List.collect (fun observation ->
+                    [
+                        string observation.SubjectKind
+                        string observation.StreamKind
+                        string observation.SubjectNumber
+                        observation.NodeId
+                        observation.EventKind
+                        observation.PayloadSha256
                     ])
             yield! missing
         ]
@@ -400,7 +707,13 @@ module MigrationClaimEventInspectBinder =
                 MigrationClaimEventCaptureContract.validateLegacyInventory legacyInventory
                 |> Result.mapError (fun reason -> "claim-event-legacy:" + reason))
             |> Result.bind (fun _ -> parseMarkers nativeFirst)
-            |> Result.bind (fun markers ->
+            |> Result.bind (fun (markers, historicalMarkers) ->
+                parseReceipts nativeFirst
+                |> Result.map (fun receipts -> markers, historicalMarkers, receipts))
+            |> Result.bind (fun (markers, historicalMarkers, receipts) ->
+                validateNativeEvents nativeFirst
+                |> Result.map (fun nativeEvents -> markers, historicalMarkers, receipts, nativeEvents))
+            |> Result.bind (fun (markers, historicalMarkers, receipts, nativeEvents) ->
                 parseIntakeMarkers nativeFirst
                 |> Result.bind (fun intakeMarkers ->
                     if not (intakeProducerBound legacyInventory) then
@@ -433,13 +746,13 @@ module MigrationClaimEventInspectBinder =
                             | Ok _ -> []
                             | Error reason -> [ reason ]
 
-                        let historicalGap =
+                        let currentClaimGap =
                             if markers |> List.exists (_.SessionOperationId >> Option.isNone) then
                                 [ "legacy-sessionless-claim-correspondence" ]
                             else
                                 []
 
-                        let missing = producerGap @ historicalGap
+                        let missing = producerGap @ currentClaimGap
 
                         let partial =
                             {
@@ -448,7 +761,10 @@ module MigrationClaimEventInspectBinder =
                                 Journals = journals
                                 LegacyInventory = legacyInventory
                                 ClaimMarkers = markers
+                                HistoricalClaimMarkers = historicalMarkers
+                                LegacyReceipts = receipts
                                 IntakeMarkers = intakeMarkers
+                                NativeEvents = nativeEvents
                                 MissingAuthorities = missing
                                 Fingerprint = ""
                             }
@@ -462,7 +778,10 @@ module MigrationClaimEventInspectBinder =
                                         journals
                                         legacyInventory
                                         markers
+                                        historicalMarkers
+                                        receipts
                                         intakeMarkers
+                                        nativeEvents
                                         missing
                             }))
 
@@ -474,7 +793,10 @@ module MigrationClaimEventInspectBinder =
                 capture.Journals
                 capture.LegacyInventory
                 capture.ClaimMarkers
+                capture.HistoricalClaimMarkers
+                capture.LegacyReceipts
                 capture.IntakeMarkers
+                capture.NativeEvents
                 capture.MissingAuthorities
 
         if capture.Fingerprint <> expectedFingerprint then
