@@ -987,40 +987,73 @@ module MigrationInspectProviderAdapter =
            || captured.CohortSha256 <> GitHubMigrationInspect.cohortSha256 options.Cohort then
             Error "workflow-pins-provider-inventory-unbound"
         else
-            let declarations =
-                captured.First
-                |> List.map (fun snapshot ->
-                    snapshot.Receiver.ReceiverName,
-                    (snapshot.Pins
-                     |> List.map (fun pin ->
-                         { EntryPath=pin.EntryPath; PinKind=pin.PinKind })
-                     |> List.sortBy _.EntryPath))
-                |> Map.ofList
-            match bindDeclaredReceiverIdentities options
-                      (captured.First |> List.map _.Receiver)
-                      (captured.Second |> List.map _.Receiver),
-                  bindDeclaredWorkflowPins options declarations captured.First captured.Second with
-            | Ok receiverProof, Ok pinProof ->
-                let unlinked = receiverProof.Pages @ pinProof.Pages
-                let pages =
-                    unlinked
-                    |> List.mapi (fun index page ->
-                        let next =
-                            if index + 1 < unlinked.Length then
-                                Some(sha unlinked.[index + 1].RequestedUri)
-                            else None
-                        { page with NextRequestIdentitySha256=next })
-                let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
-                Ok { pinProof with
-                         Pages=pages
-                         Read={ pinProof.Read with
-                                    Authority="workflow-pins/provider-tree"
-                                    PageCount=pages.Length
-                                    ItemCount=subjects.Length
-                                    HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
-                                    Subjects=subjects } }
-            | Error reason, _ -> Error $"workflow-pins-receiver:{reason}"
-            | _, Error reason -> Error reason
+            MigrationReceiverCapture.validateSignedToolIdentityEvidence captured
+            |> Result.bind (fun () ->
+                let declarations =
+                    captured.First
+                    |> List.map (fun snapshot ->
+                        snapshot.Receiver.ReceiverName,
+                        (snapshot.Pins
+                         |> List.map (fun pin ->
+                             { EntryPath=pin.EntryPath; PinKind=pin.PinKind })
+                         |> List.sortBy _.EntryPath))
+                    |> Map.ofList
+                match bindDeclaredReceiverIdentities options
+                          (captured.First |> List.map _.Receiver)
+                          (captured.Second |> List.map _.Receiver),
+                      bindDeclaredWorkflowPins options declarations captured.First captured.Second with
+                | Ok receiverProof, Ok pinProof ->
+                    let signedSubjects =
+                        captured.SignedHeads
+                        |> List.map (fun head ->
+                            head.EvidenceRequestUri,
+                            subject $"receiver:{head.ReceiverName}:signed-head" head.CommitSha
+                                (captured.First
+                                 |> List.find (fun item -> item.Receiver.ReceiverName = head.ReceiverName)
+                                 |> _.Receiver.CommitEvidence.RawBody))
+                    let toolSubjects =
+                        captured.WorkflowTools
+                        |> List.map (fun tool ->
+                            let raw =
+                                captured.First
+                                |> List.find (fun item -> item.Receiver.ReceiverName = tool.ReceiverName)
+                                |> _.Pins
+                                |> List.find (fun pin -> pin.EntryPath = tool.WorkflowPath)
+                                |> _.RawBody
+                            tool.EvidenceRequestUri,
+                            subject $"receiver:{tool.ReceiverName}:workflow-tool:{tool.WorkflowPath}:{tool.LineNumber}"
+                                tool.Revision raw)
+                    let supplemental = signedSubjects @ toolSubjects |> List.groupBy fst |> Map.ofList
+                    let unlinked = receiverProof.Pages @ pinProof.Pages
+                    let pages =
+                        unlinked
+                        |> List.mapi (fun index page ->
+                            let next =
+                                if index + 1 < unlinked.Length then
+                                    Some(sha unlinked.[index + 1].RequestedUri)
+                                else None
+                            let extra =
+                                if unlinked |> List.take index
+                                            |> List.exists (fun previous ->
+                                                previous.RequestedUri = page.RequestedUri) then []
+                                else
+                                    supplemental
+                                    |> Map.tryFind page.RequestedUri
+                                    |> Option.defaultValue []
+                                    |> List.map snd
+                            { page with NextRequestIdentitySha256=next
+                                        Subjects=(page.Subjects @ extra) |> List.sortBy _.Identity })
+                    let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
+                    Ok { pinProof with
+                             Pages=pages
+                             Read={ pinProof.Read with
+                                        Authority="workflow-pins/provider-tree-signed-tools"
+                                        PageCount=pages.Length
+                                        ItemCount=subjects.Length
+                                        HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                                        Subjects=subjects } }
+                | Error reason, _ -> Error $"workflow-pins-receiver:{reason}"
+                | _, Error reason -> Error reason)
 
     let private allowedNativeActivityRequest (options: MigrationInspectProviderOptions) request =
         match request with

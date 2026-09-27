@@ -308,7 +308,7 @@ let private receiverIdentity =
 let private receiverRef =
     reply $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
 let private receiverCommit =
-    reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+    reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}},"verification":{{"verified":true,"reason":"valid","signature":"signed-by-copy-owner","payload":"tree {receiverTree}","verified_at":"2026-09-27T10:00:00.0000000+00:00"}}}}"""
 let private receiverTreeResponse =
     reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
 let private receiverResponses =
@@ -371,7 +371,14 @@ let ``declared receiver inspect slice refuses typed raw URI population and pass 
     | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
     | Ok _ -> failwith "Changed receiver second pass was accepted"
 
-let private pinBytes = Encoding.UTF8.GetBytes "name: controlled\n"
+let private toolRevision = String.replicate 40 "e"
+let private pinBytes =
+    Encoding.UTF8.GetBytes $"""name: controlled
+jobs:
+  check:
+    steps:
+      - uses: actions/checkout@{toolRevision}
+"""
 let private pinSha =
     Array.append (Encoding.ASCII.GetBytes($"blob {pinBytes.LongLength}\u0000")) pinBytes
     |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -458,10 +465,22 @@ let ``provider tree workflow pin census binds raw trees and blobs without claimi
     match MigrationInspectProviderAdapter.bindProviderWorkflowPins options captured with
     | Error reason -> failwithf "Provider workflow pin proof refused: %s" reason
     | Ok proof ->
-        Assert.Equal("workflow-pins/provider-tree", proof.Read.Authority)
+        Assert.Equal("workflow-pins/provider-tree-signed-tools", proof.Read.Authority)
         Assert.Equal(12, proof.Read.PageCount)
-        Assert.Equal(12, proof.Read.ItemCount)
+        Assert.Equal(14, proof.Read.ItemCount)
         Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+        Assert.True(captured.SignedToolIdentitiesBound)
+        let signed = Assert.Single(captured.SignedHeads)
+        Assert.Equal(receiverHead, signed.CommitSha)
+        Assert.Equal("valid", signed.VerificationReason)
+        let tool = Assert.Single(captured.WorkflowTools)
+        Assert.Equal("actions/checkout", tool.TargetRepository)
+        Assert.Equal(toolRevision, tool.Revision)
+        Assert.Contains(proof.Read.Subjects, fun item ->
+            item.Identity = "receiver:copy-receiver:signed-head" && item.Revision = receiverHead)
+        Assert.Contains(proof.Read.Subjects, fun item ->
+            item.Identity.StartsWith("receiver:copy-receiver:workflow-tool:")
+            && item.Revision = toolRevision)
         let expectedTreeBody =
             match pinTreeResponse with
             | Response value -> value.Body
@@ -500,6 +519,54 @@ let ``provider workflow pin census refuses an empty inferred inventory`` () =
     let transport = FakeTransport (emptyPass @ emptyPass)
     Assert.Equal(Error "missing:receiver-pin-inventory",
                  MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport)
+
+[<Fact>]
+let ``provider workflow pin census refuses unsigned heads and mutable tool identities`` () =
+    let unsignedCommit =
+        reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+    let unsignedReceiverPass =
+        [ receiverIdentity; receiverRef; unsignedCommit; pinTreeResponse; receiverRef ]
+    let unsignedPinPass =
+        [ receiverIdentity; receiverRef; unsignedCommit; pinTreeResponse; receiverRef
+          pinBody; receiverRef ]
+    let unsignedTransport =
+        FakeTransport (unsignedReceiverPass @ unsignedReceiverPass @ unsignedPinPass @ unsignedPinPass)
+    Assert.Equal(Error "missing:receiver-signed-head",
+                 MigrationReceiverCapture.captureWorkflowPinsTwoPass
+                    cohort options.Repository unsignedTransport)
+
+    let mutableBytes = Encoding.UTF8.GetBytes "steps:\n  - uses: actions/checkout@v4\n"
+    let mutableSha =
+        Array.append (Encoding.ASCII.GetBytes($"blob {mutableBytes.LongLength}\u0000")) mutableBytes
+        |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let mutableTree =
+        reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"{pinPath}","mode":"100644","type":"blob","sha":"{mutableSha}","size":{mutableBytes.Length}}}]}}"""
+    let mutableBody =
+        reply $"""{{"sha":"{mutableSha}","url":"https://api.github.test/repos/FS-GG/copy/git/blobs/{mutableSha}","encoding":"base64","content":"{Convert.ToBase64String mutableBytes}","size":{mutableBytes.Length}}}"""
+    let mutableReceiverPass =
+        [ receiverIdentity; receiverRef; receiverCommit; mutableTree; receiverRef ]
+    let mutablePinPass =
+        [ receiverIdentity; receiverRef; receiverCommit; mutableTree; receiverRef
+          mutableBody; receiverRef ]
+    let mutableTransport =
+        FakeTransport (mutableReceiverPass @ mutableReceiverPass @ mutablePinPass @ mutablePinPass)
+    match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository mutableTransport with
+    | Error reason -> Assert.StartsWith("mutable-or-invalid:workflow-tool-identity:", reason)
+    | Ok _ -> failwith "Mutable workflow tool identity was accepted"
+
+[<Fact>]
+let ``provider workflow pin binder reparses raw signed and tool identity evidence`` () =
+    let captured = readProviderWorkflowPinsTwoPass ()
+    let forgedHead =
+        { captured.SignedHeads.Head with SignatureSha256=String.replicate 64 "0" }
+    Assert.Equal(Error "workflow-pins-signed-tools-mismatch",
+                 MigrationInspectProviderAdapter.bindProviderWorkflowPins
+                    options { captured with SignedHeads=[ forgedHead ] })
+    let forgedTool =
+        { captured.WorkflowTools.Head with Revision=String.replicate 40 "f" }
+    Assert.Equal(Error "workflow-pins-signed-tools-mismatch",
+                 MigrationInspectProviderAdapter.bindProviderWorkflowPins
+                    options { captured with WorkflowTools=[ forgedTool ] })
 
 let private nativeIssue =
     """{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
