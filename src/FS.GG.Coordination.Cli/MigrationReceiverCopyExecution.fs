@@ -106,9 +106,11 @@ module MigrationReceiverCopyExecution =
             false
 
     let private appliedPath root operation = Path.Combine(root, operationName operation + ".applied")
+    let private appliedText operation attempt manifest =
+        $"fsgg.receiver-copy-execution-applied/1\n{operationName operation}\n{attempt}\n{manifest}\n"
     let private persistApplied root operation attempt manifest =
         let path = appliedPath root operation
-        let text = $"fsgg.receiver-copy-execution-applied/1\n{operationName operation}\n{attempt}\n{manifest}\n"
+        let text = appliedText operation attempt manifest
         if File.Exists path then require (File.ReadAllText path = text) "receiver-copy-execution-applied-conflict"
         else
             use stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough)
@@ -116,6 +118,14 @@ module MigrationReceiverCopyExecution =
             let bytes = Encoding.UTF8.GetBytes text
             stream.Write bytes; stream.Flush true
             syncDirectory root
+
+    let private verifyApplied root operation attempt manifest =
+        let path = appliedPath root operation
+        require (File.Exists path && isNull (FileInfo(path).LinkTarget)) "receiver-copy-execution-create-marker-missing"
+        if not (OperatingSystem.IsWindows()) then
+            let mode = File.GetUnixFileMode path
+            require ((mode &&& (UnixFileMode.GroupRead ||| UnixFileMode.GroupWrite ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute)) = enum 0) "receiver-copy-execution-create-marker-mode"
+        require (File.ReadAllText path = appliedText operation attempt manifest) "receiver-copy-execution-create-marker-binding"
 
     let private classify expected observed =
         if observed |> Map.isEmpty then "empty"
@@ -126,12 +136,13 @@ module MigrationReceiverCopyExecution =
 
     let private executeCore
         (authority: MigrationReceiverCopyExecutionAuthority)
-        (manifest: MigrationReceiverCopyTransferManifest)
+        (verifiedTransfer: MigrationReceiverCopyVerifiedTransfer)
         operation
         attemptRoot
         (transport: IMigrationReceiverCopyGitTransport)
         cutAfterReservation =
         try
+            let manifest = MigrationReceiverCopyTransfer.verifiedManifest verifiedTransfer
             validateAuthority authority; validateManifest manifest
             require transport.SupportsAtomic "receiver-copy-execution-atomic-unsupported"
             let root = ensureRoot attemptRoot
@@ -184,7 +195,8 @@ module MigrationReceiverCopyExecution =
                             Ok(receipt operation attempt manifest.Fingerprint true 1 after.Refs)
                 | code -> Error($"receiver-copy-execution-create-{code}")
             | RemoveReceiverCopies ->
-                require (File.Exists(appliedPath root CreateReceiverCopies)) "receiver-copy-execution-cleanup-without-create"
+                let createAttempt = sha256 ($"{operationName CreateReceiverCopies}\000{manifest.Fingerprint}")
+                verifyApplied root CreateReceiverCopies createAttempt manifest.Fingerprint
                 let before = read ()
                 match classify expected before.Refs with
                 | "empty" ->
@@ -207,6 +219,6 @@ module MigrationReceiverCopyExecution =
                 | code -> Error($"receiver-copy-execution-cleanup-{code}")
         with ex -> Error ex.Message
 
-    let execute authority manifest operation attemptRoot transport = executeCore authority manifest operation attemptRoot transport false
-    let internal executeWithCutForTests authority manifest operation attemptRoot transport cutAfterReservation =
-        executeCore authority manifest operation attemptRoot transport cutAfterReservation
+    let execute authority verifiedTransfer operation attemptRoot transport = executeCore authority verifiedTransfer operation attemptRoot transport false
+    let internal executeWithCutForTests authority verifiedTransfer operation attemptRoot transport cutAfterReservation =
+        executeCore authority verifiedTransfer operation attemptRoot transport cutAfterReservation

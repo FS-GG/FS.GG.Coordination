@@ -34,14 +34,17 @@ let private withTemp action =
     try action root
     finally if Directory.Exists root then Directory.Delete(root, true)
 
-let private prepare root =
-    let receivers =
-        [ for id in receiverIds ->
+let private receivers =
+    [ for id in receiverIds ->
             id, $"FS-GG/FS.GG.{id}", String.replicate 40 (string ((id.Length % 9) + 1)), "", refsPrefix + id,
             [ "README.md", "100644", "blob", Text.Encoding.UTF8.GetBytes($"receiver {id}\n")
               ".github/workflows/test.yml", "100644", "blob", Text.Encoding.UTF8.GetBytes($"name: {id}\n")
               "tools/run.sh", "100755", "blob", Text.Encoding.UTF8.GetBytes("#!/bin/sh\n") ] ]
-    MigrationReceiverCopyTransfer.prepareSyntheticForTests run (String.replicate 64 "c") (String.replicate 64 "d") (Path.Combine(root, "source.git")) receivers |> unwrap
+let private prepare root =
+    let store = Path.Combine(root, "source.git")
+    let manifest = MigrationReceiverCopyTransfer.prepareSyntheticForTests run (String.replicate 64 "c") (String.replicate 64 "d") store receivers |> unwrap
+    let verified = MigrationReceiverCopyTransfer.verifySyntheticForTests run (String.replicate 64 "c") (String.replicate 64 "d") store receivers manifest |> unwrap
+    manifest, verified
 
 let private bare root name =
     let path = Path.Combine(root, name)
@@ -55,7 +58,7 @@ let private authority =
 [<Fact>]
 let ``seven deterministic parentless copies roundtrip through one local atomic create and cleanup`` () =
     withTemp (fun root ->
-        let manifest = prepare root
+        let manifest, verified = prepare root
         Assert.Equal(7, manifest.DerivedRefs.Length)
         Assert.All(manifest.DerivedRefs, fun row ->
             Assert.Equal(row.DerivedCommit, git manifest.ObjectStorePath [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ])
@@ -64,16 +67,16 @@ let ``seven deterministic parentless copies roundtrip through one local atomic c
         git manifest.ObjectStorePath [ "push"; target; manifest.DerivedRefs.Head.DerivedCommit + ":refs/heads/unrelated" ] |> ignore
         let transport = MigrationReceiverCopyGitTransport.localBare target |> unwrap
         let attempts = Path.Combine(root, "attempts")
-        let created = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies attempts transport |> unwrap
+        let created = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap
         Assert.True(created.Applied); Assert.Equal(1, created.DispatchCount); Assert.Equal(7, created.Refs.Count)
-        let replay = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies attempts transport |> unwrap
+        let replay = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap
         Assert.Equal(0, replay.DispatchCount)
-        let read = MigrationReceiverCopyExecution.execute authority manifest ReadReceiverCopies attempts transport |> unwrap
+        let read = MigrationReceiverCopyExecution.execute authority verified ReadReceiverCopies attempts transport |> unwrap
         Assert.True(created.Refs = read.Refs)
-        let removed = MigrationReceiverCopyExecution.execute authority manifest RemoveReceiverCopies attempts transport |> unwrap
+        let removed = MigrationReceiverCopyExecution.execute authority verified RemoveReceiverCopies attempts transport |> unwrap
         Assert.Equal(1, removed.DispatchCount); Assert.Empty(removed.Refs)
         Assert.Equal(manifest.DerivedRefs.Head.DerivedCommit, git target [ "rev-parse"; "refs/heads/unrelated" ])
-        let removedReplay = MigrationReceiverCopyExecution.execute authority manifest RemoveReceiverCopies attempts transport |> unwrap
+        let removedReplay = MigrationReceiverCopyExecution.execute authority verified RemoveReceiverCopies attempts transport |> unwrap
         Assert.Equal(0, removedReplay.DispatchCount))
 
 type private LostResponse(inner: IMigrationReceiverCopyGitTransport) =
@@ -90,40 +93,76 @@ type private LostResponse(inner: IMigrationReceiverCopyGitTransport) =
 [<Fact>]
 let ``lost response is reconciled by readback and never resent`` () =
     withTemp (fun root ->
-        let manifest, target = prepare root, bare root "target.git"
+        let (manifest, verified), target = prepare root, bare root "target.git"
         let lost = LostResponse(MigrationReceiverCopyGitTransport.localBare target |> unwrap)
         let attempts = Path.Combine(root, "attempts")
-        let first = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies attempts (lost :> IMigrationReceiverCopyGitTransport)
+        let first = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts (lost :> IMigrationReceiverCopyGitTransport)
         Assert.Equal(Error "simulated-lost-response", first)
-        let replay = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies attempts (lost :> IMigrationReceiverCopyGitTransport) |> unwrap
+        let replay = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts (lost :> IMigrationReceiverCopyGitTransport) |> unwrap
         Assert.Equal(0, replay.DispatchCount); Assert.Equal(1, lost.Pushes))
 
 [<Fact>]
 let ``reservation interruption never causes a blind resend`` () =
     withTemp (fun root ->
-        let manifest, target = prepare root, bare root "target.git"
+        let (_, verified), target = prepare root, bare root "target.git"
         let transport = MigrationReceiverCopyGitTransport.localBare target |> unwrap
         let attempts = Path.Combine(root, "attempts")
-        let cut = MigrationReceiverCopyExecution.executeWithCutForTests authority manifest CreateReceiverCopies attempts transport true
+        let cut = MigrationReceiverCopyExecution.executeWithCutForTests authority verified CreateReceiverCopies attempts transport true
         Assert.Equal(Error "receiver-copy-execution-cut-after-reservation", cut)
-        let replay = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies attempts transport
+        let replay = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport
         Assert.Equal(Error "receiver-copy-execution-recovery-absent", replay))
 
 [<Fact>]
 let ``authority atomic and exact mapping controls fail closed`` () =
     withTemp (fun root ->
-        let manifest, target = prepare root, bare root "target.git"
+        let (manifest, verified), target = prepare root, bare root "target.git"
         let transport = MigrationReceiverCopyGitTransport.localBare target |> unwrap
         let attempt name auth value =
             let result = MigrationReceiverCopyExecution.execute auth value CreateReceiverCopies (Path.Combine(root, name)) transport
             Assert.True(Result.isError result)
-        attempt "no-workflows" { authority with WorkflowsWrite = false } manifest
-        attempt "actions-enabled" { authority with ActionsSuppressed = false } manifest
-        attempt "no-custody" { authority with ProtectedCustody = false } manifest
-        let first = manifest.DerivedRefs.Head
-        attempt "mapping" authority { manifest with DerivedRefs = { first with DerivedRef = first.DerivedRef + "-foreign" } :: manifest.DerivedRefs.Tail }
+        attempt "no-workflows" { authority with WorkflowsWrite = false } verified
+        attempt "actions-enabled" { authority with ActionsSuppressed = false } verified
+        attempt "no-custody" { authority with ProtectedCustody = false } verified
         let unsupported = MigrationReceiverCopyGitTransport.localBareWithAtomicSupportForTests target false |> unwrap
-        Assert.Equal(Error "receiver-copy-execution-atomic-unsupported", MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies (Path.Combine(root, "unsupported")) unsupported))
+        Assert.Equal(Error "receiver-copy-execution-atomic-unsupported", MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies (Path.Combine(root, "unsupported")) unsupported))
+
+[<Fact>]
+let ``self-consistent caller substitutions cannot become verified transfer authority`` () =
+    withTemp (fun root ->
+        let manifest, _ = prepare root
+        let first = manifest.DerivedRefs.Head
+        let candidates =
+            [ { manifest with DerivedRefs = { first with SourceRepository = first.SourceRepository + "-foreign" } :: manifest.DerivedRefs.Tail }
+              { manifest with DerivedRefs = { first with DerivedCommit = String.replicate 40 "f" } :: manifest.DerivedRefs.Tail }
+              { manifest with ObjectStorePath = Path.Combine(root, "substituted.git") }
+              { manifest with BlobSha256BySha1 = manifest.BlobSha256BySha1 |> Map.add (manifest.BlobSha256BySha1.Keys |> Seq.head) (String.replicate 64 "e") } ]
+            |> List.map MigrationReceiverCopyTransfer.recomputeFingerprintForTests
+        for candidate in candidates do
+            let result = MigrationReceiverCopyTransfer.verifySyntheticForTests run (String.replicate 64 "c") (String.replicate 64 "d") (Path.Combine(root, "source.git")) receivers candidate
+            Assert.True(Result.isError result))
+
+[<Fact>]
+let ``cleanup refuses corrupt stale and foreign create markers before delete`` () =
+    withTemp (fun root ->
+        for kind in [ "corrupt"; "stale"; "foreign" ] do
+            let caseRoot = Path.Combine(root, kind)
+            Directory.CreateDirectory caseRoot |> ignore
+            let manifest, verified = prepare caseRoot
+            let target = bare caseRoot "target.git"
+            let transport = MigrationReceiverCopyGitTransport.localBare target |> unwrap
+            let attempts = Path.Combine(caseRoot, "attempts")
+            MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap |> ignore
+            let marker = Path.Combine(attempts, "create.applied")
+            let lines = File.ReadAllLines marker
+            match kind with
+            | "corrupt" -> lines[0] <- "unknown-schema"
+            | "stale" -> lines[2] <- String.replicate 64 "1"
+            | _ -> lines[3] <- String.replicate 64 "2"
+            File.WriteAllText(marker, String.Join('\n', lines) + "\n")
+            let cleanup = MigrationReceiverCopyExecution.execute authority verified RemoveReceiverCopies attempts transport
+            Assert.True(Result.isError cleanup)
+            let readback = MigrationReceiverCopyExecution.execute authority verified ReadReceiverCopies attempts transport |> unwrap
+            Assert.Equal(7, readback.Refs.Count))
 
 type private ControlledTransport(initial: Map<string, string>) =
     let mutable refs = initial
@@ -143,7 +182,7 @@ type private ControlledTransport(initial: Map<string, string>) =
 [<Fact>]
 let ``mixed wrong and unknown receiver refs refuse with zero dispatch`` () =
     withTemp (fun root ->
-        let manifest = prepare root
+        let manifest, verified = prepare root
         let expected = manifest.DerivedRefs |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
         let cases =
             [ "mixed", expected |> Map.remove manifest.DerivedRefs.Head.DerivedRef
@@ -151,7 +190,7 @@ let ``mixed wrong and unknown receiver refs refuse with zero dispatch`` () =
               "unknown", expected |> Map.add (refsPrefix + "foreign") (String.replicate 40 "e") ]
         for name, refs in cases do
             let transport = ControlledTransport refs
-            let result = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies (Path.Combine(root, name)) (transport :> IMigrationReceiverCopyGitTransport)
+            let result = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies (Path.Combine(root, name)) (transport :> IMigrationReceiverCopyGitTransport)
             Assert.True(Result.isError result); Assert.Equal(0, transport.Pushes))
 
 [<Fact>]
@@ -182,12 +221,16 @@ let ``complete accepted 8999 object corpus reconstructs all seven copies`` () =
         let coverage = MigrationReceiverCopyBlobCapture.verifyCoverage evidence actualRun copyPlan batches artifacts |> unwrap
         Assert.Equal(8999, coverage.ReceiverCopyBlobCoverageSha256BySha1.Count)
         withTemp (fun root ->
-            let manifest = MigrationReceiverCopyTransfer.prepare evidence actualRun copyPlan batches artifacts coverage (Path.Combine(root, "source.git")) |> unwrap
+            let objectStore = Path.Combine(Path.GetTempPath(), $"gs2-09-7-receiver-transfer-{actualRun.RunNonce}.git")
+            if Directory.Exists objectStore then Directory.Delete(objectStore, true)
+            let manifest = MigrationReceiverCopyTransfer.prepare evidence actualRun copyPlan batches artifacts coverage objectStore |> unwrap
+            let verified = MigrationReceiverCopyTransfer.verify evidence actualRun copyPlan batches artifacts coverage manifest |> unwrap
             Assert.Equal(7, manifest.DerivedRefs.Length)
             Assert.Equal(9836, manifest.DerivedRefs |> List.sumBy _.BlobCount)
             let target = bare root "target.git"
             let transport = MigrationReceiverCopyGitTransport.localBare target |> unwrap
-            let created = MigrationReceiverCopyExecution.execute authority manifest CreateReceiverCopies (Path.Combine(root, "attempts")) transport |> unwrap
+            let created = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies (Path.Combine(root, "attempts")) transport |> unwrap
             Assert.Equal(7, created.Refs.Count)
-            let removed = MigrationReceiverCopyExecution.execute authority manifest RemoveReceiverCopies (Path.Combine(root, "attempts")) transport |> unwrap
-            Assert.Empty(removed.Refs))
+            let removed = MigrationReceiverCopyExecution.execute authority verified RemoveReceiverCopies (Path.Combine(root, "attempts")) transport |> unwrap
+            Assert.Empty(removed.Refs)
+            Directory.Delete(objectStore, true))

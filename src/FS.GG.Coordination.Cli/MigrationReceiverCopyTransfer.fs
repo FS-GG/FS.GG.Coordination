@@ -28,6 +28,8 @@ type MigrationReceiverCopyTransferManifest =
       DerivedRefs: MigrationReceiverCopyDerivedRef list
       Fingerprint: string }
 
+type MigrationReceiverCopyVerifiedTransfer = private MigrationReceiverCopyVerifiedTransfer of MigrationReceiverCopyTransferManifest
+
 [<RequireQualifiedAccess>]
 module MigrationReceiverCopyTransfer =
     [<Literal>]
@@ -45,6 +47,72 @@ module MigrationReceiverCopyTransfer =
             hash.AppendData(BitConverter.GetBytes(System.Net.IPAddress.HostToNetworkOrder bytes.Length))
             hash.AppendData bytes
         hash.GetHashAndReset() |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private manifestFingerprint target runNonce planFingerprint coverageFingerprint coverageDigests objectStorePath rows =
+        fingerprint (seq {
+            yield "fsgg.receiver-copy-transfer-manifest/1"; yield target; yield runNonce
+            yield planFingerprint; yield coverageFingerprint; yield objectStorePath
+            for KeyValue(objectId, digest) in coverageDigests do yield objectId; yield digest
+            for row in rows do
+                yield row.ReceiverCopyId; yield row.SourceRepository; yield row.SourceCommit; yield row.SourceTree
+                yield row.DerivedRef; yield row.DerivedTree; yield row.DerivedCommit; yield string row.BlobCount })
+
+    let private commitMessage sourceRepository sourceCommit sourceTree planFingerprint runNonce =
+        String.concat "\n"
+            [ "FS.GG receiver copy"; ""; $"Original-Repository: {sourceRepository}"
+              $"Original-Commit: {sourceCommit}"; $"Original-Tree: {sourceTree}"
+              $"Copy-Plan-Fingerprint: {planFingerprint}"; $"Copy-Run-Nonce: {runNonce}"
+              "Source-Ancestry-Replicated: false"; "" ]
+
+    let private treeSha (entries: (string * string * string) list) =
+        use body = new MemoryStream()
+        for mode, _, objectId, name in
+            entries
+            |> List.map (fun (path, mode, objectId) -> mode, (if mode = "040000" then "tree" else "blob"), objectId, Path.GetFileName path)
+            |> List.sortBy (fun (_, kind, _, name) -> utf8.GetBytes(name + if kind = "tree" then "/" else "") |> Convert.ToHexString) do
+            let storedMode = if mode = "040000" then "40000" else mode
+            let prefix = utf8.GetBytes($"{storedMode} {name}\000")
+            body.Write(prefix, 0, prefix.Length)
+            let raw = Convert.FromHexString objectId
+            body.Write(raw, 0, raw.Length)
+        let bytes = body.ToArray()
+        let header = utf8.GetBytes($"tree {bytes.Length}\000")
+        SHA1.HashData(Array.append header bytes) |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let private predictRows run planFingerprint receiverBytes =
+        [ for receiverId, sourceRepository, sourceCommit, sourceTree, desiredRef, entries in receiverBytes do
+            let objectIds = Dictionary<string, string>(StringComparer.Ordinal)
+            let blobModes = entries |> List.map (fun (path, mode, _, _) -> path, mode) |> Map.ofList
+            for path, _, _, bytes in entries do objectIds[path] <- blobSha1 bytes
+            let directoryPaths =
+                entries |> List.map (fun (path, _, _, _) -> path)
+                |> List.collect (fun path -> let parts = path.Split('/') in [ for count in 1 .. parts.Length - 1 -> String.Join('/', parts[0..count-1]) ])
+                |> Set.ofList |> Set.toList |> List.sortByDescending (fun path -> path.Split('/').Length)
+            for directory in directoryPaths do
+                let prefix = directory + "/"
+                let children =
+                    [ for KeyValue(path, objectId) in objectIds do
+                        if path.StartsWith(prefix, StringComparison.Ordinal) && not ((path.Substring(prefix.Length)).Contains('/')) then
+                            yield path, (if directoryPaths |> List.contains path then "040000" else blobModes[path]), objectId ]
+                objectIds[directory] <- treeSha children
+            let roots =
+                [ for KeyValue(path, objectId) in objectIds do
+                    if not (path.Contains('/')) then yield path, (if directoryPaths |> List.contains path then "040000" else blobModes[path]), objectId ]
+            let derivedTree = treeSha roots
+            let boundSourceTree = if String.IsNullOrEmpty sourceTree then derivedTree else sourceTree
+            require (derivedTree = boundSourceTree) "receiver-copy-transfer-tree-drift"
+            let message = commitMessage sourceRepository sourceCommit boundSourceTree planFingerprint run.RunNonce
+            let body =
+                String.concat ""
+                    [ $"tree {derivedTree}\n"
+                      "author FS.GG Migration Copy <migration-copy@invalid> 946684800 +0000\n"
+                      "committer FS.GG Migration Copy <migration-copy@invalid> 946684800 +0000\n\n"
+                      message ] |> utf8.GetBytes
+            let header = utf8.GetBytes($"commit {body.Length}\000")
+            let commit = SHA1.HashData(Array.append header body) |> Convert.ToHexString |> _.ToLowerInvariant()
+            yield { ReceiverCopyId = receiverId; SourceRepository = sourceRepository; SourceCommit = sourceCommit
+                    SourceTree = boundSourceTree; DerivedRef = desiredRef; DerivedTree = derivedTree
+                    DerivedCommit = commit; BlobCount = entries.Length } ] |> List.sortBy _.ReceiverCopyId
 
     let private configure (info: ProcessStartInfo) =
         info.UseShellExecute <- false
@@ -108,6 +176,7 @@ module MigrationReceiverCopyTransfer =
         (receiverBytes: (string * string * string * string * string * (string * string * string * byte array) list) list) =
         try
             let repository = initializeStore root
+            let predicted = predictRows run planFingerprint receiverBytes |> List.map (fun row -> row.ReceiverCopyId, row) |> Map.ofList
             let derived = ResizeArray<MigrationReceiverCopyDerivedRef>()
             for receiverId, sourceRepository, sourceCommit, sourceTree, desiredRef, entries in receiverBytes do
                 require (not entries.IsEmpty) "receiver-copy-transfer-empty-tree"
@@ -143,17 +212,7 @@ module MigrationReceiverCopyTransfer =
                 let derivedTree = tree repository roots
                 let boundSourceTree = if String.IsNullOrEmpty sourceTree then derivedTree else sourceTree
                 require (derivedTree = boundSourceTree) "receiver-copy-transfer-tree-drift"
-                let message =
-                    String.concat "\n"
-                        [ "FS.GG receiver copy"
-                          ""
-                          $"Original-Repository: {sourceRepository}"
-                          $"Original-Commit: {sourceCommit}"
-                          $"Original-Tree: {boundSourceTree}"
-                          $"Copy-Plan-Fingerprint: {planFingerprint}"
-                          $"Copy-Run-Nonce: {run.RunNonce}"
-                          "Source-Ancestry-Replicated: false"
-                          "" ]
+                let message = commitMessage sourceRepository sourceCommit boundSourceTree planFingerprint run.RunNonce
                 let infoEnv =
                     [ "GIT_AUTHOR_NAME", "FS.GG Migration Copy"
                       "GIT_AUTHOR_EMAIL", "migration-copy@invalid"
@@ -177,19 +236,15 @@ module MigrationReceiverCopyTransfer =
                 let parents = git repository [ "rev-list"; "--parents"; "-n"; "1"; commit ]
                 require (parents = commit) "receiver-copy-transfer-commit-parent"
                 require (git repository [ "rev-parse"; $"{commit}^{{tree}}" ] = derivedTree) "receiver-copy-transfer-commit-tree"
+                require (predicted[receiverId].DerivedCommit = commit) "receiver-copy-transfer-predicted-commit"
                 derived.Add
                     { ReceiverCopyId = receiverId; SourceRepository = sourceRepository; SourceCommit = sourceCommit
                       SourceTree = boundSourceTree; DerivedRef = desiredRef; DerivedTree = derivedTree
                       DerivedCommit = commit; BlobCount = entries.Length }
             let rows = derived |> Seq.sortBy _.ReceiverCopyId |> List.ofSeq
             require (rows.Length = (rows |> List.map _.DerivedRef |> Set.ofList |> Set.count)) "receiver-copy-transfer-ref-duplicate"
-            let digest = fingerprint (seq {
-                yield "fsgg.receiver-copy-transfer-manifest/1"; yield target; yield run.RunNonce
-                yield planFingerprint; yield coverageFingerprint
-                for KeyValue(objectId, digest) in coverageDigests do yield objectId; yield digest
-                for row in rows do
-                    yield row.ReceiverCopyId; yield row.SourceRepository; yield row.SourceCommit; yield row.SourceTree
-                    yield row.DerivedRef; yield row.DerivedTree; yield row.DerivedCommit; yield string row.BlobCount })
+            require (rows = (predicted |> Map.values |> List.ofSeq)) "receiver-copy-transfer-predicted-rows"
+            let digest = manifestFingerprint target run.RunNonce planFingerprint coverageFingerprint coverageDigests repository rows
             Ok { Schema = "fsgg.receiver-copy-transfer-manifest/1"; TargetRepository = target; RunIdentity = run
                  PlanFingerprint = planFingerprint; BlobCoverageFingerprint = coverageFingerprint; BlobSha256BySha1 = coverageDigests
                  ObjectStorePath = repository; DerivedRefs = rows; Fingerprint = digest }
@@ -202,6 +257,9 @@ module MigrationReceiverCopyTransfer =
             |> Result.bind (fun verifiedCoverage ->
                 if verifiedCoverage <> coverage then Error "receiver-copy-transfer-coverage-drift"
                 else Ok(verifiedPlan, verifiedCoverage)))
+
+    let private canonicalObjectStore (run: MigrationSandboxSeedRequest) =
+        Path.Combine(Path.GetTempPath(), $"gs2-09-7-receiver-transfer-{run.RunNonce}.git") |> Path.GetFullPath
 
     let private loadReceivers (source: IMigrationReceiverCopyVerifiedObjectSource) (plan: MigrationReceiverCopyPlanResult) (coverage: MigrationReceiverCopyBlobCoverage) =
         [ for mapping in plan.ReceiverCopyMappings do
@@ -223,36 +281,62 @@ module MigrationReceiverCopyTransfer =
     let prepare acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage objectStoreRoot =
         verifiedInputs acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage
         |> Result.bind (fun (verifiedPlan, verifiedCoverage) ->
-            MigrationReceiverCopyBlobCapture.createVerifiedCompleteObjectSource acceptedEvidence runIdentity verifiedPlan batches artifacts verifiedCoverage
-            |> Result.bind (fun source ->
-                use source = source
-                try loadReceivers source verifiedPlan verifiedCoverage |> materialize runIdentity verifiedPlan.ReceiverCopyFingerprint verifiedCoverage.ReceiverCopyBlobCoverageFingerprint verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1 objectStoreRoot
-                with ex -> Error ex.Message))
+            try
+                require (Path.GetFullPath objectStoreRoot = canonicalObjectStore runIdentity) "receiver-copy-transfer-store-path"
+                MigrationReceiverCopyBlobCapture.createVerifiedCompleteObjectSource acceptedEvidence runIdentity verifiedPlan batches artifacts verifiedCoverage
+                |> Result.bind (fun source ->
+                    use source = source
+                    try loadReceivers source verifiedPlan verifiedCoverage |> materialize runIdentity verifiedPlan.ReceiverCopyFingerprint verifiedCoverage.ReceiverCopyBlobCoverageFingerprint verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1 objectStoreRoot
+                    with ex -> Error ex.Message)
+            with ex -> Error ex.Message)
 
     let verify acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage observed =
         verifiedInputs acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage
         |> Result.bind (fun (verifiedPlan, verifiedCoverage) ->
-            try
-                require (observed.Schema = "fsgg.receiver-copy-transfer-manifest/1" && observed.TargetRepository = target) "receiver-copy-transfer-manifest-shape"
-                require (observed.RunIdentity = runIdentity && observed.PlanFingerprint = verifiedPlan.ReceiverCopyFingerprint && observed.BlobCoverageFingerprint = verifiedCoverage.ReceiverCopyBlobCoverageFingerprint) "receiver-copy-transfer-manifest-binding"
-                require (observed.BlobSha256BySha1 = verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1) "receiver-copy-transfer-blob-coverage"
-                require (observed.DerivedRefs.Length = 7) "receiver-copy-transfer-receiver-count"
-                for row in observed.DerivedRefs do
-                    require (git observed.ObjectStorePath [ "rev-parse"; row.DerivedRef ] = row.DerivedCommit) "receiver-copy-transfer-ref-drift"
-                    require (git observed.ObjectStorePath [ "rev-parse"; $"{row.DerivedCommit}^{{tree}}" ] = row.DerivedTree) "receiver-copy-transfer-tree-readback"
-                    require (git observed.ObjectStorePath [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ] = row.DerivedCommit) "receiver-copy-transfer-parent-readback"
-                let expectedFingerprint = fingerprint (seq {
-                    yield observed.Schema; yield target; yield runIdentity.RunNonce; yield observed.PlanFingerprint; yield observed.BlobCoverageFingerprint
-                    for KeyValue(objectId, digest) in observed.BlobSha256BySha1 do yield objectId; yield digest
-                    for row in observed.DerivedRefs |> List.sortBy _.ReceiverCopyId do
-                        yield row.ReceiverCopyId; yield row.SourceRepository; yield row.SourceCommit; yield row.SourceTree
-                        yield row.DerivedRef; yield row.DerivedTree; yield row.DerivedCommit; yield string row.BlobCount })
-                require (observed.Fingerprint = expectedFingerprint) "receiver-copy-transfer-manifest-fingerprint"
-                Ok observed
-            with ex -> Error ex.Message)
+            MigrationReceiverCopyBlobCapture.createVerifiedCompleteObjectSource acceptedEvidence runIdentity verifiedPlan batches artifacts verifiedCoverage
+            |> Result.bind (fun source ->
+                use source = source
+                try
+                    let receiverBytes = loadReceivers source verifiedPlan verifiedCoverage
+                    let expectedRows = predictRows runIdentity verifiedPlan.ReceiverCopyFingerprint receiverBytes
+                    let expectedPath = canonicalObjectStore runIdentity
+                    require (observed.Schema = "fsgg.receiver-copy-transfer-manifest/1" && observed.TargetRepository = target) "receiver-copy-transfer-manifest-shape"
+                    require (observed.RunIdentity = runIdentity && observed.PlanFingerprint = verifiedPlan.ReceiverCopyFingerprint && observed.BlobCoverageFingerprint = verifiedCoverage.ReceiverCopyBlobCoverageFingerprint) "receiver-copy-transfer-manifest-binding"
+                    require (observed.BlobSha256BySha1 = verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1) "receiver-copy-transfer-blob-coverage"
+                    require (observed.ObjectStorePath = expectedPath && Directory.Exists expectedPath && isNull (DirectoryInfo(expectedPath).LinkTarget)) "receiver-copy-transfer-store-identity"
+                    require (observed.DerivedRefs = expectedRows) "receiver-copy-transfer-derived-refs"
+                    let expectedFingerprint = manifestFingerprint target runIdentity.RunNonce verifiedPlan.ReceiverCopyFingerprint verifiedCoverage.ReceiverCopyBlobCoverageFingerprint verifiedCoverage.ReceiverCopyBlobCoverageSha256BySha1 expectedPath expectedRows
+                    require (observed.Fingerprint = expectedFingerprint) "receiver-copy-transfer-manifest-fingerprint"
+                    require (git expectedPath [ "rev-parse"; "--is-bare-repository" ] = "true") "receiver-copy-transfer-store-bare"
+                    for row in expectedRows do
+                        require (git expectedPath [ "rev-parse"; row.DerivedRef ] = row.DerivedCommit) "receiver-copy-transfer-ref-drift"
+                        require (git expectedPath [ "rev-parse"; $"{row.DerivedCommit}^{{tree}}" ] = row.DerivedTree) "receiver-copy-transfer-tree-readback"
+                        require (git expectedPath [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ] = row.DerivedCommit) "receiver-copy-transfer-parent-readback"
+                    Ok(MigrationReceiverCopyVerifiedTransfer observed)
+                with ex -> Error ex.Message))
 
     let internal prepareSyntheticForTests runIdentity planFingerprint coverageFingerprint objectStoreRoot receivers =
         let digests =
             [ for _, _, _, _, _, entries in receivers do
                 for _, _, _, bytes in entries do yield blobSha1 bytes, sha256 bytes ] |> Map.ofList
         materialize runIdentity planFingerprint coverageFingerprint digests objectStoreRoot receivers
+
+    let internal verifySyntheticForTests runIdentity planFingerprint coverageFingerprint objectStoreRoot (receivers: (string * string * string * string * string * (string * string * string * byte array) list) list) observed =
+        try
+            let digests = [ for _, _, _, _, _, entries in receivers do for _, _, _, bytes in entries do yield blobSha1 bytes, sha256 bytes ] |> Map.ofList
+            let rows = predictRows runIdentity planFingerprint receivers
+            require (observed.Schema = "fsgg.receiver-copy-transfer-manifest/1" && observed.TargetRepository = target) "receiver-copy-transfer-manifest-shape"
+            require (observed.RunIdentity = runIdentity && observed.PlanFingerprint = planFingerprint && observed.BlobCoverageFingerprint = coverageFingerprint) "receiver-copy-transfer-manifest-binding"
+            require (observed.ObjectStorePath = Path.GetFullPath objectStoreRoot) "receiver-copy-transfer-store-identity"
+            require (observed.BlobSha256BySha1 = digests && observed.DerivedRefs = rows) "receiver-copy-transfer-derived-refs"
+            let expectedFingerprint = manifestFingerprint target runIdentity.RunNonce planFingerprint coverageFingerprint digests (Path.GetFullPath objectStoreRoot) rows
+            require (observed.Fingerprint = expectedFingerprint) "receiver-copy-transfer-manifest-fingerprint"
+            Ok(MigrationReceiverCopyVerifiedTransfer observed)
+        with ex -> Error ex.Message
+
+    let internal recomputeFingerprintForTests observed =
+        let rows = observed.DerivedRefs |> List.sortBy _.ReceiverCopyId
+        { observed with DerivedRefs = rows
+                        Fingerprint = manifestFingerprint observed.TargetRepository observed.RunIdentity.RunNonce observed.PlanFingerprint observed.BlobCoverageFingerprint observed.BlobSha256BySha1 observed.ObjectStorePath rows }
+
+    let internal verifiedManifest (MigrationReceiverCopyVerifiedTransfer manifest) = manifest

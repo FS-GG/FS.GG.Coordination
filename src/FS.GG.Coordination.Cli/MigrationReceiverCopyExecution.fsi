@@ -31,7 +31,7 @@ module MigrationReceiverCopyExecution =
     /// commit leases for one atomic delete.
     val execute:
         authority:MigrationReceiverCopyExecutionAuthority ->
-        manifest:MigrationReceiverCopyTransferManifest ->
+        verifiedTransfer:MigrationReceiverCopyVerifiedTransfer ->
         operation:MigrationReceiverCopyOperation ->
         attemptRoot:string ->
         transport:IMigrationReceiverCopyGitTransport ->
@@ -39,7 +39,7 @@ module MigrationReceiverCopyExecution =
 
     val internal executeWithCutForTests:
         authority:MigrationReceiverCopyExecutionAuthority ->
-        manifest:MigrationReceiverCopyTransferManifest ->
+        verifiedTransfer:MigrationReceiverCopyVerifiedTransfer ->
         operation:MigrationReceiverCopyOperation ->
         attemptRoot:string ->
         transport:IMigrationReceiverCopyGitTransport ->

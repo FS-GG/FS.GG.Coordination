@@ -23,6 +23,8 @@ type MigrationReceiverCopyTransferManifest =
       DerivedRefs: MigrationReceiverCopyDerivedRef list
       Fingerprint: string }
 
+type MigrationReceiverCopyVerifiedTransfer = private MigrationReceiverCopyVerifiedTransfer of MigrationReceiverCopyTransferManifest
+
 [<RequireQualifiedAccess>]
 module MigrationReceiverCopyTransfer =
     /// Reopens the complete, independently verified 8,999-object coverage and
@@ -39,6 +41,8 @@ module MigrationReceiverCopyTransfer =
         objectStoreRoot:string ->
             Result<MigrationReceiverCopyTransferManifest, string>
 
+    val internal verifiedManifest: verified:MigrationReceiverCopyVerifiedTransfer -> MigrationReceiverCopyTransferManifest
+
     val verify:
         acceptedEvidence:MigrationReceiverCopyAcceptedEvidence ->
         runIdentity:MigrationSandboxSeedRequest ->
@@ -47,7 +51,7 @@ module MigrationReceiverCopyTransfer =
         artifacts:MigrationReceiverCopyBlobBatchArtifact list ->
         verifiedCoverage:MigrationReceiverCopyBlobCoverage ->
         observed:MigrationReceiverCopyTransferManifest ->
-            Result<MigrationReceiverCopyTransferManifest, string>
+            Result<MigrationReceiverCopyVerifiedTransfer, string>
 
     val internal prepareSyntheticForTests:
         runIdentity:MigrationSandboxSeedRequest ->
@@ -56,3 +60,15 @@ module MigrationReceiverCopyTransfer =
         objectStoreRoot:string ->
         receivers:(string * string * string * string * string * (string * string * string * byte array) list) list ->
             Result<MigrationReceiverCopyTransferManifest, string>
+
+    val internal verifySyntheticForTests:
+        runIdentity:MigrationSandboxSeedRequest ->
+        planFingerprint:string ->
+        coverageFingerprint:string ->
+        objectStoreRoot:string ->
+        receivers:(string * string * string * string * string * (string * string * string * byte array) list) list ->
+        observed:MigrationReceiverCopyTransferManifest ->
+            Result<MigrationReceiverCopyVerifiedTransfer, string>
+
+    val internal recomputeFingerprintForTests:
+        observed:MigrationReceiverCopyTransferManifest -> MigrationReceiverCopyTransferManifest
