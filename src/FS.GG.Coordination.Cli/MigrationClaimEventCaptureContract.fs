@@ -69,7 +69,13 @@ type MigrationLegacyReceiptSource =
     { ProducerId: string
       ProducerRevision: string
       SourceIdentity: string
-      SchemaFamily: string }
+      SchemaFamily: string
+      SourceKind: MigrationLegacyReceiptSourceKind }
+
+and MigrationLegacyReceiptSourceKind =
+    | ProtectedProducer
+    | ProtectedParserOnly
+    | LocalCacheOnly
 
 type MigrationLegacyReceiptInventory =
     { ProducerReads: MigrationReviewDeliveryRead list
@@ -88,6 +94,18 @@ module MigrationClaimEventCaptureContract =
 
     let requiredNativeStreams (_: MigrationClaimNativeSubjectKind) =
         [ NativeIssueComments; NativeIssueEvents; NativeIssueTimeline ]
+
+    let requiredLegacySchemaFamilies =
+        [ "claim-marker"
+          "review-decision"
+          "review-wait"
+          "delivery-obligation"
+          "delivery-receipt"
+          "intake-marker"
+          "intake-receipt"
+          "typed-completion"
+          "completion-correction"
+          "legacy-done-receipt" ]
 
     let schemaFamilyAllowed namespace' family =
         match namespace', family with
@@ -108,6 +126,119 @@ module MigrationClaimEventCaptureContract =
         [ MigrationReviewDeliveryCaptureContract.requestSha256 read.Request
           read.RequestSha256; string read.StatusCode; read.RawSha256
           defaultArg read.NextRequestUri "" ]
+
+    let private sourceKindText = function
+        | ProtectedProducer -> "protected-producer"
+        | ProtectedParserOnly -> "protected-parser-only"
+        | LocalCacheOnly -> "local-cache-only"
+
+    let legacyInventoryFingerprint (inventory: MigrationLegacyReceiptInventory) =
+        (inventory.ProducerReads |> List.collect readParts)
+        @ (inventory.Sources
+           |> List.collect (fun source ->
+               [ source.ProducerId; source.ProducerRevision; source.SourceIdentity
+                 source.SchemaFamily; sourceKindText source.SourceKind ]))
+        |> List.map frame |> String.concat "" |> sha
+
+    let private trySourceIdentity (read: MigrationReviewDeliveryRead) =
+        try
+            let uri = Uri read.Request.Uri
+            let query = uri.Query.TrimStart('?').Split('&', StringSplitOptions.RemoveEmptyEntries)
+            let revision =
+                query
+                |> Array.tryPick (fun part ->
+                    let pair = part.Split('=', 2)
+                    if pair.Length = 2 && pair.[0] = "ref" then Some(Uri.UnescapeDataString pair.[1]) else None)
+            use response = JsonDocument.Parse read.RawBody
+            let root = response.RootElement
+            let mutable shaProperty = Unchecked.defaultof<JsonElement>
+            let mutable encodingProperty = Unchecked.defaultof<JsonElement>
+            let mutable contentProperty = Unchecked.defaultof<JsonElement>
+            let propertyNames =
+                if root.ValueKind = JsonValueKind.Object then
+                    root.EnumerateObject() |> Seq.map _.Name |> Seq.toList
+                else []
+            if read.Request.Kind <> "rest" || read.Request.Method <> "Get" || read.Request.Body.IsSome
+               || not read.Request.Variables.IsEmpty || read.NextRequestUri.IsSome
+               || read.StatusCode <> 200
+               || read.RequestSha256 <> MigrationReviewDeliveryCaptureContract.requestSha256 read.Request
+               || read.RawSha256 <> sha read.RawBody
+               || uri.Host <> "api.github.com"
+               || query.Length <> 1
+               || not (String.IsNullOrEmpty uri.Fragment)
+               || not (uri.AbsolutePath.StartsWith("/repos/FS-GG/.github/contents/", StringComparison.Ordinal))
+               || propertyNames.Length <> (propertyNames |> Set.ofList |> Set.count)
+               || not (root.TryGetProperty("sha", &shaProperty))
+               || not (root.TryGetProperty("encoding", &encodingProperty))
+               || not (root.TryGetProperty("content", &contentProperty))
+               || shaProperty.ValueKind <> JsonValueKind.String
+               || encodingProperty.ValueKind <> JsonValueKind.String
+               || contentProperty.ValueKind <> JsonValueKind.String
+               || encodingProperty.GetString() <> "base64" then None
+            else
+                let bytes = Convert.FromBase64String(contentProperty.GetString().Replace("\n", ""))
+                let gitBytes = Array.append (Encoding.ASCII.GetBytes($"blob {bytes.LongLength}\u0000")) bytes
+                let gitSha = gitBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                if shaProperty.GetString() <> gitSha then None
+                else Some(read.Request.Uri + "#sha256:" + (bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()), revision)
+        with
+        | :? JsonException | :? FormatException | :? UriFormatException -> None
+
+    let validateLegacyInventory inventory =
+        let decoded = inventory.ProducerReads |> List.map (fun read -> read, trySourceIdentity read)
+        let identities =
+            decoded
+            |> List.choose (fun (_, value) -> value |> Option.map fst)
+        let referencedIdentities = inventory.Sources |> List.map _.SourceIdentity |> Set.ofList
+        let sourceKeys =
+            inventory.Sources
+            |> List.map (fun source -> source.SchemaFamily, source.ProducerId, source.SourceIdentity)
+        let families = inventory.Sources |> List.map _.SchemaFamily |> Set.ofList
+        let required = requiredLegacySchemaFamilies |> Set.ofList
+        let revisionsValid =
+            inventory.Sources
+            |> List.forall (fun source ->
+                oid source.ProducerRevision
+                && source.ProducerRevision = source.ProducerRevision.ToLowerInvariant()
+                && not (String.IsNullOrWhiteSpace source.ProducerId)
+                && Set.contains source.SchemaFamily required
+                && (decoded
+                    |> List.exists (fun (_, decodedIdentity) ->
+                        decodedIdentity = Some(source.SourceIdentity, Some source.ProducerRevision))))
+        if inventory.ProducerReads.IsEmpty || decoded |> List.exists (snd >> Option.isNone) then
+            Error "legacy-inventory-source-read"
+        elif identities.Length <> (identities |> Set.ofList |> Set.count) then
+            Error "legacy-inventory-duplicate-read"
+        elif Set.ofList identities <> referencedIdentities then
+            Error "legacy-inventory-source-roster"
+        elif sourceKeys.Length <> (sourceKeys |> Set.ofList |> Set.count) then
+            Error "legacy-inventory-duplicate-source"
+        elif families <> required then
+            Error "legacy-inventory-family-roster"
+        elif not revisionsValid then
+            Error "legacy-inventory-source-identity"
+        elif inventory.Fingerprint <> legacyInventoryFingerprint inventory then
+            Error "legacy-inventory-fingerprint"
+        else Ok inventory
+
+    let qualifyLegacyInventory inventory =
+        validateLegacyInventory inventory
+        |> Result.bind (fun valid ->
+            // The pinned source audit found only consumers for these receipt markers, or a
+            // process-local cache. A caller-authored SourceKind must not upgrade that evidence.
+            let sourceAuditGaps =
+                Set.ofList [ "delivery-receipt"; "intake-receipt"; "legacy-done-receipt" ]
+            let unresolved =
+                requiredLegacySchemaFamilies
+                |> List.filter (fun family ->
+                    Set.contains family sourceAuditGaps
+                    || (valid.Sources
+                        |> List.exists (fun source ->
+                            source.SchemaFamily = family && source.SourceKind = ProtectedProducer)
+                        |> not))
+            match unresolved with
+            | [] -> Ok valid
+            | values -> Error("legacy-inventory-producer-unavailable:" + String.concat "," values))
 
     let private namespaceText = function
         | ClaimJournalNamespace -> "claim"
