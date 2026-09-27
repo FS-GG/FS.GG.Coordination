@@ -39,6 +39,28 @@ module MigrationReceiverCopyTransfer =
     let private utf8 = UTF8Encoding(false, true)
     let private require condition code = if not condition then failwith code
     module private Native =
+        [<Struct; StructLayout(LayoutKind.Sequential)>]
+        type FileStat =
+            val mutable Device: uint64
+            val mutable Inode: uint64
+            val mutable LinkCount: uint64
+            val mutable Mode: uint32
+            val mutable UserId: uint32
+            val mutable GroupId: uint32
+            val mutable Padding: int32
+            val mutable DeviceType: uint64
+            val mutable Size: int64
+            val mutable BlockSize: int64
+            val mutable Blocks: int64
+            val mutable AccessSeconds: int64
+            val mutable AccessNanoseconds: int64
+            val mutable ModifySeconds: int64
+            val mutable ModifyNanoseconds: int64
+            val mutable ChangeSeconds: int64
+            val mutable ChangeNanoseconds: int64
+            val mutable Reserved0: int64
+            val mutable Reserved1: int64
+            val mutable Reserved2: int64
         [<Literal>]
         let O_RDONLY = 0
         [<Literal>]
@@ -57,6 +79,8 @@ module MigrationReceiverCopyTransfer =
         extern int fsync(int descriptor)
         [<DllImport("libc")>]
         extern uint32 getuid()
+        [<DllImport("libc", SetLastError = true)>]
+        extern int lstat(string path, FileStat& status)
     let private descriptor (handle: SafeFileHandle) = handle.DangerousGetHandle().ToInt32()
     let private privateDirectoryMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
     let private privateFileMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
@@ -65,25 +89,22 @@ module MigrationReceiverCopyTransfer =
         ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherWrite ||| UnixFileMode.OtherExecute
 
     let private statUid path =
-        use child = new Process()
-        let info = ProcessStartInfo("/usr/bin/stat")
-        for argument in [ "--format=%u"; "--"; path ] do info.ArgumentList.Add argument
-        info.UseShellExecute <- false; info.RedirectStandardInput <- true; info.RedirectStandardOutput <- true; info.RedirectStandardError <- true; info.CreateNoWindow <- true
-        child.StartInfo <- info
-        require (child.Start()) "receiver-copy-transfer-stat-start"; child.StandardInput.Close()
-        let output, error = child.StandardOutput.ReadToEndAsync(), child.StandardError.ReadToEndAsync()
-        require (child.WaitForExit(5000) && child.ExitCode = 0) $"receiver-copy-transfer-stat:{error.GetAwaiter().GetResult().Trim()}"
-        UInt32.Parse(output.GetAwaiter().GetResult().Trim(), Globalization.CultureInfo.InvariantCulture)
+        let mutable status = Unchecked.defaultof<Native.FileStat>
+        require (Native.lstat(path, &status) = 0) $"receiver-copy-transfer-stat:{Marshal.GetLastPInvokeError()}"
+        status.UserId
 
     let private verifyPrivateStore root =
         require (Directory.Exists root && isNull (DirectoryInfo(root).LinkTarget)) "receiver-copy-transfer-store-link"
         if not (OperatingSystem.IsWindows()) then
             require (File.GetUnixFileMode(root) = privateDirectoryMode) "receiver-copy-transfer-store-mode"
             require (statUid root = Native.getuid()) "receiver-copy-transfer-store-owner"
+            // An unprivileged foreign owner cannot inject beneath this owner-only 0700
+            // root; exact nested UID checks also refuse privileged restore/tamper drift.
             let rec walk directory =
                 for path in Directory.EnumerateFileSystemEntries directory do
                     let info = FileInfo path
                     require (isNull info.LinkTarget) "receiver-copy-transfer-store-nested-link"
+                    require (statUid path = Native.getuid()) "receiver-copy-transfer-store-nested-owner"
                     let mode = File.GetUnixFileMode path
                     require ((mode &&& publicMode) = enum 0) "receiver-copy-transfer-store-nested-mode"
                     if Directory.Exists path then

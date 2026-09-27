@@ -199,7 +199,31 @@ let ``permissive or swapped local object store refuses verification and executio
         Directory.CreateSymbolicLink(swappedManifest.ObjectStorePath, saved) |> ignore
         let swapTransport = ControlledTransport Map.empty
         Assert.True(MigrationReceiverCopyExecution.execute authority swappedVerified CreateReceiverCopies (Path.Combine(swapRoot, "attempts")) (swapTransport :> IMigrationReceiverCopyGitTransport) |> Result.isError)
-        Assert.Equal(0, swapTransport.Pushes))
+        Assert.Equal(0, swapTransport.Pushes)
+
+        let nestedModeRoot = Path.Combine(root, "nested-mode")
+        Directory.CreateDirectory nestedModeRoot |> ignore
+        let nestedModeManifest, nestedModeVerified = prepare nestedModeRoot
+        let config = Path.Combine(nestedModeManifest.ObjectStorePath, "config")
+        File.SetUnixFileMode(config, File.GetUnixFileMode(config) ||| UnixFileMode.GroupRead)
+        Assert.True(MigrationReceiverCopyTransfer.verifySyntheticForTests run (String.replicate 64 "c") (String.replicate 64 "d") nestedModeManifest.ObjectStorePath receivers nestedModeManifest |> Result.isError)
+        let nestedModeTransport = ControlledTransport Map.empty
+        Assert.True(MigrationReceiverCopyExecution.execute authority nestedModeVerified CreateReceiverCopies (Path.Combine(nestedModeRoot, "attempts")) (nestedModeTransport :> IMigrationReceiverCopyGitTransport) |> Result.isError)
+        Assert.Equal(0, nestedModeTransport.Pushes)
+
+        let nestedLinkRoot = Path.Combine(root, "nested-link")
+        Directory.CreateDirectory nestedLinkRoot |> ignore
+        let nestedLinkManifest, nestedLinkVerified = prepare nestedLinkRoot
+        let description = Path.Combine(nestedLinkManifest.ObjectStorePath, "description")
+        let savedDescription = Path.Combine(nestedLinkRoot, "saved-description")
+        File.Move(description, savedDescription)
+        File.CreateSymbolicLink(description, savedDescription) |> ignore
+        let nestedLinkTransport = ControlledTransport Map.empty
+        Assert.True(MigrationReceiverCopyExecution.execute authority nestedLinkVerified CreateReceiverCopies (Path.Combine(nestedLinkRoot, "attempts")) (nestedLinkTransport :> IMigrationReceiverCopyGitTransport) |> Result.isError)
+        Assert.Equal(0, nestedLinkTransport.Pushes)
+        // This unprivileged test process cannot chown an entry to a foreign UID;
+        // owner-only 0700 traversal prevents another UID from injecting one.
+        )
 
 [<Fact>]
 let ``mixed wrong and unknown receiver refs refuse with zero dispatch`` () =
