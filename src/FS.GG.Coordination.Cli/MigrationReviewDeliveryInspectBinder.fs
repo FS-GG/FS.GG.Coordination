@@ -314,8 +314,15 @@ module MigrationReviewDeliveryInspectBinder =
             allRecords |> List.choose (function MigrationReviewDeliveryRecord.PullDelivery (pr, merge) -> Some(pr, merge) | _ -> None) |> Map.ofList
         let tags = allRecords |> List.choose (function MigrationReviewDeliveryRecord.Tag (name, commit) -> Some(name, commit) | _ -> None)
         let releases = allRecords |> List.choose (function MigrationReviewDeliveryRecord.Release (id, tag, false) -> Some(id, tag) | _ -> None)
-        if releases |> List.exists (fun (_, tag) -> tags |> List.exists (fst >> (=) tag) |> not) then
+        let tagTargets = tags |> Map.ofList
+        let mergeCommits = merges |> Map.values |> Seq.choose id |> Set.ofSeq
+        let releaseTargets =
+            releases
+            |> List.choose (fun (id, tag) -> Map.tryFind tag tagTargets |> Option.map (fun commit -> id, tag, commit))
+        if releaseTargets.Length <> releases.Length then
             Error "review-delivery-release-tag-correspondence"
+        elif releaseTargets |> List.exists (fun (_, _, commit) -> not (Set.contains commit mergeCommits)) then
+            Error "review-delivery-release-delivery-correspondence"
         else
             let folder (state: Result<MigrationReviewDeliveryCorrespondence list, string>) (pull: MigrationReviewDeliveryPullRequest) =
                 state |> Result.bind (fun rows ->
@@ -347,11 +354,22 @@ module MigrationReviewDeliveryInspectBinder =
                     if List.isEmpty reviewRefs || not deliveryMatches || not runMatches then
                         Error $"review-delivery-journal-correspondence:{pull.Number}"
                     else
+                        let relatedTags =
+                            match merge with
+                            | None -> []
+                            | Some commit ->
+                                tags |> List.choose (fun (name, target) -> if target = commit then Some name else None)
+                                |> List.sort
+                        let relatedTagSet = Set.ofList relatedTags
+                        let relatedReleases =
+                            releases
+                            |> List.choose (fun (id, tag) -> if Set.contains tag relatedTagSet then Some id else None)
+                            |> List.sort
                         Ok({ PullRequestNumber=pull.Number; HeadSha=pull.HeadSha; MergeCommit=merge
                              CheckRunIds=checks |> List.choose (fun (pr, _, id, _, _) -> if pr = pull.Number then Some id else None) |> List.sort
                              StatusIds=statuses |> List.choose (fun (pr, id) -> if pr = pull.Number then Some id else None) |> List.sort
                              ReviewJournalRefs=reviewRefs; DeliveryJournalRefs=deliveryRefs
-                             TagNames=tags |> List.map fst |> List.sort; ReleaseIds=releases |> List.map fst |> List.sort } :: rows))
+                             TagNames=relatedTags; ReleaseIds=relatedReleases } :: rows))
             native.PullRequests |> List.sortBy (fun item -> item.Number) |> List.fold folder (Ok []) |> Result.map List.rev
 
     let private completeFingerprint (native: MigrationReviewDeliveryNativePass)

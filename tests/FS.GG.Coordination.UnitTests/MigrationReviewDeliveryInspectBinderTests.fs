@@ -132,7 +132,9 @@ let ``canonical binder closes nonempty native release and discovered journal cor
     match MigrationReviewDeliveryInspectBinder.bind cohort repositoryOptions native journals with
     | Error reason -> failwithf "Binder refused: %s" reason
     | Ok complete ->
-        Assert.Single(complete.First.Correspondence) |> ignore
+        let row = Assert.Single(complete.First.Correspondence)
+        Assert.Equal<string list>([ "v1" ], row.TagNames)
+        Assert.Equal<int64 list>([ 501L ], row.ReleaseIds)
         match MigrationReviewDeliveryInspectBinder.authority cohort 1 complete with
         | Error reason -> failwithf "Authority refused: %s" reason
         | Ok proof ->
@@ -145,6 +147,26 @@ let ``canonical binder closes nonempty native release and discovered journal cor
         | Ok (first, second) ->
             Assert.Equal("review-delivery-release-records", first.Read.Authority)
             Assert.Equal(first.Read.HighWaterMark, second.Read.HighWaterMark)
+
+[<Fact>]
+let ``published release tag must target a journal backed merge commit`` () =
+    let (native: MigrationReviewDeliveryNativeTwoPass), (journals: MigrationJournalTwoPass) = captures ()
+    let unrelated = String.replicate 40 "e"
+    let first = native.First
+    let changedStreams =
+        first.Streams
+        |> List.map (fun stream ->
+            if stream.Kind <> "tags" then stream
+            else
+                let body = $"""[{{"name":"v1","commit":{{"sha":"{unrelated}"}}}}]"""
+                { stream with
+                    Reads=[ read "repos/FS-GG/copy/tags?per_page=100" body ]
+                    Records=[ MigrationReviewDeliveryRecord.Tag("v1", unrelated) ] })
+    let changed = { first with Streams=changedStreams; Fingerprint="" }
+    let changed = { changed with Fingerprint=MigrationReviewDeliveryCaptureContract.nativeFingerprint changed }
+    Assert.Equal(Error "review-delivery-release-delivery-correspondence",
+                 MigrationReviewDeliveryInspectBinder.bind cohort repositoryOptions
+                     { First=changed; Second=changed } journals)
 
 [<Fact>]
 let ``canonical binder refuses status URL raw drift and discovered ref without history`` () =
