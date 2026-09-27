@@ -38,10 +38,10 @@ type MigrationEnvironmentCustomRule =
       PayloadSha256: string }
 
 type MigrationEnvironmentPageEvidence =
-    { RequestedUri: string
-      PayloadJson: string
-      PayloadSha256: string
-      NextUri: string option }
+    { EnvironmentRequestedUri: string
+      EnvironmentPayloadJson: string
+      EnvironmentPayloadSha256: string
+      EnvironmentNextUri: string option }
 
 type MigrationEnvironmentObservation =
     { EnvironmentId: int64
@@ -78,9 +78,22 @@ type MigrationEnvironmentSettings =
       TotalCount: int
       Environments: MigrationEnvironmentObservation list }
 
+/// Two complete raw- and typed-equal environment settings observations.
+/// Secrets and variables remain outside this partial settings source.
+type MigrationEnvironmentSettingsCapture =
+    { EnvironmentSettingsFirst: MigrationEnvironmentSettings
+      EnvironmentSettingsSecond: MigrationEnvironmentSettings
+      EnvironmentSettingsFingerprint: string
+      EnvironmentSurfaceComplete: bool }
+
 [<RequireQualifiedAccess>]
 module MigrationEnvironmentSettingsRead =
     /// GET-only, exact-repository, terminal observation. Partial settings source only.
     val read:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationEnvironmentSettings, MigrationReadFailure>
+
+    /// Repeats the complete environment/settings read and refuses any raw or typed drift.
+    val captureTwoPass:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationEnvironmentSettingsCapture, MigrationReadFailure>

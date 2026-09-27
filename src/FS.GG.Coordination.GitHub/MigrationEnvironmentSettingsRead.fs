@@ -24,7 +24,8 @@ type MigrationEnvironmentCustomRule =
       AppNodeId: string; AppSlug: string; PayloadJson: string; PayloadSha256: string }
 
 type MigrationEnvironmentPageEvidence =
-    { RequestedUri: string; PayloadJson: string; PayloadSha256: string; NextUri: string option }
+    { EnvironmentRequestedUri: string; EnvironmentPayloadJson: string
+      EnvironmentPayloadSha256: string; EnvironmentNextUri: string option }
 
 type MigrationEnvironmentObservation =
     { EnvironmentId: int64; EnvironmentNodeId: string; Name: string; UpdatedAt: DateTimeOffset
@@ -44,6 +45,12 @@ type MigrationEnvironmentSettings =
       TerminalIdentityPayloadJson: string; TerminalIdentityPayloadSha256: string
       Pages: MigrationEnvironmentPageEvidence list; Terminal: bool; TotalCount: int
       Environments: MigrationEnvironmentObservation list }
+
+type MigrationEnvironmentSettingsCapture =
+    { EnvironmentSettingsFirst: MigrationEnvironmentSettings
+      EnvironmentSettingsSecond: MigrationEnvironmentSettings
+      EnvironmentSettingsFingerprint: string
+      EnvironmentSurfaceComplete: bool }
 
 [<RequireQualifiedAccess>]
 module MigrationEnvironmentSettingsRead =
@@ -207,7 +214,7 @@ module MigrationEnvironmentSettingsRead =
             if item.ValueKind = JsonValueKind.Null then Ok(false, false)
             else
                 match flag "protected_branches" item, flag "custom_branch_policies" item with
-                | Ok protectedBranches, Ok custom when not (protectedBranches && custom) ->
+                | Ok protectedBranches, Ok custom when protectedBranches <> custom ->
                     Ok(protectedBranches, custom)
                 | Ok _, Ok _ -> fail "invalid:deployment-branch-policy"
                 | Error error, _ | _, Error error -> Error error)
@@ -299,9 +306,10 @@ module MigrationEnvironmentSettingsRead =
                                 entries |> List.map (parseItem response.Body) |> sequence
                                 |> Result.bind (fun parsed ->
                                     let evidence =
-                                        { RequestedUri=currentUri.AbsoluteUri; PayloadJson=response.Body
-                                          PayloadSha256=sha response.Body
-                                          NextUri=next |> Option.map _.AbsoluteUri }
+                                        { EnvironmentRequestedUri=currentUri.AbsoluteUri
+                                          EnvironmentPayloadJson=response.Body
+                                          EnvironmentPayloadSha256=sha response.Body
+                                          EnvironmentNextUri=next |> Option.map _.AbsoluteUri }
                                     let all = values @ parsed
                                     if all.Length > total then
                                         Error(MigrationReadFailure.PaginationRefused "count-exceeded")
@@ -425,3 +433,56 @@ module MigrationEnvironmentSettingsRead =
                                          TerminalIdentityPayloadJson=terminalBody
                                          TerminalIdentityPayloadSha256=sha terminalBody
                                          Pages=pages; Terminal=true; TotalCount=total; Environments=observed })))))
+
+    let private fingerprint (observed: MigrationEnvironmentSettings) =
+        [ yield string observed.RepositoryId
+          yield observed.RepositoryNodeId
+          yield observed.RepositoryFullName
+          yield observed.RepositoryUpdatedAt.ToString("O", CultureInfo.InvariantCulture)
+          yield observed.IdentityUri
+          yield observed.IdentityPayloadSha256
+          yield observed.TerminalIdentityPayloadSha256
+          yield string observed.TotalCount
+          for page in observed.Pages do
+              yield page.EnvironmentRequestedUri
+              yield page.EnvironmentPayloadSha256
+              yield page.EnvironmentNextUri |> Option.defaultValue "-"
+          for environment in observed.Environments do
+              yield string environment.EnvironmentId
+              yield environment.EnvironmentNodeId
+              yield environment.Name
+              yield environment.UpdatedAt.ToString("O", CultureInfo.InvariantCulture)
+              yield string environment.ProtectedBranches
+              yield string environment.CustomBranchPolicies
+              yield environment.ListPayloadSha256
+              yield environment.DetailUri
+              yield environment.DetailPayloadSha256
+              yield environment.CustomRulesUri
+              yield environment.CustomRulesPayloadSha256
+              for rule in environment.ProtectionRules do
+                  yield rule.PayloadSha256
+              for page in environment.BranchPolicyPages do
+                  yield page.EnvironmentRequestedUri
+                  yield page.EnvironmentPayloadSha256
+                  yield page.EnvironmentNextUri |> Option.defaultValue "-"
+              for policy in environment.BranchPolicies do
+                  yield policy.PayloadSha256
+              for rule in environment.CustomRules do
+                  yield rule.PayloadSha256 ]
+        |> String.concat "\n"
+        |> sha
+
+    let captureTwoPass (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        read options transport
+        |> Result.bind (fun first ->
+            read options transport
+            |> Result.bind (fun second ->
+                let firstFingerprint = fingerprint first
+                let secondFingerprint = fingerprint second
+                if first <> second || firstFingerprint <> secondFingerprint then
+                    Error MigrationReadFailure.PopulationDrift
+                else
+                    Ok { EnvironmentSettingsFirst=first
+                         EnvironmentSettingsSecond=second
+                         EnvironmentSettingsFingerprint=firstFingerprint
+                         EnvironmentSurfaceComplete=false }))

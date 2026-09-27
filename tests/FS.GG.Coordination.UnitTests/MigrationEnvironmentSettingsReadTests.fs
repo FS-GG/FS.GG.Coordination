@@ -123,8 +123,8 @@ let ``environment source follows exact terminal environment pages`` () =
         Assert.Equal(2, observed.TotalCount)
         Assert.Equal(2, observed.Environments.Length)
         Assert.Equal(Some "https://api.github.test/repos/FS-GG/copy/environments?per_page=100&page=2",
-                     observed.Pages.Head.NextUri)
-        Assert.True(observed.Pages.[1].NextUri.IsNone)
+                     observed.Pages.Head.EnvironmentNextUri)
+        Assert.True(observed.Pages.[1].EnvironmentNextUri.IsNone)
         Assert.Equal(10, transport.Requests.Length)
 
 [<Fact>]
@@ -204,3 +204,37 @@ let ``environment source refuses unknown or inconsistent branch policy`` () =
     match MigrationEnvironmentSettingsRead.read options inconsistentTransport with
     | Error(MigrationReadFailure.MalformedResponse _) -> ()
     | result -> failwithf "inconsistent branch policy accepted: %A" result
+
+[<Fact>]
+let ``environment settings require two complete raw stable passes`` () =
+    let transport = FakeTransport(success @ success)
+    match MigrationEnvironmentSettingsRead.captureTwoPass options transport with
+    | Error failure -> failwithf "two-pass environment settings refused: %A" failure
+    | Ok captured ->
+        Assert.Equal(captured.EnvironmentSettingsFirst, captured.EnvironmentSettingsSecond)
+        Assert.Equal(64, captured.EnvironmentSettingsFingerprint.Length)
+        Assert.False(captured.EnvironmentSurfaceComplete)
+        Assert.Equal(12, transport.Requests.Length)
+
+    let rawDrift = repository.Replace("}", ",\"extra\":true}")
+    let changedSecond =
+        [ ok rawDrift; ok (list environment 1); ok environment; ok branches; ok custom; ok rawDrift ]
+    Assert.Equal(Error MigrationReadFailure.PopulationDrift,
+                 MigrationEnvironmentSettingsRead.captureTwoPass options
+                     (FakeTransport(success @ changedSecond)))
+
+[<Fact>]
+let ``environment settings refuse an explicit policy with no selected mode`` () =
+    let rulesWithoutBranch =
+        $"""[{{"id":11,"node_id":"RULE_11","type":"wait_timer","wait_timer":5}},
+               {{"id":12,"node_id":"RULE_12","type":"required_reviewers","prevent_self_review":true,"reviewers":{reviewers}}}]"""
+    let invalid =
+        $"""{{"id":100,"node_id":"ENV_100","name":"fleet-cutover",
+              "url":"https://api.github.test/repos/FS-GG/copy/environments/fleet-cutover",
+              "updated_at":"2026-09-25T01:00:00Z","protection_rules":{rulesWithoutBranch},
+              "deployment_branch_policy":{{"protected_branches":false,"custom_branch_policies":false}}}}"""
+    let transport = FakeTransport [ ok repository; ok (list invalid 1) ]
+    match MigrationEnvironmentSettingsRead.read options transport with
+    | Error(MigrationReadFailure.MalformedResponse "invalid:deployment-branch-policy") -> ()
+    | result -> failwithf "unselected branch policy mode accepted: %A" result
+    Assert.Equal(2, transport.Requests.Length)
