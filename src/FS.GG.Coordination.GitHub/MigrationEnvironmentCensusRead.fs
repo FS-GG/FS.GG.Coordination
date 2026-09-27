@@ -105,8 +105,7 @@ module MigrationEnvironmentCensusRead =
     let private validOptions (options: MigrationGitHubReadOptions) =
         not (isNull options.ApiBase)
         && options.ApiBase.IsAbsoluteUri
-        && (options.ApiBase.Scheme = Uri.UriSchemeHttps
-            || options.ApiBase.Host = "localhost")
+        && options.ApiBase.Scheme = Uri.UriSchemeHttps
         && nonempty options.Owner
         && nonempty options.Repository
         && options.ExpectedRepositoryId > 0L
@@ -121,7 +120,8 @@ module MigrationEnvironmentCensusRead =
             member _.Send request =
                 match request with
                 | Rest value when
-                    value.Method = Get
+                    validOptions options
+                    && value.Method = Get
                     && value.Body.IsNone
                     && value.Idempotency = ReplaySafe
                     && ApiVersion.value value.ApiVersion = ApiVersion.value ApiVersion.required

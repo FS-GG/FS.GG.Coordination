@@ -238,6 +238,36 @@ let ``forbidden missing timeout and redirect remain unknown`` () =
         (capturePass [ envelope 302 (Map [ "Location", "https://example.test/" ]) "redirect" ])
 
 [<Fact>]
+let ``non HTTPS API bases refuse before transport`` () =
+    for scheme in [ "http"; "ftp" ] do
+        let invalid =
+            { options with
+                ApiBase = Uri $"{scheme}://localhost/"
+            }
+
+        let inner = FakeTransport [ ok identity ]
+
+        expectError "environment-census-invalid-options" (MigrationEnvironmentCensusRead.capturePass invalid inner)
+
+        Assert.Empty(inner.Calls)
+
+        let guarded = MigrationEnvironmentCensusRead.guardReadTransport invalid inner
+
+        let request =
+            Rest
+                {
+                    Method = Get
+                    Uri = Uri $"{scheme}://localhost/repos/FS-GG/copy"
+                    Headers = Map.empty
+                    Body = None
+                    ApiVersion = ApiVersion.required
+                    Idempotency = ReplaySafe
+                }
+
+        Assert.Equal(NetworkFailure, guarded.Send request)
+        Assert.Empty(inner.Calls)
+
+[<Fact>]
 let ``guard permits only exact replay-safe versioned GET census reads`` () =
     let inner = FakeTransport [ ok "{}" ]
     let guarded = MigrationEnvironmentCensusRead.guardReadTransport options inner
