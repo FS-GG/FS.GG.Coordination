@@ -189,6 +189,7 @@ class _Installation:
         self.authority = authority
         self.configuration = configuration
         self.scopes = {scope.role: scope for scope in configuration.scopes}
+        self.parent_provenance_expires_at: dt.datetime | None = None
 
     def scope(self, role: str, now: dt.datetime) -> ProtectedScope:
         expected = self.scopes.get(role)
@@ -504,8 +505,9 @@ class ProtectedNativeWritePort:
             raise Refused("protected-write-authority")
         final_now = self.clock.current
         key_deadline = self.key_reader.authorization_expires_at
-        if (key_deadline is None
-                or not final_now < min(key_deadline,
+        parent_deadline = self.installation.parent_provenance_expires_at
+        if (key_deadline is None or parent_deadline is None
+                or not final_now < min(key_deadline, parent_deadline,
                     self.installation.configuration.provenance.expires_at,
                     self.grant_record.provenance.expires_at)):
             raise Refused("protected-write-authority")
@@ -555,13 +557,24 @@ class ProtectedParentBootstrap:
                 or first.head != binding.journal_prior_head
                 or first.binding_sha256 != _binding_sha(binding)):
             raise Refused("protected-parent-invalid")
-        self.installation.scope("parent", self.clock.now())
+        after = self.clock.now()
+        parent_scope = self.installation.scope("parent", after)
+        final_now = self.clock.now()
+        if not (final_now < first.provenance.expires_at
+                and final_now < parent_scope.expires_at):
+            raise Refused("protected-parent-invalid")
         return first
 
     def establish(self) -> bool:
-        self._qualified_record()
-        return self.journal.establish_parent(
+        parent = self._qualified_record()
+        established = self.journal.establish_parent(
             self.installation.configuration.binding)
+        if established:
+            # The scope authorizes bootstrap; the attestation provenance
+            # continues to limit sends from that bootstrap.
+            self.installation.parent_provenance_expires_at = (
+                parent.provenance.expires_at)
+        return established
 
     def require_stored(self) -> None:
         """Qualify the protected parent and match an existing local bootstrap."""

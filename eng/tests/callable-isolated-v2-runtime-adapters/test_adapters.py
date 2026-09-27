@@ -261,6 +261,30 @@ class ProtectedAdapterTests(unittest.TestCase):
             self.assertFalse(pathlib.Path(
                 authority.configuration.journal_database_path).exists())
 
+    def test_parent_expiring_during_authority_read_refuses_bootstrap(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            authority.parent = dataclasses.replace(authority.parent,
+                provenance=dataclasses.replace(authority.parent.provenance,
+                    expires_at=NOW + dt.timedelta(seconds=30)))
+            original_read = authority.read_parent
+            reads = 0
+
+            def delayed_second_read(repository, ref, path):
+                nonlocal reads
+                reads += 1
+                value = original_read(repository, ref, path)
+                if reads == 2:
+                    authority.now = NOW + dt.timedelta(seconds=31)
+                return value
+
+            authority.read_parent = delayed_second_read
+            with self.assertRaises(adapters.Refused):
+                adapters.compose_installed(authority)
+            self.assertEqual(reads, 2)
+            self.assertFalse(pathlib.Path(
+                authority.configuration.journal_database_path).exists())
+
     def test_recovery_composes_only_from_existing_qualified_parent(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))
@@ -369,7 +393,8 @@ class ProtectedAdapterTests(unittest.TestCase):
     def test_final_clock_sample_refuses_expired_send_authority(self):
         deadlines = ("issuer", "issuer-provenance", "key-provenance",
                      "issuer-scope", "key-scope", "configuration-provenance",
-                     "grant-provenance", "token-provenance")
+                     "grant-provenance", "token-provenance",
+                     "parent-provenance")
         expires_at = NOW + dt.timedelta(seconds=30)
         for deadline in deadlines:
             with self.subTest(deadline=deadline), tempfile.TemporaryDirectory() as temp:
