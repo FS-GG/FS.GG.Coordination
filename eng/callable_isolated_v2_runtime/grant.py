@@ -65,7 +65,7 @@ def _ed25519_verify(public_key: bytes, payload: bytes, signature: bytes) -> bool
 
 
 def verify(raw: bytes, binding: Binding, key_reader, now: dt.datetime,
-           *, allow_expired: bool = False) -> str:
+           *, allow_expired: bool = False, postcheck_clock=None) -> str:
     """Return grant digest only for exact signed claims and trusted active key."""
     try:
         if (type(raw) is not bytes or not 0 < len(raw) <= 8192
@@ -107,6 +107,21 @@ def verify(raw: bytes, binding: Binding, key_reader, now: dt.datetime,
         if (type(public_key) is not bytes or digest(public_key) != key_id
                 or not _ed25519_verify(public_key, canonical(payload), signature)):
             raise Refused("grant-unverified")
+        if postcheck_clock is not None:
+            # Key lookup and Ed25519 verification can block. The returned key
+            # and expiry must still be current after that work completes.
+            after_crypto = postcheck_clock.now()
+            if (type(after_crypto) is not dt.datetime or after_crypto.tzinfo is None
+                    or after_crypto.utcoffset() != dt.timedelta(0)
+                    or not now <= after_crypto < expires
+                    or key_reader.active_public_key(key_id, binding.issuer_actor_id,
+                                                    after_crypto) != public_key):
+                raise Refused("grant-stale-at-send")
+            after_key = postcheck_clock.now()
+            if (type(after_key) is not dt.datetime or after_key.tzinfo is None
+                    or after_key.utcoffset() != dt.timedelta(0)
+                    or not after_crypto <= after_key < expires):
+                raise Refused("grant-stale-at-send")
         return digest(raw)
     except Refused:
         raise

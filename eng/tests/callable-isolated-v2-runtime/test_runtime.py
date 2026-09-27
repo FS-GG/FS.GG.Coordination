@@ -30,8 +30,13 @@ def binding():
 class FixedClock:
     def __init__(self, *times):
         self.times = iter(times)
+        self.last = times[-1]
     def now(self):
-        return next(self.times)
+        try:
+            self.last = next(self.times)
+        except StopIteration:
+            pass
+        return self.last
 
 
 def sign(temp, value):
@@ -67,6 +72,22 @@ class RevokingKeys(Keys):
     def active_public_key(self, key_id, issuer_actor_id, now):
         self.calls += 1
         return self.key if self.calls == 1 else None
+
+
+class MutableKeys(Keys):
+    def __init__(self, key):
+        super().__init__(key)
+        self.revoked = False
+    def active_public_key(self, key_id, issuer_actor_id, now):
+        self.calls += 1
+        return None if self.revoked else self.key
+
+
+class MutableClock:
+    def __init__(self, now):
+        self.value = now
+    def now(self):
+        return self.value
 
 
 class CountingPort:
@@ -207,9 +228,19 @@ class ScriptedToken:
         return b"test-token"
 
 
+class ChangingToken(ScriptedToken):
+    def __init__(self, change):
+        super().__init__()
+        self.change = change
+    def read_execution_token(self):
+        token = super().read_execution_token()
+        self.change()
+        return token
+
+
 class NativeIntegrationTests(unittest.TestCase):
     def _scenario(self, temp, post_event, *, consume_poststate=True, keys_type=Keys,
-                  clock=None):
+                  clock=None, token_factory=None):
         import importlib.util
         fixture_path = ROOT / "eng/tests/fsc07-isolated-operation/test_versioned_operator_readback.py"
         spec = importlib.util.spec_from_file_location("retained_fixtures_extra", fixture_path)
@@ -239,11 +270,13 @@ class NativeIntegrationTests(unittest.TestCase):
         reader = ScriptedRead(transport)
         counter = pathlib.Path(temp) / "posts"
         writer = ScriptedWrite(transport, counter)
-        token = ScriptedToken()
+        clock = clock or FixedClock(NOW, NOW, NOW)
+        keys = keys_type(key)
+        token = token_factory(keys, clock) if token_factory else ScriptedToken()
         journal = coordinator.AttemptJournal(pathlib.Path(temp) / "attempt.db")
         self.assertTrue(journal.establish_parent(selected))
-        first = coordinator.execute_pull(selected, expected, raw, keys_type(key), reader,
-            writer, token, journal, clock or FixedClock(NOW, NOW))
+        first = coordinator.execute_pull(selected, expected, raw, keys, reader,
+            writer, token, journal, clock)
         return first, selected, expected, raw, key, reader, counter, token, journal
 
     def test_explicit_refusal_cannot_become_exact_on_recovery(self):
@@ -299,6 +332,51 @@ class NativeIntegrationTests(unittest.TestCase):
                 self.assertTrue(journal.read(selected, hashlib.sha256(raw).hexdigest()))
                 self.assertIsNone(journal.outcome(selected, hashlib.sha256(raw).hexdigest()))
 
+    def test_token_lookup_cannot_carry_stale_authority_into_post(self):
+        for kind in ("expiry", "revocation"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp:
+                def unused(f, expected):
+                    return f.event("POST", "repos/FS-GG/disposable/pulls",
+                                   body=coordinator.operator.pull_request_body(expected),
+                                   status=201, value={})
+                clock = MutableClock(NOW)
+                def token_factory(keys, clock):
+                    if kind == "expiry":
+                        return ChangingToken(lambda: setattr(
+                            clock, "value", NOW + dt.timedelta(minutes=11)))
+                    return ChangingToken(lambda: setattr(keys, "revoked", True))
+                first, selected, expected, raw, key, reader, counter, token, journal = \
+                    self._scenario(temp, unused, keys_type=MutableKeys,
+                                   clock=clock, token_factory=token_factory)
+                self.assertIsInstance(first, coordinator.operator.Unknown)
+                self.assertEqual(token.calls, 1)
+                self.assertFalse(counter.exists())
+                self.assertTrue(journal.read(selected, hashlib.sha256(raw).hexdigest()))
+                self.assertIsNone(journal.outcome(selected, hashlib.sha256(raw).hexdigest()))
+
+    def test_final_key_lookup_cannot_hide_expiry_or_revocation(self):
+        for kind in ("expiry", "revocation"):
+            with self.subTest(kind=kind), tempfile.TemporaryDirectory() as temp:
+                clock = MutableClock(NOW)
+                class DelayedKeys(Keys):
+                    def active_public_key(self, key_id, issuer_actor_id, now):
+                        self.calls += 1
+                        if kind == "expiry" and self.calls == 4:
+                            clock.value = NOW + dt.timedelta(minutes=11)
+                        if kind == "revocation" and self.calls == 5:
+                            return None
+                        return self.key
+                def unused(f, expected):
+                    return f.event("POST", "repos/FS-GG/disposable/pulls",
+                                   body=coordinator.operator.pull_request_body(expected),
+                                   status=201, value={})
+                first, selected, expected, raw, key, reader, counter, token, journal = \
+                    self._scenario(temp, unused, keys_type=DelayedKeys, clock=clock)
+                self.assertIsInstance(first, coordinator.operator.Unknown)
+                self.assertEqual(token.calls, 1)
+                self.assertFalse(counter.exists())
+                self.assertIsNone(journal.outcome(selected, hashlib.sha256(raw).hexdigest()))
+
     def test_one_post_and_recovery_only_reads(self):
         import importlib.util
         fixture_path = ROOT / "eng/tests/fsc07-isolated-operation/test_versioned_operator_readback.py"
@@ -339,7 +417,7 @@ class NativeIntegrationTests(unittest.TestCase):
             journal = coordinator.AttemptJournal(pathlib.Path(temp) / "attempt.db")
             self.assertTrue(journal.establish_parent(selected))
             first = coordinator.execute_pull(selected, expected, raw, Keys(key), reader,
-                                             writer, token, journal, FixedClock(NOW, NOW))
+                                             writer, token, journal, FixedClock(NOW, NOW, NOW))
             self.assertIsInstance(first, op.ExactPull)
             self.assertEqual(counter.read_text(), "POST\n")
             self.assertEqual(token.calls, 1)

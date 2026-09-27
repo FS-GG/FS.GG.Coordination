@@ -136,7 +136,8 @@ class _Transport:
             if not self.journal.read(self.binding, self.grant_sha):
                 raise Refused("runtime-fence-drift")
             if verify(self.raw_grant, self.binding, self.key_reader,
-                      self.clock_port.now()) != self.grant_sha:
+                      self.clock_port.now(),
+                      postcheck_clock=self.clock_port) != self.grant_sha:
                 raise Refused("runtime-grant-drift")
             if (path != f"repos/{self.binding.target_repository}/pulls"
                     or json.loads(self.binding.canonical_request) != body):
@@ -144,6 +145,12 @@ class _Transport:
             token = self.token_port.read_execution_token()
             if type(token) is not bytes or not token:
                 raise Refused("runtime-token-unavailable")
+            # Token acquisition may block or mint. Its result confers no lasting
+            # authority: recheck active key and expiry at the actual send edge.
+            if verify(self.raw_grant, self.binding, self.key_reader,
+                      self.clock_port.now(),
+                      postcheck_clock=self.clock_port) != self.grant_sha:
+                raise Refused("runtime-grant-drift")
             try:
                 response = self.write_port.post_pull(path, self.binding.canonical_request, token)
             except Exception:
