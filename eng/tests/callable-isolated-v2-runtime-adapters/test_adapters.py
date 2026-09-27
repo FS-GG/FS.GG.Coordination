@@ -211,6 +211,21 @@ class ProtectedAdapterTests(unittest.TestCase):
             with self.assertRaises(adapters.Refused):
                 runtime.key_reader.active_public_key(authority.key_id, 104, NOW)
 
+    def test_issuer_expiring_during_key_read_is_refused(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            runtime = adapters.compose_installed(authority)
+            authority.issuer = dataclasses.replace(authority.issuer,
+                expires_at=NOW + dt.timedelta(seconds=1))
+
+            def delayed_key_read(key_id, issuer_actor_id):
+                authority.now = authority.issuer.expires_at
+                return authority.key
+
+            authority.read_active_key = delayed_key_read
+            with self.assertRaisesRegex(adapters.Refused, "protected-key-invalid"):
+                runtime.key_reader.active_public_key(authority.key_id, 104, NOW)
+
     def test_invalid_grant_does_not_poison_corrected_parent_bootstrap(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))

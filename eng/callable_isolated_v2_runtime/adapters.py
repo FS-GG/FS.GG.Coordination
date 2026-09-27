@@ -389,6 +389,8 @@ class ProtectedIssuerKeyReader:
         after = self.clock.now()
         self.installation.scope("issuer", after)
         self.installation.scope("key", after)
+        if not after < issuer.expires_at:
+            raise Refused("protected-key-invalid")
         return key.public_key
 
 
