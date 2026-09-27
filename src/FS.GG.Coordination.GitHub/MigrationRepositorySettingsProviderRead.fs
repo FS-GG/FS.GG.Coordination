@@ -28,6 +28,21 @@ type MigrationRepositoryCodeSecurityRead =
       Enforcement: string
       ConfigurationUpdatedAt: string }
 
+type MigrationRepositoryDependencyControlsRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      ConfigurationId: int64
+      ConfigurationTargetType: string
+      ConfigurationName: string
+      Enforcement: string
+      ConfigurationUpdatedAt: string
+      DependencyGraph: bool
+      DependencyGraphAutosubmitAction: bool
+      DependencyGraphAutosubmitUsesLabeledRunners: bool
+      DependabotAlerts: bool
+      DependabotSecurityUpdates: bool
+      DependabotSecurityUpdatesPaused: bool
+      DependabotDelegatedAlertDismissal: bool }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -337,6 +352,10 @@ module MigrationRepositorySettingsProviderRead =
                 Error(MigrationRepositorySettingsSurfaceRefusal.Partial $"inherited-or-unset:{name}")
             | _ -> refuse $"unsupported:{name}:{status}")
 
+    let private explicitSecurityFlag name value =
+        explicitSecurityStatus name value
+        |> Result.map ((=) "enabled")
+
     let private advancedSecurity value =
         text "advanced_security" value
         |> Result.bind (fun status ->
@@ -565,6 +584,199 @@ module MigrationRepositorySettingsProviderRead =
                         | Ok status, Ok _ -> refuse $"unsupported:attachment-status:{status}"
                         | Error failure, _ | _, Error failure -> Error failure))
 
+    let private dependencyOptions value =
+        prop "dependency_graph_autosubmit_action_options" value
+        |> Result.bind (fun item ->
+            if item.ValueKind <> JsonValueKind.Object then
+                refuse "invalid:dependency_graph_autosubmit_action_options"
+            else
+                exactMembers "dependency_graph_autosubmit_action_options" [ "labeled_runners" ] item
+                |> Result.bind (flag "labeled_runners"))
+
+    let private endpointRequest (options: MigrationGitHubReadOptions) suffix =
+        let uri = Uri(options.ApiBase, $"{repoPath options}/{suffix}")
+        uri,
+        Rest
+            { Method=Get; Uri=uri; Headers=headers options; Body=None
+              ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+
+    let private terminalPage stream (uri: Uri) (response: ResponseEnvelope) =
+        let body = if isNull response.Body then "" else response.Body
+        { SettingsStream=stream
+          SettingsRequestedUri=uri.AbsoluteUri
+          SettingsPayloadJson=body
+          SettingsPayloadSha256=hashText body
+          SettingsNextUri=None }
+
+    let private readVulnerabilityAlerts
+        (options: MigrationGitHubReadOptions)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        let uri, request = endpointRequest options "vulnerability-alerts"
+        match transport.Send request with
+        | NetworkFailure | TimedOut ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "transport-unavailable")
+        | Response response when response.StatusCode = 401 || response.StatusCode = 403 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized $"http:{response.StatusCode}")
+        | Response response when response.StatusCode = 404 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                "disabled-or-inaccessible:vulnerability-alerts")
+        | Response response when response.StatusCode <> 204 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                $"vulnerability-alerts-http:{response.StatusCode}")
+        | Response response when responseHeader "link" response.Headers |> Option.isSome ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                "vulnerability-alerts-unexpected-continuation")
+        | Response response when not (isNull response.Body || response.Body = "") ->
+            refuse "vulnerability-alerts-unexpected-body"
+        | Response response -> Ok(terminalPage "vulnerability-alerts" uri response)
+
+    let private readAutomatedSecurityFixes
+        (options: MigrationGitHubReadOptions)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        let uri, request = endpointRequest options "automated-security-fixes"
+        match transport.Send request with
+        | NetworkFailure | TimedOut ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "transport-unavailable")
+        | Response response when response.StatusCode = 401 || response.StatusCode = 403 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized $"http:{response.StatusCode}")
+        | Response response when response.StatusCode = 404 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                "disabled-or-inaccessible:dependabot-security-updates")
+        | Response response when response.StatusCode <> 200 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                $"automated-security-fixes-http:{response.StatusCode}")
+        | Response response when responseHeader "link" response.Headers |> Option.isSome ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                "automated-security-fixes-unexpected-continuation")
+        | Response response ->
+            parse response.Body
+            |> Result.bind (exactMembers "automated-security-fixes" [ "enabled"; "paused" ])
+            |> Result.bind (fun root ->
+                match flag "enabled" root, flag "paused" root with
+                | Ok true, Ok paused -> Ok(paused, terminalPage "automated-security-fixes" uri response)
+                | Ok false, Ok _ -> refuse "contradictory:automated-security-fixes-200-disabled"
+                | Error failure, _ | _, Error failure -> Error failure)
+
+    let readDependencyControls
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) then refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            repositoryResponse options identity repositoryRevision transport
+            |> Result.bind (fun (repository, _) ->
+                let configurationUri, configurationRequest = codeSecurityRequest options
+                match transport.Send configurationRequest with
+                | NetworkFailure | TimedOut ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "transport-unavailable")
+                | Response response when response.StatusCode = 401 || response.StatusCode = 403 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized $"http:{response.StatusCode}")
+                | Response response when response.StatusCode = 404 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "http:404")
+                | Response response when response.StatusCode = 204 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                        "no-attached-configuration-dependency-controls-unproven")
+                | Response response when response.StatusCode <> 200 ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable $"http:{response.StatusCode}")
+                | Response response when responseHeader "link" response.Headers |> Option.isSome ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial "unexpected-continuation")
+                | Response response ->
+                    parse response.Body
+                    |> Result.bind (fun root ->
+                        match text "status" root, prop "configuration" root with
+                        | Ok "attached", Ok configuration ->
+                            match positive "id" configuration, text "target_type" configuration,
+                                  text "name" configuration, text "enforcement" configuration,
+                                  text "updated_at" configuration,
+                                  explicitSecurityFlag "dependency_graph" configuration,
+                                  explicitSecurityFlag "dependency_graph_autosubmit_action" configuration,
+                                  dependencyOptions configuration,
+                                  explicitSecurityFlag "dependabot_alerts" configuration,
+                                  explicitSecurityFlag "dependabot_security_updates" configuration,
+                                  explicitSecurityFlag "dependabot_delegated_alert_dismissal" configuration with
+                            | Ok id, Ok targetType, Ok name, Ok enforcement, Ok updatedAt,
+                              Ok dependencyGraph, Ok autosubmit, Ok labeledRunners,
+                              Ok alerts, Ok securityUpdates, Ok delegatedDismissal when
+                                (targetType = "organization" || targetType = "enterprise")
+                                && (enforcement = "enforced" || enforcement = "unenforced"
+                                    || enforcement = "enterprise_enforced") ->
+                                configurationUrl options targetType id configuration
+                                |> Result.bind (fun _ ->
+                                    if not dependencyGraph || not alerts || not securityUpdates then
+                                        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                                            "disabled-dependency-controls-effective-state-not-readable")
+                                    else
+                                        readVulnerabilityAlerts options transport
+                                        |> Result.bind (fun alertsPage ->
+                                            readAutomatedSecurityFixes options transport
+                                            |> Result.map (fun (paused, updatesPage) ->
+                                                let subject = $"configuration:{id}"
+                                                let setting name value =
+                                                    { Surface=DependencyControls; Subject=subject; Name=name; Value=value }
+                                                let settings =
+                                                    [ setting "configuration-id" (SettingValue.Integer id)
+                                                      setting "target-type" (SettingValue.Text targetType)
+                                                      setting "configuration-name" (SettingValue.Text name)
+                                                      setting "enforcement" (SettingValue.Text enforcement)
+                                                      setting "configuration-updated-at" (SettingValue.Text updatedAt)
+                                                      setting "dependency-graph" (SettingValue.Boolean dependencyGraph)
+                                                      setting "dependency-graph-autosubmit-action" (SettingValue.Boolean autosubmit)
+                                                      setting "dependency-graph-autosubmit-uses-labeled-runners"
+                                                          (SettingValue.Boolean labeledRunners)
+                                                      setting "dependabot-alerts" (SettingValue.Boolean alerts)
+                                                      setting "dependabot-security-updates" (SettingValue.Boolean securityUpdates)
+                                                      setting "dependabot-security-updates-paused" (SettingValue.Boolean paused)
+                                                      setting "dependabot-delegated-alert-dismissal"
+                                                          (SettingValue.Boolean delegatedDismissal) ]
+                                                let configurationPage =
+                                                    terminalPage "dependency-security-configuration"
+                                                        configurationUri response
+                                                { SurfaceRead=
+                                                    { RepositoryIdentity=identity
+                                                      RepositoryRevision=repositoryRevision
+                                                      Surface=DependencyControls
+                                                      Complete=true
+                                                      Pages=
+                                                        [ identityPage options repository
+                                                          configurationPage
+                                                          alertsPage
+                                                          updatesPage ]
+                                                      Settings=settings }
+                                                  ConfigurationId=id
+                                                  ConfigurationTargetType=targetType
+                                                  ConfigurationName=name
+                                                  Enforcement=enforcement
+                                                  ConfigurationUpdatedAt=updatedAt
+                                                  DependencyGraph=dependencyGraph
+                                                  DependencyGraphAutosubmitAction=autosubmit
+                                                  DependencyGraphAutosubmitUsesLabeledRunners=labeledRunners
+                                                  DependabotAlerts=alerts
+                                                  DependabotSecurityUpdates=securityUpdates
+                                                  DependabotSecurityUpdatesPaused=paused
+                                                  DependabotDelegatedAlertDismissal=delegatedDismissal })))
+                            | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                                refuse "unsupported:dependency-configuration-provenance"
+                            | Error failure, _, _, _, _, _, _, _, _, _, _
+                            | _, Error failure, _, _, _, _, _, _, _, _, _
+                            | _, _, Error failure, _, _, _, _, _, _, _, _
+                            | _, _, _, Error failure, _, _, _, _, _, _, _
+                            | _, _, _, _, Error failure, _, _, _, _, _, _
+                            | _, _, _, _, _, Error failure, _, _, _, _, _
+                            | _, _, _, _, _, _, Error failure, _, _, _, _
+                            | _, _, _, _, _, _, _, Error failure, _, _, _
+                            | _, _, _, _, _, _, _, _, Error failure, _, _
+                            | _, _, _, _, _, _, _, _, _, Error failure, _
+                            | _, _, _, _, _, _, _, _, _, _, Error failure -> Error failure
+                        | Ok status, Ok _ -> refuse $"unsupported:attachment-status:{status}"
+                        | Error failure, _ | _, Error failure -> Error failure))
+
     let readReleasesAndTags
         (options: MigrationGitHubReadOptions)
         (identity: RepositoryIdentity)
@@ -612,6 +824,10 @@ type MigrationRepositorySettingsGitHubProvider
                 |> Result.map _.SurfaceRead
             | CodeSecurity ->
                 MigrationRepositorySettingsProviderRead.readCodeSecurity
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | DependencyControls ->
+                MigrationRepositorySettingsProviderRead.readDependencyControls
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | Environments ->

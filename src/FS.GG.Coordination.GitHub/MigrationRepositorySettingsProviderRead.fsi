@@ -35,6 +35,23 @@ type MigrationRepositoryCodeSecurityRead =
       Enforcement: string
       ConfigurationUpdatedAt: string }
 
+/// Effective dependency controls from an attached explicit security
+/// configuration, reconciled with repository-level alert and update reads.
+type MigrationRepositoryDependencyControlsRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      ConfigurationId: int64
+      ConfigurationTargetType: string
+      ConfigurationName: string
+      Enforcement: string
+      ConfigurationUpdatedAt: string
+      DependencyGraph: bool
+      DependencyGraphAutosubmitAction: bool
+      DependencyGraphAutosubmitUsesLabeledRunners: bool
+      DependabotAlerts: bool
+      DependabotSecurityUpdates: bool
+      DependabotSecurityUpdatesPaused: bool
+      DependabotDelegatedAlertDismissal: bool }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -56,8 +73,17 @@ module MigrationRepositorySettingsProviderRead =
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryCodeSecurityRead, MigrationRepositorySettingsSurfaceRefusal>
 
-/// Concrete partial provider. ReleasesAndTags and CodeSecurity are implemented.
-/// Every other incomplete surface refuses and cannot complete canonical settings.
+    /// GET-only read of explicit dependency controls from the attached security
+    /// configuration, reconciled with repository alert and security-update state.
+    val readDependencyControls:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryDependencyControlsRead, MigrationRepositorySettingsSurfaceRefusal>
+
+/// Concrete partial provider. ReleasesAndTags, CodeSecurity, and DependencyControls
+/// are implemented. Other incomplete surfaces refuse canonical composition.
 type MigrationRepositorySettingsGitHubProvider =
     new:
         options:MigrationGitHubReadOptions * transport:IMigrationGitHubReadTransport ->
