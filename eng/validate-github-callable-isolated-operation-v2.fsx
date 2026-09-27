@@ -36,6 +36,23 @@ let testsPath = "eng/tests/fsc07-isolated-operation/test_versioned_operator_read
 let loopbackPath = "eng/qualify-callable-isolated-v2-loopback.py"
 let preflightPath = "evidence/github-substrate-v2/gs2-09-9/isolated-operation-preflight.json"
 let identity = "v2-call-01-4b-isolated-native-v2-provisional"
+let expectedForbidden =
+    [ "live-provider-mutation"
+      "new-external-acceptance"
+      "migration-or-cutover"
+      "production-writer-enable"
+      "historical-operation-rewrite" ]
+
+let validateAuthorityCeiling (value: JsonElement) =
+    let forbidden = property "forbidden" value
+    require (forbidden.ValueKind = JsonValueKind.Array) "v5 forbidden authority ceiling shape"
+    let actual =
+        forbidden.EnumerateArray()
+        |> Seq.map (fun item ->
+            require (item.ValueKind = JsonValueKind.String) "v5 forbidden authority ceiling entry"
+            item.GetString())
+        |> Seq.toList
+    require (actual = expectedForbidden) "v5 forbidden authority ceiling"
 
 // The protected native operation is historical. Its source and evidence are never rotated in place.
 for relative, expected in [
@@ -53,6 +70,7 @@ require (string "schema" c = "fsgg.coordination.callable-isolated-operation-cont
 require (string "identity" c = identity) "v5 contract identity"
 require (string "state" c = "prepared-not-authorized" && not (boolean "authorized" c)) "v5 contract authorization"
 require (string "scope" c = "offline-inspect-and-loopback-http-only; no live provider authority or effect command") "v5 contract scope"
+validateAuthorityCeiling c
 let source = property "source" c
 require (string "operationSource" source = sourcePath) "v5 source path"
 require (string "operationSourceSha256" source = sha sourcePath) "v5 source bytes"
@@ -94,6 +112,43 @@ let run executable values =
     child.WaitForExit()
     require (child.ExitCode = 0) $"offline qualification command failed with exit {child.ExitCode}"
     output.Result, error.Result
+
+// A valid semantic reseal must not let a removed authority ceiling pass this
+// independent validator, even while the provisional operator remains unchanged.
+let mutationRoot = Path.Combine(Path.GetTempPath(), $"fsgg-v2-authority-ceiling-{Guid.NewGuid():N}")
+Directory.CreateDirectory mutationRoot |> ignore
+try
+    let mutatedContract = Path.Combine(mutationRoot, "contract.json")
+    let mutatedProposal = Path.Combine(mutationRoot, "proposal.json")
+    let reseal = """
+import hashlib,json,pathlib,sys
+contract_path,proposal_path,out_contract,out_proposal=sys.argv[1:]
+def seal(value,key):
+    value.pop(key,None)
+    raw=json.dumps(value,sort_keys=True,separators=(',',':'),ensure_ascii=True,allow_nan=False).encode('ascii')
+    value[key]=hashlib.sha256(raw).hexdigest()
+contract=json.loads(pathlib.Path(contract_path).read_bytes())
+contract['forbidden']=[]
+seal(contract,'contractSha256')
+proposal=json.loads(pathlib.Path(proposal_path).read_bytes())
+proposal['contract']['sha256']=contract['contractSha256']
+seal(proposal,'proposalSha256')
+pathlib.Path(out_contract).write_text(json.dumps(contract,separators=(',',':')),encoding='utf-8')
+pathlib.Path(out_proposal).write_text(json.dumps(proposal,separators=(',',':')),encoding='utf-8')
+"""
+    run "python3" [ "-c"; reseal; absolute contractPath; absolute proposalPath;
+                    mutatedContract; mutatedProposal ] |> ignore
+    // Prove the mutation is coherently resealed and otherwise accepted by the
+    // unchanged provisional inspect boundary; this validator supplies the new refusal.
+    run "python3" [ sourcePath; "--contract"; mutatedContract; "--proposal"; mutatedProposal;
+                    "--preflight"; preflightPath; "inspect" ] |> ignore
+    use mutated = JsonDocument.Parse(File.ReadAllBytes mutatedContract)
+    let mutable refused = false
+    try validateAuthorityCeiling mutated.RootElement
+    with _ -> refused <- true
+    require refused "v5 resealed forbidden authority ceiling mutation accepted"
+finally
+    Directory.Delete(mutationRoot, true)
 
 let inspectionText, _ =
     run "python3" [ sourcePath; "--contract"; contractPath; "--proposal"; proposalPath;
