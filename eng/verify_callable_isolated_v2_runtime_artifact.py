@@ -90,30 +90,20 @@ def _members(archive: bytes) -> dict[str, bytes]:
         raise Refused("runtime-archive-invalid") from None
 
 
-def verify(archive: bytes, manifest_raw: bytes) -> dict:
+def verify_candidate_bytes(archive: bytes, manifest_raw: bytes) -> dict:
+    """Verify a downloaded candidate without consulting a source checkout."""
     manifest = _manifest(manifest_raw)
-    try:
-        revision, tree = builder.source_identity()
-        sources = builder.source_members()
-        builder_sha = _sha(builder.source_blob(builder.BUILDER_SOURCE))
-    except ValueError:
-        raise Refused("runtime-source-unavailable") from None
     requirements = manifest["runtimeRequirements"]
     if (type(manifest["schema"]) is not str
             or manifest["schema"] != builder.SCHEMA
             or type(manifest["sourceRevision"]) is not str
             or HEX40.fullmatch(manifest["sourceRevision"]) is None
-            or manifest["sourceRevision"] != revision
             or type(manifest["sourceTree"]) is not str
             or HEX40.fullmatch(manifest["sourceTree"]) is None
-            or manifest["sourceTree"] != tree
             or type(manifest["builderSha256"]) is not str
             or HEX64.fullmatch(manifest["builderSha256"]) is None
-            or manifest["builderSha256"] != builder_sha
             or type(manifest["retainedOperatorSha256"]) is not str
             or HEX64.fullmatch(manifest["retainedOperatorSha256"]) is None
-            or manifest["retainedOperatorSha256"] != _sha(sources[
-                "callable_isolated_v2_retained_operator.py"])
             or type(manifest["archiveSha256"]) is not str
             or HEX64.fullmatch(manifest["archiveSha256"]) is None
             or manifest["archiveSha256"] != _sha(archive)
@@ -128,25 +118,47 @@ def verify(archive: bytes, manifest_raw: bytes) -> dict:
 
     members = _members(archive)
     listed = manifest["members"]
-    if type(listed) is not list or len(listed) != len(sources):
+    if type(listed) is not list or len(listed) != len(members):
         raise Refused("runtime-member-manifest")
-    for index, path in enumerate(sorted(sources)):
+    for index, path in enumerate(sorted(members)):
         entry = listed[index]
-        raw = members.get(path)
+        raw = members[path]
         if (type(entry) is not dict or set(entry) != {"path", "sha256", "size"}
                 or entry["path"] != path
                 or type(entry["sha256"]) is not str
                 or HEX64.fullmatch(entry["sha256"]) is None
                 or type(entry["size"]) is not int
-                or entry["size"] != len(sources[path])
-                or entry["sha256"] != _sha(sources[path])
-                or raw != sources[path]):
+                or entry["size"] != len(raw)
+                or entry["sha256"] != _sha(raw)):
             raise Refused("runtime-member-binding")
-    if archive != builder._archive(sources):
+    if manifest["retainedOperatorSha256"] != _sha(members[
+            "callable_isolated_v2_retained_operator.py"]):
+        raise Refused("runtime-retained-operator-binding")
+    if archive != builder._archive(members):
         raise Refused("runtime-archive-noncanonical")
     return {"schema": builder.SCHEMA, "verified": True,
-            "sourceRevision": revision, "sourceTree": tree,
+            "sourceRevision": manifest["sourceRevision"],
+            "sourceTree": manifest["sourceTree"],
             "archiveSha256": manifest["archiveSha256"]}
+
+
+def verify(archive: bytes, manifest_raw: bytes) -> dict:
+    candidate = verify_candidate_bytes(archive, manifest_raw)
+    manifest = _manifest(manifest_raw)
+    try:
+        revision, tree = builder.source_identity()
+        sources = builder.source_members()
+        builder_sha = _sha(builder.source_blob(builder.BUILDER_SOURCE))
+    except ValueError:
+        raise Refused("runtime-source-unavailable") from None
+    if (candidate["sourceRevision"] != revision
+            or candidate["sourceTree"] != tree
+            or manifest["builderSha256"] != builder_sha):
+        raise Refused("runtime-manifest-binding")
+    members = _members(archive)
+    if any(members[path] != sources[path] for path in sorted(sources)):
+        raise Refused("runtime-member-binding")
+    return candidate
 
 
 def _read(path: pathlib.Path, maximum: int, reason: str) -> bytes:

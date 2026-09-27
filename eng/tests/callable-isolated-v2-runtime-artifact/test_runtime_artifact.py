@@ -9,6 +9,7 @@ import io
 import json
 import os
 import pathlib
+import stat
 import subprocess
 import sys
 import tempfile
@@ -29,6 +30,31 @@ class RuntimeArtifactTests(unittest.TestCase):
         manifest = builder.build(root)
         return (root / builder.ARCHIVE_NAME,
                 root / builder.MANIFEST_NAME, manifest)
+
+    def custom_archive(self, members, *, compression=zipfile.ZIP_STORED,
+                       unsafe_member=None):
+        output = io.BytesIO()
+        with zipfile.ZipFile(output, "w", compression=compression,
+                             allowZip64=False) as zipped:
+            for path, raw in members.items():
+                info = zipfile.ZipInfo(path, builder.FIXED_TIME)
+                info.compress_type = compression
+                info.create_system = 3
+                mode = (stat.S_IFLNK | 0o777 if path == unsafe_member
+                        else stat.S_IFREG | 0o644)
+                info.external_attr = mode << 16
+                zipped.writestr(info, raw)
+        return output.getvalue()
+
+    def reseal(self, manifest, archive, members):
+        value = json.loads(json.dumps(manifest))
+        value["archiveSha256"] = hashlib.sha256(archive).hexdigest()
+        value["members"] = [
+            {"path": path, "sha256": hashlib.sha256(raw).hexdigest(),
+             "size": len(raw)} for path, raw in members.items()]
+        value["retainedOperatorSha256"] = hashlib.sha256(members[
+            "callable_isolated_v2_retained_operator.py"]).hexdigest()
+        return builder.canonical(value)
 
     def test_two_builds_are_byte_identical_and_emit_only_frozen_names(self):
         with tempfile.TemporaryDirectory() as temp:
@@ -73,10 +99,60 @@ class RuntimeArtifactTests(unittest.TestCase):
             archive, manifest_path, _ = self.build(pathlib.Path(temp))
             raw_archive = archive.read_bytes()
             raw_manifest = manifest_path.read_bytes()
+            self.assertTrue(verifier.verify_candidate_bytes(
+                raw_archive, raw_manifest)["verified"])
             self.assertTrue(verifier.verify(raw_archive, raw_manifest)["verified"])
             with self.assertRaisesRegex(verifier.Refused,
                                         "runtime-manifest-binding"):
                 verifier.verify(raw_archive + b"x", raw_manifest)
+
+    def test_candidate_byte_verifier_is_source_independent_but_checkout_is_exact(self):
+        with tempfile.TemporaryDirectory() as temp:
+            archive, manifest_path, _ = self.build(pathlib.Path(temp))
+            value = json.loads(manifest_path.read_bytes())
+            value["sourceRevision"] = "a" * 40
+            value["sourceTree"] = "b" * 40
+            value["builderSha256"] = "c" * 64
+            raw = builder.canonical(value)
+            checked = verifier.verify_candidate_bytes(archive.read_bytes(), raw)
+            self.assertEqual(checked["sourceRevision"], "a" * 40)
+            self.assertEqual(checked["sourceTree"], "b" * 40)
+            with self.assertRaisesRegex(verifier.Refused,
+                                        "runtime-manifest-binding"):
+                verifier.verify(archive.read_bytes(), raw)
+
+    def test_candidate_byte_verifier_refuses_compressed_archive(self):
+        with tempfile.TemporaryDirectory() as temp:
+            _, _, manifest = self.build(pathlib.Path(temp))
+            members = builder.source_members()
+            archive = self.custom_archive(
+                members, compression=zipfile.ZIP_DEFLATED)
+            with self.assertRaisesRegex(verifier.Refused,
+                                        "runtime-archive-metadata"):
+                verifier.verify_candidate_bytes(
+                    archive, self.reseal(manifest, archive, members))
+
+    def test_candidate_byte_verifier_refuses_oversized_member(self):
+        with tempfile.TemporaryDirectory() as temp:
+            _, _, manifest = self.build(pathlib.Path(temp))
+            members = builder.source_members()
+            members["__main__.py"] = b"x" * 256_001
+            archive = self.custom_archive(members)
+            with self.assertRaisesRegex(verifier.Refused,
+                                        "runtime-archive-metadata"):
+                verifier.verify_candidate_bytes(
+                    archive, self.reseal(manifest, archive, members))
+
+    def test_candidate_byte_verifier_refuses_unsafe_member_metadata(self):
+        with tempfile.TemporaryDirectory() as temp:
+            _, _, manifest = self.build(pathlib.Path(temp))
+            members = builder.source_members()
+            archive = self.custom_archive(
+                members, unsafe_member="__main__.py")
+            with self.assertRaisesRegex(verifier.Refused,
+                                        "runtime-archive-metadata"):
+                verifier.verify_candidate_bytes(
+                    archive, self.reseal(manifest, archive, members))
 
     def test_verifier_refuses_noncanonical_duplicate_and_wrong_member_manifest(self):
         with tempfile.TemporaryDirectory() as temp:
