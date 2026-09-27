@@ -23,6 +23,14 @@ type private CapturingTransport(inner: IMigrationGitHubReadTransport, allow: Git
 
 [<RequireQualifiedAccess>]
 module MigrationInspectProviderAdapter =
+    let bindReviewDeliveryRecords options native journals =
+        MigrationReviewDeliveryInspectBinder.bind options.Cohort options.Repository native journals
+        |> Result.bind (fun capture ->
+            MigrationReviewDeliveryInspectBinder.authority options.Cohort 1 capture
+            |> Result.bind (fun first ->
+                MigrationReviewDeliveryInspectBinder.authority options.Cohort 2 capture
+                |> Result.map (fun second -> first, second)))
+
     let internal allowedRequest (options: MigrationInspectProviderOptions) authority request =
         match authority, request with
         | "repository-settings/core", Rest value ->

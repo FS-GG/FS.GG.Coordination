@@ -16,6 +16,14 @@ type MigrationInspectProviderAdapter =
 
 [<RequireQualifiedAccess>]
 module MigrationInspectProviderAdapter =
+    /// Pure canonical binder over independently captured native and journal evidence.
+    /// ReadAuthority remains unavailable until both provider readers join this adapter.
+    val bindReviewDeliveryRecords:
+        options:MigrationInspectProviderOptions ->
+        native:MigrationReviewDeliveryNativeTwoPass ->
+        journals:MigrationJournalTwoPass ->
+            Result<GitHubMigrationInspectAuthority * GitHubMigrationInspectAuthority, string>
+
     /// Refuses requests outside one declared read-only authority before dispatching to inner.
     val guardReadTransport:
         options:MigrationInspectProviderOptions -> authority:string ->
