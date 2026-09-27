@@ -2,7 +2,9 @@
 
 import dataclasses
 import hashlib
+import importlib.util
 import io
+import json
 import pathlib
 import sys
 import tempfile
@@ -109,6 +111,96 @@ class ConfigurationAuthority:
 
 
 class RuntimeHostTests(unittest.TestCase):
+    def test_execute_then_two_fresh_recoveries_keep_one_attempt(self):
+        expected_host, witness, bundle = fixture()
+        spec = importlib.util.spec_from_file_location("host_adapter_fixtures",
+            ENG / "tests/callable-isolated-v2-runtime-adapters/test_adapters.py")
+        adapter_fixtures = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = adapter_fixtures
+        spec.loader.exec_module(adapter_fixtures)
+        spec = importlib.util.spec_from_file_location("host_native_fixtures",
+            ENG / "tests/fsc07-isolated-operation/test_versioned_operator_readback.py")
+        native_fixtures = importlib.util.module_from_spec(spec)
+        sys.modules[spec.name] = native_fixtures
+        spec.loader.exec_module(native_fixtures)
+        old = adapter_fixtures.coordinator
+        op = old.operator
+        pull_expected = op.ExpectedPull(op.OPERATION_IDENTITY, 1, 44,
+            "FS-GG/disposable", "refs/heads/source", native_fixtures.SHA_A,
+            "refs/heads/main", native_fixtures.SHA_B)
+        before = op.NativeReadAdapter(op.OfflineTranscriptTransport(
+            native_fixtures.pull_read_events())).read_pull_census(pull_expected)
+        prestate_sha = adapter_fixtures.contracts.digest(
+            adapter_fixtures.grant.canonical(dataclasses.asdict(before)))
+        pull = native_fixtures.pull_observed().pulls[0]
+        response = dict(pull, url="https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        events = (native_fixtures.pull_read_events() * 4
+            + [native_fixtures.event("POST", "repos/FS-GG/disposable/pulls",
+                body=op.pull_request_body(pull_expected), status=201, value=response)]
+            + native_fixtures.pull_read_events((pull,)) * 6)
+        transport = op.OfflineTranscriptTransport(events)
+
+        class RetainedAuthority(adapter_fixtures.Authority):
+            def __init__(self, root):
+                super().__init__(root, expected_override=pull_expected,
+                    binding_changes={"source_revision": expected_host.source_revision,
+                        "source_tree": expected_host.source_tree,
+                        "artifact_sha256": expected_host.archive_sha256,
+                        "workflow_sha256": expected_host.workflow_sha256,
+                        "run_id": expected_host.execution_run_id,
+                        "run_attempt": expected_host.execution_run_attempt,
+                        "target_prestate_sha256": prestate_sha})
+                self.configuration = dataclasses.replace(self.configuration,
+                    revision=expected_host.source_revision,
+                    source_tree=expected_host.source_tree)
+                self.token = dataclasses.replace(self.token,
+                    repository=pull_expected.repository,
+                    repository_id=pull_expected.repository_id)
+                self.reservations = 0
+                self.persistences = 0
+
+            def native_get(self, path):
+                self.gets.append(path)
+                return transport.request("GET", path)
+
+            def native_post(self, path, body, token):
+                self.posts.append((path, body, token))
+                return transport.request("POST", path, json.loads(body))
+
+            def reserve_attempt(self, binding, grant_sha256):
+                self.reservations += 1
+                return super().reserve_attempt(binding, grant_sha256)
+
+            def persist_attempt_outcome(self, operation_id, binding_sha256,
+                                        grant_sha256, outcome):
+                self.persistences += 1
+                return super().persist_attempt_outcome(operation_id,
+                    binding_sha256, grant_sha256, outcome)
+
+        with tempfile.TemporaryDirectory() as directory:
+            authority = RetainedAuthority(pathlib.Path(directory))
+            installed = Host(expected_host, bundle, authority)
+            saved = {name: sys.modules.pop(name) for name in host_loader.MODULES
+                     if name in sys.modules}
+            try:
+                first = host_loader.run(installed, witness)
+                self.assertEqual(type(first).__name__, "ExactPull")
+                self.assertEqual((len(authority.posts), authority.token_calls,
+                    authority.reservations, authority.persistences), (1, 1, 1, 1))
+                first_recovery = host_loader.run(installed, witness, recovery=True)
+                second_recovery = host_loader.run(installed, witness, recovery=True)
+            finally:
+                sys.modules.update(saved)
+            self.assertEqual([type(result).__name__ for result in
+                (first_recovery, second_recovery)], ["ExactPull"] * 2)
+            self.assertEqual([result.number for result in
+                (first, first_recovery, second_recovery)], [8] * 3)
+            self.assertEqual(len(authority.posts), 1)
+            self.assertEqual(authority.token_calls, 1)
+            self.assertEqual(authority.reservations, 1)
+            self.assertEqual(authority.persistences, 1)
+            self.assertEqual(transport.writes, 1)
+
     def test_exact_archive_loads_and_missing_authority_refuses_before_import(self):
         expected, witness, bundle = fixture()
         missing = Host(expected, bundle, None)

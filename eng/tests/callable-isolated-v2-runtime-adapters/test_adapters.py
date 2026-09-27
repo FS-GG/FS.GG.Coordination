@@ -31,7 +31,8 @@ def provenance(authority_id, role, index):
 
 
 class Authority:
-    def __init__(self, root: pathlib.Path):
+    def __init__(self, root: pathlib.Path, *, expected_override=None,
+                 binding_changes=None):
         self.authority_id = "a" * 64
         self.now = NOW
         private_key = root / "private.pem"
@@ -48,6 +49,8 @@ class Authority:
             coordinator.operator.OPERATION_IDENTITY, 1, 42, "FS-GG/target",
             "refs/heads/source", "1" * 40,
             "refs/heads/main", "2" * 40)
+        if expected_override is not None:
+            expected = expected_override
         request = json.dumps(coordinator.operator.pull_request_body(expected),
             sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode("ascii")
         self.binding = contracts.Binding(
@@ -56,6 +59,8 @@ class Authority:
             contracts.digest(request), 101, 2, 103, 104,
             "FS-GG/.github", "refs/heads/main", "journal/runtime.json",
             9, "8" * 40, "operation-1", request)
+        if binding_changes is not None:
+            self.binding = dataclasses.replace(self.binding, **binding_changes)
         self.binding_sha = contracts.digest(grant.canonical(self.binding.claims()))
         payload = {"schema": grant.SCHEMA, "audience": grant.AUDIENCE,
             "algorithm": "Ed25519", "keyId": self.key_id,
@@ -86,11 +91,13 @@ class Authority:
             provenance(self.authority_id, "configuration", 1))
         self.grant_record = adapters.GrantRecord(
             self.binding.operation_id, self.binding_sha,
-            contracts.digest(self.raw_grant), self.key_id, 104, 101, 2,
+            contracts.digest(self.raw_grant), self.key_id, 104,
+            self.binding.run_id, self.binding.run_attempt,
             self.raw_grant, provenance(self.authority_id, "grant", 2))
         self.issuer = adapters.IssuerRecord(
             self.binding.operation_id, self.binding_sha,
-            self.grant_record.grant_sha256, self.key_id, 104, 101, 2,
+            self.grant_record.grant_sha256, self.key_id, 104,
+            self.binding.run_id, self.binding.run_attempt,
             NOW - dt.timedelta(minutes=2), NOW + dt.timedelta(minutes=10),
             True, provenance(self.authority_id, "issuer", 3))
         self.key = adapters.KeyRecord(self.key_id, 104, self.public_key,

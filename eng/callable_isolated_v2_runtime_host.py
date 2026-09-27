@@ -199,9 +199,49 @@ def _configuration_bound(configuration: object,
 class _BoundAuthority:
     """Recheck every configuration read, including the adapter's two reads."""
 
-    def __init__(self, authority: object, expected: ExpectedRuntime):
+    def __init__(self, authority: object, expected: ExpectedRuntime, runtime: object):
         self._authority = authority
         self._expected = expected
+        # Protected storage may retain records made by a previous archive load.
+        # Only these closed record shapes cross the load boundary. The runtime
+        # still performs its exact-type and semantic authority checks afterward.
+        operator = runtime.coordinator.operator
+        contracts = importlib.import_module("callable_isolated_v2_runtime.contracts")
+        allowed = {
+            (cls.__module__, cls.__name__): cls for cls in (
+                runtime.ProtectedScope, runtime.RecordProvenance,
+                runtime.InstalledConfiguration, runtime.GrantRecord,
+                runtime.IssuerRecord, runtime.KeyRecord, runtime.ParentRecord,
+                runtime.TokenLease, runtime.CommittedAttempt,
+                contracts.Binding, operator.ExpectedPull, operator.HttpResponse)
+        }
+        self._current = allowed
+        self._source = {}
+
+    def _materialize(self, value: object, *, outward: bool = False):
+        if type(value) is tuple:
+            return tuple(self._materialize(item, outward=outward) for item in value)
+        if type(value) in (str, bytes, int, bool, type(None)):
+            return value
+        if type(value) is dict:
+            return {key: self._materialize(item, outward=outward)
+                    for key, item in value.items()}
+        if not dataclasses.is_dataclass(value) or isinstance(value, type):
+            return value
+        cls = type(value)
+        key = (cls.__module__, cls.__name__)
+        current = self._current.get(key)
+        if current is None or cls.__qualname__ != current.__qualname__:
+            return value
+        current_fields = tuple(field.name for field in dataclasses.fields(current))
+        if (tuple(field.name for field in dataclasses.fields(cls)) != current_fields
+                or cls.__dataclass_params__.frozen is not True):
+            return value
+        if not outward:
+            self._source.setdefault(key, cls)
+        target = self._source.get(key, current) if outward else current
+        return target(**{name: self._materialize(getattr(value, name), outward=outward)
+                         for name in current_fields})
 
     def read_installed_configuration(self):
         try:
@@ -209,10 +249,21 @@ class _BoundAuthority:
         except Exception:
             raise Refused("runtime-host-configuration-unavailable") from None
         _configuration_bound(configuration, self._expected)
-        return configuration
+        return self._materialize(configuration)
 
     def __getattr__(self, name: str):
-        return getattr(self._authority, name)
+        method = getattr(self._authority, name)
+        if name in ("scope", "read_grant", "read_issuer", "read_active_key",
+                    "read_parent", "read_committed_attempt", "native_get",
+                    "issue_execution_token", "native_post"):
+            def read(*args):
+                return self._materialize(method(*args))
+            return read
+        if name in ("reserve_attempt", "persist_attempt_outcome"):
+            def write(*args):
+                return method(*(self._materialize(arg, outward=True) for arg in args))
+            return write
+        return method
 
 
 def run(host: ProtectedHost, witness: candidate.CandidateWitness,
@@ -247,7 +298,7 @@ def run(host: ProtectedHost, witness: candidate.CandidateWitness,
         _check_file(fd, archive)
         runtime = _load(path)
         _check_file(fd, archive)
-        bound_authority = _BoundAuthority(authority, expected)
+        bound_authority = _BoundAuthority(authority, expected, runtime)
         first = bound_authority.read_installed_configuration()
         second = bound_authority.read_installed_configuration()
         if first != second:
