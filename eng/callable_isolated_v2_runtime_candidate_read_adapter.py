@@ -117,8 +117,9 @@ class NativeCandidateProducerAdapter:
         self._artifact: dict[str, Any] | None = None
 
     def scope(self) -> dict[str, Any]:
+        # Run/artifact reads use Actions; commit and workflow byte reads use Contents.
         return _scope(self.transport, self.selection.repository_id,
-                      ["actions:read", "metadata:read"], self.now)
+                      ["actions:read", "contents:read", "metadata:read"], self.now)
 
     def read_run(self, run_id: int, attempt: int) -> dict[str, Any]:
         s = self.selection

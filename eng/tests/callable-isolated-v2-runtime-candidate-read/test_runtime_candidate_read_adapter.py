@@ -109,6 +109,20 @@ class NativeCandidateAdapterTests(unittest.TestCase):
         self.assertFalse(result.can_dispatch_effect)
         self.assertEqual(result.live_effects, 0)
 
+    def test_producer_scope_requires_contents_read_without_write(self):
+        for permissions in (
+            ["actions:read", "metadata:read"],
+            ["actions:read", "contents:read", "metadata:read", "contents:write"],
+        ):
+            with self.subTest(permissions=permissions):
+                selection, _, reader, _ = fixture()
+                reader.value["permissions"] = permissions
+                producer = adapter.NativeCandidateProducerAdapter(
+                    reader, selection, s5.NOW)
+                with self.assertRaisesRegex(adapter.Refused, "candidate-scope-binding"):
+                    producer.read_run(selection.run_id, 1)
+                self.assertEqual(reader.calls, [])
+
     def test_missing_artifact_page_and_extra_artifact_refuse(self):
         key = f"repos/{witness.REPOSITORY}/actions/runs/101/artifacts?per_page=100&page=1"
         for change in (

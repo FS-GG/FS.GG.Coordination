@@ -199,7 +199,7 @@ def qualify(selection: Selection, workflow_bytes: bytes,
     except workflow_check.Refused:
         raise Refused("runtime-candidate-workflow") from None
     producer_scope = _scope(producer_port, selection.repository_id,
-                            ["actions:read", "metadata:read"], now)
+                            ["actions:read", "contents:read", "metadata:read"], now)
     download_scope = _scope(download_port, selection.repository_id,
                             ["actions:read"], now)
     if (producer_scope["principalId"] == download_scope["principalId"]
@@ -268,7 +268,7 @@ def qualify(selection: Selection, workflow_bytes: bytes,
     archive, manifest = _read_bundle(bundle)
     manifest_sha = _verify_candidate(manifest, archive, selection)
     if (_scope(producer_port, selection.repository_id,
-               ["actions:read", "metadata:read"], now) != producer_scope
+               ["actions:read", "contents:read", "metadata:read"], now) != producer_scope
             or _scope(download_port, selection.repository_id,
                       ["actions:read"], now) != download_scope):
         raise Refused("runtime-candidate-scope-drift")
