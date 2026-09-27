@@ -118,8 +118,9 @@ type MigrationRepositoryActionsPolicyRead =
       RepositoryForkPullRequestApprovalPolicy: string
       ApplicableActionsPolicyCount: int64 }
 
-/// Complete repository-local environment settings for a bounded repository whose
-/// environment secret inventory is empty. Environment variables retain their
+/// Complete repository-local environment settings for a bounded public, private,
+/// or internal repository whose environment secret inventory is empty. Successful
+/// exact endpoint reads prove plan applicability. Environment variables retain their
 /// clear provider value in the canonical setting list and their digest in the
 /// typed environment observation.
 type MigrationRepositoryEnvironmentsRead =

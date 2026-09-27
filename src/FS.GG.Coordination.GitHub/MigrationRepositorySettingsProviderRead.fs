@@ -1225,7 +1225,8 @@ module MigrationRepositorySettingsProviderRead =
         | MigrationReadFailure.HttpRefused status when status = 401 || status = 403 ->
             Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized $"http:{status}")
         | MigrationReadFailure.HttpRefused status when status = 404 ->
-            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "environment-http:404")
+            Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                "environment-plan-permission-or-resource-http:404")
         | MigrationReadFailure.HttpRefused status -> refuse $"environment-http:{status}"
         | MigrationReadFailure.PaginationRefused reason ->
             Error(MigrationRepositorySettingsSurfaceRefusal.Partial $"environment-pagination:{reason}")
@@ -1331,11 +1332,7 @@ module MigrationRepositorySettingsProviderRead =
             repositoryResponse options identity repositoryRevision transport
             |> Result.bind (fun (repository, repositoryRoot) ->
                 enumText "visibility" [ "public"; "private"; "internal" ] repositoryRoot
-                |> Result.bind (fun visibility ->
-                    if visibility <> "public" then
-                        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
-                            $"{visibility}-repository-environment-plan-applicability-unproven")
-                    else
+                |> Result.bind (fun _ ->
                         match MigrationEnvironmentSettingsRead.read options transport with
                         | Error failure -> environmentFailure failure
                         | Ok observed ->

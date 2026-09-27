@@ -96,16 +96,23 @@ let private environmentSecrets = "{\"total_count\":0,\"secrets\":[]}"
 let private environmentVariables =
     "{\"total_count\":1,\"variables\":[{\"name\":\"REGION\",\"value\":\"eu-central\",\"created_at\":\"2026-09-28T00:00:00Z\",\"updated_at\":\"2026-09-28T01:00:00Z\"}]}"
 
-let private environmentPass () =
-    [ response 200 Map.empty (repository true)
-      response 200 Map.empty (repository true)
+let private privateRepository =
+    (repository true).Replace("\"private\":false", "\"private\":true")
+                     .Replace("\"visibility\":\"public\"", "\"visibility\":\"private\"")
+
+let private environmentPassFor repositoryBody =
+    [ response 200 Map.empty repositoryBody
+      response 200 Map.empty repositoryBody
       response 200 Map.empty environmentList
       response 200 Map.empty environment
       response 200 Map.empty environmentBranches
       response 200 Map.empty environmentCustomRules
       response 200 Map.empty environmentSecrets
       response 200 Map.empty environmentVariables
-      response 200 Map.empty (repository true) ]
+      response 200 Map.empty repositoryBody ]
+
+let private environmentPass () = environmentPassFor (repository true)
+let private privateEnvironmentPass () = environmentPassFor privateRepository
 
 let private next suffix =
     Map.ofList
@@ -402,11 +409,30 @@ let ``environment reader binds terminal roster rules reviewers branches and vari
             fun page -> Assert.Equal(64, page.SettingsPayloadSha256.Length))
 
 [<Fact>]
+let ``environment reader accepts two stable exact private endpoint passes`` () =
+    let transport = FakeTransport(privateEnvironmentPass() @ privateEnvironmentPass())
+    let first = MigrationRepositorySettingsProviderRead.readEnvironments options identity revision transport
+    match first with
+    | Error refusal -> failwithf "private environments refused: %A" refusal
+    | Ok captured ->
+        Assert.Single(captured.Environments) |> ignore
+        Assert.Equal(24, captured.SurfaceRead.Settings.Length)
+        Assert.Contains(
+            captured.SurfaceRead.Settings,
+            fun setting ->
+                setting.Subject = "environment:100:variable:REGION"
+                && setting.Value = SettingValue.Text "eu-central")
+        Assert.Equal(privateRepository, captured.SurfaceRead.Pages.Head.SettingsPayloadJson)
+        let second = MigrationRepositorySettingsProviderRead.readEnvironments options identity revision transport
+        Assert.Equal(first, second)
+        Assert.Equal(18, transport.Requests.Length)
+
+[<Fact>]
 let ``environment reader refuses secrets plan ambiguity access gaps malformed rules and drift`` () =
     let secretInventory =
         "{\"total_count\":1,\"secrets\":[{\"name\":\"TOKEN\",\"created_at\":\"2026-09-28T00:00:00Z\",\"updated_at\":\"2026-09-28T01:00:00Z\"}]}"
     let withSecret =
-        environmentPass()
+        privateEnvironmentPass()
         |> List.mapi (fun index outcome ->
             if index = 6 then response 200 Map.empty secretInventory else outcome)
     Assert.Equal(
@@ -415,23 +441,19 @@ let ``environment reader refuses secrets plan ambiguity access gaps malformed ru
         MigrationRepositorySettingsProviderRead.readEnvironments
             options identity revision (FakeTransport(withSecret)))
 
-    let privateRepository =
-        (repository true).Replace("\"private\":false", "\"private\":true")
-                         .Replace("\"visibility\":\"public\"", "\"visibility\":\"private\"")
-    Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
-            "private-repository-environment-plan-applicability-unproven"),
-        MigrationRepositorySettingsProviderRead.readEnvironments
-            options identity revision (FakeTransport([ response 200 Map.empty privateRepository ])))
-
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:403"),
         MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
-            (FakeTransport([ response 200 Map.empty (repository true); response 403 Map.empty "{}" ])))
+            (FakeTransport([ response 200 Map.empty privateRepository; response 403 Map.empty "{}" ])))
     Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "environment-http:404"),
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:401"),
         MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
-            (FakeTransport([ response 200 Map.empty (repository true); response 404 Map.empty "{}" ])))
+            (FakeTransport([ response 200 Map.empty privateRepository; response 401 Map.empty "{}" ])))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+            "environment-plan-permission-or-resource-http:404"),
+        MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
+            (FakeTransport([ response 200 Map.empty privateRepository; response 404 Map.empty "{}" ])))
 
     let malformedRules = environment.Replace(",\"wait_timer\":5", "")
     let malformedList = environmentList.Replace(environment, malformedRules)
@@ -439,14 +461,14 @@ let ``environment reader refuses secrets plan ambiguity access gaps malformed ru
         Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "environment:missing:wait_timer"),
         MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
             (FakeTransport(
-                [ response 200 Map.empty (repository true)
-                  response 200 Map.empty (repository true)
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateRepository
                   response 200 Map.empty malformedList ])))
 
     let escapedRoster =
         FakeTransport(
-            [ response 200 Map.empty (repository true)
-              response 200 Map.empty (repository true)
+            [ response 200 Map.empty privateRepository
+              response 200 Map.empty privateRepository
               response 200
                   (Map.ofList
                       [ "link", "<https://evil.test/repos/FS-GG/sandbox/environments?per_page=100&page=2>; rel=\"next\"" ])
@@ -458,10 +480,10 @@ let ``environment reader refuses secrets plan ambiguity access gaps malformed ru
             options identity revision escapedRoster)
 
     let terminalRawDrift =
-        environmentPass()
+        privateEnvironmentPass()
         |> List.mapi (fun index outcome ->
             if index = 8 then
-                response 200 Map.empty ((repository true).Replace("}", ",\"extra\":true}"))
+                response 200 Map.empty (privateRepository.Replace("}", ",\"extra\":true}"))
             else outcome)
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Partial
