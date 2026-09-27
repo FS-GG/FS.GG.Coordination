@@ -366,6 +366,53 @@ class ProtectedAdapterTests(unittest.TestCase):
                 self.assertEqual(reads, 2)
                 self.assertEqual(authority.posts, [])
 
+    def test_final_clock_sample_refuses_expired_send_authority(self):
+        deadlines = ("issuer", "issuer-provenance", "key-provenance",
+                     "issuer-scope", "key-scope", "configuration-provenance",
+                     "grant-provenance", "token-provenance")
+        expires_at = NOW + dt.timedelta(seconds=30)
+        for deadline in deadlines:
+            with self.subTest(deadline=deadline), tempfile.TemporaryDirectory() as temp:
+                authority = Authority(pathlib.Path(temp))
+                if deadline == "issuer":
+                    authority.issuer = dataclasses.replace(authority.issuer,
+                        expires_at=expires_at)
+                elif deadline.endswith("-scope"):
+                    role = deadline.removesuffix("-scope")
+                    scopes = tuple(dataclasses.replace(scope,
+                        expires_at=expires_at) if scope.role == role else scope
+                        for scope in authority.configuration.scopes)
+                    authority.configuration = dataclasses.replace(
+                        authority.configuration, scopes=scopes)
+                    authority.scopes = {scope.role: scope for scope in scopes}
+                else:
+                    role = deadline.removesuffix("-provenance")
+                    name = {"configuration": "configuration",
+                            "grant": "grant_record", "token": "token"}.get(role, role)
+                    record = getattr(authority, name)
+                    setattr(authority, name, dataclasses.replace(record,
+                        provenance=dataclasses.replace(record.provenance,
+                            expires_at=expires_at)))
+                runtime = adapters.compose_installed(authority)
+                token = runtime.token_port.read_execution_token()
+                original_key_lookup = runtime.key_reader.active_public_key
+                lookups = 0
+
+                def advance_after_second_lookup(key_id, issuer_actor_id, now):
+                    nonlocal lookups
+                    value = original_key_lookup(key_id, issuer_actor_id, now)
+                    lookups += 1
+                    if lookups == 2:
+                        authority.now = expires_at + dt.timedelta(seconds=1)
+                    return value
+
+                runtime.key_reader.active_public_key = advance_after_second_lookup
+                with self.assertRaises(adapters.Refused):
+                    runtime.write_port.post_pull("repos/FS-GG/target/pulls",
+                        authority.binding.canonical_request, token)
+                self.assertEqual(lookups, 2)
+                self.assertEqual(authority.posts, [])
+
     def test_known_401_survives_post_scope_drift_and_cannot_be_exact(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))

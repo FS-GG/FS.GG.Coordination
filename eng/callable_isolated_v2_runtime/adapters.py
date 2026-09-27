@@ -349,6 +349,7 @@ class ProtectedIssuerKeyReader:
         self.installation = installation
         self.clock = clock
         self.grant_record = grant_record
+        self.authorization_expires_at: dt.datetime | None = None
 
     def active_public_key(self, key_id: str, issuer_actor_id: int,
                           now: dt.datetime) -> bytes | None:
@@ -390,12 +391,14 @@ class ProtectedIssuerKeyReader:
         issuer_scope = self.installation.scope("issuer", after)
         key_scope = self.installation.scope("key", after)
         final_now = self.clock.now()
-        if not (final_now < issuer.expires_at
-                and final_now < issuer.provenance.expires_at
-                and final_now < key.provenance.expires_at
-                and final_now < issuer_scope.expires_at
-                and final_now < key_scope.expires_at):
+        deadline = min(issuer.expires_at, issuer.provenance.expires_at,
+                       key.provenance.expires_at, issuer_scope.expires_at,
+                       key_scope.expires_at)
+        if not final_now < deadline:
             raise Refused("protected-key-invalid")
+        if self.authorization_expires_at is not None:
+            deadline = min(deadline, self.authorization_expires_at)
+        self.authorization_expires_at = deadline
         return key.public_key
 
 
@@ -427,6 +430,7 @@ class ProtectedTokenPort:
     def __init__(self, installation: _Installation, clock: TrustedClock):
         self.installation, self.clock = installation, clock
         self._lease: TokenLease | None = None
+        self._scope_expires_at: dt.datetime | None = None
         self._consumed = False
 
     def read_execution_token(self) -> bytes:
@@ -453,14 +457,18 @@ class ProtectedTokenPort:
                 or not lease.issued_at <= now < lease.expires_at
                 or lease.expires_at > lease.issued_at + dt.timedelta(minutes=30)):
             raise Refused("protected-token-invalid")
-        self.installation.scope("token", self.clock.now())
+        token_scope = self.installation.scope("token", self.clock.now())
         self._lease = lease
+        self._scope_expires_at = token_scope.expires_at
         return lease.token
 
     def consume(self, token: bytes, now: dt.datetime) -> None:
         if (self._lease is None or self._consumed
                 or type(token) is not bytes or token != self._lease.token
-                or not _utc(now) or not now < self._lease.expires_at):
+                or not _utc(now) or self._scope_expires_at is None
+                or not now < min(self._lease.expires_at,
+                                 self._lease.provenance.expires_at,
+                                 self._scope_expires_at)):
             raise Refused("protected-token-selection")
         self._consumed = True
 
@@ -495,6 +503,12 @@ class ProtectedNativeWritePort:
         if grant_sha != self.grant_record.grant_sha256:
             raise Refused("protected-write-authority")
         final_now = self.clock.current
+        key_deadline = self.key_reader.authorization_expires_at
+        if (key_deadline is None
+                or not final_now < min(key_deadline,
+                    self.installation.configuration.provenance.expires_at,
+                    self.grant_record.provenance.expires_at)):
+            raise Refused("protected-write-authority")
         if not final_now < write_scope.expires_at:
             raise Refused("protected-write-scope-expired")
         self.token_port.consume(token, final_now)
