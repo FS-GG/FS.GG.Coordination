@@ -103,6 +103,10 @@ type MigrationRepositoryActionsPolicyRead =
       RepositoryForkPullRequestApprovalPolicy: string
       ApplicableActionsPolicyCount: int64 }
 
+type MigrationRepositoryEnvironmentsRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      Environments: MigrationEnvironmentObservation list }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -1213,6 +1217,185 @@ module MigrationRepositorySettingsProviderRead =
                 | Ok _, Ok ownerType -> refuse $"unsupported:owner-type:{ownerType}"
                 | Error failure, _ | _, Error failure -> Error failure)
 
+    let private environmentFailure failure =
+        match failure with
+        | MigrationReadFailure.InvalidOptions -> refuse "invalid-options"
+        | MigrationReadFailure.TransportUnavailable ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "transport-unavailable")
+        | MigrationReadFailure.HttpRefused status when status = 401 || status = 403 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized $"http:{status}")
+        | MigrationReadFailure.HttpRefused status when status = 404 ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "environment-http:404")
+        | MigrationReadFailure.HttpRefused status -> refuse $"environment-http:{status}"
+        | MigrationReadFailure.PaginationRefused reason ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial $"environment-pagination:{reason}")
+        | MigrationReadFailure.MalformedResponse reason -> refuse $"environment:{reason}"
+        | MigrationReadFailure.DuplicateIdentity identity -> refuse $"environment-duplicate:{identity}"
+        | MigrationReadFailure.IdentityDrift -> refuse "environment-identity-drift"
+        | MigrationReadFailure.PopulationDrift -> refuse "environment-population-drift"
+        | MigrationReadFailure.SnapshotMismatch reason -> refuse $"environment-snapshot:{reason}"
+        | MigrationReadFailure.GraphQLErrors -> refuse "environment-unexpected-graphql-errors"
+
+    let private environmentPage stream (page: MigrationEnvironmentPageEvidence) =
+        { SettingsStream=stream
+          SettingsRequestedUri=page.EnvironmentRequestedUri
+          SettingsPayloadJson=page.EnvironmentPayloadJson
+          SettingsPayloadSha256=page.EnvironmentPayloadSha256
+          SettingsNextUri=page.EnvironmentNextUri }
+
+    let private environmentVariableValues (environment: MigrationEnvironmentObservation) =
+        environment.VariablePages
+        |> List.fold (fun state page ->
+            state
+            |> Result.bind (fun values ->
+                parse page.EnvironmentPayloadJson
+                |> Result.bind (prop "variables")
+                |> Result.bind arrayRoot
+                |> Result.bind (fun entries ->
+                    entries
+                    |> List.fold (fun parsed entry ->
+                        parsed
+                        |> Result.bind (fun items ->
+                            match text "name" entry, text "value" entry with
+                            | Ok name, Ok value -> Ok((name, value) :: items)
+                            | Error failure, _ | _, Error failure -> Error failure)) (Ok [])
+                    |> Result.map (fun items -> values @ List.rev items)))) (Ok [])
+        |> Result.bind (fun values ->
+            let observed =
+                environment.Variables |> List.map (fun variable -> variable.Name, variable.ValueSha256)
+            let extracted = values |> List.map (fun (name, value) -> name, hashText value)
+            if observed = extracted then Ok values
+            else refuse $"environment-variable-evidence-drift:{environment.Name}")
+
+    let private environmentSettings (environment: MigrationEnvironmentObservation) variableValues =
+        let environmentSubject = $"environment:{environment.EnvironmentId}"
+        let setting subject name value =
+            { Surface=Environments; Subject=subject; Name=name; Value=value }
+        let core =
+            [ setting environmentSubject "name" (SettingValue.Text environment.Name)
+              setting environmentSubject "node-id" (SettingValue.Text environment.EnvironmentNodeId)
+              setting environmentSubject "updated-at" (SettingValue.Text(environment.UpdatedAt.ToString("O")))
+              setting environmentSubject "protected-branches" (SettingValue.Boolean environment.ProtectedBranches)
+              setting environmentSubject "custom-branch-policies" (SettingValue.Boolean environment.CustomBranchPolicies) ]
+        let protection =
+            environment.ProtectionRules
+            |> List.collect (fun rule ->
+                let subject = $"{environmentSubject}:protection-rule:{rule.RuleId}"
+                [ yield setting subject "node-id" (SettingValue.Text rule.RuleNodeId)
+                  yield setting subject "kind" (SettingValue.Text rule.Kind)
+                  match rule.WaitMinutes with
+                  | Some minutes -> yield setting subject "wait-minutes" (SettingValue.Integer(int64 minutes))
+                  | None -> ()
+                  match rule.PreventSelfReview with
+                  | Some prevent -> yield setting subject "prevent-self-review" (SettingValue.Boolean prevent)
+                  | None -> ()
+                  for reviewer in rule.Reviewers do
+                      let reviewerSubject =
+                          $"{subject}:reviewer:{reviewer.Kind.ToLowerInvariant()}:{reviewer.DatabaseId}"
+                      yield setting reviewerSubject "node-id" (SettingValue.Text reviewer.NodeId)
+                      yield setting reviewerSubject "name" (SettingValue.Text reviewer.Name)
+                      yield setting reviewerSubject "kind" (SettingValue.Text reviewer.Kind) ])
+        let branches =
+            environment.BranchPolicies
+            |> List.collect (fun policy ->
+                let subject = $"{environmentSubject}:deployment-branch-policy:{policy.PolicyId}"
+                [ setting subject "node-id" (SettingValue.Text policy.PolicyNodeId)
+                  setting subject "name" (SettingValue.Text policy.Name)
+                  setting subject "kind" (SettingValue.Text policy.Kind) ])
+        let custom =
+            environment.CustomRules
+            |> List.collect (fun rule ->
+                let subject = $"{environmentSubject}:custom-protection-rule:{rule.RuleId}"
+                [ setting subject "node-id" (SettingValue.Text rule.RuleNodeId)
+                  setting subject "enabled" (SettingValue.Boolean rule.Enabled)
+                  setting subject "app-id" (SettingValue.Integer rule.AppId)
+                  setting subject "app-node-id" (SettingValue.Text rule.AppNodeId)
+                  setting subject "app-slug" (SettingValue.Text rule.AppSlug) ])
+        let variables =
+            variableValues
+            |> List.map (fun (name, value) ->
+                setting $"{environmentSubject}:variable:{name}" "value" (SettingValue.Text value))
+        core @ protection @ branches @ custom @ variables
+
+    let readEnvironments
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) then refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            repositoryResponse options identity repositoryRevision transport
+            |> Result.bind (fun (repository, repositoryRoot) ->
+                enumText "visibility" [ "public"; "private"; "internal" ] repositoryRoot
+                |> Result.bind (fun visibility ->
+                    if visibility <> "public" then
+                        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                            $"{visibility}-repository-environment-plan-applicability-unproven")
+                    else
+                        match MigrationEnvironmentSettingsRead.read options transport with
+                        | Error failure -> environmentFailure failure
+                        | Ok observed ->
+                            let mutable expectedRevision = DateTimeOffset.MinValue
+                            if observed.RepositoryId <> identity.DatabaseId
+                               || observed.RepositoryNodeId <> identity.NodeId
+                               || observed.RepositoryFullName <> $"{identity.Owner}/{identity.Name}"
+                               || not (DateTimeOffset.TryParse(repositoryRevision, &expectedRevision))
+                               || observed.RepositoryUpdatedAt <> expectedRevision then
+                                refuse "environment-identity-drift"
+                            elif observed.IdentityPayloadJson <> repository.Body
+                                 || observed.TerminalIdentityPayloadJson <> repository.Body then
+                                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                    "environment-repository-raw-identity-drift")
+                            elif observed.Environments |> List.exists (fun item -> not (List.isEmpty item.Secrets)) then
+                                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                    "environment-secret-values-provider-inaccessible")
+                            else
+                                observed.Environments
+                                |> List.fold (fun state environment ->
+                                    state
+                                    |> Result.bind (fun values ->
+                                        environmentVariableValues environment
+                                        |> Result.map (fun variables -> values @ [ environment, variables ]))) (Ok [])
+                                |> Result.map (fun environmentsWithVariables ->
+                                    let pages =
+                                        [ identityPage options repository ]
+                                        @ (observed.Pages |> List.map (environmentPage "environment-roster"))
+                                        @ (observed.Environments
+                                           |> List.collect (fun environment ->
+                                               [ { SettingsStream=$"environment-detail:{environment.EnvironmentId}"
+                                                   SettingsRequestedUri=environment.DetailUri
+                                                   SettingsPayloadJson=environment.DetailPayloadJson
+                                                   SettingsPayloadSha256=environment.DetailPayloadSha256
+                                                   SettingsNextUri=None }
+                                                 yield! environment.BranchPolicyPages
+                                                        |> List.map (environmentPage
+                                                            $"environment-branch-policies:{environment.EnvironmentId}")
+                                                 { SettingsStream=$"environment-custom-protection-rules:{environment.EnvironmentId}"
+                                                   SettingsRequestedUri=environment.CustomRulesUri
+                                                   SettingsPayloadJson=environment.CustomRulesPayloadJson
+                                                   SettingsPayloadSha256=environment.CustomRulesPayloadSha256
+                                                   SettingsNextUri=None }
+                                                 yield! environment.SecretPages
+                                                        |> List.map (environmentPage
+                                                            $"environment-secrets:{environment.EnvironmentId}")
+                                                 yield! environment.VariablePages
+                                                        |> List.map (environmentPage
+                                                            $"environment-variables:{environment.EnvironmentId}") ]))
+                                    let settings =
+                                        { Surface=Environments; Subject=$"repository:{identity.DatabaseId}"
+                                          Name="environment-count"; Value=SettingValue.Integer(int64 observed.TotalCount) }
+                                        :: (environmentsWithVariables
+                                            |> List.collect (fun (environment, variables) ->
+                                                environmentSettings environment variables))
+                                    { SurfaceRead=
+                                        { RepositoryIdentity=identity; RepositoryRevision=repositoryRevision
+                                          Surface=Environments; Complete=true; Pages=pages; Settings=settings }
+                                      Environments=observed.Environments })))
+
     let private readVulnerabilityAlerts
         (options: MigrationGitHubReadOptions)
         (transport: IMigrationGitHubReadTransport)
@@ -1448,8 +1631,9 @@ type MigrationRepositorySettingsGitHubProvider
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | Environments ->
-                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
-                    "environment-secrets-variables-and-plan-conditions-remain-unbound")
+                MigrationRepositorySettingsProviderRead.readEnvironments
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
             | _ ->
                 Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
                     $"surface-reader-not-installed:{RepositorySettingsAdapter.surfaceId surface}")

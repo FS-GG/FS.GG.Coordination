@@ -118,6 +118,14 @@ type MigrationRepositoryActionsPolicyRead =
       RepositoryForkPullRequestApprovalPolicy: string
       ApplicableActionsPolicyCount: int64 }
 
+/// Complete repository-local environment settings for a bounded repository whose
+/// environment secret inventory is empty. Environment variables retain their
+/// clear provider value in the canonical setting list and their digest in the
+/// typed environment observation.
+type MigrationRepositoryEnvironmentsRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      Environments: MigrationEnvironmentObservation list }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -178,6 +186,22 @@ module MigrationRepositorySettingsProviderRead =
         repositoryRevision:string ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryActionsPolicyRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only read of the terminal environment roster, environment details,
+    /// reviewers, wait rules, branch/tag policies, custom deployment rules,
+    /// secrets inventory and variables. Nonempty secret inventories refuse because
+    /// GitHub never returns secret values.
+    /// Endpoint contracts: https://docs.github.com/en/rest/deployments/environments,
+    /// https://docs.github.com/en/rest/deployments/branch-policies,
+    /// https://docs.github.com/en/rest/deployments/protection-rules,
+    /// https://docs.github.com/en/rest/actions/secrets and
+    /// https://docs.github.com/en/rest/actions/variables.
+    val readEnvironments:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryEnvironmentsRead, MigrationRepositorySettingsSurfaceRefusal>
 
 /// Concrete partial provider for the implemented repository settings surfaces.
 /// Other incomplete surfaces refuse canonical composition.

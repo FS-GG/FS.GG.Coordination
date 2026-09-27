@@ -79,6 +79,34 @@ let private actionsPass () =
       response 200 Map.empty repositoryForkApproval
       response 200 Map.empty noApplicableActionsPolicies ]
 
+let private environmentReviewers =
+    "[{\"type\":\"User\",\"reviewer\":{\"id\":7,\"node_id\":\"USER_7\",\"login\":\"alice\"}},{\"type\":\"Team\",\"reviewer\":{\"id\":8,\"node_id\":\"TEAM_8\",\"slug\":\"operators\"}}]"
+
+let private environmentRules =
+    $"[{{\"id\":11,\"node_id\":\"RULE_11\",\"type\":\"wait_timer\",\"wait_timer\":5}},{{\"id\":12,\"node_id\":\"RULE_12\",\"type\":\"required_reviewers\",\"prevent_self_review\":true,\"reviewers\":{environmentReviewers}}},{{\"id\":13,\"node_id\":\"RULE_13\",\"type\":\"branch_policy\"}}]"
+
+let private environment =
+    $"{{\"id\":100,\"node_id\":\"ENV_100\",\"name\":\"fleet-cutover\",\"url\":\"https://api.github.test/repos/FS-GG/sandbox/environments/fleet-cutover\",\"updated_at\":\"{revision}\",\"protection_rules\":{environmentRules},\"deployment_branch_policy\":{{\"protected_branches\":false,\"custom_branch_policies\":true}}}}"
+
+let private environmentList = $"{{\"total_count\":1,\"environments\":[{environment}]}}"
+let private environmentBranches =
+    "{\"total_count\":1,\"branch_policies\":[{\"id\":21,\"node_id\":\"BRANCH_21\",\"name\":\"release/*\",\"type\":\"branch\"}]}"
+let private environmentCustomRules = "{\"total_count\":0,\"custom_deployment_protection_rules\":[]}"
+let private environmentSecrets = "{\"total_count\":0,\"secrets\":[]}"
+let private environmentVariables =
+    "{\"total_count\":1,\"variables\":[{\"name\":\"REGION\",\"value\":\"eu-central\",\"created_at\":\"2026-09-28T00:00:00Z\",\"updated_at\":\"2026-09-28T01:00:00Z\"}]}"
+
+let private environmentPass () =
+    [ response 200 Map.empty (repository true)
+      response 200 Map.empty (repository true)
+      response 200 Map.empty environmentList
+      response 200 Map.empty environment
+      response 200 Map.empty environmentBranches
+      response 200 Map.empty environmentCustomRules
+      response 200 Map.empty environmentSecrets
+      response 200 Map.empty environmentVariables
+      response 200 Map.empty (repository true) ]
+
 let private next suffix =
     Map.ofList
         [ "link",
@@ -344,6 +372,110 @@ let ``actions policy reader refuses inaccessible partial conditional unknown and
             options identity revision (FakeTransport([ response 200 Map.empty drifted ])))
 
 [<Fact>]
+let ``environment reader binds terminal roster rules reviewers branches and variables`` () =
+    let transport = FakeTransport(environmentPass())
+    match MigrationRepositorySettingsProviderRead.readEnvironments options identity revision transport with
+    | Error refusal -> failwithf "environments refused: %A" refusal
+    | Ok captured ->
+        Assert.Equal(identity, captured.SurfaceRead.RepositoryIdentity)
+        Assert.Equal(revision, captured.SurfaceRead.RepositoryRevision)
+        let observed = Assert.Single(captured.Environments)
+        Assert.Equal("fleet-cutover", observed.Name)
+        Assert.Equal(3, observed.ProtectionRules.Length)
+        Assert.Equal(Some 5, observed.ProtectionRules[0].WaitMinutes)
+        Assert.Equal(2, observed.ProtectionRules[1].Reviewers.Length)
+        Assert.Single(observed.BranchPolicies) |> ignore
+        Assert.Empty(observed.CustomRules)
+        Assert.Empty(observed.Secrets)
+        Assert.Single(observed.Variables) |> ignore
+        Assert.Equal(9, transport.Requests.Length)
+        Assert.Equal(7, captured.SurfaceRead.Pages.Length)
+        Assert.Equal(24, captured.SurfaceRead.Settings.Length)
+        Assert.Contains(
+            captured.SurfaceRead.Settings,
+            fun setting ->
+                setting.Subject = "environment:100:variable:REGION"
+                && setting.Name = "value"
+                && setting.Value = SettingValue.Text "eu-central")
+        Assert.All(
+            captured.SurfaceRead.Pages,
+            fun page -> Assert.Equal(64, page.SettingsPayloadSha256.Length))
+
+[<Fact>]
+let ``environment reader refuses secrets plan ambiguity access gaps malformed rules and drift`` () =
+    let secretInventory =
+        "{\"total_count\":1,\"secrets\":[{\"name\":\"TOKEN\",\"created_at\":\"2026-09-28T00:00:00Z\",\"updated_at\":\"2026-09-28T01:00:00Z\"}]}"
+    let withSecret =
+        environmentPass()
+        |> List.mapi (fun index outcome ->
+            if index = 6 then response 200 Map.empty secretInventory else outcome)
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "environment-secret-values-provider-inaccessible"),
+        MigrationRepositorySettingsProviderRead.readEnvironments
+            options identity revision (FakeTransport(withSecret)))
+
+    let privateRepository =
+        (repository true).Replace("\"private\":false", "\"private\":true")
+                         .Replace("\"visibility\":\"public\"", "\"visibility\":\"private\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+            "private-repository-environment-plan-applicability-unproven"),
+        MigrationRepositorySettingsProviderRead.readEnvironments
+            options identity revision (FakeTransport([ response 200 Map.empty privateRepository ])))
+
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:403"),
+        MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
+            (FakeTransport([ response 200 Map.empty (repository true); response 403 Map.empty "{}" ])))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "environment-http:404"),
+        MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
+            (FakeTransport([ response 200 Map.empty (repository true); response 404 Map.empty "{}" ])))
+
+    let malformedRules = environment.Replace(",\"wait_timer\":5", "")
+    let malformedList = environmentList.Replace(environment, malformedRules)
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "environment:missing:wait_timer"),
+        MigrationRepositorySettingsProviderRead.readEnvironments options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty (repository true)
+                  response 200 Map.empty (repository true)
+                  response 200 Map.empty malformedList ])))
+
+    let escapedRoster =
+        FakeTransport(
+            [ response 200 Map.empty (repository true)
+              response 200 Map.empty (repository true)
+              response 200
+                  (Map.ofList
+                      [ "link", "<https://evil.test/repos/FS-GG/sandbox/environments?per_page=100&page=2>; rel=\"next\"" ])
+                  environmentList ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "environment-pagination:escaped-next-uri"),
+        MigrationRepositorySettingsProviderRead.readEnvironments
+            options identity revision escapedRoster)
+
+    let terminalRawDrift =
+        environmentPass()
+        |> List.mapi (fun index outcome ->
+            if index = 8 then
+                response 200 Map.empty ((repository true).Replace("}", ",\"extra\":true}"))
+            else outcome)
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "environment-repository-raw-identity-drift"),
+        MigrationRepositorySettingsProviderRead.readEnvironments
+            options identity revision (FakeTransport(terminalRawDrift)))
+
+    let drifted = (repository true).Replace(revision, "2026-09-28T01:02:04Z")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "repository-identity-drift"),
+        MigrationRepositorySettingsProviderRead.readEnvironments
+            options identity revision (FakeTransport([ response 200 Map.empty drifted ])))
+
+[<Fact>]
 let ``releases and tags reader retains terminal raw streams and draft visibility proof`` () =
     let transport = FakeTransport(successPass())
     match MigrationRepositorySettingsProviderRead.readReleasesAndTags options identity revision transport with
@@ -368,6 +500,7 @@ type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvide
     interface IMigrationRepositorySettingsSurfaceProvider with
         member _.Read(actualIdentity, actualRevision, surface) =
             if surface = SettingsSurface.Repository || surface = MergePolicy || surface = ActionsPolicy
+               || surface = Environments
                || surface = ReleasesAndTags || surface = CodeSecurity || surface = DependencyControls then
                 concrete.Read(actualIdentity, actualRevision, surface)
             else
@@ -390,7 +523,8 @@ type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvide
 [<Fact>]
 let ``concrete provider pages join the eleven-surface two-pass composer`` () =
     let pass () =
-        repositoryPass() @ mergePass() @ actionsPass() @ successPass() @ securityPass() @ dependencyPass()
+        repositoryPass() @ mergePass() @ actionsPass() @ environmentPass()
+        @ successPass() @ securityPass() @ dependencyPass()
     let transport = FakeTransport(pass() @ pass())
     let concrete =
         MigrationRepositorySettingsGitHubProvider(options, transport)
@@ -399,7 +533,7 @@ let ``concrete provider pages join the eleven-surface two-pass composer`` () =
     match MigrationRepositorySettingsRead.captureTwoPass identity revision provider with
     | Error failure -> failwithf "two-pass provider capture refused: %A" failure
     | Ok captured ->
-        Assert.Equal(50, transport.Requests.Length)
+        Assert.Equal(68, transport.Requests.Length)
         Assert.Equal(
             Ok captured,
             MigrationRepositorySettingsRead.validateCapture captured)
@@ -421,6 +555,11 @@ let ``concrete provider pages join the eleven-surface two-pass composer`` () =
                 Assert.Equal(revision, actualRevision)
                 Assert.Equal(20, settings.Length)
             | state -> failwithf "unexpected actions policy surface: %A" state
+            match observation.Surfaces[Environments] with
+            | Supported(actualRevision, true, settings) ->
+                Assert.Equal(revision, actualRevision)
+                Assert.Equal(24, settings.Length)
+            | state -> failwithf "unexpected environments surface: %A" state
             match observation.Surfaces[ReleasesAndTags] with
             | Supported(actualRevision, true, settings) ->
                 Assert.Equal(revision, actualRevision)
@@ -604,10 +743,6 @@ let ``concrete provider leaves every unimplemented or partial surface unavailabl
         Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
             "surface-reader-not-installed:custom-properties"),
         source.Read(identity, revision, CustomProperties))
-    Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
-            "environment-secrets-variables-and-plan-conditions-remain-unbound"),
-        source.Read(identity, revision, Environments))
     Assert.Equal(
         Error(MigrationRepositorySettingsReadFailure.ProviderRefused(
             CustomProperties,
