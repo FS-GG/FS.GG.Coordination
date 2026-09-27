@@ -22,6 +22,33 @@ type MigrationLegacyIntakeMarker =
         PayloadSha256: string
     }
 
+type MigrationHistoricalClaimObservation =
+    {
+        SubjectNumber: int
+        CommentNodeId: string
+        Marker: MigrationHistoricalClaimMarker
+        PayloadSha256: string
+    }
+
+type MigrationLegacyReceiptObservation =
+    {
+        SubjectNumber: int
+        CommentNodeId: string
+        Location: MigrationLegacyReceiptLocation
+        Receipt: MigrationLegacyReceipt
+        PayloadSha256: string
+    }
+
+type MigrationNativeEventObservation =
+    {
+        SubjectKind: MigrationClaimNativeSubjectKind
+        StreamKind: MigrationClaimNativeStreamKind
+        SubjectNumber: int
+        NodeId: string
+        EventKind: string
+        PayloadSha256: string
+    }
+
 type MigrationClaimEventPartialCapture =
     {
         NativeFirst: MigrationNativeActivityCapture
@@ -29,7 +56,10 @@ type MigrationClaimEventPartialCapture =
         Journals: MigrationClaimJournalTwoPass
         LegacyInventory: MigrationLegacyReceiptInventory
         ClaimMarkers: MigrationLegacyClaimMarker list
+        HistoricalClaimMarkers: MigrationHistoricalClaimObservation list
+        LegacyReceipts: MigrationLegacyReceiptObservation list
         IntakeMarkers: MigrationLegacyIntakeMarker list
+        NativeEvents: MigrationNativeEventObservation list
         MissingAuthorities: string list
         Fingerprint: string
     }

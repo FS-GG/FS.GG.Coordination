@@ -37,14 +37,22 @@ type MigrationReceiverWorkflowToolIdentity =
 
 /// Two stable reads of pin bytes. InventoryBound distinguishes caller declarations from a
 /// provider-tree-derived workflow/package census.
+type MigrationReceiverPinEvidenceOrigin =
+    private
+    | CallerDeclared
+    | ProviderTreeSignedTools
+    static member internal CreateCallerDeclared: unit -> MigrationReceiverPinEvidenceOrigin
+    static member internal CreateProviderTreeSignedTools: unit -> MigrationReceiverPinEvidenceOrigin
+
 type MigrationReceiverPinTwoPass =
     { CohortSha256: string
-      InventoryBound: bool
-      SignedToolIdentitiesBound: bool
+      EvidenceOrigin: MigrationReceiverPinEvidenceOrigin
       SignedHeads: MigrationReceiverSignedHeadIdentity list
       WorkflowTools: MigrationReceiverWorkflowToolIdentity list
       First: MigrationReceiverPinSnapshot list
       Second: MigrationReceiverPinSnapshot list }
+    member InventoryBound: bool
+    member SignedToolIdentitiesBound: bool
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverCapture =

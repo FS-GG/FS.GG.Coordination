@@ -204,6 +204,72 @@ let private withIssueBody body (capture: MigrationNativeActivityCapture) =
 
     { Input = input; Snapshot = snapshot }
 
+let private withNativeEventAndTimeline (capture: MigrationNativeActivityCapture) =
+    let eventRaw =
+        JsonSerializer.Serialize(
+            {|
+                id = 301L
+                node_id = "IE_301"
+                event = "labeled"
+                created_at = "2026-09-24T10:00:00Z"
+                actor = {| login = "worker-a" |}
+            |}
+        )
+
+    let timelineRaw =
+        JsonSerializer.Serialize(
+            {|
+                node_id = "TL_401"
+                event = "cross-referenced"
+            |}
+        )
+
+    let eventStream = capture.Input.IssueEvents.Head
+    let timelineStream = capture.Input.IssueTimelines.Head
+
+    let input =
+        { capture.Input with
+            IssueEvents =
+                [
+                    { eventStream with
+                        Events =
+                            [
+                                {
+                                    DatabaseId = 301L
+                                    NodeId = "IE_301"
+                                    SubjectNumber = 7
+                                    EventKind = "labeled"
+                                    ActorLogin = Some "worker-a"
+                                    CreatedAt = stamp
+                                    PayloadJson = eventRaw
+                                    PayloadSha256 = shaText eventRaw
+                                }
+                            ]
+                    }
+                ]
+            IssueTimelines =
+                [
+                    { timelineStream with
+                        Records =
+                            [
+                                {
+                                    NodeId = "TL_401"
+                                    SubjectNumber = 7
+                                    EventKind = "cross-referenced"
+                                    PayloadJson = timelineRaw
+                                    PayloadSha256 = shaText timelineRaw
+                                }
+                            ]
+                    }
+                ]
+        }
+
+    let snapshot =
+        MigrationNativeActivity.reconcile options input
+        |> Result.defaultWith (failwithf "%A")
+
+    { Input = input; Snapshot = snapshot }
+
 let private ok body =
     Response
         {
@@ -360,50 +426,50 @@ let private journals () =
 let private pinnedIntakeMarkerBytes =
     // Exact ca6dd7bd:src/FS.GG.Coord.Core/IntakeReceipt.fs blob (SHA-256 6ae65a6b...).
     [
-            "bmFtZXNwYWNlIEZTLkdHLkNvb3JkCgptb2R1bGUgSW50YWtlUmVjZWlwdCA9CiAgICBvcGVuIFN5c3RlbS5TZWN1cml0eS5Dcnlw"
-            "dG9ncmFwaHkKICAgIG9wZW4gU3lzdGVtLlRleHQKCiAgICB0eXBlIFJlY2VpcHQgPQogICAgICAgIHsKICAgICAgICAgICAgRHJh"
-            "ZnRJZDogc3RyaW5nCiAgICAgICAgICAgIE93bmVyOiBzdHJpbmcKICAgICAgICAgICAgUmVwb3NpdG9yeTogc3RyaW5nCiAgICAg"
-            "ICAgICAgIElzc3VlTnVtYmVyOiBpbnQKICAgICAgICAgICAgRHJhZnREaWdlc3Q6IHN0cmluZwogICAgICAgIH0KCiAgICBsZXQg"
-            "cHJpdmF0ZSBkaWdlc3RXaXRoU2V2ZXJpdHkgc2V2ZXJpdHkgKGRyYWZ0OiBJbnRha2UuRHJhZnQpID0KICAgICAgICBsZXQgcGFy"
-            "dHMgPQogICAgICAgICAgICBbCiAgICAgICAgICAgICAgICBkcmFmdC5TY2hlbWEKICAgICAgICAgICAgICAgIGRyYWZ0LklkCiAg"
-            "ICAgICAgICAgICAgICBkcmFmdC5Pd25lcgogICAgICAgICAgICAgICAgZHJhZnQuUmVwb3NpdG9yeQogICAgICAgICAgICAgICAg"
-            "ZHJhZnQuVGl0bGUKICAgICAgICAgICAgICAgIGRyYWZ0Lk9ic2VydmVkCiAgICAgICAgICAgICAgICBkcmFmdC5Sb290Q2F1c2UK"
-            "ICAgICAgICAgICAgICAgIGRyYWZ0LkFjY2VwdGFuY2UKICAgICAgICAgICAgICAgIGRyYWZ0LlZlcmlmaWNhdGlvbgogICAgICAg"
-            "ICAgICAgICAgU3RyaW5nLmNvbmNhdCAiXHUwMDFmIiBkcmFmdC5QYXRocwogICAgICAgICAgICAgICAgZHJhZnQuQ2xhc3MKICAg"
-            "ICAgICAgICAgICAgIGRyYWZ0LlN0YXR1cwogICAgICAgICAgICAgICAgc3RyaW5nIGRyYWZ0LkRpc3Bvc2l0aW9uCiAgICAgICAg"
-            "ICAgICAgICBzdHJpbmcgZHJhZnQuUGhhc2UKICAgICAgICAgICAgICAgIHN0cmluZyBzZXZlcml0eQogICAgICAgICAgICAgICAg"
-            "c3RyaW5nIGRyYWZ0LkJsb2NrZWRCeQogICAgICAgICAgICAgICAgc3RyaW5nIGRyYWZ0LkJsb2NrZWRPbgogICAgICAgICAgICAg"
-            "ICAgc3RyaW5nIGRyYWZ0LkJhY2tsb2dSZWFzb24KICAgICAgICAgICAgICAgIHN0cmluZyBkcmFmdC5KdWRnZW1lbnRRdWVzdGlv"
-            "bgogICAgICAgICAgICBdCgogICAgICAgIFNIQTI1Ni5IYXNoRGF0YShFbmNvZGluZy5VVEY4LkdldEJ5dGVzKFN0cmluZy5jb25j"
-            "YXQgIlx1MDAxZSIgcGFydHMpKQogICAgICAgIHw+IFN5c3RlbS5Db252ZXJ0LlRvSGV4U3RyaW5nCiAgICAgICAgfD4gZnVuIHZh"
-            "bHVlIC0+IHZhbHVlLlRvTG93ZXJJbnZhcmlhbnQoKQoKICAgIGxldCBkaWdlc3QgKGRyYWZ0OiBJbnRha2UuRHJhZnQpID0gZGln"
-            "ZXN0V2l0aFNldmVyaXR5IGRyYWZ0LlNldmVyaXR5IGRyYWZ0CgogICAgLy8gRXZlcnkgYWNjZXB0ZWQgcHJlZGVjZXNzb3IgaXMg"
-            "YW4gRVhQTElDSVQgbWlncmF0aW9uLCBuZXZlciAiYW55IGRpZ2VzdCB3aXRoIHRoaXMgaWQiLiAgVGhhdCBrZWVwcwogICAgLy8g"
-            "dGhlIHJlY2VpcHQgYW4gZXhhY3QgY29udGVudCBiaW5kaW5nIHdoaWxlIGFsbG93aW5nIHRoZSBkZWNvZGVyIHRvIHJlcGFpciBh"
-            "IHZhbHVlIHRoYXQgYW4gb2xkZXIKICAgIC8vIHZhbGlkYXRvciBhY2NlcHRlZCBldmVuIHRob3VnaCB0aGUgYm9hcmQgY291bGQg"
-            "bm90IHByb2plY3QgaXQuICBDcm9zcy1wcm9kdWN0IHRoZSB0d28gYm91bmRlZAogICAgLy8gbWlncmF0aW9ucyBiZWNhdXNlIGEg"
-            "ZHJhZnQgbWF5IGhhdmUgcGFzc2VkIHRocm91Z2ggYm90aCBoaXN0b3JpY2FsIGRlZmVjdHMuCiAgICBsZXQgY29tcGF0aWJsZURy"
-            "YWZ0cyAoZHJhZnQ6IEludGFrZS5EcmFmdCkgPQogICAgICAgIGxldCBjbGFzc1ZhcmlhbnRzID0KICAgICAgICAgICAgWwogICAg"
-            "ICAgICAgICAgICAgeWllbGQgZHJhZnQKICAgICAgICAgICAgICAgIGlmIGRyYWZ0LkNsYXNzID0gImhhcmRlbmluZyIgdGhlbgog"
-            "ICAgICAgICAgICAgICAgICAgIHlpZWxkIHsgZHJhZnQgd2l0aCBDbGFzcyA9ICJjYXBhYmlsaXR5IiB9CiAgICAgICAgICAgIF0K"
-            "CiAgICAgICAgY2xhc3NWYXJpYW50cwogICAgICAgIHw+IExpc3QuY29sbGVjdCAoZnVuIGNsYXNzVmFyaWFudCAtPgogICAgICAg"
-            "ICAgICBbCiAgICAgICAgICAgICAgICB5aWVsZCBjbGFzc1ZhcmlhbnQKICAgICAgICAgICAgICAgIG1hdGNoIGNsYXNzVmFyaWFu"
-            "dC5TZXZlcml0eSB3aXRoCiAgICAgICAgICAgICAgICB8IFNvbWUgdmFsdWUgd2hlbiB2YWx1ZS5Ub0xvd2VySW52YXJpYW50KCkg"
-            "PD4gdmFsdWUgLT4KICAgICAgICAgICAgICAgICAgICB5aWVsZAogICAgICAgICAgICAgICAgICAgICAgICB7IGNsYXNzVmFyaWFu"
-            "dCB3aXRoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBTZXZlcml0eSA9IFNvbWUodmFsdWUuVG9Mb3dlckludmFyaWFudCgp"
-            "KQogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB8IF8gLT4gKCkKICAgICAgICAgICAgXSkKICAgICAg"
-            "ICB8PiBMaXN0LmRpc3RpbmN0CgogICAgbGV0IGNvbXBhdGlibGVEaWdlc3RzIChkcmFmdDogSW50YWtlLkRyYWZ0KSA9CiAgICAg"
-            "ICAgY29tcGF0aWJsZURyYWZ0cyBkcmFmdCB8PiBMaXN0Lm1hcCBkaWdlc3QKCiAgICBsZXQgbWFya2VyIChkcmFmdDogSW50YWtl"
-            "LkRyYWZ0KSA9CiAgICAgICAgJCI8IS0tIGZzZ2c6aW50YWtlOnYxIGlkPSVze2RyYWZ0LklkfSBkaWdlc3Q9JXN7ZGlnZXN0IGRy"
-            "YWZ0fSAtLT4iCgogICAgbGV0IHZhbGlkYXRlIChkcmFmdDogSW50YWtlLkRyYWZ0KSAocmVjZWlwdDogUmVjZWlwdCkgPQogICAg"
-            "ICAgIGlmIHJlY2VpcHQuSXNzdWVOdW1iZXIgPD0gMCB0aGVuCiAgICAgICAgICAgIEVycm9yICJyZWNlaXB0IGlzc3VlTnVtYmVy"
-            "IG11c3QgYmUgcG9zaXRpdmUiCiAgICAgICAgZWxpZiByZWNlaXB0LkRyYWZ0SWQgPD4gZHJhZnQuSWQgdGhlbgogICAgICAgICAg"
-            "ICBFcnJvciAicmVjZWlwdCBkcmFmdCBpZCBkb2VzIG5vdCBtYXRjaCB0aGlzIGRyYWZ0IgogICAgICAgIGVsaWYgcmVjZWlwdC5P"
-            "d25lciA8PiBkcmFmdC5Pd25lciB8fCByZWNlaXB0LlJlcG9zaXRvcnkgPD4gZHJhZnQuUmVwb3NpdG9yeSB0aGVuCiAgICAgICAg"
-            "ICAgIEVycm9yICJyZWNlaXB0IG93bmVyL3JlcG9zaXRvcnkgZG9lcyBub3QgbWF0Y2ggdGhpcyBkcmFmdCIKICAgICAgICBlbGlm"
-            "IGNvbXBhdGlibGVEaWdlc3RzIGRyYWZ0IHw+IExpc3QuY29udGFpbnMgcmVjZWlwdC5EcmFmdERpZ2VzdCB8PiBub3QgdGhlbgog"
-            "ICAgICAgICAgICBFcnJvciAicmVjZWlwdCBjb250ZW50IGRpZ2VzdCBkb2VzIG5vdCBtYXRjaCB0aGlzIGRyYWZ0IgogICAgICAg"
-            "IGVsc2UKICAgICAgICAgICAgT2sgcmVjZWlwdAo="
+        "bmFtZXNwYWNlIEZTLkdHLkNvb3JkCgptb2R1bGUgSW50YWtlUmVjZWlwdCA9CiAgICBvcGVuIFN5c3RlbS5TZWN1cml0eS5Dcnlw"
+        "dG9ncmFwaHkKICAgIG9wZW4gU3lzdGVtLlRleHQKCiAgICB0eXBlIFJlY2VpcHQgPQogICAgICAgIHsKICAgICAgICAgICAgRHJh"
+        "ZnRJZDogc3RyaW5nCiAgICAgICAgICAgIE93bmVyOiBzdHJpbmcKICAgICAgICAgICAgUmVwb3NpdG9yeTogc3RyaW5nCiAgICAg"
+        "ICAgICAgIElzc3VlTnVtYmVyOiBpbnQKICAgICAgICAgICAgRHJhZnREaWdlc3Q6IHN0cmluZwogICAgICAgIH0KCiAgICBsZXQg"
+        "cHJpdmF0ZSBkaWdlc3RXaXRoU2V2ZXJpdHkgc2V2ZXJpdHkgKGRyYWZ0OiBJbnRha2UuRHJhZnQpID0KICAgICAgICBsZXQgcGFy"
+        "dHMgPQogICAgICAgICAgICBbCiAgICAgICAgICAgICAgICBkcmFmdC5TY2hlbWEKICAgICAgICAgICAgICAgIGRyYWZ0LklkCiAg"
+        "ICAgICAgICAgICAgICBkcmFmdC5Pd25lcgogICAgICAgICAgICAgICAgZHJhZnQuUmVwb3NpdG9yeQogICAgICAgICAgICAgICAg"
+        "ZHJhZnQuVGl0bGUKICAgICAgICAgICAgICAgIGRyYWZ0Lk9ic2VydmVkCiAgICAgICAgICAgICAgICBkcmFmdC5Sb290Q2F1c2UK"
+        "ICAgICAgICAgICAgICAgIGRyYWZ0LkFjY2VwdGFuY2UKICAgICAgICAgICAgICAgIGRyYWZ0LlZlcmlmaWNhdGlvbgogICAgICAg"
+        "ICAgICAgICAgU3RyaW5nLmNvbmNhdCAiXHUwMDFmIiBkcmFmdC5QYXRocwogICAgICAgICAgICAgICAgZHJhZnQuQ2xhc3MKICAg"
+        "ICAgICAgICAgICAgIGRyYWZ0LlN0YXR1cwogICAgICAgICAgICAgICAgc3RyaW5nIGRyYWZ0LkRpc3Bvc2l0aW9uCiAgICAgICAg"
+        "ICAgICAgICBzdHJpbmcgZHJhZnQuUGhhc2UKICAgICAgICAgICAgICAgIHN0cmluZyBzZXZlcml0eQogICAgICAgICAgICAgICAg"
+        "c3RyaW5nIGRyYWZ0LkJsb2NrZWRCeQogICAgICAgICAgICAgICAgc3RyaW5nIGRyYWZ0LkJsb2NrZWRPbgogICAgICAgICAgICAg"
+        "ICAgc3RyaW5nIGRyYWZ0LkJhY2tsb2dSZWFzb24KICAgICAgICAgICAgICAgIHN0cmluZyBkcmFmdC5KdWRnZW1lbnRRdWVzdGlv"
+        "bgogICAgICAgICAgICBdCgogICAgICAgIFNIQTI1Ni5IYXNoRGF0YShFbmNvZGluZy5VVEY4LkdldEJ5dGVzKFN0cmluZy5jb25j"
+        "YXQgIlx1MDAxZSIgcGFydHMpKQogICAgICAgIHw+IFN5c3RlbS5Db252ZXJ0LlRvSGV4U3RyaW5nCiAgICAgICAgfD4gZnVuIHZh"
+        "bHVlIC0+IHZhbHVlLlRvTG93ZXJJbnZhcmlhbnQoKQoKICAgIGxldCBkaWdlc3QgKGRyYWZ0OiBJbnRha2UuRHJhZnQpID0gZGln"
+        "ZXN0V2l0aFNldmVyaXR5IGRyYWZ0LlNldmVyaXR5IGRyYWZ0CgogICAgLy8gRXZlcnkgYWNjZXB0ZWQgcHJlZGVjZXNzb3IgaXMg"
+        "YW4gRVhQTElDSVQgbWlncmF0aW9uLCBuZXZlciAiYW55IGRpZ2VzdCB3aXRoIHRoaXMgaWQiLiAgVGhhdCBrZWVwcwogICAgLy8g"
+        "dGhlIHJlY2VpcHQgYW4gZXhhY3QgY29udGVudCBiaW5kaW5nIHdoaWxlIGFsbG93aW5nIHRoZSBkZWNvZGVyIHRvIHJlcGFpciBh"
+        "IHZhbHVlIHRoYXQgYW4gb2xkZXIKICAgIC8vIHZhbGlkYXRvciBhY2NlcHRlZCBldmVuIHRob3VnaCB0aGUgYm9hcmQgY291bGQg"
+        "bm90IHByb2plY3QgaXQuICBDcm9zcy1wcm9kdWN0IHRoZSB0d28gYm91bmRlZAogICAgLy8gbWlncmF0aW9ucyBiZWNhdXNlIGEg"
+        "ZHJhZnQgbWF5IGhhdmUgcGFzc2VkIHRocm91Z2ggYm90aCBoaXN0b3JpY2FsIGRlZmVjdHMuCiAgICBsZXQgY29tcGF0aWJsZURy"
+        "YWZ0cyAoZHJhZnQ6IEludGFrZS5EcmFmdCkgPQogICAgICAgIGxldCBjbGFzc1ZhcmlhbnRzID0KICAgICAgICAgICAgWwogICAg"
+        "ICAgICAgICAgICAgeWllbGQgZHJhZnQKICAgICAgICAgICAgICAgIGlmIGRyYWZ0LkNsYXNzID0gImhhcmRlbmluZyIgdGhlbgog"
+        "ICAgICAgICAgICAgICAgICAgIHlpZWxkIHsgZHJhZnQgd2l0aCBDbGFzcyA9ICJjYXBhYmlsaXR5IiB9CiAgICAgICAgICAgIF0K"
+        "CiAgICAgICAgY2xhc3NWYXJpYW50cwogICAgICAgIHw+IExpc3QuY29sbGVjdCAoZnVuIGNsYXNzVmFyaWFudCAtPgogICAgICAg"
+        "ICAgICBbCiAgICAgICAgICAgICAgICB5aWVsZCBjbGFzc1ZhcmlhbnQKICAgICAgICAgICAgICAgIG1hdGNoIGNsYXNzVmFyaWFu"
+        "dC5TZXZlcml0eSB3aXRoCiAgICAgICAgICAgICAgICB8IFNvbWUgdmFsdWUgd2hlbiB2YWx1ZS5Ub0xvd2VySW52YXJpYW50KCkg"
+        "PD4gdmFsdWUgLT4KICAgICAgICAgICAgICAgICAgICB5aWVsZAogICAgICAgICAgICAgICAgICAgICAgICB7IGNsYXNzVmFyaWFu"
+        "dCB3aXRoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBTZXZlcml0eSA9IFNvbWUodmFsdWUuVG9Mb3dlckludmFyaWFudCgp"
+        "KQogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB8IF8gLT4gKCkKICAgICAgICAgICAgXSkKICAgICAg"
+        "ICB8PiBMaXN0LmRpc3RpbmN0CgogICAgbGV0IGNvbXBhdGlibGVEaWdlc3RzIChkcmFmdDogSW50YWtlLkRyYWZ0KSA9CiAgICAg"
+        "ICAgY29tcGF0aWJsZURyYWZ0cyBkcmFmdCB8PiBMaXN0Lm1hcCBkaWdlc3QKCiAgICBsZXQgbWFya2VyIChkcmFmdDogSW50YWtl"
+        "LkRyYWZ0KSA9CiAgICAgICAgJCI8IS0tIGZzZ2c6aW50YWtlOnYxIGlkPSVze2RyYWZ0LklkfSBkaWdlc3Q9JXN7ZGlnZXN0IGRy"
+        "YWZ0fSAtLT4iCgogICAgbGV0IHZhbGlkYXRlIChkcmFmdDogSW50YWtlLkRyYWZ0KSAocmVjZWlwdDogUmVjZWlwdCkgPQogICAg"
+        "ICAgIGlmIHJlY2VpcHQuSXNzdWVOdW1iZXIgPD0gMCB0aGVuCiAgICAgICAgICAgIEVycm9yICJyZWNlaXB0IGlzc3VlTnVtYmVy"
+        "IG11c3QgYmUgcG9zaXRpdmUiCiAgICAgICAgZWxpZiByZWNlaXB0LkRyYWZ0SWQgPD4gZHJhZnQuSWQgdGhlbgogICAgICAgICAg"
+        "ICBFcnJvciAicmVjZWlwdCBkcmFmdCBpZCBkb2VzIG5vdCBtYXRjaCB0aGlzIGRyYWZ0IgogICAgICAgIGVsaWYgcmVjZWlwdC5P"
+        "d25lciA8PiBkcmFmdC5Pd25lciB8fCByZWNlaXB0LlJlcG9zaXRvcnkgPD4gZHJhZnQuUmVwb3NpdG9yeSB0aGVuCiAgICAgICAg"
+        "ICAgIEVycm9yICJyZWNlaXB0IG93bmVyL3JlcG9zaXRvcnkgZG9lcyBub3QgbWF0Y2ggdGhpcyBkcmFmdCIKICAgICAgICBlbGlm"
+        "IGNvbXBhdGlibGVEaWdlc3RzIGRyYWZ0IHw+IExpc3QuY29udGFpbnMgcmVjZWlwdC5EcmFmdERpZ2VzdCB8PiBub3QgdGhlbgog"
+        "ICAgICAgICAgICBFcnJvciAicmVjZWlwdCBjb250ZW50IGRpZ2VzdCBkb2VzIG5vdCBtYXRjaCB0aGlzIGRyYWZ0IgogICAgICAg"
+        "IGVsc2UKICAgICAgICAgICAgT2sgcmVjZWlwdAo="
     ]
     |> String.concat ""
     |> Convert.FromBase64String
@@ -509,8 +575,7 @@ let private inventoryWithIntakeSource uri (bytes: byte array) =
     let changedRead =
         { read with
             Request = { read.Request with Uri = uri }
-            RequestSha256 =
-                MigrationReviewDeliveryCaptureContract.requestSha256 { read.Request with Uri = uri }
+            RequestSha256 = MigrationReviewDeliveryCaptureContract.requestSha256 { read.Request with Uri = uri }
             RawBody = raw
             RawSha256 = shaText raw
         }
@@ -616,14 +681,8 @@ let ``wrong journal session and malformed claim marker refuse`` () =
         MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
     )
 
-    Assert.Equal(
-        Error "claim-event-historical-claim-parser-unavailable",
-        let activity = native "<!-- C-claim worker=worker-a lease=30 -->"
-        MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
-    )
-
 [<Fact>]
-let ``sessionless historical marker stays partial and altered source inventory refuses`` () =
+let ``sessionless current marker stays partial while altered source inventory refuses`` () =
     let marker = "<!-- fsgg:claim worker=worker-a lease=30 renewed=1 -->"
 
     let capture =
@@ -632,6 +691,8 @@ let ``sessionless historical marker stays partial and altered source inventory r
         MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
         |> Result.defaultWith failwith
 
+    Assert.Equal(None, capture.ClaimMarkers.Head.SessionOperationId)
+    Assert.Empty capture.HistoricalClaimMarkers
     Assert.Contains("legacy-sessionless-claim-correspondence", capture.MissingAuthorities)
     let current = inventory ()
     let first = current.ProducerReads.Head
@@ -649,6 +710,55 @@ let ``sessionless historical marker stays partial and altered source inventory r
         Error "claim-event-legacy:legacy-inventory-source-read",
         let activity = native marker
         MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) changed
+    )
+
+[<Fact>]
+let ``historical claim marker is reparsed from raw comment bytes`` () =
+    let marker = "<!-- fsgg:claim worker=ghost-222 lease=120 -->\nheld"
+    let activity = native marker
+
+    let capture =
+        MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
+        |> Result.defaultWith failwith
+
+    Assert.Empty capture.ClaimMarkers
+    let observed = Assert.Single capture.HistoricalClaimMarkers
+    Assert.Equal(7, observed.SubjectNumber)
+    Assert.Equal("IC_201", observed.CommentNodeId)
+    Assert.Equal("ghost-222", observed.Marker.Worker)
+    Assert.Equal(120, observed.Marker.LeaseMinutes)
+    Assert.Equal(None, observed.Marker.Session)
+    Assert.Equal(shaText marker, observed.Marker.BodySha256)
+
+[<Fact>]
+let ``legacy receipt is reparsed and unknown marker prefixes refuse`` () =
+    let body =
+        "<!-- fsgg:delivery-completion/v1 -->\n"
+        + "{\"schema\":\"fsgg.coord.delivery-completion/v1\",\"item\":\"FS-GG/copy#7\",\"pullRequest\":9,\"mergeSha\":\"abc\",\"mergeReachable\":true,\"obligationReceipts\":[],\"pendingBoardWrites\":0,\"freshnessToken\":\"fresh\",\"actionKey\":\"action\",\"completedAt\":\"2026-09-27T10:00:00.0000000+00:00\",\"digest\":\"39fbf9dbce5391197fea46341dd7e65e5593766cce0b8e49469a10fddfba0af4\"}"
+
+    let activity = native body
+
+    let capture =
+        MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
+        |> Result.defaultWith failwith
+
+    let observed = Assert.Single capture.LegacyReceipts
+    Assert.Equal(7, observed.SubjectNumber)
+    Assert.Equal("IC_201", observed.CommentNodeId)
+
+    Assert.Equal(
+        Error "claim-event-unknown-marker-prefix:future-receipt/v9",
+        let unknown = native "<!-- fsgg:future-receipt/v9 value=x -->"
+        MigrationClaimEventInspectBinder.bindPartial options unknown unknown (journals ()) (inventory ())
+    )
+
+    Assert.Equal(
+        Error "claim-event-unknown-marker-prefix:future-intake/v9",
+        let unknown =
+            native "ordinary comment"
+            |> withIssueBody "<!-- fsgg:future-intake/v9 value=x -->"
+
+        MigrationClaimEventInspectBinder.bindPartial options unknown unknown (journals ()) (inventory ())
     )
 
 [<Fact>]
@@ -731,13 +841,23 @@ let ``caller producer label cannot replace protected intake marker bytes`` () =
     let current = inventory ()
     let source = current.Sources |> List.find (_.SchemaFamily >> (=) "intake-marker")
     let uri = source.SourceIdentity.Split('#').[0]
+
     let copiedMarker =
         Encoding.UTF8.GetBytes "let marker draft = \"<!-- fsgg:intake:v1 id=42 digest=abc -->\""
+
     let retainedConsumer =
         Path.Combine(
             AppContext.BaseDirectory,
-            "..", "..", "..", "..", "..",
-            "evidence", "github-substrate-v2", "corpus", "originals", "C-intake.source"
+            "..",
+            "..",
+            "..",
+            "..",
+            "..",
+            "evidence",
+            "github-substrate-v2",
+            "corpus",
+            "originals",
+            "C-intake.source"
         )
         |> File.ReadAllBytes
 
@@ -752,3 +872,48 @@ let ``caller producer label cannot replace protected intake marker bytes`` () =
             Error "claim-event-intake-producer-unavailable",
             MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) candidate
         )
+
+[<Fact>]
+let ``native event and timeline records are independently rebound to raw bytes`` () =
+    let claim =
+        $"<!-- fsgg:claim worker=worker-a lease=30 renewed=1 session={operation} -->"
+
+    let activity = native claim |> withNativeEventAndTimeline
+
+    let capture =
+        MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
+        |> Result.defaultWith failwith
+
+    Assert.Equal(2, capture.NativeEvents.Length)
+    Assert.Contains(capture.NativeEvents, fun value -> value.NodeId = "IE_301" && value.EventKind = "labeled")
+    Assert.Contains(capture.NativeEvents, fun value -> value.NodeId = "TL_401" && value.EventKind = "cross-referenced")
+
+    let eventStream = activity.Input.IssueEvents.Head
+
+    let changedInput =
+        { activity.Input with
+            IssueEvents =
+                [
+                    { eventStream with
+                        Events =
+                            [
+                                { eventStream.Events.Head with
+                                    EventKind = "unlabeled"
+                                }
+                            ]
+                    }
+                ]
+        }
+
+    let changed =
+        {
+            Input = changedInput
+            Snapshot =
+                MigrationNativeActivity.reconcile options changedInput
+                |> Result.defaultWith (failwithf "%A")
+        }
+
+    Assert.Equal(
+        Error "claim-event-native-event-raw-typed",
+        MigrationClaimEventInspectBinder.bindPartial options changed changed (journals ()) (inventory ())
+    )

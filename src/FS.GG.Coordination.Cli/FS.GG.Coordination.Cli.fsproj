@@ -81,6 +81,10 @@
     <Compile Include="MigrationRollbackPrivateForkWorkflowReadback.fs" />
     <Compile Include="MigrationSandboxFixtureSeed.fsi" />
     <Compile Include="MigrationSandboxFixtureSeed.fs" />
+    <Compile Include="MigrationReceiverCopyPlan.fsi" />
+    <Compile Include="MigrationReceiverCopyPlan.fs" />
+    <Compile Include="MigrationReceiverCopyBlobCapture.fsi" />
+    <Compile Include="MigrationReceiverCopyBlobCapture.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
     <Compile Include="MigrationSandboxProviderObservation.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
