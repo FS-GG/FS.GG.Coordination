@@ -88,6 +88,36 @@ type MigrationRepositoryMergePolicyRead =
       MergeCommitTitle: string
       MergeCommitMessage: string }
 
+type MigrationRepositorySelectedActions =
+    { GitHubOwnedAllowed: bool
+      VerifiedAllowed: bool
+      PatternsAllowed: string list }
+
+/// Explicit organization and repository Actions policy for a public organization
+/// repository. This bounded result requires a terminal zero applicable-policy
+/// count; required workflows and other nonempty newer policies remain partial.
+type MigrationRepositoryActionsPolicyRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      OrganizationEnabledRepositories: string
+      OrganizationAllowedActions: string
+      OrganizationSelectedActions: MigrationRepositorySelectedActions option
+      OrganizationShaPinningRequired: bool
+      RepositoryEnabled: bool
+      RepositoryAllowedActions: string
+      RepositorySelectedActions: MigrationRepositorySelectedActions option
+      ShaPinningRequired: bool
+      OrganizationDefaultWorkflowPermissions: string
+      OrganizationCanApprovePullRequestReviews: bool
+      RepositoryDefaultWorkflowPermissions: string
+      RepositoryCanApprovePullRequestReviews: bool
+      OrganizationArtifactAndLogRetentionDays: int64
+      OrganizationMaximumArtifactAndLogRetentionDays: int64
+      RepositoryArtifactAndLogRetentionDays: int64
+      RepositoryMaximumArtifactAndLogRetentionDays: int64
+      OrganizationForkPullRequestApprovalPolicy: string
+      RepositoryForkPullRequestApprovalPolicy: string
+      ApplicableActionsPolicyCount: int64 }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -135,6 +165,19 @@ module MigrationRepositorySettingsProviderRead =
         repositoryRevision:string ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryMergePolicyRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only read of Actions permissions, workflow defaults, retention and
+    /// fork approval at organization and repository scope. This bounded reader
+    /// supports public organization repositories with an explicit all-repository
+    /// organization scope and no applicable newer Actions policies.
+    /// Endpoint contracts: https://docs.github.com/en/rest/actions/permissions
+    /// and https://docs.github.com/en/rest/actions/policies.
+    val readActionsPolicy:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryActionsPolicyRead, MigrationRepositorySettingsSurfaceRefusal>
 
 /// Concrete partial provider for the implemented repository settings surfaces.
 /// Other incomplete surfaces refuse canonical composition.

@@ -76,6 +76,33 @@ type MigrationRepositoryMergePolicyRead =
       MergeCommitTitle: string
       MergeCommitMessage: string }
 
+type MigrationRepositorySelectedActions =
+    { GitHubOwnedAllowed: bool
+      VerifiedAllowed: bool
+      PatternsAllowed: string list }
+
+type MigrationRepositoryActionsPolicyRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      OrganizationEnabledRepositories: string
+      OrganizationAllowedActions: string
+      OrganizationSelectedActions: MigrationRepositorySelectedActions option
+      OrganizationShaPinningRequired: bool
+      RepositoryEnabled: bool
+      RepositoryAllowedActions: string
+      RepositorySelectedActions: MigrationRepositorySelectedActions option
+      ShaPinningRequired: bool
+      OrganizationDefaultWorkflowPermissions: string
+      OrganizationCanApprovePullRequestReviews: bool
+      RepositoryDefaultWorkflowPermissions: string
+      RepositoryCanApprovePullRequestReviews: bool
+      OrganizationArtifactAndLogRetentionDays: int64
+      OrganizationMaximumArtifactAndLogRetentionDays: int64
+      RepositoryArtifactAndLogRetentionDays: int64
+      RepositoryMaximumArtifactAndLogRetentionDays: int64
+      OrganizationForkPullRequestApprovalPolicy: string
+      RepositoryForkPullRequestApprovalPolicy: string
+      ApplicableActionsPolicyCount: int64 }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -928,6 +955,264 @@ module MigrationRepositorySettingsProviderRead =
           SettingsPayloadSha256=hashText body
           SettingsNextUri=None }
 
+    // Contracts are from the GitHub REST Actions permissions and Actions policies
+    // documentation. Each non-paginated endpoint must terminate in its response;
+    // applicable policy listing is accepted only when its first terminal page proves zero.
+    let private actionsGetJson options transport stream (uri: Uri) allowedMembers =
+        get options transport uri
+        |> Result.bind (fun response ->
+            if responseHeader "link" response.Headers |> Option.isSome then
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                    $"{stream}-unexpected-continuation")
+            else
+                parse response.Body
+                |> Result.bind (fun root ->
+                    if root.ValueKind <> JsonValueKind.Object then refuse $"invalid:{stream}"
+                    else exactMembers stream allowedMembers root
+                         |> Result.map (fun _ -> root, terminalPage stream uri response)))
+
+    let private actionsUri (options: MigrationGitHubReadOptions) scope suffix =
+        match scope with
+        | "organization" ->
+            Uri(options.ApiBase, $"orgs/{Uri.EscapeDataString options.Owner}/actions/permissions{suffix}")
+        | _ -> Uri(options.ApiBase, $"{repoPath options}/actions/permissions{suffix}")
+
+    let private selectedActionsUrl options scope (root: JsonElement) allowed =
+        prop "selected_actions_url" root
+        |> Result.bind (fun item ->
+            if allowed <> "selected" then
+                if item.ValueKind = JsonValueKind.Null then Ok None
+                else refuse $"invalid:{scope}-selected-actions-boundary"
+            elif item.ValueKind <> JsonValueKind.String || not (validText (item.GetString())) then
+                refuse $"invalid:{scope}-selected-actions-url"
+            else
+                let mutable actual = Unchecked.defaultof<Uri>
+                let named = actionsUri options scope "/selected-actions"
+                let numeric =
+                    Uri(options.ApiBase,
+                        $"repositories/{options.ExpectedRepositoryId}/actions/permissions/selected-actions")
+                if not (Uri.TryCreate(item.GetString(), UriKind.Absolute, &actual))
+                   || actual.Scheme <> Uri.UriSchemeHttps
+                   || (actual.AbsoluteUri <> named.AbsoluteUri
+                       && (scope <> "repository" || actual.AbsoluteUri <> numeric.AbsoluteUri)) then
+                    refuse $"foreign:{scope}-selected-actions-url"
+                else Ok(Some named))
+
+    let private readSelectedActions options transport scope uri =
+        actionsGetJson options transport $"{scope}-selected-actions" uri
+            [ "github_owned_allowed"; "verified_allowed"; "patterns_allowed" ]
+        |> Result.bind (fun (root, page) ->
+            match flag "github_owned_allowed" root, flag "verified_allowed" root,
+                  textList "patterns_allowed" root with
+            | Ok githubOwned, Ok verified, Ok patterns ->
+                Ok(
+                    { GitHubOwnedAllowed=githubOwned
+                      VerifiedAllowed=verified
+                      PatternsAllowed=patterns },
+                    page)
+            | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure)
+
+    let private readActionsCore options transport scope =
+        let uri = actionsUri options scope ""
+        let members =
+            if scope = "organization" then
+                [ "enabled_repositories"; "allowed_actions"; "selected_actions_url"
+                  "sha_pinning_required" ]
+            else [ "enabled"; "allowed_actions"; "selected_actions_url"; "sha_pinning_required" ]
+        actionsGetJson options transport $"{scope}-actions-permissions" uri members
+        |> Result.bind (fun (root, page) ->
+            enumText "allowed_actions" [ "all"; "local_only"; "selected" ] root
+            |> Result.bind (fun allowed ->
+                (if scope = "organization" && allowed = "selected" then
+                     Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                         "organization-selected-actions-identity-unmodeled")
+                 else selectedActionsUrl options scope root allowed)
+                |> Result.bind (fun selectedUri ->
+                    let selection =
+                        match selectedUri with
+                        | Some selected ->
+                            readSelectedActions options transport scope selected
+                            |> Result.map (fun (value, selectedPage) -> Some value, [ selectedPage ])
+                        | None -> Ok(None, [])
+                    selection
+                    |> Result.bind (fun (selected, selectedPages) ->
+                        flag "sha_pinning_required" root
+                        |> Result.bind (fun pinning ->
+                            if scope = "organization" then
+                                enumText "enabled_repositories" [ "all"; "none"; "selected" ] root
+                                |> Result.bind (fun enabledRepositories ->
+                                    if enabledRepositories = "selected" then
+                                        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                            "organization-selected-repository-scope-unmodeled")
+                                    elif enabledRepositories <> "all" then
+                                        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                                            "organization-actions-disabled")
+                                    else Ok(enabledRepositories, true, allowed, selected, pinning,
+                                            page :: selectedPages))
+                            else
+                                flag "enabled" root
+                                |> Result.bind (fun enabled ->
+                                    if enabled then Ok("repository", enabled, allowed, selected, pinning,
+                                                       page :: selectedPages)
+                                    else
+                                        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                                            "repository-actions-disabled")))))))
+
+    let private readWorkflowDefaults options transport scope =
+        let uri = actionsUri options scope "/workflow"
+        actionsGetJson options transport $"{scope}-workflow-permissions" uri
+            [ "default_workflow_permissions"; "can_approve_pull_request_reviews" ]
+        |> Result.bind (fun (root, page) ->
+            match enumText "default_workflow_permissions" [ "read"; "write" ] root,
+                  flag "can_approve_pull_request_reviews" root with
+            | Ok permissions, Ok approval -> Ok(permissions, approval, page)
+            | Error failure, _ | _, Error failure -> Error failure)
+
+    let private readRetention options transport scope =
+        let uri = actionsUri options scope "/artifact-and-log-retention"
+        actionsGetJson options transport $"{scope}-artifact-and-log-retention" uri
+            [ "days"; "maximum_allowed_days" ]
+        |> Result.bind (fun (root, page) ->
+            match positive "days" root, positive "maximum_allowed_days" root with
+            | Ok days, Ok maximum when days <= maximum -> Ok(days, maximum, page)
+            | Ok _, Ok _ -> refuse $"contradictory:{scope}-artifact-and-log-retention"
+            | Error failure, _ | _, Error failure -> Error failure)
+
+    let private readForkApproval options transport scope =
+        let uri = actionsUri options scope "/fork-pr-contributor-approval"
+        actionsGetJson options transport $"{scope}-fork-pr-contributor-approval" uri [ "approval_policy" ]
+        |> Result.bind (fun (root, page) ->
+            enumText "approval_policy"
+                [ "first_time_contributors_new_to_github"; "first_time_contributors"
+                  "all_external_contributors" ] root
+            |> Result.map (fun policy -> policy, page))
+
+    let private readApplicableActionsPolicies
+        (options: MigrationGitHubReadOptions)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        let uri =
+            Uri(options.ApiBase,
+                $"{repoPath options}/actions/policies?per_page=100&has_parents=true")
+        actionsGetJson options transport "applicable-actions-policies" uri [ "total_count"; "policies" ]
+        |> Result.bind (fun (root, page) ->
+            let mutable count = -1L
+            let countResult =
+                prop "total_count" root
+                |> Result.bind (fun item ->
+                    if item.ValueKind = JsonValueKind.Number && item.TryGetInt64(&count) && count >= 0L then Ok count
+                    else refuse "invalid:total_count")
+            match countResult, prop "policies" root with
+            | Ok 0L, Ok policies when policies.ValueKind = JsonValueKind.Array
+                                   && (policies.EnumerateArray() |> Seq.isEmpty) -> Ok(0L, page)
+            | Ok 0L, Ok policies when policies.ValueKind = JsonValueKind.Array ->
+                refuse "contradictory:applicable-actions-policies"
+            | Ok count, Ok policies when count > 0L && policies.ValueKind = JsonValueKind.Array ->
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                    "applicable-actions-policies-detail-unmodeled")
+            | Ok _, Ok _ -> refuse "invalid:policies"
+            | Error failure, _ | _, Error failure -> Error failure)
+
+    let readActionsPolicy
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) then refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            repositoryResponse options identity repositoryRevision transport
+            |> Result.bind (fun (repository, repositoryRoot) ->
+                match enumText "visibility" [ "public"; "private"; "internal" ] repositoryRoot,
+                      prop "owner" repositoryRoot |> Result.bind (text "type") with
+                | Ok "public", Ok "Organization" ->
+                    readActionsCore options transport "organization"
+                    |> Result.bind (fun (orgScope, _, orgAllowed, orgSelected, orgPinning, orgCorePages) ->
+                        readActionsCore options transport "repository"
+                        |> Result.bind (fun (_, repoEnabled, repoAllowed, repoSelected, pinning, repoCorePages) ->
+                            readWorkflowDefaults options transport "organization"
+                            |> Result.bind (fun (orgWorkflow, orgApprove, orgWorkflowPage) ->
+                                readWorkflowDefaults options transport "repository"
+                                |> Result.bind (fun (repoWorkflow, repoApprove, repoWorkflowPage) ->
+                                    readRetention options transport "organization"
+                                    |> Result.bind (fun (orgDays, orgMaximum, orgRetentionPage) ->
+                                        readRetention options transport "repository"
+                                        |> Result.bind (fun (repoDays, repoMaximum, repoRetentionPage) ->
+                                            if repoMaximum > orgMaximum then
+                                                refuse "contradictory:repository-retention-maximum"
+                                            else
+                                                readForkApproval options transport "organization"
+                                                |> Result.bind (fun (orgForkApproval, orgForkPage) ->
+                                                    readForkApproval options transport "repository"
+                                                    |> Result.bind (fun (repoForkApproval, repoForkPage) ->
+                                                        readApplicableActionsPolicies options transport
+                                                        |> Result.map (fun (policyCount, policiesPage) ->
+                                                            let setting subject name value =
+                                                                { Surface=ActionsPolicy; Subject=subject; Name=name; Value=value }
+                                                            let orgSubject = $"organization:{options.Owner}"
+                                                            let repoSubject = $"repository:{identity.DatabaseId}"
+                                                            let selectedSettings subject selected =
+                                                                match selected with
+                                                                | None -> []
+                                                                | Some value ->
+                                                                    [ setting subject "github-owned-actions-allowed" (SettingValue.Boolean value.GitHubOwnedAllowed)
+                                                                      setting subject "verified-actions-allowed" (SettingValue.Boolean value.VerifiedAllowed)
+                                                                      setting subject "action-patterns-allowed" (SettingValue.TextList value.PatternsAllowed) ]
+                                                            let settings =
+                                                                [ setting orgSubject "enabled-repositories" (SettingValue.Text orgScope)
+                                                                  setting orgSubject "allowed-actions" (SettingValue.Text orgAllowed) ]
+                                                                @ selectedSettings orgSubject orgSelected
+                                                                @ [ setting orgSubject "sha-pinning-required" (SettingValue.Boolean orgPinning) ]
+                                                                @ [ setting repoSubject "enabled" (SettingValue.Boolean repoEnabled)
+                                                                    setting repoSubject "allowed-actions" (SettingValue.Text repoAllowed) ]
+                                                                @ selectedSettings repoSubject repoSelected
+                                                                @ [ setting repoSubject "sha-pinning-required" (SettingValue.Boolean pinning)
+                                                                    setting orgSubject "default-workflow-permissions" (SettingValue.Text orgWorkflow)
+                                                                    setting orgSubject "can-approve-pull-request-reviews" (SettingValue.Boolean orgApprove)
+                                                                    setting repoSubject "default-workflow-permissions" (SettingValue.Text repoWorkflow)
+                                                                    setting repoSubject "can-approve-pull-request-reviews" (SettingValue.Boolean repoApprove)
+                                                                    setting orgSubject "artifact-and-log-retention-days" (SettingValue.Integer orgDays)
+                                                                    setting orgSubject "maximum-artifact-and-log-retention-days" (SettingValue.Integer orgMaximum)
+                                                                    setting repoSubject "artifact-and-log-retention-days" (SettingValue.Integer repoDays)
+                                                                    setting repoSubject "maximum-artifact-and-log-retention-days" (SettingValue.Integer repoMaximum)
+                                                                    setting orgSubject "fork-pull-request-approval-policy" (SettingValue.Text orgForkApproval)
+                                                                    setting repoSubject "fork-pull-request-approval-policy" (SettingValue.Text repoForkApproval)
+                                                                    setting repoSubject "applicable-actions-policy-count" (SettingValue.Integer policyCount) ]
+                                                            let pages =
+                                                                [ identityPage options repository ] @ orgCorePages @ repoCorePages
+                                                                @ [ orgWorkflowPage; repoWorkflowPage; orgRetentionPage; repoRetentionPage
+                                                                    orgForkPage; repoForkPage; policiesPage ]
+                                                            { SurfaceRead=
+                                                                { RepositoryIdentity=identity; RepositoryRevision=repositoryRevision
+                                                                  Surface=ActionsPolicy; Complete=true; Pages=pages; Settings=settings }
+                                                              OrganizationEnabledRepositories=orgScope
+                                                              OrganizationAllowedActions=orgAllowed
+                                                              OrganizationSelectedActions=orgSelected
+                                                              OrganizationShaPinningRequired=orgPinning
+                                                              RepositoryEnabled=repoEnabled
+                                                              RepositoryAllowedActions=repoAllowed
+                                                              RepositorySelectedActions=repoSelected
+                                                              ShaPinningRequired=pinning
+                                                              OrganizationDefaultWorkflowPermissions=orgWorkflow
+                                                              OrganizationCanApprovePullRequestReviews=orgApprove
+                                                              RepositoryDefaultWorkflowPermissions=repoWorkflow
+                                                              RepositoryCanApprovePullRequestReviews=repoApprove
+                                                              OrganizationArtifactAndLogRetentionDays=orgDays
+                                                              OrganizationMaximumArtifactAndLogRetentionDays=orgMaximum
+                                                              RepositoryArtifactAndLogRetentionDays=repoDays
+                                                              RepositoryMaximumArtifactAndLogRetentionDays=repoMaximum
+                                                              OrganizationForkPullRequestApprovalPolicy=orgForkApproval
+                                                              RepositoryForkPullRequestApprovalPolicy=repoForkApproval
+                                                              ApplicableActionsPolicyCount=policyCount })))))))))
+                | Ok visibility, Ok "Organization" ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                        $"{visibility}-repository-actions-access-and-fork-policy-unmodeled")
+                | Ok _, Ok ownerType -> refuse $"unsupported:owner-type:{ownerType}"
+                | Error failure, _ | _, Error failure -> Error failure)
+
     let private readVulnerabilityAlerts
         (options: MigrationGitHubReadOptions)
         (transport: IMigrationGitHubReadTransport)
@@ -1144,6 +1429,10 @@ type MigrationRepositorySettingsGitHubProvider
                 |> Result.map _.SurfaceRead
             | MergePolicy ->
                 MigrationRepositorySettingsProviderRead.readMergePolicy
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | ActionsPolicy ->
+                MigrationRepositorySettingsProviderRead.readActionsPolicy
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | ReleasesAndTags ->
