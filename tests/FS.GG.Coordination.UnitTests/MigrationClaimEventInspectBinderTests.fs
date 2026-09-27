@@ -2,6 +2,7 @@ module FS.GG.Coordination.MigrationClaimEventInspectBinderTests
 
 open System
 open System.Collections.Generic
+open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -356,6 +357,57 @@ let private journals () =
     MigrationClaimJournalCapture.captureTwoPass options (FakeTransport route)
     |> Result.defaultWith failwith
 
+let private pinnedIntakeMarkerBytes =
+    // Exact ca6dd7bd:src/FS.GG.Coord.Core/IntakeReceipt.fs blob (SHA-256 6ae65a6b...).
+    [
+            "bmFtZXNwYWNlIEZTLkdHLkNvb3JkCgptb2R1bGUgSW50YWtlUmVjZWlwdCA9CiAgICBvcGVuIFN5c3RlbS5TZWN1cml0eS5Dcnlw"
+            "dG9ncmFwaHkKICAgIG9wZW4gU3lzdGVtLlRleHQKCiAgICB0eXBlIFJlY2VpcHQgPQogICAgICAgIHsKICAgICAgICAgICAgRHJh"
+            "ZnRJZDogc3RyaW5nCiAgICAgICAgICAgIE93bmVyOiBzdHJpbmcKICAgICAgICAgICAgUmVwb3NpdG9yeTogc3RyaW5nCiAgICAg"
+            "ICAgICAgIElzc3VlTnVtYmVyOiBpbnQKICAgICAgICAgICAgRHJhZnREaWdlc3Q6IHN0cmluZwogICAgICAgIH0KCiAgICBsZXQg"
+            "cHJpdmF0ZSBkaWdlc3RXaXRoU2V2ZXJpdHkgc2V2ZXJpdHkgKGRyYWZ0OiBJbnRha2UuRHJhZnQpID0KICAgICAgICBsZXQgcGFy"
+            "dHMgPQogICAgICAgICAgICBbCiAgICAgICAgICAgICAgICBkcmFmdC5TY2hlbWEKICAgICAgICAgICAgICAgIGRyYWZ0LklkCiAg"
+            "ICAgICAgICAgICAgICBkcmFmdC5Pd25lcgogICAgICAgICAgICAgICAgZHJhZnQuUmVwb3NpdG9yeQogICAgICAgICAgICAgICAg"
+            "ZHJhZnQuVGl0bGUKICAgICAgICAgICAgICAgIGRyYWZ0Lk9ic2VydmVkCiAgICAgICAgICAgICAgICBkcmFmdC5Sb290Q2F1c2UK"
+            "ICAgICAgICAgICAgICAgIGRyYWZ0LkFjY2VwdGFuY2UKICAgICAgICAgICAgICAgIGRyYWZ0LlZlcmlmaWNhdGlvbgogICAgICAg"
+            "ICAgICAgICAgU3RyaW5nLmNvbmNhdCAiXHUwMDFmIiBkcmFmdC5QYXRocwogICAgICAgICAgICAgICAgZHJhZnQuQ2xhc3MKICAg"
+            "ICAgICAgICAgICAgIGRyYWZ0LlN0YXR1cwogICAgICAgICAgICAgICAgc3RyaW5nIGRyYWZ0LkRpc3Bvc2l0aW9uCiAgICAgICAg"
+            "ICAgICAgICBzdHJpbmcgZHJhZnQuUGhhc2UKICAgICAgICAgICAgICAgIHN0cmluZyBzZXZlcml0eQogICAgICAgICAgICAgICAg"
+            "c3RyaW5nIGRyYWZ0LkJsb2NrZWRCeQogICAgICAgICAgICAgICAgc3RyaW5nIGRyYWZ0LkJsb2NrZWRPbgogICAgICAgICAgICAg"
+            "ICAgc3RyaW5nIGRyYWZ0LkJhY2tsb2dSZWFzb24KICAgICAgICAgICAgICAgIHN0cmluZyBkcmFmdC5KdWRnZW1lbnRRdWVzdGlv"
+            "bgogICAgICAgICAgICBdCgogICAgICAgIFNIQTI1Ni5IYXNoRGF0YShFbmNvZGluZy5VVEY4LkdldEJ5dGVzKFN0cmluZy5jb25j"
+            "YXQgIlx1MDAxZSIgcGFydHMpKQogICAgICAgIHw+IFN5c3RlbS5Db252ZXJ0LlRvSGV4U3RyaW5nCiAgICAgICAgfD4gZnVuIHZh"
+            "bHVlIC0+IHZhbHVlLlRvTG93ZXJJbnZhcmlhbnQoKQoKICAgIGxldCBkaWdlc3QgKGRyYWZ0OiBJbnRha2UuRHJhZnQpID0gZGln"
+            "ZXN0V2l0aFNldmVyaXR5IGRyYWZ0LlNldmVyaXR5IGRyYWZ0CgogICAgLy8gRXZlcnkgYWNjZXB0ZWQgcHJlZGVjZXNzb3IgaXMg"
+            "YW4gRVhQTElDSVQgbWlncmF0aW9uLCBuZXZlciAiYW55IGRpZ2VzdCB3aXRoIHRoaXMgaWQiLiAgVGhhdCBrZWVwcwogICAgLy8g"
+            "dGhlIHJlY2VpcHQgYW4gZXhhY3QgY29udGVudCBiaW5kaW5nIHdoaWxlIGFsbG93aW5nIHRoZSBkZWNvZGVyIHRvIHJlcGFpciBh"
+            "IHZhbHVlIHRoYXQgYW4gb2xkZXIKICAgIC8vIHZhbGlkYXRvciBhY2NlcHRlZCBldmVuIHRob3VnaCB0aGUgYm9hcmQgY291bGQg"
+            "bm90IHByb2plY3QgaXQuICBDcm9zcy1wcm9kdWN0IHRoZSB0d28gYm91bmRlZAogICAgLy8gbWlncmF0aW9ucyBiZWNhdXNlIGEg"
+            "ZHJhZnQgbWF5IGhhdmUgcGFzc2VkIHRocm91Z2ggYm90aCBoaXN0b3JpY2FsIGRlZmVjdHMuCiAgICBsZXQgY29tcGF0aWJsZURy"
+            "YWZ0cyAoZHJhZnQ6IEludGFrZS5EcmFmdCkgPQogICAgICAgIGxldCBjbGFzc1ZhcmlhbnRzID0KICAgICAgICAgICAgWwogICAg"
+            "ICAgICAgICAgICAgeWllbGQgZHJhZnQKICAgICAgICAgICAgICAgIGlmIGRyYWZ0LkNsYXNzID0gImhhcmRlbmluZyIgdGhlbgog"
+            "ICAgICAgICAgICAgICAgICAgIHlpZWxkIHsgZHJhZnQgd2l0aCBDbGFzcyA9ICJjYXBhYmlsaXR5IiB9CiAgICAgICAgICAgIF0K"
+            "CiAgICAgICAgY2xhc3NWYXJpYW50cwogICAgICAgIHw+IExpc3QuY29sbGVjdCAoZnVuIGNsYXNzVmFyaWFudCAtPgogICAgICAg"
+            "ICAgICBbCiAgICAgICAgICAgICAgICB5aWVsZCBjbGFzc1ZhcmlhbnQKICAgICAgICAgICAgICAgIG1hdGNoIGNsYXNzVmFyaWFu"
+            "dC5TZXZlcml0eSB3aXRoCiAgICAgICAgICAgICAgICB8IFNvbWUgdmFsdWUgd2hlbiB2YWx1ZS5Ub0xvd2VySW52YXJpYW50KCkg"
+            "PD4gdmFsdWUgLT4KICAgICAgICAgICAgICAgICAgICB5aWVsZAogICAgICAgICAgICAgICAgICAgICAgICB7IGNsYXNzVmFyaWFu"
+            "dCB3aXRoCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBTZXZlcml0eSA9IFNvbWUodmFsdWUuVG9Mb3dlckludmFyaWFudCgp"
+            "KQogICAgICAgICAgICAgICAgICAgICAgICB9CiAgICAgICAgICAgICAgICB8IF8gLT4gKCkKICAgICAgICAgICAgXSkKICAgICAg"
+            "ICB8PiBMaXN0LmRpc3RpbmN0CgogICAgbGV0IGNvbXBhdGlibGVEaWdlc3RzIChkcmFmdDogSW50YWtlLkRyYWZ0KSA9CiAgICAg"
+            "ICAgY29tcGF0aWJsZURyYWZ0cyBkcmFmdCB8PiBMaXN0Lm1hcCBkaWdlc3QKCiAgICBsZXQgbWFya2VyIChkcmFmdDogSW50YWtl"
+            "LkRyYWZ0KSA9CiAgICAgICAgJCI8IS0tIGZzZ2c6aW50YWtlOnYxIGlkPSVze2RyYWZ0LklkfSBkaWdlc3Q9JXN7ZGlnZXN0IGRy"
+            "YWZ0fSAtLT4iCgogICAgbGV0IHZhbGlkYXRlIChkcmFmdDogSW50YWtlLkRyYWZ0KSAocmVjZWlwdDogUmVjZWlwdCkgPQogICAg"
+            "ICAgIGlmIHJlY2VpcHQuSXNzdWVOdW1iZXIgPD0gMCB0aGVuCiAgICAgICAgICAgIEVycm9yICJyZWNlaXB0IGlzc3VlTnVtYmVy"
+            "IG11c3QgYmUgcG9zaXRpdmUiCiAgICAgICAgZWxpZiByZWNlaXB0LkRyYWZ0SWQgPD4gZHJhZnQuSWQgdGhlbgogICAgICAgICAg"
+            "ICBFcnJvciAicmVjZWlwdCBkcmFmdCBpZCBkb2VzIG5vdCBtYXRjaCB0aGlzIGRyYWZ0IgogICAgICAgIGVsaWYgcmVjZWlwdC5P"
+            "d25lciA8PiBkcmFmdC5Pd25lciB8fCByZWNlaXB0LlJlcG9zaXRvcnkgPD4gZHJhZnQuUmVwb3NpdG9yeSB0aGVuCiAgICAgICAg"
+            "ICAgIEVycm9yICJyZWNlaXB0IG93bmVyL3JlcG9zaXRvcnkgZG9lcyBub3QgbWF0Y2ggdGhpcyBkcmFmdCIKICAgICAgICBlbGlm"
+            "IGNvbXBhdGlibGVEaWdlc3RzIGRyYWZ0IHw+IExpc3QuY29udGFpbnMgcmVjZWlwdC5EcmFmdERpZ2VzdCB8PiBub3QgdGhlbgog"
+            "ICAgICAgICAgICBFcnJvciAicmVjZWlwdCBjb250ZW50IGRpZ2VzdCBkb2VzIG5vdCBtYXRjaCB0aGlzIGRyYWZ0IgogICAgICAg"
+            "IGVsc2UKICAgICAgICAgICAgT2sgcmVjZWlwdAo="
+    ]
+    |> String.concat ""
+    |> Convert.FromBase64String
+
 let private producerRevision = "ca6dd7bd5d14cd3c44f54c89ee87f602c3a3abce"
 
 let private inventory () =
@@ -364,7 +416,7 @@ let private inventory () =
         |> List.map (fun family ->
             let source =
                 if family = "intake-marker" then
-                    "let marker draft = $\"<!-- fsgg:intake:v1 id={draft.Id} digest={digest draft} -->\""
+                    Encoding.UTF8.GetString pinnedIntakeMarkerBytes
                 else
                     "protected source for " + family
 
@@ -383,7 +435,11 @@ let private inventory () =
                 {
                     Kind = "rest"
                     Method = "Get"
-                    Uri = $"https://api.github.com/repos/FS-GG/.github/contents/src/{family}.fs?ref={producerRevision}"
+                    Uri =
+                        if family = "intake-marker" then
+                            $"https://api.github.com/repos/FS-GG/.github/contents/src/FS.GG.Coord.Core/IntakeReceipt.fs?ref={producerRevision}"
+                        else
+                            $"https://api.github.com/repos/FS-GG/.github/contents/src/{family}.fs?ref={producerRevision}"
                     Headers = Map.empty
                     Body = None
                     Variables = Map.empty
@@ -432,7 +488,7 @@ let private inventory () =
         Fingerprint = MigrationClaimEventCaptureContract.legacyInventoryFingerprint partial
     }
 
-let private inventoryWithoutIntakeProducerBytes () =
+let private inventoryWithIntakeSource uri (bytes: byte array) =
     let current = inventory ()
     let source = current.Sources |> List.find (_.SchemaFamily >> (=) "intake-marker")
 
@@ -440,7 +496,6 @@ let private inventoryWithoutIntakeProducerBytes () =
         current.ProducerReads
         |> List.find (fun value -> source.SourceIdentity.StartsWith(value.Request.Uri, StringComparison.Ordinal))
 
-    let bytes = Encoding.UTF8.GetBytes "intake parser without a protected marker writer"
     let oid = gitSha "blob" bytes
 
     let raw =
@@ -453,6 +508,9 @@ let private inventoryWithoutIntakeProducerBytes () =
 
     let changedRead =
         { read with
+            Request = { read.Request with Uri = uri }
+            RequestSha256 =
+                MigrationReviewDeliveryCaptureContract.requestSha256 { read.Request with Uri = uri }
             RawBody = raw
             RawSha256 = shaText raw
         }
@@ -460,7 +518,7 @@ let private inventoryWithoutIntakeProducerBytes () =
     let changedSource =
         { source with
             SourceIdentity =
-                read.Request.Uri
+                uri
                 + "#sha256:"
                 + (bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant())
         }
@@ -487,6 +545,12 @@ let private inventoryWithoutIntakeProducerBytes () =
     { partial with
         Fingerprint = MigrationClaimEventCaptureContract.legacyInventoryFingerprint partial
     }
+
+let private inventoryWithoutIntakeProducerBytes () =
+    let current = inventory ()
+    let source = current.Sources |> List.find (_.SchemaFamily >> (=) "intake-marker")
+    let uri = source.SourceIdentity.Split('#').[0]
+    inventoryWithIntakeSource uri (Encoding.UTF8.GetBytes "intake parser without a protected marker writer")
 
 [<Fact>]
 let ``partial binder joins native claim session to protected journal and retains producer gaps`` () =
@@ -633,6 +697,7 @@ let ``quoted and malformed intake marker lookalikes refuse`` () =
 
     for body in
         [
+            "<!-- fsgg:intake:v2 id=intake-42 digest=" + String.replicate 64 "a" + " -->"
             "prose\n<!-- fsgg:intake:v1 id=intake-42 digest="
             + String.replicate 64 "a"
             + " -->"
@@ -662,3 +727,28 @@ let ``caller producer label cannot replace protected intake marker bytes`` () =
             (journals ())
             (inventoryWithoutIntakeProducerBytes ())
     )
+
+    let current = inventory ()
+    let source = current.Sources |> List.find (_.SchemaFamily >> (=) "intake-marker")
+    let uri = source.SourceIdentity.Split('#').[0]
+    let copiedMarker =
+        Encoding.UTF8.GetBytes "let marker draft = \"<!-- fsgg:intake:v1 id=42 digest=abc -->\""
+    let retainedConsumer =
+        Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..", "..",
+            "evidence", "github-substrate-v2", "corpus", "originals", "C-intake.source"
+        )
+        |> File.ReadAllBytes
+
+    for candidate in
+        [
+            inventoryWithIntakeSource uri copiedMarker
+            inventoryWithIntakeSource
+                ($"https://api.github.com/repos/FS-GG/.github/contents/tests/FS.GG.Coord.Cli.BoardOps.Tests/IntakeTransactionTests.fs?ref={producerRevision}")
+                retainedConsumer
+        ] do
+        Assert.Equal(
+            Error "claim-event-intake-producer-unavailable",
+            MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) candidate
+        )

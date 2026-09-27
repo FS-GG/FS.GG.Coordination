@@ -233,7 +233,7 @@ module MigrationClaimEventInspectBinder =
                 match typedMatches, body with
                 | false, _
                 | _, None -> Error "claim-event-issue-raw-typed"
-                | true, Some value when value.Contains("fsgg:intake:v1", StringComparison.Ordinal) ->
+                | true, Some value when value.Contains("fsgg:intake", StringComparison.Ordinal) ->
                     let matched = intakePattern.Match value
 
                     if not matched.Success then
@@ -280,20 +280,30 @@ module MigrationClaimEventInspectBinder =
         | :? InvalidOperationException -> None
 
     let private intakeProducerBound (inventory: MigrationLegacyReceiptInventory) =
+        // ca6dd7bd's IntakeReceipt.marker formats the marker passed to the issue-body
+        // writer in Writes.renderIntake. The identity is the complete audited blob.
+        let revision = "ca6dd7bd5d14cd3c44f54c89ee87f602c3a3abce"
+        let uri =
+            "https://api.github.com/repos/FS-GG/.github/contents/src/FS.GG.Coord.Core/IntakeReceipt.fs?ref="
+            + revision
+        let identity = uri + "#sha256:6ae65a6b3b48f7f865330efca90e41a1786dd820da01c19f5623698b2761baa6"
         let intakeSources =
             inventory.Sources
             |> List.filter (fun source ->
-                source.SchemaFamily = "intake-marker" && source.SourceKind = ProtectedProducer)
+                source.SchemaFamily = "intake-marker"
+                && source.SourceKind = ProtectedProducer
+                && source.ProducerRevision = revision
+                && source.SourceIdentity = identity)
 
         intakeSources
         |> List.exists (fun source ->
             inventory.ProducerReads
             |> List.exists (fun read ->
                 decodedSource read
-                |> Option.exists (fun (identity, bytes) ->
-                    source.SourceIdentity = identity
-                    && bytes.Contains("<!-- fsgg:intake:v1 id=", StringComparison.Ordinal)
-                    && bytes.Contains(" digest=", StringComparison.Ordinal))))
+                |> Option.exists (fun (decodedIdentity, _) ->
+                    read.Request.Uri = uri
+                    && decodedIdentity = identity
+                    && source.SourceIdentity = decodedIdentity)))
 
     let private journalClaims (journals: MigrationClaimJournalTwoPass) =
         try
