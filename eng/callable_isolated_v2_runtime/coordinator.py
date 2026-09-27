@@ -128,6 +128,7 @@ class _Transport:
         self.clock_port, self.binding, self.raw_grant = clock_port, binding, raw_grant
         self.key_reader, self.journal, self.grant_sha = key_reader, journal, grant_sha
         self.outcome_acknowledged = False
+        self.acknowledged_outcome = None
 
     def request(self, method, path, body):
         if method == "GET" and body is None:
@@ -159,10 +160,13 @@ class _Transport:
             except Exception:
                 self.outcome_acknowledged = self.journal.record_outcome(
                     self.binding, self.grant_sha, "lost") is True
+                if self.outcome_acknowledged:
+                    self.acknowledged_outcome = {"status": "lost"}
                 raise
             if not self.journal.record_outcome(self.binding, self.grant_sha, response):
                 raise Refused("runtime-outcome-unacknowledged")
             self.outcome_acknowledged = True
+            self.acknowledged_outcome = response
             return response
         raise Refused("runtime-method")
 
@@ -233,13 +237,10 @@ def execute_pull(binding: Binding, expected, raw_grant: bytes, key_reader,
         if type(result) is operator.ExactPull:
             if not transport.outcome_acknowledged:
                 return operator.Unknown("runtime-outcome-unacknowledged")
+            if outcome != transport.acknowledged_outcome:
+                return operator.Unknown("runtime-outcome-contradiction")
             if not operator._response_allows_readback(outcome):
                 return operator.Unknown("runtime-outcome-ineligible")
-            adapter = operator.NativeReadAdapter(read_port)
-            confirmed = operator.classify_pull_after_one_attempt(
-                expected, lambda: adapter.read_pull_census(expected), outcome)
-            if confirmed != result:
-                return operator.Unknown("runtime-outcome-contradiction")
         return result
     except Exception:
         return operator.Unknown("runtime-unavailable")
