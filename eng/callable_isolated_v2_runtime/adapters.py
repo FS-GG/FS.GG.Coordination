@@ -231,6 +231,7 @@ class _Installation:
         self.configuration = configuration
         self.scopes = {scope.role: scope for scope in configuration.scopes}
         self.parent_provenance_expires_at: dt.datetime | None = None
+        self.journal_attestation_expires_at: dt.datetime | None = None
 
     def scope(self, role: str, now: dt.datetime) -> ProtectedScope:
         expected = self.scopes.get(role)
@@ -350,6 +351,7 @@ def _load_installation(authority: ProtectedAuthority) -> tuple[_Installation, Tr
 class ProtectedGrantReader:
     def __init__(self, installation: _Installation, clock: TrustedClock):
         self.installation, self.clock = installation, clock
+        self._last_deadline: dt.datetime | None = None
 
     def read(self) -> GrantRecord:
         binding = self.installation.configuration.binding
@@ -545,8 +547,11 @@ class ProtectedNativeWritePort:
         final_now = self.clock.current
         key_deadline = self.key_reader.authorization_expires_at
         parent_deadline = self.installation.parent_provenance_expires_at
+        journal_deadline = self.installation.journal_attestation_expires_at
         if (key_deadline is None or parent_deadline is None
+                or journal_deadline is None
                 or not final_now < min(key_deadline, parent_deadline,
+                    journal_deadline,
                     self.installation.configuration.provenance.expires_at,
                     self.grant_record.provenance.expires_at)):
             raise Refused("protected-write-authority")
@@ -610,6 +615,7 @@ class ProtectedAttemptJournal:
         self.installation.parent_provenance_expires_at = parent.provenance.expires_at
 
     def _committed(self) -> CommittedAttempt | None:
+        self._last_deadline = None
         binding = self.installation.configuration.binding
         now = self.clock.now()
         self.installation.scope("journal", now)
@@ -621,7 +627,6 @@ class ProtectedAttemptJournal:
         if value is None:
             return None
         value = _copy_exact(value, CommittedAttempt, "protected-journal-shape")
-        self.installation.record(value.provenance, "journal", now)
         if (value.operation_id != binding.operation_id
                 or value.repository != binding.journal_repository
                 or value.ref != binding.journal_ref
@@ -633,7 +638,13 @@ class ProtectedAttemptJournal:
                 or value.attempt_may_have_started is not True
                 or not _valid_outcome(value.outcome)):
             raise Refused("protected-journal-invalid")
-        self.installation.scope("journal", self.clock.now())
+        final_now = self.clock.now()
+        final_scope = self.installation.scope("journal", final_now)
+        self.installation.record(value.provenance, "journal", final_now)
+        if not final_now < final_scope.expires_at:
+            raise Refused("protected-journal-expired")
+        self._last_deadline = min(
+            value.provenance.expires_at, final_scope.expires_at)
         return value
 
     def reserve(self, binding: Binding, grant_sha256: str) -> bool:
@@ -651,10 +662,14 @@ class ProtectedAttemptJournal:
         return admitted
 
     def read(self, binding: Binding, grant_sha256: str) -> bool:
+        self.installation.journal_attestation_expires_at = None
         if binding != self.installation.configuration.binding:
             return False
         value = self._committed()
-        return value is not None and value.grant_sha256 == grant_sha256
+        if value is None or value.grant_sha256 != grant_sha256:
+            return False
+        self.installation.journal_attestation_expires_at = self._last_deadline
+        return True
 
     def record_outcome(self, binding: Binding, grant_sha256: str,
                        outcome: object) -> bool:

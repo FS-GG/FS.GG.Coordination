@@ -273,6 +273,49 @@ class ProtectedAdapterTests(unittest.TestCase):
             self.assertFalse(runtime.journal.reserve(runtime.binding,
                 authority.grant_record.grant_sha256))
 
+    def test_journal_attestation_expiry_before_send_has_zero_posts(self):
+        for delay in ("read", "write-scope"):
+            with self.subTest(delay=delay), tempfile.TemporaryDirectory() as temp:
+                authority = Authority(pathlib.Path(temp))
+                runtime = adapters.compose_installed(authority)
+                original_read = authority.read_committed_attempt
+                reads = 0
+                def timed_read(operation_id):
+                    nonlocal reads
+                    reads += 1
+                    value = original_read(operation_id)
+                    if value is None:
+                        return None
+                    value = dataclasses.replace(value, provenance=
+                        dataclasses.replace(value.provenance,
+                            expires_at=NOW + dt.timedelta(seconds=30)))
+                    if delay == "read" and reads == 3:
+                        authority.now = NOW + dt.timedelta(seconds=31)
+                    return value
+                authority.read_committed_attempt = timed_read
+                original_scope = authority.scope
+                def timed_scope(role):
+                    value = original_scope(role)
+                    if delay == "write-scope" and role == "native-write":
+                        authority.now = NOW + dt.timedelta(seconds=31)
+                    return value
+                authority.scope = timed_scope
+                def attempt(expected, transport, reserve):
+                    if not reserve("key"):
+                        return coordinator.operator.Unknown("reserve-refused")
+                    return transport.request("POST", f"repos/{expected.repository}/pulls",
+                        coordinator.operator.pull_request_body(expected))
+                with (mock.patch.object(coordinator, "_prestate_matches", return_value=True),
+                      mock.patch.object(coordinator.operator, "run_pull_once", side_effect=attempt)):
+                    result = coordinator.execute_pull(runtime.binding, runtime.expected,
+                        runtime.raw_grant, runtime.key_reader, runtime.read_port,
+                        runtime.write_port, runtime.token_port, runtime.journal,
+                        runtime.clock_port)
+                self.assertIsInstance(result, coordinator.operator.Unknown)
+                self.assertGreaterEqual(reads, 3)
+                self.assertEqual(authority.posts, [])
+                self.assertIsNotNone(authority.attempt)
+
     def test_compose_uses_stored_parent_and_separate_scoped_ports(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))
@@ -284,6 +327,10 @@ class ProtectedAdapterTests(unittest.TestCase):
             response = runtime.read_port.request(
                 "GET", "repos/FS-GG/target", None)
             self.assertEqual(response.status, 200)
+            self.assertTrue(runtime.journal.reserve(
+                authority.binding, authority.grant_record.grant_sha256))
+            self.assertTrue(runtime.journal.read(
+                authority.binding, authority.grant_record.grant_sha256))
             token = runtime.token_port.read_execution_token()
             response = runtime.write_port.post_pull(
                 "repos/FS-GG/target/pulls",
@@ -292,8 +339,6 @@ class ProtectedAdapterTests(unittest.TestCase):
             self.assertEqual(len(authority.posts), 1)
             self.assertIsNot(runtime.read_port, runtime.write_port)
             self.assertIsNot(runtime.write_port, runtime.token_port)
-            self.assertTrue(runtime.journal.reserve(
-                authority.binding, authority.grant_record.grant_sha256))
 
     def test_parent_missing_or_drifting_fails_before_token_or_provider(self):
         for mode in ("missing", "drift"):
