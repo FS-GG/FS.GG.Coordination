@@ -6,7 +6,10 @@ type MigrationNativeActivityInput =
       PullRequests: MigrationPullRequestPopulation
       IssueComments: MigrationIssueCommentPopulation list
       IssueEvents: MigrationIssueEventPopulation list
+      IssueTimelines: MigrationTimelinePopulation list
       PullRequestComments: MigrationIssueCommentPopulation list
+      PullRequestEvents: MigrationIssueEventPopulation list
+      PullRequestTimelines: MigrationTimelinePopulation list
       PullRequestReviews: MigrationPullRequestReviewPopulation list
       PullRequestInlineComments: MigrationPullRequestReviewCommentPopulation list }
 
@@ -16,7 +19,10 @@ type MigrationNativeActivitySnapshot =
       PullRequestCount: int
       IssueCommentCount: int
       IssueEventCount: int
+      IssueTimelineCount: int
       PullRequestCommentCount: int
+      PullRequestEventCount: int
+      PullRequestTimelineCount: int
       ReviewCount: int
       InlineCommentCount: int
       NormalizedSha256: string }

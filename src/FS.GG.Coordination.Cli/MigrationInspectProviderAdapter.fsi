@@ -108,6 +108,14 @@ module MigrationInspectProviderAdapter =
         second:MigrationReceiverPinSnapshot list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Binds a provider-tree-derived workflow/package byte census, raw valid-signature evidence
+    /// for every receiver head and every immutable external workflow tool identity. The canonical
+    /// workflow-pins authority remains unavailable until the receiver roster is independently closed.
+    val bindProviderWorkflowPins:
+        options:MigrationInspectProviderOptions ->
+        captured:MigrationReceiverPinTwoPass ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Binds complete provider-derived native issue/PR activity over two raw-stable passes.
     /// Protected claim journals and custom receipts remain outside this partial authority.
     val bindNativeActivity:

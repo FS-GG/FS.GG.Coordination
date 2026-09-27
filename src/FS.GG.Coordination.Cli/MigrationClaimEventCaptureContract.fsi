@@ -67,7 +67,13 @@ type MigrationLegacyReceiptSource =
     { ProducerId: string
       ProducerRevision: string
       SourceIdentity: string
-      SchemaFamily: string }
+      SchemaFamily: string
+      SourceKind: MigrationLegacyReceiptSourceKind }
+
+and MigrationLegacyReceiptSourceKind =
+    | ProtectedProducer
+    | ProtectedParserOnly
+    | LocalCacheOnly
 
 type MigrationLegacyReceiptInventory =
     { ProducerReads: MigrationReviewDeliveryRead list
@@ -83,6 +89,20 @@ module MigrationClaimEventCaptureContract =
 
     /// Comments, issue events and timeline are mandatory for every independently censused issue and pull request.
     val requiredNativeStreams: MigrationClaimNativeSubjectKind -> MigrationClaimNativeStreamKind list
+
+    /// Every legacy family that must have source evidence before the raw native capture can be qualified.
+    val requiredLegacySchemaFamilies: string list
+
+    /// Binds every immutable producer source response and its role classification.
+    val legacyInventoryFingerprint: MigrationLegacyReceiptInventory -> string
+
+    /// Validates exact immutable Contents API bytes, the complete requested-family roster and the inventory fingerprint.
+    val validateLegacyInventory:
+        MigrationLegacyReceiptInventory -> Result<MigrationLegacyReceiptInventory, string>
+
+    /// Requires a protected producer for every family. Parser-only and local-cache evidence remains an explicit refusal.
+    val qualifyLegacyInventory:
+        MigrationLegacyReceiptInventory -> Result<MigrationLegacyReceiptInventory, string>
 
     /// Claim refs accept claim schemas; operation refs accept admission, ordinary and review schemas.
     /// A decoder must refuse every schema that it cannot map to one of these known families.

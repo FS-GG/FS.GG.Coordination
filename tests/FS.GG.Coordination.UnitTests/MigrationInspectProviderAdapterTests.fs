@@ -308,7 +308,7 @@ let private receiverIdentity =
 let private receiverRef =
     reply $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
 let private receiverCommit =
-    reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+    reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}},"verification":{{"verified":true,"reason":"valid","signature":"signed-by-copy-owner","payload":"tree {receiverTree}","verified_at":"2026-09-27T10:00:00.0000000+00:00"}}}}"""
 let private receiverTreeResponse =
     reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
 let private receiverResponses =
@@ -371,7 +371,14 @@ let ``declared receiver inspect slice refuses typed raw URI population and pass 
     | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
     | Ok _ -> failwith "Changed receiver second pass was accepted"
 
-let private pinBytes = Encoding.UTF8.GetBytes "name: controlled\n"
+let private toolRevision = String.replicate 40 "e"
+let private pinBytes =
+    Encoding.UTF8.GetBytes $"""name: controlled
+jobs:
+  check:
+    steps:
+      - uses: actions/checkout@{toolRevision}
+"""
 let private pinSha =
     Array.append (Encoding.ASCII.GetBytes($"blob {pinBytes.LongLength}\u0000")) pinBytes
     |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -384,6 +391,8 @@ let private pinBody =
 let private pinResponses =
     [ receiverIdentity; receiverRef; receiverCommit; pinTreeResponse; receiverRef
       pinBody; receiverRef ]
+let private pinReceiverResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; pinTreeResponse; receiverRef ]
 let private pinDeclarations =
     Map [ "copy-receiver", [ { EntryPath=pinPath; PinKind="workflow" } ] ]
 
@@ -393,6 +402,12 @@ let private readWorkflowPinsTwoPass () =
               cohort pinDeclarations options.Repository transport with
     | Ok proof -> proof
     | Error failure -> failwithf "Expected workflow pin two-pass proof: %s" failure
+
+let private readProviderWorkflowPinsTwoPass () =
+    let transport = FakeTransport (pinReceiverResponses @ pinReceiverResponses @ pinResponses @ pinResponses)
+    match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport with
+    | Ok proof -> proof
+    | Error failure -> failwithf "Expected provider workflow pin proof: %s" failure
 
 [<Fact>]
 let ``declared workflow pin inspect slice binds exact tree blob bytes and stable ref`` () =
@@ -443,12 +458,124 @@ let ``declared workflow pin inspect slice refuses missing pins changed source an
     Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
                     options pinDeclarations captured.First changedSecond |> Result.isError)
 
+[<Fact>]
+let ``provider tree workflow pin census binds raw trees and blobs without claiming canonical closure`` () =
+    let captured = readProviderWorkflowPinsTwoPass ()
+    Assert.True(captured.InventoryBound)
+    match MigrationInspectProviderAdapter.bindProviderWorkflowPins options captured with
+    | Error reason -> failwithf "Provider workflow pin proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("workflow-pins/provider-tree-signed-tools", proof.Read.Authority)
+        Assert.Equal(12, proof.Read.PageCount)
+        Assert.Equal(14, proof.Read.ItemCount)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+        Assert.True(captured.SignedToolIdentitiesBound)
+        let signed = Assert.Single(captured.SignedHeads)
+        Assert.Equal(receiverHead, signed.CommitSha)
+        Assert.Equal("valid", signed.VerificationReason)
+        let tool = Assert.Single(captured.WorkflowTools)
+        Assert.Equal("actions/checkout", tool.TargetRepository)
+        Assert.Equal(toolRevision, tool.Revision)
+        Assert.Contains(proof.Read.Subjects, fun item ->
+            item.Identity = "receiver:copy-receiver:signed-head" && item.Revision = receiverHead)
+        Assert.Contains(proof.Read.Subjects, fun item ->
+            item.Identity.StartsWith("receiver:copy-receiver:workflow-tool:")
+            && item.Revision = toolRevision)
+        let expectedTreeBody =
+            match pinTreeResponse with
+            | Response value -> value.Body
+            | _ -> failwith "Expected receiver tree response"
+        Assert.Contains(proof.Pages, fun page -> page.RawBody = expectedTreeBody)
+        let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                     :> IGitHubMigrationInspectSource
+        Assert.Equal(Error "authority-adapter-unavailable:workflow-pins",
+                     source.ReadAuthority(1, "workflow-pins"))
+
+[<Fact>]
+let ``provider workflow pin binder refuses an unbound caller declared inventory`` () =
+    let declared = readWorkflowPinsTwoPass ()
+    Assert.False(declared.InventoryBound)
+    Assert.Equal(Error "workflow-pins-provider-inventory-unbound",
+                 MigrationInspectProviderAdapter.bindProviderWorkflowPins options declared)
+
+[<Fact>]
+let ``provider workflow pin census refuses a changed preliminary tree`` () =
+    let changedTree =
+        reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"package.json","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
+    let changedPass =
+        [ receiverIdentity; receiverRef; receiverCommit; changedTree; receiverRef ]
+    let transport = FakeTransport (receiverResponses @ changedPass)
+    match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport with
+    | Error "changed:receiver-snapshot" -> ()
+    | Error other -> failwithf "Unexpected refusal: %s" other
+    | Ok _ -> failwith "Changed provider tree was accepted"
+
+[<Fact>]
+let ``provider workflow pin census refuses an empty inferred inventory`` () =
+    let emptyTree =
+        reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[]}}"""
+    let emptyPass =
+        [ receiverIdentity; receiverRef; receiverCommit; emptyTree; receiverRef ]
+    let transport = FakeTransport (emptyPass @ emptyPass)
+    Assert.Equal(Error "missing:receiver-pin-inventory",
+                 MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository transport)
+
+[<Fact>]
+let ``provider workflow pin census refuses unsigned heads and mutable tool identities`` () =
+    let unsignedCommit =
+        reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+    let unsignedReceiverPass =
+        [ receiverIdentity; receiverRef; unsignedCommit; pinTreeResponse; receiverRef ]
+    let unsignedPinPass =
+        [ receiverIdentity; receiverRef; unsignedCommit; pinTreeResponse; receiverRef
+          pinBody; receiverRef ]
+    let unsignedTransport =
+        FakeTransport (unsignedReceiverPass @ unsignedReceiverPass @ unsignedPinPass @ unsignedPinPass)
+    Assert.Equal(Error "missing:receiver-signed-head",
+                 MigrationReceiverCapture.captureWorkflowPinsTwoPass
+                    cohort options.Repository unsignedTransport)
+
+    let mutableBytes = Encoding.UTF8.GetBytes "steps:\n  - uses: actions/checkout@v4\n"
+    let mutableSha =
+        Array.append (Encoding.ASCII.GetBytes($"blob {mutableBytes.LongLength}\u0000")) mutableBytes
+        |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    let mutableTree =
+        reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"{pinPath}","mode":"100644","type":"blob","sha":"{mutableSha}","size":{mutableBytes.Length}}}]}}"""
+    let mutableBody =
+        reply $"""{{"sha":"{mutableSha}","url":"https://api.github.test/repos/FS-GG/copy/git/blobs/{mutableSha}","encoding":"base64","content":"{Convert.ToBase64String mutableBytes}","size":{mutableBytes.Length}}}"""
+    let mutableReceiverPass =
+        [ receiverIdentity; receiverRef; receiverCommit; mutableTree; receiverRef ]
+    let mutablePinPass =
+        [ receiverIdentity; receiverRef; receiverCommit; mutableTree; receiverRef
+          mutableBody; receiverRef ]
+    let mutableTransport =
+        FakeTransport (mutableReceiverPass @ mutableReceiverPass @ mutablePinPass @ mutablePinPass)
+    match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository mutableTransport with
+    | Error reason -> Assert.StartsWith("mutable-or-invalid:workflow-tool-identity:", reason)
+    | Ok _ -> failwith "Mutable workflow tool identity was accepted"
+
+[<Fact>]
+let ``provider workflow pin binder reparses raw signed and tool identity evidence`` () =
+    let captured = readProviderWorkflowPinsTwoPass ()
+    let forgedHead =
+        { captured.SignedHeads.Head with SignatureSha256=String.replicate 64 "0" }
+    Assert.Equal(Error "workflow-pins-signed-tools-mismatch",
+                 MigrationInspectProviderAdapter.bindProviderWorkflowPins
+                    options { captured with SignedHeads=[ forgedHead ] })
+    let forgedTool =
+        { captured.WorkflowTools.Head with Revision=String.replicate 40 "f" }
+    Assert.Equal(Error "workflow-pins-signed-tools-mismatch",
+                 MigrationInspectProviderAdapter.bindProviderWorkflowPins
+                    options { captured with WorkflowTools=[ forgedTool ] })
+
 let private nativeIssue =
     """{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
 let private nativeComment =
     """{"id":201,"node_id":"COMMENT_201","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/1","body":"claim","created_at":"2026-09-25T10:00:00Z","updated_at":"2026-09-25T10:00:00Z","user":{"login":"actor"}}"""
 let private nativeEvent =
     """{"id":202,"node_id":"EVENT_202","event":"assigned","created_at":"2026-09-25T10:00:00Z","actor":{"login":"actor"}}"""
+let private nativeTimeline =
+    """{"node_id":"TIMELINE_203","event":"assigned"}"""
 
 let private nativeRoute request =
     match request with
@@ -460,6 +587,7 @@ let private nativeRoute request =
         | "/repos/FS-GG/copy/pulls" -> reply "[]"
         | "/repos/FS-GG/copy/issues/1/comments" -> reply $"[{nativeComment}]"
         | "/repos/FS-GG/copy/issues/1/events" -> reply $"[{nativeEvent}]"
+        | "/repos/FS-GG/copy/issues/1/timeline" -> reply $"[{nativeTimeline}]"
         | _ -> NetworkFailure
 
 let private captureNative route =
@@ -478,11 +606,11 @@ let ``native activity inspect slice binds provider derived terminal streams over
     | Error reason -> failwithf "Native activity proof refused: %s" reason
     | Ok proof ->
         Assert.Equal("claim-and-event-streams/native", proof.Read.Authority)
-        Assert.Equal(4, proof.Read.PageCount)
-        Assert.Equal(3, proof.Read.ItemCount)
+        Assert.Equal(5, proof.Read.PageCount)
+        Assert.Equal(4, proof.Read.ItemCount)
         Assert.Equal($"[{nativeComment}]", proof.Pages.[2].RawBody)
         Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
-    Assert.Equal(24, transport.Calls.Length)
+    Assert.Equal(28, transport.Calls.Length)
     let source = MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource
     Assert.Equal(Error "authority-adapter-unavailable:claim-and-event-streams",
@@ -529,6 +657,18 @@ let ``native activity inspect slice refuses missing page raw typed mismatch and 
         | _ -> nativeRoute request
     Assert.True(MigrationInspectProviderAdapter.readNativeActivity
                     options (RoutingTransport drifting) |> Result.isError)
+
+    let mutable timelineReads = 0
+    let changedTimelineBody = nativeTimeline.Replace("assigned", "closed")
+    let timelineDrifting request =
+        match request with
+        | Rest value when value.Uri.AbsolutePath.EndsWith("/timeline", StringComparison.Ordinal) ->
+            timelineReads <- timelineReads + 1
+            if timelineReads = 2 then reply $"[{changedTimelineBody}]"
+            else nativeRoute request
+        | _ -> nativeRoute request
+    Assert.True(MigrationInspectProviderAdapter.readNativeActivity
+                    options (RoutingTransport timelineDrifting) |> Result.isError)
 
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""

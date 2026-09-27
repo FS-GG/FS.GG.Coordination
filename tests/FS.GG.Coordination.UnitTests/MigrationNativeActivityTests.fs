@@ -38,6 +38,17 @@ let private issueEvent =
     { DatabaseId=202L; NodeId="IE_202"; SubjectNumber=1; EventKind="assigned"
       ActorLogin=Some "actor"; CreatedAt=stamp; PayloadJson=raw; PayloadSha256=rawDigest }
 
+let private pullRequestEvent =
+    { issueEvent with DatabaseId=206L; NodeId="PE_206"; SubjectNumber=2 }
+
+let private issueTimeline =
+    { NodeId="IT_207"; SubjectNumber=1; EventKind="assigned"
+      PayloadJson=raw; PayloadSha256=rawDigest }
+
+let private pullRequestTimeline =
+    { NodeId="PT_208"; SubjectNumber=2; EventKind="reviewed"
+      PayloadJson=raw; PayloadSha256=rawDigest }
+
 let private pullRequestComment =
     { issueComment with DatabaseId=203L; NodeId="PC_203"; SubjectNumber=2 }
 
@@ -62,9 +73,18 @@ let private sample () : MigrationNativeActivityInput =
       IssueEvents=[ { RepositoryId=42L; SubjectNumber=1; SubjectNodeId="I_1"
                       PageCount=1; Terminal=true; Pages=[ page "issues/1/events" ]
                       Events=[ issueEvent ] } ]
+      IssueTimelines=[ { RepositoryId=42L; SubjectNumber=1; SubjectNodeId="I_1"
+                         PageCount=1; Terminal=true; Pages=[ page "issues/1/timeline" ]
+                         Records=[ issueTimeline ] } ]
       PullRequestComments=[ { RepositoryId=42L; SubjectNumber=2; SubjectNodeId="P_2"
                               PageCount=1; Terminal=true; Pages=[ page "issues/2/comments" ]
                               Comments=[ pullRequestComment ] } ]
+      PullRequestEvents=[ { RepositoryId=42L; SubjectNumber=2; SubjectNodeId="P_2"
+                            PageCount=1; Terminal=true; Pages=[ page "issues/2/events" ]
+                            Events=[ pullRequestEvent ] } ]
+      PullRequestTimelines=[ { RepositoryId=42L; SubjectNumber=2; SubjectNodeId="P_2"
+                               PageCount=1; Terminal=true; Pages=[ page "issues/2/timeline" ]
+                               Records=[ pullRequestTimeline ] } ]
       PullRequestReviews=[ { RepositoryId=42L; PullRequestNumber=2; PullRequestNodeId="P_2"
                              PageCount=1; Terminal=true; Pages=[ page "pulls/2/reviews" ]
                              Reviews=[ review ] } ]
@@ -112,6 +132,11 @@ let private response body =
         { StatusCode=200; Headers=Map.empty; Body=body; ETag=None
           RateBudget={ Limit=Some 5000; Remaining=Some 4999; ResetAt=None; Cost=Some 1 } }
 
+let private responseWithHeaders headers body =
+    Response
+        { StatusCode=200; Headers=headers; Body=body; ETag=None
+          RateBudget={ Limit=Some 5000; Remaining=Some 4999; ResetAt=None; Cost=Some 1 } }
+
 type private FakeTransport(responses: TransportOutcome list) =
     let queue = Queue<TransportOutcome>(responses)
     let requests = ResizeArray<GitHubRequest>()
@@ -120,6 +145,37 @@ type private FakeTransport(responses: TransportOutcome list) =
         member _.Send request =
             requests.Add request
             if queue.Count = 0 then NetworkFailure else queue.Dequeue()
+
+[<Fact>]
+let ``PR issue events and timelines retain terminal linked pages`` () =
+    let input = sample ()
+    let repository = response """{"id":42,"full_name":"FS-GG/copy"}"""
+    let eventBody =
+        """[{"id":206,"node_id":"PE_206","event":"labeled","created_at":"2026-09-24T10:00:00Z","actor":null}]"""
+    let timelineFirst = """[{"node_id":"PT_208","event":"reviewed"}]"""
+    let timelineSecond = """[{"node_id":"PT_209","event":"merged"}]"""
+    let next = "https://api.github.test/repos/FS-GG/copy/issues/2/timeline?per_page=100&page=2"
+    let transport =
+        FakeTransport(
+            [ repository; response eventBody
+              repository; responseWithHeaders (Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ]) timelineFirst
+              response timelineSecond ])
+    let events =
+        MigrationGitHubRead.readPullRequestIssueEvents options input.PullRequests 2 transport
+        |> requireOk
+    let timeline =
+        MigrationGitHubRead.readPullRequestTimeline options input.PullRequests 2 transport
+        |> requireOk
+    Assert.Equal(1, events.PageCount)
+    Assert.Equal("P_2", events.SubjectNodeId)
+    Assert.Equal(2, timeline.PageCount)
+    Assert.Equal(Some next, timeline.Pages.Head.NextUri)
+    Assert.True(timeline.Terminal)
+    Assert.Equal<string list>([ "PT_208"; "PT_209" ], timeline.Records |> List.map _.NodeId)
+    Assert.All(transport.Requests, fun request ->
+        match request with
+        | Rest value -> Assert.Equal(Get, value.Method)
+        | GraphQL _ -> failwith "native timeline issued GraphQL")
 
 let private emptyCensusResponses =
     [ response """{"id":42,"full_name":"FS-GG/copy"}"""; response "[]" ]
@@ -135,11 +191,26 @@ let ``complete native activity binds every censused subject and raw item`` () =
         Assert.Equal(1, snapshot.PullRequestCount)
         Assert.Equal(1, snapshot.IssueCommentCount)
         Assert.Equal(1, snapshot.IssueEventCount)
+        Assert.Equal(1, snapshot.IssueTimelineCount)
         Assert.Equal(1, snapshot.PullRequestCommentCount)
+        Assert.Equal(1, snapshot.PullRequestEventCount)
+        Assert.Equal(1, snapshot.PullRequestTimelineCount)
         Assert.Equal(1, snapshot.ReviewCount)
         Assert.Equal(1, snapshot.InlineCommentCount)
         Assert.Equal(64, snapshot.NormalizedSha256.Length)
         Assert.Equal(snapshot, MigrationNativeActivity.reconcile options input |> requireOk)
+
+[<Fact>]
+let ``timeline overlap preserves the independently observed event`` () =
+    let input = sample ()
+    let timeline = input.IssueTimelines.Head
+    let repeated =
+        { issueTimeline with NodeId=issueEvent.NodeId; PayloadJson=issueEvent.PayloadJson
+                             PayloadSha256=issueEvent.PayloadSha256 }
+    let changed = { input with IssueTimelines=[ { timeline with Records=[ repeated ] } ] }
+    let snapshot = MigrationNativeActivity.reconcile options changed |> requireOk
+    Assert.Equal(1, snapshot.IssueEventCount)
+    Assert.Equal(1, snapshot.IssueTimelineCount)
 
 [<Fact>]
 let ``native activity refuses a PR population outside issue marker set`` () =
@@ -152,6 +223,9 @@ let ``missing subject stream refuses without trying to find an absent review str
     let input = sample ()
     assertRefused "stream-population" { input with PullRequestReviews=[] }
     assertRefused "stream-population" { input with IssueEvents=[] }
+    assertRefused "stream-population" { input with IssueTimelines=[] }
+    assertRefused "stream-population" { input with PullRequestEvents=[] }
+    assertRefused "stream-population" { input with PullRequestTimelines=[] }
 
 [<Fact>]
 let ``nonterminal and disconnected page chains refuse`` () =
@@ -172,6 +246,12 @@ let ``native activity refuses a stream page from another repository`` () =
         let foreignPage = { stream.Pages.Head with RequestedUri=foreign }
         assertRefused "stream-pages"
             { input with IssueEvents=[ { stream with Pages=[ foreignPage ] } ] }
+    let timeline = input.PullRequestTimelines.Head
+    let wrongSubject =
+        { timeline.Pages.Head with
+            RequestedUri="https://api.github.test/repos/FS-GG/copy/issues/1/timeline?per_page=100" }
+    assertRefused "stream-pages"
+        { input with PullRequestTimelines=[ { timeline with Pages=[ wrongSubject ] } ] }
 
 [<Fact>]
 let ``native activity refuses self consistent foreign initial census`` () =
@@ -185,7 +265,10 @@ let ``native activity refuses self consistent foreign initial census`` () =
             PullRequests={ input.PullRequests with Pages=pages input.PullRequests.Pages }
             IssueComments=input.IssueComments |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
             IssueEvents=input.IssueEvents |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            IssueTimelines=input.IssueTimelines |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
             PullRequestComments=input.PullRequestComments |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            PullRequestEvents=input.PullRequestEvents |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
+            PullRequestTimelines=input.PullRequestTimelines |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
             PullRequestReviews=input.PullRequestReviews |> List.map (fun stream -> { stream with Pages=pages stream.Pages })
             PullRequestInlineComments=input.PullRequestInlineComments |> List.map (fun stream -> { stream with Pages=pages stream.Pages }) }
     assertRefused "census-scope" foreign
@@ -326,6 +409,12 @@ let ``provider capture reads every nonempty native stream before reconciling`` (
         response ($"""[{{"id":{id},"node_id":"{node}","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/{number}","body":"body","created_at":"2026-09-24T10:00:00Z","updated_at":"2026-09-24T10:00:00Z","user":{{"login":"actor"}}}}]""")
     let eventPage =
         response """[{"id":202,"node_id":"IE_202","event":"assigned","created_at":"2026-09-24T10:00:00Z","actor":null}]"""
+    let pullEventPage =
+        response """[{"id":206,"node_id":"PE_206","event":"labeled","created_at":"2026-09-24T10:00:00Z","actor":null}]"""
+    let issueTimelinePage =
+        response """[{"node_id":"IT_207","event":"assigned"}]"""
+    let pullTimelinePage =
+        response """[{"node_id":"PT_208","event":"reviewed"}]"""
     let reviewPage =
         response """[{"id":204,"node_id":"R_204","pull_request_url":"https://api.github.test/repos/FS-GG/copy/pulls/2","state":"APPROVED","commit_id":null,"submitted_at":"2026-09-24T10:00:00Z","user":{"login":"reviewer"}}]"""
     let inlinePage =
@@ -334,7 +423,10 @@ let ``provider capture reads every nonempty native stream before reconciling`` (
         [ repository; issuePage; repository; pullRequestPage
           repository; comment 1 201 "IC_201"
           repository; eventPage
+          repository; issueTimelinePage
           repository; comment 2 203 "PC_203"
+          repository; pullEventPage
+          repository; pullTimelinePage
           repository; reviewPage
           repository; inlinePage
           repository; issuePage; repository; pullRequestPage ]
@@ -344,10 +436,13 @@ let ``provider capture reads every nonempty native stream before reconciling`` (
     Assert.Equal(1, capture.Snapshot.PullRequestCount)
     Assert.Equal(1, capture.Snapshot.IssueCommentCount)
     Assert.Equal(1, capture.Snapshot.IssueEventCount)
+    Assert.Equal(1, capture.Snapshot.IssueTimelineCount)
     Assert.Equal(1, capture.Snapshot.PullRequestCommentCount)
+    Assert.Equal(1, capture.Snapshot.PullRequestEventCount)
+    Assert.Equal(1, capture.Snapshot.PullRequestTimelineCount)
     Assert.Equal(1, capture.Snapshot.ReviewCount)
     Assert.Equal(1, capture.Snapshot.InlineCommentCount)
-    Assert.Equal(18, transport.Requests.Length)
+    Assert.Equal(24, transport.Requests.Length)
 
 [<Fact>]
 let ``two complete native passes agree before a stable result is returned`` () =

@@ -67,10 +67,16 @@
     <Compile Include="MigrationStepExecution.fs" />
     <Compile Include="MigrationGitHubRead.fsi" />
     <Compile Include="MigrationGitHubRead.fs" />
+    <Compile Include="MigrationReceiverRosterRead.fsi" />
+    <Compile Include="MigrationReceiverRosterRead.fs" />
     <Compile Include="MigrationImmutableReleasesRead.fsi" />
     <Compile Include="MigrationImmutableReleasesRead.fs" />
+    <Compile Include="MigrationEnvironmentCensusRead.fsi" />
+    <Compile Include="MigrationEnvironmentCensusRead.fs" />
     <Compile Include="MigrationNativeActivity.fsi" />
     <Compile Include="MigrationNativeActivity.fs" />
+    <Compile Include="MigrationEnvironmentSettingsRead.fsi" />
+    <Compile Include="MigrationEnvironmentSettingsRead.fs" />
     <Compile Include="LifecycleProjectionAdapter.fsi" />
     <Compile Include="LifecycleProjectionAdapter.fs" />
     <Compile Include="FleetShadowAdapter.fsi" />

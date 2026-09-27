@@ -293,6 +293,22 @@ type MigrationIssueEventPopulation =
       Pages: MigrationRestPageEvidence list
       Events: MigrationIssueEventRecord list }
 
+type MigrationTimelineRecord =
+    { NodeId: string
+      SubjectNumber: int
+      EventKind: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationTimelinePopulation =
+    { RepositoryId: int64
+      SubjectNumber: int
+      SubjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      Records: MigrationTimelineRecord list }
+
 type MigrationPullRequestReviewRecord =
     { DatabaseId: int64
       NodeId: string
@@ -576,6 +592,27 @@ module MigrationGitHubRead =
         issueNumber:int ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationIssueEventPopulation, MigrationReadFailure>
+
+    val readPullRequestIssueEvents:
+        options:MigrationGitHubReadOptions ->
+        pullRequests:MigrationPullRequestPopulation ->
+        pullRequestNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationIssueEventPopulation, MigrationReadFailure>
+
+    val readIssueTimeline:
+        options:MigrationGitHubReadOptions ->
+        issues:MigrationIssuePopulation ->
+        issueNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationTimelinePopulation, MigrationReadFailure>
+
+    val readPullRequestTimeline:
+        options:MigrationGitHubReadOptions ->
+        pullRequests:MigrationPullRequestPopulation ->
+        pullRequestNumber:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationTimelinePopulation, MigrationReadFailure>
 
     val readIssueTypes:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
