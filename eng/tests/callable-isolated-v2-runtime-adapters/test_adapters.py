@@ -337,6 +337,35 @@ class ProtectedAdapterTests(unittest.TestCase):
                     authority.binding.canonical_request, token)
             self.assertEqual(authority.posts, [])
 
+    def test_final_key_lookup_refuses_expired_record_provenance(self):
+        for role in ("issuer", "key"):
+            with self.subTest(role=role), tempfile.TemporaryDirectory() as temp:
+                authority = Authority(pathlib.Path(temp))
+                runtime = adapters.compose_installed(authority)
+                token = runtime.token_port.read_execution_token()
+                record = getattr(authority, role)
+                setattr(authority, role, dataclasses.replace(record,
+                    provenance=dataclasses.replace(record.provenance,
+                        expires_at=NOW + dt.timedelta(seconds=30))))
+                original_key_read = authority.read_active_key
+                reads = 0
+
+                def slow_second_key_read(key_id, issuer_actor_id):
+                    nonlocal reads
+                    reads += 1
+                    value = original_key_read(key_id, issuer_actor_id)
+                    if reads == 2:
+                        authority.now = NOW + dt.timedelta(seconds=31)
+                    return value
+
+                authority.read_active_key = slow_second_key_read
+                with self.assertRaisesRegex(adapters.Refused,
+                                            "protected-write-authority"):
+                    runtime.write_port.post_pull("repos/FS-GG/target/pulls",
+                        authority.binding.canonical_request, token)
+                self.assertEqual(reads, 2)
+                self.assertEqual(authority.posts, [])
+
     def test_known_401_survives_post_scope_drift_and_cannot_be_exact(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))

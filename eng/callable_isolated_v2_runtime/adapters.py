@@ -387,9 +387,14 @@ class ProtectedIssuerKeyReader:
                 or hashlib.sha256(key.public_key).hexdigest() != key_id):
             raise Refused("protected-key-invalid")
         after = self.clock.now()
-        self.installation.scope("issuer", after)
-        self.installation.scope("key", after)
-        if not after < issuer.expires_at:
+        issuer_scope = self.installation.scope("issuer", after)
+        key_scope = self.installation.scope("key", after)
+        final_now = self.clock.now()
+        if not (final_now < issuer.expires_at
+                and final_now < issuer.provenance.expires_at
+                and final_now < key.provenance.expires_at
+                and final_now < issuer_scope.expires_at
+                and final_now < key_scope.expires_at):
             raise Refused("protected-key-invalid")
         return key.public_key
 
