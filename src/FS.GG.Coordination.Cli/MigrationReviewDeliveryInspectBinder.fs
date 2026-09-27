@@ -185,10 +185,19 @@ module MigrationReviewDeliveryInspectBinder =
     let private nativeValid repository (pass: MigrationReviewDeliveryNativePass) =
         let pulls = pass.PullRequests |> List.sortBy (fun (item: MigrationReviewDeliveryPullRequest) -> item.Number)
         let numbers = pulls |> List.map _.Number
-        let kindsFor number =
-            pass.Streams |> List.filter (fun stream -> stream.Subject = string number) |> List.map _.Kind |> Set.ofList
-        let required = Set.ofList [ "reviews"; "inline-comments"; "check-runs"; "statuses"; "pull-delivery" ]
-        let allowed = Set.add "merge-object" required
+        let streamCommit suffix (stream: MigrationReviewDeliveryNativeStream) =
+            stream.Reads
+            |> List.tryHead
+            |> Option.bind (fun read ->
+                let marker = "/commits/"
+                let start = read.Request.Uri.IndexOf(marker, StringComparison.Ordinal)
+                if start < 0 then None
+                else
+                    let valueStart = start + marker.Length
+                    let finish = read.Request.Uri.IndexOf($"/{suffix}", valueStart, StringComparison.Ordinal)
+                    if finish <= valueStart then None else Some(read.Request.Uri.Substring(valueStart, finish - valueStart)))
+        let requiredSingleton = Set.ofList [ "reviews"; "inline-comments"; "pull-delivery" ]
+        let allowed = Set.ofList [ "reviews"; "inline-comments"; "check-runs"; "statuses"; "pull-delivery"; "merge-object" ]
         let repositoryKinds =
             pass.Streams |> List.filter (fun stream -> stream.Subject = "repository") |> List.map _.Kind |> List.sort
         pass.Repository.RepositoryId = repository.ExpectedRepositoryId
@@ -198,9 +207,19 @@ module MigrationReviewDeliveryInspectBinder =
         && pulls |> List.forall (pullRawMatches pass.PullRequestCensus)
         && pulls |> List.forall (fun pull ->
             let streams = pass.Streams |> List.filter (fun stream -> stream.Subject = string pull.Number)
-            Set.isSubset required (kindsFor pull.Number)
-            && streams |> List.forall (fun stream -> Set.contains stream.Kind allowed)
-            && required |> Set.forall (fun kind -> streams |> List.filter (fun stream -> stream.Kind = kind) |> List.length = 1)
+            let merge =
+                streams |> List.collect _.Records
+                |> List.choose (function
+                    | MigrationReviewDeliveryRecord.PullDelivery (_, value) -> Some value
+                    | _ -> None) |> List.tryExactlyOne |> Option.flatten
+            let commits = [ yield pull.HeadSha; match merge with Some value when value <> pull.HeadSha -> yield value | _ -> () ]
+            let checkCommits = streams |> List.filter (_.Kind >> (=) "check-runs") |> List.map (streamCommit "check-runs")
+            let statusCommits = streams |> List.filter (_.Kind >> (=) "statuses") |> List.map (streamCommit "statuses")
+            streams |> List.forall (fun stream -> Set.contains stream.Kind allowed)
+            && requiredSingleton |> Set.forall (fun kind -> streams |> List.filter (fun stream -> stream.Kind = kind) |> List.length = 1)
+            && checkCommits = (commits |> List.map Some)
+            && statusCommits = (commits |> List.map Some)
+            && (streams |> List.filter (_.Kind >> (=) "merge-object") |> List.length = if merge.IsSome then 1 else 0)
             && streams |> List.filter (fun stream -> stream.Kind = "pull-delivery")
                |> List.forall (fun stream ->
                    containsObject (fun item ->
@@ -214,8 +233,7 @@ module MigrationReviewDeliveryInspectBinder =
     let private supportedSchema schema =
         Set.contains schema
             (Set.ofList [ "fsgg.coordination.review-authority/1"
-                          "fsgg.coordination.delivery-authority/1"
-                          "fsgg.coordination.ordinary-delivery-journal/1" ])
+                          "fsgg.coordination.delivery-authority/1" ])
 
     let private journalRawMatches (entry: MigrationJournalHistoryEntry) =
         let expectedChain =
@@ -286,7 +304,10 @@ module MigrationReviewDeliveryInspectBinder =
     let private correspondence (native: MigrationReviewDeliveryNativePass) (journals: MigrationJournalPass) =
         let allRecords = native.Streams |> List.collect _.Records
         let checks =
-            allRecords |> List.choose (function MigrationReviewDeliveryRecord.CheckRun (pr, commit, id, _, _, _) -> Some(pr, commit, id) | _ -> None)
+            allRecords |> List.choose (function
+                | MigrationReviewDeliveryRecord.CheckRun (pr, commit, id, _, status, conclusion) ->
+                    Some(pr, commit, id, status, conclusion)
+                | _ -> None)
         let statuses =
             allRecords |> List.choose (function MigrationReviewDeliveryRecord.CommitStatus (pr, _, id, _, _) -> Some(pr, id) | _ -> None)
         let merges =
@@ -317,13 +338,17 @@ module MigrationReviewDeliveryInspectBinder =
                         delivery |> List.forall (fun item ->
                             match item.Record.ProtectedRunId, item.Record.ProtectedRunCommit with
                             | None, None -> true
-                            | Some id, Some commit -> List.contains (pull.Number, commit, id) checks
+                            | Some id, Some commit ->
+                                match item.Record.ProtectedRunConclusion with
+                                | Some conclusion ->
+                                    List.contains (pull.Number, commit, id, "completed", Some conclusion) checks
+                                | None -> false
                             | _ -> false)
                     if List.isEmpty reviewRefs || not deliveryMatches || not runMatches then
                         Error $"review-delivery-journal-correspondence:{pull.Number}"
                     else
                         Ok({ PullRequestNumber=pull.Number; HeadSha=pull.HeadSha; MergeCommit=merge
-                             CheckRunIds=checks |> List.choose (fun (pr, _, id) -> if pr = pull.Number then Some id else None) |> List.sort
+                             CheckRunIds=checks |> List.choose (fun (pr, _, id, _, _) -> if pr = pull.Number then Some id else None) |> List.sort
                              StatusIds=statuses |> List.choose (fun (pr, id) -> if pr = pull.Number then Some id else None) |> List.sort
                              ReviewJournalRefs=reviewRefs; DeliveryJournalRefs=deliveryRefs
                              TagNames=tags |> List.map fst |> List.sort; ReleaseIds=releases |> List.map fst |> List.sort } :: rows))

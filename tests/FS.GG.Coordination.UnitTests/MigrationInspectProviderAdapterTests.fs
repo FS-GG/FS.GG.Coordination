@@ -84,7 +84,6 @@ let ``incomplete authority families remain unavailable without provider calls`` 
                  :> IGitHubMigrationInspectSource
     let incomplete =
         [ "claim-and-event-streams"
-          "review-delivery-release-records"
           "repository-settings"
           "workflow-pins"
           "receiver-identities" ]

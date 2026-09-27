@@ -31,6 +31,18 @@ module MigrationInspectProviderAdapter =
                 MigrationReviewDeliveryInspectBinder.authority options.Cohort 2 capture
                 |> Result.map (fun second -> first, second)))
 
+    let readReviewDeliveryRecords options passOrdinal transport =
+        if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
+        else
+            MigrationReviewDeliveryCapture.captureTwoPass options.Repository transport
+            |> Result.mapError (fun reason -> $"review-delivery-native-read:{reason}")
+            |> Result.bind (fun native ->
+                MigrationJournalCapture.captureTwoPass options.Repository transport
+                |> Result.mapError (fun reason -> $"review-delivery-journal-read:{reason}")
+                |> Result.bind (fun journals ->
+                    bindReviewDeliveryRecords options native journals
+                    |> Result.map (fun (first, second) -> if passOrdinal = 1 then first else second)))
+
     let internal allowedRequest (options: MigrationInspectProviderOptions) authority request =
         match authority, request with
         | "repository-settings/core", Rest value ->
@@ -1871,6 +1883,8 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
     interface IGitHubMigrationInspectSource with
         member _.ReadAuthority(passOrdinal, authority) =
             if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
+            elif authority = "review-delivery-release-records" then
+                MigrationInspectProviderAdapter.readReviewDeliveryRecords options passOrdinal transport
             elif authority = "issues-open-and-relevant-closed" then
                 lock issueProofs (fun () -> issueProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)

@@ -24,6 +24,13 @@ module MigrationInspectProviderAdapter =
         journals:MigrationJournalTwoPass ->
             Result<GitHubMigrationInspectAuthority * GitHubMigrationInspectAuthority, string>
 
+    /// Captures two fresh native and journal passes and returns the requested canonical pass.
+    val readReviewDeliveryRecords:
+        options:MigrationInspectProviderOptions ->
+        passOrdinal:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Refuses requests outside one declared read-only authority before dispatching to inner.
     val guardReadTransport:
         options:MigrationInspectProviderOptions -> authority:string ->

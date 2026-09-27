@@ -61,6 +61,12 @@ let private nativePass () =
               ($"""{{"number":7,"head":{{"sha":"{head}"}},"merge_commit_sha":"{merge}"}}""") [ MigrationReviewDeliveryRecord.PullDelivery(7, Some merge) ]
           stream "merge-object" "7" ($"repos/FS-GG/copy/commits/{merge}")
               ($"""{{"sha":"{merge}"}}""") [ MigrationReviewDeliveryRecord.MergeObject(7, merge) ]
+          stream "check-runs" "7" (MigrationReviewDeliveryCaptureContract.checkRunsPath "repos/FS-GG/copy" merge)
+              ($"""{{"total_count":1,"check_runs":[{{"id":601,"name":"protected-delivery","status":"completed","conclusion":"success","head_sha":"{merge}"}}]}}""")
+              [ MigrationReviewDeliveryRecord.CheckRun(7, merge, 601L, "protected-delivery", "completed", Some "success") ]
+          stream "statuses" "7" (MigrationReviewDeliveryCaptureContract.statusesPath "repos/FS-GG/copy" merge)
+              """[{"id":701,"context":"delivery/protected","state":"success"}]"""
+              [ MigrationReviewDeliveryRecord.CommitStatus(7, merge, 701L, "delivery/protected", "success") ]
           stream "tags" "repository" "repos/FS-GG/copy/tags?per_page=100"
               ($"""[{{"name":"v1","commit":{{"sha":"{merge}"}}}}]""") [ MigrationReviewDeliveryRecord.Tag("v1", merge) ]
           stream "releases" "repository" "repos/FS-GG/copy/releases?per_page=100"
@@ -164,7 +170,7 @@ let ``canonical binder refuses status URL raw drift and discovered ref without h
                      { First=changed; Second=changed })
 
 [<Fact>]
-let ``canonical binder refuses typed raw journal drift and canonical source stays unavailable`` () =
+let ``canonical binder refuses typed raw journal drift and source propagates provider refusal`` () =
     let (native: MigrationReviewDeliveryNativeTwoPass), (journals: MigrationJournalTwoPass) = captures ()
     let journal: MigrationJournalPass = journals.First
     let changedEntry =
@@ -175,22 +181,25 @@ let ``canonical binder refuses typed raw journal drift and canonical source stay
                  MigrationReviewDeliveryInspectBinder.bind cohort repositoryOptions native
                      { First=changed; Second=changed })
 
+    let mutable calls = 0
     let noTransport =
-        { new IMigrationGitHubReadTransport with member _.Send _ = failwith "provider dispatch was not expected" }
+        { new IMigrationGitHubReadTransport with
+            member _.Send _ = calls <- calls + 1; NetworkFailure }
     let source = MigrationInspectProviderAdapter(adapterOptions, noTransport) :> IGitHubMigrationInspectSource
-    Assert.Equal(Error "authority-adapter-unavailable:review-delivery-release-records",
+    Assert.Equal(Error "review-delivery-native-read:transport:unavailable",
                  source.ReadAuthority(1, "review-delivery-release-records"))
+    Assert.Equal(1, calls)
 
 [<Fact>]
-let ``done receipt refuses without provider check evidence on merge commit`` () =
+let ``done receipt refuses wrong protected run conclusion`` () =
     let (native: MigrationReviewDeliveryNativeTwoPass), (journals: MigrationJournalTwoPass) = captures ()
     let journal = journals.First
     let current = journal.Histories.[1]
     let doneRecord =
-        { current.Record with Kind="done"; ProtectedRunId=Some 301L
-                              ProtectedRunCommit=Some merge; ProtectedRunConclusion=Some "success" }
+        { current.Record with Kind="done"; ProtectedRunId=Some 601L
+                              ProtectedRunCommit=Some merge; ProtectedRunConclusion=Some "failure" }
     let doneBody =
-        $"""{{"schema":"{doneRecord.Schema}","schemaVersion":1,"kind":"done","subject":"FS-GG/copy#7","operationId":"{doneRecord.OperationId}","generation":1,"mergeCommit":"{merge}","protectedRunId":301,"protectedRunCommit":"{merge}","protectedRunConclusion":"success"}}"""
+        $"""{{"schema":"{doneRecord.Schema}","schemaVersion":1,"kind":"done","subject":"FS-GG/copy#7","operationId":"{doneRecord.OperationId}","generation":1,"mergeCommit":"{merge}","protectedRunId":601,"protectedRunCommit":"{merge}","protectedRunConclusion":"failure"}}"""
     let eventRead = read ($"repos/FS-GG/copy/git/blobs/{current.CommitSha}") doneBody
     let changedEntry = { current with Record=doneRecord; Reads=eventRead :: current.Reads.Tail }
     let changed = { journal with Histories=[ journal.Histories.[0]; changedEntry ]; Fingerprint="" }
@@ -198,3 +207,25 @@ let ``done receipt refuses without provider check evidence on merge commit`` () 
     Assert.Equal(Error "review-delivery-journal-correspondence:7",
                  MigrationReviewDeliveryInspectBinder.bind cohort repositoryOptions native
                      { First=changed; Second=changed })
+
+[<Fact>]
+let ``full nonempty join binds done receipt to exact completed merge check`` () =
+    let (native: MigrationReviewDeliveryNativeTwoPass), (journals: MigrationJournalTwoPass) = captures ()
+    let journal = journals.First
+    let current = journal.Histories.[1]
+    let doneRecord =
+        { current.Record with Kind="done"; ProtectedRunId=Some 601L
+                              ProtectedRunCommit=Some merge; ProtectedRunConclusion=Some "success" }
+    let doneBody =
+        $"""{{"schema":"{doneRecord.Schema}","schemaVersion":1,"kind":"done","subject":"FS-GG/copy#7","operationId":"{doneRecord.OperationId}","generation":1,"mergeCommit":"{merge}","protectedRunId":601,"protectedRunCommit":"{merge}","protectedRunConclusion":"success"}}"""
+    let eventRead = read ($"repos/FS-GG/copy/git/blobs/{current.CommitSha}") doneBody
+    let changedEntry = { current with Record=doneRecord; Reads=eventRead :: current.Reads.Tail }
+    let changed = { journal with Histories=[ journal.Histories.[0]; changedEntry ]; Fingerprint="" }
+    let changed = { changed with Fingerprint=MigrationReviewDeliveryCaptureContract.journalFingerprint changed }
+    match MigrationReviewDeliveryInspectBinder.bind cohort repositoryOptions native
+              { First=changed; Second=changed } with
+    | Error reason -> failwithf "Full correspondence refused: %s" reason
+    | Ok complete ->
+        let row = Assert.Single(complete.First.Correspondence)
+        Assert.Contains(601L, row.CheckRunIds)
+        Assert.Equal(Some merge, row.MergeCommit)

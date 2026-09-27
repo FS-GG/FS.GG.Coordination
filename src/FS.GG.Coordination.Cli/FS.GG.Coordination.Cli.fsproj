@@ -27,6 +27,10 @@
     <Compile Include="InstalledOrdinarySettlementProvider.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureContract.fsi" />
     <Compile Include="MigrationReviewDeliveryCaptureContract.fs" />
+    <Compile Include="MigrationReviewDeliveryCapture.fsi" />
+    <Compile Include="MigrationReviewDeliveryCapture.fs" />
+    <Compile Include="MigrationJournalCapture.fsi" />
+    <Compile Include="MigrationJournalCapture.fs" />
     <Compile Include="MigrationReviewDeliveryInspectBinder.fsi" />
     <Compile Include="MigrationReviewDeliveryInspectBinder.fs" />
     <Compile Include="MigrationInspectProviderAdapter.fsi" />
@@ -49,10 +53,6 @@
     <Compile Include="MigrationProtectedIssueCensusSignedRecovery.fs" />
     <Compile Include="MigrationReceiverCapture.fsi" />
     <Compile Include="MigrationReceiverCapture.fs" />
-    <Compile Include="MigrationReviewDeliveryCapture.fsi" />
-    <Compile Include="MigrationReviewDeliveryCapture.fs" />
-    <Compile Include="MigrationJournalCapture.fsi" />
-    <Compile Include="MigrationJournalCapture.fs" />
     <Compile Include="MigrationRollbackReceiverReadback.fsi" />
     <Compile Include="MigrationRollbackReceiverReadback.fs" />
     <Compile Include="MigrationRollbackSettingsReadback.fsi" />
