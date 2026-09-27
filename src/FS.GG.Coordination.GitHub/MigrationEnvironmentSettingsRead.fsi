@@ -100,11 +100,29 @@ type MigrationEnvironmentSettings =
       Environments: MigrationEnvironmentObservation list }
 
 /// Two complete raw- and typed-equal environment settings observations.
-/// Secrets and variables remain outside this partial settings source.
+/// Secret values and the other repository-settings surfaces remain outside this partial source.
 type MigrationEnvironmentSettingsCapture =
     { EnvironmentSettingsFirst: MigrationEnvironmentSettings
       EnvironmentSettingsSecond: MigrationEnvironmentSettings
       EnvironmentSettingsFingerprint: string
+      EnvironmentSurfaceComplete: bool }
+
+[<RequireQualifiedAccess>]
+type MigrationEnvironmentSettingsCompositionFailure =
+    | OpeningCensusRefused of reason:string
+    | SettingsRefused of MigrationReadFailure
+    | ClosingCensusRefused of reason:string
+    | CensusDrift
+    | IdentityDrift
+    | RosterDrift
+
+/// Detailed settings bracketed by two independently stable provider censuses.
+/// This proves the environment roster used by the partial source; it does not complete repository settings.
+type MigrationEnvironmentSettingsComposition =
+    { OpeningCensus: EnvironmentCensusCapture
+      Settings: MigrationEnvironmentSettingsCapture
+      ClosingCensus: EnvironmentCensusCapture
+      CompositionFingerprint: string
       EnvironmentSurfaceComplete: bool }
 
 [<RequireQualifiedAccess>]
@@ -118,3 +136,8 @@ module MigrationEnvironmentSettingsRead =
     val captureTwoPass:
         options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
             Result<MigrationEnvironmentSettingsCapture, MigrationReadFailure>
+
+    /// Brackets the detailed two-pass read with independent two-pass censuses and requires an exact roster.
+    val captureBracketed:
+        options:MigrationGitHubReadOptions -> transport:IMigrationGitHubReadTransport ->
+            Result<MigrationEnvironmentSettingsComposition, MigrationEnvironmentSettingsCompositionFailure>

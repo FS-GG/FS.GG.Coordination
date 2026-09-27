@@ -60,6 +60,8 @@ let private success =
     [ ok repository; ok (list environment 1); ok environment; ok branches; ok custom
       ok secrets; ok variables; ok repository ]
 
+let private censusPass environmentPage = [ ok repository; ok environmentPage ]
+
 let private sha (value: string) =
     value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -285,6 +287,47 @@ let ``environment settings require two complete raw stable passes`` () =
     Assert.Equal(Error MigrationReadFailure.PopulationDrift,
                  MigrationEnvironmentSettingsRead.captureTwoPass options
                      (FakeTransport(success @ changedSecond)))
+
+[<Fact>]
+let ``environment settings composition brackets details with an exhaustive stable census`` () =
+    let census = censusPass (list environment 1)
+    let transport = FakeTransport(census @ census @ success @ success @ census @ census)
+    match MigrationEnvironmentSettingsRead.captureBracketed options transport with
+    | Error failure -> failwithf "bracketed settings refused: %A" failure
+    | Ok composed ->
+        Assert.Equal(composed.OpeningCensus, composed.ClosingCensus)
+        Assert.Equal(1, composed.OpeningCensus.EnvironmentFirst.EnvironmentTotalCount)
+        Assert.Single(composed.Settings.EnvironmentSettingsFirst.Environments) |> ignore
+        Assert.Equal(64, composed.CompositionFingerprint.Length)
+        Assert.False(composed.EnvironmentSurfaceComplete)
+        Assert.False(composed.Settings.EnvironmentSurfaceComplete)
+        Assert.Equal(24, transport.Requests.Length)
+
+[<Fact>]
+let ``environment settings composition refuses census drift around details`` () =
+    let opening = censusPass (list environment 1)
+    let revised = environment.Replace("2026-09-25T01:00:00Z", "2026-09-25T01:01:00Z")
+    let closing = censusPass (list revised 1)
+    let transport =
+        FakeTransport(opening @ opening @ success @ success @ closing @ closing)
+    Assert.Equal(Error MigrationEnvironmentSettingsCompositionFailure.CensusDrift,
+                 MigrationEnvironmentSettingsRead.captureBracketed options transport)
+
+[<Fact>]
+let ``environment settings composition refuses independent roster mismatch`` () =
+    let other = environment.Replace("ENV_100", "ENV_999")
+    let census = censusPass (list other 1)
+    let transport = FakeTransport(census @ census @ success @ success @ census @ census)
+    Assert.Equal(Error MigrationEnvironmentSettingsCompositionFailure.RosterDrift,
+                 MigrationEnvironmentSettingsRead.captureBracketed options transport)
+
+[<Fact>]
+let ``environment settings composition refuses independently changed repository node`` () =
+    let otherIdentity = repository.Replace("REPO_42", "REPO_OTHER")
+    let census = [ ok otherIdentity; ok (list environment 1) ]
+    let transport = FakeTransport(census @ census @ success @ success @ census @ census)
+    Assert.Equal(Error MigrationEnvironmentSettingsCompositionFailure.IdentityDrift,
+                 MigrationEnvironmentSettingsRead.captureBracketed options transport)
 
 [<Fact>]
 let ``environment settings refuse an explicit policy with no selected mode`` () =

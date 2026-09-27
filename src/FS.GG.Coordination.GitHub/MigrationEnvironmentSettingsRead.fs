@@ -63,6 +63,22 @@ type MigrationEnvironmentSettingsCapture =
       EnvironmentSurfaceComplete: bool }
 
 [<RequireQualifiedAccess>]
+type MigrationEnvironmentSettingsCompositionFailure =
+    | OpeningCensusRefused of reason:string
+    | SettingsRefused of MigrationReadFailure
+    | ClosingCensusRefused of reason:string
+    | CensusDrift
+    | IdentityDrift
+    | RosterDrift
+
+type MigrationEnvironmentSettingsComposition =
+    { OpeningCensus: EnvironmentCensusCapture
+      Settings: MigrationEnvironmentSettingsCapture
+      ClosingCensus: EnvironmentCensusCapture
+      CompositionFingerprint: string
+      EnvironmentSurfaceComplete: bool }
+
+[<RequireQualifiedAccess>]
 module MigrationEnvironmentSettingsRead =
     let private fail reason = Error(MigrationReadFailure.MalformedResponse reason)
     let private sha (value: string) =
@@ -549,3 +565,44 @@ module MigrationEnvironmentSettingsRead =
                          EnvironmentSettingsSecond=second
                          EnvironmentSettingsFingerprint=firstFingerprint
                          EnvironmentSurfaceComplete=false }))
+
+    let private censusRoster (capture: EnvironmentCensusCapture) =
+        capture.EnvironmentFirst.Environments
+        |> List.map (fun item -> item.EnvironmentId, item.EnvironmentNodeId, item.EnvironmentName)
+        |> List.sort
+
+    let private settingsRoster (capture: MigrationEnvironmentSettingsCapture) =
+        capture.EnvironmentSettingsFirst.Environments
+        |> List.map (fun item -> item.EnvironmentId, item.EnvironmentNodeId, item.Name)
+        |> List.sort
+
+    let captureBracketed (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
+        MigrationEnvironmentCensusRead.captureTwoPass options transport
+        |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.OpeningCensusRefused
+        |> Result.bind (fun opening ->
+            captureTwoPass options transport
+            |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.SettingsRefused
+            |> Result.bind (fun settings ->
+                MigrationEnvironmentCensusRead.captureTwoPass options transport
+                |> Result.mapError MigrationEnvironmentSettingsCompositionFailure.ClosingCensusRefused
+                |> Result.bind (fun closing ->
+                    let censusIdentity = opening.EnvironmentFirst.EnvironmentRepository
+                    let settingsIdentity = settings.EnvironmentSettingsFirst
+                    if opening <> closing then
+                        Error MigrationEnvironmentSettingsCompositionFailure.CensusDrift
+                    elif censusIdentity.EnvironmentRepositoryId <> settingsIdentity.RepositoryId
+                         || censusIdentity.EnvironmentRepositoryNodeId <> settingsIdentity.RepositoryNodeId
+                         || censusIdentity.EnvironmentRepositoryFullName <> settingsIdentity.RepositoryFullName then
+                        Error MigrationEnvironmentSettingsCompositionFailure.IdentityDrift
+                    elif censusRoster opening <> settingsRoster settings then
+                        Error MigrationEnvironmentSettingsCompositionFailure.RosterDrift
+                    else
+                        let fingerprint =
+                            [ opening.EnvironmentCaptureFingerprint
+                              settings.EnvironmentSettingsFingerprint
+                              closing.EnvironmentCaptureFingerprint ]
+                            |> String.concat "\n"
+                            |> sha
+                        Ok { OpeningCensus=opening; Settings=settings; ClosingCensus=closing
+                             CompositionFingerprint=fingerprint
+                             EnvironmentSurfaceComplete=false })))
