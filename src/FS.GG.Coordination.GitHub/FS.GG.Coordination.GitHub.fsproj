@@ -67,6 +67,8 @@
     <Compile Include="MigrationStepExecution.fs" />
     <Compile Include="MigrationGitHubRead.fsi" />
     <Compile Include="MigrationGitHubRead.fs" />
+    <Compile Include="MigrationProjectStatusStepRuntime.fsi" />
+    <Compile Include="MigrationProjectStatusStepRuntime.fs" />
     <Compile Include="MigrationReceiverRosterRead.fsi" />
     <Compile Include="MigrationReceiverRosterRead.fs" />
     <Compile Include="MigrationImmutableReleasesRead.fsi" />

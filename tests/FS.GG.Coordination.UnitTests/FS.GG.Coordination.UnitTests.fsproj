@@ -62,6 +62,7 @@
     <Compile Include="GitHubRollbackReadbackTests.fs" />
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
+    <Compile Include="MigrationProjectStatusStepRuntimeTests.fs" />
     <Compile Include="MigrationReceiverRosterReadTests.fs" />
     <Compile Include="MigrationImmutableReleasesReadTests.fs" />
     <Compile Include="MigrationEnvironmentSettingsReadTests.fs" />

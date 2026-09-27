@@ -353,11 +353,13 @@ type private IssueTypeAuthority(step: MigrationExecutionStep) =
                 MigrationCasOutcome.Accepted accepted
             | _ -> MigrationCasOutcome.Conflict }
 
-type private IssueTypeProvider(step: MigrationExecutionStep, mutationResponse: string) =
+type private IssueTypeProvider(step: MigrationExecutionStep, mutationResponse: string,
+                               ?foreignAfterMutation: bool) =
     let mutable typeId = "TYPE_1"
     let mutable revisionValue = step.ExpectedTargetRevision
     let mutable mutationCount = 0
     let mutable requests: GitHubRequest list = []
+    let foreignAfterMutation = defaultArg foreignAfterMutation false
 
     member _.MutationCount = mutationCount
     member _.Requests = List.rev requests
@@ -369,9 +371,10 @@ type private IssueTypeProvider(step: MigrationExecutionStep, mutationResponse: s
             | GraphQL graph when graph.Document.StartsWith("query", StringComparison.Ordinal) ->
                 Assert.Equal(ReplaySafe, graph.Idempotency)
                 Assert.Equal(Some "ISSUE_1", Map.tryFind "issueId" graph.Variables)
+                let repositoryId = if foreignAfterMutation && mutationCount > 0 then 77 else 42
                 Response
                     { StatusCode=200; Headers=Map.empty
-                      Body=$"{{\"data\":{{\"node\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"issueType\":{{\"id\":\"{typeId}\"}}}}}}}}"
+                      Body=$"{{\"data\":{{\"node\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"repository\":{{\"databaseId\":{repositoryId}}},\"issueType\":{{\"id\":\"{typeId}\"}}}}}}}}"
                       ETag=None; RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
             | GraphQL graph when graph.Document.StartsWith("mutation", StringComparison.Ordinal) ->
                 Assert.Equal(NeverReplay, graph.Idempotency)
@@ -390,7 +393,7 @@ type private IssueTypeProvider(step: MigrationExecutionStep, mutationResponse: s
                 | "graphql-error" ->
                     Response
                         { StatusCode=200; Headers=Map.empty
-                          Body=$"{{\"data\":{{\"updateIssueIssueType\":{{\"clientMutationId\":\"{step.OperationId}\",\"issue\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"issueType\":{{\"id\":\"TYPE_2\"}}}}}}}},\"errors\":[{{\"message\":\"late resolver failure\"}}]}}"
+                          Body=$"{{\"data\":{{\"updateIssueIssueType\":{{\"clientMutationId\":\"{step.OperationId}\",\"issue\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"repository\":{{\"databaseId\":42}},\"issueType\":{{\"id\":\"TYPE_2\"}}}}}}}},\"errors\":[{{\"message\":\"late resolver failure\"}}]}}"
                           ETag=None; RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
                 | "malformed" ->
                     Response
@@ -404,12 +407,12 @@ type private IssueTypeProvider(step: MigrationExecutionStep, mutationResponse: s
                 | "mismatch" ->
                     Response
                         { StatusCode=200; Headers=Map.empty
-                          Body=$"{{\"data\":{{\"updateIssueIssueType\":{{\"clientMutationId\":\"other-operation\",\"issue\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"issueType\":{{\"id\":\"TYPE_2\"}}}}}}}}}}"
+                          Body=$"{{\"data\":{{\"updateIssueIssueType\":{{\"clientMutationId\":\"other-operation\",\"issue\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"repository\":{{\"databaseId\":42}},\"issueType\":{{\"id\":\"TYPE_2\"}}}}}}}}}}"
                           ETag=None; RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
                 | _ ->
                     Response
                         { StatusCode=200; Headers=Map.empty
-                          Body=$"{{\"data\":{{\"updateIssueIssueType\":{{\"clientMutationId\":\"{step.OperationId}\",\"issue\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"issueType\":{{\"id\":\"TYPE_2\"}}}}}}}}}}"
+                          Body=$"{{\"data\":{{\"updateIssueIssueType\":{{\"clientMutationId\":\"{step.OperationId}\",\"issue\":{{\"__typename\":\"Issue\",\"id\":\"ISSUE_1\",\"updatedAt\":\"{revisionValue}\",\"repository\":{{\"databaseId\":42}},\"issueType\":{{\"id\":\"TYPE_2\"}}}}}}}}}}"
                           ETag=None; RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
             | _ -> failwith "unexpected provider request"
 
@@ -420,6 +423,60 @@ let private issueTypeRuntime selected authority provider =
         authority
         provider
     |> function Ok runtime -> runtime | Error reason -> failwith reason
+
+[<Fact>]
+let ``issue type accepts explicit null but refuses missing malformed and foreign prestate`` () =
+    let selected =
+        { issueTypeStep () with
+            ExpectedTargetSha256=MigrationIssueTypeStepRuntime.targetSha256 "ISSUE_1" None
+            Seal="" }
+        |> sealStep |> get
+    Assert.NotEqual(selected.ExpectedTargetSha256,
+                    MigrationIssueTypeStepRuntime.targetSha256 "ISSUE_1" (Some "none"))
+    for issueTypeField, repositoryId, accepted in
+        [ "\"issueType\":null", 42, true
+          "", 42, false
+          "\"issueType\":{}", 42, false
+          "\"issueType\":{\"id\":null}", 42, false
+          "\"issueType\":{\"id\":\"\"}", 42, false
+          "\"issueType\":\"TYPE_1\"", 42, false
+          "\"issueType\":null", 77, false ] do
+        let authority = IssueTypeAuthority(selected)
+        let mutable requests = 0
+        let field = if issueTypeField = "" then "" else "," + issueTypeField
+        let body =
+            sprintf
+                """{"data":{"node":{"__typename":"Issue","id":"ISSUE_1","updatedAt":"2026-09-27T08:00:00Z","repository":{"databaseId":%d}%s}}}"""
+                repositoryId field
+        let provider =
+            { new IMigrationStepProviderTransport with
+                member _.Send _ =
+                    requests <- requests + 1
+                    Response
+                        { StatusCode=200; Headers=Map.empty; Body=body; ETag=None
+                          RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } } }
+        let runtime = issueTypeRuntime selected authority.Port provider
+        let outcome = MigrationStepExecution.advance selected MigrationAdvanceCut.StopBeforeIntent runtime
+        if accepted then
+            Assert.Equal(Ok(MigrationAdvanceResult.Interrupted "before-intent"), outcome)
+        else
+            match outcome with
+            | Error [ MigrationExecutionFailure.JournalUnavailable _ ] -> ()
+            | value -> failwithf "expected source refusal, got %A" value
+        Assert.Equal(1, requests)
+        Assert.Equal(None, authority.Journal)
+
+[<Fact>]
+let ``foreign issue repository on post-dispatch readback cannot settle`` () =
+    let selected = issueTypeStep ()
+    let authority = IssueTypeAuthority(selected)
+    let provider = IssueTypeProvider(selected, "complete", foreignAfterMutation=true)
+    let runtime = issueTypeRuntime selected authority.Port provider
+    Assert.Equal(Error [ MigrationExecutionFailure.JournalUnavailable "provider-malformed-issue" ],
+                 MigrationStepExecution.advance selected MigrationAdvanceCut.NoCut runtime)
+    Assert.Equal(Some MigrationJournalStage.InFlight, authority.Journal |> Option.map _.Stage)
+    Assert.Equal(1, provider.MutationCount)
+    Assert.Equal(6, provider.Requests.Length)
 
 [<Fact>]
 let ``issue type provider runtime closes durable intent dispatch and authoritative readback`` () =
@@ -544,7 +601,8 @@ let private blockingStep blocking blockedBy =
     |> get
 
 type private BlockingProvider(step: MigrationExecutionStep, responseKind: string,
-                              initialBlocking: string list, initialBlockedBy: string list) =
+                              initialBlocking: string list, initialBlockedBy: string list,
+                              ?pageFault: string * string) =
     let mutable blocking = initialBlocking
     let mutable blockedBy = initialBlockedBy
     let mutable mutationCount = 0
@@ -575,12 +633,22 @@ type private BlockingProvider(step: MigrationExecutionStep, responseKind: string
                         $"[{{\"__typename\":\"Issue\",\"id\":\"{values[index]}\",\"repository\":{{\"databaseId\":42}}}}]"
                     else "[]"
                 let endCursor = if hasNext then $"\"{index + 1}\"" else "null"
+                let pageInfo =
+                    match pageFault with
+                    | Some(faultConnection, "missing-boolean") when faultConnection = connection ->
+                        $"{{\"endCursor\":{endCursor}}}"
+                    | Some(faultConnection, "wrong-boolean") when faultConnection = connection ->
+                        $"{{\"hasNextPage\":\"false\",\"endCursor\":{endCursor}}}"
+                    | Some(faultConnection, "empty-cursor") when faultConnection = connection && hasNext ->
+                        "{\"hasNextPage\":true,\"endCursor\":\"\"}"
+                    | _ ->
+                        $"{{\"hasNextPage\":{hasNext.ToString().ToLowerInvariant()},\"endCursor\":{endCursor}}}"
                 Response
                     { StatusCode=200; Headers=Map.empty
                       Body=
                         sprintf
-                            """{"data":{"node":{"__typename":"Issue","id":"%s","updatedAt":"2026-09-27T08:00:00Z","repository":{"databaseId":42},"%s":{"totalCount":%d,"nodes":%s,"pageInfo":{"hasNextPage":%s,"endCursor":%s}}}}}"""
-                            issueId connection values.Length nodes (hasNext.ToString().ToLowerInvariant()) endCursor
+                            """{"data":{"node":{"__typename":"Issue","id":"%s","updatedAt":"2026-09-27T08:00:00Z","repository":{"databaseId":42},"%s":{"totalCount":%d,"nodes":%s,"pageInfo":%s}}}}"""
+                            issueId connection values.Length nodes pageInfo
                       ETag=None; RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
             | GraphQL graph when graph.Document.StartsWith("mutation", StringComparison.Ordinal) ->
                 Assert.Equal(NeverReplay, graph.Idempotency)
@@ -677,6 +745,26 @@ let ``blocking edge runtime refuses partial reciprocal prestate before intent`` 
     Assert.Equal(None, authority.Journal)
 
 [<Fact>]
+let ``blocking edge refuses missing Boolean and empty cursor on either endpoint before intent`` () =
+    for connection in [ "blocking"; "blockedBy" ] do
+        for fault, values in
+            [ "missing-boolean", []
+              "wrong-boolean", []
+              "empty-cursor", [ "ISSUE_3"; "ISSUE_4" ] ] do
+            let blocking, blockedBy =
+                if connection = "blocking" then values, [] else [], values
+            let selected = blockingStep blocking blockedBy
+            let authority = IssueTypeAuthority(selected)
+            let provider = BlockingProvider(selected, "complete", blocking, blockedBy,
+                                            pageFault=(connection, fault))
+            let runtime = blockingRuntime selected authority.Port provider
+            match MigrationStepExecution.advance selected MigrationAdvanceCut.NoCut runtime with
+            | Error [ MigrationExecutionFailure.JournalUnavailable _ ] -> ()
+            | result -> failwithf "expected page-info refusal, got %A" result
+            Assert.Equal(0, provider.MutationCount)
+            Assert.Equal(None, authority.Journal)
+
+[<Fact>]
 let ``issue type and blocking edge reject insecure provider URI before transport`` () =
     let options = { GraphQLUri=Uri "http://provider.example/graphql"; Headers=Map.empty }
     let issue = issueTypeStep ()
@@ -692,3 +780,36 @@ let ``issue type and blocking edge reject insecure provider URI before transport
     | Error "invalid-blocking-edge-binding" -> ()
     | result -> failwithf "expected blocking-edge URI refusal, got %A" result
     Assert.Equal(0, edgeProvider.RequestCount)
+
+[<Fact>]
+let ``foreign final journal grant refuses issue and blocking mutations after valid prefix`` () =
+    let foreignFinalGrant (authority: IssueTypeAuthority) =
+        let source = authority.Port
+        let mutable reads = 0
+        { source with
+            ObserveJournal = fun operation ->
+                reads <- reads + 1
+                match source.ObserveJournal operation with
+                | Ok(Some value) when reads = 3 ->
+                    Ok(Some { value with OperationId="migration:foreign:1" })
+                | result -> result }
+
+    let issue = issueTypeStep ()
+    let issueAuthority = IssueTypeAuthority(issue)
+    let issueProvider = IssueTypeProvider(issue, "complete")
+    let issueRuntime = issueTypeRuntime issue (foreignFinalGrant issueAuthority) issueProvider
+    Assert.Equal(Error [ MigrationExecutionFailure.EffectRefused "missing-fresh-in-flight-grant" ],
+                 MigrationStepExecution.advance issue MigrationAdvanceCut.NoCut issueRuntime)
+    Assert.Equal(Some MigrationJournalStage.InFlight, issueAuthority.Journal |> Option.map _.Stage)
+    Assert.Equal(0, issueProvider.MutationCount)
+    Assert.Equal(4, issueProvider.Requests.Length)
+
+    let edge = blockingStep [] []
+    let edgeAuthority = IssueTypeAuthority(edge)
+    let edgeProvider = BlockingProvider(edge, "complete", [], [])
+    let edgeRuntime = blockingRuntime edge (foreignFinalGrant edgeAuthority) edgeProvider
+    Assert.Equal(Error [ MigrationExecutionFailure.EffectRefused "missing-fresh-in-flight-grant" ],
+                 MigrationStepExecution.advance edge MigrationAdvanceCut.NoCut edgeRuntime)
+    Assert.Equal(Some MigrationJournalStage.InFlight, edgeAuthority.Journal |> Option.map _.Stage)
+    Assert.Equal(0, edgeProvider.MutationCount)
+    Assert.Equal(16, edgeProvider.RequestCount)

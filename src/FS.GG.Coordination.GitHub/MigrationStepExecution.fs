@@ -508,14 +508,17 @@ module MigrationIssueTypeStepRuntime =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
     let targetSha256 (issueNodeId: string) (typeNodeId: string option) =
-        let typePart = typeNodeId |> Option.defaultValue "none"
+        let typePart =
+            match typeNodeId with
+            | None -> "none"
+            | Some value -> $"some:{Encoding.UTF8.GetByteCount value}:{value}"
         sha $"issue:{Encoding.UTF8.GetByteCount issueNodeId}:{issueNodeId}\ntype:{Encoding.UTF8.GetByteCount typePart}:{typePart}"
 
     let private query =
-        "query($issueId:ID!) { node(id:$issueId) { __typename ... on Issue { id updatedAt issueType { id } } } }"
+        "query($issueId:ID!) { node(id:$issueId) { __typename ... on Issue { id updatedAt repository { databaseId } issueType { id } } } }"
 
     let private mutation =
-        "mutation($issueId:ID!,$typeId:ID!,$clientMutationId:String!) { updateIssueIssueType(input:{issueId:$issueId,issueTypeId:$typeId,clientMutationId:$clientMutationId}) { clientMutationId issue { __typename id updatedAt issueType { id } } } }"
+        "mutation($issueId:ID!,$typeId:ID!,$clientMutationId:String!) { updateIssueIssueType(input:{issueId:$issueId,issueTypeId:$typeId,clientMutationId:$clientMutationId}) { clientMutationId issue { __typename id updatedAt repository { databaseId } issueType { id } } } }"
 
     let private tryProperty (name: string) (node: JsonNode) =
         match node with
@@ -550,14 +553,32 @@ module MigrationIssueTypeStepRuntime =
         | NetworkFailure -> Error "provider-network-failure"
         | TimedOut -> Error "provider-timeout"
 
-    let private parseIssue node =
-        match tryString "__typename" node, tryString "id" node, tryString "updatedAt" node with
-        | Some "Issue", Some issueId, Some revision ->
-            let typeId = tryProperty "issueType" node |> Option.bind (tryString "id")
-            Ok(issueId, revision, typeId)
+    let private parseIssue repositoryId (node: JsonNode) =
+        let observedRepository =
+            tryProperty "repository" node
+            |> Option.bind (fun repository ->
+                tryProperty "databaseId" repository
+                |> Option.bind (fun value -> try Some(value.GetValue<int64>()) with _ -> None))
+        match tryString "__typename" node, tryString "id" node,
+              tryString "updatedAt" node, observedRepository, node with
+        | Some "Issue", Some issueId, Some revision, Some observedRepositoryId, (:? JsonObject as issue)
+            when observedRepositoryId = repositoryId
+                 && not (String.IsNullOrWhiteSpace issueId)
+                 && issueId = issueId.Trim()
+                 && not (String.IsNullOrWhiteSpace revision) ->
+            if not (issue.ContainsKey "issueType") then Error "provider-malformed-issue-type"
+            else
+                match issue["issueType"] with
+                | null -> Ok(issueId, revision, None)
+                | :? JsonObject as issueType ->
+                    match tryString "id" issueType with
+                    | Some typeId when not (String.IsNullOrWhiteSpace typeId)
+                                       && typeId = typeId.Trim() -> Ok(issueId, revision, Some typeId)
+                    | _ -> Error "provider-malformed-issue-type"
+                | _ -> Error "provider-malformed-issue-type"
         | _ -> Error "provider-malformed-issue"
 
-    let private readIssue issueNodeId options (transport: IMigrationStepProviderTransport) =
+    let private readIssue repositoryId issueNodeId options (transport: IMigrationStepProviderTransport) =
         let request =
             GraphQL
                 { Uri=options.GraphQLUri
@@ -570,10 +591,11 @@ module MigrationIssueTypeStepRuntime =
         | Error reason -> Error reason
         | Ok root ->
             match tryProperty "data" root |> Option.bind (tryProperty "node") with
-            | Some issue -> parseIssue issue
+            | Some issue -> parseIssue repositoryId issue
             | None -> Error "provider-missing-issue"
 
-    let private dispatch issueNodeId typeNodeId operationId options (transport: IMigrationStepProviderTransport) =
+    let private dispatch repositoryId issueNodeId typeNodeId operationId options
+                         (transport: IMigrationStepProviderTransport) =
         let request =
             GraphQL
                 { Uri=options.GraphQLUri
@@ -597,7 +619,7 @@ module MigrationIssueTypeStepRuntime =
                 | Some update ->
                     match tryString "clientMutationId" update, tryProperty "issue" update with
                     | Some clientId, Some issue when clientId = operationId ->
-                        match parseIssue issue with
+                        match parseIssue repositoryId issue with
                         | Ok(observedIssue, _, Some observedType)
                             when observedIssue = issueNodeId && observedType = typeNodeId ->
                             MigrationDispatchOutcome.Applied
@@ -606,7 +628,7 @@ module MigrationIssueTypeStepRuntime =
 
     let create step options authority transport =
         match MigrationStepExecution.sealStep step, step.Effect with
-        | Ok sealedStep, MigrationEffect.SetIssueType(_, issueNodeId, typeNodeId)
+        | Ok sealedStep, MigrationEffect.SetIssueType(repositoryId, issueNodeId, typeNodeId)
             when sealedStep.Seal = step.Seal
                  && step.DesiredTargetSha256 = targetSha256 issueNodeId (Some typeNodeId)
                  && not (isNull options.GraphQLUri)
@@ -625,9 +647,9 @@ module MigrationIssueTypeStepRuntime =
                 member _.ObserveTarget effect =
                     if effect <> step.Effect then Error "unsupported-or-cross-step-effect"
                     else
-                        readIssue issueNodeId options transport
+                        readIssue repositoryId issueNodeId options transport
                         |> Result.map (fun (observedIssue, revision, observedType) ->
-                            { Identity=$"repository:{match step.Effect with MigrationEffect.SetIssueType(repository, _, _) -> repository | _ -> 0L}/issue:{observedIssue}/type"
+                            { Identity=$"repository:{repositoryId}/issue:{observedIssue}/type"
                               Revision=revision
                               Sha256=targetSha256 observedIssue observedType
                               Complete=true
@@ -636,7 +658,7 @@ module MigrationIssueTypeStepRuntime =
                     if operationId <> step.OperationId || effect <> step.Effect then
                         Error "unsupported-or-cross-step-effect"
                     else
-                        readIssue issueNodeId options transport
+                        readIssue repositoryId issueNodeId options transport
                         |> Result.map (fun (observedIssue, _, observedType) ->
                             if observedIssue <> issueNodeId then MigrationEffectObservation.Unknown
                             elif observedType = Some typeNodeId then
@@ -649,11 +671,12 @@ module MigrationIssueTypeStepRuntime =
                     else
                         match authority.ObserveJournal step.OperationId with
                         | Ok(Some observed)
-                            when observed.StepSeal = step.Seal
+                            when observed.OperationId = step.OperationId
+                                 && observed.StepSeal = step.Seal
                                  && observed.Stage = MigrationJournalStage.InFlight
                                  && observed.Generation = generation
                                  && observed.Commit = commit ->
-                            dispatch issueNodeId typeNodeId step.OperationId options transport
+                            dispatch repositoryId issueNodeId typeNodeId step.OperationId options transport
                         | _ -> MigrationDispatchOutcome.Refused "missing-fresh-in-flight-grant" }
             |> Ok
         | Ok _, MigrationEffect.SetIssueType _ -> Error "invalid-issue-type-binding"
@@ -762,16 +785,23 @@ module MigrationBlockingEdgeStepRuntime =
                                 | None ->
                                     let values = parsed |> List.choose (function Ok value -> Some value | _ -> None)
                                     let all = accumulated @ values
+                                    let hasNext = tryBool "hasNextPage" pageInfo
                                     let next =
-                                        match tryBool "hasNextPage" pageInfo, tryProperty "endCursor" pageInfo with
-                                        | Some true, Some value -> try Some(value.GetValue<string>()) with _ -> None
+                                        match hasNext, tryProperty "endCursor" pageInfo with
+                                        | Some true, Some value ->
+                                            try
+                                                let cursor = value.GetValue<string>()
+                                                if String.IsNullOrWhiteSpace cursor || cursor <> cursor.Trim() then None
+                                                else Some cursor
+                                            with _ -> None
                                         | Some false, _ -> None
                                         | _ -> None
                                     let validPage =
-                                        (expectedRevision |> Option.forall ((=) revision))
+                                        hasNext.IsSome
+                                        && (expectedRevision |> Option.forall ((=) revision))
                                         && (expectedTotal |> Option.forall ((=) total))
                                         && all.Length <= total
-                                        && (if tryBool "hasNextPage" pageInfo = Some true then next.IsSome else all.Length = total)
+                                        && (if hasNext = Some true then next.IsSome else all.Length = total)
                                     if not validPage then Error "provider-relation-population-drift"
                                     elif next.IsSome then
                                         loop next (cursor |> Option.fold (fun state value -> Set.add value state) seen)
@@ -882,7 +912,8 @@ module MigrationBlockingEdgeStepRuntime =
                     else
                         match authority.ObserveJournal step.OperationId with
                         | Ok(Some observed)
-                            when observed.StepSeal = step.Seal
+                            when observed.OperationId = step.OperationId
+                                 && observed.StepSeal = step.Seal
                                  && observed.Stage = MigrationJournalStage.InFlight
                                  && observed.Generation = generation
                                  && observed.Commit = commit ->
