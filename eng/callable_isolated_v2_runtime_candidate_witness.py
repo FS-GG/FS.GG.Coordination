@@ -284,7 +284,7 @@ def qualify(selection: Selection, workflow_bytes: bytes,
         raise Refused("runtime-candidate-artifact-binding")
     artifact_created, expires = (_time(artifact["createdAt"]),
                                  _time(artifact["expiresAt"]))
-    if not completed <= artifact_created <= now < expires:
+    if not created <= artifact_created <= completed <= now < expires:
         raise Refused("runtime-candidate-artifact-time")
     try:
         bundle = download_port.download(selection.artifact_id, url)

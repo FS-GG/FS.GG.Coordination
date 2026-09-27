@@ -110,7 +110,7 @@ def fixture():
         **common, "artifactId": 104,
         "name": f"callable-isolated-v2-runtime-candidate-{SHA}",
         "expired": False, "size": len(bundle), "digest": "sha256:" + sha(bundle),
-        "downloadUrl": url, "createdAt": "2026-09-27T11:57:00Z",
+        "downloadUrl": url, "createdAt": "2026-09-27T11:56:00Z",
         "expiresAt": "2026-09-28T11:57:00Z"}
     return (selection, workflow, Port(producer_scope, run, artifact),
             Port(download_scope, bundle=bundle), archive, manifest_bytes)
@@ -209,6 +209,14 @@ class RuntimeCandidateWitnessTests(unittest.TestCase):
             with self.subTest(change=change):
                 with self.assertRaises(witness.Refused):
                     self.observe(change)
+
+    def test_artifact_outside_run_interval_refuses(self):
+        for created_at in ("2026-09-27T11:54:59Z",
+                           "2026-09-27T11:57:01Z"):
+            with self.subTest(created_at=created_at):
+                with self.assertRaises(witness.Refused):
+                    self.observe(lambda values: values[2].artifact.update(
+                        createdAt=created_at))
 
 
 if __name__ == "__main__":
