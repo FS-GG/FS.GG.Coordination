@@ -41,6 +41,15 @@ type private FakeTransport(responses: TransportOutcome list) =
             calls.Add(request, response)
             response
 
+type private RoutingTransport(route: GitHubRequest -> TransportOutcome) =
+    let calls = ResizeArray<GitHubRequest * TransportOutcome>()
+    member _.Calls = calls |> Seq.toList
+    interface IMigrationGitHubReadTransport with
+        member _.Send request =
+            let outcome = route request
+            calls.Add(request, outcome)
+            outcome
+
 let private repositoryCore =
     """{"id":42,"node_id":"R_42","full_name":"FS-GG/copy","default_branch":"main","visibility":"private","archived":false,"disabled":false,"has_issues":true,"allow_squash_merge":true,"allow_merge_commit":false,"allow_rebase_merge":true,"delete_branch_on_merge":true}"""
 
@@ -416,6 +425,93 @@ let ``declared workflow pin inspect slice refuses missing pins changed source an
         [ { captured.Second.Head with PinSnapshotSha256=String.replicate 64 "f" } ]
     Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
                     options pinDeclarations captured.First changedSecond |> Result.isError)
+
+let private nativeIssue =
+    """{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+let private nativeComment =
+    """{"id":201,"node_id":"COMMENT_201","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/1","body":"claim","created_at":"2026-09-25T10:00:00Z","updated_at":"2026-09-25T10:00:00Z","user":{"login":"actor"}}"""
+let private nativeEvent =
+    """{"id":202,"node_id":"EVENT_202","event":"assigned","created_at":"2026-09-25T10:00:00Z","actor":{"login":"actor"}}"""
+
+let private nativeRoute request =
+    match request with
+    | GraphQL _ -> NetworkFailure
+    | Rest value ->
+        match value.Uri.AbsolutePath with
+        | "/repos/FS-GG/copy" -> reply repositoryIdentity
+        | "/repos/FS-GG/copy/issues" -> reply $"[{nativeIssue}]"
+        | "/repos/FS-GG/copy/pulls" -> reply "[]"
+        | "/repos/FS-GG/copy/issues/1/comments" -> reply $"[{nativeComment}]"
+        | "/repos/FS-GG/copy/issues/1/events" -> reply $"[{nativeEvent}]"
+        | _ -> NetworkFailure
+
+let private captureNative route =
+    let transport = RoutingTransport route
+    let captured =
+        MigrationNativeActivity.capture options.Repository transport
+        |> function
+           | Ok value -> value
+           | Error failure -> failwithf "Expected native activity capture: %A" failure
+    captured, transport.Calls
+
+[<Fact>]
+let ``native activity inspect slice binds provider derived terminal streams over two raw passes`` () =
+    let transport = RoutingTransport nativeRoute
+    match MigrationInspectProviderAdapter.readNativeActivity options transport with
+    | Error reason -> failwithf "Native activity proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("claim-and-event-streams/native", proof.Read.Authority)
+        Assert.Equal(4, proof.Read.PageCount)
+        Assert.Equal(3, proof.Read.ItemCount)
+        Assert.Equal($"[{nativeComment}]", proof.Pages.[2].RawBody)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+    Assert.Equal(24, transport.Calls.Length)
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:claim-and-event-streams",
+                 source.ReadAuthority(1, "claim-and-event-streams"))
+
+[<Fact>]
+let ``native activity inspect slice refuses missing page raw typed mismatch and pass drift`` () =
+    let missing request =
+        match request with
+        | Rest value when value.Uri.AbsolutePath.EndsWith("/events", StringComparison.Ordinal) ->
+            NetworkFailure
+        | _ -> nativeRoute request
+    Assert.True(MigrationInspectProviderAdapter.readNativeActivity
+                    options (RoutingTransport missing) |> Result.isError)
+
+    let first, firstCalls = captureNative nativeRoute
+    let second, secondCalls = captureNative nativeRoute
+    let stream = first.Input.IssueEvents.Head
+    let changedRaw = "{}"
+    let changedDigest =
+        changedRaw |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let changedEvent =
+        { stream.Events.Head with PayloadJson=changedRaw; PayloadSha256=changedDigest }
+    let changedInput =
+        { first.Input with IssueEvents=[ { stream with Events=[ changedEvent ] } ] }
+    let changedSnapshot =
+        MigrationNativeActivity.reconcile options.Repository changedInput
+        |> function Ok value -> value | Error failure -> failwithf "Changed typed fixture invalid: %A" failure
+    let changedCapture = { Input=changedInput; Snapshot=changedSnapshot }
+    match MigrationInspectProviderAdapter.bindNativeActivity
+              options changedCapture firstCalls second secondCalls with
+    | Error reason -> Assert.Contains("raw-typed", reason)
+    | Ok _ -> failwith "Raw and typed native activity mismatch was accepted"
+
+    let mutable eventReads = 0
+    let changedEventBody = nativeEvent.Replace("assigned", "closed")
+    let drifting request =
+        match request with
+        | Rest value when value.Uri.AbsolutePath.EndsWith("/events", StringComparison.Ordinal) ->
+            eventReads <- eventReads + 1
+            if eventReads = 2 then reply $"[{changedEventBody}]"
+            else nativeRoute request
+        | _ -> nativeRoute request
+    Assert.True(MigrationInspectProviderAdapter.readNativeActivity
+                    options (RoutingTransport drifting) |> Result.isError)
 
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""

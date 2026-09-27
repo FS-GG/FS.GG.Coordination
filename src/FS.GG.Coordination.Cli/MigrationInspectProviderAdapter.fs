@@ -960,6 +960,220 @@ module MigrationInspectProviderAdapter =
                          Pages=pages }
                 with failure -> Error $"workflow-pins-raw-or-scope:{failure.Message}"
 
+    let private allowedNativeActivityRequest (options: MigrationInspectProviderOptions) request =
+        match request with
+        | GraphQL _ -> false
+        | Rest value ->
+            let repository =
+                Uri(options.Repository.ApiBase,
+                    $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+            let relative =
+                if value.Uri.AbsolutePath.StartsWith(repository.AbsolutePath, StringComparison.Ordinal) then
+                    value.Uri.AbsolutePath.Substring(repository.AbsolutePath.Length)
+                else "foreign"
+            let segments = relative.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            let positive (candidate: string) =
+                let mutable number = 0
+                Int32.TryParse(candidate, &number) && number > 0
+            let activityPath =
+                match segments with
+                | [||] -> true
+                | [| "issues" |] | [| "pulls" |] -> true
+                | [| "issues"; number; ("comments" | "events") |] -> positive number
+                | [| "pulls"; number; ("reviews" | "comments") |] -> positive number
+                | _ -> false
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && value.Uri.Authority = repository.Authority
+            && activityPath
+
+    let bindNativeActivity
+        (options: MigrationInspectProviderOptions)
+        (first: MigrationNativeActivityCapture)
+        (firstCaptures: (GitHubRequest * TransportOutcome) list)
+        (second: MigrationNativeActivityCapture)
+        (secondCaptures: (GitHubRequest * TransportOutcome) list) =
+        if not (repositoryBinding options) then Error "native-activity-cohort"
+        else
+            try
+                let identityUri =
+                    Uri(options.Repository.ApiBase,
+                        $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+                        .AbsoluteUri
+                let pageUris (pages: MigrationRestPageEvidence list) = pages |> List.map _.RequestedUri
+                let streamPages (input: MigrationNativeActivityInput) =
+                    [ yield! input.IssueComments |> List.collect (fun value -> value.Pages)
+                      yield! input.IssueEvents |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestComments |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestReviews |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestInlineComments |> List.collect (fun value -> value.Pages) ]
+                let expectedUriCounts (input: MigrationNativeActivityInput) =
+                    let streamReadCount =
+                        input.IssueComments.Length + input.IssueEvents.Length
+                        + input.PullRequestComments.Length + input.PullRequestReviews.Length
+                        + input.PullRequestInlineComments.Length
+                    [ for _ in 1 .. 4 + streamReadCount do yield identityUri
+                      for uri in pageUris input.Issues.Pages do yield uri; yield uri
+                      for uri in pageUris input.PullRequests.Pages do yield uri; yield uri
+                      yield! streamPages input |> pageUris ]
+                    |> List.countBy id |> Map.ofList
+                let rawCalls captures =
+                    captures
+                    |> List.map (fun (request, outcome) ->
+                        if not (allowedNativeActivityRequest options request) then failwith "request-scope"
+                        match request, responseBody outcome with
+                        | Rest value, Ok body -> value.Uri.AbsoluteUri, body, outcome
+                        | _ -> failwith "provider-response")
+                let payloadSubject identity payload =
+                    payload, subject identity (sha payload) payload
+                let typedRows (input: MigrationNativeActivityInput) =
+                    [ yield! input.Issues.Issues
+                              |> List.map (fun item ->
+                                  payloadSubject $"native:issue:{item.NodeId}" item.PayloadJson)
+                      yield! input.PullRequests.PullRequests
+                              |> List.map (fun item ->
+                                  payloadSubject $"native:pull-request:{item.NodeId}" item.PayloadJson)
+                      yield! input.IssueComments |> List.collect (fun stream ->
+                          stream.Comments |> List.map (fun item ->
+                              payloadSubject $"native:issue-comment:{item.NodeId}" item.PayloadJson))
+                      yield! input.IssueEvents |> List.collect (fun stream ->
+                          stream.Events |> List.map (fun item ->
+                              payloadSubject $"native:issue-event:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestComments |> List.collect (fun stream ->
+                          stream.Comments |> List.map (fun item ->
+                              payloadSubject $"native:pull-comment:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestReviews |> List.collect (fun stream ->
+                          stream.Reviews |> List.map (fun item ->
+                              payloadSubject $"native:review:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestInlineComments |> List.collect (fun stream ->
+                          stream.Comments |> List.map (fun item ->
+                              payloadSubject $"native:inline-comment:{item.NodeId}" item.PayloadJson)) ]
+                let validatePass (capture: MigrationNativeActivityCapture) captures =
+                    let reconciled =
+                        MigrationNativeActivity.reconcile options.Repository capture.Input
+                        |> function
+                           | Ok value -> value
+                           | Error failure -> failwith $"typed-reconcile:{failure}"
+                    if reconciled <> capture.Snapshot then failwith "snapshot-mismatch"
+                    let calls = rawCalls captures
+                    let actualCounts = calls |> List.map (fun (uri, _, _) -> uri) |> List.countBy id |> Map.ofList
+                    if actualCounts <> expectedUriCounts capture.Input then failwith "request-population"
+                    let byUri = calls |> List.groupBy (fun (uri, _, _) -> uri) |> Map.ofList
+                    let identities = byUri.[identityUri]
+                    let expectedIdentityCount =
+                        4 + capture.Input.IssueComments.Length + capture.Input.IssueEvents.Length
+                        + capture.Input.PullRequestComments.Length + capture.Input.PullRequestReviews.Length
+                        + capture.Input.PullRequestInlineComments.Length
+                    if identities.Length <> expectedIdentityCount
+                       || (identities |> List.map (fun (_, body, _) -> body) |> List.distinct |> List.length) <> 1 then
+                        failwith "identity-drift"
+                    let identityBody = identities.Head |> fun (_, body, _) -> body
+                    use identityDocument = JsonDocument.Parse identityBody
+                    requireUniqueMembers identityDocument.RootElement
+                    if identityDocument.RootElement.GetProperty("id").GetInt64()
+                           <> options.Repository.ExpectedRepositoryId
+                       || identityDocument.RootElement.GetProperty("full_name").GetString()
+                           <> $"{options.Repository.Owner}/{options.Repository.Repository}" then
+                        failwith "identity"
+                    let rows = typedRows capture.Input
+                    if rows.Length <> (rows |> List.map fst |> Set.ofList |> Set.count) then
+                        failwith "typed-payload-duplicate"
+                    let subjectByPayload = rows |> Map.ofList
+                    let pageSubjects = System.Collections.Generic.Dictionary<string, GitHubDiscoverySubject list>()
+                    let validatePages (pages: MigrationRestPageEvidence list)
+                                      (expectedPayloads: string list) skipPullMarkers expectedCopies =
+                        let rawItems = ResizeArray<string>()
+                        for page in pages do
+                            let occurrences = byUri.[page.RequestedUri]
+                            if occurrences.Length <> expectedCopies then failwith "page-copy-count"
+                            let bodies = occurrences |> List.map (fun (_, body, _) -> body) |> List.distinct
+                            if bodies.Length <> 1 || sha bodies.Head <> page.PayloadSha256 then
+                                failwith "raw-page-drift"
+                            if occurrences
+                               |> List.exists (fun (_, _, outcome) -> capturedNextUri outcome <> Some page.NextUri) then
+                                failwith "page-chain"
+                            use document = JsonDocument.Parse bodies.Head
+                            if document.RootElement.ValueKind <> JsonValueKind.Array then failwith "page-array"
+                            requireUniqueMembers document.RootElement
+                            let retained =
+                                document.RootElement.EnumerateArray()
+                                |> Seq.choose (fun item ->
+                                    let mutable marker = Unchecked.defaultof<JsonElement>
+                                    if skipPullMarkers && item.TryGetProperty("pull_request", &marker) then None
+                                    else Some(item.GetRawText()))
+                                |> Seq.toList
+                            retained |> List.iter rawItems.Add
+                            let subjects =
+                                retained |> List.map (fun payload ->
+                                    Map.tryFind payload subjectByPayload
+                                    |> Option.defaultWith (fun () -> failwith "raw-typed-item"))
+                            pageSubjects.[page.RequestedUri] <- subjects
+                        if (rawItems |> Seq.toList |> List.sort) <> List.sort expectedPayloads then
+                            failwith "raw-typed-population"
+                    validatePages capture.Input.Issues.Pages
+                        (capture.Input.Issues.Issues |> List.map _.PayloadJson) true 2
+                    validatePages capture.Input.PullRequests.Pages
+                        (capture.Input.PullRequests.PullRequests |> List.map _.PayloadJson) false 2
+                    for stream in capture.Input.IssueComments do
+                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.IssueEvents do
+                        validatePages stream.Pages (stream.Events |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.PullRequestComments do
+                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.PullRequestReviews do
+                        validatePages stream.Pages (stream.Reviews |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.PullRequestInlineComments do
+                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                    let orderedPages =
+                        capture.Input.Issues.Pages @ capture.Input.PullRequests.Pages
+                        @ streamPages capture.Input
+                    orderedPages
+                    |> List.map (fun page ->
+                        let _, body, _ = byUri.[page.RequestedUri].Head
+                        page.RequestedUri, body, pageSubjects.[page.RequestedUri])
+                let firstPages = validatePass first firstCaptures
+                let secondPages = validatePass second secondCaptures
+                let normalizedCalls captures =
+                    rawCalls captures
+                    |> List.map (fun (uri, body, outcome) -> uri, body, capturedNextUri outcome)
+                if first <> second || normalizedCalls firstCaptures <> normalizedCalls secondCaptures
+                   || firstPages <> secondPages then
+                    failwith "two-pass-drift"
+                let pages =
+                    firstPages
+                    |> List.mapi (fun index (uri, body, subjects) ->
+                        let next =
+                            if index + 1 < firstPages.Length then
+                                let nextUri, _, _ = firstPages.[index + 1]
+                                Some(sha nextUri)
+                            else None
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=sha body
+                          NextRequestIdentitySha256=next; Subjects=subjects })
+                let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="claim-and-event-streams/native"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"native-activity-raw-or-scope:{failure.Message}"
+
+    let readNativeActivity options (transport: IMigrationGitHubReadTransport) =
+        let capture () =
+            let retained = CapturingTransport(transport, allowedNativeActivityRequest options)
+            MigrationNativeActivity.capture options.Repository retained
+            |> Result.mapError (fun failure -> $"native-activity-read:{failure}")
+            |> Result.map (fun value -> value, retained.Calls)
+        capture ()
+        |> Result.bind (fun (first, firstCalls) ->
+            capture ()
+            |> Result.bind (fun (second, secondCalls) ->
+                bindNativeActivity options first firstCalls second secondCalls))
+
     let bindIssues (options: MigrationInspectProviderOptions) (population: MigrationIssuePopulation)
                    (captures: (GitHubRequest * TransportOutcome) list) =
         if not (repositoryBinding options) || population.RepositoryId <> options.Repository.ExpectedRepositoryId

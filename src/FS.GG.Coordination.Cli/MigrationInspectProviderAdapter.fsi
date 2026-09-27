@@ -93,6 +93,22 @@ module MigrationInspectProviderAdapter =
         second:MigrationReceiverPinSnapshot list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Binds complete provider-derived native issue/PR activity over two raw-stable passes.
+    /// Protected claim journals and custom receipts remain outside this partial authority.
+    val bindNativeActivity:
+        options:MigrationInspectProviderOptions ->
+        first:MigrationNativeActivityCapture ->
+        firstCaptures:(GitHubRequest * TransportOutcome) list ->
+        second:MigrationNativeActivityCapture ->
+        secondCaptures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Performs and binds two independent native activity captures through a GET-only fence.
+    val readNativeActivity:
+        options:MigrationInspectProviderOptions ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
     val bindNativeRelations:
         options:MigrationInspectProviderOptions ->
