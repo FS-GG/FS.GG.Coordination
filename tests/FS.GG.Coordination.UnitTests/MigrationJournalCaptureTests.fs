@@ -82,18 +82,20 @@ let private treeSha (entries: (string * string) list) =
         @ (Convert.FromHexString oid |> Array.toList))
     |> List.toArray |> gitSha "tree"
 
-let private deliveryFixture () =
+let private deliveryFixture generation (transformEvent: byte[] -> byte[]) =
     let subject = "fs-gg/copy#7"
     let address = ReviewDeliveryAdapter.deliveryAddress subject |> Result.defaultWith (failwithf "%A")
     let record: DeliveryAuthorityRecord =
         { SchemaVersion=1; Subject=subject; Kind=DeliveryGenesis; ReviewChainId=""; ReviewEpochKey=""
           ReviewSeat=""; MergeCommit=""; ProtectedRunId=None; ProtectedRunCommit=None
           ProtectedRunConclusion=None; OperationId="delivery-root" }
-    let eventBytes = ReviewDeliveryAdapter.deliveryAuthorityBytes record |> Result.defaultWith (failwithf "%A")
+    let eventBytes =
+        ReviewDeliveryAdapter.deliveryAuthorityBytes record
+        |> Result.defaultWith (failwithf "%A") |> transformEvent
     let eventOid = gitSha "blob" eventBytes
     let eventDigest = ShardedJournalAdapter.sha256 eventBytes
     let unsigned: JournalHead =
-        { SchemaVersion=1; Address=address; Generation=1L; EventDigest=eventDigest; SnapshotDigest=None
+        { SchemaVersion=1; Address=address; Generation=generation; EventDigest=eventDigest; SnapshotDigest=None
           Terminal=false; PriorHeadDigest=None; HeadDigest=String.replicate 64 "0" }
     let firstHeadBytes = ShardedJournalAdapter.journalHeadBytes unsigned
     let head = { unsigned with HeadDigest=ShardedJournalAdapter.sha256 firstHeadBytes }
@@ -111,25 +113,28 @@ let private deliveryFixture () =
 let private blobBody oid (bytes: byte[]) =
     $"""{{"sha":"{oid}","encoding":"base64","content":"{Convert.ToBase64String bytes}","size":{bytes.Length}}}"""
 
-[<Fact>]
-let ``delivery journal walks a hash-bound root and decodes the receipt in two fresh passes`` () =
-    let address, record, eventBytes, eventOid, headBytes, headOid, tree, commit = deliveryFixture ()
+let private fixtureRoute (address: AggregateAddress, _, eventBytes: byte[], eventOid, headBytes: byte[], headOid, tree, commit) request =
     let refs prefix =
         if prefix = "operation" then
             $"""[{{"ref":"{address.Ref}","object":{{"type":"commit","sha":"{commit}"}}}}]"""
         else "[]"
-    let route request =
-        match path request with
-        | "/repos/FS-GG/copy" -> ok Map.empty """{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}"""
-        | value when value.EndsWith("/review/", StringComparison.Ordinal) -> ok Map.empty (refs "review")
-        | value when value.EndsWith("/operation/", StringComparison.Ordinal) -> ok Map.empty (refs "operation")
-        | value when value.EndsWith("/git/commits/" + commit, StringComparison.Ordinal) ->
-            ok Map.empty ($"""{{"sha":"{commit}","tree":{{"sha":"{tree}"}},"parents":[],"author":{{"name":"Test","email":"test@example.com","date":"1970-01-01T00:00:00Z"}},"committer":{{"name":"Test","email":"test@example.com","date":"1970-01-01T00:00:00Z"}},"message":"journal genesis"}}""")
-        | value when value.EndsWith("/git/trees/" + tree, StringComparison.Ordinal) ->
-            ok Map.empty ($"""{{"sha":"{tree}","truncated":false,"tree":[{{"path":"event.json","mode":"100644","type":"blob","sha":"{eventOid}"}},{{"path":"head.json","mode":"100644","type":"blob","sha":"{headOid}"}}]}}""")
-        | value when value.EndsWith("/git/blobs/" + eventOid, StringComparison.Ordinal) -> ok Map.empty (blobBody eventOid eventBytes)
-        | value when value.EndsWith("/git/blobs/" + headOid, StringComparison.Ordinal) -> ok Map.empty (blobBody headOid headBytes)
-        | value -> failwithf "unexpected request %s" value
+    match path request with
+    | "/repos/FS-GG/copy" -> ok Map.empty """{"id":42,"node_id":"REPO_42","full_name":"FS-GG/copy"}"""
+    | value when value.EndsWith("/review/", StringComparison.Ordinal) -> ok Map.empty (refs "review")
+    | value when value.EndsWith("/operation/", StringComparison.Ordinal) -> ok Map.empty (refs "operation")
+    | value when value.EndsWith("/git/commits/" + commit, StringComparison.Ordinal) ->
+        ok Map.empty ($"""{{"sha":"{commit}","tree":{{"sha":"{tree}"}},"parents":[],"author":{{"name":"Test","email":"test@example.com","date":"1970-01-01T00:00:00Z"}},"committer":{{"name":"Test","email":"test@example.com","date":"1970-01-01T00:00:00Z"}},"message":"journal genesis"}}""")
+    | value when value.EndsWith("/git/trees/" + tree, StringComparison.Ordinal) ->
+        ok Map.empty ($"""{{"sha":"{tree}","truncated":false,"tree":[{{"path":"event.json","mode":"100644","type":"blob","sha":"{eventOid}"}},{{"path":"head.json","mode":"100644","type":"blob","sha":"{headOid}"}}]}}""")
+    | value when value.EndsWith("/git/blobs/" + eventOid, StringComparison.Ordinal) -> ok Map.empty (blobBody eventOid eventBytes)
+    | value when value.EndsWith("/git/blobs/" + headOid, StringComparison.Ordinal) -> ok Map.empty (blobBody headOid headBytes)
+    | value -> failwithf "unexpected request %s" value
+
+[<Fact>]
+let ``delivery journal walks a hash-bound root and decodes the receipt in two fresh passes`` () =
+    let fixture = deliveryFixture 1L id
+    let _, record, _, _, _, _, _, _ = fixture
+    let route = fixtureRoute fixture
     let transport = FakeTransport route
     match MigrationJournalCapture.captureTwoPass options transport with
     | Error failure -> failwithf "delivery capture refused: %s" failure
@@ -139,6 +144,30 @@ let ``delivery journal walks a hash-bound root and decodes the receipt in two fr
         Assert.Equal(record.Subject, entry.Record.Subject)
         Assert.Equal("genesis", entry.Record.Kind)
         Assert.Equal(14, transport.Requests.Length)
+
+[<Fact>]
+let ``missing discovered commit refuses without interpreting absence`` () =
+    let fixture = deliveryFixture 1L id
+    let _, _, _, _, _, _, _, commit = fixture
+    let route request =
+        if (path request).EndsWith("/git/commits/" + commit, StringComparison.Ordinal) then NetworkFailure
+        else fixtureRoute fixture request
+    Assert.Equal(Error "transport-unavailable", MigrationJournalCapture.captureTwoPass options (FakeTransport route))
+
+[<Fact>]
+let ``root generation must begin at one`` () =
+    let fixture = deliveryFixture 2L id
+    match MigrationJournalCapture.captureTwoPass options (FakeTransport(fixtureRoute fixture)) with
+    | Error value -> Assert.Contains("NonMonotonicJournalGeneration", value)
+    | Ok _ -> failwith "generation gap was accepted"
+
+[<Fact>]
+let ``unknown delivery schema refuses after object hashes verify`` () =
+    let alterSchema (bytes: byte[]) =
+        Encoding.UTF8.GetString(bytes).Replace("\"schemaVersion\":1", "\"schemaVersion\":2")
+        |> Encoding.UTF8.GetBytes
+    let fixture = deliveryFixture 1L alterSchema
+    Assert.Equal(Error "invalid-delivery-record", MigrationJournalCapture.captureTwoPass options (FakeTransport(fixtureRoute fixture)))
 
 [<Fact>]
 let ``two pass namespace drift refuses`` () =

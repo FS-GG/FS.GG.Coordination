@@ -351,7 +351,26 @@ module MigrationJournalCapture =
         let namespaces = MigrationReviewDeliveryCaptureContract.journalRefPrefixes |> List.map (namespaceCensus options transport)
         let refs = namespaces |> List.collect _.Refs
         if not (refs |> List.map _.RefName |> unique) then refuse "duplicate-journal-ref"
-        let histories = refs |> List.collect (history options transport)
+        let captured = refs |> List.collect (history options transport)
+        let reviewSubjects =
+            captured
+            |> List.filter (fun item -> item.Record.Schema = "fsgg.coordination.delivery-authority/1")
+            |> List.map (fun item ->
+                let chain =
+                    ReviewDeliveryAdapter.chainId item.Record.Subject
+                    |> Result.defaultWith (fun _ -> refuse "invalid-delivery-subject")
+                chain, item.Record.Subject)
+            |> List.distinct
+            |> List.groupBy fst
+            |> List.map (fun (chain, values) -> chain, values |> List.map snd |> List.distinct)
+            |> Map.ofList
+        let histories =
+            captured |> List.map (fun item ->
+                if item.Record.Schema <> "fsgg.coordination.review-authority/1" then item
+                else
+                    match Map.tryFind item.Record.Subject reviewSubjects with
+                    | Some [ subject ] -> { item with Record = { item.Record with Subject = subject } }
+                    | _ -> refuse "unbound-review-subject")
         let partial = { Repository = repository; Namespaces = namespaces; Histories = histories; Fingerprint = "" }
         { partial with Fingerprint = MigrationReviewDeliveryCaptureContract.journalFingerprint partial }
 
