@@ -3354,7 +3354,7 @@ let ``gate catalog is literal dotnet only and matches selected unit`` () =
     let commands =
         catalog.RootElement.GetProperty("commands").EnumerateArray() |> Seq.toList
 
-    Assert.Equal(75, commands.Length)
+    Assert.Equal(77, commands.Length)
 
     for command in commands do
         Assert.Equal("dotnet", command.GetProperty("executable").GetString())

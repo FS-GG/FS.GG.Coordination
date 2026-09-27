@@ -328,6 +328,13 @@ secret-sentinel suppression and contract/proposal/source substitution refusal. T
 qualification only. It issues no grant, reads no credential, contacts no GitHub endpoint, dispatches no workflow,
 changes no provider state and does not supersede the immutable v1 operation or its accepted evidence.
 
+The local shared-catalog rotation retains the historical v1 preparation command for provenance and selects
+the prospective v2 contract at Q3 and v2 recovery at Q6 alongside the existing ordinary and protected
+revalidation commands. The candidate GS2-09.9 unit digest is
+`07c19ec07f8b787c8de8a2ec36235ab8d44811ec2314238585fc89bd43c93141`; the independent v2 validator
+also rejects a coherently resealed removal of its five forbidden effects. These command registrations prepare
+qualification only. They do not turn the source-only `/5` proof into installed or native acceptance.
+
 Remaining installed/native gate for that prospective rotation: separately bind an installed artifact and native
 adapter to these exact `/5` bytes, obtain new typed protected authority and fresh target, reviewer, installation,
 credential, capability and protection observations, then execute and independently read back one admitted v2
