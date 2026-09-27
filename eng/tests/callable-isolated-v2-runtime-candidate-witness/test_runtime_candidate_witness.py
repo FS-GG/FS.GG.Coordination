@@ -87,7 +87,8 @@ def fixture():
                                   sha(workflow))
     producer_scope = {"principalId": "producer-reader",
         "credentialId": "1" * 64, "repository": witness.REPOSITORY,
-        "repositoryId": 77, "permissions": ["actions:read", "metadata:read"],
+        "repositoryId": 77,
+        "permissions": ["actions:read", "contents:read", "metadata:read"],
         "expiresAt": "2026-09-27T12:20:00Z"}
     download_scope = {"principalId": "download-reader",
         "credentialId": "2" * 64, "repository": witness.REPOSITORY,
@@ -137,6 +138,16 @@ class RuntimeCandidateWitnessTests(unittest.TestCase):
         self.assertFalse(result.authorized)
         self.assertFalse(result.can_dispatch_effect)
         self.assertEqual(result.live_effects, 0)
+
+    def test_producer_scope_requires_exact_read_grants(self):
+        for permissions in (
+            ["actions:read", "metadata:read"],
+            ["actions:read", "contents:read", "metadata:read", "contents:write"],
+        ):
+            with self.subTest(permissions=permissions):
+                with self.assertRaisesRegex(witness.Refused, "runtime-candidate-scope-binding"):
+                    self.observe(lambda values: values[2].scopes[0].update(
+                        permissions=permissions))
 
     def test_wrong_source_workflow_or_attempt_refuses(self):
         changes = (

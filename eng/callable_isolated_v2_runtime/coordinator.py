@@ -14,7 +14,7 @@ operator = operator_module()
 
 
 class AttemptJournal:
-    """SQLite durable attempt fence; competing processes share one operation key."""
+    """Local SQLite qualification backend; never selected by the installed composer."""
     def __init__(self, path: Path):
         self.path = Path(path)
 
@@ -127,6 +127,8 @@ class _Transport:
         self.read_port, self.write_port, self.token_port = read_port, write_port, token_port
         self.clock_port, self.binding, self.raw_grant = clock_port, binding, raw_grant
         self.key_reader, self.journal, self.grant_sha = key_reader, journal, grant_sha
+        self.outcome_acknowledged = False
+        self.acknowledged_outcome = None
 
     def request(self, method, path, body):
         if method == "GET" and body is None:
@@ -151,12 +153,20 @@ class _Transport:
                       self.clock_port.now(),
                       postcheck_clock=self.clock_port) != self.grant_sha:
                 raise Refused("runtime-grant-drift")
+            if not self.journal.read(self.binding, self.grant_sha):
+                raise Refused("runtime-fence-drift")
             try:
                 response = self.write_port.post_pull(path, self.binding.canonical_request, token)
             except Exception:
-                self.journal.record_outcome(self.binding, self.grant_sha, "lost")
+                self.outcome_acknowledged = self.journal.record_outcome(
+                    self.binding, self.grant_sha, "lost") is True
+                if self.outcome_acknowledged:
+                    self.acknowledged_outcome = {"status": "lost"}
                 raise
-            self.journal.record_outcome(self.binding, self.grant_sha, response)
+            if not self.journal.record_outcome(self.binding, self.grant_sha, response):
+                raise Refused("runtime-outcome-unacknowledged")
+            self.outcome_acknowledged = True
+            self.acknowledged_outcome = response
             return response
         raise Refused("runtime-method")
 
@@ -224,8 +234,13 @@ def execute_pull(binding: Binding, expected, raw_grant: bytes, key_reader,
         outcome = journal.outcome(binding, grant_sha)
         if outcome is None:
             return operator.Unknown("runtime-outcome-unproved")
-        if type(result) is operator.ExactPull and not operator._response_allows_readback(outcome):
-            return operator.Unknown("runtime-outcome-ineligible")
+        if type(result) is operator.ExactPull:
+            if not transport.outcome_acknowledged:
+                return operator.Unknown("runtime-outcome-unacknowledged")
+            if outcome != transport.acknowledged_outcome:
+                return operator.Unknown("runtime-outcome-contradiction")
+            if not operator._response_allows_readback(outcome):
+                return operator.Unknown("runtime-outcome-ineligible")
         return result
     except Exception:
         return operator.Unknown("runtime-unavailable")

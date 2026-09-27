@@ -11,6 +11,7 @@ import json
 import pathlib
 import subprocess
 import sys
+import threading
 
 
 PYZ = pathlib.Path(sys.argv[1]).resolve()
@@ -49,6 +50,8 @@ class Authority:
         self.posts = 0
         self.gets = 0
         self.applied = False
+        self.attempt = None
+        self.journal_lock = threading.Lock()
         self.expected = coordinator.operator.ExpectedPull(
             coordinator.operator.OPERATION_IDENTITY, 1, 44,
             "FS-GG/disposable", "refs/heads/source", SHA_A,
@@ -116,7 +119,7 @@ class Authority:
             adapters.CONFIG_SCHEMA, True, True, self.authority_id,
             adapters.API_ORIGIN, 77, self.binding.source_revision,
             self.binding.source_tree, self.expected.source_ref,
-            self.expected.base_ref, str(STATE / "runtime.db"), self.binding,
+            self.expected.base_ref, "", self.binding,
             self.expected, scopes,
             provenance(self.authority_id, "configuration", 1),
         )
@@ -146,7 +149,7 @@ class Authority:
             self.binding.operation_id, self.binding.target_repository,
             self.binding.target_repository_id, 77, "e" * 64, b"secret",
             NOW - dt.timedelta(minutes=1), NOW + dt.timedelta(minutes=5),
-            provenance(self.authority_id, "token", 8),
+            provenance(self.authority_id, "token", 9),
         )
 
     def scope(self, role):
@@ -166,6 +169,33 @@ class Authority:
 
     def read_parent(self, repository, ref, path):
         return self.parent
+
+    def reserve_attempt(self, binding, grant_sha256):
+        with self.journal_lock:
+            if self.attempt is not None or binding != self.binding:
+                return False
+            self.attempt = adapters.CommittedAttempt(
+                binding.operation_id, binding.journal_repository,
+                binding.journal_ref, binding.journal_path,
+                binding.journal_prior_generation, binding.journal_prior_head,
+                self.binding_sha, grant_sha256, True, None,
+                provenance(self.authority_id, "journal", 6))
+            return True
+
+    def read_committed_attempt(self, operation_id):
+        with self.journal_lock:
+            return self.attempt
+
+    def persist_attempt_outcome(self, operation_id, binding_sha256,
+                                grant_sha256, outcome):
+        with self.journal_lock:
+            if (self.attempt is None or self.attempt.operation_id != operation_id
+                    or self.attempt.binding_sha256 != binding_sha256
+                    or self.attempt.grant_sha256 != grant_sha256
+                    or self.attempt.outcome is not None):
+                return False
+            self.attempt = dataclasses.replace(self.attempt, outcome=outcome)
+            return True
 
     def trusted_now(self):
         return NOW

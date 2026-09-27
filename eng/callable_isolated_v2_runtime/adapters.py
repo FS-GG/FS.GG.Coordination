@@ -12,9 +12,7 @@ import dataclasses
 import datetime as dt
 import hashlib
 import json
-from pathlib import Path
 import re
-import sqlite3
 from typing import Protocol
 
 from . import coordinator
@@ -23,7 +21,7 @@ from .grant import canonical, verify
 
 
 API_ORIGIN = "https://api.github.com"
-CONFIG_SCHEMA = "fsgg.coordination.callable-isolated-v2-runtime-installation/1"
+CONFIG_SCHEMA = "fsgg.coordination.callable-isolated-v2-runtime-installation/2"
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 ROLE_PERMISSIONS = {
@@ -32,6 +30,7 @@ ROLE_PERMISSIONS = {
     "issuer": ("runtime-issuer:read",),
     "key": ("runtime-active-key:read",),
     "parent": ("runtime-journal-parent:read",),
+    "journal": ("runtime-journal:reserve", "runtime-journal:read", "runtime-journal:write"),
     "clock": ("trusted-time:read",),
     "native-read": ("metadata:read", "contents:read", "pull_requests:read"),
     "token": ("execution-token:issue",),
@@ -80,7 +79,7 @@ class InstalledConfiguration:
     source_tree: str
     source_ref: str
     base_ref: str
-    journal_database_path: str
+    journal_database_path: str  # Must be empty; retained to reject legacy local-path installs.
     binding: Binding
     expected: object
     scopes: tuple[ProtectedScope, ...]
@@ -149,8 +148,34 @@ class TokenLease:
     provenance: RecordProvenance
 
 
+@dataclasses.dataclass(frozen=True)
+class CommittedAttempt:
+    """An independently read, committed host record for one irreversible attempt."""
+    operation_id: str
+    repository: str
+    ref: str
+    path: str
+    prior_generation: int
+    prior_head: str
+    binding_sha256: str
+    grant_sha256: str
+    attempt_may_have_started: bool
+    outcome: object | None
+    provenance: RecordProvenance
+
+
 class ProtectedAuthority(Protocol):
-    """One host-owned capability; an implementation is not supplied here."""
+    """One host-owned capability; an implementation is not supplied here.
+
+    reserve_attempt must atomically compare the protected parent generation/head
+    and insert a permanent may-have-started fence for both operation ID and
+    parent tuple. False means a definite rejection; uncertainty must raise.
+    read_committed_attempt must use an independent committed read, never a
+    reservation caller's uncommitted or cached view. persist_attempt_outcome
+    must durably store one immutable outcome before returning True. A failed or
+    uncertain acknowledgement must retain the fence and may return False or
+    raise. None of these methods may fall back to local process storage.
+    """
 
     def scope(self, role: str) -> ProtectedScope: ...
     def read_installed_configuration(self) -> InstalledConfiguration: ...
@@ -158,6 +183,10 @@ class ProtectedAuthority(Protocol):
     def read_issuer(self, operation_id: str) -> IssuerRecord: ...
     def read_active_key(self, key_id: str, issuer_actor_id: int) -> KeyRecord: ...
     def read_parent(self, repository: str, ref: str, path: str) -> ParentRecord: ...
+    def reserve_attempt(self, binding: Binding, grant_sha256: str) -> bool: ...
+    def read_committed_attempt(self, operation_id: str) -> CommittedAttempt | None: ...
+    def persist_attempt_outcome(self, operation_id: str, binding_sha256: str,
+                                grant_sha256: str, outcome: object) -> bool: ...
     def trusted_now(self) -> dt.datetime: ...
     def native_get(self, path: str): ...
     def issue_execution_token(self, operation_id: str) -> TokenLease: ...
@@ -177,6 +206,18 @@ def _binding_sha(binding: Binding) -> str:
     return digest(canonical(binding.claims()))
 
 
+def _valid_outcome(value: object) -> bool:
+    if value is None or value == "lost":
+        return True
+    return (type(value) is coordinator.operator.HttpResponse
+            and type(value.status) is int
+            and type(value.headers) is tuple
+            and all(type(pair) is tuple and len(pair) == 2
+                    and all(type(item) is str for item in pair)
+                    for pair in value.headers)
+            and type(value.body) is bytes and len(value.body) <= 4_000_000)
+
+
 def _copy_exact(value, expected_type, reason: str):
     if type(value) is not expected_type:
         raise Refused(reason)
@@ -190,6 +231,7 @@ class _Installation:
         self.configuration = configuration
         self.scopes = {scope.role: scope for scope in configuration.scopes}
         self.parent_provenance_expires_at: dt.datetime | None = None
+        self.journal_attestation_expires_at: dt.datetime | None = None
 
     def scope(self, role: str, now: dt.datetime) -> ProtectedScope:
         expected = self.scopes.get(role)
@@ -275,7 +317,6 @@ def _load_installation(authority: ProtectedAuthority) -> tuple[_Installation, Tr
                        if type(scope) is ProtectedScope)
     credentials = tuple(scope.credential_id for scope in first.scopes
                         if type(scope) is ProtectedScope)
-    journal_path = Path(first.journal_database_path)
     if (first.schema != CONFIG_SCHEMA or first.complete is not True
             or first.immutable is not True
             or HEX64.fullmatch(first.authority_id or "") is None
@@ -292,8 +333,7 @@ def _load_installation(authority: ProtectedAuthority) -> tuple[_Installation, Tr
             or expected.repository_id != binding.target_repository_id
             or expected.source_ref != first.source_ref
             or expected.base_ref != first.base_ref
-            or type(first.journal_database_path) is not str
-            or not journal_path.is_absolute() or journal_path.is_symlink()
+            or first.journal_database_path != ""
             or len(first.scopes) != len(ROLE_PERMISSIONS)
             or set(roles) != set(ROLE_PERMISSIONS) or len(set(roles)) != len(roles)
             or len(set(principals)) != len(principals)
@@ -311,6 +351,7 @@ def _load_installation(authority: ProtectedAuthority) -> tuple[_Installation, Tr
 class ProtectedGrantReader:
     def __init__(self, installation: _Installation, clock: TrustedClock):
         self.installation, self.clock = installation, clock
+        self._last_deadline: dt.datetime | None = None
 
     def read(self) -> GrantRecord:
         binding = self.installation.configuration.binding
@@ -506,8 +547,11 @@ class ProtectedNativeWritePort:
         final_now = self.clock.current
         key_deadline = self.key_reader.authorization_expires_at
         parent_deadline = self.installation.parent_provenance_expires_at
+        journal_deadline = self.installation.journal_attestation_expires_at
         if (key_deadline is None or parent_deadline is None
+                or journal_deadline is None
                 or not final_now < min(key_deadline, parent_deadline,
+                    journal_deadline,
                     self.installation.configuration.provenance.expires_at,
                     self.grant_record.provenance.expires_at)):
             raise Refused("protected-write-authority")
@@ -528,10 +572,11 @@ class ProtectedNativeWritePort:
         return response
 
 
-class ProtectedParentBootstrap:
-    def __init__(self, installation: _Installation, clock: TrustedClock,
-                 journal: coordinator.AttemptJournal):
-        self.installation, self.clock, self.journal = installation, clock, journal
+class ProtectedAttemptJournal:
+    """Host CAS and independent committed replay; no filesystem fallback."""
+
+    def __init__(self, installation: _Installation, clock: TrustedClock):
+        self.installation, self.clock = installation, clock
 
     def _qualified_record(self) -> ParentRecord:
         binding = self.installation.configuration.binding
@@ -565,33 +610,93 @@ class ProtectedParentBootstrap:
             raise Refused("protected-parent-invalid")
         return first
 
-    def establish(self) -> bool:
+    def qualify_parent(self) -> None:
         parent = self._qualified_record()
-        established = self.journal.establish_parent(
-            self.installation.configuration.binding)
-        if established:
-            # The scope authorizes bootstrap; the attestation provenance
-            # continues to limit sends from that bootstrap.
-            self.installation.parent_provenance_expires_at = (
-                parent.provenance.expires_at)
-        return established
+        self.installation.parent_provenance_expires_at = parent.provenance.expires_at
 
-    def require_stored(self) -> None:
-        """Qualify the protected parent and match an existing local bootstrap."""
-        parent = self._qualified_record()
-        path = self.journal.path
-        if not path.is_file() or path.is_symlink():
-            raise Refused("protected-parent-not-stored")
+    def _committed(self) -> CommittedAttempt | None:
+        self._last_deadline = None
+        binding = self.installation.configuration.binding
+        now = self.clock.now()
+        self.installation.scope("journal", now)
         try:
-            with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as db:
-                row = db.execute(
-                    "SELECT generation, head FROM parents "
-                    "WHERE repository=? AND ref=? AND path=?",
-                    (parent.repository, parent.ref, parent.path)).fetchone()
-        except sqlite3.Error:
-            raise Refused("protected-parent-not-stored") from None
-        if row != (parent.generation, parent.head):
-            raise Refused("protected-parent-not-stored")
+            value = self.installation.authority.read_committed_attempt(
+                binding.operation_id)
+        except Exception:
+            raise Refused("protected-journal-read-unavailable") from None
+        if value is None:
+            return None
+        value = _copy_exact(value, CommittedAttempt, "protected-journal-shape")
+        if (value.operation_id != binding.operation_id
+                or value.repository != binding.journal_repository
+                or value.ref != binding.journal_ref
+                or value.path != binding.journal_path
+                or value.prior_generation != binding.journal_prior_generation
+                or value.prior_head != binding.journal_prior_head
+                or value.binding_sha256 != _binding_sha(binding)
+                or HEX64.fullmatch(value.grant_sha256 or "") is None
+                or value.attempt_may_have_started is not True
+                or not _valid_outcome(value.outcome)):
+            raise Refused("protected-journal-invalid")
+        final_now = self.clock.now()
+        final_scope = self.installation.scope("journal", final_now)
+        self.installation.record(value.provenance, "journal", final_now)
+        if not final_now < final_scope.expires_at:
+            raise Refused("protected-journal-expired")
+        self._last_deadline = min(
+            value.provenance.expires_at, final_scope.expires_at)
+        return value
+
+    def reserve(self, binding: Binding, grant_sha256: str) -> bool:
+        if binding != self.installation.configuration.binding or HEX64.fullmatch(grant_sha256 or "") is None:
+            raise Refused("protected-journal-selection")
+        self.qualify_parent()
+        now = self.clock.now()
+        self.installation.scope("journal", now)
+        try:
+            admitted = self.installation.authority.reserve_attempt(binding, grant_sha256)
+        except Exception:
+            raise Refused("protected-journal-reservation-unknown") from None
+        if type(admitted) is not bool:
+            raise Refused("protected-journal-reservation-unknown")
+        return admitted
+
+    def read(self, binding: Binding, grant_sha256: str) -> bool:
+        self.installation.journal_attestation_expires_at = None
+        if binding != self.installation.configuration.binding:
+            return False
+        value = self._committed()
+        if value is None or value.grant_sha256 != grant_sha256:
+            return False
+        self.installation.journal_attestation_expires_at = self._last_deadline
+        return True
+
+    def record_outcome(self, binding: Binding, grant_sha256: str,
+                       outcome: object) -> bool:
+        if (binding != self.installation.configuration.binding
+                or outcome is None or not _valid_outcome(outcome)):
+            return False
+        now = self.clock.now()
+        self.installation.scope("journal", now)
+        try:
+            acknowledged = self.installation.authority.persist_attempt_outcome(
+                binding.operation_id, _binding_sha(binding), grant_sha256, outcome)
+        except Exception:
+            return False
+        if acknowledged is not True:
+            return False
+        value = self._committed()
+        return value is not None and value.grant_sha256 == grant_sha256 and value.outcome == outcome
+
+    def outcome(self, binding: Binding, grant_sha256: str):
+        if binding != self.installation.configuration.binding:
+            return None
+        value = self._committed()
+        if value is None or value.grant_sha256 != grant_sha256:
+            return None
+        if value.outcome == "lost":
+            return {"status": "lost"}
+        return value.outcome
 
 
 @dataclasses.dataclass(frozen=True)
@@ -603,12 +708,12 @@ class InstalledRuntime:
     read_port: ProtectedNativeReadPort
     write_port: ProtectedNativeWritePort
     token_port: ProtectedTokenPort
-    journal: coordinator.AttemptJournal
+    journal: ProtectedAttemptJournal
     clock_port: TrustedClock
 
 
 def compose_installed(authority: ProtectedAuthority) -> InstalledRuntime:
-    """Qualify protected records and bootstrap one new stored parent."""
+    """Qualify protected records and require the host journal capability."""
     installation, clock = _load_installation(authority)
     grant_record = ProtectedGrantReader(installation, clock).read()
     key_reader = ProtectedIssuerKeyReader(installation, clock, grant_record)
@@ -620,10 +725,13 @@ def compose_installed(authority: ProtectedAuthority) -> InstalledRuntime:
         raise Refused("protected-grant-unverified") from None
     if verified != grant_record.grant_sha256:
         raise Refused("protected-grant-unverified")
-    journal = coordinator.AttemptJournal(Path(
-        installation.configuration.journal_database_path))
-    if not ProtectedParentBootstrap(installation, clock, journal).establish():
-        raise Refused("protected-parent-already-established")
+    journal = ProtectedAttemptJournal(installation, clock)
+    journal.qualify_parent()
+    # A missing capability must refuse before any token can be requested.
+    if not callable(getattr(authority, "reserve_attempt", None)) or not callable(
+            getattr(authority, "read_committed_attempt", None)) or not callable(
+            getattr(authority, "persist_attempt_outcome", None)):
+        raise Refused("protected-journal-capability-missing")
     read_port = ProtectedNativeReadPort(installation, clock)
     token_port = ProtectedTokenPort(installation, clock)
     write_port = ProtectedNativeWritePort(installation, clock, token_port,
@@ -652,18 +760,19 @@ class InstalledRecovery:
     raw_grant: bytes
     key_reader: ProtectedIssuerKeyReader
     read_port: ProtectedNativeReadPort
-    journal: coordinator.AttemptJournal
+    journal: ProtectedAttemptJournal
     clock_port: TrustedClock
 
 
 def compose_recovery(authority: ProtectedAuthority) -> InstalledRecovery:
-    """Qualify the same protected records without creating or replacing parent."""
+    """Qualify the same protected records for read-only recovery."""
     installation, clock = _load_installation(authority)
     grant_record = ProtectedGrantReader(installation, clock).read()
     key_reader = ProtectedIssuerKeyReader(installation, clock, grant_record)
-    journal = coordinator.AttemptJournal(Path(
-        installation.configuration.journal_database_path))
-    ProtectedParentBootstrap(installation, clock, journal).require_stored()
+    journal = ProtectedAttemptJournal(installation, clock)
+    journal.qualify_parent()
+    if not callable(getattr(authority, "read_committed_attempt", None)):
+        raise Refused("protected-journal-capability-missing")
     return InstalledRecovery(installation.configuration.binding,
         installation.configuration.expected, grant_record.raw_grant,
         key_reader, ProtectedNativeReadPort(installation, clock), journal,
