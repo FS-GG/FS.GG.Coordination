@@ -39,6 +39,12 @@ type MigrationReceiverInstallationCapture =
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverInstallationRead =
+    [<Literal>]
+    let private sandboxRepositoryId = 1353050537L
+    [<Literal>]
+    let private sandboxRepositoryNodeId = "R_kgDOUKXpqQ"
+    [<Literal>]
+    let private sandboxRepositoryName = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
     let private unavailable reason = Error $"receiver-installation-authority-adapter-unavailable:{reason}"
     let private sha256 (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -174,22 +180,25 @@ module MigrationReceiverInstallationRead =
         && Map.tryFind "metadata" options.RequiredPermissions = Some "read"
         && options.RequiredPermissions |> Map.forall (fun name level ->
             validPermissionName name && Set.contains level (set [ "read"; "write"; "admin" ]))
-        && options.SelectedRepositories.Length = 7
+        && options.SelectedRepositories =
+            [ { DeclaredRepositoryId=sandboxRepositoryId
+                DeclaredRepositoryNodeId=sandboxRepositoryNodeId
+                DeclaredRepositoryFullName=sandboxRepositoryName } ]
         && options.SelectedRepositories |> List.forall (fun repository ->
             repository.DeclaredRepositoryId > 0L
             && validText repository.DeclaredRepositoryNodeId
             && validText repository.DeclaredRepositoryFullName
             && repository.DeclaredRepositoryFullName.StartsWith(options.AccountLogin + "/", StringComparison.OrdinalIgnoreCase))
-        && (options.SelectedRepositories |> List.map _.DeclaredRepositoryId |> Set.ofList |> Set.count) = 7
-        && (options.SelectedRepositories |> List.map _.DeclaredRepositoryNodeId |> Set.ofList |> Set.count) = 7
-        && (options.SelectedRepositories |> List.map (fun item -> item.DeclaredRepositoryFullName.ToLowerInvariant()) |> Set.ofList |> Set.count) = 7
+        && (options.SelectedRepositories |> List.map _.DeclaredRepositoryId |> Set.ofList |> Set.count) = 1
+        && (options.SelectedRepositories |> List.map _.DeclaredRepositoryNodeId |> Set.ofList |> Set.count) = 1
+        && (options.SelectedRepositories |> List.map (fun item -> item.DeclaredRepositoryFullName.ToLowerInvariant()) |> Set.ofList |> Set.count) = 1
 
     let private exactScope options (pass: MigrationReceiverRosterPass) =
         parseInstallationBinding options pass.Pages.Head.RosterRawBody
         |> Result.bind (fun () ->
             if pass.ScopeSettings.Permissions <> options.RequiredPermissions then
                 unavailable "installation-permission-settings-unknown"
-            elif pass.RepositoryTotalCount <> 7 then unavailable "unselected-repository-grant"
+            elif pass.RepositoryTotalCount <> 1 then unavailable "unselected-repository-grant"
             elif pass.Repositories |> List.exists (fun item -> not item.RosterPrivate || item.RosterArchived || item.RosterDisabled) then
                 unavailable "repository-settings-unknown"
             else

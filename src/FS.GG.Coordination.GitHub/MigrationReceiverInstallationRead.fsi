@@ -35,8 +35,8 @@ type MigrationReceiverInstallationCapture =
 [<RequireQualifiedAccess>]
 module MigrationReceiverInstallationRead =
     /// Reads the authenticated App, its selected installation settings and the complete
-    /// installation-token repository census twice. Only an exact seven-repository scope is
-    /// returned in the shape consumed by MigrationReceiverAuthorityComposer.
+    /// installation-token repository census twice. Only the single accepted sandbox repository
+    /// scope is returned; its seven receiver refs are verified by the downstream provider read.
     val captureForComposer:
         options: MigrationReceiverInstallationReadOptions ->
         transport: IMigrationGitHubReadTransport ->
