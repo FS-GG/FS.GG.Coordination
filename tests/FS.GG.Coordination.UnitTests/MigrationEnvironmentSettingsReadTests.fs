@@ -52,7 +52,13 @@ let private list one total = $"""{{"total_count":{total},"environments":[{one}]}
 let private branches =
     """{"total_count":1,"branch_policies":[{"id":21,"node_id":"BRANCH_21","name":"main","type":"branch"}]}"""
 let private custom = """{"total_count":0,"custom_deployment_protection_rules":[]}"""
-let private success = [ ok repository; ok (list environment 1); ok environment; ok branches; ok custom; ok repository ]
+let private secrets =
+    """{"total_count":1,"secrets":[{"name":"DEPLOY_TOKEN","created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"}]}"""
+let private variables =
+    """{"total_count":1,"variables":[{"name":"REGION","value":"eu-central","created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"}]}"""
+let private success =
+    [ ok repository; ok (list environment 1); ok environment; ok branches; ok custom
+      ok secrets; ok variables; ok repository ]
 
 let private sha (value: string) =
     value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -78,10 +84,19 @@ let ``environment source reads exact repository terminal settings with raw evide
         Assert.Single(item.BranchPolicies) |> ignore
         Assert.Equal("main", item.BranchPolicies.Head.Name)
         Assert.Empty(item.CustomRules)
+        Assert.Equal("DEPLOY_TOKEN", Assert.Single(item.Secrets).Name)
+        Assert.Equal("REGION", Assert.Single(item.Variables).Name)
+        Assert.Equal(sha "eu-central", item.Variables.Head.ValueSha256)
+        Assert.Single(item.SecretPages) |> ignore
+        Assert.Single(item.VariablePages) |> ignore
+        Assert.Equal("https://api.github.test/repos/FS-GG/copy/environments/fleet-cutover/secrets?per_page=30&page=1",
+                     item.SecretPages.Head.EnvironmentRequestedUri)
+        Assert.Equal("https://api.github.test/repos/FS-GG/copy/environments/fleet-cutover/variables?per_page=30&page=1",
+                     item.VariablePages.Head.EnvironmentRequestedUri)
         Assert.Equal(sha environment, item.DetailPayloadSha256)
         Assert.Equal(sha custom, item.CustomRulesPayloadSha256)
         Assert.Equal(sha repository, observed.IdentityPayloadSha256)
-        Assert.Equal(6, transport.Requests.Length)
+        Assert.Equal(8, transport.Requests.Length)
         for request in transport.Requests do
             match request with
             | Rest value -> Assert.Equal(Get, value.Method); Assert.True(value.Body.IsNone)
@@ -114,8 +129,8 @@ let ``environment source follows exact terminal environment pages`` () =
             (list environment 2)
     let transport =
         FakeTransport [ ok repository; firstPage; ok (list second 2)
-                        ok environment; ok branches; ok custom
-                        ok second; ok branches; ok custom; ok repository ]
+                        ok environment; ok branches; ok custom; ok secrets; ok variables
+                        ok second; ok branches; ok custom; ok secrets; ok variables; ok repository ]
     match MigrationEnvironmentSettingsRead.read options transport with
     | Error failure -> failwithf "terminal pagination refused: %A" failure
     | Ok observed ->
@@ -125,7 +140,54 @@ let ``environment source follows exact terminal environment pages`` () =
         Assert.Equal(Some "https://api.github.test/repos/FS-GG/copy/environments?per_page=100&page=2",
                      observed.Pages.Head.EnvironmentNextUri)
         Assert.True(observed.Pages.[1].EnvironmentNextUri.IsNone)
-        Assert.Equal(10, transport.Requests.Length)
+        Assert.Equal(14, transport.Requests.Length)
+
+[<Fact>]
+let ``environment source follows exact terminal secret pages at provider page size`` () =
+    let firstSecret =
+        """{"total_count":2,"secrets":[{"name":"DEPLOY_TOKEN","created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"}]}"""
+    let secondSecret =
+        """{"total_count":2,"secrets":[{"name":"SIGNING_KEY","created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"}]}"""
+    let firstPage =
+        reply 200
+            (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/copy/environments/fleet-cutover/secrets?per_page=30&page=2>; rel=\"next\"" ])
+            firstSecret
+    let transport =
+        FakeTransport [ ok repository; ok (list environment 1); ok environment; ok branches; ok custom
+                        firstPage; ok secondSecret; ok variables; ok repository ]
+    match MigrationEnvironmentSettingsRead.read options transport with
+    | Error failure -> failwithf "terminal secret pagination refused: %A" failure
+    | Ok observed ->
+        let item = Assert.Single(observed.Environments)
+        Assert.Equal(2, item.SecretPages.Length)
+        Assert.Equal(2, item.Secrets.Length)
+        Assert.Equal(Some "https://api.github.test/repos/FS-GG/copy/environments/fleet-cutover/secrets?per_page=30&page=2",
+                     item.SecretPages.Head.EnvironmentNextUri)
+        Assert.True(item.SecretPages.[1].EnvironmentNextUri.IsNone)
+        Assert.Equal(9, transport.Requests.Length)
+
+[<Fact>]
+let ``environment source refuses duplicate secrets and malformed variables`` () =
+    let duplicateSecrets =
+        """{"total_count":2,"secrets":[
+              {"name":"DEPLOY_TOKEN","created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"},
+              {"name":"deploy_token","created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"}]}"""
+    let duplicate =
+        FakeTransport [ ok repository; ok (list environment 1); ok environment; ok branches; ok custom
+                        ok duplicateSecrets ]
+    match MigrationEnvironmentSettingsRead.read options duplicate with
+    | Error(MigrationReadFailure.DuplicateIdentity _) -> ()
+    | result -> failwithf "duplicate secret accepted: %A" result
+
+    let malformedVariables =
+        """{"total_count":1,"variables":[{"name":"REGION","value":7,
+              "created_at":"2026-09-25T00:00:00Z","updated_at":"2026-09-25T01:00:00Z"}]}"""
+    let malformed =
+        FakeTransport [ ok repository; ok (list environment 1); ok environment; ok branches; ok custom
+                        ok secrets; ok malformedVariables ]
+    match MigrationEnvironmentSettingsRead.read options malformed with
+    | Error(MigrationReadFailure.MalformedResponse "invalid:variable") -> ()
+    | result -> failwithf "malformed variable accepted: %A" result
 
 [<Fact>]
 let ``environment source refuses changed duplicate and foreign identities`` () =
@@ -166,7 +228,7 @@ let ``environment source refuses custom-rule count and terminal repository drift
     | result -> failwithf "partial custom rule inventory accepted: %A" result
     let changedRepo = repository.Replace("2026-09-25T01:00:00Z", "2026-09-25T01:01:00Z")
     let drift = FakeTransport [ ok repository; ok (list environment 1); ok environment
-                                ok branches; ok custom; ok changedRepo ]
+                                ok branches; ok custom; ok secrets; ok variables; ok changedRepo ]
     Assert.Equal(Error MigrationReadFailure.IdentityDrift,
                  MigrationEnvironmentSettingsRead.read options drift)
 
@@ -185,7 +247,7 @@ let ``environment source refuses unexpected custom-rule continuation`` () =
 
 [<Fact>]
 let ``environment source refuses null successful response without later requests`` () =
-    for prefixLength in 0 .. 5 do
+    for prefixLength in 0 .. 7 do
         let transport =
             FakeTransport((success |> List.take prefixLength) @ [ reply 200 Map.empty null ])
         Assert.Equal(Error(MigrationReadFailure.MalformedResponse "missing:response-body"),
@@ -214,11 +276,12 @@ let ``environment settings require two complete raw stable passes`` () =
         Assert.Equal(captured.EnvironmentSettingsFirst, captured.EnvironmentSettingsSecond)
         Assert.Equal(64, captured.EnvironmentSettingsFingerprint.Length)
         Assert.False(captured.EnvironmentSurfaceComplete)
-        Assert.Equal(12, transport.Requests.Length)
+        Assert.Equal(16, transport.Requests.Length)
 
     let rawDrift = repository.Replace("}", ",\"extra\":true}")
     let changedSecond =
-        [ ok rawDrift; ok (list environment 1); ok environment; ok branches; ok custom; ok rawDrift ]
+        [ ok rawDrift; ok (list environment 1); ok environment; ok branches; ok custom
+          ok secrets; ok variables; ok rawDrift ]
     Assert.Equal(Error MigrationReadFailure.PopulationDrift,
                  MigrationEnvironmentSettingsRead.captureTwoPass options
                      (FakeTransport(success @ changedSecond)))

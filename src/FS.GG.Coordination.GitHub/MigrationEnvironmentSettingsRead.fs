@@ -23,6 +23,14 @@ type MigrationEnvironmentCustomRule =
     { RuleId: int64; RuleNodeId: string; Enabled: bool; AppId: int64
       AppNodeId: string; AppSlug: string; PayloadJson: string; PayloadSha256: string }
 
+type MigrationEnvironmentSecret =
+    { Name: string; CreatedAt: DateTimeOffset; UpdatedAt: DateTimeOffset
+      PayloadJson: string; PayloadSha256: string }
+
+type MigrationEnvironmentVariable =
+    { Name: string; ValueSha256: string; CreatedAt: DateTimeOffset; UpdatedAt: DateTimeOffset
+      PayloadJson: string; PayloadSha256: string }
+
 type MigrationEnvironmentPageEvidence =
     { EnvironmentRequestedUri: string; EnvironmentPayloadJson: string
       EnvironmentPayloadSha256: string; EnvironmentNextUri: string option }
@@ -35,6 +43,8 @@ type MigrationEnvironmentObservation =
       BranchPolicies: MigrationEnvironmentBranchPolicy list
       CustomRulesUri: string; CustomRulesPayloadJson: string; CustomRulesPayloadSha256: string
       CustomRules: MigrationEnvironmentCustomRule list
+      SecretPages: MigrationEnvironmentPageEvidence list; Secrets: MigrationEnvironmentSecret list
+      VariablePages: MigrationEnvironmentPageEvidence list; Variables: MigrationEnvironmentVariable list
       ListPayloadJson: string; ListPayloadSha256: string
       DetailUri: string; DetailPayloadJson: string; DetailPayloadSha256: string }
 
@@ -241,7 +251,7 @@ module MigrationEnvironmentSettingsRead =
         | _, _, _, _, Error error, _, _ | _, _, _, _, _, Error error, _
         | _, _, _, _, _, _, Error error -> Error error
 
-    let private pageNumber (baseUri: Uri) expectedPage (candidate: Uri) =
+    let private pageNumber (baseUri: Uri) perPage expectedPage (candidate: Uri) =
         if candidate.Scheme <> baseUri.Scheme || candidate.Authority <> baseUri.Authority
            || candidate.AbsolutePath <> baseUri.AbsolutePath || not (String.IsNullOrEmpty candidate.Fragment) then
             Error(MigrationReadFailure.PaginationRefused "escaped-next-uri")
@@ -253,7 +263,7 @@ module MigrationEnvironmentSettingsRead =
                 Error(MigrationReadFailure.PaginationRefused "invalid-next-query")
             else
                 let parsed = values |> Array.map (fun part -> part.[0], part.[1]) |> Map.ofArray
-                if Map.tryFind "per_page" parsed = Some "100"
+                if Map.tryFind "per_page" parsed = Some perPage
                    && Map.tryFind "page" parsed = Some(string expectedPage) then Ok()
                 else Error(MigrationReadFailure.PaginationRefused "invalid-next-page")
 
@@ -291,7 +301,7 @@ module MigrationEnvironmentSettingsRead =
         | _ -> Error(MigrationReadFailure.PaginationRefused "duplicate-link-header")
 
     let private readPages (options: MigrationGitHubReadOptions) transport (initialUri: Uri)
-                          (itemName: string) parseItem =
+                          perPage (itemName: string) parseItem =
         let rec loop pageNumberValue (currentUri: Uri) seen pages values expectedTotal =
             if pageNumberValue > 1000 || Set.contains currentUri.AbsoluteUri seen then
                 Error(MigrationReadFailure.PaginationRefused "repeated-or-excessive-page")
@@ -316,7 +326,7 @@ module MigrationEnvironmentSettingsRead =
                                     else
                                         match next with
                                         | Some uri ->
-                                            pageNumber initialUri (pageNumberValue + 1) uri
+                                            pageNumber initialUri perPage (pageNumberValue + 1) uri
                                             |> Result.bind (fun () ->
                                                 if List.isEmpty entries then
                                                     Error(MigrationReadFailure.PaginationRefused "empty-nonterminal-page")
@@ -350,6 +360,30 @@ module MigrationEnvironmentSettingsRead =
         | Error error, _, _, _ | _, Error error, _, _
         | _, _, Error error, _ | _, _, _, Error error -> Error error
 
+    let private secret (_: string) (value: JsonElement) =
+        match str "name" value, timestamp "created_at" value, timestamp "updated_at" value with
+        | Ok name, Ok created, Ok updated when updated >= created ->
+            let payload = value.GetRawText()
+            Ok { Name=name; CreatedAt=created; UpdatedAt=updated
+                 PayloadJson=payload; PayloadSha256=sha payload }
+        | Ok _, Ok _, Ok _ -> fail "invalid:secret-timestamps"
+        | Error error, _, _ | _, Error error, _ | _, _, Error error -> Error error
+
+    let private variable (_: string) (value: JsonElement) =
+        match str "name" value, prop "value" value,
+              timestamp "created_at" value, timestamp "updated_at" value with
+        | Ok name, Ok variableValue, Ok created, Ok updated when
+            variableValue.ValueKind = JsonValueKind.String && updated >= created ->
+            let text = variableValue.GetString()
+            if isNull text then fail "invalid:value"
+            else
+                let payload = value.GetRawText()
+                Ok { Name=name; ValueSha256=sha text; CreatedAt=created; UpdatedAt=updated
+                     PayloadJson=payload; PayloadSha256=sha payload }
+        | Ok _, Ok _, Ok _, Ok _ -> fail "invalid:variable"
+        | Error error, _, _, _ | _, Error error, _, _
+        | _, _, Error error, _ | _, _, _, Error error -> Error error
+
     let private readCustom (options: MigrationGitHubReadOptions) transport uri =
         get options transport uri |> Result.bind (fun response ->
             if response.Headers |> Map.exists (fun name _ -> name.Equals("link", StringComparison.OrdinalIgnoreCase)) then
@@ -371,7 +405,7 @@ module MigrationEnvironmentSettingsRead =
             let repoUri = Uri(options.ApiBase, repoPath)
             let listUri = Uri(options.ApiBase, $"{repoPath}/environments?per_page=100&page=1")
             repoIdentity options transport repoUri |> Result.bind (fun (repoId, repoNode, fullName, revision, identityBody) ->
-                readPages options transport listUri "environments" (fun _ item ->
+                readPages options transport listUri "100" "environments" (fun _ item ->
                     environment options item |> Result.map (fun parsed -> parsed, item.GetRawText()))
                 |> Result.bind (fun (pages, summaries, total) ->
                     summaries |> List.map (fun ((id, node, name, updated, protectedBranches, custom, rules), payload) ->
@@ -399,7 +433,7 @@ module MigrationEnvironmentSettingsRead =
                                                     Uri(options.ApiBase, $"{repoPath}/environments/{escaped}/deployment-branch-policies?per_page=100&page=1")
                                                 let branchRead =
                                                     if custom then
-                                                        readPages options transport branchUri "branch_policies" branchPolicy
+                                                        readPages options transport branchUri "100" "branch_policies" branchPolicy
                                                         |> Result.bind (fun (branchPages, policies, _) ->
                                                             policies
                                                             |> unique (fun item -> string item.PolicyId)
@@ -411,16 +445,32 @@ module MigrationEnvironmentSettingsRead =
                                                     let customUri =
                                                         Uri(options.ApiBase, $"{repoPath}/environments/{escaped}/deployment_protection_rules")
                                                     readCustom options transport customUri |> Result.bind (fun (customBody, customRules) ->
-                                                        let observed =
-                                                            { EnvironmentId=id; EnvironmentNodeId=node; Name=name; UpdatedAt=updated
-                                                              ProtectedBranches=protectedBranches; CustomBranchPolicies=custom
-                                                              ProtectionRules=rules; BranchPolicyPages=branchPages
-                                                              BranchPolicies=branchPolicies; CustomRulesUri=customUri.AbsoluteUri
-                                                              CustomRulesPayloadJson=customBody; CustomRulesPayloadSha256=sha customBody
-                                                              CustomRules=customRules; ListPayloadJson=payload; ListPayloadSha256=sha payload
-                                                              DetailUri=detailUri.AbsoluteUri; DetailPayloadJson=detailResponse.Body
-                                                              DetailPayloadSha256=sha detailResponse.Body }
-                                                        details tail (observed :: accumulated))))))
+                                                        let secretUri =
+                                                            Uri(options.ApiBase, $"{repoPath}/environments/{escaped}/secrets?per_page=30&page=1")
+                                                        readPages options transport secretUri "30" "secrets" secret
+                                                        |> Result.bind (fun (secretPages, secrets, _) ->
+                                                            secrets
+                                                            |> unique (fun item -> item.Name.ToUpperInvariant())
+                                                            |> Result.bind (fun secrets ->
+                                                                let variableUri =
+                                                                    Uri(options.ApiBase, $"{repoPath}/environments/{escaped}/variables?per_page=30&page=1")
+                                                                readPages options transport variableUri "30" "variables" variable
+                                                                |> Result.bind (fun (variablePages, variables, _) ->
+                                                                    variables
+                                                                    |> unique (fun item -> item.Name.ToUpperInvariant())
+                                                                    |> Result.bind (fun variables ->
+                                                                        let observed =
+                                                                            { EnvironmentId=id; EnvironmentNodeId=node; Name=name; UpdatedAt=updated
+                                                                              ProtectedBranches=protectedBranches; CustomBranchPolicies=custom
+                                                                              ProtectionRules=rules; BranchPolicyPages=branchPages
+                                                                              BranchPolicies=branchPolicies; CustomRulesUri=customUri.AbsoluteUri
+                                                                              CustomRulesPayloadJson=customBody; CustomRulesPayloadSha256=sha customBody
+                                                                              CustomRules=customRules; SecretPages=secretPages; Secrets=secrets
+                                                                              VariablePages=variablePages; Variables=variables
+                                                                              ListPayloadJson=payload; ListPayloadSha256=sha payload
+                                                                              DetailUri=detailUri.AbsoluteUri; DetailPayloadJson=detailResponse.Body
+                                                                              DetailPayloadSha256=sha detailResponse.Body }
+                                                                        details tail (observed :: accumulated))))))))))
                         details summaries [] |> Result.bind (fun observed ->
                             repoIdentity options transport repoUri |> Result.bind (fun (lastId, lastNode, lastName, lastRevision, terminalBody) ->
                                 if (lastId, lastNode, lastName, lastRevision) <> (repoId, repoNode, fullName, revision) then
@@ -468,7 +518,20 @@ module MigrationEnvironmentSettingsRead =
               for policy in environment.BranchPolicies do
                   yield policy.PayloadSha256
               for rule in environment.CustomRules do
-                  yield rule.PayloadSha256 ]
+                  yield rule.PayloadSha256
+              for page in environment.SecretPages do
+                  yield page.EnvironmentRequestedUri
+                  yield page.EnvironmentPayloadSha256
+                  yield page.EnvironmentNextUri |> Option.defaultValue "-"
+              for secret in environment.Secrets do
+                  yield secret.PayloadSha256
+              for page in environment.VariablePages do
+                  yield page.EnvironmentRequestedUri
+                  yield page.EnvironmentPayloadSha256
+                  yield page.EnvironmentNextUri |> Option.defaultValue "-"
+              for variable in environment.Variables do
+                  yield variable.PayloadSha256
+                  yield variable.ValueSha256 ]
         |> String.concat "\n"
         |> sha
 

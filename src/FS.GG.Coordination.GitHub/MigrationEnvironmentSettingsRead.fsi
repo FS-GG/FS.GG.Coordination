@@ -37,6 +37,23 @@ type MigrationEnvironmentCustomRule =
       PayloadJson: string
       PayloadSha256: string }
 
+/// Secret metadata only. Provider APIs never expose secret values.
+type MigrationEnvironmentSecret =
+    { Name: string
+      CreatedAt: DateTimeOffset
+      UpdatedAt: DateTimeOffset
+      PayloadJson: string
+      PayloadSha256: string }
+
+/// Environment variable identity and value digest. Raw provider evidence is retained for two-pass comparison.
+type MigrationEnvironmentVariable =
+    { Name: string
+      ValueSha256: string
+      CreatedAt: DateTimeOffset
+      UpdatedAt: DateTimeOffset
+      PayloadJson: string
+      PayloadSha256: string }
+
 type MigrationEnvironmentPageEvidence =
     { EnvironmentRequestedUri: string
       EnvironmentPayloadJson: string
@@ -57,6 +74,10 @@ type MigrationEnvironmentObservation =
       CustomRulesPayloadJson: string
       CustomRulesPayloadSha256: string
       CustomRules: MigrationEnvironmentCustomRule list
+      SecretPages: MigrationEnvironmentPageEvidence list
+      Secrets: MigrationEnvironmentSecret list
+      VariablePages: MigrationEnvironmentPageEvidence list
+      Variables: MigrationEnvironmentVariable list
       ListPayloadJson: string
       ListPayloadSha256: string
       DetailUri: string
