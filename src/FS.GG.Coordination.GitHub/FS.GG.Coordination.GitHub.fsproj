@@ -73,6 +73,8 @@
     <Compile Include="MigrationProjectStatusStepRuntime.fs" />
     <Compile Include="MigrationReceiverRosterRead.fsi" />
     <Compile Include="MigrationReceiverRosterRead.fs" />
+    <Compile Include="MigrationReceiverInstallationRead.fsi" />
+    <Compile Include="MigrationReceiverInstallationRead.fs" />
     <Compile Include="MigrationImmutableReleasesRead.fsi" />
     <Compile Include="MigrationImmutableReleasesRead.fs" />
     <Compile Include="MigrationEnvironmentCensusRead.fsi" />
