@@ -50,6 +50,18 @@ let private stamp = DateTimeOffset.Parse "2026-09-24T10:00:00Z"
 let private operation = "0123456789abcdef0123456789abcdef"
 
 let private native markerBody =
+    let issueRaw =
+        JsonSerializer.Serialize(
+            {|
+                number = 7
+                id = 107L
+                node_id = "I_7"
+                state = "open"
+                updated_at = "2026-09-24T10:00:00Z"
+                body = "ordinary issue body"
+            |}
+        )
+
     let commentRaw =
         JsonSerializer.Serialize(
             {|
@@ -79,8 +91,8 @@ let private native markerBody =
                                 NodeId = "I_7"
                                 State = "open"
                                 UpdatedAt = stamp
-                                PayloadJson = "{}"
-                                PayloadSha256 = shaText "{}"
+                                PayloadJson = issueRaw
+                                PayloadSha256 = shaText issueRaw
                             }
                         ]
                     PullRequestCount = 0
@@ -148,6 +160,41 @@ let private native markerBody =
             PullRequestTimelines = []
             PullRequestReviews = []
             PullRequestInlineComments = []
+        }
+
+    let snapshot =
+        MigrationNativeActivity.reconcile options input
+        |> Result.defaultWith (failwithf "%A")
+
+    { Input = input; Snapshot = snapshot }
+
+let private withIssueBody body (capture: MigrationNativeActivityCapture) =
+    let issue = capture.Input.Issues.Issues.Head
+
+    let raw =
+        JsonSerializer.Serialize(
+            {|
+                number = issue.Number
+                id = issue.DatabaseId
+                node_id = issue.NodeId
+                state = issue.State
+                updated_at = "2026-09-24T10:00:00Z"
+                body = body
+            |}
+        )
+
+    let changedIssue =
+        { issue with
+            PayloadJson = raw
+            PayloadSha256 = shaText raw
+        }
+
+    let input =
+        { capture.Input with
+            Issues =
+                { capture.Input.Issues with
+                    Issues = [ changedIssue ]
+                }
         }
 
     let snapshot =
@@ -315,7 +362,13 @@ let private inventory () =
     let rows =
         MigrationClaimEventCaptureContract.requiredLegacySchemaFamilies
         |> List.map (fun family ->
-            let bytes = Encoding.UTF8.GetBytes("protected source for " + family)
+            let source =
+                if family = "intake-marker" then
+                    "let marker draft = $\"<!-- fsgg:intake:v1 id={draft.Id} digest={digest draft} -->\""
+                else
+                    "protected source for " + family
+
+            let bytes = Encoding.UTF8.GetBytes source
             let oid = gitSha "blob" bytes
 
             let raw =
@@ -379,6 +432,62 @@ let private inventory () =
         Fingerprint = MigrationClaimEventCaptureContract.legacyInventoryFingerprint partial
     }
 
+let private inventoryWithoutIntakeProducerBytes () =
+    let current = inventory ()
+    let source = current.Sources |> List.find (_.SchemaFamily >> (=) "intake-marker")
+
+    let read =
+        current.ProducerReads
+        |> List.find (fun value -> source.SourceIdentity.StartsWith(value.Request.Uri, StringComparison.Ordinal))
+
+    let bytes = Encoding.UTF8.GetBytes "intake parser without a protected marker writer"
+    let oid = gitSha "blob" bytes
+
+    let raw =
+        JsonSerializer.Serialize
+            {|
+                sha = oid
+                encoding = "base64"
+                content = Convert.ToBase64String bytes
+            |}
+
+    let changedRead =
+        { read with
+            RawBody = raw
+            RawSha256 = shaText raw
+        }
+
+    let changedSource =
+        { source with
+            SourceIdentity =
+                read.Request.Uri
+                + "#sha256:"
+                + (bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant())
+        }
+
+    let partial =
+        { current with
+            ProducerReads =
+                current.ProducerReads
+                |> List.map (fun value ->
+                    if value.Request.Uri = read.Request.Uri then
+                        changedRead
+                    else
+                        value)
+            Sources =
+                current.Sources
+                |> List.map (fun value ->
+                    if value.SchemaFamily = "intake-marker" then
+                        changedSource
+                    else
+                        value)
+            Fingerprint = ""
+        }
+
+    { partial with
+        Fingerprint = MigrationClaimEventCaptureContract.legacyInventoryFingerprint partial
+    }
+
 [<Fact>]
 let ``partial binder joins native claim session to protected journal and retains producer gaps`` () =
     let marker =
@@ -392,6 +501,7 @@ let ``partial binder joins native claim session to protected journal and retains
 
     let observed = Assert.Single capture.ClaimMarkers
     Assert.Equal(Some operation, observed.SessionOperationId)
+    Assert.Empty capture.IntakeMarkers
 
     Assert.Contains(
         "legacy-inventory-producer-unavailable:delivery-receipt,intake-receipt,legacy-done-receipt",
@@ -488,4 +598,67 @@ let ``second native pass drift refuses before correspondence`` () =
     Assert.Equal(
         Error "claim-event-native-pass-drift",
         MigrationClaimEventInspectBinder.bindPartial options first second (journals ()) (inventory ())
+    )
+
+[<Fact>]
+let ``protected intake marker is parsed from exact issue census bytes`` () =
+    let claim =
+        $"<!-- fsgg:claim worker=worker-a lease=30 renewed=1 session={operation} -->"
+
+    let draftDigest = String.replicate 64 "a"
+
+    let activity =
+        native claim
+        |> withIssueBody $"<!-- fsgg:intake:v1 id=intake-42 digest={draftDigest} -->\n\n## Observed behavior\nvalue"
+
+    let capture =
+        MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
+        |> Result.defaultWith failwith
+
+    let marker = Assert.Single capture.IntakeMarkers
+    Assert.Equal(7, marker.IssueNumber)
+    Assert.Equal("I_7", marker.IssueNodeId)
+    Assert.Equal("intake-42", marker.DraftId)
+    Assert.Equal(draftDigest, marker.DraftDigest)
+
+    Assert.Equal(
+        Error "claim-event-partial-fingerprint",
+        MigrationClaimEventInspectBinder.qualifyCanonical { capture with IntakeMarkers = [] }
+    )
+
+[<Fact>]
+let ``quoted and malformed intake marker lookalikes refuse`` () =
+    let claim =
+        $"<!-- fsgg:claim worker=worker-a lease=30 renewed=1 session={operation} -->"
+
+    for body in
+        [
+            "prose\n<!-- fsgg:intake:v1 id=intake-42 digest="
+            + String.replicate 64 "a"
+            + " -->"
+            "<!-- fsgg:intake:v1 id=intake/42 digest=" + String.replicate 64 "a" + " -->"
+            "<!-- fsgg:intake:v1 id=intake-42 digest=" + String.replicate 64 "A" + " -->"
+        ] do
+        let activity = native claim |> withIssueBody body
+
+        Assert.Equal(
+            Error "claim-event-unknown-intake-marker",
+            MigrationClaimEventInspectBinder.bindPartial options activity activity (journals ()) (inventory ())
+        )
+
+[<Fact>]
+let ``caller producer label cannot replace protected intake marker bytes`` () =
+    let claim =
+        $"<!-- fsgg:claim worker=worker-a lease=30 renewed=1 session={operation} -->"
+
+    let activity = native claim
+
+    Assert.Equal(
+        Error "claim-event-intake-producer-unavailable",
+        MigrationClaimEventInspectBinder.bindPartial
+            options
+            activity
+            activity
+            (journals ())
+            (inventoryWithoutIntakeProducerBytes ())
     )
