@@ -1,9 +1,22 @@
 module FS.GG.Coordination.MigrationReceiverCopyBlobCaptureTests
 
 open System
+open System.Diagnostics
 open System.IO
 open Xunit
 open FS.GG.Coordination.Cli
+
+type LocalReceiverSampleFactAttribute() as this =
+    inherit FactAttribute()
+    do
+        if Environment.GetEnvironmentVariable("FSGG_CAPTURE_RECEIVER_BLOB_SAMPLE") <> "1" then
+            this.Skip <- "requires FSGG_CAPTURE_RECEIVER_BLOB_SAMPLE=1 and all seven pinned sibling repositories"
+
+type FullLocalReceiverFactAttribute() as this =
+    inherit FactAttribute()
+    do
+        if Environment.GetEnvironmentVariable("FSGG_CAPTURE_ALL_RECEIVER_BLOBS") <> "1" then
+            this.Skip <- "requires FSGG_CAPTURE_ALL_RECEIVER_BLOBS=1 and all seven pinned sibling repositories"
 
 let private repositoryRoot = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "../../../../.."))
 let private projectsRoot = Directory.GetParent(repositoryRoot).FullName
@@ -28,6 +41,17 @@ let private locations =
       "templates", "FS.GG.Templates"; "game", "FS.GG.Game"; "audio", "FS.GG.Audio"; "net", "FS.GG.Net" ]
     |> List.map (fun (id, directory) -> id, Path.Combine(projectsRoot, directory)) |> Map.ofList
 let private rootFor (run: MigrationSandboxSeedRequest) = Path.Combine(Path.GetTempPath(), $"gs2-09-7-receiver-blobs-{run.RunNonce}")
+let private runGit arguments =
+    let start = ProcessStartInfo("/usr/bin/git")
+    arguments |> List.iter start.ArgumentList.Add
+    start.RedirectStandardError <- true
+    start.UseShellExecute <- false
+    use child = Process.Start start
+    let diagnostics = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, diagnostics)
+let private requireLocalReceiverRepositories () =
+    Assert.All(locations.Values, fun path -> Assert.True(Directory.Exists path, $"missing pinned receiver repository: {path}"))
 
 [<Fact>]
 let ``accepted copy plan produces exact deterministic bounded blob batches`` () =
@@ -50,10 +74,20 @@ let ``accepted copy plan produces exact deterministic bounded blob batches`` () 
 let ``local source refuses a census locator swapped to another accepted repository`` () =
     let run = makeRun 36086215836L
     let copyPlan = plan run
-    let swapped = locations |> Map.add "sdd" locations["rendering"] |> Map.add "rendering" locations["sdd"]
-    match MigrationReceiverCopyBlobCapture.createLocalGitSource evidence run copyPlan swapped with
-    | Error error -> Assert.Contains("repository-identity", error)
-    | Ok source -> source.Dispose(); Assert.Fail("expected swapped repository refusal")
+    let root = Path.Combine(Path.GetTempPath(), $"gs2-09-7-receiver-identity-{Guid.NewGuid():N}")
+    try
+        Directory.CreateDirectory root |> ignore
+        runGit [ "-C"; root; "init"; "--quiet" ]
+        runGit [ "-C"; root; "remote"; "add"; "origin"; "https://github.com/FS-GG/not-the-accepted-receiver.git" ]
+        let hermeticLocations =
+            copyPlan.ReceiverCopyMappings
+            |> List.map (fun mapping -> mapping.ReceiverCopyId, root)
+            |> Map.ofList
+        match MigrationReceiverCopyBlobCapture.createLocalGitSource evidence run copyPlan hermeticLocations with
+        | Error error -> Assert.Contains("repository-identity", error)
+        | Ok source -> source.Dispose(); Assert.Fail("expected swapped repository refusal")
+    finally
+        if Directory.Exists root then Directory.Delete(root, true)
 
 [<Fact>]
 let ``high volume Git diagnostics are continuously drained into a bounded projection`` () =
@@ -92,7 +126,10 @@ let ``precreated nonprivate capture root is refused without changing its mode`` 
     Directory.CreateDirectory root |> ignore
     File.SetUnixFileMode(root, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead)
     try
-        use source = MigrationReceiverCopyBlobCapture.createLocalGitSource evidence run copyPlan locations |> unwrap
+        use source =
+            { new IMigrationReceiverCopyLocalGitObjectSource with
+                member _.ReadBlob _ = Error "unexpected-read"
+                member _.Dispose() = () }
         let batch = MigrationReceiverCopyBlobCapture.planBatches evidence run copyPlan |> unwrap |> List.head
         match MigrationReceiverCopyBlobCapture.captureBatch evidence run copyPlan source root batch with
         | Error error -> Assert.Contains("directory-ownership", error)
@@ -100,8 +137,9 @@ let ``precreated nonprivate capture root is refused without changing its mode`` 
         Assert.True(File.GetUnixFileMode(root).HasFlag UnixFileMode.GroupRead)
     finally Directory.Delete(root, true)
 
-[<Fact>]
+[<LocalReceiverSampleFact>]
 let ``local pinned source captures resumes verifies and rejects retained byte tampering`` () =
+    requireLocalReceiverRepositories ()
     let run = makeRun 36086215836L
     let copyPlan = plan run
     let root = rootFor run
@@ -124,25 +162,25 @@ let ``local pinned source captures resumes verifies and rejects retained byte ta
     finally
         if Directory.Exists root then Directory.Delete(root, true)
 
-[<Fact>]
+[<FullLocalReceiverFact>]
 let ``full local corpus capture is available as an explicit qualification`` () =
-    if Environment.GetEnvironmentVariable("FSGG_CAPTURE_ALL_RECEIVER_BLOBS") = "1" then
-        let run = makeRun 36086215835L
-        let copyPlan = plan run
-        let root = rootFor run
-        use source = MigrationReceiverCopyBlobCapture.createLocalGitSource evidence run copyPlan locations |> unwrap
-        let batches = MigrationReceiverCopyBlobCapture.planBatches evidence run copyPlan |> unwrap
-        let artifacts = batches |> List.map (MigrationReceiverCopyBlobCapture.captureBatch evidence run copyPlan source root >> unwrap)
-        let coverage = MigrationReceiverCopyBlobCapture.verifyCoverage evidence run copyPlan batches artifacts |> unwrap
-        Assert.Equal(8999, coverage.ReceiverCopyBlobCoverageSha256BySha1.Count)
-        Assert.Equal(batches.Length, coverage.ReceiverCopyBlobCoverageBatchFingerprints.Length)
-        let first, rest = artifacts.Head, artifacts.Tail
-        let omitted =
-            { first with
-                ReceiverCopyBlobSha256BySha1 = first.ReceiverCopyBlobSha256BySha1 |> Map.remove batches.Head.ReceiverCopyBlobSha1s.Head }
-        Assert.True(MigrationReceiverCopyBlobCapture.verifyCoverage evidence run copyPlan batches (omitted :: rest) |> Result.isError)
-        let retainedKey = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.keys |> Seq.head
-        let retainedOmitted =
-            { copyPlan with
-                ReceiverCopyRetainedBlobSha256BySha1 = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.remove retainedKey }
-        Assert.True(MigrationReceiverCopyBlobCapture.verifyCoverage evidence run retainedOmitted batches artifacts |> Result.isError)
+    requireLocalReceiverRepositories ()
+    let run = makeRun 36086215835L
+    let copyPlan = plan run
+    let root = rootFor run
+    use source = MigrationReceiverCopyBlobCapture.createLocalGitSource evidence run copyPlan locations |> unwrap
+    let batches = MigrationReceiverCopyBlobCapture.planBatches evidence run copyPlan |> unwrap
+    let artifacts = batches |> List.map (MigrationReceiverCopyBlobCapture.captureBatch evidence run copyPlan source root >> unwrap)
+    let coverage = MigrationReceiverCopyBlobCapture.verifyCoverage evidence run copyPlan batches artifacts |> unwrap
+    Assert.Equal(8999, coverage.ReceiverCopyBlobCoverageSha256BySha1.Count)
+    Assert.Equal(batches.Length, coverage.ReceiverCopyBlobCoverageBatchFingerprints.Length)
+    let first, rest = artifacts.Head, artifacts.Tail
+    let omitted =
+        { first with
+            ReceiverCopyBlobSha256BySha1 = first.ReceiverCopyBlobSha256BySha1 |> Map.remove batches.Head.ReceiverCopyBlobSha1s.Head }
+    Assert.True(MigrationReceiverCopyBlobCapture.verifyCoverage evidence run copyPlan batches (omitted :: rest) |> Result.isError)
+    let retainedKey = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.keys |> Seq.head
+    let retainedOmitted =
+        { copyPlan with
+            ReceiverCopyRetainedBlobSha256BySha1 = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.remove retainedKey }
+    Assert.True(MigrationReceiverCopyBlobCapture.verifyCoverage evidence run retainedOmitted batches artifacts |> Result.isError)
