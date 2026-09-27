@@ -1,0 +1,56 @@
+name: callable-isolated-v2-runtime-candidate
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: callable-isolated-v2-runtime-candidate-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-runtime-candidate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    timeout-minutes: 10
+    steps:
+      - name: Check out the exact workflow source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          fetch-depth: 1
+          ref: ${{ github.sha }}
+
+      - name: Prove the exact checked-out source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git diff --exit-code --no-ext-diff
+          git diff --cached --exit-code --no-ext-diff
+
+      - name: Build and verify the source-only runtime candidate
+        shell: bash
+        env:
+          CANDIDATE_OUTPUT: ${{ runner.temp }}/callable-isolated-v2-runtime-candidate
+        run: |
+          set -euo pipefail
+          python3 eng/build_callable_isolated_v2_runtime.py \
+            --output-directory "$CANDIDATE_OUTPUT"
+          python3 eng/verify_callable_isolated_v2_runtime_artifact.py \
+            --archive "$CANDIDATE_OUTPUT/callable-isolated-v2-runtime.pyz" \
+            --manifest "$CANDIDATE_OUTPUT/callable-isolated-v2-runtime-manifest.json"
+
+      - name: Upload the exact runtime candidate pair
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: callable-isolated-v2-runtime-candidate-${{ github.sha }}
+          path: |
+            ${{ runner.temp }}/callable-isolated-v2-runtime-candidate/callable-isolated-v2-runtime.pyz
+            ${{ runner.temp }}/callable-isolated-v2-runtime-candidate/callable-isolated-v2-runtime-manifest.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
