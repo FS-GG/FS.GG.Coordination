@@ -18,7 +18,10 @@ let private revision = "2026-09-28T01:02:03Z"
 
 let private repository canPush =
     let push = if canPush then "true" else "false"
-    $"{{\"id\":41,\"node_id\":\"R_settings\",\"full_name\":\"FS-GG/sandbox\",\"default_branch\":\"main\",\"updated_at\":\"{revision}\",\"fork\":false,\"permissions\":{{\"push\":{push}}}}}"
+    $"{{\"id\":41,\"node_id\":\"R_settings\",\"name\":\"sandbox\",\"full_name\":\"FS-GG/sandbox\",\"owner\":{{\"login\":\"FS-GG\",\"type\":\"Organization\"}},\"default_branch\":\"main\",\"updated_at\":\"{revision}\",\"fork\":false,\"private\":false,\"visibility\":\"public\",\"description\":\"Sandbox repository\",\"homepage\":null,\"topics\":[\"migration\",\"test\"],\"archived\":false,\"disabled\":false,\"has_issues\":true,\"has_projects\":true,\"has_wiki\":false,\"has_pages\":false,\"has_discussions\":true,\"has_downloads\":true,\"has_pull_requests\":true,\"pull_request_creation_policy\":\"all\",\"is_template\":false,\"web_commit_signoff_required\":false,\"allow_squash_merge\":true,\"allow_merge_commit\":true,\"allow_rebase_merge\":true,\"allow_auto_merge\":false,\"allow_update_branch\":true,\"delete_branch_on_merge\":true,\"squash_merge_commit_title\":\"PR_TITLE\",\"squash_merge_commit_message\":\"PR_BODY\",\"merge_commit_title\":\"PR_TITLE\",\"merge_commit_message\":\"PR_BODY\",\"use_squash_pr_title_as_default\":true,\"permissions\":{{\"push\":{push}}}}}"
+
+let private organizationPolicy =
+    "{\"login\":\"FS-GG\",\"updated_at\":\"2026-09-28T00:00:00Z\",\"has_repository_projects\":true,\"members_can_fork_private_repositories\":true,\"web_commit_signoff_required\":false}"
 
 let private tagsFirst =
     "[{\"name\":\"v2\",\"node_id\":\"REF_v2\",\"commit\":{\"sha\":\"2222222222222222222222222222222222222222\"}}]"
@@ -35,6 +38,12 @@ let private releaseTwo =
 let private rate = { Limit=None; Remaining=None; ResetAt=None; Cost=None }
 let private response status headers body =
     Response { StatusCode=status; Headers=headers; Body=body; ETag=None; RateBudget=rate }
+
+let private repositoryPass () =
+    [ response 200 Map.empty (repository true)
+      response 200 Map.empty organizationPolicy ]
+
+let private mergePass () = [ response 200 Map.empty (repository true) ]
 
 let private next suffix =
     Map.ofList
@@ -73,6 +82,123 @@ type private FakeTransport(outcomes: TransportOutcome list) =
             | [] -> failwith "unexpected provider request"
 
 [<Fact>]
+let ``repository reader binds explicit properties and organization provenance`` () =
+    let transport = FakeTransport(repositoryPass())
+    match MigrationRepositorySettingsProviderRead.readRepository options identity revision transport with
+    | Error refusal -> failwithf "repository refused: %A" refusal
+    | Ok captured ->
+        Assert.Equal(identity, captured.SurfaceRead.RepositoryIdentity)
+        Assert.Equal(revision, captured.SurfaceRead.RepositoryRevision)
+        Assert.Equal("public", captured.Visibility)
+        Assert.True(captured.HasProjects)
+        Assert.True(captured.HasDiscussions)
+        Assert.Equal(Some "Sandbox repository", captured.Description)
+        Assert.Equal(None, captured.Homepage)
+        Assert.Equal<string list>([ "migration"; "test" ], captured.Topics)
+        Assert.Equal<string list>(
+            [ "repository-identity"; "organization-repository-policy" ],
+            captured.SurfaceRead.Pages |> List.map _.SettingsStream)
+        Assert.Equal(18, captured.SurfaceRead.Settings.Length)
+        Assert.All(captured.SurfaceRead.Pages, fun page -> Assert.Equal(64, page.SettingsPayloadSha256.Length))
+
+[<Fact>]
+let ``repository reader refuses inherited policy missing fields and revision drift`` () =
+    let inheritedPolicy = organizationPolicy.Replace(
+        "\"has_repository_projects\":true", "\"has_repository_projects\":false")
+    let inherited =
+        FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty inheritedPolicy ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+            "inherited:organization-repository-projects-policy"),
+        MigrationRepositorySettingsProviderRead.readRepository options identity revision inherited)
+
+    let missing = (repository true).Replace(",\"has_discussions\":true", "")
+    let missingField = FakeTransport([ response 200 Map.empty missing ])
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "missing:has_discussions"),
+        MigrationRepositorySettingsProviderRead.readRepository options identity revision missingField)
+
+    let drifted = (repository true).Replace(revision, "2026-09-28T01:02:04Z")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "repository-identity-drift"),
+        MigrationRepositorySettingsProviderRead.readRepository
+            options identity revision (FakeTransport([ response 200 Map.empty drifted ])))
+
+    let privateRepository =
+        (repository true)
+            .Replace("\"private\":false", "\"private\":true")
+            .Replace("\"visibility\":\"public\"", "\"visibility\":\"private\",\"allow_forking\":false")
+    let privateForkingDenied = organizationPolicy.Replace(
+        "\"members_can_fork_private_repositories\":true",
+        "\"members_can_fork_private_repositories\":false")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+            "inherited:organization-private-forking-policy"),
+        MigrationRepositorySettingsProviderRead.readRepository
+            options identity revision
+            (FakeTransport(
+                [ response 200 Map.empty privateRepository
+                  response 200 Map.empty privateForkingDenied ])))
+
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:403"),
+        MigrationRepositorySettingsProviderRead.readRepository
+            options identity revision (FakeTransport([ response 403 Map.empty "{}" ])))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "http:404"),
+        MigrationRepositorySettingsProviderRead.readRepository
+            options identity revision (FakeTransport([ response 404 Map.empty "{}" ])))
+
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "repository-unexpected-continuation"),
+        MigrationRepositorySettingsProviderRead.readRepository
+            options identity revision
+            (FakeTransport(
+                [ response 200
+                    (Map.ofList [ "link", "<https://api.github.test/repos/FS-GG/sandbox?page=2>; rel=\"next\"" ])
+                    (repository true) ])))
+
+[<Fact>]
+let ``merge policy reader binds explicit modes and commit message choices`` () =
+    let transport = FakeTransport(mergePass())
+    match MigrationRepositorySettingsProviderRead.readMergePolicy options identity revision transport with
+    | Error refusal -> failwithf "merge policy refused: %A" refusal
+    | Ok captured ->
+        Assert.True(captured.AllowSquashMerge)
+        Assert.True(captured.AllowMergeCommit)
+        Assert.True(captured.AllowRebaseMerge)
+        Assert.False(captured.AllowAutoMerge)
+        Assert.True(captured.AllowUpdateBranch)
+        Assert.Equal("PR_TITLE", captured.SquashMergeCommitTitle)
+        Assert.Equal("PR_BODY", captured.MergeCommitMessage)
+        Assert.Equal(10, captured.SurfaceRead.Settings.Length)
+        Assert.Single(captured.SurfaceRead.Pages) |> ignore
+
+[<Fact>]
+let ``merge policy reader refuses hidden options permission gaps and unknown choices`` () =
+    let disabledSquash = (repository true).Replace("\"allow_squash_merge\":true", "\"allow_squash_merge\":false")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "disabled-squash-merge-latent-options-unavailable"),
+        MigrationRepositorySettingsProviderRead.readMergePolicy
+            options identity revision (FakeTransport([ response 200 Map.empty disabledSquash ])))
+
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized
+            "merge-settings-contents-write-unproven"),
+        MigrationRepositorySettingsProviderRead.readMergePolicy
+            options identity revision (FakeTransport([ response 200 Map.empty (repository false) ])))
+
+    let unknown = (repository true).Replace(
+        "\"merge_commit_message\":\"PR_BODY\"", "\"merge_commit_message\":\"FUTURE\"")
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "unsupported:merge_commit_message:FUTURE"),
+        MigrationRepositorySettingsProviderRead.readMergePolicy
+            options identity revision (FakeTransport([ response 200 Map.empty unknown ])))
+
+[<Fact>]
 let ``releases and tags reader retains terminal raw streams and draft visibility proof`` () =
     let transport = FakeTransport(successPass())
     match MigrationRepositorySettingsProviderRead.readReleasesAndTags options identity revision transport with
@@ -96,7 +222,8 @@ let ``releases and tags reader retains terminal raw streams and draft visibility
 type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvider) =
     interface IMigrationRepositorySettingsSurfaceProvider with
         member _.Read(actualIdentity, actualRevision, surface) =
-            if surface = ReleasesAndTags || surface = CodeSecurity || surface = DependencyControls then
+            if surface = SettingsSurface.Repository || surface = MergePolicy
+               || surface = ReleasesAndTags || surface = CodeSecurity || surface = DependencyControls then
                 concrete.Read(actualIdentity, actualRevision, surface)
             else
                 let body = $"{{\"surface\":\"{RepositorySettingsAdapter.surfaceId surface}\"}}"
@@ -117,7 +244,7 @@ type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvide
 
 [<Fact>]
 let ``concrete provider pages join the eleven-surface two-pass composer`` () =
-    let pass () = successPass() @ securityPass() @ dependencyPass()
+    let pass () = repositoryPass() @ mergePass() @ successPass() @ securityPass() @ dependencyPass()
     let transport = FakeTransport(pass() @ pass())
     let concrete =
         MigrationRepositorySettingsGitHubProvider(options, transport)
@@ -126,13 +253,23 @@ let ``concrete provider pages join the eleven-surface two-pass composer`` () =
     match MigrationRepositorySettingsRead.captureTwoPass identity revision provider with
     | Error failure -> failwithf "two-pass provider capture refused: %A" failure
     | Ok captured ->
-        Assert.Equal(22, transport.Requests.Length)
+        Assert.Equal(28, transport.Requests.Length)
         Assert.Equal(
             Ok captured,
             MigrationRepositorySettingsRead.validateCapture captured)
         match MigrationRepositorySettingsRead.composeComplete captured with
         | Error failure -> failwithf "complete composition refused: %A" failure
         | Ok observation ->
+            match observation.Surfaces[SettingsSurface.Repository] with
+            | Supported(actualRevision, true, settings) ->
+                Assert.Equal(revision, actualRevision)
+                Assert.Equal(18, settings.Length)
+            | state -> failwithf "unexpected repository surface: %A" state
+            match observation.Surfaces[MergePolicy] with
+            | Supported(actualRevision, true, settings) ->
+                Assert.Equal(revision, actualRevision)
+                Assert.Equal(10, settings.Length)
+            | state -> failwithf "unexpected merge policy surface: %A" state
             match observation.Surfaces[ReleasesAndTags] with
             | Supported(actualRevision, true, settings) ->
                 Assert.Equal(revision, actualRevision)
@@ -309,22 +446,24 @@ let ``dependency controls reader refuses forbidden missing unknown and drifted e
 
 [<Fact>]
 let ``concrete provider leaves every unimplemented or partial surface unavailable`` () =
-    let transport = FakeTransport([])
+    let transport = FakeTransport(repositoryPass())
     let provider = MigrationRepositorySettingsGitHubProvider(options, transport)
     let source = provider :> IMigrationRepositorySettingsSurfaceProvider
     Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported "surface-reader-not-installed:repository"),
-        source.Read(identity, revision, SettingsSurface.Repository))
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported
+            "surface-reader-not-installed:custom-properties"),
+        source.Read(identity, revision, CustomProperties))
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Partial
             "environment-secrets-variables-and-plan-conditions-remain-unbound"),
         source.Read(identity, revision, Environments))
     Assert.Equal(
         Error(MigrationRepositorySettingsReadFailure.ProviderRefused(
-            SettingsSurface.Repository,
-            MigrationRepositorySettingsSurfaceRefusal.Unsupported "surface-reader-not-installed:repository")),
+            CustomProperties,
+            MigrationRepositorySettingsSurfaceRefusal.Unsupported
+                "surface-reader-not-installed:custom-properties")),
         MigrationRepositorySettingsRead.captureTwoPass identity revision source)
-    Assert.Empty transport.Requests
+    Assert.Equal(2, transport.Requests.Length)
 
 [<Fact>]
 let ``release reader refuses missing push proof and forbidden access`` () =

@@ -52,6 +52,42 @@ type MigrationRepositoryDependencyControlsRead =
       DependabotSecurityUpdatesPaused: bool
       DependabotDelegatedAlertDismissal: bool }
 
+/// Explicit repository properties with organization policy provenance checked.
+type MigrationRepositoryPropertiesRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      Visibility: string
+      Archived: bool
+      Disabled: bool
+      HasIssues: bool
+      HasProjects: bool
+      HasWiki: bool
+      HasPages: bool
+      HasDiscussions: bool
+      HasDownloads: bool
+      HasPullRequests: bool
+      PullRequestCreationPolicy: string
+      IsTemplate: bool
+      AllowForking: bool option
+      WebCommitSignoffRequired: bool
+      Description: string option
+      Homepage: string option
+      Topics: string list }
+
+/// Explicit merge modes and commit-message policies from a repository read made
+/// with merge-settings visibility proven by repository push permission.
+type MigrationRepositoryMergePolicyRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      AllowSquashMerge: bool
+      AllowMergeCommit: bool
+      AllowRebaseMerge: bool
+      AllowAutoMerge: bool
+      AllowUpdateBranch: bool
+      DeleteBranchOnMerge: bool
+      SquashMergeCommitTitle: string
+      SquashMergeCommitMessage: string
+      MergeCommitTitle: string
+      MergeCommitMessage: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -82,8 +118,26 @@ module MigrationRepositorySettingsProviderRead =
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryDependencyControlsRead, MigrationRepositorySettingsSurfaceRefusal>
 
-/// Concrete partial provider. ReleasesAndTags, CodeSecurity, and DependencyControls
-/// are implemented. Other incomplete surfaces refuse canonical composition.
+    /// GET-only read of explicit repository properties. Organization-level policy
+    /// that masks repository projects, private forking, or signoff is refused.
+    val readRepository:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryPropertiesRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only read of merge modes and commit-message policies. Disabled merge
+    /// modes with hidden latent options and missing write visibility are refused.
+    val readMergePolicy:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryMergePolicyRead, MigrationRepositorySettingsSurfaceRefusal>
+
+/// Concrete partial provider for the implemented repository settings surfaces.
+/// Other incomplete surfaces refuse canonical composition.
 type MigrationRepositorySettingsGitHubProvider =
     new:
         options:MigrationGitHubReadOptions * transport:IMigrationGitHubReadTransport ->

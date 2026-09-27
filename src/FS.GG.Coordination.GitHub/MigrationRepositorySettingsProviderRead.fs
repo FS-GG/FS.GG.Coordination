@@ -43,6 +43,39 @@ type MigrationRepositoryDependencyControlsRead =
       DependabotSecurityUpdatesPaused: bool
       DependabotDelegatedAlertDismissal: bool }
 
+type MigrationRepositoryPropertiesRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      Visibility: string
+      Archived: bool
+      Disabled: bool
+      HasIssues: bool
+      HasProjects: bool
+      HasWiki: bool
+      HasPages: bool
+      HasDiscussions: bool
+      HasDownloads: bool
+      HasPullRequests: bool
+      PullRequestCreationPolicy: string
+      IsTemplate: bool
+      AllowForking: bool option
+      WebCommitSignoffRequired: bool
+      Description: string option
+      Homepage: string option
+      Topics: string list }
+
+type MigrationRepositoryMergePolicyRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      AllowSquashMerge: bool
+      AllowMergeCommit: bool
+      AllowRebaseMerge: bool
+      AllowAutoMerge: bool
+      AllowUpdateBranch: bool
+      DeleteBranchOnMerge: bool
+      SquashMergeCommitTitle: string
+      SquashMergeCommitMessage: string
+      MergeCommitTitle: string
+      MergeCommitMessage: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -181,25 +214,29 @@ module MigrationRepositorySettingsProviderRead =
         let uri = Uri(options.ApiBase, repoPath options)
         get options transport uri
         |> Result.bind (fun response ->
-            parse response.Body
-            |> Result.bind (fun root ->
-                match positive "id" root, text "node_id" root, text "full_name" root,
-                      text "default_branch" root, text "updated_at" root, sourceNodeId root with
-                | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok updatedAt, Ok source when
-                    id = options.ExpectedRepositoryId
-                    && id = identity.DatabaseId
-                    && nodeId = identity.NodeId
-                    && fullName = $"{identity.Owner}/{identity.Name}"
-                    && fullName = $"{options.Owner}/{options.Repository}"
-                    && defaultBranch = identity.DefaultBranch
-                    && source = identity.SourceRepositoryNodeId
-                    && updatedAt = revision ->
-                    Ok(response, root)
-                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
-                    Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "repository-identity-drift")
-                | Error failure, _, _, _, _, _ | _, Error failure, _, _, _, _
-                | _, _, Error failure, _, _, _ | _, _, _, Error failure, _, _
-                | _, _, _, _, Error failure, _ | _, _, _, _, _, Error failure -> Error failure))
+            if responseHeader "link" response.Headers |> Option.isSome then
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                    "repository-unexpected-continuation")
+            else
+                parse response.Body
+                |> Result.bind (fun root ->
+                    match positive "id" root, text "node_id" root, text "full_name" root,
+                          text "default_branch" root, text "updated_at" root, sourceNodeId root with
+                    | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok updatedAt, Ok source when
+                        id = options.ExpectedRepositoryId
+                        && id = identity.DatabaseId
+                        && nodeId = identity.NodeId
+                        && fullName = $"{identity.Owner}/{identity.Name}"
+                        && fullName = $"{options.Owner}/{options.Repository}"
+                        && defaultBranch = identity.DefaultBranch
+                        && source = identity.SourceRepositoryNodeId
+                        && updatedAt = revision ->
+                        Ok(response, root)
+                    | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "repository-identity-drift")
+                    | Error failure, _, _, _, _, _ | _, Error failure, _, _, _, _
+                    | _, _, Error failure, _, _, _ | _, _, _, Error failure, _, _
+                    | _, _, _, _, Error failure, _ | _, _, _, _, _, Error failure -> Error failure))
 
     let private identityPage (options: MigrationGitHubReadOptions) (response: ResponseEnvelope) =
         { SettingsStream="repository-identity"
@@ -584,6 +621,289 @@ module MigrationRepositorySettingsProviderRead =
                         | Ok status, Ok _ -> refuse $"unsupported:attachment-status:{status}"
                         | Error failure, _ | _, Error failure -> Error failure))
 
+    let private tryProp (name: string) (value: JsonElement) =
+        let mutable found = Unchecked.defaultof<JsonElement>
+        if value.ValueKind = JsonValueKind.Object && value.TryGetProperty(name, &found) then Some found
+        else None
+
+    let private optionalTrimmedText name value =
+        prop name value
+        |> Result.bind (fun item ->
+            match item.ValueKind with
+            | JsonValueKind.Null -> Ok None
+            | JsonValueKind.String when validText (item.GetString()) -> Ok(Some(item.GetString()))
+            | _ -> refuse $"invalid:{name}")
+
+    let private textList name value =
+        prop name value
+        |> Result.bind (fun item ->
+            if item.ValueKind <> JsonValueKind.Array then refuse $"invalid:{name}"
+            else
+                item.EnumerateArray()
+                |> Seq.fold (fun state entry ->
+                    state
+                    |> Result.bind (fun values ->
+                        if entry.ValueKind = JsonValueKind.String && validText (entry.GetString()) then
+                            Ok(entry.GetString() :: values)
+                        else refuse $"invalid:{name}")) (Ok [])
+                |> Result.map List.rev
+                |> Result.bind (unique id $"duplicate:{name}"))
+
+    let private enumText name allowed value =
+        text name value
+        |> Result.bind (fun actual ->
+            if Set.contains actual (Set.ofList allowed) then Ok actual
+            else refuse $"unsupported:{name}:{actual}")
+
+    let private organizationPolicy
+        (options: MigrationGitHubReadOptions)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        let uri = Uri(options.ApiBase, $"orgs/{Uri.EscapeDataString options.Owner}")
+        get options transport uri
+        |> Result.bind (fun response ->
+            if responseHeader "link" response.Headers |> Option.isSome then
+                Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                    "organization-policy-unexpected-continuation")
+            else
+                parse response.Body
+                |> Result.bind (fun root ->
+                    match text "login" root, text "updated_at" root,
+                          flag "has_repository_projects" root,
+                          flag "members_can_fork_private_repositories" root,
+                          flag "web_commit_signoff_required" root with
+                    | Ok login, Ok _, Ok projects, Ok privateForking, Ok signoff when
+                        login = options.Owner ->
+                        Ok(
+                            projects,
+                            privateForking,
+                            signoff,
+                            { SettingsStream="organization-repository-policy"
+                              SettingsRequestedUri=uri.AbsoluteUri
+                              SettingsPayloadJson=response.Body
+                              SettingsPayloadSha256=hashText response.Body
+                              SettingsNextUri=None })
+                    | Ok _, Ok _, Ok _, Ok _, Ok _ -> refuse "organization-identity-drift"
+                    | Error failure, _, _, _, _ | _, Error failure, _, _, _
+                    | _, _, Error failure, _, _ | _, _, _, Error failure, _
+                    | _, _, _, _, Error failure -> Error failure))
+
+    let readRepository
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) then refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            repositoryResponse options identity repositoryRevision transport
+            |> Result.bind (fun (response, root) ->
+                let flags =
+                    [ "private"; "archived"; "disabled"; "has_issues"; "has_projects"
+                      "has_wiki"; "has_pages"; "has_discussions"; "has_downloads"
+                      "has_pull_requests"; "is_template"; "web_commit_signoff_required" ]
+                    |> List.fold (fun state name ->
+                        state
+                        |> Result.bind (fun values ->
+                            flag name root |> Result.map (fun actual -> Map.add name actual values))) (Ok Map.empty)
+                let ownerType = prop "owner" root |> Result.bind (text "type")
+                match enumText "visibility" [ "public"; "private"; "internal" ] root,
+                      enumText "pull_request_creation_policy" [ "all"; "collaborators_only" ] root,
+                      optionalTrimmedText "description" root, optionalTrimmedText "homepage" root,
+                      textList "topics" root, ownerType, flags with
+                | Ok visibility, Ok pullPolicy, Ok description, Ok homepage, Ok topics,
+                  Ok ownerKind, Ok values when ownerKind = "Organization" || ownerKind = "User" ->
+                    let isPrivate = values["private"]
+                    if isPrivate <> (visibility <> "public") then
+                        refuse "contradictory:visibility"
+                    else
+                        let allowForking =
+                            if visibility = "public" then
+                                match tryProp "allow_forking" root with
+                                | None -> Ok None
+                                | Some item ->
+                                    match item.ValueKind with
+                                    | JsonValueKind.True -> Ok(Some true)
+                                    | JsonValueKind.False -> Ok(Some false)
+                                    | _ -> refuse "invalid:allow_forking"
+                            else flag "allow_forking" root |> Result.map Some
+                        allowForking
+                        |> Result.bind (fun allowForking ->
+                            let policy =
+                                if ownerKind = "Organization" then
+                                    organizationPolicy options transport
+                                    |> Result.map (fun (projects, forking, signoff, page) ->
+                                        Some(projects, forking, signoff), [ page ])
+                                else Ok(None, [])
+                            policy
+                            |> Result.bind (fun (organization, organizationPages) ->
+                                match organization with
+                                | Some(false, _, _) ->
+                                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                                        "inherited:organization-repository-projects-policy")
+                                | Some(_, false, _) when visibility <> "public" ->
+                                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                                        "inherited:organization-private-forking-policy")
+                                | Some(_, _, true) ->
+                                    Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
+                                        "inherited:organization-web-commit-signoff-policy")
+                                | _ ->
+                                    let subject = $"repository:{identity.DatabaseId}"
+                                    let setting name value =
+                                        { Surface=SettingsSurface.Repository; Subject=subject
+                                          Name=name; Value=value }
+                                    let coreSettings =
+                                        [ setting "default-branch" (SettingValue.Text identity.DefaultBranch)
+                                          setting "visibility" (SettingValue.Text visibility)
+                                          setting "archived" (SettingValue.Boolean values["archived"])
+                                          setting "disabled" (SettingValue.Boolean values["disabled"])
+                                          setting "has-issues" (SettingValue.Boolean values["has_issues"])
+                                          setting "has-projects" (SettingValue.Boolean values["has_projects"])
+                                          setting "has-wiki" (SettingValue.Boolean values["has_wiki"])
+                                          setting "has-pages" (SettingValue.Boolean values["has_pages"])
+                                          setting "has-discussions" (SettingValue.Boolean values["has_discussions"])
+                                          setting "has-downloads" (SettingValue.Boolean values["has_downloads"])
+                                          setting "has-pull-requests" (SettingValue.Boolean values["has_pull_requests"])
+                                          setting "pull-request-creation-policy" (SettingValue.Text pullPolicy)
+                                          setting "is-template" (SettingValue.Boolean values["is_template"])
+                                          setting "web-commit-signoff-required"
+                                              (SettingValue.Boolean values["web_commit_signoff_required"])
+                                          setting "description-present" (SettingValue.Boolean description.IsSome)
+                                          setting "homepage-present" (SettingValue.Boolean homepage.IsSome)
+                                          setting "topics" (SettingValue.TextList topics) ]
+                                    let optionalSettings =
+                                        [ description
+                                          |> Option.map (SettingValue.Text >> setting "description")
+                                          homepage
+                                          |> Option.map (SettingValue.Text >> setting "homepage")
+                                          allowForking
+                                          |> Option.map (SettingValue.Boolean >> setting "allow-forking") ]
+                                        |> List.choose id
+                                    let settings = coreSettings @ optionalSettings
+                                    Ok
+                                        { SurfaceRead=
+                                            { RepositoryIdentity=identity
+                                              RepositoryRevision=repositoryRevision
+                                              Surface=SettingsSurface.Repository
+                                              Complete=true
+                                              Pages=identityPage options response :: organizationPages
+                                              Settings=settings }
+                                          Visibility=visibility
+                                          Archived=values["archived"]
+                                          Disabled=values["disabled"]
+                                          HasIssues=values["has_issues"]
+                                          HasProjects=values["has_projects"]
+                                          HasWiki=values["has_wiki"]
+                                          HasPages=values["has_pages"]
+                                          HasDiscussions=values["has_discussions"]
+                                          HasDownloads=values["has_downloads"]
+                                          HasPullRequests=values["has_pull_requests"]
+                                          PullRequestCreationPolicy=pullPolicy
+                                          IsTemplate=values["is_template"]
+                                          AllowForking=allowForking
+                                          WebCommitSignoffRequired=values["web_commit_signoff_required"]
+                                          Description=description
+                                          Homepage=homepage
+                                          Topics=topics }))
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok ownerKind, Ok _ ->
+                    refuse $"unsupported:owner-type:{ownerKind}"
+                | Error failure, _, _, _, _, _, _ | _, Error failure, _, _, _, _, _
+                | _, _, Error failure, _, _, _, _ | _, _, _, Error failure, _, _, _
+                | _, _, _, _, Error failure, _, _ | _, _, _, _, _, Error failure, _
+                | _, _, _, _, _, _, Error failure -> Error failure)
+
+    let private optionalDeprecatedSquashTitle value expected =
+        match tryProp "use_squash_pr_title_as_default" value with
+        | None -> Ok()
+        | Some item ->
+            match item.ValueKind with
+            | JsonValueKind.True when expected = "PR_TITLE" -> Ok()
+            | JsonValueKind.False when expected = "COMMIT_OR_PR_TITLE" -> Ok()
+            | JsonValueKind.True | JsonValueKind.False ->
+                refuse "contradictory:use_squash_pr_title_as_default"
+            | _ -> refuse "invalid:use_squash_pr_title_as_default"
+
+    let readMergePolicy
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) then refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            repositoryResponse options identity repositoryRevision transport
+            |> Result.bind (fun (response, root) ->
+                let canViewMergeSettings = prop "permissions" root |> Result.bind (flag "push")
+                match flag "allow_squash_merge" root, flag "allow_merge_commit" root,
+                      flag "allow_rebase_merge" root, flag "allow_auto_merge" root,
+                      flag "allow_update_branch" root, flag "delete_branch_on_merge" root,
+                      enumText "squash_merge_commit_title" [ "PR_TITLE"; "COMMIT_OR_PR_TITLE" ] root,
+                      enumText "squash_merge_commit_message" [ "PR_BODY"; "COMMIT_MESSAGES"; "BLANK" ] root,
+                      enumText "merge_commit_title" [ "PR_TITLE"; "MERGE_MESSAGE" ] root,
+                      enumText "merge_commit_message" [ "PR_TITLE"; "PR_BODY"; "BLANK" ] root,
+                      canViewMergeSettings with
+                | Ok true, Ok true, Ok allowRebase, Ok allowAuto, Ok allowUpdate, Ok deleteBranch,
+                  Ok squashTitle, Ok squashMessage, Ok mergeTitle, Ok mergeMessage, Ok true ->
+                    optionalDeprecatedSquashTitle root squashTitle
+                    |> Result.map (fun () ->
+                        let subject = $"repository:{identity.DatabaseId}"
+                        let setting name value =
+                            { Surface=MergePolicy; Subject=subject; Name=name; Value=value }
+                        let settings =
+                            [ setting "allow-squash-merge" (SettingValue.Boolean true)
+                              setting "allow-merge-commit" (SettingValue.Boolean true)
+                              setting "allow-rebase-merge" (SettingValue.Boolean allowRebase)
+                              setting "allow-auto-merge" (SettingValue.Boolean allowAuto)
+                              setting "allow-update-branch" (SettingValue.Boolean allowUpdate)
+                              setting "delete-branch-on-merge" (SettingValue.Boolean deleteBranch)
+                              setting "squash-merge-commit-title" (SettingValue.Text squashTitle)
+                              setting "squash-merge-commit-message" (SettingValue.Text squashMessage)
+                              setting "merge-commit-title" (SettingValue.Text mergeTitle)
+                              setting "merge-commit-message" (SettingValue.Text mergeMessage) ]
+                        { SurfaceRead=
+                            { RepositoryIdentity=identity
+                              RepositoryRevision=repositoryRevision
+                              Surface=MergePolicy
+                              Complete=true
+                              Pages=[ identityPage options response ]
+                              Settings=settings }
+                          AllowSquashMerge=true
+                          AllowMergeCommit=true
+                          AllowRebaseMerge=allowRebase
+                          AllowAutoMerge=allowAuto
+                          AllowUpdateBranch=allowUpdate
+                          DeleteBranchOnMerge=deleteBranch
+                          SquashMergeCommitTitle=squashTitle
+                          SquashMergeCommitMessage=squashMessage
+                          MergeCommitTitle=mergeTitle
+                          MergeCommitMessage=mergeMessage })
+                | Ok false, _, _, _, _, _, _, _, _, _, _ ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                        "disabled-squash-merge-latent-options-unavailable")
+                | _, Ok false, _, _, _, _, _, _, _, _, _ ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                        "disabled-merge-commit-latent-options-unavailable")
+                | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok _, Ok false ->
+                    Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized
+                        "merge-settings-contents-write-unproven")
+                | Error failure, _, _, _, _, _, _, _, _, _, _
+                | _, Error failure, _, _, _, _, _, _, _, _, _
+                | _, _, Error failure, _, _, _, _, _, _, _, _
+                | _, _, _, Error failure, _, _, _, _, _, _, _
+                | _, _, _, _, Error failure, _, _, _, _, _, _
+                | _, _, _, _, _, Error failure, _, _, _, _, _
+                | _, _, _, _, _, _, Error failure, _, _, _, _
+                | _, _, _, _, _, _, _, Error failure, _, _, _
+                | _, _, _, _, _, _, _, _, Error failure, _, _
+                | _, _, _, _, _, _, _, _, _, Error failure, _
+                | _, _, _, _, _, _, _, _, _, _, Error failure -> Error failure)
+
     let private dependencyOptions value =
         prop "dependency_graph_autosubmit_action_options" value
         |> Result.bind (fun item ->
@@ -818,6 +1138,14 @@ type MigrationRepositorySettingsGitHubProvider
     interface IMigrationRepositorySettingsSurfaceProvider with
         member _.Read(identity, repositoryRevision, surface) =
             match surface with
+            | SettingsSurface.Repository ->
+                MigrationRepositorySettingsProviderRead.readRepository
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | MergePolicy ->
+                MigrationRepositorySettingsProviderRead.readMergePolicy
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
             | ReleasesAndTags ->
                 MigrationRepositorySettingsProviderRead.readReleasesAndTags
                     options identity repositoryRevision transport
