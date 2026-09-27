@@ -30,6 +30,7 @@ class Binding:
     journal_prior_generation: int
     journal_prior_head: str
     operation_id: str
+    canonical_request: bytes
 
     def claims(self) -> dict:
         return {"sourceRevision": self.source_revision,
