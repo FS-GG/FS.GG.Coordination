@@ -10,6 +10,7 @@ import stat
 import sys
 import unittest
 import zipfile
+from unittest import mock
 
 ENG = pathlib.Path(__file__).resolve().parents[2]
 ROOT = ENG.parent
@@ -26,12 +27,12 @@ def sha(raw):
     return hashlib.sha256(raw).hexdigest()
 
 
-def zipped(entries):
+def zipped(entries, compression=zipfile.ZIP_STORED):
     output = io.BytesIO()
-    with zipfile.ZipFile(output, "w", compression=zipfile.ZIP_STORED) as archive:
+    with zipfile.ZipFile(output, "w", compression=compression) as archive:
         for name, raw in entries:
             info = zipfile.ZipInfo(name, (1980, 1, 1, 0, 0, 0))
-            info.compress_type = zipfile.ZIP_STORED
+            info.compress_type = compression
             info.create_system = 3
             info.external_attr = (stat.S_IFREG | 0o644) << 16
             archive.writestr(info, raw)
@@ -168,6 +169,35 @@ class RuntimeCandidateWitnessTests(unittest.TestCase):
             with self.subTest(change=change):
                 with self.assertRaises(witness.Refused):
                     self.observe(change)
+
+    def test_compressed_oversized_inner_archive_refuses(self):
+        def compressed_inner(values):
+            foreign = zipped([(witness.MEMBERS[0], b"x" * 3_000_000)],
+                             zipfile.ZIP_DEFLATED)
+            values[3].bundle = zipped([(witness.ARCHIVE_NAME, foreign),
+                                       (witness.MANIFEST_NAME, values[5])])
+            values[2].artifact["size"] = len(values[3].bundle)
+            values[2].artifact["digest"] = "sha256:" + sha(values[3].bundle)
+
+        with self.assertRaises(witness.Refused):
+            self.observe(compressed_inner)
+
+    def test_outer_zip_expansion_refuses_before_member_read(self):
+        expanded = zipped([
+            (witness.ARCHIVE_NAME, b"x" * 3_000_000),
+            (witness.MANIFEST_NAME, b"{}\n"),
+        ], zipfile.ZIP_DEFLATED)
+        reads = []
+        original = zipfile.ZipFile.read
+
+        def tracked(instance, *args, **kwargs):
+            reads.append(args)
+            return original(instance, *args, **kwargs)
+
+        with mock.patch.object(zipfile.ZipFile, "read", tracked):
+            with self.assertRaises(witness.Refused):
+                witness._read_bundle(expanded)
+        self.assertEqual(reads, [])
 
     def test_mismatched_or_noncanonical_manifest_refuses(self):
         def replace_manifest(values, transform):

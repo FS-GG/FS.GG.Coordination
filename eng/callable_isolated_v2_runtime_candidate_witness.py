@@ -7,11 +7,11 @@ import dataclasses
 import datetime as dt
 import hashlib
 import io
-import json
 import re
 import zipfile
 from typing import Any, Protocol
 
+import verify_callable_isolated_v2_runtime_artifact as artifact_check
 import verify_callable_isolated_v2_runtime_candidate_workflow as workflow_check
 
 REPOSITORY = "FS-GG/FS.GG.Coordination"
@@ -37,7 +37,8 @@ RUNTIME_REQUIREMENTS = {
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 MAX_BUNDLE = 2_000_000
-MAX_ARCHIVE = 1_000_000
+MAX_ARCHIVE = 2_000_000
+MAX_MANIFEST = 64_000
 
 
 class Refused(ValueError):
@@ -137,71 +138,42 @@ def _read_bundle(raw: bytes) -> tuple[bytes, bytes]:
             infos = bundle.infolist()
             names = [item.filename for item in infos]
             if (len(names) != 2 or set(names) != {ARCHIVE_NAME, MANIFEST_NAME}
-                    or any(item.is_dir() or item.flag_bits & 0x1 for item in infos)
+                    or any(item.is_dir() or item.flag_bits & 0x1
+                           or item.compress_type != zipfile.ZIP_STORED
+                           for item in infos)
                     or any(((item.external_attr >> 16) & 0o170000)
                            not in (0, 0o100000) for item in infos)):
                 raise Refused("runtime-candidate-bundle-members")
+            limits = {ARCHIVE_NAME: MAX_ARCHIVE, MANIFEST_NAME: MAX_MANIFEST}
+            if any(not 0 < item.file_size <= limits[item.filename]
+                   or not 0 < item.compress_size <= limits[item.filename]
+                   or item.compress_size != item.file_size for item in infos):
+                raise Refused("runtime-candidate-bundle-member-size")
             archive = bundle.read(ARCHIVE_NAME)
             manifest = bundle.read(MANIFEST_NAME)
     except Refused:
         raise
     except Exception:
         raise Refused("runtime-candidate-bundle-invalid") from None
-    if not 0 < len(archive) <= MAX_ARCHIVE or not 0 < len(manifest) <= 128_000:
+    if not 0 < len(archive) <= MAX_ARCHIVE or not 0 < len(manifest) <= MAX_MANIFEST:
         raise Refused("runtime-candidate-bundle-member-size")
     return archive, manifest
 
 
-def _verify_manifest(raw: bytes, archive: bytes, selection: Selection) -> str:
+def _verify_candidate(raw: bytes, archive: bytes, selection: Selection) -> str:
     try:
-        value = json.loads(raw)
-    except (UnicodeError, json.JSONDecodeError):
-        raise Refused("runtime-candidate-manifest-json") from None
-    keys = {"schema", "sourceRevision", "sourceTree", "builderSha256",
-            "retainedOperatorSha256", "archiveSha256", "runtimeRequirements",
-            "members"}
-    _exact(value, keys, "runtime-candidate-manifest-shape")
-    canonical = (json.dumps(value, sort_keys=True, separators=(",", ":"),
-                            ensure_ascii=True, allow_nan=False) + "\n").encode("ascii")
-    if canonical != raw:
-        raise Refused("runtime-candidate-manifest-canonical")
-    if (value["schema"] != ARTIFACT_SCHEMA
+        value = artifact_check.verify_candidate_bytes(archive, raw)
+    except artifact_check.Refused:
+        raise Refused("runtime-candidate-artifact-invalid") from None
+    if (type(value) is not dict
+            or set(value) != {"schema", "verified", "sourceRevision",
+                              "sourceTree", "archiveSha256"}
+            or value["schema"] != ARTIFACT_SCHEMA
+            or value["verified"] is not True
             or value["sourceRevision"] != selection.source_sha
             or value["sourceTree"] != selection.source_tree
-            or type(value["builderSha256"]) is not str
-            or HEX64.fullmatch(value["builderSha256"]) is None
-            or type(value["retainedOperatorSha256"]) is not str
-            or HEX64.fullmatch(value["retainedOperatorSha256"]) is None
-            or value["archiveSha256"] != hashlib.sha256(archive).hexdigest()
-            or value["runtimeRequirements"] != RUNTIME_REQUIREMENTS
-            or type(value["members"]) is not list
-            or [item.get("path") if type(item) is dict else None
-                for item in value["members"]] != list(MEMBERS)):
+            or value["archiveSha256"] != hashlib.sha256(archive).hexdigest()):
         raise Refused("runtime-candidate-manifest-binding")
-    try:
-        with zipfile.ZipFile(io.BytesIO(archive)) as packaged:
-            infos = packaged.infolist()
-            if ([item.filename for item in infos] != list(MEMBERS)
-                    or any(item.is_dir() or item.flag_bits & 0x1 for item in infos)
-                    or any(((item.external_attr >> 16) & 0o170000)
-                           not in (0, 0o100000) for item in infos)):
-                raise Refused("runtime-candidate-archive-members")
-            for info, member in zip(infos, value["members"], strict=True):
-                _exact(member, {"path", "sha256", "size"},
-                       "runtime-candidate-member-shape")
-                content = packaged.read(info)
-                if (member["path"] != info.filename
-                        or type(member["sha256"]) is not str
-                        or member["sha256"] != hashlib.sha256(content).hexdigest()
-                        or type(member["size"]) is not int
-                        or member["size"] != len(content)):
-                    raise Refused("runtime-candidate-member-binding")
-    except Refused:
-        raise
-    except Exception:
-        raise Refused("runtime-candidate-archive-invalid") from None
-    if value["retainedOperatorSha256"] != value["members"][1]["sha256"]:
-        raise Refused("runtime-candidate-retained-operator")
     return hashlib.sha256(raw).hexdigest()
 
 
@@ -294,7 +266,7 @@ def qualify(selection: Selection, workflow_bytes: bytes,
             or hashlib.sha256(bundle).hexdigest() != artifact["digest"][7:]):
         raise Refused("runtime-candidate-download-digest")
     archive, manifest = _read_bundle(bundle)
-    manifest_sha = _verify_manifest(manifest, archive, selection)
+    manifest_sha = _verify_candidate(manifest, archive, selection)
     if (_scope(producer_port, selection.repository_id,
                ["actions:read", "metadata:read"], now) != producer_scope
             or _scope(download_port, selection.repository_id,
