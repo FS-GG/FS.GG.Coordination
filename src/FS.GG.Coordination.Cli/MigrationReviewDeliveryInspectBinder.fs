@@ -44,6 +44,7 @@ module MigrationReviewDeliveryInspectBinder =
         match expected, tryProperty name element with
         | None, None -> true
         | None, Some value -> value.ValueKind = JsonValueKind.Null
+                              || (value.ValueKind = JsonValueKind.String && value.GetString() = "")
         | Some wanted, Some value when value.ValueKind = JsonValueKind.String -> value.GetString() = wanted
         | _ -> false
 
@@ -217,24 +218,41 @@ module MigrationReviewDeliveryInspectBinder =
                           "fsgg.coordination.ordinary-delivery-journal/1" ])
 
     let private journalRawMatches (entry: MigrationJournalHistoryEntry) =
-        containsObject
-            (fun item ->
-                let schema =
-                    match tryString "schema" item, tryInt64 "schemaVersion" item with
-                    | Some value, _ -> Some value
-                    | None, Some 1L -> Some entry.Record.Schema
-                    | _ -> None
-                schema = Some entry.Record.Schema
-                && tryString "operationId" item = Some entry.Record.OperationId
-                && (tryInt64 "generation" item = Some entry.Record.Generation
-                    || tryInt64 "schemaVersion" item = Some 1L)
-                && (tryString "kind" item |> Option.forall ((=) entry.Record.Kind))
-                && (tryString "subject" item |> Option.forall ((=) entry.Record.Subject))
-                && optionalStringMatches "mergeCommit" entry.Record.MergeCommit item
-                && optionalInt64Matches "protectedRunId" entry.Record.ProtectedRunId item
-                && optionalStringMatches "protectedRunCommit" entry.Record.ProtectedRunCommit item
-                && optionalStringMatches "protectedRunConclusion" entry.Record.ProtectedRunConclusion item)
-            entry.Reads
+        let expectedChain =
+            if entry.Record.Schema = "fsgg.coordination.review-authority/1" then
+                ReviewDeliveryAdapter.chainId entry.Record.Subject |> Result.toOption
+            else None
+        let eventMatches =
+            containsObject
+                (fun item ->
+                    let schema =
+                        match tryString "schema" item, tryInt64 "schemaVersion" item with
+                        | Some value, _ -> Some value
+                        | None, Some 1L -> Some entry.Record.Schema
+                        | _ -> None
+                    schema = Some entry.Record.Schema
+                    && tryString "operationId" item = Some entry.Record.OperationId
+                    && tryInt64 "schemaVersion" item = Some 1L
+                    && (tryString "kind" item |> Option.forall ((=) entry.Record.Kind))
+                    && (match expectedChain with
+                        | Some chain -> tryString "chainId" item = Some chain
+                        | None -> tryString "subject" item = Some entry.Record.Subject)
+                    && optionalStringMatches "mergeCommit" entry.Record.MergeCommit item
+                    && optionalInt64Matches "protectedRunId" entry.Record.ProtectedRunId item
+                    && optionalStringMatches "protectedRunCommit" entry.Record.ProtectedRunCommit item
+                    && optionalStringMatches "protectedRunConclusion" entry.Record.ProtectedRunConclusion item)
+                entry.Reads
+        let headMatches =
+            containsObject
+                (fun item ->
+                    tryInt64 "schemaVersion" item = Some 1L
+                    && tryInt64 "generation" item = Some entry.Record.Generation
+                    && (tryString "journalKind" item
+                        |> Option.exists (fun kind ->
+                            kind = "review" && entry.Record.Schema = "fsgg.coordination.review-authority/1"
+                            || kind = "operation" && entry.Record.Schema = "fsgg.coordination.delivery-authority/1")))
+                entry.Reads
+        eventMatches && headMatches
 
     let private journalValid repository (pass: MigrationJournalPass) =
         let refs = pass.Namespaces |> List.collect _.Refs
@@ -282,19 +300,19 @@ module MigrationReviewDeliveryInspectBinder =
                 state |> Result.bind (fun rows ->
                     let related = journals.Histories |> List.filter (fun item -> subjectNumber item.Record.Subject = Some pull.Number)
                     let reviewRefs =
-                        related |> List.filter (fun item -> item.Record.Kind.Contains("review", StringComparison.OrdinalIgnoreCase))
+                        related |> List.filter (fun item -> item.Record.Schema = "fsgg.coordination.review-authority/1")
                         |> List.map _.RefName |> List.distinct |> List.sort
                     let delivery =
-                        related |> List.filter (fun item -> item.Record.Kind.Contains("delivery", StringComparison.OrdinalIgnoreCase)
-                                                           || item.Record.Kind.Contains("done", StringComparison.OrdinalIgnoreCase))
+                        related |> List.filter (fun item -> item.Record.Schema = "fsgg.coordination.delivery-authority/1")
                     let deliveryRefs = delivery |> List.map _.RefName |> List.distinct |> List.sort
                     let merge = Map.tryFind pull.Number merges |> Option.defaultValue None
                     let deliveryMatches =
                         match merge with
-                        | None -> List.isEmpty delivery
+                        | None -> delivery |> List.forall (_.Record.MergeCommit >> Option.isNone)
                         | Some commit ->
-                            not (List.isEmpty delivery)
-                            && delivery |> List.forall (fun item -> item.Record.MergeCommit = Some commit)
+                            delivery |> List.exists (fun item -> item.Record.MergeCommit = Some commit)
+                            && delivery |> List.forall (fun item ->
+                                item.Record.MergeCommit.IsNone || item.Record.MergeCommit = Some commit)
                     let runMatches =
                         delivery |> List.forall (fun item ->
                             match item.Record.ProtectedRunId, item.Record.ProtectedRunCommit with

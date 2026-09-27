@@ -87,9 +87,18 @@ let private journalPass () =
           Refs=[ { RefName=refName; HeadSha=commit } ] }
     let history refName commit schema kind operation mergeCommit =
         let mergeProperty = mergeCommit |> Option.map (sprintf ",\"mergeCommit\":\"%s\"") |> Option.defaultValue ""
-        let body = $"""{{"schema":"{schema}","kind":"{kind}","subject":"FS-GG/copy#7","operationId":"{operation}","generation":1{mergeProperty}}}"""
+        let chainProperty =
+            if kind = "review" then
+                let chain = ReviewDeliveryAdapter.chainId "FS-GG/copy#7" |> Result.defaultWith (failwithf "%A")
+                $",\"chainId\":\"{chain}\""
+            else ""
+        let body = $"""{{"schema":"{schema}","schemaVersion":1,"kind":"{kind}","subject":"FS-GG/copy#7","operationId":"{operation}","generation":1{mergeProperty}{chainProperty}}}"""
+        let journalKind = if kind = "review" then "review" else "operation"
+        let headBody = $"""{{"schemaVersion":1,"generation":1,"journalKind":"{journalKind}"}}"""
         { RefName=refName; CommitSha=commit; ParentSha=None; TreeSha=tree
-          HeadPath="head.json"; EventPath="events/1.json"; Reads=[ read ($"repos/FS-GG/copy/git/commits/{commit}") body ]
+          HeadPath="head.json"; EventPath="events/1.json"
+          Reads=[ read ($"repos/FS-GG/copy/git/blobs/{commit}") body
+                  read ($"repos/FS-GG/copy/git/blobs/{commit}0") headBody ]
           Record={ Schema=schema; Kind=kind; Subject="FS-GG/copy#7"; OperationId=operation
                    Generation=1L; MergeCommit=mergeCommit; ProtectedRunId=None
                    ProtectedRunCommit=None; ProtectedRunConclusion=None } }
@@ -171,3 +180,21 @@ let ``canonical binder refuses typed raw journal drift and canonical source stay
     let source = MigrationInspectProviderAdapter(adapterOptions, noTransport) :> IGitHubMigrationInspectSource
     Assert.Equal(Error "authority-adapter-unavailable:review-delivery-release-records",
                  source.ReadAuthority(1, "review-delivery-release-records"))
+
+[<Fact>]
+let ``done receipt refuses without provider check evidence on merge commit`` () =
+    let (native: MigrationReviewDeliveryNativeTwoPass), (journals: MigrationJournalTwoPass) = captures ()
+    let journal = journals.First
+    let current = journal.Histories.[1]
+    let doneRecord =
+        { current.Record with Kind="done"; ProtectedRunId=Some 301L
+                              ProtectedRunCommit=Some merge; ProtectedRunConclusion=Some "success" }
+    let doneBody =
+        $"""{{"schema":"{doneRecord.Schema}","schemaVersion":1,"kind":"done","subject":"FS-GG/copy#7","operationId":"{doneRecord.OperationId}","generation":1,"mergeCommit":"{merge}","protectedRunId":301,"protectedRunCommit":"{merge}","protectedRunConclusion":"success"}}"""
+    let eventRead = read ($"repos/FS-GG/copy/git/blobs/{current.CommitSha}") doneBody
+    let changedEntry = { current with Record=doneRecord; Reads=eventRead :: current.Reads.Tail }
+    let changed = { journal with Histories=[ journal.Histories.[0]; changedEntry ]; Fingerprint="" }
+    let changed = { changed with Fingerprint=MigrationReviewDeliveryCaptureContract.journalFingerprint changed }
+    Assert.Equal(Error "review-delivery-journal-correspondence:7",
+                 MigrationReviewDeliveryInspectBinder.bind cohort repositoryOptions native
+                     { First=changed; Second=changed })
