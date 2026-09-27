@@ -105,6 +105,94 @@ let ``repository core inspect guard refuses writes before dispatch`` () =
     Assert.Equal(NetworkFailure, guard.Send write)
     Assert.Empty(inner.Calls)
 
+let private repositoryIdentity = """{"id":42,"full_name":"FS-GG/copy"}"""
+let private actionsAll =
+    """{"enabled":true,"allowed_actions":"all","selected_actions_url":null,"sha_pinning_required":false}"""
+let private actionsSelected =
+    """{"enabled":true,"allowed_actions":"selected","selected_actions_url":"https://api.github.test/repositories/42/actions/permissions/selected-actions","sha_pinning_required":true}"""
+let private selectedActions =
+    """{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":["FS-GG/*@*"]}"""
+
+let private readRepositoryActions responses =
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readRepositoryActionsPolicy options.Repository transport with
+    | Ok settings -> settings, transport.Calls
+    | Error failure -> failwithf "Expected repository Actions policy: %A" failure
+
+[<Fact>]
+let ``repository Actions inspect slice binds core and conditional allowlist raw pages`` () =
+    let selected, selectedCalls =
+        readRepositoryActions [ reply repositoryIdentity; reply actionsSelected; reply selectedActions ]
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options selected selectedCalls with
+    | Error reason -> failwithf "Selected Actions proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings/actions", proof.Read.Authority)
+        Assert.Equal(3, proof.Read.PageCount)
+        Assert.Equal(3, proof.Read.ItemCount)
+        Assert.Equal(selectedActions, proof.Pages.[2].RawBody)
+        Assert.Equal(Some proof.Pages.[2].RequestIdentitySha256,
+                     proof.Pages.[1].NextRequestIdentitySha256)
+
+    let all, allCalls = readRepositoryActions [ reply repositoryIdentity; reply actionsAll ]
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options all allCalls with
+    | Error reason -> failwithf "Actions core proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(2, proof.Pages.Length)
+        Assert.Equal(None, proof.Pages.[1].NextRequestIdentitySha256)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+                 source.ReadAuthority(1, "repository-settings"))
+
+[<Fact>]
+let ``repository Actions inspect slice independently refuses raw typed and request drift`` () =
+    let settings, calls =
+        readRepositoryActions [ reply repositoryIdentity; reply actionsSelected; reply selectedActions ]
+    let changed = { settings with PatternsAllowed=Some [ "FS-GG/other@*" ] }
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options changed calls with
+    | Error reason -> Assert.StartsWith("repository-actions-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed typed Actions policy was accepted"
+
+    let ambiguous = selectedActions.Replace("\"verified_allowed\":false",
+                                            "\"verified_allowed\":true,\"verified_allowed\":false")
+    let duplicateRaw = calls |> List.mapi (fun index (request, outcome) ->
+        if index = 2 then request, reply ambiguous else request, outcome)
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options settings duplicateRaw with
+    | Error reason -> Assert.StartsWith("repository-actions-raw-or-scope:", reason)
+    | Ok _ -> failwith "Duplicate selected Actions member was accepted"
+
+    let request, outcome = calls.[2]
+    let foreign =
+        match request with
+        | Rest value -> Rest { value with Uri=Uri "https://api.github.test/repositories/43/actions/permissions/selected-actions" }
+        | _ -> failwith "Expected REST request"
+    Assert.Equal(Error "repository-actions-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryActionsPolicy
+                     options settings [ calls.[0]; calls.[1]; foreign, outcome ])
+    Assert.Equal(Error "repository-actions-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryActionsPolicy
+                     options settings (calls @ [ calls.Head ]))
+
+[<Fact>]
+let ``repository Actions inspect guard refuses foreign allowlist and writes before dispatch`` () =
+    let inner = FakeTransport [ reply selectedActions ]
+    let guard = MigrationInspectProviderAdapter.guardReadTransport
+                    options "repository-settings/actions" inner
+    let foreign =
+        Rest { Method=Get
+               Uri=Uri "https://api.github.test/repositories/43/actions/permissions/selected-actions"
+               Headers=Map.empty; Body=None; ApiVersion=ApiVersion.required
+               Idempotency=ReplaySafe }
+    let write =
+        Rest { Method=Put
+               Uri=Uri "https://api.github.test/repositories/42/actions/permissions/selected-actions"
+               Headers=Map.empty; Body=Some "{}"; ApiVersion=ApiVersion.required
+               Idempotency=NeverReplay }
+    Assert.Equal(NetworkFailure, guard.Send foreign)
+    Assert.Equal(NetworkFailure, guard.Send write)
+    Assert.Empty(inner.Calls)
+
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""
 

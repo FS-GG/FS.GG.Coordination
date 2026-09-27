@@ -32,6 +32,18 @@ module MigrationInspectProviderAdapter =
             value.Method = Get && value.Body.IsNone
             && value.Uri.Scheme = Uri.UriSchemeHttps
             && value.Uri = repository
+        | "repository-settings/actions", Rest value ->
+            let repositoryPath =
+                $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+            let allowed =
+                [ Uri(options.Repository.ApiBase, repositoryPath)
+                  Uri(options.Repository.ApiBase, $"{repositoryPath}/actions/permissions")
+                  Uri(options.Repository.ApiBase, $"{repositoryPath}/actions/permissions/selected-actions")
+                  Uri(options.Repository.ApiBase,
+                      $"repositories/{options.Repository.ExpectedRepositoryId}/actions/permissions/selected-actions") ]
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && List.contains value.Uri allowed
         | "issues-open-and-relevant-closed", Rest value ->
             let repository =
                 Uri(options.Repository.ApiBase,
@@ -263,6 +275,121 @@ module MigrationInspectProviderAdapter =
                                  Pages=[ page ] }
                     with _ -> Error "repository-core-raw-parse"
             | _ -> Error "repository-core-capture-shape"
+
+    let bindRepositoryActionsPolicy
+        (options: MigrationInspectProviderOptions)
+        (settings: MigrationRepositoryActionsPolicy)
+        (captures: (GitHubRequest * TransportOutcome) list) =
+        let repositoryPath =
+            $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+        let identityUri = Uri(options.Repository.ApiBase, repositoryPath).AbsoluteUri
+        let policyUri = Uri(options.Repository.ApiBase, $"{repositoryPath}/actions/permissions").AbsoluteUri
+        let expectedUris =
+            [ yield identityUri
+              yield policyUri
+              match settings.SelectedActionsUri with
+              | Some uri -> yield uri
+              | None -> () ]
+        if not (repositoryBinding options)
+           || settings.RepositoryId <> options.Repository.ExpectedRepositoryId
+           || settings.RepositoryFullName <> $"{options.Repository.Owner}/{options.Repository.Repository}"
+           || settings.IdentityUri <> identityUri || settings.PolicyUri <> policyUri then
+            Error "repository-actions-cohort"
+        elif captures.Length <> expectedUris.Length
+             || (captures |> List.exists (fst >> allowedRequest options "repository-settings/actions" >> not)) then
+            Error "repository-actions-capture-shape"
+        else
+            try
+                let captured =
+                    captures
+                    |> List.map (fun (request, outcome) ->
+                        match request, responseBody outcome with
+                        | Rest value, Ok body when capturedNextUri outcome = Some None ->
+                            value.Uri.AbsoluteUri, body
+                        | Rest _, Ok _ -> failwith "unexpected-continuation"
+                        | _, Error _ -> failwith "provider-response"
+                        | _ -> failwith "request-kind")
+                if (captured |> List.map fst) <> expectedUris then failwith "request-sequence"
+                let identityBody = captured.[0] |> snd
+                let policyBody = captured.[1] |> snd
+                use identityDocument = JsonDocument.Parse identityBody
+                use policyDocument = JsonDocument.Parse policyBody
+                requireUniqueMembers identityDocument.RootElement
+                requireUniqueMembers policyDocument.RootElement
+                let identity =
+                    identityDocument.RootElement.GetProperty("id").GetInt64(),
+                    identityDocument.RootElement.GetProperty("full_name").GetString()
+                let policy = policyDocument.RootElement
+                let selectedProperty = policy.GetProperty("selected_actions_url")
+                let selectedUri =
+                    match selectedProperty.ValueKind with
+                    | JsonValueKind.Null -> None
+                    | JsonValueKind.String -> Some(selectedProperty.GetString())
+                    | _ -> failwith "selected-actions-url"
+                let parsedPolicy =
+                    policy.GetProperty("enabled").GetBoolean(),
+                    policy.GetProperty("allowed_actions").GetString(),
+                    policy.GetProperty("sha_pinning_required").GetBoolean(),
+                    selectedUri
+                let typedPolicy =
+                    settings.Enabled, settings.AllowedActions, settings.ShaPinningRequired,
+                    settings.SelectedActionsUri
+                let validPolicy =
+                    Set.contains settings.AllowedActions (set [ "all"; "local_only"; "selected" ])
+                    && ((settings.AllowedActions = "selected") = settings.SelectedActionsUri.IsSome)
+                if identity <> (settings.RepositoryId, settings.RepositoryFullName)
+                   || parsedPolicy <> typedPolicy || not validPolicy
+                   || settings.IdentityPayloadJson <> identityBody
+                   || settings.IdentityPayloadSha256 <> sha identityBody
+                   || settings.PolicyPayloadJson <> policyBody
+                   || settings.PolicyPayloadSha256 <> sha policyBody then
+                    failwith "raw-typed-mismatch"
+                match settings.SelectedActionsUri, settings.SelectedActionsPayloadJson,
+                      settings.SelectedActionsPayloadSha256, settings.GitHubOwnedAllowed,
+                      settings.VerifiedAllowed, settings.PatternsAllowed with
+                | None, None, None, None, None, None when captured.Length = 2 -> ()
+                | Some _, Some selectedBody, Some selectedHash, Some githubOwned,
+                  Some verified, Some patterns when captured.Length = 3 ->
+                    if selectedBody <> (captured.[2] |> snd) || selectedHash <> sha selectedBody then
+                        failwith "selected-raw"
+                    use selectedDocument = JsonDocument.Parse selectedBody
+                    let selected = selectedDocument.RootElement
+                    requireUniqueMembers selected
+                    let entries = selected.GetProperty("patterns_allowed").EnumerateArray() |> Seq.toList
+                    let parsedPatterns = entries |> List.map _.GetString()
+                    let parsedSelected =
+                        selected.GetProperty("github_owned_allowed").GetBoolean(),
+                        selected.GetProperty("verified_allowed").GetBoolean(), parsedPatterns
+                    if parsedSelected <> (githubOwned, verified, patterns)
+                       || patterns |> List.exists String.IsNullOrWhiteSpace
+                       || (patterns |> Set.ofList |> Set.count) <> patterns.Length then
+                        failwith "selected-raw-typed-mismatch"
+                | _ -> failwith "selected-shape"
+                let names =
+                    [ $"repository:{settings.RepositoryId}:settings:actions:identity"
+                      $"repository:{settings.RepositoryId}:settings:actions:policy"
+                      if captured.Length = 3 then
+                          $"repository:{settings.RepositoryId}:settings:actions:selected" ]
+                let pages =
+                    List.zip3 expectedUris (captured |> List.map snd) names
+                    |> List.mapi (fun index (uri, body, name) ->
+                        let digest = sha body
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=digest
+                          NextRequestIdentitySha256=
+                              if index + 1 < expectedUris.Length then Some(sha expectedUris.[index + 1]) else None
+                          Subjects=[ subject name digest body ] })
+                let subjects = pages |> List.collect _.Subjects
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="repository-settings/actions"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"repository-actions-raw-or-scope:{failure.Message}"
 
     let bindIssues (options: MigrationInspectProviderOptions) (population: MigrationIssuePopulation)
                    (captures: (GitHubRequest * TransportOutcome) list) =

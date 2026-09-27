@@ -60,6 +60,14 @@ module MigrationInspectProviderAdapter =
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Binds the repository Actions core policy and its conditional selected allowlist.
+    /// This remains a partial settings proof and cannot satisfy repository-settings.
+    val bindRepositoryActionsPolicy:
+        options:MigrationInspectProviderOptions ->
+        settings:MigrationRepositoryActionsPolicy ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
     val bindNativeRelations:
         options:MigrationInspectProviderOptions ->
