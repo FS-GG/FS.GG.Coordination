@@ -193,6 +193,87 @@ let ``repository Actions inspect guard refuses foreign allowlist and writes befo
     Assert.Equal(NetworkFailure, guard.Send write)
     Assert.Empty(inner.Calls)
 
+let private propertySchema =
+    """[{"property_name":"environment","source_type":"organization","value_type":"single_select","required":true,"require_explicit_values":true,"values_editable_by":"org_actors","default_value":"production","allowed_values":["production","development"]},{"property_name":"teams","source_type":"organization","value_type":"multi_select","required":false,"values_editable_by":null,"allowed_values":["backend","frontend"]},{"property_name":"approved","source_type":"organization","value_type":"true_false","required":false}]"""
+let private propertyValues =
+    """[{"property_name":"environment","value":"production"},{"property_name":"teams","value":["backend"]},{"property_name":"approved","value":true}]"""
+
+let private readRepositoryCustomProperties responses =
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readCustomProperties options.Repository transport with
+    | Ok settings -> settings, transport.Calls
+    | Error failure -> failwithf "Expected repository custom properties: %A" failure
+
+[<Fact>]
+let ``repository custom properties inspect slice binds definitions values and exact raw pages`` () =
+    let settings, calls =
+        readRepositoryCustomProperties
+            [ reply repositoryIdentity; reply propertySchema; reply propertyValues ]
+    match MigrationInspectProviderAdapter.bindRepositoryCustomProperties options settings calls with
+    | Error reason -> failwithf "Custom-property proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings/custom-properties", proof.Read.Authority)
+        Assert.Equal(3, proof.Read.PageCount)
+        Assert.Equal(7, proof.Read.ItemCount)
+        Assert.Equal(3, proof.Pages.[1].Subjects.Length)
+        Assert.Equal(3, proof.Pages.[2].Subjects.Length)
+        Assert.Equal(propertySchema, proof.Pages.[1].RawBody)
+        Assert.Equal(propertyValues, proof.Pages.[2].RawBody)
+        Assert.Equal(Some proof.Pages.[2].RequestIdentitySha256,
+                     proof.Pages.[1].NextRequestIdentitySha256)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+                 source.ReadAuthority(1, "repository-settings"))
+
+[<Fact>]
+let ``repository custom properties inspect slice independently refuses raw typed and request drift`` () =
+    let settings, calls =
+        readRepositoryCustomProperties
+            [ reply repositoryIdentity; reply propertySchema; reply propertyValues ]
+    let changed = { settings with Definitions=settings.Definitions.Tail }
+    match MigrationInspectProviderAdapter.bindRepositoryCustomProperties options changed calls with
+    | Error reason -> Assert.StartsWith("repository-custom-properties-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed typed property definitions were accepted"
+
+    let ambiguous = propertyValues.Replace("\"property_name\":\"approved\"",
+                                           "\"property_name\":\"teams\",\"property_name\":\"approved\"")
+    let duplicateRaw = calls |> List.mapi (fun index (request, outcome) ->
+        if index = 2 then request, reply ambiguous else request, outcome)
+    match MigrationInspectProviderAdapter.bindRepositoryCustomProperties options settings duplicateRaw with
+    | Error reason -> Assert.StartsWith("repository-custom-properties-raw-or-scope:", reason)
+    | Ok _ -> failwith "Duplicate raw property member was accepted"
+
+    let schemaRequest, schemaOutcome = calls.[1]
+    let foreign =
+        match schemaRequest with
+        | Rest value -> Rest { value with Uri=Uri "https://api.github.test/orgs/Other/properties/schema" }
+        | _ -> failwith "Expected REST request"
+    Assert.Equal(Error "repository-custom-properties-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCustomProperties
+                     options settings [ calls.[0]; foreign, schemaOutcome; calls.[2] ])
+    Assert.Equal(Error "repository-custom-properties-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCustomProperties
+                     options settings (calls @ [ calls.Head ]))
+
+[<Fact>]
+let ``repository custom properties inspect guard refuses foreign schema and writes before dispatch`` () =
+    let inner = FakeTransport [ reply propertySchema ]
+    let guard = MigrationInspectProviderAdapter.guardReadTransport
+                    options "repository-settings/custom-properties" inner
+    let foreign =
+        Rest { Method=Get; Uri=Uri "https://api.github.test/orgs/Other/properties/schema"
+               Headers=Map.empty; Body=None; ApiVersion=ApiVersion.required
+               Idempotency=ReplaySafe }
+    let write =
+        Rest { Method=Patch; Uri=Uri "https://api.github.test/repos/FS-GG/copy/properties/values"
+               Headers=Map.empty; Body=Some "[]"; ApiVersion=ApiVersion.required
+               Idempotency=NeverReplay }
+    Assert.Equal(NetworkFailure, guard.Send foreign)
+    Assert.Equal(NetworkFailure, guard.Send write)
+    Assert.Empty(inner.Calls)
+
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""
 

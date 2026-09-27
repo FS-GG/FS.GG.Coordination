@@ -44,6 +44,17 @@ module MigrationInspectProviderAdapter =
             value.Method = Get && value.Body.IsNone
             && value.Uri.Scheme = Uri.UriSchemeHttps
             && List.contains value.Uri allowed
+        | "repository-settings/custom-properties", Rest value ->
+            let repositoryPath =
+                $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+            let allowed =
+                [ Uri(options.Repository.ApiBase, repositoryPath)
+                  Uri(options.Repository.ApiBase,
+                      $"orgs/{Uri.EscapeDataString options.Repository.Owner}/properties/schema")
+                  Uri(options.Repository.ApiBase, $"{repositoryPath}/properties/values") ]
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && List.contains value.Uri allowed
         | "issues-open-and-relevant-closed", Rest value ->
             let repository =
                 Uri(options.Repository.ApiBase,
@@ -390,6 +401,210 @@ module MigrationInspectProviderAdapter =
                             Subjects=subjects }
                      Pages=pages }
             with failure -> Error $"repository-actions-raw-or-scope:{failure.Message}"
+
+    let bindRepositoryCustomProperties
+        (options: MigrationInspectProviderOptions)
+        (settings: MigrationCustomProperties)
+        (captures: (GitHubRequest * TransportOutcome) list) =
+        let repositoryPath =
+            $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+        let expectedUris =
+            [ Uri(options.Repository.ApiBase, repositoryPath).AbsoluteUri
+              Uri(options.Repository.ApiBase,
+                  $"orgs/{Uri.EscapeDataString options.Repository.Owner}/properties/schema").AbsoluteUri
+              Uri(options.Repository.ApiBase, $"{repositoryPath}/properties/values").AbsoluteUri ]
+        if not (repositoryBinding options)
+           || settings.RepositoryId <> options.Repository.ExpectedRepositoryId
+           || settings.RepositoryFullName <> $"{options.Repository.Owner}/{options.Repository.Repository}"
+           || [ settings.IdentityUri; settings.SchemaUri; settings.ValuesUri ] <> expectedUris then
+            Error "repository-custom-properties-cohort"
+        elif captures.Length <> 3
+             || (captures
+                 |> List.exists (fst >> allowedRequest options "repository-settings/custom-properties" >> not)) then
+            Error "repository-custom-properties-capture-shape"
+        else
+            try
+                let nonblank value = not (String.IsNullOrWhiteSpace value)
+                let requiredString (name: string) (element: JsonElement) =
+                    let value = element.GetProperty(name)
+                    if value.ValueKind <> JsonValueKind.String || not (nonblank (value.GetString())) then
+                        failwith $"string:{name}"
+                    value.GetString()
+                let optionalProperty (name: string) (element: JsonElement) =
+                    let mutable value = Unchecked.defaultof<JsonElement>
+                    if element.TryGetProperty(name, &value) then Some value else None
+                let stringList (value: JsonElement) =
+                    if value.ValueKind <> JsonValueKind.Array then failwith "string-list"
+                    let values = value.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                    if values |> List.exists (nonblank >> not)
+                       || (values |> Set.ofList |> Set.count) <> values.Length then failwith "string-list"
+                    values
+                let propertyData valueType (value: JsonElement) =
+                    match valueType, value.ValueKind with
+                    | ("string" | "single_select"), JsonValueKind.String ->
+                        let parsed = value.GetString()
+                        if isNull parsed then failwith "property-text"
+                        PropertyText parsed
+                    | "url", JsonValueKind.String ->
+                        let parsed = value.GetString()
+                        let mutable uri = Unchecked.defaultof<Uri>
+                        if not (Uri.TryCreate(parsed, UriKind.Absolute, &uri))
+                           || (uri.Scheme <> Uri.UriSchemeHttps && uri.Scheme <> Uri.UriSchemeHttp) then
+                            failwith "property-url"
+                        PropertyText parsed
+                    | "multi_select", JsonValueKind.Array -> PropertyChoices(stringList value)
+                    | "true_false", JsonValueKind.True -> PropertyFlag true
+                    | "true_false", JsonValueKind.False -> PropertyFlag false
+                    | _ -> failwith "property-value"
+                let parseDefinition (element: JsonElement) =
+                    requireUniqueMembers element
+                    let name = requiredString "property_name" element
+                    let sourceType = requiredString "source_type" element
+                    let valueType = requiredString "value_type" element
+                    if sourceType <> "organization"
+                       || not (Set.contains valueType
+                                   (set [ "string"; "single_select"; "multi_select"; "true_false"; "url" ])) then
+                        failwith "property-definition"
+                    let required = element.GetProperty("required").GetBoolean()
+                    let requireExplicit =
+                        optionalProperty "require_explicit_values" element
+                        |> Option.map _.GetBoolean()
+                    let editableBy =
+                        optionalProperty "values_editable_by" element
+                        |> Option.map (fun value ->
+                            if value.ValueKind = JsonValueKind.Null then None
+                            else
+                                let parsed = requiredString "values_editable_by" element
+                                if not (Set.contains parsed (set [ "org_actors"; "org_and_repo_actors" ])) then
+                                    failwith "values-editable-by"
+                                Some parsed)
+                    let defaultValue =
+                        optionalProperty "default_value" element
+                        |> Option.map (fun value ->
+                            if value.ValueKind = JsonValueKind.Null then None
+                            else Some(propertyData valueType value))
+                    let allowedValues =
+                        match optionalProperty "allowed_values" element with
+                        | None when valueType = "single_select" || valueType = "multi_select" ->
+                            failwith "allowed-values-required"
+                        | None -> None
+                        | Some value when value.ValueKind = JsonValueKind.Null
+                                          && valueType <> "single_select" && valueType <> "multi_select" -> None
+                        | Some value when valueType = "single_select" || valueType = "multi_select" ->
+                            Some(stringList value)
+                        | Some _ -> failwith "allowed-values-shape"
+                    let permitted = function
+                        | PropertyText value, Some allowed -> List.contains value allowed
+                        | PropertyChoices values, Some allowed ->
+                            values |> List.forall (fun value -> List.contains value allowed)
+                        | _, None -> true
+                        | _ -> false
+                    if defaultValue |> Option.bind id |> Option.exists (fun value -> not (permitted (value, allowedValues))) then
+                        failwith "default-value"
+                    let raw = element.GetRawText()
+                    { Name=name; SourceType=sourceType; ValueType=valueType; Required=required
+                      RequireExplicitValues=requireExplicit; ValuesEditableBy=editableBy
+                      DefaultValue=defaultValue; AllowedValues=allowedValues
+                      PayloadJson=raw; PayloadSha256=sha raw }
+                let parseValue definitions (element: JsonElement) =
+                    requireUniqueMembers element
+                    let name = requiredString "property_name" element
+                    let definition =
+                        definitions |> List.tryFind (fun (value: MigrationCustomPropertyDefinition) -> value.Name = name)
+                        |> Option.defaultWith (fun () -> failwith "unknown-property")
+                    let value = propertyData definition.ValueType (element.GetProperty("value"))
+                    match value, definition.AllowedValues with
+                    | PropertyText choice, Some allowed when not (List.contains choice allowed) ->
+                        failwith "property-choice"
+                    | PropertyChoices choices, Some allowed when
+                        choices |> List.exists (fun choice -> not (List.contains choice allowed)) ->
+                        failwith "property-choice"
+                    | _ -> ()
+                    let raw = element.GetRawText()
+                    { Name=name; Value=value; PayloadJson=raw; PayloadSha256=sha raw }
+                let captured =
+                    captures
+                    |> List.map (fun (request, outcome) ->
+                        match request, responseBody outcome with
+                        | Rest value, Ok body when capturedNextUri outcome = Some None ->
+                            value.Uri.AbsoluteUri, body
+                        | Rest _, Ok _ -> failwith "unexpected-continuation"
+                        | _, Error _ -> failwith "provider-response"
+                        | _ -> failwith "request-kind")
+                if (captured |> List.map fst) <> expectedUris then failwith "request-sequence"
+                let identityBody = captured.[0] |> snd
+                let schemaBody = captured.[1] |> snd
+                let valuesBody = captured.[2] |> snd
+                use identityDocument = JsonDocument.Parse identityBody
+                requireUniqueMembers identityDocument.RootElement
+                let identity =
+                    identityDocument.RootElement.GetProperty("id").GetInt64(),
+                    requiredString "full_name" identityDocument.RootElement
+                use schemaDocument = JsonDocument.Parse schemaBody
+                use valuesDocument = JsonDocument.Parse valuesBody
+                if schemaDocument.RootElement.ValueKind <> JsonValueKind.Array
+                   || valuesDocument.RootElement.ValueKind <> JsonValueKind.Array then
+                    failwith "array-shape"
+                let definitions =
+                    schemaDocument.RootElement.EnumerateArray() |> Seq.map parseDefinition |> Seq.toList
+                if definitions.Length <> (definitions |> List.map _.Name |> Set.ofList |> Set.count) then
+                    failwith "duplicate-definition"
+                let values =
+                    valuesDocument.RootElement.EnumerateArray()
+                    |> Seq.map (parseValue definitions) |> Seq.toList
+                if values.Length <> (values |> List.map _.Name |> Set.ofList |> Set.count) then
+                    failwith "duplicate-value"
+                let valueNames = values |> List.map _.Name |> Set.ofList
+                if definitions
+                   |> List.exists (fun definition ->
+                       (definition.Required || definition.RequireExplicitValues = Some true)
+                       && not (Set.contains definition.Name valueNames)) then
+                    failwith "required-value"
+                if identity <> (settings.RepositoryId, settings.RepositoryFullName)
+                   || definitions <> settings.Definitions || values <> settings.Values
+                   || settings.IdentityPayloadJson <> identityBody
+                   || settings.IdentityPayloadSha256 <> sha identityBody
+                   || settings.SchemaPayloadJson <> schemaBody
+                   || settings.SchemaPayloadSha256 <> sha schemaBody
+                   || settings.ValuesPayloadJson <> valuesBody
+                   || settings.ValuesPayloadSha256 <> sha valuesBody then
+                    failwith "raw-typed-mismatch"
+                let identitySubject =
+                    subject $"repository:{settings.RepositoryId}:settings:custom-properties:identity"
+                        (sha identityBody) identityBody
+                let definitionSubjects =
+                    definitions
+                    |> List.map (fun definition ->
+                        subject
+                            $"repository:{settings.RepositoryId}:settings:custom-property-definition:{definition.Name}"
+                            definition.PayloadSha256 definition.PayloadJson)
+                let valueSubjects =
+                    values
+                    |> List.map (fun value ->
+                        subject
+                            $"repository:{settings.RepositoryId}:settings:custom-property-value:{value.Name}"
+                            value.PayloadSha256 value.PayloadJson)
+                let bodies = [ identityBody; schemaBody; valuesBody ]
+                let pageSubjects = [ [ identitySubject ]; definitionSubjects; valueSubjects ]
+                let pages =
+                    List.zip3 expectedUris bodies pageSubjects
+                    |> List.mapi (fun index (uri, body, subjects) ->
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=sha body
+                          NextRequestIdentitySha256=
+                              if index + 1 < expectedUris.Length then Some(sha expectedUris.[index + 1]) else None
+                          Subjects=subjects })
+                let subjects = pages |> List.collect _.Subjects
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="repository-settings/custom-properties"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"repository-custom-properties-raw-or-scope:{failure.Message}"
 
     let bindIssues (options: MigrationInspectProviderOptions) (population: MigrationIssuePopulation)
                    (captures: (GitHubRequest * TransportOutcome) list) =

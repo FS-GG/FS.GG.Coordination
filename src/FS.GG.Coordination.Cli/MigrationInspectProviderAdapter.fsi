@@ -68,6 +68,14 @@ module MigrationInspectProviderAdapter =
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Binds organization property definitions and one repository's explicit values.
+    /// Enterprise inheritance and the other settings surfaces remain outside this proof.
+    val bindRepositoryCustomProperties:
+        options:MigrationInspectProviderOptions ->
+        settings:MigrationCustomProperties ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
     val bindNativeRelations:
         options:MigrationInspectProviderOptions ->
