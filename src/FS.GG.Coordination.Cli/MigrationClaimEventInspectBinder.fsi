@@ -13,6 +13,15 @@ type MigrationLegacyClaimMarker =
         PayloadSha256: string
     }
 
+type MigrationLegacyIntakeMarker =
+    {
+        IssueNumber: int
+        IssueNodeId: string
+        DraftId: string
+        DraftDigest: string
+        PayloadSha256: string
+    }
+
 type MigrationClaimEventPartialCapture =
     {
         NativeFirst: MigrationNativeActivityCapture
@@ -20,6 +29,7 @@ type MigrationClaimEventPartialCapture =
         Journals: MigrationClaimJournalTwoPass
         LegacyInventory: MigrationLegacyReceiptInventory
         ClaimMarkers: MigrationLegacyClaimMarker list
+        IntakeMarkers: MigrationLegacyIntakeMarker list
         MissingAuthorities: string list
         Fingerprint: string
     }

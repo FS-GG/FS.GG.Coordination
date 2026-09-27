@@ -68,6 +68,8 @@
     <Compile Include="MigrationEnvironmentCensusReadTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureContractTests.fs" />
     <Compile Include="MigrationClaimEventCaptureContractTests.fs" />
+    <Compile Include="MigrationLegacyReceiptParserTests.fs" />
+    <Compile Include="MigrationHistoricalClaimParserTests.fs" />
     <Compile Include="MigrationClaimJournalCaptureTests.fs" />
     <Compile Include="MigrationClaimEventInspectBinderTests.fs" />
     <Compile Include="MigrationReviewDeliveryInspectBinderTests.fs" />
