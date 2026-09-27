@@ -223,6 +223,398 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assertIsInstance(value, operator.Unknown)
         self.assertNotIn(SENTINEL, repr(value))
 
+    def test_lost_response_read_cannot_rewrite_selected_pull_sha(self):
+        expected_pull = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["head"]["sha"] = SHA_C
+        observed_pull = dataclasses.replace(
+            pull_observed(), source_branch_sha=SHA_C, pulls=(pull,))
+
+        def read_pull():
+            object.__setattr__(expected_pull, "source_sha", SHA_C)
+            pull["body"] = operator.pull_request_body(expected_pull)["body"]
+            return observed_pull
+
+        self.assert_unknown(operator.classify_pull_after_one_attempt(
+            expected_pull, read_pull))
+
+    def test_lost_response_read_cannot_rewrite_selected_protection_sha(self):
+        expected_protection = protection_expected()
+        observed_protection = dataclasses.replace(
+            protection_observed(), branch_sha=SHA_C)
+
+        def read_protection():
+            object.__setattr__(expected_protection, "branch_sha", SHA_C)
+            return observed_protection
+
+        self.assert_unknown(operator.classify_protection_after_one_attempt(
+            expected_protection, read_protection))
+
+    def test_reservation_callback_cannot_redirect_selected_native_write(self):
+        for kind in ("pull", "protection"):
+            with self.subTest(kind=kind):
+                expected = pull_expected() if kind == "pull" else protection_expected()
+                events = (pull_read_events() if kind == "pull"
+                          else protection_read_events()) * 2
+                playback = operator.OfflineTranscriptTransport(events)
+                posts = []
+
+                class TracingTransport:
+                    def request(self, method, path, body=None):
+                        if method in {"POST", "PUT"}:
+                            posts.append((method, path))
+                            raise OSError("synthetic-lost-response")
+                        return playback.request(method, path, body)
+
+                def reserve(_key):
+                    if kind == "pull":
+                        object.__setattr__(expected, "repository", "FS-GG/foreign")
+                    else:
+                        object.__setattr__(expected, "branch", "foreign")
+                    return True
+
+                runner = (operator.run_pull_once if kind == "pull"
+                          else operator.run_protection_once)
+                self.assert_unknown(runner(expected, TracingTransport(), reserve))
+                self.assertEqual(posts, [
+                    ("POST", "repos/FS-GG/disposable/pulls") if kind == "pull"
+                    else ("PUT", "repos/FS-GG/disposable/branches/main/protection")])
+
+    def test_native_reader_cannot_return_mutated_selected_repository_id(self):
+        for kind in ("pull", "protection"):
+            with self.subTest(kind=kind):
+                expected = pull_expected() if kind == "pull" else protection_expected()
+                events = (pull_read_events() if kind == "pull"
+                          else protection_read_events())
+                playback = operator.OfflineTranscriptTransport(events)
+                count = [0]
+
+                class MutatingTransport:
+                    def request(self, method, path, body=None):
+                        response = playback.request(method, path, body)
+                        count[0] += 1
+                        if count[0] == len(events):
+                            object.__setattr__(expected, "repository_id", 45)
+                        return response
+
+                reader = operator.NativeReadAdapter(MutatingTransport())
+                observed = (reader.read_pull_census(expected) if kind == "pull"
+                            else reader.read_protection(expected))
+                self.assertEqual(observed.repository_id, 44)
+
+    def test_native_reader_refuses_foreign_repository_url(self):
+        root = "https://api.github.com/repos/FS-GG/disposable"
+        for kind in ("pull", "protection"):
+            for url in ("https://api.github.com/repos/FS-GG/foreign",
+                        root + "?alias=1", root.replace(".com/", ".com:443/"),
+                        None, root):
+                with self.subTest(kind=kind, url=url):
+                    expected = pull_expected() if kind == "pull" else protection_expected()
+                    events = (pull_read_events() if kind == "pull"
+                              else protection_read_events())
+                    for item in events:
+                        if (item["method"] == "GET"
+                                and item["path"] == "repos/FS-GG/disposable"):
+                            item["response"]["json"]["url"] = url
+                    reader = operator.NativeReadAdapter(
+                        operator.OfflineTranscriptTransport(events))
+                    if url == root:
+                        observed = (reader.read_pull_census(expected) if kind == "pull"
+                                    else reader.read_protection(expected))
+                        self.assertEqual(observed.repository_id, 44)
+                    else:
+                        with self.assertRaisesRegex(
+                                operator.Refused, "native-repository-mismatch"):
+                            if kind == "pull":
+                                reader.read_pull_census(expected)
+                            else:
+                                reader.read_protection(expected)
+
+    def test_exact_pull_refuses_foreign_nested_repository_url(self):
+        root = "https://api.github.com/repos/FS-GG/disposable"
+        for side in ("head", "base"):
+            for url in ("https://api.github.com/repos/FS-GG/foreign",
+                        root + "?alias=1", None, root):
+                with self.subTest(side=side, url=url):
+                    pull = copy.deepcopy(pull_observed().pulls[0])
+                    pull[side]["repo"]["url"] = url
+                    observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+                    result = operator.classify_pull_after_one_attempt(
+                        pull_expected(), lambda: observed)
+                    if url == root:
+                        self.assertIsInstance(result, operator.ExactPull)
+                    else:
+                        self.assert_unknown(result)
+
+    def test_native_pull_list_detail_refuses_nested_repository_url_drift(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        for side in ("head", "base"):
+            with self.subTest(side=side):
+                events = pull_read_events((pull,))
+                events[3]["response"]["json"][0][side]["repo"]["url"] = (
+                    "https://api.github.com/repos/FS-GG/foreign")
+                events[5]["response"]["json"][side]["repo"]["url"] = (
+                    "https://api.github.com/repos/FS-GG/disposable")
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events))
+                with self.assertRaisesRegex(
+                        operator.Refused, "native-pull-list-detail-repo-drift"):
+                    reader.read_pull_census(pull_expected())
+
+    def test_lost_response_foreign_nested_repository_url_stays_unknown(self):
+        expected = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["base"]["repo"]["url"] = (
+            "https://api.github.com/repos/FS-GG/foreign")
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_exact_pull_refuses_foreign_pull_object_url(self):
+        root = "https://api.github.com/repos/FS-GG/disposable/pulls/8"
+        for url in ("https://api.github.com/repos/FS-GG/foreign/pulls/8",
+                    "https://api.github.com/repos/FS-GG/disposable/pulls/9",
+                    root + "?alias=1", None, root):
+            with self.subTest(url=url):
+                pull = copy.deepcopy(pull_observed().pulls[0])
+                pull["url"] = url
+                observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+                result = operator.classify_pull_after_one_attempt(
+                    pull_expected(), lambda: observed)
+                if url == root:
+                    self.assertIsInstance(result, operator.ExactPull)
+                else:
+                    self.assert_unknown(result)
+
+    def test_native_pull_list_detail_refuses_object_url_drift(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        events = pull_read_events((pull,))
+        events[3]["response"]["json"][0]["url"] = (
+            "https://api.github.com/repos/FS-GG/foreign/pulls/8")
+        events[5]["response"]["json"]["url"] = (
+            "https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        reader = operator.NativeReadAdapter(
+            operator.OfflineTranscriptTransport(events))
+        with self.assertRaisesRegex(operator.Refused, "native-pull-list-detail-url-drift"):
+            reader.read_pull_census(pull_expected())
+        exact = "https://api.github.com/repos/FS-GG/disposable/pulls/8"
+        events = pull_read_events((pull,))
+        events[3]["response"]["json"][0]["url"] = exact
+        events[5]["response"]["json"]["url"] = exact
+        reader = operator.NativeReadAdapter(
+            operator.OfflineTranscriptTransport(events))
+        self.assertEqual(reader.read_pull_census(pull_expected()).pulls[0]["url"], exact)
+
+    def test_lost_response_foreign_pull_object_url_stays_unknown(self):
+        expected = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["url"] = "https://api.github.com/repos/FS-GG/foreign/pulls/8"
+        post = pull_read_events((pull,))
+        post[3]["response"]["json"][0]["url"] = pull["url"]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_native_protection_refuses_foreign_branch_commit_url(self):
+        selected = f"https://api.github.com/repos/FS-GG/disposable/commits/{SHA_B}"
+        foreign = f"https://api.github.com/repos/FS-GG/foreign/commits/{SHA_B}"
+        for probe in (2, 6):
+            for url in (foreign, selected + "?alias=1", None, selected):
+                with self.subTest(probe=probe, url=url):
+                    events = protection_read_events(
+                        protected=True, policy=protection_observed().policy)
+                    events[probe]["response"]["json"]["commit"]["url"] = url
+                    reader = operator.NativeReadAdapter(
+                        operator.OfflineTranscriptTransport(events))
+                    if url == selected:
+                        self.assertTrue(reader.read_protection(
+                            protection_expected()).protected)
+                    else:
+                        with self.assertRaisesRegex(
+                                operator.Refused,
+                                ("native-branch-identity" if probe == 2
+                                 else "native-protection-terminal-branch-drift")):
+                            reader.read_protection(protection_expected())
+
+    def test_lost_response_foreign_branch_commit_url_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        foreign = f"https://api.github.com/repos/FS-GG/foreign/commits/{SHA_B}"
+        for index in (2, 6):
+            post[index]["response"]["json"]["commit"]["url"] = foreign
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_native_protection_refuses_terminal_policy_type_alias(self):
+        for field in ("strict", "admin-enabled", "check-app-id"):
+            with self.subTest(field=field):
+                events = protection_read_events(
+                    protected=True, policy=protection_observed().policy)
+                terminal = events[7]["response"]["json"]
+                if field == "strict":
+                    terminal["required_status_checks"]["strict"] = 1
+                elif field == "admin-enabled":
+                    terminal["enforce_admins"]["enabled"] = 0
+                else:
+                    terminal["required_status_checks"]["checks"][0]["app_id"] = 17.0
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events * 2))
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    protection_expected(),
+                    lambda: reader.read_protection(protection_expected())))
+
+    def test_lost_response_terminal_policy_type_alias_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        post[7]["response"]["json"]["required_status_checks"]["strict"] = 1
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_native_pull_refuses_list_detail_draft_type_alias(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        for listed_draft in (0, 0.0):
+            with self.subTest(listed_draft=listed_draft):
+                events = pull_read_events((pull,))
+                events[3]["response"]["json"][0]["draft"] = listed_draft
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events * 2))
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(),
+                    lambda: reader.read_pull_census(pull_expected())))
+
+    def test_lost_response_pull_draft_type_alias_stays_unknown(self):
+        expected = pull_expected()
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        post = pull_read_events((pull,))
+        post[3]["response"]["json"][0]["draft"] = 0
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_native_json_refuses_exponent_overflow(self):
+        for raw in (b'{"value":1e999}', b'{"value":-1e999}'):
+            with self.subTest(raw=raw):
+                with self.assertRaisesRegex(operator.Refused, "json-nonfinite"):
+                    operator._strict_json(raw)
+        self.assertEqual(operator._strict_json(b'{"value":1.5}'), {"value": 1.5})
+
+    def test_lost_response_nonfinite_repository_extra_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        raw = '{"id":44,"full_name":"FS-GG/disposable","extra":1e999}'
+        for index in (0, 4):
+            post[index]["response"]["rawBody"] = raw
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_repository_dot_segments_refuse_before_native_callbacks(self):
+        for repository in ("../disposable", "./disposable",
+                           "FS-GG/..", "FS-GG/."):
+            for kind in ("pull", "protection"):
+                with self.subTest(repository=repository, kind=kind):
+                    original = pull_expected() if kind == "pull" else protection_expected()
+                    expected = dataclasses.replace(original, repository=repository)
+                    calls = []
+
+                    class Transport:
+                        def request(self, method, path, body=None):
+                            calls.append((method, path))
+                            raise OSError("no-native-request-allowed")
+
+                    def reserve(_key):
+                        calls.append(("reserve", ""))
+                        return True
+
+                    runner = operator.run_pull_once if kind == "pull" else operator.run_protection_once
+                    self.assert_unknown(runner(expected, Transport(), reserve))
+                    self.assertEqual(calls, [])
+
+    def test_native_reader_refuses_repository_owner_name_conflict(self):
+        for kind in ("pull", "protection"):
+            for field, value in (("owner", {"login": "Foreign"}),
+                                 ("name", "foreign"),
+                                 ("owner", None)):
+                with self.subTest(kind=kind, field=field, value=value):
+                    expected = pull_expected() if kind == "pull" else protection_expected()
+                    events = (pull_read_events() if kind == "pull"
+                              else protection_read_events())
+                    for item in events:
+                        if (item["method"] == "GET"
+                                and item["path"] == "repos/FS-GG/disposable"):
+                            item["response"]["json"][field] = value
+                    reader = operator.NativeReadAdapter(
+                        operator.OfflineTranscriptTransport(events))
+                    with self.assertRaisesRegex(
+                            operator.Refused, "native-repository-mismatch"):
+                        if kind == "pull":
+                            reader.read_pull_census(expected)
+                        else:
+                            reader.read_protection(expected)
+            events = (pull_read_events() if kind == "pull"
+                      else protection_read_events())
+            for item in events:
+                if (item["method"] == "GET"
+                        and item["path"] == "repos/FS-GG/disposable"):
+                    item["response"]["json"].update({
+                        "owner": {"login": "FS-GG"}, "name": "disposable"})
+            reader = operator.NativeReadAdapter(
+                operator.OfflineTranscriptTransport(events))
+            observed = (reader.read_pull_census(pull_expected()) if kind == "pull"
+                        else reader.read_protection(protection_expected()))
+            self.assertEqual(observed.repository_id, 44)
+
+    def test_lost_response_foreign_repository_owner_stays_unknown(self):
+        expected = protection_expected()
+        post = protection_read_events(
+            protected=True, policy=protection_observed().policy)
+        for index in (0, 4):
+            post[index]["response"]["json"]["owner"] = {"login": "Foreign"}
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(expected),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
     def test_pull_repository_id_must_not_accept_boolean_alias(self):
         expected = dataclasses.replace(pull_expected(), repository_id=1)
         for side in ("head", "base"):
@@ -459,6 +851,55 @@ class VersionedReadbackTests(unittest.TestCase):
             provider_response={"status": "unknown", "body": SENTINEL})
         self.assertEqual(result, operator.ExactPull(8, "PR_8", DIGEST))
 
+    def test_direct_pull_classifier_keeps_explicit_refusal_unknown(self):
+        # A future installed caller may pass its counted response directly to
+        # the classifier. Exact poststate cannot override an explicit refusal.
+        for response in ({"status": 302, "body": SENTINEL},
+                         operator.HttpResponse(401, (), b"redacted"),
+                         {"status": True}, {"status": 302.0},
+                         {"status": "302"}):
+            reads = iter((pull_observed(), pull_observed()))
+            with self.subTest(response=type(response).__name__):
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(), lambda: next(reads),
+                    provider_response=response))
+        for response in ({"status": 500},
+                         {"status": "lost"}):
+            reads = iter((pull_observed(), pull_observed()))
+            self.assertIsInstance(operator.classify_pull_after_one_attempt(
+                pull_expected(), lambda: next(reads),
+                provider_response=response), operator.ExactPull)
+
+    def test_direct_pull_success_response_must_match_native_identity(self):
+        complete = dict(pull_observed().pulls[0],
+                        url="https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        for response in ({"status": 201, "body": complete},
+                         operator.HttpResponse(201, (), json.dumps(complete).encode()),
+                         operator.HttpResponse(201, (("Location", complete["url"]),),
+                                               json.dumps(complete).encode())):
+            with self.subTest(positive=type(response).__name__):
+                self.assertIsInstance(operator.classify_pull_after_one_attempt(
+                    pull_expected(), pull_observed,
+                    provider_response=response), operator.ExactPull)
+        wrong_head = copy.deepcopy(complete)
+        wrong_head["head"]["sha"] = SHA_C
+        wrong_number = dict(complete, number=9)
+        for response in ({"status": 201},
+                         {"status": 201, "body": wrong_head},
+                         {"status": 201, "body": wrong_number},
+                         operator.HttpResponse(201, (("Location", complete["url"] + "?q=1"),),
+                                               json.dumps(complete).encode()),
+                         operator.HttpResponse(201, (("Location", complete["url"]),
+                                                     ("location", complete["url"])),
+                                               json.dumps(complete).encode()),
+                         {"status": 201, "body": complete,
+                          "headers": {"Location": complete["url"] + "/9"}},
+                         operator.HttpResponse(201, (), b'{"number":8,"number":9}')):
+            with self.subTest(negative=repr(response)[:80]):
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(), pull_observed,
+                    provider_response=response))
+
     def test_pull_rejects_wrong_head_base_repo_and_identity(self):
         observed = pull_observed()
         for wrong in (
@@ -531,6 +972,15 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assert_unknown(operator.classify_protection_after_one_attempt(
             protection_expected(), lambda: next(reads)))
 
+    def test_direct_protection_classifier_keeps_explicit_refusal_unknown(self):
+        for response in ({"status": 302, "body": SENTINEL},
+                         operator.HttpResponse(401, (), b"redacted")):
+            reads = iter((protection_observed(), protection_observed()))
+            with self.subTest(response=type(response).__name__):
+                self.assert_unknown(operator.classify_protection_after_one_attempt(
+                    protection_expected(), lambda: next(reads),
+                    provider_response=response))
+
     def test_protection_rejects_wrong_branch_repo_incomplete_and_retry(self):
         observed = protection_observed()
         for wrong in (
@@ -577,6 +1027,51 @@ class VersionedReadbackTests(unittest.TestCase):
         result = operator.run_protection_once(protection_expected(), transport,
                                               reserve_once_factory())
         self.assertIsInstance(result, operator.ExactProtection)
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_success_response_foreign_pull_identity_stays_unknown(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         value={"number": 9, "node_id": "PR_9"}, status=201)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_success_response_exact_pull_identity_stays_exact(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        response_pull = dict(pull, url=
+                             "https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         value=response_pull, status=201)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assertIsInstance(operator.run_pull_once(
+            expected, transport, reserve_once_factory()), operator.ExactPull)
+        self.assertEqual(transport.writes, 1)
+
+    def test_q3_success_response_foreign_location_stays_unknown(self):
+        expected = pull_expected()
+        pull = pull_observed().pulls[0]
+        response_pull = dict(pull, url=
+                             "https://api.github.com/repos/FS-GG/disposable/pulls/8")
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(expected),
+                         value=response_pull, status=201,
+                         headers={"Location":
+                                  "https://api.github.com/repos/FS-GG/disposable/pulls/9"})] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            expected, transport, reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
 
     def test_q3_loopback_http_pull_and_protection(self):
@@ -845,6 +1340,7 @@ class VersionedReadbackTests(unittest.TestCase):
         transport = operator.OfflineTranscriptTransport(events)
         self.assert_unknown(operator.run_pull_once(
             pull_expected(), transport, reserve_once_factory()))
+
         self.assertEqual(transport.writes, 0)
         events = protection_read_events()
         events[6]["response"]["json"]["protected"] = True
@@ -882,6 +1378,48 @@ class VersionedReadbackTests(unittest.TestCase):
                                                    reserve_once_factory()))
         self.assertEqual(transport.writes, 0)
 
+    def test_lost_response_foreign_nested_repository_owner_stays_unknown(self):
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        pull["head"]["repo"]["owner"] = {"login": "Foreign"}
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] +
+                  pull_read_events((pull,)) * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_nested_repository_owner_and_name_bind_selected_full_name(self):
+        for side, key, value in (("head", "owner", {"login": "Foreign"}),
+                                 ("base", "owner", {"login": "Foreign"}),
+                                 ("head", "name", "foreign"),
+                                 ("base", "name", "foreign")):
+            with self.subTest(side=side, key=key):
+                pull = copy.deepcopy(pull_observed().pulls[0])
+                pull[side]["repo"][key] = value
+                observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+                self.assert_unknown(operator.classify_pull_after_one_attempt(
+                    pull_expected(), lambda: observed))
+        pull = copy.deepcopy(pull_observed().pulls[0])
+        for side in ("head", "base"):
+            pull[side]["repo"]["owner"] = {"login": "FS-GG"}
+            pull[side]["repo"]["name"] = "disposable"
+        observed = dataclasses.replace(pull_observed(), pulls=(pull,))
+        self.assertIsInstance(operator.classify_pull_after_one_attempt(
+            pull_expected(), lambda: observed), operator.ExactPull)
+
+    def test_unselected_pull_nested_repository_identity_is_still_checked(self):
+        unrelated = copy.deepcopy(pull_observed().pulls[0])
+        unrelated["body"] = "unrelated"
+        unrelated["base"]["repo"]["name"] = "foreign"
+        reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((unrelated,))))
+        with self.assertRaisesRegex(operator.Refused,
+                                    "native-pull-list-detail-repo-drift"):
+            reader.read_pull_census(pull_expected())
+
     def test_q6_controlled_exception_sentinel_not_surfaced(self):
         events = pull_read_events() * 2 + [
             event("POST", "repos/FS-GG/disposable/pulls",
@@ -906,6 +1444,149 @@ class VersionedReadbackTests(unittest.TestCase):
         self.assert_unknown(operator.run_pull_once(pull_expected(), transport,
                                                    reserve_once_factory()))
         self.assertEqual(transport.writes, 1)
+
+    def test_q6_terminal_repository_node_identity_drift_is_unknown(self):
+        pull = pull_observed().pulls[0]
+        post = pull_read_events((pull,))
+        post[0]["response"]["json"]["node_id"] = "R_44_A"
+        post[6]["response"]["json"]["node_id"] = "R_44_B"
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_native_repository_node_identity_requires_stable_shape(self):
+        pull = pull_observed().pulls[0]
+        for first, terminal, exact in (("R_44", "R_44", True),
+                                       ("R_44", None, False),
+                                       (True, True, False)):
+            with self.subTest(first=first, terminal=terminal):
+                events = pull_read_events((pull,))
+                events[0]["response"]["json"]["node_id"] = first
+                if terminal is not None:
+                    events[6]["response"]["json"]["node_id"] = terminal
+                reader = operator.NativeReadAdapter(
+                    operator.OfflineTranscriptTransport(events))
+                if exact:
+                    self.assertTrue(reader.read_pull_census(pull_expected()).complete)
+                else:
+                    with self.assertRaises(operator.Refused):
+                        reader.read_pull_census(pull_expected())
+
+    def test_q6_terminal_protection_repository_node_drift_is_unknown(self):
+        policy = protection_observed().policy
+        post = protection_read_events(True, policy)
+        post[0]["response"]["json"]["node_id"] = "R_44_A"
+        post[4]["response"]["json"]["node_id"] = "R_44_B"
+        events = (protection_read_events() * 2 +
+                  [event("PUT", "repos/FS-GG/disposable/branches/main/protection",
+                         body=operator.protection_body(protection_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_protection_once(
+            protection_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_q6_open_census_foreign_closed_row_stays_unknown(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated", state="closed")
+        post = pull_read_events((selected, unrelated))
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_unrelated_open_census_rows_must_have_coherent_lifecycle(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        observed = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((selected, unrelated)))).read_pull_census(pull_expected())
+        self.assertEqual(len(observed.pulls), 1)
+        for field, value in (("state", "closed"), ("draft", 0),
+                             ("merged", True), ("merged_at", "2026-09-25T00:00:00Z")):
+            with self.subTest(field=field):
+                wrong = copy.deepcopy(unrelated)
+                wrong[field] = value
+                reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+                    pull_read_events((selected, wrong))))
+                with self.assertRaisesRegex(operator.Refused,
+                                            "native-open-pull-row-state"):
+                    reader.read_pull_census(pull_expected())
+
+    def test_q6_open_census_foreign_base_target_stays_unknown(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        unrelated["base"]["repo"] = {"id": 45, "full_name": "FS-GG/foreign"}
+        post = pull_read_events((selected, unrelated))
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_open_census_base_target_is_selected_for_every_row(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        unrelated["head"]["repo"] = {"id": 45, "full_name": "FS-GG/fork"}
+        reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((selected, unrelated))))
+        self.assertEqual(len(reader.read_pull_census(pull_expected()).pulls), 1)
+        for foreign in ({"id": 45, "full_name": "FS-GG/disposable"},
+                        {"id": 44, "full_name": "FS-GG/foreign"}):
+            with self.subTest(foreign=foreign):
+                wrong = copy.deepcopy(unrelated)
+                wrong["base"]["repo"] = foreign
+                reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+                    pull_read_events((selected, wrong))))
+                with self.assertRaisesRegex(operator.Refused,
+                                            "native-pull-list-base-target"):
+                    reader.read_pull_census(pull_expected())
+
+    def test_q6_open_census_duplicate_node_id_stays_unknown(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, body="unrelated")
+        post = pull_read_events((selected, unrelated))
+        events = (pull_read_events() * 2 +
+                  [event("POST", "repos/FS-GG/disposable/pulls",
+                         body=operator.pull_request_body(pull_expected()),
+                         error=SENTINEL)] + post * 2)
+        transport = operator.OfflineTranscriptTransport(events)
+        self.assert_unknown(operator.run_pull_once(
+            pull_expected(), transport, reserve_once_factory()))
+        self.assertEqual(transport.writes, 1)
+
+    def test_open_census_requires_unique_nonempty_node_ids(self):
+        selected = pull_observed().pulls[0]
+        unrelated = copy.deepcopy(selected)
+        unrelated.update(number=9, node_id="PR_9", body="unrelated")
+        reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+            pull_read_events((selected, unrelated))))
+        self.assertEqual(len(reader.read_pull_census(pull_expected()).pulls), 1)
+        for node_id in ("PR_8", ""):
+            with self.subTest(node_id=node_id):
+                wrong = copy.deepcopy(unrelated)
+                wrong["node_id"] = node_id
+                reader = operator.NativeReadAdapter(operator.OfflineTranscriptTransport(
+                    pull_read_events((selected, wrong))))
+                with self.assertRaisesRegex(operator.Refused,
+                                            "native-pull-list-identity"):
+                    reader.read_pull_census(pull_expected())
 
     def test_q6_restart_replay_cli_and_v5_inspect_binding(self):
         root = SOURCE.parents[1]

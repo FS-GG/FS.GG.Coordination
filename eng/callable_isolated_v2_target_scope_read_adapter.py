@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import hashlib
 import json
@@ -68,7 +69,7 @@ def _scope(transport: TargetReadTransport, repository_id: int,
             raise Refused("target-reader-scope-expired")
     except candidate.Refused:
         raise Refused("target-reader-scope-expired") from None
-    return value
+    return copy.deepcopy(value)
 
 
 def _read(transport: TargetReadTransport, path: str) -> tuple[Any, str]:
@@ -128,7 +129,7 @@ class TargetScopeReadAdapter:
             raise Refused("target-selection-invalid")
         self.transport = transport
         self.attestor = attestor
-        self.selected = selected
+        self.selected = copy.deepcopy(selected)
         self.candidate_sha256 = candidate_sha256
         self.now = now
 

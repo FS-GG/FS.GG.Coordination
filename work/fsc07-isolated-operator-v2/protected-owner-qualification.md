@@ -1,0 +1,43 @@
+# GS2-09.9 protected owner qualification boundary
+
+Status: source-only decision packet, 2026-09-25. This records the evidence and decisions needed before a protected v2 installation or native one-attempt operation. It approves neither action. No execution token, selected target, journal generation, grant or provider request is present here.
+
+## Verified draft boundary
+
+| Draft | Verified head | What it can establish |
+| --- | --- | --- |
+| [#550 one-operation plan](https://github.com/FS-GG/FS.GG.Coordination/pull/550) | `19323acc60f6f1314b9c92030c203bf2789e21ad` | Proposed one canonical PR POST, durable intent before send, no repeat after an ambiguous outcome, complete native readback. It remains prepared, not authorized. |
+| [#563 inspect-only workflow](https://github.com/FS-GG/FS.GG.Coordination/pull/563) | `55ca33b7b45fd81889ffbccb4fbd4939f352b7d3` | A draft workflow with `if: ${{ false }}`, unselected source, image and packet pins, and an explicit refusal step. It cannot schedule an installed probe in this state. |
+| [#573 inspect-only release chain](https://github.com/FS-GG/FS.GG.Coordination/pull/573) | `e457a3ffd2b3a3c682e8b22ffa08ba9f9d75cf44` | Source checks for archive object identity and runtime closure. The proposed inspect-only archive SHA-256 is `003f63ac1b0f895642a7000954607b0980f8e9f1dbb058576e66b40ed79cbfb7`; it has no native execution entry. |
+| [#608 fake-port observer chain](https://github.com/FS-GG/FS.GG.Coordination/pull/608) | `4a56cb5c0be136d95759bd35029e7ba1497bb495` | Closed candidate, source/workflow/review/target/plan readers, token-free App metadata and complete prestate consistency controls. Outputs remain `authorized:false` and `can_dispatch:false`; no protected observer or provider transport is installed. |
+
+These are separate draft stacks. A #608 source check cannot be presented as a #563 installed artifact. The [custody decision](native-custody-decision.md) describes the proposed role split; the [candidate contract](effect-candidate.md) rejects the inspect-only archive as an execution artifact.
+
+## Decisions the protected owners must record
+
+Each selected value must come from an independent protected readback with immutable object ID, exact bytes or digest, producer principal, UTC event time and source revision. A candidate's own JSON, a claimed `scope()` dictionary or an App token mint response cannot attest its own provenance. Keep token bytes out of the packet.
+
+| Decision owner | Exact selection and independently checked evidence | Present state |
+| --- | --- | --- |
+| Coordination release owner and distinct release reviewer | Integrated protected Coordination commit/tree containing the reviewed source; producer workflow revision/path/hash, run ID/attempt, artifact ID and archive/member/source hashes; immutable runner image digest, image attestation, interpreter and closure digests; reviewer event ID/time and separate producer/reviewer identities. | Unselected. #563 is disabled with placeholder pins. No protected archive installation or independent release readback. |
+| `.github` workflow and authority owner | Separate execution workflow revision/path/hash and protected environment; selected run ID/attempt, dispatch actor, active independent reviewer and immutable approval event; grant issuer distinct from actor and reviewer; exact one-use grant fields and expiry. | Unselected. No execution workflow, approval event, issuer or grant. |
+| Disposable target and App custodian | One non-`.github` repository name, numeric and node IDs, installation ID, source/base refs and SHAs; separate setup and cleanup permissions; read-only prestate actor and immutable witness event/producer; execution App issue record, one selected repository, effective `metadata:read`, `contents:read`, `pull_requests:write` and expiry, without publishing the token. | Unselected. Fake target and App metadata ports provide consistency only. |
+| Protected journal owner and independent replay reader | Backend/repository/ref, operation and request digests, prior generation/head, atomic `attempt-may-have-started` CAS, committed generation/head and fresh-process independent readback. The writer and replay reader have distinct credentials. | Unselected. Local SQLite and injected fences do not qualify. |
+| Native result observer | Selected credential's one counted POST, response or exception class without secret contents, two complete PR and protection list/detail snapshots with terminal pagination and exact refs/policy, and a fresh-process zero-repeat check against the same journal generation. | No installed effect command or provider run. |
+
+The source-level [prestate reader](target-prestate-read-adapter.md) carries witness principal and time claims, but no immutable witness-event implementation. The [effective-scope join](effective-scope-prestate-join.md) compares those claims with two reader roles; it cannot authenticate any of them. A protected owner must independently fetch the event and effective App selection before relying on either result.
+
+## Gate sequence and refusal controls
+
+1. **Inspect-only release decision.** The release owner selects an integrated immutable source revision, protected producer and independent reviewer, artifact and runner/runtime pins. An approved change to #563's disabled state is a separate decision. Its first protected run must prove exact installed bytes and zero token read, journal access, provider POST and dispatch under missing or swapped pins. A successful inspect-only release does not qualify the native execution artifact.
+2. **Execution artifact decision.** A separate reviewed effect archive and workflow must bind the selected source, actor, reviewer, target, App scope and operation bytes. Source and installed negatives must refuse no grant, stale review, wrong run/attempt, foreign target, broadened repository/permission set, replaced archive/image, and wrong interpreter closure before token read or CAS. This source/test prerequisite can be prepared without protected access; the protected artifact, producer and install cannot.
+3. **Target, credential and intent decision.** Separately authorized setup establishes the disposable target and cleanup capability. Independent observers read back refs, policy, complete absent marker census, App issue and effective scope, and immutable witness events. The journal owner commits and independently rereads the one-attempt CAS. A lost CAS acknowledgment leaves zero POST and an uncertain attempt spent until independently resolved.
+4. **One-POST authorization.** Only a fresh approval for the exact run/attempt and selected target, byte-bound short-lived grant, protected CAS readback and installed no-grant refusal can open a single native POST window. A lost POST response or 500 consumes the attempt: complete native readback may prove the one exact poststate, otherwise result is `Unknown` with zero repeat. A 2xx response alone is insufficient. Setup, cleanup and any recovery write need separate authorization and receipt.
+
+Before either protected decision, independent negative controls must mutate one pin or role at a time and show refusal with observable counters at the installed entry. In particular, substitute the dispatch actor as reviewer or witness producer; change only the run attempt, source tree, archive, image, interpreter, selected repository ID, App permission, prestate transcript, journal parent or PR head/base. A changed value must never be repaired by reusing a candidate-supplied digest. Secret sentinels must not enter public output or exception chains.
+
+## Owner handoff and current hold
+
+The Coordination source owner can prepare the separate closed execution artifact/workflow design and fake-port negative tests now. The protected release owner and distinct reviewer are **waiting** for an integrated source revision and an explicit inspect-only release selection; their completion signal is independent readback of actual producer, archive, runner and installed refusal evidence. The target/App custodian, journal owner, grant issuer and native observer are **waiting** for that separately reviewed effect boundary and their own protected selections. The Authority owner has **no action** from this packet.
+
+The first protected owner decision is the inspect-only release selection in step 1, not native dispatch approval. The later one-POST decision needs all step 2 and 3 coordinates and separate approval. Until then, #563 stays disabled; the #550 native one-attempt hold, typed ceiling, gate/index, #545 disputed receipt, receiver pin, Authority boundary and cutover remain unchanged.

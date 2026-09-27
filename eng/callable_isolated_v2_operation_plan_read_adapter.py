@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import copy
+import dataclasses
 import datetime as dt
 import hashlib
 import json
@@ -13,11 +14,27 @@ import callable_isolated_v2_effect_candidate as candidate
 
 PLAN_SCHEMA = "fsgg.coordination.callable-isolated-v2-operation-plan/1"
 SEAL_SCHEMA = "fsgg.coordination.callable-isolated-v2-plan-seal/1"
+REQUEST_SCHEMA = "fsgg.coordination.callable-isolated-v2-verified-request/1"
 TITLE = "V2-CALL-01.4b synthetic delivery v2"
 
 
 class Refused(ValueError):
     """Fixed refusal without plan, provider or credential contents."""
+
+
+@dataclasses.dataclass(frozen=True)
+class VerifiedRequest:
+    """Closed request bytes from the same canonical plan and seal read."""
+
+    plan_record_id: int
+    plan_sha256: str
+    operation_id: str
+    request_sha256: str
+    canonical_request: bytes
+    schema: str = dataclasses.field(init=False, default=REQUEST_SCHEMA)
+    authorized: bool = dataclasses.field(init=False, default=False)
+    can_dispatch: bool = dataclasses.field(init=False, default=False)
+    live_effects: int = dataclasses.field(init=False, default=0)
 
 
 class PlanReadPort(Protocol):
@@ -30,6 +47,8 @@ class PlanReadPort(Protocol):
 
 class ProtectedPlanSeal(Protocol):
     """Future independent plan seal observation; none supplied."""
+
+    def scope(self) -> dict[str, Any]: ...
 
     def read_seal(self, record_id: int, plan_sha256: str) -> dict[str, Any]: ...
 
@@ -92,7 +111,24 @@ def _scope(port: PlanReadPort, now: dt.datetime) -> dict[str, Any]:
             or type(value["permissions"]) is not list
             or _time(value["expiresAt"]) <= now):
         raise Refused("plan-reader-binding")
-    return value
+    return copy.deepcopy(value)
+
+
+def _seal_scope(port: ProtectedPlanSeal, now: dt.datetime) -> dict[str, Any]:
+    try:
+        value = port.scope()
+    except Exception:
+        raise Refused("plan-seal-scope-unavailable") from None
+    value = _exact(value, {"principalId", "credentialId", "store",
+                           "permissions", "expiresAt"}, "plan-seal-scope-shape")
+    if (type(value["principalId"]) is not str or not value["principalId"]
+            or not candidate._hex(value["credentialId"], candidate.HEX64)
+            or value["store"] != "coordination-protected-plan-seal"
+            or type(value["permissions"]) is not list
+            or value["permissions"] != ["read-seal"]
+            or _time(value["expiresAt"]) <= now):
+        raise Refused("plan-seal-scope-binding")
+    return copy.deepcopy(value)
 
 
 class OperationPlanReadAdapter:
@@ -122,6 +158,11 @@ class OperationPlanReadAdapter:
         self.now = now
 
     def observe_operation_plan(self) -> dict[str, Any]:
+        observation, _ = self.observe_with_verified_request()
+        return observation
+
+    def observe_with_verified_request(self) -> tuple[dict[str, Any], VerifiedRequest]:
+        """Return the existing candidate observation and sealed request once."""
         source, workflow, review, target = self.selected
         source_facts = source["facts"]
         workflow_facts = workflow["facts"]
@@ -227,6 +268,14 @@ class OperationPlanReadAdapter:
         if scope_after != scope_before:
             raise Refused("plan-reader-drift")
         digest = hashlib.sha256(raw).hexdigest()
+        seal_scope_before = _seal_scope(self.seal, self.now)
+        if (seal_scope_before["principalId"] in
+                {scope_after["principalId"]} |
+                {item["principalId"] for item in self.selected}
+                or seal_scope_before["credentialId"] in
+                {scope_after["credentialId"]} |
+                {item["credentialId"] for item in self.selected}):
+            raise Refused("plan-seal-reader-custody")
         try:
             attested = self.seal.read_seal(self.record_id, digest)
         except Exception:
@@ -237,15 +286,8 @@ class OperationPlanReadAdapter:
                     "reviewEventId", "targetRepositoryId", "operationId",
                     "sealedAt", "expiresAt"}, "plan-seal-shape")
         if (attested["schema"] != SEAL_SCHEMA or attested["complete"] is not True
-                or type(attested["principalId"]) is not str
-                or not attested["principalId"]
-                or attested["principalId"] in
-                   {scope_after["principalId"]} |
-                   {item["principalId"] for item in self.selected}
-                or not candidate._hex(attested["credentialId"], candidate.HEX64)
-                or attested["credentialId"] in
-                   {scope_after["credentialId"]} |
-                   {item["credentialId"] for item in self.selected}
+                or attested["principalId"] != seal_scope_before["principalId"]
+                or attested["credentialId"] != seal_scope_before["credentialId"]
                 or attested["recordId"] != self.record_id
                 or type(attested["recordId"]) is not int
                 or attested["planSha256"] != digest
@@ -266,7 +308,10 @@ class OperationPlanReadAdapter:
                 or expires > review_expires
                 or expires - sealed_at > dt.timedelta(minutes=30)):
             raise Refused("plan-seal-time")
-        return {"envelope": {
+        if (_seal_scope(self.seal, self.now) != seal_scope_before
+                or _scope(self.port, self.now) != scope_before):
+            raise Refused("plan-seal-reader-drift")
+        observation = {"envelope": {
             "schema": observers.SCHEMA, "role": "operation-plan", "complete": True,
             "principalId": scope_after["principalId"],
             "credentialId": scope_after["credentialId"],
@@ -274,3 +319,6 @@ class OperationPlanReadAdapter:
             "candidateSha256": self.candidate_sha256,
             "observedAt": self.now.strftime("%Y-%m-%dT%H:%M:%SZ"),
             "facts": {"operation": operation}}, "blobs": {}}
+        verified = VerifiedRequest(self.record_id, digest, operation["id"],
+                                   request_sha, _canonical(request))
+        return observation, verified

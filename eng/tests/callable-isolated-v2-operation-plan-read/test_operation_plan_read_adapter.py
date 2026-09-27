@@ -1,6 +1,7 @@
 """Independent fake-store controls for a held operation-plan observer."""
 
 import copy
+import dataclasses
 import datetime as dt
 import hashlib
 import json
@@ -82,7 +83,7 @@ def fixture():
 class FakePort:
     def __init__(self, raw, scope):
         self.raw = raw
-        self.scopes = [copy.deepcopy(scope), copy.deepcopy(scope)]
+        self.scopes = [copy.deepcopy(scope) for _ in range(3)]
         self.reads = []
 
     def scope(self):
@@ -97,6 +98,14 @@ class FakeSeal:
     def __init__(self, value):
         self.value = copy.deepcopy(value)
         self.calls = []
+        scope = {"principalId": "plan-sealer", "credentialId": "2" * 64,
+                 "store": "coordination-protected-plan-seal",
+                 "permissions": ["read-seal"],
+                 "expiresAt": "2026-09-25T12:20:00Z"}
+        self.scopes = [copy.deepcopy(scope), copy.deepcopy(scope)]
+
+    def scope(self):
+        return self.scopes.pop(0)
 
     def read_seal(self, record_id, plan_sha256):
         self.calls.append((record_id, plan_sha256))
@@ -106,6 +115,76 @@ class FakeSeal:
 
 
 class OperationPlanTests(unittest.TestCase):
+    def test_seal_reader_scope_must_bind_record_and_survive_read(self):
+        for changed in (("principalId", "foreign-sealer"),
+                        ("credentialId", "a" * 64),
+                        ("permissions", ["read-seal", "write-seal"])):
+            with self.subTest(changed=changed):
+                envelopes, record, scope, seal = fixture()
+                independent = FakeSeal(seal)
+                independent.scopes[0][changed[0]] = changed[1]
+                with self.assertRaises(plan.Refused):
+                    plan.OperationPlanReadAdapter(
+                        FakePort(canonical(record), scope), independent,
+                        *envelopes, 500, "f" * 64, NOW
+                    ).observe_with_verified_request()
+        envelopes, record, scope, seal = fixture()
+        independent = FakeSeal(seal)
+        independent.scopes[1]["credentialId"] = "a" * 64
+        with self.assertRaises(plan.Refused):
+            plan.OperationPlanReadAdapter(
+                FakePort(canonical(record), scope), independent,
+                *envelopes, 500, "f" * 64, NOW
+            ).observe_with_verified_request()
+
+    def test_seal_callback_cannot_hide_final_plan_reader_scope_drift(self):
+        envelopes, record, scope, seal = fixture()
+        port = FakePort(canonical(record), scope)
+        port.scopes[2]["credentialId"] = "a" * 64
+        with self.assertRaises(plan.Refused):
+            plan.OperationPlanReadAdapter(
+                port, FakeSeal(seal), *envelopes, 500, "f" * 64, NOW
+            ).observe_with_verified_request()
+
+    def test_seal_scope_exception_does_not_expose_secret(self):
+        envelopes, record, scope, seal = fixture()
+        class BrokenSeal(FakeSeal):
+            def scope(self):
+                raise OSError("SYNTHETIC_SECRET_SENTINEL")
+        with self.assertRaisesRegex(plan.Refused,
+                                    "plan-seal-scope-unavailable") as caught:
+            plan.OperationPlanReadAdapter(
+                FakePort(canonical(record), scope), BrokenSeal(seal),
+                *envelopes, 500, "f" * 64, NOW
+            ).observe_with_verified_request()
+        self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
+
+    def test_same_sealed_read_exposes_canonical_request_without_candidate_blob(self):
+        envelopes, record, scope, seal = fixture()
+        port = FakePort(canonical(record), scope)
+        independent = FakeSeal(seal)
+        adapter = plan.OperationPlanReadAdapter(port, independent, *envelopes,
+                                                500, "f" * 64, NOW)
+        observation, verified = adapter.observe_with_verified_request()
+        self.assertEqual(port.reads, [500])
+        self.assertEqual(len(independent.calls), 1)
+        self.assertEqual(observation["blobs"], {})
+        self.assertEqual(verified.canonical_request, canonical(record["request"]))
+        self.assertEqual(verified.request_sha256,
+                         record["operation"]["requestSha256"])
+        self.assertEqual(verified.operation_id, record["operation"]["id"])
+        self.assertEqual(verified.plan_record_id, 500)
+        self.assertEqual(verified.plan_sha256, sha(canonical(record)))
+        self.assertEqual(verified.schema, plan.REQUEST_SCHEMA)
+        self.assertFalse(verified.authorized)
+        self.assertFalse(verified.can_dispatch)
+        self.assertEqual(verified.live_effects, 0)
+        for changed in ({"authorized": True}, {"can_dispatch": True},
+                        {"live_effects": 1}, {"schema": "foreign"}):
+            with self.subTest(changed=changed):
+                with self.assertRaises((TypeError, ValueError)):
+                    dataclasses.replace(verified, **changed)
+
     def observe(self, envelopes=None, record=None, raw=None, scope=None, seal=None):
         selected, prepared, reader_scope, attestation = fixture()
         source = selected if envelopes is None else envelopes
@@ -209,6 +288,21 @@ class OperationPlanTests(unittest.TestCase):
             plan.OperationPlanReadAdapter(Broken(canonical(prepared), scope),
                 FakeSeal(seal), *envelopes, 500, "f" * 64, NOW).observe_operation_plan()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(caught.exception))
+
+    def test_reused_plan_reader_scope_mutated_at_final_read_refuses(self):
+        envelopes, prepared, scope, seal = fixture()
+        port = FakePort(canonical(prepared), scope)
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "a" * 64
+            return shared
+        port.scope = reused_scope
+        with self.assertRaises(plan.Refused):
+            plan.OperationPlanReadAdapter(port, FakeSeal(seal), *envelopes,
+                500, "f" * 64, NOW).observe_operation_plan()
 
 
 if __name__ == "__main__":

@@ -215,6 +215,46 @@ class ReviewReadTests(unittest.TestCase):
             adapter.observe_review()
         self.assertNotIn("SYNTHETIC_SECRET_SENTINEL", repr(error.exception))
 
+    def test_reused_review_reader_scope_mutated_at_final_read_refuses(self):
+        selected_workflow, scope, approvals, membership, audit = fixture()
+        transport = FakeTransport(scope, approvals, membership)
+        shared = copy.deepcopy(scope)
+        reads = [0]
+        def reused_scope():
+            reads[0] += 1
+            if reads[0] == 2:
+                shared["credentialId"] = "f" * 64
+            return shared
+        transport.scope = reused_scope
+        reader = review.ReviewReadAdapter(transport, FakeAudit(audit),
+            selected_workflow, 123, 88, 203, "reviewer", 500, "d" * 64,
+            "2026-09-25T12:20:00Z", NOW)
+        with self.assertRaises(review.Refused):
+            reader.observe_review()
+
+    def test_workflow_actor_mutated_after_review_construction_refuses(self):
+        selected_workflow, scope, approvals, membership, audit = fixture()
+        reader = review.ReviewReadAdapter(
+            FakeTransport(scope, approvals, membership), FakeAudit(audit),
+            selected_workflow, 123, 88, 203, "reviewer", 500, "d" * 64,
+            "2026-09-25T12:20:00Z", NOW)
+        selected_workflow["facts"]["dispatchActorId"] = 203
+        with self.assertRaises(review.Refused):
+            reader.observe_review()
+        selected_workflow, scope, approvals, membership, audit = fixture()
+        class MutatingTransport(FakeTransport):
+            def get(self, path):
+                response = super().get(path)
+                if len(self.paths) == 1:
+                    selected_workflow["facts"]["dispatchActorId"] = 203
+                return response
+        reader = review.ReviewReadAdapter(
+            MutatingTransport(scope, approvals, membership), FakeAudit(audit),
+            selected_workflow, 123, 88, 203, "reviewer", 500, "d" * 64,
+            "2026-09-25T12:20:00Z", NOW)
+        with self.assertRaises(review.Refused):
+            reader.observe_review()
+
 
 if __name__ == "__main__":
     unittest.main()

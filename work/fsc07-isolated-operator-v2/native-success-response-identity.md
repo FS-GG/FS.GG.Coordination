@@ -1,0 +1,11 @@
+# GS2-09.9 successful native response identity
+
+Status: source-only, non-authorizing candidate, 2026-09-25. Stacked on draft #816. The provisional v2 operator, closed archive and both disabled workflows remain outside a protected installed provider route.
+
+An independent red-before offline test returned `ExactPull(number=8)` after a single synthetic POST returned HTTP 201 naming PR number 9 and node `PR_9`. Two subsequent complete reads named PR number 8. The runner previously checked the response status but discarded its identity before classification. A successful response and native readback that disagree cannot establish the result of the selected one POST.
+
+The one-attempt runner now carries the counted response into classification. For a 2xx response, the classifier requires strict JSON with the same PR number, node ID, selected REST URL, source and base repository/ref/SHA, title, body marker, state and draft flag as the intended operation. Missing or duplicate response fields and a foreign head return `Unknown`. A lost response or 5xx remains eligible for exact two-read native reconciliation. Explicit 3xx/4xx remains ineligible. The independent tests cover a wrong 201 PR identity, correct JSON and raw HTTP 201 responses, omitted identity, changed head SHA and duplicate JSON member. The source does not expose provider body or exception text in its result.
+
+The closed effect archive is unchanged at SHA-256 `d665e9b66f42aa3df8b270b792d5958aec6c4bd2bd136010cd146b5e237dcd19`. Its builder pins the external provisional native source SHA-256 `9bccaafe5b616b3d33a41c3270816d0941775559acac6c6a35bf02f8444ac79f`; the new builder SHA-256 is `f12cafb0da8538fc3af2c99ab4e7035783b14e719c0c1f20fb43ef5bccfb8c51` and manifest-file SHA-256 is `fd4cf78cea10f44538cd73e24e54bb33876cae23d82e2c774988277461faf36f`. These are provisional local hashes, not approved protected release pins.
+
+This control does not prove which actor caused the PR, effective App scope, protected CAS generation, grant issuance, installed artifact custody or one counted native POST. The #550 one-operation authorization, #545 disputed receipt, disabled workflows, gate/index, protected merge, Authority write and cutover remain held.

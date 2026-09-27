@@ -1,0 +1,11 @@
+# These source-only proposals deliberately have constant refusal gates and
+# runner labels that are not registered. Keep actionlint's other checks active.
+paths:
+  .github/workflows/callable-isolated-v2-effect-release.yml:
+    ignore:
+      - 'constant expression "false" in condition\. remove the if: section'
+      - 'label "isolated-v2-release-unselected" is unknown\.'
+  .github/workflows/callable-isolated-v2-execute.yml:
+    ignore:
+      - 'constant expression "false" in condition\. remove the if: section'
+      - 'label "isolated-v2-effect-unselected" is unknown\.'

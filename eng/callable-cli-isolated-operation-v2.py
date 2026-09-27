@@ -16,6 +16,7 @@ import dataclasses
 import hashlib
 import http.client
 import json
+import math
 import os
 import pathlib
 import re
@@ -58,9 +59,16 @@ def _finite_constant(_value: str):
     raise Refused("json-nonfinite")
 
 
+def _finite_float(raw: str) -> float:
+    value = float(raw)
+    if not math.isfinite(value):
+        raise Refused("json-nonfinite")
+    return value
+
+
 def _strict_json(raw: bytes):
     return json.loads(raw, object_pairs_hook=_unique_object,
-                      parse_constant=_finite_constant)
+                      parse_constant=_finite_constant, parse_float=_finite_float)
 
 
 @dataclasses.dataclass(frozen=True)
@@ -222,13 +230,27 @@ class NativeReadAdapter:
                                 "link": link, "bodySha256": _sha(response.body)})
         return response.status, link, body
 
-    def _repo(self, repository: str, repository_id: int) -> None:
+    def _repo(self, repository: str, repository_id: int) -> str | None:
+        if not _safe_repository(repository):
+            raise Refused("native-repository-mismatch")
+        owner, name = repository.split("/")
         status, _, body = self._get(f"repos/{repository}")
         if (status != 200 or type(body) is not dict
                 or type(body.get("id")) is not int
                 or body["id"] != repository_id
-                or body.get("full_name") != repository):
+                or body.get("full_name") != repository
+                or ("name" in body and body["name"] != name)
+                or ("owner" in body and
+                    (type(body["owner"]) is not dict
+                     or body["owner"].get("login") != owner))
+                or ("url" in body and
+                    (type(body["url"]) is not str or body["url"] !=
+                     f"https://api.github.com/repos/{repository}"))):
             raise Refused("native-repository-mismatch")
+        node_id = body.get("node_id")
+        if "node_id" in body and (type(node_id) is not str or not node_id):
+            raise Refused("native-repository-node-invalid")
+        return node_id
 
     def _ref(self, repository: str, ref: str) -> str:
         branch = ref.removeprefix("refs/heads/")
@@ -316,27 +338,48 @@ class NativeReadAdapter:
         raise Refused("native-pull-page-limit")
 
     def read_pull_census(self, expected: ExpectedPull) -> PullCensus:
+        if not _valid_pull(expected):
+            raise Refused("native-pull-identity-invalid")
+        expected = dataclasses.replace(expected)
         self.transcript = []
-        self._repo(expected.repository, expected.repository_id)
+        repository_node = self._repo(expected.repository, expected.repository_id)
         source_sha = self._ref(expected.repository, expected.source_ref)
         base_sha = self._ref(expected.repository, expected.base_ref)
         listed = self._open_pulls(expected.repository)
         selected: list[dict] = []
         seen: set[int] = set()
+        seen_nodes: set[str] = set()
         for item in listed:
             number = item.get("number") if type(item) is dict else None
-            if type(number) is not int or number <= 0 or number in seen:
+            node_id = item.get("node_id") if type(item) is dict else None
+            if (type(number) is not int or number <= 0 or number in seen
+                    or type(node_id) is not str or not node_id
+                    or node_id in seen_nodes):
                 raise Refused("native-pull-list-identity")
             seen.add(number)
+            seen_nodes.add(node_id)
             status, _, detail = self._get(f"repos/{expected.repository}/pulls/{number}")
             if (status != 200 or type(detail) is not dict
                     or detail.get("number") != number):
                 raise Refused("native-pull-detail-identity")
+            for row in (item, detail):
+                if (row.get("state") != "open"
+                        or type(row.get("draft")) is not bool
+                        or ("merged" in row and row["merged"] is not False)
+                        or ("merged_at" in row and row["merged_at"] is not None)):
+                    raise Refused("native-open-pull-row-state")
+            if (("url" in item) != ("url" in detail)
+                    or ("url" in detail and
+                        (type(detail["url"]) is not str
+                         or item["url"] != detail["url"]
+                         or detail["url"] != _pull_url(expected.repository, number)))):
+                raise Refused("native-pull-list-detail-url-drift")
             if (type(item.get("node_id")) is not str
                     or item["node_id"] != detail.get("node_id")):
                 raise Refused("native-pull-list-detail-node-drift")
             for field in ("state", "draft", "title", "body"):
-                if field not in item or item[field] != detail.get(field):
+                if (field not in item or field not in detail
+                        or _digest(item[field]) != _digest(detail[field])):
                     raise Refused("native-pull-list-detail-field-drift")
             for side in ("head", "base"):
                 listed_side = item.get(side)
@@ -347,15 +390,23 @@ class NativeReadAdapter:
                     raise Refused("native-pull-list-detail-drift")
                 listed_repo = listed_side.get("repo")
                 detail_repo = detail_side.get("repo")
-                if (type(listed_repo) is not dict or type(detail_repo) is not dict
-                        or type(listed_repo.get("id")) is not int
-                        or type(detail_repo.get("id")) is not int
+                if (not _repo_object_consistent(listed_repo)
+                        or not _repo_object_consistent(detail_repo)
                         or listed_repo.get("id") != detail_repo.get("id")
-                        or listed_repo.get("full_name") != detail_repo.get("full_name")):
+                        or listed_repo.get("full_name") != detail_repo.get("full_name")
+                        or ("url" in listed_repo) != ("url" in detail_repo)
+                        or ("url" in listed_repo and
+                            (type(listed_repo["url"]) is not str
+                             or listed_repo["url"] != detail_repo["url"]))):
                     raise Refused("native-pull-list-detail-repo-drift")
+                if (side == "base"
+                        and (not _same_repo(listed_repo, expected)
+                             or not _same_repo(detail_repo, expected))):
+                    raise Refused("native-pull-list-base-target")
             if detail.get("body") == pull_request_body(expected)["body"]:
                 selected.append(detail)
-        self._repo(expected.repository, expected.repository_id)
+        if self._repo(expected.repository, expected.repository_id) != repository_node:
+            raise Refused("native-repository-terminal-node-drift")
         if (self._ref(expected.repository, expected.source_ref) != source_sha
                 or self._ref(expected.repository, expected.base_ref) != base_sha):
             raise Refused("native-pull-terminal-ref-drift")
@@ -363,8 +414,11 @@ class NativeReadAdapter:
                           tuple(selected), _digest(self.transcript))
 
     def read_protection(self, expected: ExpectedProtection) -> ProtectionReadback:
+        if not _valid_protection(expected):
+            raise Refused("native-protection-identity-invalid")
+        expected = dataclasses.replace(expected)
         self.transcript = []
-        self._repo(expected.repository, expected.repository_id)
+        repository_node = self._repo(expected.repository, expected.repository_id)
         branch = expected.branch
         sha = self._ref(expected.repository, f"refs/heads/{branch}")
         branch_path = f"repos/{expected.repository}/branches/{urllib.parse.quote(branch, safe='/')}"
@@ -373,6 +427,7 @@ class NativeReadAdapter:
         if (status != 200 or type(branch_body) is not dict
                 or branch_body.get("name") != branch
                 or type(commit) is not dict or commit.get("sha") != sha
+                or not _branch_commit_url_matches(commit, expected.repository, sha)
                 or type(branch_body.get("protected")) is not bool
                 or not _branch_protection_url_matches(branch_body, expected)):
             raise Refused("native-branch-identity")
@@ -383,7 +438,8 @@ class NativeReadAdapter:
             raise Refused("native-protection-status")
         if protected and not _protection_urls_match(policy, expected):
             raise Refused("native-protection-target")
-        self._repo(expected.repository, expected.repository_id)
+        if self._repo(expected.repository, expected.repository_id) != repository_node:
+            raise Refused("native-repository-terminal-node-drift")
         if self._ref(expected.repository, f"refs/heads/{branch}") != sha:
             raise Refused("native-protection-terminal-ref-drift")
         terminal_status, _, terminal_branch = self._get(branch_path)
@@ -392,11 +448,14 @@ class NativeReadAdapter:
                 or terminal_branch.get("name") != branch
                 or type(terminal_commit) is not dict
                 or terminal_commit.get("sha") != sha
+                or not _branch_commit_url_matches(
+                    terminal_commit, expected.repository, sha)
                 or terminal_branch.get("protected") is not protected
                 or not _branch_protection_url_matches(terminal_branch, expected)):
             raise Refused("native-protection-terminal-branch-drift")
         terminal_policy_status, _, terminal_policy = self._get(f"{branch_path}/protection")
-        if terminal_policy_status != status or terminal_policy != policy:
+        if (terminal_policy_status != status
+                or _digest(terminal_policy) != _digest(policy)):
             raise Refused("native-protection-terminal-policy-drift")
         return ProtectionReadback(True, expected.repository_id, branch, sha,
                                   protected, policy if protected else {},
@@ -408,8 +467,7 @@ PULL_TITLE = "V2-CALL-01.4b synthetic delivery v2"
 
 def _valid_pull(expected: object) -> bool:
     return (type(expected) is ExpectedPull and _shape(expected)
-            and type(expected.repository) is str
-            and REPOSITORY.fullmatch(expected.repository) is not None
+            and _safe_repository(expected.repository)
             and type(expected.source_ref) is str
             and expected.source_ref.startswith("refs/heads/")
             and _safe_branch(expected.source_ref.removeprefix("refs/heads/"))
@@ -422,8 +480,7 @@ def _valid_pull(expected: object) -> bool:
 
 def _valid_protection(expected: object) -> bool:
     return (type(expected) is ExpectedProtection and _shape(expected)
-            and type(expected.repository) is str
-            and REPOSITORY.fullmatch(expected.repository) is not None
+            and _safe_repository(expected.repository)
             and _safe_branch(expected.branch)
             and _oid(expected.branch_sha)
             and type(expected.check_context) is str and bool(expected.check_context)
@@ -463,6 +520,11 @@ def _shape(expected) -> bool:
 def _safe_branch(value: object) -> bool:
     return (type(value) is str and BRANCH.fullmatch(value) is not None
             and all(segment not in {"", ".", ".."} for segment in value.split("/")))
+
+
+def _safe_repository(value: object) -> bool:
+    return (type(value) is str and REPOSITORY.fullmatch(value) is not None
+            and all(segment not in {".", ".."} for segment in value.split("/")))
 
 
 def _oid(value: object) -> bool:
@@ -593,9 +655,29 @@ def _complete_digest(value: object) -> bool:
 
 
 def _same_repo(value: object, expected: ExpectedPull) -> bool:
-    return (type(value) is dict and type(value.get("id")) is int
+    return (_repo_object_consistent(value)
             and value["id"] == expected.repository_id
-            and value.get("full_name") == expected.repository)
+            and value["full_name"] == expected.repository)
+
+
+def _repo_object_consistent(value: object) -> bool:
+    if type(value) is not dict or type(value.get("id")) is not int or value["id"] <= 0:
+        return False
+    repository = value.get("full_name")
+    if not _safe_repository(repository):
+        return False
+    owner, name = repository.split("/")
+    return (("name" not in value or value["name"] == name)
+            and ("owner" not in value or
+                 (type(value["owner"]) is dict
+                  and value["owner"].get("login") == owner))
+            and ("url" not in value or
+                 (type(value["url"]) is str and value["url"] ==
+                  f"https://api.github.com/repos/{repository}")))
+
+
+def _pull_url(repository: str, number: int) -> str:
+    return f"https://api.github.com/repos/{repository}/pulls/{number}"
 
 
 def _two(read: Callable[[], object]):
@@ -613,19 +695,88 @@ def _two(read: Callable[[], object]):
         return None
 
 
+def _response_allows_readback(value: object) -> bool:
+    """Only a 2xx, ambiguous 5xx/loss, or absent response may be reconciled."""
+    if value is None:
+        return True
+    if type(value) is HttpResponse:
+        status = value.status
+    elif type(value) is dict:
+        status = value.get("status")
+    else:
+        return False
+    return ((type(status) is int and
+             (200 <= status < 300 or 500 <= status < 600))
+            or (type(status) is str and status in {"unknown", "lost"}))
+
+
+def _pull_success_response_matches(value: object, expected: ExpectedPull,
+                                   pull: dict) -> bool:
+    """A successful POST must identify the same PR as the native readback."""
+    if value is None:
+        return True
+    if type(value) is HttpResponse:
+        if not 200 <= value.status < 300:
+            return True
+        headers = value.headers
+        try:
+            body = _strict_json(value.body)
+        except (UnicodeError, ValueError, Refused):
+            return False
+    elif type(value) is dict:
+        if type(value.get("status")) is not int or not 200 <= value["status"] < 300:
+            return True
+        headers = value.get("headers", ())
+        body = value.get("body")
+    else:
+        return False
+    if type(headers) is not tuple or any(
+            type(pair) is not tuple or len(pair) != 2
+            or type(pair[0]) is not str or type(pair[1]) is not str
+            for pair in headers):
+        return False
+    locations = [part for name, part in headers if name.lower() == "location"]
+    if len(locations) > 1 or (locations and locations[0] !=
+                              _pull_url(expected.repository, pull["number"])):
+        return False
+    if type(body) is not dict:
+        return False
+    head = body.get("head")
+    base = body.get("base")
+    return (type(body.get("number")) is int
+            and body["number"] == pull["number"]
+            and type(body.get("node_id")) is str
+            and body["node_id"] == pull["node_id"]
+            and type(body.get("url")) is str
+            and body["url"] == _pull_url(expected.repository, pull["number"])
+            and body.get("state") == "open"
+            and body.get("draft") is False
+            and body.get("title") == PULL_TITLE
+            and body.get("body") == pull_request_body(expected)["body"]
+            and type(head) is dict and type(base) is dict
+            and head.get("ref") == expected.source_ref.removeprefix("refs/heads/")
+            and head.get("sha") == expected.source_sha
+            and _same_repo(head.get("repo"), expected)
+            and base.get("ref") == expected.base_ref.removeprefix("refs/heads/")
+            and base.get("sha") == expected.base_sha
+            and _same_repo(base.get("repo"), expected))
+
+
 def classify_pull_after_one_attempt(
         expected: ExpectedPull,
         read: Callable[[], PullCensus],
         provider_response: object = None) -> ExactPull | Unknown:
     """Require one complete, coherent and exact PR poststate after attempt one.
 
-    The ambiguous send response is ignored. A caller must durably prove its
-    original one-attempt count and supply a qualified complete native reader.
+    A caller must durably prove its original one-attempt count and supply a
+    qualified complete native reader. Explicit refusals cannot be reconciled.
     """
-    del provider_response
     try:
+        if not _response_allows_readback(provider_response):
+            return Unknown("pull-request-provider-response-ineligible")
         if not _valid_pull(expected):
             return Unknown("pull-request-identity-invalid")
+        expected = dataclasses.replace(expected)
         observed = _two(read)
         if (type(observed) is not PullCensus or observed.complete is not True
                 or type(observed.repository_id) is not int
@@ -642,6 +793,9 @@ def classify_pull_after_one_attempt(
         if (type(head) is not dict or type(base) is not dict
                 or type(pull.get("number")) is not int or pull["number"] <= 0
                 or type(pull.get("node_id")) is not str or not pull["node_id"]
+                or ("url" in pull and
+                    (type(pull["url"]) is not str or pull["url"] !=
+                     _pull_url(expected.repository, pull["number"])))
                 or pull.get("state") != "open" or pull.get("draft") is not False
                 or pull.get("merged") is not False
                 or pull.get("title") != PULL_TITLE
@@ -653,6 +807,8 @@ def classify_pull_after_one_attempt(
                 or base.get("sha") != expected.base_sha
                 or not _same_repo(base.get("repo"), expected)):
             return Unknown("pull-request-readback-mismatch")
+        if not _pull_success_response_matches(provider_response, expected, pull):
+            return Unknown("pull-request-provider-response-mismatch")
         return ExactPull(pull["number"], pull["node_id"], observed.transcript_sha256)
     except Exception:
         return Unknown("pull-request-readback-unavailable")
@@ -666,6 +822,12 @@ def _protection_url(expected: ExpectedProtection) -> str:
     branch = urllib.parse.quote(expected.branch, safe="/")
     return (f"https://api.github.com/repos/{expected.repository}/"
             f"branches/{branch}/protection")
+
+
+def _branch_commit_url_matches(commit: dict, repository: str, sha: str) -> bool:
+    return ("url" not in commit or
+            (type(commit["url"]) is str and commit["url"] ==
+             f"https://api.github.com/repos/{repository}/commits/{sha}"))
 
 
 def _branch_protection_url_matches(branch: object, expected: ExpectedProtection) -> bool:
@@ -703,10 +865,12 @@ def classify_protection_after_one_attempt(
         read: Callable[[], ProtectionReadback],
         provider_response: object = None) -> ExactProtection | Unknown:
     """Require full protection readback, including disabled force pushes."""
-    del provider_response
     try:
+        if not _response_allows_readback(provider_response):
+            return Unknown("branch-protection-provider-response-ineligible")
         if not _valid_protection(expected):
             return Unknown("branch-protection-identity-invalid")
+        expected = dataclasses.replace(expected)
         observed = _two(read)
         if (type(observed) is not ProtectionReadback
                 or observed.complete is not True
@@ -763,6 +927,7 @@ def run_pull_once(expected: ExpectedPull, transport: object,
     try:
         if not _valid_pull(expected):
             return Unknown("pull-request-identity-invalid")
+        expected = dataclasses.replace(expected)
         reader = NativeReadAdapter(transport)
         before = _two(lambda: reader.read_pull_census(expected))
         if (type(before) is not PullCensus or before.complete is not True
@@ -779,6 +944,7 @@ def run_pull_once(expected: ExpectedPull, transport: object,
                        "baseSha": expected.base_sha})
         if reserve_once(key) is not True:
             return Unknown("pull-request-attempt-not-reserved")
+        response = None
         try:
             response = transport.request("POST", f"repos/{expected.repository}/pulls", body)
             if (type(response) is not HttpResponse or type(response.status) is not int
@@ -793,7 +959,7 @@ def run_pull_once(expected: ExpectedPull, transport: object,
             # A lost response may conceal an applied write. Never send again.
             pass
         return classify_pull_after_one_attempt(
-            expected, lambda: reader.read_pull_census(expected))
+            expected, lambda: reader.read_pull_census(expected), response)
     except Exception:
         return Unknown("pull-request-runtime-unavailable")
 
@@ -804,6 +970,7 @@ def run_protection_once(expected: ExpectedProtection, transport: object,
     try:
         if not _valid_protection(expected):
             return Unknown("branch-protection-identity-invalid")
+        expected = dataclasses.replace(expected)
         reader = NativeReadAdapter(transport)
         before = _two(lambda: reader.read_protection(expected))
         if (type(before) is not ProtectionReadback or before.complete is not True
