@@ -2,7 +2,8 @@ namespace FS.GG.Coordination.GitHub
 
 /// One retained provider response in a terminal page chain.
 type MigrationRepositorySettingsPageEvidence =
-    { SettingsRequestedUri: string
+    { SettingsStream: string
+      SettingsRequestedUri: string
       SettingsPayloadJson: string
       SettingsPayloadSha256: string
       SettingsNextUri: string option }

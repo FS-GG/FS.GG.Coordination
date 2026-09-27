@@ -23,7 +23,8 @@ let private read surface suffix =
       Surface=surface
       Complete=true
       Pages=
-        [ { SettingsRequestedUri=$"https://api.github.test/repos/FS-GG/sandbox/settings/{RepositorySettingsAdapter.surfaceId surface}"
+        [ { SettingsStream=RepositorySettingsAdapter.surfaceId surface
+            SettingsRequestedUri=$"https://api.github.test/repos/FS-GG/sandbox/settings/{RepositorySettingsAdapter.surfaceId surface}"
             SettingsPayloadJson=body; SettingsPayloadSha256=sha body; SettingsNextUri=None } ]
       Settings=
         [ { Surface=surface; Subject="FS-GG/sandbox"; Name="enabled"; Value=Boolean true } ] }

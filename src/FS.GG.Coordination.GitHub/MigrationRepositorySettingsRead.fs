@@ -6,7 +6,8 @@ open System.Security.Cryptography
 open System.Text
 
 type MigrationRepositorySettingsPageEvidence =
-    { SettingsRequestedUri: string
+    { SettingsStream: string
+      SettingsRequestedUri: string
       SettingsPayloadJson: string
       SettingsPayloadSha256: string
       SettingsNextUri: string option }
@@ -73,7 +74,8 @@ module MigrationRepositorySettingsRead =
 
     let private pageText (page: MigrationRepositorySettingsPageEvidence) =
         String.concat "|"
-            [ Convert.ToBase64String(Encoding.UTF8.GetBytes page.SettingsRequestedUri)
+            [ Convert.ToBase64String(Encoding.UTF8.GetBytes page.SettingsStream)
+              Convert.ToBase64String(Encoding.UTF8.GetBytes page.SettingsRequestedUri)
               page.SettingsPayloadSha256
               page.SettingsNextUri
               |> Option.map (Encoding.UTF8.GetBytes >> Convert.ToBase64String)
@@ -123,8 +125,9 @@ module MigrationRepositorySettingsRead =
         |> String.concat "\n"
         |> hashText
 
-    let private validatePages
+    let private validateStream
         (surface: SettingsSurface)
+        (stream: string)
         (pages: MigrationRepositorySettingsPageEvidence list)
         =
         if List.isEmpty pages then
@@ -137,7 +140,9 @@ module MigrationRepositorySettingsRead =
                 match remaining with
                 | [] -> Ok()
                 | page :: tail ->
-                    if not (validText page.SettingsRequestedUri) then
+                    if page.SettingsStream <> stream then
+                        Error(MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, "stream-drift"))
+                    elif not (validText page.SettingsRequestedUri) then
                         Error(MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, "invalid-request-uri"))
                     elif not (seen.Add page.SettingsRequestedUri) then
                         Error(MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, "duplicate-request-uri"))
@@ -158,6 +163,24 @@ module MigrationRepositorySettingsRead =
                             Error(MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, "pagination-chain-drift"))
 
             loop (HashSet<string>(StringComparer.Ordinal)) pages
+
+    let private validatePages surface pages =
+        if pages |> List.exists (fun page -> not (validText page.SettingsStream)) then
+            Error(MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, "invalid-stream"))
+        else
+            let streams = pages |> List.groupBy _.SettingsStream
+            let duplicateRequest =
+                pages
+                |> List.groupBy _.SettingsRequestedUri
+                |> List.tryFind (fun (_, matches) -> matches.Length > 1)
+
+            match duplicateRequest with
+            | Some _ ->
+                Error(MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, "duplicate-request-uri"))
+            | None ->
+                streams
+                |> List.fold (fun state (stream, streamPages) ->
+                    state |> Result.bind (fun () -> validateStream surface stream streamPages)) (Ok())
 
     let private validateSettings (surface: SettingsSurface) (settings: RepositorySetting list) =
         if settings |> List.exists (fun setting -> setting.Surface <> surface) then
