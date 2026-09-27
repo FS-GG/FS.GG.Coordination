@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import hashlib
+import importlib
 import importlib.util
 import pathlib
 
@@ -58,8 +59,16 @@ def digest(raw: bytes) -> str:
 
 def operator_module():
     """Load the retained /5 parser and classifier without editing its identity."""
+    module_name = "callable_isolated_v2_retained_operator"
+    try:
+        return importlib.import_module(module_name)
+    except ModuleNotFoundError as error:
+        if error.name != module_name:
+            raise
     path = pathlib.Path(__file__).resolve().parents[1] / "callable-cli-isolated-operation-v2.py"
-    spec = importlib.util.spec_from_file_location("callable_isolated_v2_retained_operator", path)
+    spec = importlib.util.spec_from_file_location(module_name, path)
+    if spec is None or spec.loader is None:
+        raise ImportError("retained-operator-unavailable")
     module = importlib.util.module_from_spec(spec)
     import sys
     sys.modules[spec.name] = module
