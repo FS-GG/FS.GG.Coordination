@@ -999,7 +999,7 @@ module MigrationInspectProviderAdapter =
                 match segments with
                 | [||] -> true
                 | [| "issues" |] | [| "pulls" |] -> true
-                | [| "issues"; number; ("comments" | "events") |] -> positive number
+                | [| "issues"; number; ("comments" | "events" | "timeline") |] -> positive number
                 | [| "pulls"; number; ("reviews" | "comments") |] -> positive number
                 | _ -> false
             value.Method = Get && value.Body.IsNone
@@ -1024,13 +1024,18 @@ module MigrationInspectProviderAdapter =
                 let streamPages (input: MigrationNativeActivityInput) =
                     [ yield! input.IssueComments |> List.collect (fun value -> value.Pages)
                       yield! input.IssueEvents |> List.collect (fun value -> value.Pages)
+                      yield! input.IssueTimelines |> List.collect (fun value -> value.Pages)
                       yield! input.PullRequestComments |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestEvents |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestTimelines |> List.collect (fun value -> value.Pages)
                       yield! input.PullRequestReviews |> List.collect (fun value -> value.Pages)
                       yield! input.PullRequestInlineComments |> List.collect (fun value -> value.Pages) ]
                 let expectedUriCounts (input: MigrationNativeActivityInput) =
                     let streamReadCount =
                         input.IssueComments.Length + input.IssueEvents.Length
-                        + input.PullRequestComments.Length + input.PullRequestReviews.Length
+                        + input.IssueTimelines.Length + input.PullRequestComments.Length
+                        + input.PullRequestEvents.Length + input.PullRequestTimelines.Length
+                        + input.PullRequestReviews.Length
                         + input.PullRequestInlineComments.Length
                     [ for _ in 1 .. 4 + streamReadCount do yield identityUri
                       for uri in pageUris input.Issues.Pages do yield uri; yield uri
@@ -1059,9 +1064,18 @@ module MigrationInspectProviderAdapter =
                       yield! input.IssueEvents |> List.collect (fun stream ->
                           stream.Events |> List.map (fun item ->
                               payloadSubject $"native:issue-event:{item.NodeId}" item.PayloadJson))
+                      yield! input.IssueTimelines |> List.collect (fun stream ->
+                          stream.Records |> List.map (fun item ->
+                              payloadSubject $"native:issue-timeline:{stream.SubjectNumber}:{item.NodeId}" item.PayloadJson))
                       yield! input.PullRequestComments |> List.collect (fun stream ->
                           stream.Comments |> List.map (fun item ->
                               payloadSubject $"native:pull-comment:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestEvents |> List.collect (fun stream ->
+                          stream.Events |> List.map (fun item ->
+                              payloadSubject $"native:pull-event:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestTimelines |> List.collect (fun stream ->
+                          stream.Records |> List.map (fun item ->
+                              payloadSubject $"native:pull-timeline:{stream.SubjectNumber}:{item.NodeId}" item.PayloadJson))
                       yield! input.PullRequestReviews |> List.collect (fun stream ->
                           stream.Reviews |> List.map (fun item ->
                               payloadSubject $"native:review:{item.NodeId}" item.PayloadJson))
@@ -1082,7 +1096,9 @@ module MigrationInspectProviderAdapter =
                     let identities = byUri.[identityUri]
                     let expectedIdentityCount =
                         4 + capture.Input.IssueComments.Length + capture.Input.IssueEvents.Length
-                        + capture.Input.PullRequestComments.Length + capture.Input.PullRequestReviews.Length
+                        + capture.Input.IssueTimelines.Length + capture.Input.PullRequestComments.Length
+                        + capture.Input.PullRequestEvents.Length + capture.Input.PullRequestTimelines.Length
+                        + capture.Input.PullRequestReviews.Length
                         + capture.Input.PullRequestInlineComments.Length
                     if identities.Length <> expectedIdentityCount
                        || (identities |> List.map (fun (_, body, _) -> body) |> List.distinct |> List.length) <> 1 then
@@ -1098,11 +1114,12 @@ module MigrationInspectProviderAdapter =
                     let rows = typedRows capture.Input
                     if rows.Length <> (rows |> List.map fst |> Set.ofList |> Set.count) then
                         failwith "typed-payload-duplicate"
-                    let subjectByPayload = rows |> Map.ofList
                     let pageSubjects = System.Collections.Generic.Dictionary<string, GitHubDiscoverySubject list>()
                     let validatePages (pages: MigrationRestPageEvidence list)
-                                      (expectedPayloads: string list) skipPullMarkers expectedCopies =
+                                      (expectedRows: (string * GitHubDiscoverySubject) list)
+                                      skipPullMarkers expectedCopies =
                         let rawItems = ResizeArray<string>()
+                        let mutable remaining = expectedRows
                         for page in pages do
                             let occurrences = byUri.[page.RequestedUri]
                             if occurrences.Length <> expectedCopies then failwith "page-copy-count"
@@ -1125,25 +1142,50 @@ module MigrationInspectProviderAdapter =
                             retained |> List.iter rawItems.Add
                             let subjects =
                                 retained |> List.map (fun payload ->
-                                    Map.tryFind payload subjectByPayload
-                                    |> Option.defaultWith (fun () -> failwith "raw-typed-item"))
+                                    match remaining |> List.tryFindIndex (fst >> (=) payload) with
+                                    | None -> failwith "raw-typed-item"
+                                    | Some index ->
+                                        let _, observed = remaining.[index]
+                                        remaining <-
+                                            remaining
+                                            |> List.mapi (fun current value -> current, value)
+                                            |> List.choose (fun (current, value) ->
+                                                if current = index then None else Some value)
+                                        observed)
                             pageSubjects.[page.RequestedUri] <- subjects
-                        if (rawItems |> Seq.toList |> List.sort) <> List.sort expectedPayloads then
+                        if not remaining.IsEmpty
+                           || (rawItems |> Seq.toList |> List.sort) <> (expectedRows |> List.map fst |> List.sort) then
                             failwith "raw-typed-population"
                     validatePages capture.Input.Issues.Pages
-                        (capture.Input.Issues.Issues |> List.map _.PayloadJson) true 2
+                        (capture.Input.Issues.Issues |> List.map (fun item ->
+                            payloadSubject $"native:issue:{item.NodeId}" item.PayloadJson)) true 2
                     validatePages capture.Input.PullRequests.Pages
-                        (capture.Input.PullRequests.PullRequests |> List.map _.PayloadJson) false 2
+                        (capture.Input.PullRequests.PullRequests |> List.map (fun item ->
+                            payloadSubject $"native:pull-request:{item.NodeId}" item.PayloadJson)) false 2
                     for stream in capture.Input.IssueComments do
-                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                        validatePages stream.Pages (stream.Comments |> List.map (fun item ->
+                            payloadSubject $"native:issue-comment:{item.NodeId}" item.PayloadJson)) false 1
                     for stream in capture.Input.IssueEvents do
-                        validatePages stream.Pages (stream.Events |> List.map _.PayloadJson) false 1
+                        validatePages stream.Pages (stream.Events |> List.map (fun item ->
+                            payloadSubject $"native:issue-event:{item.NodeId}" item.PayloadJson)) false 1
+                    for stream in capture.Input.IssueTimelines do
+                        validatePages stream.Pages (stream.Records |> List.map (fun item ->
+                            payloadSubject $"native:issue-timeline:{stream.SubjectNumber}:{item.NodeId}" item.PayloadJson)) false 1
                     for stream in capture.Input.PullRequestComments do
-                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                        validatePages stream.Pages (stream.Comments |> List.map (fun item ->
+                            payloadSubject $"native:pull-comment:{item.NodeId}" item.PayloadJson)) false 1
+                    for stream in capture.Input.PullRequestEvents do
+                        validatePages stream.Pages (stream.Events |> List.map (fun item ->
+                            payloadSubject $"native:pull-event:{item.NodeId}" item.PayloadJson)) false 1
+                    for stream in capture.Input.PullRequestTimelines do
+                        validatePages stream.Pages (stream.Records |> List.map (fun item ->
+                            payloadSubject $"native:pull-timeline:{stream.SubjectNumber}:{item.NodeId}" item.PayloadJson)) false 1
                     for stream in capture.Input.PullRequestReviews do
-                        validatePages stream.Pages (stream.Reviews |> List.map _.PayloadJson) false 1
+                        validatePages stream.Pages (stream.Reviews |> List.map (fun item ->
+                            payloadSubject $"native:review:{item.NodeId}" item.PayloadJson)) false 1
                     for stream in capture.Input.PullRequestInlineComments do
-                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                        validatePages stream.Pages (stream.Comments |> List.map (fun item ->
+                            payloadSubject $"native:inline-comment:{item.NodeId}" item.PayloadJson)) false 1
                     let orderedPages =
                         capture.Input.Issues.Pages @ capture.Input.PullRequests.Pages
                         @ streamPages capture.Input

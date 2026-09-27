@@ -9,7 +9,10 @@ type MigrationNativeActivityInput =
       PullRequests: MigrationPullRequestPopulation
       IssueComments: MigrationIssueCommentPopulation list
       IssueEvents: MigrationIssueEventPopulation list
+      IssueTimelines: MigrationTimelinePopulation list
       PullRequestComments: MigrationIssueCommentPopulation list
+      PullRequestEvents: MigrationIssueEventPopulation list
+      PullRequestTimelines: MigrationTimelinePopulation list
       PullRequestReviews: MigrationPullRequestReviewPopulation list
       PullRequestInlineComments: MigrationPullRequestReviewCommentPopulation list }
 
@@ -19,7 +22,10 @@ type MigrationNativeActivitySnapshot =
       PullRequestCount: int
       IssueCommentCount: int
       IssueEventCount: int
+      IssueTimelineCount: int
       PullRequestCommentCount: int
+      PullRequestEventCount: int
+      PullRequestTimelineCount: int
       ReviewCount: int
       InlineCommentCount: int
       NormalizedSha256: string }
@@ -119,8 +125,14 @@ module MigrationNativeActivity =
                         scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None false))
                     && (input.IssueEvents |> List.forall (fun stream ->
                         scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/events" None false))
+                    && (input.IssueTimelines |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/timeline" None false))
                     && (input.PullRequestComments |> List.forall (fun stream ->
                         scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/comments" None false))
+                    && (input.PullRequestEvents |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/events" None false))
+                    && (input.PullRequestTimelines |> List.forall (fun stream ->
+                        scoped stream.Pages $"{issuePath}/{stream.SubjectNumber}/timeline" None false))
                     && (input.PullRequestReviews |> List.forall (fun stream ->
                         scoped stream.Pages $"{pullPath}/{stream.PullRequestNumber}/reviews" None false))
                     && (input.PullRequestInlineComments |> List.forall (fun stream ->
@@ -162,7 +174,10 @@ module MigrationNativeActivity =
         let inputPopulations =
             exactPopulation issueNumbers input.IssueComments _.SubjectNumber
             && exactPopulation issueNumbers input.IssueEvents _.SubjectNumber
+            && exactPopulation issueNumbers input.IssueTimelines _.SubjectNumber
             && exactPopulation pullRequestNumbers input.PullRequestComments _.SubjectNumber
+            && exactPopulation pullRequestNumbers input.PullRequestEvents _.SubjectNumber
+            && exactPopulation pullRequestNumbers input.PullRequestTimelines _.SubjectNumber
             && exactPopulation pullRequestNumbers input.PullRequestReviews _.PullRequestNumber
             && exactPopulation pullRequestNumbers input.PullRequestInlineComments _.PullRequestNumber
         let allPageSets =
@@ -170,13 +185,19 @@ module MigrationNativeActivity =
             && pagesValid pullRequests.PageCount pullRequests.Pages
             && (input.IssueComments |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
             && (input.IssueEvents |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
+            && (input.IssueTimelines |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
             && (input.PullRequestComments |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
+            && (input.PullRequestEvents |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
+            && (input.PullRequestTimelines |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
             && (input.PullRequestReviews |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
             && (input.PullRequestInlineComments |> List.forall (fun stream -> pagesValid stream.PageCount stream.Pages))
         let allStreamsTerminal =
             (input.IssueComments |> List.forall _.Terminal)
             && (input.IssueEvents |> List.forall _.Terminal)
+            && (input.IssueTimelines |> List.forall _.Terminal)
             && (input.PullRequestComments |> List.forall _.Terminal)
+            && (input.PullRequestEvents |> List.forall _.Terminal)
+            && (input.PullRequestTimelines |> List.forall _.Terminal)
             && (input.PullRequestReviews |> List.forall _.Terminal)
             && (input.PullRequestInlineComments |> List.forall _.Terminal)
         let allStreamsBound =
@@ -192,12 +213,30 @@ module MigrationNativeActivity =
                 && stream.Events |> List.forall (fun event ->
                     event.SubjectNumber = stream.SubjectNumber
                     && payloadValid event.PayloadJson event.PayloadSha256))
+            && input.IssueTimelines |> List.forall (fun stream ->
+                stream.RepositoryId = issues.RepositoryId
+                && matchingIssue stream.SubjectNumber stream.SubjectNodeId
+                && stream.Records |> List.forall (fun event ->
+                    event.SubjectNumber = stream.SubjectNumber
+                    && payloadValid event.PayloadJson event.PayloadSha256))
             && input.PullRequestComments |> List.forall (fun stream ->
                 stream.RepositoryId = issues.RepositoryId
                 && matchingPullRequest stream.SubjectNumber stream.SubjectNodeId
                 && stream.Comments |> List.forall (fun comment ->
                     comment.SubjectNumber = stream.SubjectNumber
                     && payloadValid comment.PayloadJson comment.PayloadSha256))
+            && input.PullRequestEvents |> List.forall (fun stream ->
+                stream.RepositoryId = issues.RepositoryId
+                && matchingPullRequest stream.SubjectNumber stream.SubjectNodeId
+                && stream.Events |> List.forall (fun event ->
+                    event.SubjectNumber = stream.SubjectNumber
+                    && payloadValid event.PayloadJson event.PayloadSha256))
+            && input.PullRequestTimelines |> List.forall (fun stream ->
+                stream.RepositoryId = issues.RepositoryId
+                && matchingPullRequest stream.SubjectNumber stream.SubjectNodeId
+                && stream.Records |> List.forall (fun event ->
+                    event.SubjectNumber = stream.SubjectNumber
+                    && payloadValid event.PayloadJson event.PayloadSha256))
             && input.PullRequestReviews |> List.forall (fun stream ->
                 stream.RepositoryId = issues.RepositoryId
                 && matchingPullRequest stream.PullRequestNumber stream.PullRequestNodeId
@@ -214,12 +253,14 @@ module MigrationNativeActivity =
             [ yield! input.IssueComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId)
               yield! input.IssueEvents |> List.collect (fun stream -> stream.Events |> List.map _.NodeId)
               yield! input.PullRequestComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId)
+              yield! input.PullRequestEvents |> List.collect (fun stream -> stream.Events |> List.map _.NodeId)
               yield! input.PullRequestReviews |> List.collect (fun stream -> stream.Reviews |> List.map _.NodeId)
               yield! input.PullRequestInlineComments |> List.collect (fun stream -> stream.Comments |> List.map _.NodeId) ]
         let activityDatabaseIds =
             [ [ yield! input.IssueComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId)
                 yield! input.PullRequestComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId) ]
               input.IssueEvents |> List.collect (fun stream -> stream.Events |> List.map _.DatabaseId)
+              input.PullRequestEvents |> List.collect (fun stream -> stream.Events |> List.map _.DatabaseId)
               input.PullRequestReviews |> List.collect (fun stream -> stream.Reviews |> List.map _.DatabaseId)
               input.PullRequestInlineComments |> List.collect (fun stream -> stream.Comments |> List.map _.DatabaseId) ]
         let orphanReviewComment =
@@ -266,13 +307,17 @@ module MigrationNativeActivity =
             let recordParts records = records |> List.collect (fun (nodeId, digest) -> [ nodeId; digest ])
             let issueCommentCount = input.IssueComments |> List.sumBy (fun stream -> stream.Comments.Length)
             let issueEventCount = input.IssueEvents |> List.sumBy (fun stream -> stream.Events.Length)
+            let issueTimelineCount = input.IssueTimelines |> List.sumBy (fun stream -> stream.Records.Length)
             let pullRequestCommentCount = input.PullRequestComments |> List.sumBy (fun stream -> stream.Comments.Length)
+            let pullRequestEventCount = input.PullRequestEvents |> List.sumBy (fun stream -> stream.Events.Length)
+            let pullRequestTimelineCount = input.PullRequestTimelines |> List.sumBy (fun stream -> stream.Records.Length)
             let reviewCount = input.PullRequestReviews |> List.sumBy (fun stream -> stream.Reviews.Length)
             let inlineCount = input.PullRequestInlineComments |> List.sumBy (fun stream -> stream.Comments.Length)
             let parts =
                 [ string issues.RepositoryId; string issues.PageCount; string issues.Issues.Length
                   string pullRequests.PageCount; string pullRequests.PullRequests.Length
-                  string issueCommentCount; string issueEventCount; string pullRequestCommentCount
+                  string issueCommentCount; string issueEventCount; string issueTimelineCount
+                  string pullRequestCommentCount; string pullRequestEventCount; string pullRequestTimelineCount
                   string reviewCount; string inlineCount ]
                 @ pageParts issues.Pages
                 @ (issues.Issues |> List.sortBy _.Number |> List.collect (fun issue ->
@@ -286,9 +331,18 @@ module MigrationNativeActivity =
                 @ (input.IssueEvents |> List.sortBy _.SubjectNumber |> List.collect (fun stream ->
                     [ string stream.SubjectNumber; stream.SubjectNodeId ] @ pageParts stream.Pages
                     @ (stream.Events |> List.sortBy _.DatabaseId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
+                @ (input.IssueTimelines |> List.sortBy _.SubjectNumber |> List.collect (fun stream ->
+                    [ string stream.SubjectNumber; stream.SubjectNodeId ] @ pageParts stream.Pages
+                    @ (stream.Records |> List.sortBy _.NodeId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
                 @ (input.PullRequestComments |> List.sortBy _.SubjectNumber |> List.collect (fun stream ->
                     [ string stream.SubjectNumber; stream.SubjectNodeId ] @ pageParts stream.Pages
                     @ (stream.Comments |> List.sortBy _.DatabaseId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
+                @ (input.PullRequestEvents |> List.sortBy _.SubjectNumber |> List.collect (fun stream ->
+                    [ string stream.SubjectNumber; stream.SubjectNodeId ] @ pageParts stream.Pages
+                    @ (stream.Events |> List.sortBy _.DatabaseId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
+                @ (input.PullRequestTimelines |> List.sortBy _.SubjectNumber |> List.collect (fun stream ->
+                    [ string stream.SubjectNumber; stream.SubjectNodeId ] @ pageParts stream.Pages
+                    @ (stream.Records |> List.sortBy _.NodeId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
                 @ (input.PullRequestReviews |> List.sortBy _.PullRequestNumber |> List.collect (fun stream ->
                     [ string stream.PullRequestNumber; stream.PullRequestNodeId ] @ pageParts stream.Pages
                     @ (stream.Reviews |> List.sortBy _.DatabaseId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
@@ -297,8 +351,9 @@ module MigrationNativeActivity =
                     @ (stream.Comments |> List.sortBy _.DatabaseId |> List.map (fun item -> item.NodeId, item.PayloadSha256) |> recordParts)))
             Ok { RepositoryId=issues.RepositoryId; IssueCount=issues.Issues.Length
                  PullRequestCount=pullRequests.PullRequests.Length
-                 IssueCommentCount=issueCommentCount; IssueEventCount=issueEventCount
-                 PullRequestCommentCount=pullRequestCommentCount; ReviewCount=reviewCount
+                 IssueCommentCount=issueCommentCount; IssueEventCount=issueEventCount; IssueTimelineCount=issueTimelineCount
+                 PullRequestCommentCount=pullRequestCommentCount; PullRequestEventCount=pullRequestEventCount
+                 PullRequestTimelineCount=pullRequestTimelineCount; ReviewCount=reviewCount
                  InlineCommentCount=inlineCount
                  NormalizedSha256=parts |> List.map framed |> String.concat "" |> sha }
 
@@ -312,34 +367,66 @@ module MigrationNativeActivity =
         MigrationGitHubRead.readIssues options transport
         |> Result.bind (fun issues ->
             MigrationGitHubRead.readPullRequests options issues transport
-            |> Result.bind (fun pullRequests ->
-                let issueNumbers = issues.Issues |> List.map _.Number
-                let pullRequestNumbers = pullRequests.PullRequests |> List.map _.Number
-                collect issueNumbers (fun number -> MigrationGitHubRead.readIssueComments options issues number transport)
-                |> Result.bind (fun issueComments ->
-                    collect issueNumbers (fun number -> MigrationGitHubRead.readIssueEvents options issues number transport)
-                    |> Result.bind (fun issueEvents ->
-                        collect pullRequestNumbers (fun number -> MigrationGitHubRead.readPullRequestComments options pullRequests number transport)
-                        |> Result.bind (fun pullRequestComments ->
-                            collect pullRequestNumbers (fun number -> MigrationGitHubRead.readPullRequestReviews options pullRequests number transport)
-                            |> Result.bind (fun pullRequestReviews ->
-                                collect pullRequestNumbers (fun number -> MigrationGitHubRead.readPullRequestReviewComments options pullRequests number transport)
-                                |> Result.bind (fun inlineComments ->
-                                    MigrationGitHubRead.readIssues options transport
-                                    |> Result.bind (fun finalIssues ->
-                                        MigrationGitHubRead.readPullRequests options finalIssues transport
-                                        |> Result.bind (fun finalPullRequests ->
-                                            if finalIssues <> issues || finalPullRequests <> pullRequests then
-                                                Error MigrationReadFailure.PopulationDrift
-                                            else
-                                                let input =
-                                                    { Issues=issues; PullRequests=pullRequests
-                                                      IssueComments=issueComments; IssueEvents=issueEvents
-                                                      PullRequestComments=pullRequestComments
-                                                      PullRequestReviews=pullRequestReviews
-                                                      PullRequestInlineComments=inlineComments }
-                                                reconcile options input
-                                                |> Result.map (fun snapshot -> { Input=input; Snapshot=snapshot }))))))))))
+            |> Result.map (fun pullRequests -> issues, pullRequests))
+        |> Result.bind (fun (issues, pullRequests) ->
+            let numbers = issues.Issues |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readIssueComments options issues number transport)
+            |> Result.map (fun value -> issues, pullRequests, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments) ->
+            let numbers = issues.Issues |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readIssueEvents options issues number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents) ->
+            let numbers = issues.Issues |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readIssueTimeline options issues number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, issueEvents, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents, issueTimelines) ->
+            let numbers = pullRequests.PullRequests |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readPullRequestComments options pullRequests number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, issueEvents, issueTimelines, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents, issueTimelines, pullRequestComments) ->
+            let numbers = pullRequests.PullRequests |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readPullRequestIssueEvents options pullRequests number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                                        pullRequestComments, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                             pullRequestComments, pullRequestEvents) ->
+            let numbers = pullRequests.PullRequests |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readPullRequestTimeline options pullRequests number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                                        pullRequestComments, pullRequestEvents, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                             pullRequestComments, pullRequestEvents, pullRequestTimelines) ->
+            let numbers = pullRequests.PullRequests |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readPullRequestReviews options pullRequests number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                                        pullRequestComments, pullRequestEvents, pullRequestTimelines, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                             pullRequestComments, pullRequestEvents, pullRequestTimelines, pullRequestReviews) ->
+            let numbers = pullRequests.PullRequests |> List.map _.Number
+            collect numbers (fun number -> MigrationGitHubRead.readPullRequestReviewComments options pullRequests number transport)
+            |> Result.map (fun value -> issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                                        pullRequestComments, pullRequestEvents, pullRequestTimelines,
+                                        pullRequestReviews, value))
+        |> Result.bind (fun (issues, pullRequests, issueComments, issueEvents, issueTimelines,
+                             pullRequestComments, pullRequestEvents, pullRequestTimelines,
+                             pullRequestReviews, inlineComments) ->
+            MigrationGitHubRead.readIssues options transport
+            |> Result.bind (fun finalIssues ->
+                MigrationGitHubRead.readPullRequests options finalIssues transport
+                |> Result.bind (fun finalPullRequests ->
+                    if finalIssues <> issues || finalPullRequests <> pullRequests then
+                        Error MigrationReadFailure.PopulationDrift
+                    else
+                        let input =
+                            { Issues=issues; PullRequests=pullRequests
+                              IssueComments=issueComments; IssueEvents=issueEvents
+                              IssueTimelines=issueTimelines; PullRequestComments=pullRequestComments
+                              PullRequestEvents=pullRequestEvents; PullRequestTimelines=pullRequestTimelines
+                              PullRequestReviews=pullRequestReviews
+                              PullRequestInlineComments=inlineComments }
+                        reconcile options input
+                        |> Result.map (fun snapshot -> { Input=input; Snapshot=snapshot }))))
 
     let captureStable (options: MigrationGitHubReadOptions) (transport: IMigrationGitHubReadTransport) =
         capture options transport

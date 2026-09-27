@@ -8,14 +8,17 @@ This audit pins the producer and parser source needed by the
 `claim-and-event-streams` authority. It records evidence from immutable source
 bytes. It is not a provider observation or a completeness receipt.
 
-## Native capture gap
+## Native capture
 
-The current native reader retains issue comments and issue events for issues,
-plus issue comments, reviews and inline comments for pull requests. It omits
-pull-request issue events, every issue and pull-request timeline, and issue
-bodies. A complete capture needs independently censused, terminal comment,
-issue-event and timeline streams for every issue and pull request, population
-rereads and two equal passes. Issue bodies remain owned by the issue authority.
+The native reader now retains independently censused, terminal comment,
+issue-event and timeline streams for every issue and pull request, plus reviews
+and inline comments for pull requests. It repeats both issue and pull-request
+populations after all streams and requires two fresh captures to agree on typed
+records, exact raw response bodies, page links and request identity. Timeline
+records remain distinct observations when their node IDs and bytes overlap the
+comment or issue-event endpoints. Issue bodies remain owned by the issue
+authority. Native marker classification and correspondence to protected journal
+history still require the final claim/event binder.
 
 ## Producer inventory
 

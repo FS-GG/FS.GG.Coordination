@@ -449,6 +449,8 @@ let private nativeComment =
     """{"id":201,"node_id":"COMMENT_201","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/1","body":"claim","created_at":"2026-09-25T10:00:00Z","updated_at":"2026-09-25T10:00:00Z","user":{"login":"actor"}}"""
 let private nativeEvent =
     """{"id":202,"node_id":"EVENT_202","event":"assigned","created_at":"2026-09-25T10:00:00Z","actor":{"login":"actor"}}"""
+let private nativeTimeline =
+    """{"node_id":"TIMELINE_203","event":"assigned"}"""
 
 let private nativeRoute request =
     match request with
@@ -460,6 +462,7 @@ let private nativeRoute request =
         | "/repos/FS-GG/copy/pulls" -> reply "[]"
         | "/repos/FS-GG/copy/issues/1/comments" -> reply $"[{nativeComment}]"
         | "/repos/FS-GG/copy/issues/1/events" -> reply $"[{nativeEvent}]"
+        | "/repos/FS-GG/copy/issues/1/timeline" -> reply $"[{nativeTimeline}]"
         | _ -> NetworkFailure
 
 let private captureNative route =
@@ -478,11 +481,11 @@ let ``native activity inspect slice binds provider derived terminal streams over
     | Error reason -> failwithf "Native activity proof refused: %s" reason
     | Ok proof ->
         Assert.Equal("claim-and-event-streams/native", proof.Read.Authority)
-        Assert.Equal(4, proof.Read.PageCount)
-        Assert.Equal(3, proof.Read.ItemCount)
+        Assert.Equal(5, proof.Read.PageCount)
+        Assert.Equal(4, proof.Read.ItemCount)
         Assert.Equal($"[{nativeComment}]", proof.Pages.[2].RawBody)
         Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
-    Assert.Equal(24, transport.Calls.Length)
+    Assert.Equal(28, transport.Calls.Length)
     let source = MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource
     Assert.Equal(Error "authority-adapter-unavailable:claim-and-event-streams",
@@ -529,6 +532,18 @@ let ``native activity inspect slice refuses missing page raw typed mismatch and 
         | _ -> nativeRoute request
     Assert.True(MigrationInspectProviderAdapter.readNativeActivity
                     options (RoutingTransport drifting) |> Result.isError)
+
+    let mutable timelineReads = 0
+    let changedTimelineBody = nativeTimeline.Replace("assigned", "closed")
+    let timelineDrifting request =
+        match request with
+        | Rest value when value.Uri.AbsolutePath.EndsWith("/timeline", StringComparison.Ordinal) ->
+            timelineReads <- timelineReads + 1
+            if timelineReads = 2 then reply $"[{changedTimelineBody}]"
+            else nativeRoute request
+        | _ -> nativeRoute request
+    Assert.True(MigrationInspectProviderAdapter.readNativeActivity
+                    options (RoutingTransport timelineDrifting) |> Result.isError)
 
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""

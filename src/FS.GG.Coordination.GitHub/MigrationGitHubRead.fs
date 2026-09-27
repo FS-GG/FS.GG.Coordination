@@ -287,6 +287,22 @@ type MigrationIssueEventPopulation =
       Pages: MigrationRestPageEvidence list
       Events: MigrationIssueEventRecord list }
 
+type MigrationTimelineRecord =
+    { NodeId: string
+      SubjectNumber: int
+      EventKind: string
+      PayloadJson: string
+      PayloadSha256: string }
+
+type MigrationTimelinePopulation =
+    { RepositoryId: int64
+      SubjectNumber: int
+      SubjectNodeId: string
+      PageCount: int
+      Terminal: bool
+      Pages: MigrationRestPageEvidence list
+      Records: MigrationTimelineRecord list }
+
 type MigrationPullRequestReviewRecord =
     { DatabaseId: int64
       NodeId: string
@@ -2451,6 +2467,155 @@ module MigrationGitHubRead =
                                                       Terminal=true; Pages=allPages
                                                       Events=List.sortBy _.DatabaseId complete }))
                     pages Set.empty 0 [] [] start)
+
+    let readPullRequestIssueEvents (options: MigrationGitHubReadOptions)
+                                   (pullRequests: MigrationPullRequestPopulation)
+                                   (pullRequestNumber: int)
+                                   (transport: IMigrationGitHubReadTransport) =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        elif not pullRequests.Terminal || pullRequests.PageCount < 1
+             || pullRequests.RepositoryId <> options.ExpectedRepositoryId then
+            Error(MigrationReadFailure.SnapshotMismatch "pull-request-census")
+        else
+            match pullRequests.PullRequests |> List.tryFind (fun item -> item.Number = pullRequestNumber) with
+            | None -> Error(MigrationReadFailure.SnapshotMismatch "uncensused-pull-request")
+            | Some pullRequest ->
+                readRepository options transport
+                |> Result.bind (fun repositoryId ->
+                    let start =
+                        Uri(options.ApiBase,
+                            $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}/issues/{pullRequestNumber}/events?per_page=100")
+                    let rec pages (seen: Set<string>) count records evidence (current: Uri) =
+                        if count >= 1000 || Set.contains current.AbsoluteUri seen then
+                            Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                        elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
+                             || current.AbsolutePath <> start.AbsolutePath
+                             || not (exactCommentPageQuery count current) then
+                            Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
+                        else
+                            response transport (Rest { Method=Get; Uri=current; Headers=headers options.Token options.UserAgent
+                                                       Body=None; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                            |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result, document))
+                            |> Result.bind (fun (result, document) ->
+                                use document = document
+                                if document.RootElement.ValueKind <> JsonValueKind.Array then
+                                    Error(MigrationReadFailure.MalformedResponse "events-not-array")
+                                else
+                                    let parsed =
+                                        document.RootElement.EnumerateArray()
+                                        |> Seq.map (fun value ->
+                                            uniqueObjectMembers value
+                                            |> Result.bind (fun () ->
+                                                property "actor" value
+                                                |> Result.bind (fun actor ->
+                                                    if actor.ValueKind = JsonValueKind.Null then Ok ()
+                                                    else uniqueObjectMembers actor))
+                                            |> Result.bind (fun () -> parseIssueEvent pullRequestNumber value))
+                                        |> Seq.toList
+                                    match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
+                                    | Some failure -> Error failure
+                                    | None ->
+                                        let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
+                                        match Transport.tryNextLink (linkHeader result.Headers) with
+                                        | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
+                                        | Ok next ->
+                                            let page =
+                                                { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
+                                                  NextUri=next |> Option.map _.AbsoluteUri }
+                                            let all, allPages = records @ values, evidence @ [ page ]
+                                            match next with
+                                            | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) all allPages uri
+                                            | None ->
+                                                collectUnique (fun (value: MigrationIssueEventRecord) -> value.NodeId) all
+                                                |> Result.bind (collectUnique (fun value -> string value.DatabaseId))
+                                                |> Result.map (fun complete ->
+                                                    { RepositoryId=repositoryId; SubjectNumber=pullRequestNumber
+                                                      SubjectNodeId=pullRequest.NodeId; PageCount=count + 1
+                                                      Terminal=true; Pages=allPages
+                                                      Events=List.sortBy _.DatabaseId complete }))
+                    pages Set.empty 0 [] [] start)
+
+    let private readTimeline options repositoryId subjectNumber subjectNodeId
+                             (transport: IMigrationGitHubReadTransport) =
+        readRepository options transport
+        |> Result.bind (fun observedRepositoryId ->
+            if observedRepositoryId <> repositoryId then Error MigrationReadFailure.IdentityDrift
+            else
+                let start =
+                    Uri(options.ApiBase,
+                        $"repos/{Uri.EscapeDataString options.Owner}/{Uri.EscapeDataString options.Repository}/issues/{subjectNumber}/timeline?per_page=100")
+                let rec pages (seen: Set<string>) count records evidence (current: Uri) =
+                    if count >= 1000 || Set.contains current.AbsoluteUri seen then
+                        Error(MigrationReadFailure.PaginationRefused "cycle-or-page-limit")
+                    elif current.Scheme <> start.Scheme || current.Authority <> start.Authority
+                         || current.AbsolutePath <> start.AbsolutePath
+                         || not (exactCommentPageQuery count current) then
+                        Error(MigrationReadFailure.PaginationRefused "continuation-escaped-scope")
+                    else
+                        response transport (Rest { Method=Get; Uri=current; Headers=headers options.Token options.UserAgent
+                                                   Body=None; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe })
+                        |> Result.bind (fun result -> parse result.Body |> Result.map (fun document -> result, document))
+                        |> Result.bind (fun (result, document) ->
+                            use document = document
+                            if document.RootElement.ValueKind <> JsonValueKind.Array then
+                                Error(MigrationReadFailure.MalformedResponse "timeline-not-array")
+                            else
+                                let parsed =
+                                    document.RootElement.EnumerateArray()
+                                    |> Seq.map (fun value ->
+                                        uniqueObjectMembers value
+                                        |> Result.bind (fun () ->
+                                            match requiredString "node_id" value, requiredString "event" value with
+                                            | Ok nodeId, Ok eventKind ->
+                                                let payload = value.GetRawText()
+                                                Ok { NodeId=nodeId; SubjectNumber=subjectNumber; EventKind=eventKind
+                                                     PayloadJson=payload; PayloadSha256=sha payload }
+                                            | Error failure, _ | _, Error failure -> Error failure))
+                                    |> Seq.toList
+                                match parsed |> List.tryPick (function Error failure -> Some failure | Ok _ -> None) with
+                                | Some failure -> Error failure
+                                | None ->
+                                    let values = parsed |> List.choose (function Ok value -> Some value | Error _ -> None)
+                                    match Transport.tryNextLink (linkHeader result.Headers) with
+                                    | Error failure -> Error(MigrationReadFailure.PaginationRefused $"{failure}")
+                                    | Ok next ->
+                                        let page =
+                                            { RequestedUri=current.AbsoluteUri; PayloadSha256=sha result.Body
+                                              NextUri=next |> Option.map _.AbsoluteUri }
+                                        let all, allPages = records @ values, evidence @ [ page ]
+                                        match next with
+                                        | Some uri -> pages (Set.add current.AbsoluteUri seen) (count + 1) all allPages uri
+                                        | None ->
+                                            collectUnique (fun (value: MigrationTimelineRecord) -> value.NodeId) all
+                                            |> Result.map (fun complete ->
+                                                { RepositoryId=repositoryId; SubjectNumber=subjectNumber
+                                                  SubjectNodeId=subjectNodeId; PageCount=count + 1
+                                                  Terminal=true; Pages=allPages
+                                                  Records=List.sortBy _.NodeId complete }))
+                pages Set.empty 0 [] [] start)
+
+    let readIssueTimeline (options: MigrationGitHubReadOptions) (issues: MigrationIssuePopulation)
+                          issueNumber transport =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        elif not issues.Terminal || issues.PageCount < 1 || issues.RepositoryId <> options.ExpectedRepositoryId then
+            Error(MigrationReadFailure.SnapshotMismatch "issue-census")
+        else
+            match issues.Issues |> List.tryFind (fun item -> item.Number = issueNumber) with
+            | None -> Error(MigrationReadFailure.SnapshotMismatch "uncensused-issue")
+            | Some issue -> readTimeline options issues.RepositoryId issueNumber issue.NodeId transport
+
+    let readPullRequestTimeline (options: MigrationGitHubReadOptions)
+                                (pullRequests: MigrationPullRequestPopulation)
+                                pullRequestNumber transport =
+        if not (valid options) then Error MigrationReadFailure.InvalidOptions
+        elif not pullRequests.Terminal || pullRequests.PageCount < 1
+             || pullRequests.RepositoryId <> options.ExpectedRepositoryId then
+            Error(MigrationReadFailure.SnapshotMismatch "pull-request-census")
+        else
+            match pullRequests.PullRequests |> List.tryFind (fun item -> item.Number = pullRequestNumber) with
+            | None -> Error(MigrationReadFailure.SnapshotMismatch "uncensused-pull-request")
+            | Some pullRequest ->
+                readTimeline options pullRequests.RepositoryId pullRequestNumber pullRequest.NodeId transport
 
     let private issueTypeQuery =
         "query($owner:String!,$name:String!,$after:String) { repository(owner:$owner,name:$name) { databaseId issueTypes(first:100,after:$after) { nodes { id name } pageInfo { hasNextPage endCursor } } } }"
