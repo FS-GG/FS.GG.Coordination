@@ -52,6 +52,14 @@ module MigrationInspectProviderAdapter =
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Binds one repository REST document to an explicitly partial core-settings proof.
+    /// Its distinct authority name cannot satisfy the complete repository-settings row.
+    val bindRepositoryCoreSettings:
+        options:MigrationInspectProviderOptions ->
+        settings:MigrationRepositoryCoreSettings ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
     val bindNativeRelations:
         options:MigrationInspectProviderOptions ->

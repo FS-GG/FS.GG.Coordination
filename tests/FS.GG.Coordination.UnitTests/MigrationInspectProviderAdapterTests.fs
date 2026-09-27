@@ -41,6 +41,70 @@ type private FakeTransport(responses: TransportOutcome list) =
             calls.Add(request, response)
             response
 
+let private repositoryCore =
+    """{"id":42,"node_id":"R_42","full_name":"FS-GG/copy","default_branch":"main","visibility":"private","archived":false,"disabled":false,"has_issues":true,"allow_squash_merge":true,"allow_merge_commit":false,"allow_rebase_merge":true,"delete_branch_on_merge":true}"""
+
+let private readRepositoryCore responses =
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readRepositoryCoreSettings options.Repository transport with
+    | Ok settings -> settings, transport.Calls
+    | Error failure -> failwithf "Expected repository core settings: %A" failure
+
+[<Fact>]
+let ``repository core inspect slice binds exact raw settings without completing authority`` () =
+    let settings, calls = readRepositoryCore [ reply repositoryCore ]
+    match MigrationInspectProviderAdapter.bindRepositoryCoreSettings options settings calls with
+    | Error reason -> failwithf "Repository core proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings/core", proof.Read.Authority)
+        Assert.Equal(1, proof.Read.PageCount)
+        Assert.Equal(1, proof.Read.ItemCount)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+        Assert.Equal("repository:42:settings:core", proof.Read.Subjects.Head.Identity)
+        Assert.Equal(repositoryCore, proof.Pages.Head.RawBody)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+                 source.ReadAuthority(1, "repository-settings"))
+
+[<Fact>]
+let ``repository core inspect slice refuses typed raw and request drift`` () =
+    let settings, calls = readRepositoryCore [ reply repositoryCore ]
+    Assert.Equal(Error "repository-core-raw-typed-mismatch",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options { settings with DefaultBranch="other" } calls)
+
+    let request, outcome = calls.Head
+    let foreign =
+        match request with
+        | Rest value -> Rest { value with Uri=Uri "https://api.github.test/repos/FS-GG/other" }
+        | _ -> failwith "Expected REST request"
+    Assert.Equal(Error "repository-core-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options settings [ foreign, outcome ])
+    Assert.Equal(Error "repository-core-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options settings (calls @ calls))
+
+    let ambiguous = repositoryCore.Replace("\"default_branch\":\"main\"",
+                                           "\"default_branch\":\"other\",\"default_branch\":\"main\"")
+    Assert.Equal(Error "repository-core-raw-parse",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options settings [ request, reply ambiguous ])
+
+[<Fact>]
+let ``repository core inspect guard refuses writes before dispatch`` () =
+    let inner = FakeTransport [ reply repositoryCore ]
+    let guard = MigrationInspectProviderAdapter.guardReadTransport
+                    options "repository-settings/core" inner
+    let write =
+        Rest { Method=Patch; Uri=Uri "https://api.github.test/repos/FS-GG/copy"
+               Headers=Map.empty; Body=Some "{}"; ApiVersion=ApiVersion.required
+               Idempotency=NeverReplay }
+    Assert.Equal(NetworkFailure, guard.Send write)
+    Assert.Empty(inner.Calls)
+
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""
 

@@ -25,6 +25,13 @@ type private CapturingTransport(inner: IMigrationGitHubReadTransport, allow: Git
 module MigrationInspectProviderAdapter =
     let internal allowedRequest (options: MigrationInspectProviderOptions) authority request =
         match authority, request with
+        | "repository-settings/core", Rest value ->
+            let repository =
+                Uri(options.Repository.ApiBase,
+                    $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && value.Uri = repository
         | "issues-open-and-relevant-closed", Rest value ->
             let repository =
                 Uri(options.Repository.ApiBase,
@@ -189,6 +196,73 @@ module MigrationInspectProviderAdapter =
                 issues, pullRequestNumbers)
             |> Ok
         with _ -> Error "raw-issue-parse"
+
+    let bindRepositoryCoreSettings
+        (options: MigrationInspectProviderOptions)
+        (settings: MigrationRepositoryCoreSettings)
+        (captures: (GitHubRequest * TransportOutcome) list) =
+        if not (repositoryBinding options)
+           || settings.RepositoryId <> options.Repository.ExpectedRepositoryId
+           || settings.FullName <> $"{options.Repository.Owner}/{options.Repository.Repository}" then
+            Error "repository-core-cohort"
+        elif captures.Length <> 1
+             || (captures |> List.exists (fst >> allowedRequest options "repository-settings/core" >> not)) then
+            Error "repository-core-capture-shape"
+        else
+            match captures.Head with
+            | Rest request, outcome ->
+                match responseBody outcome with
+                | Error reason -> Error reason
+                | Ok body ->
+                    try
+                        use document = JsonDocument.Parse body
+                        let root = document.RootElement
+                        requireUniqueMembers root
+                        let parsed =
+                            root.GetProperty("id").GetInt64(),
+                            root.GetProperty("node_id").GetString(),
+                            root.GetProperty("full_name").GetString(),
+                            root.GetProperty("default_branch").GetString(),
+                            root.GetProperty("visibility").GetString(),
+                            root.GetProperty("archived").GetBoolean(),
+                            root.GetProperty("disabled").GetBoolean(),
+                            root.GetProperty("has_issues").GetBoolean(),
+                            root.GetProperty("allow_squash_merge").GetBoolean(),
+                            root.GetProperty("allow_merge_commit").GetBoolean(),
+                            root.GetProperty("allow_rebase_merge").GetBoolean(),
+                            root.GetProperty("delete_branch_on_merge").GetBoolean()
+                        let typed =
+                            settings.RepositoryId, settings.NodeId, settings.FullName,
+                            settings.DefaultBranch, settings.Visibility, settings.Archived,
+                            settings.Disabled, settings.HasIssues, settings.AllowSquashMerge,
+                            settings.AllowMergeCommit, settings.AllowRebaseMerge,
+                            settings.DeleteBranchOnMerge
+                        let validStrings =
+                            not (String.IsNullOrWhiteSpace settings.NodeId)
+                            && not (String.IsNullOrWhiteSpace settings.DefaultBranch)
+                            && Set.contains settings.Visibility (set [ "public"; "private"; "internal" ])
+                        if parsed <> typed || not validStrings
+                           || settings.PayloadJson <> body || settings.PayloadSha256 <> sha body then
+                            Error "repository-core-raw-typed-mismatch"
+                        elif capturedNextUri outcome <> Some None then
+                            Error "repository-core-unexpected-continuation"
+                        else
+                            let revision = sha body
+                            let observed = subject $"repository:{settings.RepositoryId}:settings:core" revision body
+                            let page =
+                                { RequestedUri=request.Uri.AbsoluteUri
+                                  RequestIdentitySha256=sha request.Uri.AbsoluteUri
+                                  RawBody=body; PayloadSha256=revision
+                                  NextRequestIdentitySha256=None; Subjects=[ observed ] }
+                            Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                                 ScopeVerified=true; SubjectsParsedFromRaw=true
+                                 Read={ Authority="repository-settings/core"
+                                        ObservedAt=DateTimeOffset.UtcNow
+                                        PageCount=1; ItemCount=1; Terminal=true; NextCursor=None
+                                        HighWaterMark=digestParts [ revision ]; Subjects=[ observed ] }
+                                 Pages=[ page ] }
+                    with _ -> Error "repository-core-raw-parse"
+            | _ -> Error "repository-core-capture-shape"
 
     let bindIssues (options: MigrationInspectProviderOptions) (population: MigrationIssuePopulation)
                    (captures: (GitHubRequest * TransportOutcome) list) =
