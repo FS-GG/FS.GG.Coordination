@@ -17,6 +17,10 @@ type IMigrationReceiverCopyLocalGitObjectSource =
     inherit IDisposable
     abstract ReadBlob: sha1:string -> Result<ReadOnlyMemory<byte>, string>
 
+type IMigrationReceiverCopyVerifiedObjectSource =
+    inherit IDisposable
+    abstract ReadBlob: sha1:string -> Result<ReadOnlyMemory<byte>, string>
+
 type MigrationReceiverCopyBlobBatch =
     { ReceiverCopyBlobPlanFingerprint: string
       ReceiverCopyBlobBatchOrdinal: int
@@ -424,14 +428,17 @@ module MigrationReceiverCopyBlobCapture =
                 current <- next
             action current (List.last parts)
         finally current.Dispose()
-    let private readSecure path =
+    let private readSecureBounded maximumBytes path =
         withParentHandle path (fun parent name ->
             use handle = ownedHandle (Native.openat(descriptor parent, name, Native.O_RDONLY ||| Native.O_NOFOLLOW ||| Native.O_CLOEXEC, 0u)) "receiver-copy-blob-artifact-open"
             validateDescriptor 0x8000u 0x180u "receiver-copy-blob-artifact-ownership" handle
             use stream = new FileStream(handle, FileAccess.Read)
-            use target = new MemoryStream()
-            stream.CopyTo target
-            target.ToArray())
+            require (stream.Length >= 0L && stream.Length <= int64 maximumBytes) "receiver-copy-blob-artifact-size-bound"
+            let bytes = Array.zeroCreate<byte> (int stream.Length)
+            stream.ReadExactly bytes
+            require (stream.ReadByte() = -1) "receiver-copy-blob-artifact-concurrent-growth"
+            bytes)
+    let private readSecure path = readSecureBounded (8 * 1024 * 1024) path
     let private atomicSecure path (bytes: byte array) =
         withParentHandle path (fun parent name ->
             let temporary = ".tmp-" + Guid.NewGuid().ToString("N")
@@ -653,3 +660,51 @@ module MigrationReceiverCopyBlobCapture =
                 privateFile path
                 Ok { ReceiverCopyBlobCoveragePlanFingerprint = plan.ReceiverCopyFingerprint; ReceiverCopyBlobCoverageBatchFingerprints = fingerprints; ReceiverCopyBlobCoverageSha256BySha1 = digests; ReceiverCopyBlobCoverageFingerprint = coverageDigest }
             with ex -> Error ex.Message)
+
+    let createVerifiedCompleteObjectSource acceptedEvidence runIdentity verifiedCopyPlan batches artifacts coverage =
+        verifyCoverage acceptedEvidence runIdentity verifiedCopyPlan batches artifacts
+        |> Result.bind (fun actualCoverage ->
+            if actualCoverage <> coverage then Error "receiver-copy-blob-coverage-drift"
+            else
+                MigrationReceiverCopyPlan.readRetainedBlobBytes acceptedEvidence runIdentity verifiedCopyPlan
+                |> Result.bind (fun retained ->
+                    try
+                        require (retained.Count = 460 && coverage.ReceiverCopyBlobCoverageSha256BySha1.Count = 8999) "receiver-copy-blob-source-population"
+                        let sizes =
+                            verifiedCopyPlan.ReceiverCopyMappings
+                            |> List.collect (fun mapping -> mapping.ReceiverCopyRequiredEntries)
+                            |> List.choose (fun entry -> if entry.EntryKind = "blob" then entry.EntrySize |> Option.map (fun size -> entry.EntrySha, size) else None)
+                            |> List.groupBy fst
+                            |> List.map (fun (objectId, entries) ->
+                                let values = entries |> List.map snd |> Set.ofList
+                                require (values.Count = 1) "receiver-copy-blob-source-size-drift"
+                                objectId, Set.minElement values)
+                            |> Map.ofList
+                        let root, objects = prepare runIdentity (rootFor runIdentity)
+                        ignore root
+                        let mutable disposed = false
+                        Ok
+                            { new IMigrationReceiverCopyVerifiedObjectSource with
+                                member _.ReadBlob(objectId) =
+                                    try
+                                        require (not disposed) "receiver-copy-blob-source-disposed"
+                                        let digest =
+                                            coverage.ReceiverCopyBlobCoverageSha256BySha1
+                                            |> Map.tryFind objectId
+                                            |> Option.defaultWith (fun () -> failwith "receiver-copy-blob-source-uncovered")
+                                        let bytes =
+                                            match Map.tryFind objectId retained with
+                                            | Some source -> Array.copy source
+                                            | None -> readSecureBounded 1048576 (Path.Combine(objects, digest + ".blob"))
+                                        require (bytes.Length <= 1048576) "receiver-copy-blob-source-size-bound"
+                                        match Map.tryFind objectId sizes with
+                                        | Some expected -> require (int64 bytes.Length = expected) "receiver-copy-blob-source-size"
+                                        | None -> require (retained.ContainsKey objectId) "receiver-copy-blob-source-undeclared"
+                                        require (blobSha1 bytes = objectId && sha256 bytes = digest) "receiver-copy-blob-source-byte-drift"
+                                        Ok(ReadOnlyMemory<byte>(bytes))
+                                    with ex -> Error ex.Message
+                                member _.Dispose() =
+                                    if not disposed then
+                                        disposed <- true
+                                        for KeyValue(_, bytes) in retained do Array.Clear bytes }
+                    with ex -> Error ex.Message))

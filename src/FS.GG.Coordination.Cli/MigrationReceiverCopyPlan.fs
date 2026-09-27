@@ -469,7 +469,7 @@ module MigrationReceiverCopyPlan =
     let private gitBlobSha (bytes: byte array) =
         let header = strictUtf8.GetBytes($"blob {bytes.Length}\000")
         sha1Array (Array.append header bytes)
-    let private parseRetainedBlobs
+    let private parseRetainedBlobRows
         (census: ReceiverCensusSnapshot)
         (censusDigests: string list)
         (manifests: ReceiverManifest list)
@@ -500,11 +500,15 @@ module MigrationReceiverCopyPlan =
                   match Map.tryFind blobSha1 manifestBlobs with
                   | Some uses -> require (uses |> List.forall (fun entry -> entry.EntrySize = Some(int64 bytes.Length))) "blob-length"
                   | None -> ()
-                  yield blobSha1, expectedSha256 ]
+                  yield blobSha1, (expectedSha256, bytes) ]
         require (retained.Length = (retained |> List.map fst |> Set.ofList |> Set.count)) "blob-sha1-duplicate"
-        require (retained.Length = (retained |> List.map snd |> Set.ofList |> Set.count)) "blob-sha256-duplicate"
-        require (List.sort censusDigests = (retained |> List.map snd |> List.sort)) "blob-census-binding"
+        require (retained.Length = (retained |> List.map (snd >> fst) |> Set.ofList |> Set.count)) "blob-sha256-duplicate"
+        require (List.sort censusDigests = (retained |> List.map (snd >> fst) |> List.sort)) "blob-census-binding"
         Map.ofList retained
+
+    let private parseRetainedBlobs census censusDigests manifests external evidence =
+        parseRetainedBlobRows census censusDigests manifests external evidence
+        |> Map.map (fun _ (digest, _) -> digest)
 
     let private validRunIdentity (request: MigrationSandboxSeedRequest) =
         isHex 40 request.CandidateSha && isHex 64 request.CorpusSha256 && request.WorkflowRunId > 0L
@@ -598,3 +602,17 @@ module MigrationReceiverCopyPlan =
         (observed: MigrationReceiverCopyPlanResult) =
         derive acceptedEvidence runIdentity
         |> Result.bind (fun expected -> if expected = observed then Ok expected else Error "receiver-copy-plan-drift")
+
+    let internal readRetainedBlobBytes acceptedEvidence runIdentity observed =
+        verify acceptedEvidence runIdentity observed
+        |> Result.bind (fun _ ->
+            try
+                let producerRevision, producerTree, acceptedEpoch = validateBinding acceptedEvidence
+                let census, descriptions, correspondence = parseCensus producerRevision producerTree acceptedEpoch acceptedEvidence
+                let manifests, external = parseManifests census correspondence descriptions acceptedEvidence
+                let rows = parseRetainedBlobRows census correspondence.BlobDigests manifests external acceptedEvidence
+                require
+                    (rows |> Map.map (fun _ (digest, _) -> digest) = observed.ReceiverCopyRetainedBlobSha256BySha1)
+                    "receiver-copy-retained-bytes-drift"
+                Ok(rows |> Map.map (fun _ (_, bytes) -> bytes))
+            with ex -> Error ex.Message)

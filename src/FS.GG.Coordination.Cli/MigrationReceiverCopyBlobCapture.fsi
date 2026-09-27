@@ -6,6 +6,10 @@ type IMigrationReceiverCopyLocalGitObjectSource =
     inherit IDisposable
     abstract ReadBlob: sha1:string -> Result<ReadOnlyMemory<byte>, string>
 
+type IMigrationReceiverCopyVerifiedObjectSource =
+    inherit IDisposable
+    abstract ReadBlob: sha1:string -> Result<ReadOnlyMemory<byte>, string>
+
 type MigrationReceiverCopyBlobBatch =
     { ReceiverCopyBlobPlanFingerprint: string
       ReceiverCopyBlobBatchOrdinal: int
@@ -82,6 +86,19 @@ module MigrationReceiverCopyBlobCapture =
         batches:MigrationReceiverCopyBlobBatch list ->
         artifacts:MigrationReceiverCopyBlobBatchArtifact list ->
             Result<MigrationReceiverCopyBlobCoverage, string>
+
+    /// Revalidates the exact 8,999-object coverage before construction. Each read
+    /// reopens captured bytes through the private no-follow path and checks their
+    /// size, Git SHA-1 and SHA-256 immediately before the caller receives a copy.
+    /// Retained bytes are reparsed from the accepted archive and checked likewise.
+    val createVerifiedCompleteObjectSource:
+        acceptedEvidence:MigrationReceiverCopyAcceptedEvidence ->
+        runIdentity:MigrationSandboxSeedRequest ->
+        verifiedCopyPlan:MigrationReceiverCopyPlanResult ->
+        batches:MigrationReceiverCopyBlobBatch list ->
+        artifacts:MigrationReceiverCopyBlobBatchArtifact list ->
+        coverage:MigrationReceiverCopyBlobCoverage ->
+            Result<IMigrationReceiverCopyVerifiedObjectSource, string>
 
     /// Test-only bounded projection used to exercise high-volume diagnostic draining.
     val internal drainDiagnosticsForTests: bytes:ReadOnlyMemory<byte> -> string
