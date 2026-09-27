@@ -296,6 +296,32 @@ class ProtectedAdapterTests(unittest.TestCase):
                     authority.binding.canonical_request, token)
             self.assertEqual(authority.posts, [])
 
+    def test_slow_final_key_lookup_cannot_outlive_retained_write_scope(self):
+        with tempfile.TemporaryDirectory() as temp:
+            authority = Authority(pathlib.Path(temp))
+            scopes = list(authority.configuration.scopes)
+            index = next(index for index, scope in enumerate(scopes)
+                         if scope.role == "native-write")
+            scopes[index] = dataclasses.replace(scopes[index],
+                expires_at=NOW + dt.timedelta(seconds=30))
+            authority.configuration = dataclasses.replace(
+                authority.configuration, scopes=tuple(scopes))
+            authority.scopes = {scope.role: scope for scope in scopes}
+            runtime = adapters.compose_installed(authority)
+            token = runtime.token_port.read_execution_token()
+            original_key_read = authority.read_active_key
+
+            def slow_key_read(key_id, issuer_actor_id):
+                value = original_key_read(key_id, issuer_actor_id)
+                authority.now = NOW + dt.timedelta(minutes=1)
+                return value
+
+            authority.read_active_key = slow_key_read
+            with self.assertRaises(adapters.Refused):
+                runtime.write_port.post_pull("repos/FS-GG/target/pulls",
+                    authority.binding.canonical_request, token)
+            self.assertEqual(authority.posts, [])
+
     def test_known_401_survives_post_scope_drift_and_cannot_be_exact(self):
         with tempfile.TemporaryDirectory() as temp:
             authority = Authority(pathlib.Path(temp))

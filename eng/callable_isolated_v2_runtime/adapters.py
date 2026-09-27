@@ -476,7 +476,7 @@ class ProtectedNativeWritePort:
                 or canonical_request != binding.canonical_request):
             raise Refused("protected-write-selection")
         now = self.clock.now()
-        self.installation.scope("native-write", now)
+        write_scope = self.installation.scope("native-write", now)
         # The protected write-scope read may block.  Repeat grant, issuer and
         # active-key verification after it so the final protected check is the
         # one immediately adjacent to the provider call.
@@ -487,7 +487,10 @@ class ProtectedNativeWritePort:
             raise Refused("protected-write-authority") from None
         if grant_sha != self.grant_record.grant_sha256:
             raise Refused("protected-write-authority")
-        self.token_port.consume(token, self.clock.current)
+        final_now = self.clock.current
+        if not final_now < write_scope.expires_at:
+            raise Refused("protected-write-scope-expired")
+        self.token_port.consume(token, final_now)
         self._sent = True
         try:
             response = self.installation.authority.native_post(
