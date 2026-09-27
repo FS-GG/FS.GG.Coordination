@@ -317,6 +317,25 @@ the deleted target's PR or journal.
 Cleanup settled for synthetic repository ID `1376575900` with HTTP 404 and a separate live 404 readback.
 This single-operation evidence does not accept `OpenV2`, Q4, GS2-09 migration or a production default.
 
+Prospective v2 operator rotation source-repair window: a new `/5` contract and proposal retain identity
+`v2-call-01-4b-isolated-native-v2-provisional` and state `prepared-not-authorized`, bind the current provisional
+operator `7f275d4f6e28808a6d30b9427dc26d7a867fdddbd65ae146d5b28872c1a72fcd` and its 71-control suite
+`8cab4decc1a7866c45c2a947ab3ba22585504bfc0879554914c16325fac36b92`, and add a staged loopback HTTP proof.
+That proof covers exact and ambiguous POST/PUT outcomes, wrong head/base and foreign identities, force-push,
+deletion, missing-policy and changed-protection readback, terminal pagination, duplicate and moved observations,
+lost response, `500`, `302` and `401`, zero redirect egress, at most one write, durable fresh-process no-repeat,
+secret-sentinel suppression and contract/proposal/source substitution refusal. This is repository source
+qualification only. It issues no grant, reads no credential, contacts no GitHub endpoint, dispatches no workflow,
+changes no provider state and does not supersede the immutable v1 operation or its accepted evidence.
+
+Remaining installed/native gate for that prospective rotation: separately bind an installed artifact and native
+adapter to these exact `/5` bytes, obtain new typed protected authority and fresh target, reviewer, installation,
+credential, capability and protection observations, then execute and independently read back one admitted v2
+operation with interruption recovery and no-repeat replay. Historical v1 installed/native acceptance cannot
+satisfy that gate. Until its distinct protected result is merged and verified, the v2 proposal remains
+prepared-not-authorized and supplies no `.4b` admission, `.4c` acceptance, Q4, `OpenV2`, migration, production
+writer or external-acceptance authority.
+
 ## Dependencies, invalidators, and completion examples
 
 Dependencies are the exact GS2 receipts named above, the unchanged roadmap bytes, canonical JSON behavior, the
