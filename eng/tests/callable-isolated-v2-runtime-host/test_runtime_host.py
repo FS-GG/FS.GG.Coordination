@@ -5,6 +5,8 @@ import hashlib
 import io
 import pathlib
 import sys
+import tempfile
+from types import SimpleNamespace
 import unittest
 import zipfile
 
@@ -76,6 +78,36 @@ class WrongExecutionHost(Host):
         return 999, 1
 
 
+class ConfigurationAuthority:
+    def __init__(self, expected, change=None):
+        binding = SimpleNamespace(
+            source_revision=expected.source_revision,
+            source_tree=expected.source_tree,
+            artifact_sha256=expected.archive_sha256,
+            workflow_sha256=expected.workflow_sha256,
+            run_id=expected.execution_run_id,
+            run_attempt=expected.execution_run_attempt)
+        self.configuration = SimpleNamespace(
+            revision=expected.source_revision,
+            source_tree=expected.source_tree, binding=binding)
+        if change:
+            change(self.configuration)
+        self.calls = []
+
+    def read_installed_configuration(self):
+        self.calls.append("configuration")
+        return self.configuration
+
+    def __getattr__(self, name):
+        if name in ("trusted_now", "scope", "read_grant", "read_parent",
+                    "native_get", "native_post", "issue_execution_token"):
+            def unexpected(*_args):
+                self.calls.append(name)
+                raise AssertionError("effect reached before binding")
+            return unexpected
+        raise AttributeError(name)
+
+
 class RuntimeHostTests(unittest.TestCase):
     def test_exact_archive_loads_and_missing_authority_refuses_before_import(self):
         expected, witness, bundle = fixture()
@@ -86,11 +118,17 @@ class RuntimeHostTests(unittest.TestCase):
         self.assertEqual(missing.calls, ["expected", ("bundle", 104),
                                          "execution", "authority"])
 
-        present = Host(expected, bundle, object())
+        authority = ConfigurationAuthority(expected)
+        present = Host(expected, bundle, authority)
         result = host_loader.run(present, witness)
         self.assertEqual(type(result).__name__, "Unknown")
+        self.assertEqual(authority.calls,
+                         ["configuration"] * 4)
+        # A reused memfd number must not reuse zipimport's prior directory cache.
+        self.assertEqual(type(host_loader.run(present, witness)).__name__, "Unknown")
+        self.assertEqual(authority.calls, ["configuration"] * 8)
         self.assertEqual(present.calls, ["expected", ("bundle", 104),
-                                         "execution", "authority"])
+                                         "execution", "authority"] * 2)
         self.assertNotIn("callable_isolated_v2_runtime", sys.modules)
 
     def test_candidate_witness_never_substitutes_host_expectation(self):
@@ -124,6 +162,30 @@ class RuntimeHostTests(unittest.TestCase):
         with self.assertRaisesRegex(host_loader.Refused, "execution-run"):
             host_loader.run(host, witness)
         self.assertEqual(host.calls, ["expected", ("bundle", 104), "execution"])
+
+    def test_authority_binding_refuses_each_mismatch_before_effects(self):
+        expected, witness, bundle = fixture()
+        changes = {
+            "configuration revision": lambda c: setattr(c, "revision", "d" * 40),
+            "configuration tree": lambda c: setattr(c, "source_tree", "d" * 40),
+            "binding revision": lambda c: setattr(c.binding, "source_revision", "d" * 40),
+            "binding tree": lambda c: setattr(c.binding, "source_tree", "d" * 40),
+            "artifact": lambda c: setattr(c.binding, "artifact_sha256", "d" * 64),
+            "workflow": lambda c: setattr(c.binding, "workflow_sha256", "d" * 64),
+            "execution run": lambda c: setattr(c.binding, "run_id", 999),
+            "execution attempt": lambda c: setattr(c.binding, "run_attempt", 2),
+        }
+        with tempfile.TemporaryDirectory() as directory:
+            journal = pathlib.Path(directory) / "runtime.db"
+            for name, change in changes.items():
+                with self.subTest(name=name):
+                    authority = ConfigurationAuthority(expected, change)
+                    authority.configuration.journal_database_path = str(journal)
+                    with self.assertRaisesRegex(host_loader.Refused,
+                                                "configuration-binding"):
+                        host_loader.run(Host(expected, bundle, authority), witness)
+                    self.assertEqual(authority.calls, ["configuration"])
+                    self.assertFalse(journal.exists())
 
     def test_import_shadow_refuses_before_runtime_composition(self):
         expected, witness, bundle = fixture()

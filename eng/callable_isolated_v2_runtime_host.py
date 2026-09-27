@@ -176,6 +176,45 @@ def _load(path: str):
             sys.path.remove(path)
 
 
+def _configuration_bound(configuration: object,
+                         expected: ExpectedRuntime) -> None:
+    """Check the authority's installed coordinates before any effectful join."""
+    try:
+        binding = configuration.binding
+        actual = (configuration.revision, configuration.source_tree,
+                  binding.source_revision, binding.source_tree,
+                  binding.artifact_sha256, binding.workflow_sha256,
+                  binding.run_id, binding.run_attempt)
+    except (AttributeError, TypeError):
+        raise Refused("runtime-host-configuration-unavailable") from None
+    wanted = (expected.source_revision, expected.source_tree,
+              expected.source_revision, expected.source_tree,
+              expected.archive_sha256, expected.workflow_sha256,
+              expected.execution_run_id, expected.execution_run_attempt)
+    if any(type(a) is not type(b) or a != b
+           for a, b in zip(actual, wanted, strict=True)):
+        raise Refused("runtime-host-configuration-binding")
+
+
+class _BoundAuthority:
+    """Recheck every configuration read, including the adapter's two reads."""
+
+    def __init__(self, authority: object, expected: ExpectedRuntime):
+        self._authority = authority
+        self._expected = expected
+
+    def read_installed_configuration(self):
+        try:
+            configuration = self._authority.read_installed_configuration()
+        except Exception:
+            raise Refused("runtime-host-configuration-unavailable") from None
+        _configuration_bound(configuration, self._expected)
+        return configuration
+
+    def __getattr__(self, name: str):
+        return getattr(self._authority, name)
+
+
 def run(host: ProtectedHost, witness: candidate.CandidateWitness,
         *, recovery: bool = False):
     """Verify host identity and immutable archive before runtime composition.
@@ -208,8 +247,13 @@ def run(host: ProtectedHost, witness: candidate.CandidateWitness,
         _check_file(fd, archive)
         runtime = _load(path)
         _check_file(fd, archive)
+        bound_authority = _BoundAuthority(authority, expected)
+        first = bound_authority.read_installed_configuration()
+        second = bound_authority.read_installed_configuration()
+        if first != second:
+            raise Refused("runtime-host-configuration-drift")
         return (runtime.recover_installed if recovery else
-                runtime.execute_installed)(authority)
+                runtime.execute_installed)(bound_authority)
     finally:
         for name in reversed(MODULES):
             module = sys.modules.get(name)
