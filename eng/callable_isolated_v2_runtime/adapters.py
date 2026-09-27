@@ -14,11 +14,12 @@ import hashlib
 import json
 from pathlib import Path
 import re
+import sqlite3
 from typing import Protocol
 
 from . import coordinator
 from .contracts import Binding, digest
-from .grant import canonical
+from .grant import canonical, verify
 
 
 API_ORIGIN = "https://api.github.com"
@@ -246,6 +247,12 @@ class TrustedClock:
         self._last = value
         return value
 
+    @property
+    def current(self) -> dt.datetime:
+        if self._last is None:
+            raise Refused("protected-clock-unsampled")
+        return self._last
+
 
 def _load_installation(authority: ProtectedAuthority) -> tuple[_Installation, TrustedClock]:
     if authority is None:
@@ -372,7 +379,7 @@ class ProtectedIssuerKeyReader:
                 or issuer.active is not True
                 or not _utc(issuer.issued_at) or not _utc(issuer.expires_at)
                 or not issuer.issued_at < issuer.expires_at
-                or not issuer.issued_at <= now
+                or not issuer.issued_at <= now < issuer.expires_at
                 or issuer.expires_at > issuer.issued_at + dt.timedelta(minutes=30)
                 or key.key_id != key_id or key.issuer_actor_id != issuer_actor_id
                 or key.active is not True or key.revoked_at is not None
@@ -453,9 +460,13 @@ class ProtectedTokenPort:
 
 class ProtectedNativeWritePort:
     def __init__(self, installation: _Installation, clock: TrustedClock,
-                 token_port: ProtectedTokenPort):
+                 token_port: ProtectedTokenPort,
+                 key_reader: ProtectedIssuerKeyReader,
+                 grant_record: GrantRecord):
         self.installation, self.clock = installation, clock
         self.token_port = token_port
+        self.key_reader = key_reader
+        self.grant_record = grant_record
         self._sent = False
 
     def post_pull(self, path: str, canonical_request: bytes, token: bytes):
@@ -466,7 +477,17 @@ class ProtectedNativeWritePort:
             raise Refused("protected-write-selection")
         now = self.clock.now()
         self.installation.scope("native-write", now)
-        self.token_port.consume(token, now)
+        # The protected write-scope read may block.  Repeat grant, issuer and
+        # active-key verification after it so the final protected check is the
+        # one immediately adjacent to the provider call.
+        try:
+            grant_sha = verify(self.grant_record.raw_grant, binding,
+                self.key_reader, self.clock.now(), postcheck_clock=self.clock)
+        except Exception:
+            raise Refused("protected-write-authority") from None
+        if grant_sha != self.grant_record.grant_sha256:
+            raise Refused("protected-write-authority")
+        self.token_port.consume(token, self.clock.current)
         self._sent = True
         try:
             response = self.installation.authority.native_post(
@@ -475,7 +496,9 @@ class ProtectedNativeWritePort:
             raise
         if type(response) is not coordinator.operator.HttpResponse:
             raise Refused("protected-write-response")
-        self.installation.scope("native-write", self.clock.now())
+        # A provider response is durable outcome evidence.  Authority changing
+        # after the POST cannot turn a known refusal or contradiction into a
+        # transport loss; the next operation will requalify from scratch.
         return response
 
 
@@ -484,7 +507,7 @@ class ProtectedParentBootstrap:
                  journal: coordinator.AttemptJournal):
         self.installation, self.clock, self.journal = installation, clock, journal
 
-    def establish(self) -> bool:
+    def _qualified_record(self) -> ParentRecord:
         binding = self.installation.configuration.binding
         now = self.clock.now()
         self.installation.scope("parent", now)
@@ -509,7 +532,29 @@ class ProtectedParentBootstrap:
                 or first.binding_sha256 != _binding_sha(binding)):
             raise Refused("protected-parent-invalid")
         self.installation.scope("parent", self.clock.now())
-        return self.journal.establish_parent(binding)
+        return first
+
+    def establish(self) -> bool:
+        self._qualified_record()
+        return self.journal.establish_parent(
+            self.installation.configuration.binding)
+
+    def require_stored(self) -> None:
+        """Qualify the protected parent and match an existing local bootstrap."""
+        parent = self._qualified_record()
+        path = self.journal.path
+        if not path.is_file() or path.is_symlink():
+            raise Refused("protected-parent-not-stored")
+        try:
+            with sqlite3.connect(path.as_uri() + "?mode=ro", uri=True) as db:
+                row = db.execute(
+                    "SELECT generation, head FROM parents "
+                    "WHERE repository=? AND ref=? AND path=?",
+                    (parent.repository, parent.ref, parent.path)).fetchone()
+        except sqlite3.Error:
+            raise Refused("protected-parent-not-stored") from None
+        if row != (parent.generation, parent.head):
+            raise Refused("protected-parent-not-stored")
 
 
 @dataclasses.dataclass(frozen=True)
@@ -529,14 +574,23 @@ def compose_installed(authority: ProtectedAuthority) -> InstalledRuntime:
     """Qualify protected records and bootstrap one new stored parent."""
     installation, clock = _load_installation(authority)
     grant_record = ProtectedGrantReader(installation, clock).read()
+    key_reader = ProtectedIssuerKeyReader(installation, clock, grant_record)
+    try:
+        verified = verify(grant_record.raw_grant,
+            installation.configuration.binding, key_reader, clock.now(),
+            postcheck_clock=clock)
+    except Exception:
+        raise Refused("protected-grant-unverified") from None
+    if verified != grant_record.grant_sha256:
+        raise Refused("protected-grant-unverified")
     journal = coordinator.AttemptJournal(Path(
         installation.configuration.journal_database_path))
     if not ProtectedParentBootstrap(installation, clock, journal).establish():
         raise Refused("protected-parent-already-established")
-    key_reader = ProtectedIssuerKeyReader(installation, clock, grant_record)
     read_port = ProtectedNativeReadPort(installation, clock)
     token_port = ProtectedTokenPort(installation, clock)
-    write_port = ProtectedNativeWritePort(installation, clock, token_port)
+    write_port = ProtectedNativeWritePort(installation, clock, token_port,
+                                          key_reader, grant_record)
     return InstalledRuntime(installation.configuration.binding,
         installation.configuration.expected, grant_record.raw_grant,
         key_reader, read_port, write_port, token_port, journal, clock)
@@ -552,3 +606,40 @@ def execute_installed(authority: ProtectedAuthority):
         runtime.raw_grant, runtime.key_reader, runtime.read_port,
         runtime.write_port, runtime.token_port, runtime.journal,
         runtime.clock_port)
+
+
+@dataclasses.dataclass(frozen=True)
+class InstalledRecovery:
+    binding: Binding
+    expected: object
+    raw_grant: bytes
+    key_reader: ProtectedIssuerKeyReader
+    read_port: ProtectedNativeReadPort
+    journal: coordinator.AttemptJournal
+    clock_port: TrustedClock
+
+
+def compose_recovery(authority: ProtectedAuthority) -> InstalledRecovery:
+    """Qualify the same protected records without creating or replacing parent."""
+    installation, clock = _load_installation(authority)
+    grant_record = ProtectedGrantReader(installation, clock).read()
+    key_reader = ProtectedIssuerKeyReader(installation, clock, grant_record)
+    journal = coordinator.AttemptJournal(Path(
+        installation.configuration.journal_database_path))
+    ProtectedParentBootstrap(installation, clock, journal).require_stored()
+    return InstalledRecovery(installation.configuration.binding,
+        installation.configuration.expected, grant_record.raw_grant,
+        key_reader, ProtectedNativeReadPort(installation, clock), journal,
+        clock)
+
+
+def recover_installed(authority: ProtectedAuthority):
+    """Run S1 recovery through qualified readers and an existing parent only."""
+    try:
+        runtime = compose_recovery(authority)
+        now = runtime.clock_port.now()
+    except Exception:
+        return coordinator.operator.Unknown("protected-recovery-unavailable")
+    return coordinator.recover_pull(runtime.binding, runtime.expected,
+        runtime.raw_grant, runtime.key_reader, runtime.read_port,
+        runtime.journal, now)
