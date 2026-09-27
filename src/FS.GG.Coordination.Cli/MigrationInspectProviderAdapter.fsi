@@ -16,6 +16,21 @@ type MigrationInspectProviderAdapter =
 
 [<RequireQualifiedAccess>]
 module MigrationInspectProviderAdapter =
+    /// Pure canonical binder over independently captured native and journal evidence.
+    /// ReadAuthority remains unavailable until both provider readers join this adapter.
+    val bindReviewDeliveryRecords:
+        options:MigrationInspectProviderOptions ->
+        native:MigrationReviewDeliveryNativeTwoPass ->
+        journals:MigrationJournalTwoPass ->
+            Result<GitHubMigrationInspectAuthority * GitHubMigrationInspectAuthority, string>
+
+    /// Captures two fresh native and journal passes and returns the requested canonical pass.
+    val readReviewDeliveryRecords:
+        options:MigrationInspectProviderOptions ->
+        passOrdinal:int ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Refuses requests outside one declared read-only authority before dispatching to inner.
     val guardReadTransport:
         options:MigrationInspectProviderOptions -> authority:string ->
@@ -50,6 +65,63 @@ module MigrationInspectProviderAdapter =
         options:MigrationInspectProviderOptions ->
         population:MigrationProjectValuePopulation ->
         captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Binds one repository REST document to an explicitly partial core-settings proof.
+    /// Its distinct authority name cannot satisfy the complete repository-settings row.
+    val bindRepositoryCoreSettings:
+        options:MigrationInspectProviderOptions ->
+        settings:MigrationRepositoryCoreSettings ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Binds the repository Actions core policy and its conditional selected allowlist.
+    /// This remains a partial settings proof and cannot satisfy repository-settings.
+    val bindRepositoryActionsPolicy:
+        options:MigrationInspectProviderOptions ->
+        settings:MigrationRepositoryActionsPolicy ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Binds organization property definitions and one repository's explicit values.
+    /// Enterprise inheritance and the other settings surfaces remain outside this proof.
+    val bindRepositoryCustomProperties:
+        options:MigrationInspectProviderOptions ->
+        settings:MigrationCustomProperties ->
+        captures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Revalidates two stable raw snapshots for every declared receiver.
+    /// Declaration exhaustiveness and pin bytes remain outside this partial proof.
+    val bindDeclaredReceiverIdentities:
+        options:MigrationInspectProviderOptions ->
+        first:MigrationReceiverSnapshot list ->
+        second:MigrationReceiverSnapshot list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Revalidates declared workflow/package blob bytes over two stable receiver snapshots.
+    /// The declaration roster remains caller supplied, so canonical workflow-pins stays unavailable.
+    val bindDeclaredWorkflowPins:
+        options:MigrationInspectProviderOptions ->
+        pinsByReceiver:Map<string, MigrationReceiverPinDeclaration list> ->
+        first:MigrationReceiverPinSnapshot list ->
+        second:MigrationReceiverPinSnapshot list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Binds complete provider-derived native issue/PR activity over two raw-stable passes.
+    /// Protected claim journals and custom receipts remain outside this partial authority.
+    val bindNativeActivity:
+        options:MigrationInspectProviderOptions ->
+        first:MigrationNativeActivityCapture ->
+        firstCaptures:(GitHubRequest * TransportOutcome) list ->
+        second:MigrationNativeActivityCapture ->
+        secondCaptures:(GitHubRequest * TransportOutcome) list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
+    /// Performs and binds two independent native activity captures through a GET-only fence.
+    val readNativeActivity:
+        options:MigrationInspectProviderOptions ->
+        transport:IMigrationGitHubReadTransport ->
             Result<GitHubMigrationInspectAuthority, string>
 
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.

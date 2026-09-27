@@ -23,8 +23,58 @@ type private CapturingTransport(inner: IMigrationGitHubReadTransport, allow: Git
 
 [<RequireQualifiedAccess>]
 module MigrationInspectProviderAdapter =
+    let bindReviewDeliveryRecords options native journals =
+        MigrationReviewDeliveryInspectBinder.bind options.Cohort options.Repository native journals
+        |> Result.bind (fun capture ->
+            MigrationReviewDeliveryInspectBinder.authority options.Cohort 1 capture
+            |> Result.bind (fun first ->
+                MigrationReviewDeliveryInspectBinder.authority options.Cohort 2 capture
+                |> Result.map (fun second -> first, second)))
+
+    let readReviewDeliveryRecords options passOrdinal transport =
+        if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
+        else
+            MigrationReviewDeliveryCapture.captureTwoPass options.Repository transport
+            |> Result.mapError (fun reason -> $"review-delivery-native-read:{reason}")
+            |> Result.bind (fun native ->
+                MigrationJournalCapture.captureTwoPass options.Repository transport
+                |> Result.mapError (fun reason -> $"review-delivery-journal-read:{reason}")
+                |> Result.bind (fun journals ->
+                    bindReviewDeliveryRecords options native journals
+                    |> Result.map (fun (first, second) -> if passOrdinal = 1 then first else second)))
+
     let internal allowedRequest (options: MigrationInspectProviderOptions) authority request =
         match authority, request with
+        | "repository-settings/core", Rest value ->
+            let repository =
+                Uri(options.Repository.ApiBase,
+                    $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && value.Uri = repository
+        | "repository-settings/actions", Rest value ->
+            let repositoryPath =
+                $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+            let allowed =
+                [ Uri(options.Repository.ApiBase, repositoryPath)
+                  Uri(options.Repository.ApiBase, $"{repositoryPath}/actions/permissions")
+                  Uri(options.Repository.ApiBase, $"{repositoryPath}/actions/permissions/selected-actions")
+                  Uri(options.Repository.ApiBase,
+                      $"repositories/{options.Repository.ExpectedRepositoryId}/actions/permissions/selected-actions") ]
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && List.contains value.Uri allowed
+        | "repository-settings/custom-properties", Rest value ->
+            let repositoryPath =
+                $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+            let allowed =
+                [ Uri(options.Repository.ApiBase, repositoryPath)
+                  Uri(options.Repository.ApiBase,
+                      $"orgs/{Uri.EscapeDataString options.Repository.Owner}/properties/schema")
+                  Uri(options.Repository.ApiBase, $"{repositoryPath}/properties/values") ]
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && List.contains value.Uri allowed
         | "issues-open-and-relevant-closed", Rest value ->
             let repository =
                 Uri(options.Repository.ApiBase,
@@ -189,6 +239,960 @@ module MigrationInspectProviderAdapter =
                 issues, pullRequestNumbers)
             |> Ok
         with _ -> Error "raw-issue-parse"
+
+    let bindRepositoryCoreSettings
+        (options: MigrationInspectProviderOptions)
+        (settings: MigrationRepositoryCoreSettings)
+        (captures: (GitHubRequest * TransportOutcome) list) =
+        if not (repositoryBinding options)
+           || settings.RepositoryId <> options.Repository.ExpectedRepositoryId
+           || settings.FullName <> $"{options.Repository.Owner}/{options.Repository.Repository}" then
+            Error "repository-core-cohort"
+        elif captures.Length <> 1
+             || (captures |> List.exists (fst >> allowedRequest options "repository-settings/core" >> not)) then
+            Error "repository-core-capture-shape"
+        else
+            match captures.Head with
+            | Rest request, outcome ->
+                match responseBody outcome with
+                | Error reason -> Error reason
+                | Ok body ->
+                    try
+                        use document = JsonDocument.Parse body
+                        let root = document.RootElement
+                        requireUniqueMembers root
+                        let parsed =
+                            root.GetProperty("id").GetInt64(),
+                            root.GetProperty("node_id").GetString(),
+                            root.GetProperty("full_name").GetString(),
+                            root.GetProperty("default_branch").GetString(),
+                            root.GetProperty("visibility").GetString(),
+                            root.GetProperty("archived").GetBoolean(),
+                            root.GetProperty("disabled").GetBoolean(),
+                            root.GetProperty("has_issues").GetBoolean(),
+                            root.GetProperty("allow_squash_merge").GetBoolean(),
+                            root.GetProperty("allow_merge_commit").GetBoolean(),
+                            root.GetProperty("allow_rebase_merge").GetBoolean(),
+                            root.GetProperty("delete_branch_on_merge").GetBoolean()
+                        let typed =
+                            settings.RepositoryId, settings.NodeId, settings.FullName,
+                            settings.DefaultBranch, settings.Visibility, settings.Archived,
+                            settings.Disabled, settings.HasIssues, settings.AllowSquashMerge,
+                            settings.AllowMergeCommit, settings.AllowRebaseMerge,
+                            settings.DeleteBranchOnMerge
+                        let validStrings =
+                            not (String.IsNullOrWhiteSpace settings.NodeId)
+                            && not (String.IsNullOrWhiteSpace settings.DefaultBranch)
+                            && Set.contains settings.Visibility (set [ "public"; "private"; "internal" ])
+                        if parsed <> typed || not validStrings
+                           || settings.PayloadJson <> body || settings.PayloadSha256 <> sha body then
+                            Error "repository-core-raw-typed-mismatch"
+                        elif capturedNextUri outcome <> Some None then
+                            Error "repository-core-unexpected-continuation"
+                        else
+                            let revision = sha body
+                            let observed = subject $"repository:{settings.RepositoryId}:settings:core" revision body
+                            let page =
+                                { RequestedUri=request.Uri.AbsoluteUri
+                                  RequestIdentitySha256=sha request.Uri.AbsoluteUri
+                                  RawBody=body; PayloadSha256=revision
+                                  NextRequestIdentitySha256=None; Subjects=[ observed ] }
+                            Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                                 ScopeVerified=true; SubjectsParsedFromRaw=true
+                                 Read={ Authority="repository-settings/core"
+                                        ObservedAt=DateTimeOffset.UtcNow
+                                        PageCount=1; ItemCount=1; Terminal=true; NextCursor=None
+                                        HighWaterMark=digestParts [ revision ]; Subjects=[ observed ] }
+                                 Pages=[ page ] }
+                    with _ -> Error "repository-core-raw-parse"
+            | _ -> Error "repository-core-capture-shape"
+
+    let bindRepositoryActionsPolicy
+        (options: MigrationInspectProviderOptions)
+        (settings: MigrationRepositoryActionsPolicy)
+        (captures: (GitHubRequest * TransportOutcome) list) =
+        let repositoryPath =
+            $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+        let identityUri = Uri(options.Repository.ApiBase, repositoryPath).AbsoluteUri
+        let policyUri = Uri(options.Repository.ApiBase, $"{repositoryPath}/actions/permissions").AbsoluteUri
+        let expectedUris =
+            [ yield identityUri
+              yield policyUri
+              match settings.SelectedActionsUri with
+              | Some uri -> yield uri
+              | None -> () ]
+        if not (repositoryBinding options)
+           || settings.RepositoryId <> options.Repository.ExpectedRepositoryId
+           || settings.RepositoryFullName <> $"{options.Repository.Owner}/{options.Repository.Repository}"
+           || settings.IdentityUri <> identityUri || settings.PolicyUri <> policyUri then
+            Error "repository-actions-cohort"
+        elif captures.Length <> expectedUris.Length
+             || (captures |> List.exists (fst >> allowedRequest options "repository-settings/actions" >> not)) then
+            Error "repository-actions-capture-shape"
+        else
+            try
+                let captured =
+                    captures
+                    |> List.map (fun (request, outcome) ->
+                        match request, responseBody outcome with
+                        | Rest value, Ok body when capturedNextUri outcome = Some None ->
+                            value.Uri.AbsoluteUri, body
+                        | Rest _, Ok _ -> failwith "unexpected-continuation"
+                        | _, Error _ -> failwith "provider-response"
+                        | _ -> failwith "request-kind")
+                if (captured |> List.map fst) <> expectedUris then failwith "request-sequence"
+                let identityBody = captured.[0] |> snd
+                let policyBody = captured.[1] |> snd
+                use identityDocument = JsonDocument.Parse identityBody
+                use policyDocument = JsonDocument.Parse policyBody
+                requireUniqueMembers identityDocument.RootElement
+                requireUniqueMembers policyDocument.RootElement
+                let identity =
+                    identityDocument.RootElement.GetProperty("id").GetInt64(),
+                    identityDocument.RootElement.GetProperty("full_name").GetString()
+                let policy = policyDocument.RootElement
+                let selectedProperty = policy.GetProperty("selected_actions_url")
+                let selectedUri =
+                    match selectedProperty.ValueKind with
+                    | JsonValueKind.Null -> None
+                    | JsonValueKind.String -> Some(selectedProperty.GetString())
+                    | _ -> failwith "selected-actions-url"
+                let parsedPolicy =
+                    policy.GetProperty("enabled").GetBoolean(),
+                    policy.GetProperty("allowed_actions").GetString(),
+                    policy.GetProperty("sha_pinning_required").GetBoolean(),
+                    selectedUri
+                let typedPolicy =
+                    settings.Enabled, settings.AllowedActions, settings.ShaPinningRequired,
+                    settings.SelectedActionsUri
+                let validPolicy =
+                    Set.contains settings.AllowedActions (set [ "all"; "local_only"; "selected" ])
+                    && ((settings.AllowedActions = "selected") = settings.SelectedActionsUri.IsSome)
+                if identity <> (settings.RepositoryId, settings.RepositoryFullName)
+                   || parsedPolicy <> typedPolicy || not validPolicy
+                   || settings.IdentityPayloadJson <> identityBody
+                   || settings.IdentityPayloadSha256 <> sha identityBody
+                   || settings.PolicyPayloadJson <> policyBody
+                   || settings.PolicyPayloadSha256 <> sha policyBody then
+                    failwith "raw-typed-mismatch"
+                match settings.SelectedActionsUri, settings.SelectedActionsPayloadJson,
+                      settings.SelectedActionsPayloadSha256, settings.GitHubOwnedAllowed,
+                      settings.VerifiedAllowed, settings.PatternsAllowed with
+                | None, None, None, None, None, None when captured.Length = 2 -> ()
+                | Some _, Some selectedBody, Some selectedHash, Some githubOwned,
+                  Some verified, Some patterns when captured.Length = 3 ->
+                    if selectedBody <> (captured.[2] |> snd) || selectedHash <> sha selectedBody then
+                        failwith "selected-raw"
+                    use selectedDocument = JsonDocument.Parse selectedBody
+                    let selected = selectedDocument.RootElement
+                    requireUniqueMembers selected
+                    let entries = selected.GetProperty("patterns_allowed").EnumerateArray() |> Seq.toList
+                    let parsedPatterns = entries |> List.map _.GetString()
+                    let parsedSelected =
+                        selected.GetProperty("github_owned_allowed").GetBoolean(),
+                        selected.GetProperty("verified_allowed").GetBoolean(), parsedPatterns
+                    if parsedSelected <> (githubOwned, verified, patterns)
+                       || patterns |> List.exists String.IsNullOrWhiteSpace
+                       || (patterns |> Set.ofList |> Set.count) <> patterns.Length then
+                        failwith "selected-raw-typed-mismatch"
+                | _ -> failwith "selected-shape"
+                let names =
+                    [ $"repository:{settings.RepositoryId}:settings:actions:identity"
+                      $"repository:{settings.RepositoryId}:settings:actions:policy"
+                      if captured.Length = 3 then
+                          $"repository:{settings.RepositoryId}:settings:actions:selected" ]
+                let pages =
+                    List.zip3 expectedUris (captured |> List.map snd) names
+                    |> List.mapi (fun index (uri, body, name) ->
+                        let digest = sha body
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=digest
+                          NextRequestIdentitySha256=
+                              if index + 1 < expectedUris.Length then Some(sha expectedUris.[index + 1]) else None
+                          Subjects=[ subject name digest body ] })
+                let subjects = pages |> List.collect _.Subjects
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="repository-settings/actions"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"repository-actions-raw-or-scope:{failure.Message}"
+
+    let bindRepositoryCustomProperties
+        (options: MigrationInspectProviderOptions)
+        (settings: MigrationCustomProperties)
+        (captures: (GitHubRequest * TransportOutcome) list) =
+        let repositoryPath =
+            $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}"
+        let expectedUris =
+            [ Uri(options.Repository.ApiBase, repositoryPath).AbsoluteUri
+              Uri(options.Repository.ApiBase,
+                  $"orgs/{Uri.EscapeDataString options.Repository.Owner}/properties/schema").AbsoluteUri
+              Uri(options.Repository.ApiBase, $"{repositoryPath}/properties/values").AbsoluteUri ]
+        if not (repositoryBinding options)
+           || settings.RepositoryId <> options.Repository.ExpectedRepositoryId
+           || settings.RepositoryFullName <> $"{options.Repository.Owner}/{options.Repository.Repository}"
+           || [ settings.IdentityUri; settings.SchemaUri; settings.ValuesUri ] <> expectedUris then
+            Error "repository-custom-properties-cohort"
+        elif captures.Length <> 3
+             || (captures
+                 |> List.exists (fst >> allowedRequest options "repository-settings/custom-properties" >> not)) then
+            Error "repository-custom-properties-capture-shape"
+        else
+            try
+                let nonblank value = not (String.IsNullOrWhiteSpace value)
+                let requiredString (name: string) (element: JsonElement) =
+                    let value = element.GetProperty(name)
+                    if value.ValueKind <> JsonValueKind.String || not (nonblank (value.GetString())) then
+                        failwith $"string:{name}"
+                    value.GetString()
+                let optionalProperty (name: string) (element: JsonElement) =
+                    let mutable value = Unchecked.defaultof<JsonElement>
+                    if element.TryGetProperty(name, &value) then Some value else None
+                let stringList (value: JsonElement) =
+                    if value.ValueKind <> JsonValueKind.Array then failwith "string-list"
+                    let values = value.EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                    if values |> List.exists (nonblank >> not)
+                       || (values |> Set.ofList |> Set.count) <> values.Length then failwith "string-list"
+                    values
+                let propertyData valueType (value: JsonElement) =
+                    match valueType, value.ValueKind with
+                    | ("string" | "single_select"), JsonValueKind.String ->
+                        let parsed = value.GetString()
+                        if isNull parsed then failwith "property-text"
+                        PropertyText parsed
+                    | "url", JsonValueKind.String ->
+                        let parsed = value.GetString()
+                        let mutable uri = Unchecked.defaultof<Uri>
+                        if not (Uri.TryCreate(parsed, UriKind.Absolute, &uri))
+                           || (uri.Scheme <> Uri.UriSchemeHttps && uri.Scheme <> Uri.UriSchemeHttp) then
+                            failwith "property-url"
+                        PropertyText parsed
+                    | "multi_select", JsonValueKind.Array -> PropertyChoices(stringList value)
+                    | "true_false", JsonValueKind.True -> PropertyFlag true
+                    | "true_false", JsonValueKind.False -> PropertyFlag false
+                    | _ -> failwith "property-value"
+                let parseDefinition (element: JsonElement) =
+                    requireUniqueMembers element
+                    let name = requiredString "property_name" element
+                    let sourceType = requiredString "source_type" element
+                    let valueType = requiredString "value_type" element
+                    if sourceType <> "organization"
+                       || not (Set.contains valueType
+                                   (set [ "string"; "single_select"; "multi_select"; "true_false"; "url" ])) then
+                        failwith "property-definition"
+                    let required = element.GetProperty("required").GetBoolean()
+                    let requireExplicit =
+                        optionalProperty "require_explicit_values" element
+                        |> Option.map _.GetBoolean()
+                    let editableBy =
+                        optionalProperty "values_editable_by" element
+                        |> Option.map (fun value ->
+                            if value.ValueKind = JsonValueKind.Null then None
+                            else
+                                let parsed = requiredString "values_editable_by" element
+                                if not (Set.contains parsed (set [ "org_actors"; "org_and_repo_actors" ])) then
+                                    failwith "values-editable-by"
+                                Some parsed)
+                    let defaultValue =
+                        optionalProperty "default_value" element
+                        |> Option.map (fun value ->
+                            if value.ValueKind = JsonValueKind.Null then None
+                            else Some(propertyData valueType value))
+                    let allowedValues =
+                        match optionalProperty "allowed_values" element with
+                        | None when valueType = "single_select" || valueType = "multi_select" ->
+                            failwith "allowed-values-required"
+                        | None -> None
+                        | Some value when value.ValueKind = JsonValueKind.Null
+                                          && valueType <> "single_select" && valueType <> "multi_select" -> None
+                        | Some value when valueType = "single_select" || valueType = "multi_select" ->
+                            Some(stringList value)
+                        | Some _ -> failwith "allowed-values-shape"
+                    let permitted = function
+                        | PropertyText value, Some allowed -> List.contains value allowed
+                        | PropertyChoices values, Some allowed ->
+                            values |> List.forall (fun value -> List.contains value allowed)
+                        | _, None -> true
+                        | _ -> false
+                    if defaultValue |> Option.bind id |> Option.exists (fun value -> not (permitted (value, allowedValues))) then
+                        failwith "default-value"
+                    let raw = element.GetRawText()
+                    { Name=name; SourceType=sourceType; ValueType=valueType; Required=required
+                      RequireExplicitValues=requireExplicit; ValuesEditableBy=editableBy
+                      DefaultValue=defaultValue; AllowedValues=allowedValues
+                      PayloadJson=raw; PayloadSha256=sha raw }
+                let parseValue definitions (element: JsonElement) =
+                    requireUniqueMembers element
+                    let name = requiredString "property_name" element
+                    let definition =
+                        definitions |> List.tryFind (fun (value: MigrationCustomPropertyDefinition) -> value.Name = name)
+                        |> Option.defaultWith (fun () -> failwith "unknown-property")
+                    let value = propertyData definition.ValueType (element.GetProperty("value"))
+                    match value, definition.AllowedValues with
+                    | PropertyText choice, Some allowed when not (List.contains choice allowed) ->
+                        failwith "property-choice"
+                    | PropertyChoices choices, Some allowed when
+                        choices |> List.exists (fun choice -> not (List.contains choice allowed)) ->
+                        failwith "property-choice"
+                    | _ -> ()
+                    let raw = element.GetRawText()
+                    { Name=name; Value=value; PayloadJson=raw; PayloadSha256=sha raw }
+                let captured =
+                    captures
+                    |> List.map (fun (request, outcome) ->
+                        match request, responseBody outcome with
+                        | Rest value, Ok body when capturedNextUri outcome = Some None ->
+                            value.Uri.AbsoluteUri, body
+                        | Rest _, Ok _ -> failwith "unexpected-continuation"
+                        | _, Error _ -> failwith "provider-response"
+                        | _ -> failwith "request-kind")
+                if (captured |> List.map fst) <> expectedUris then failwith "request-sequence"
+                let identityBody = captured.[0] |> snd
+                let schemaBody = captured.[1] |> snd
+                let valuesBody = captured.[2] |> snd
+                use identityDocument = JsonDocument.Parse identityBody
+                requireUniqueMembers identityDocument.RootElement
+                let identity =
+                    identityDocument.RootElement.GetProperty("id").GetInt64(),
+                    requiredString "full_name" identityDocument.RootElement
+                use schemaDocument = JsonDocument.Parse schemaBody
+                use valuesDocument = JsonDocument.Parse valuesBody
+                if schemaDocument.RootElement.ValueKind <> JsonValueKind.Array
+                   || valuesDocument.RootElement.ValueKind <> JsonValueKind.Array then
+                    failwith "array-shape"
+                let definitions =
+                    schemaDocument.RootElement.EnumerateArray() |> Seq.map parseDefinition |> Seq.toList
+                if definitions.Length <> (definitions |> List.map _.Name |> Set.ofList |> Set.count) then
+                    failwith "duplicate-definition"
+                let values =
+                    valuesDocument.RootElement.EnumerateArray()
+                    |> Seq.map (parseValue definitions) |> Seq.toList
+                if values.Length <> (values |> List.map _.Name |> Set.ofList |> Set.count) then
+                    failwith "duplicate-value"
+                let valueNames = values |> List.map _.Name |> Set.ofList
+                if definitions
+                   |> List.exists (fun definition ->
+                       (definition.Required || definition.RequireExplicitValues = Some true)
+                       && not (Set.contains definition.Name valueNames)) then
+                    failwith "required-value"
+                if identity <> (settings.RepositoryId, settings.RepositoryFullName)
+                   || definitions <> settings.Definitions || values <> settings.Values
+                   || settings.IdentityPayloadJson <> identityBody
+                   || settings.IdentityPayloadSha256 <> sha identityBody
+                   || settings.SchemaPayloadJson <> schemaBody
+                   || settings.SchemaPayloadSha256 <> sha schemaBody
+                   || settings.ValuesPayloadJson <> valuesBody
+                   || settings.ValuesPayloadSha256 <> sha valuesBody then
+                    failwith "raw-typed-mismatch"
+                let identitySubject =
+                    subject $"repository:{settings.RepositoryId}:settings:custom-properties:identity"
+                        (sha identityBody) identityBody
+                let definitionSubjects =
+                    definitions
+                    |> List.map (fun definition ->
+                        subject
+                            $"repository:{settings.RepositoryId}:settings:custom-property-definition:{definition.Name}"
+                            definition.PayloadSha256 definition.PayloadJson)
+                let valueSubjects =
+                    values
+                    |> List.map (fun value ->
+                        subject
+                            $"repository:{settings.RepositoryId}:settings:custom-property-value:{value.Name}"
+                            value.PayloadSha256 value.PayloadJson)
+                let bodies = [ identityBody; schemaBody; valuesBody ]
+                let pageSubjects = [ [ identitySubject ]; definitionSubjects; valueSubjects ]
+                let pages =
+                    List.zip3 expectedUris bodies pageSubjects
+                    |> List.mapi (fun index (uri, body, subjects) ->
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=sha body
+                          NextRequestIdentitySha256=
+                              if index + 1 < expectedUris.Length then Some(sha expectedUris.[index + 1]) else None
+                          Subjects=subjects })
+                let subjects = pages |> List.collect _.Subjects
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="repository-settings/custom-properties"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"repository-custom-properties-raw-or-scope:{failure.Message}"
+
+    let bindDeclaredReceiverIdentities
+        (options: MigrationInspectProviderOptions)
+        (first: MigrationReceiverSnapshot list)
+        (second: MigrationReceiverSnapshot list) =
+        if not (GitHubMigrationInspect.validCohort options.Cohort) then
+            Error "receiver-declared-cohort"
+        else
+            try
+                let hex40 (value: string) =
+                    not (isNull value) && value.Length = 40
+                    && (value |> Seq.forall (fun c -> Char.IsAsciiHexDigitLower c))
+                let stringProperty (name: string) (root: JsonElement) =
+                    let value = root.GetProperty(name)
+                    if value.ValueKind <> JsonValueKind.String || String.IsNullOrWhiteSpace(value.GetString()) then
+                        failwith $"string:{name}"
+                    value.GetString()
+                let shaProperty (name: string) (root: JsonElement) =
+                    let value = stringProperty name root
+                    if not (hex40 value) then failwith $"sha:{name}"
+                    value
+                let parse (body: string) =
+                    let document = JsonDocument.Parse body
+                    requireUniqueMembers document.RootElement
+                    document
+                let parseTree (body: string) (expectedTree: string) =
+                    use document = parse body
+                    let root = document.RootElement
+                    if shaProperty "sha" root <> expectedTree
+                       || root.GetProperty("truncated").GetBoolean()
+                       || root.GetProperty("tree").ValueKind <> JsonValueKind.Array then
+                        failwith "tree-root"
+                    let entries =
+                        root.GetProperty("tree").EnumerateArray()
+                        |> Seq.map (fun entry ->
+                            let path = stringProperty "path" entry
+                            let mode = stringProperty "mode" entry
+                            let kind = stringProperty "type" entry
+                            let entrySha = shaProperty "sha" entry
+                            let safePath =
+                                not (path.StartsWith('/')) && not (path.Contains("..", StringComparison.Ordinal))
+                                && not (path.Contains('\\'))
+                                && (path.Split('/') |> Array.forall (fun part ->
+                                    not (String.IsNullOrWhiteSpace part) && part <> "."))
+                            if not safePath || not (Set.contains kind (set [ "blob"; "tree" ]))
+                               || (kind = "blob" && not (Set.contains mode (set [ "100644"; "100755"; "120000" ])))
+                               || (kind = "tree" && mode <> "040000") then
+                                failwith "tree-entry"
+                            let mutable size = Unchecked.defaultof<JsonElement>
+                            let hasSize = entry.TryGetProperty("size", &size)
+                            let entrySize =
+                                if kind = "blob" then
+                                    let mutable parsed = 0L
+                                    if not hasSize || size.ValueKind <> JsonValueKind.Number
+                                       || not (size.TryGetInt64(&parsed)) || parsed < 0L then
+                                        failwith "tree-size"
+                                    Some parsed
+                                else
+                                    if hasSize && size.ValueKind <> JsonValueKind.Null then failwith "tree-size"
+                                    None
+                            { EntryPath=path; EntryMode=mode; EntryKind=kind
+                              EntrySha=entrySha; EntrySize=entrySize })
+                        |> Seq.toList
+                    if entries.Length <> (entries |> List.map _.EntryPath |> Set.ofList |> Set.count) then
+                        failwith "tree-duplicate-path"
+                    entries |> List.sortBy _.EntryPath
+                let repositories =
+                    options.Cohort.Repositories
+                    |> List.map (fun (repository: GitHubMigrationCopyRepository) ->
+                        repository.Id, repository)
+                    |> Map.ofList
+                let declarations: GitHubMigrationCopyReceiver list =
+                    options.Cohort.Receivers |> List.sortBy _.Receiver
+                let expectedNames = declarations |> List.map _.Receiver
+                let validateSnapshot (passOrdinal: int)
+                                     (declaration: GitHubMigrationCopyReceiver)
+                                     (snapshot: MigrationReceiverSnapshot) =
+                    let repository =
+                        Map.tryFind declaration.RepositoryId repositories
+                        |> Option.defaultWith (fun () -> failwith "receiver-repository")
+                    if snapshot.ReceiverName <> declaration.Receiver
+                       || snapshot.RepositoryId <> repository.Id
+                       || snapshot.RepositoryNodeId <> repository.NodeId
+                       || snapshot.RepositoryFullName <> repository.FullName
+                       || snapshot.RefName <> declaration.RefName
+                       || snapshot.CommitSha <> declaration.ExpectedHead
+                       || not (hex40 snapshot.CommitSha) || not (hex40 snapshot.TreeSha) then
+                        failwith "receiver-binding"
+                    let parts = repository.FullName.Split('/')
+                    if parts.Length <> 2 then failwith "repository-name"
+                    let repositoryPath =
+                        $"repos/{Uri.EscapeDataString parts.[0]}/{Uri.EscapeDataString parts.[1]}"
+                    let identityUri = Uri(options.Repository.ApiBase, repositoryPath).AbsoluteUri
+                    let refUri =
+                        Uri(options.Repository.ApiBase,
+                            $"{repositoryPath}/git/ref/{declaration.RefName.Substring(5)}").AbsoluteUri
+                    let commitUri =
+                        Uri(options.Repository.ApiBase,
+                            $"{repositoryPath}/git/commits/{declaration.ExpectedHead}").AbsoluteUri
+                    let treeUri =
+                        Uri(options.Repository.ApiBase,
+                            $"{repositoryPath}/git/trees/{snapshot.TreeSha}?recursive=1").AbsoluteUri
+                    let evidence =
+                        [ "identity", identityUri, snapshot.IdentityEvidence
+                          "initial-ref", refUri, snapshot.InitialRefEvidence
+                          "commit", commitUri, snapshot.CommitEvidence
+                          "tree", treeUri, snapshot.TreeEvidence
+                          "terminal-ref", refUri, snapshot.TerminalRefEvidence ]
+                    for _, expectedUri, item in evidence do
+                        if item.RequestUri <> expectedUri || item.RawSha256 <> sha item.RawBody then
+                            failwith "receiver-evidence"
+                    use identityDocument = parse snapshot.IdentityEvidence.RawBody
+                    let identity = identityDocument.RootElement
+                    if identity.GetProperty("id").GetInt64() <> repository.Id
+                       || stringProperty "node_id" identity <> repository.NodeId
+                       || stringProperty "full_name" identity <> repository.FullName then
+                        failwith "receiver-identity"
+                    let parseRef (body: string) =
+                        use document = parse body
+                        let root = document.RootElement
+                        let target = root.GetProperty("object")
+                        if stringProperty "ref" root <> declaration.RefName
+                           || stringProperty "type" target <> "commit"
+                           || shaProperty "sha" target <> declaration.ExpectedHead then
+                            failwith "receiver-ref"
+                    parseRef snapshot.InitialRefEvidence.RawBody
+                    parseRef snapshot.TerminalRefEvidence.RawBody
+                    use commitDocument = parse snapshot.CommitEvidence.RawBody
+                    let commit = commitDocument.RootElement
+                    if shaProperty "sha" commit <> declaration.ExpectedHead
+                       || shaProperty "sha" (commit.GetProperty("tree")) <> snapshot.TreeSha then
+                        failwith "receiver-commit"
+                    let entries = parseTree snapshot.TreeEvidence.RawBody snapshot.TreeSha
+                    if entries <> snapshot.TreeEntries then failwith "receiver-tree-typed"
+                    let expectedSnapshot =
+                        [ yield snapshot.ReceiverName
+                          yield string snapshot.RepositoryId
+                          yield snapshot.RepositoryNodeId
+                          yield snapshot.RepositoryFullName
+                          yield snapshot.RefName
+                          yield snapshot.CommitSha
+                          yield snapshot.TreeSha
+                          for _, _, item in evidence do
+                              yield item.RequestUri
+                              yield item.RawSha256
+                          for item in entries do
+                              yield item.EntryPath
+                              yield item.EntryMode
+                              yield item.EntryKind
+                              yield item.EntrySha
+                              yield item.EntrySize |> Option.map string |> Option.defaultValue "" ]
+                        |> digestParts
+                    if snapshot.SnapshotSha256 <> expectedSnapshot then failwith "receiver-snapshot-digest"
+                    evidence
+                    |> List.map (fun (kind, uri, item) ->
+                        let observed =
+                            subject
+                                $"receiver:{snapshot.ReceiverName}:pass:{passOrdinal}:{kind}"
+                                item.RawSha256 item.RawBody
+                        uri, item.RawBody, observed)
+                let validatePass (passOrdinal: int) (snapshots: MigrationReceiverSnapshot list) =
+                    if snapshots |> List.map _.ReceiverName <> expectedNames then
+                        failwith "receiver-population"
+                    List.map2 (validateSnapshot passOrdinal) declarations snapshots |> List.collect id
+                let firstRows = validatePass 1 first
+                let secondRows = validatePass 2 second
+                if first <> second then failwith "receiver-two-pass-drift"
+                let rows = firstRows @ secondRows
+                let pages =
+                    rows
+                    |> List.mapi (fun index (uri, body, observed) ->
+                        let next =
+                            if index + 1 < rows.Length then
+                                let nextUri, _, _ = rows.[index + 1]
+                                Some(sha nextUri)
+                            else None
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=sha body
+                          NextRequestIdentitySha256=next; Subjects=[ observed ] })
+                let subjects = pages |> List.collect _.Subjects
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="receiver-identities/declared"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"receiver-declared-raw-or-scope:{failure.Message}"
+
+    let bindDeclaredWorkflowPins
+        (options: MigrationInspectProviderOptions)
+        (pinsByReceiver: Map<string, MigrationReceiverPinDeclaration list>)
+        (first: MigrationReceiverPinSnapshot list)
+        (second: MigrationReceiverPinSnapshot list) =
+        let receivers = options.Cohort.Receivers |> List.sortBy _.Receiver
+        let receiverNames = receivers |> List.map _.Receiver
+        let declaredNames = pinsByReceiver |> Map.toList |> List.map fst |> List.sort
+        if not (GitHubMigrationInspect.validCohort options.Cohort)
+           || declaredNames <> (receiverNames |> List.sort)
+           || pinsByReceiver |> Map.exists (fun _ pins -> isNull (box pins) || pins.IsEmpty) then
+            Error "workflow-pins-declaration"
+        else
+            match bindDeclaredReceiverIdentities options
+                      (first |> List.map _.Receiver) (second |> List.map _.Receiver) with
+            | Error reason -> Error $"workflow-pins-receiver:{reason}"
+            | Ok _ ->
+                try
+                    let bytesSha (value: byte array) =
+                        value |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                    let isWorkflow (path: string) =
+                        path.StartsWith(".github/workflows/", StringComparison.Ordinal)
+                    let packageNames =
+                        set [ "global.json"; "Directory.Packages.props"; "packages.lock.json"
+                              "package.json"; "package-lock.json"; "pnpm-lock.yaml"
+                              "yarn.lock"; "nuget.config" ]
+                    let isPackage (path: string) = path.Split('/') |> Array.last |> packageNames.Contains
+                    let validDeclaration (pin: MigrationReceiverPinDeclaration) =
+                        not (String.IsNullOrWhiteSpace pin.EntryPath)
+                        && (pin.PinKind = "workflow" && isWorkflow pin.EntryPath
+                            || pin.PinKind = "package" && isPackage pin.EntryPath
+                               && not (isWorkflow pin.EntryPath))
+                    let stringProperty (name: string) (root: JsonElement) =
+                        let value = root.GetProperty(name)
+                        if value.ValueKind <> JsonValueKind.String then failwith $"string:{name}"
+                        value.GetString()
+                    let validateBlob (receiver: MigrationReceiverSnapshot)
+                                     (declaration: MigrationReceiverPinDeclaration)
+                                     (pin: MigrationReceiverPinBlob) =
+                        let entry =
+                            receiver.TreeEntries
+                            |> List.tryFind (fun item -> item.EntryPath = declaration.EntryPath)
+                            |> Option.defaultWith (fun () -> failwith "pin-tree-entry")
+                        if pin.EntryPath <> declaration.EntryPath || pin.PinKind <> declaration.PinKind
+                           || entry.EntryKind <> "blob" || entry.EntryMode <> pin.EntryMode
+                           || entry.EntrySha <> pin.EntrySha || entry.EntrySize <> Some pin.EntrySize
+                           || not (Set.contains pin.EntryMode (set [ "100644"; "100755" ])) then
+                            failwith "pin-binding"
+                        let parts = receiver.RepositoryFullName.Split('/')
+                        if parts.Length <> 2 then failwith "pin-repository"
+                        let uri =
+                            Uri(options.Repository.ApiBase,
+                                $"repos/{Uri.EscapeDataString parts.[0]}/{Uri.EscapeDataString parts.[1]}/git/blobs/{pin.EntrySha}")
+                                .AbsoluteUri
+                        if pin.RequestUri <> uri || pin.RequestSha256 <> sha $"GET\n{uri}"
+                           || pin.RawSha256 <> sha pin.RawBody || pin.BytesSha256 <> bytesSha pin.Bytes
+                           || int64 pin.Bytes.LongLength <> pin.EntrySize then
+                            failwith "pin-evidence"
+                        use document = JsonDocument.Parse pin.RawBody
+                        let root = document.RootElement
+                        requireUniqueMembers root
+                        let encoded = stringProperty "content" root
+                        let rawBytes =
+                            let compact = encoded.Replace("\r", "").Replace("\n", "")
+                            if compact |> Seq.exists (fun c ->
+                                not (Char.IsAsciiLetterOrDigit c || c = '+' || c = '/' || c = '=')) then
+                                failwith "pin-base64"
+                            Convert.FromBase64String compact
+                        if stringProperty "sha" root <> pin.EntrySha
+                           || stringProperty "encoding" root <> "base64"
+                           || stringProperty "url" root <> uri
+                           || root.GetProperty("size").GetInt64() <> pin.EntrySize
+                           || rawBytes <> pin.Bytes then
+                            failwith "pin-raw-typed"
+                        let gitBytes =
+                            Array.append
+                                (Encoding.ASCII.GetBytes($"blob {rawBytes.LongLength}\u0000")) rawBytes
+                        let gitSha =
+                            gitBytes |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+                        if gitSha <> pin.EntrySha then failwith "pin-git-object"
+                    let validatePass (snapshots: MigrationReceiverPinSnapshot list) =
+                        if snapshots |> List.map (fun item -> item.Receiver.ReceiverName) <> receiverNames then
+                            failwith "pin-receiver-population"
+                        snapshots
+                        |> List.map (fun snapshot ->
+                            let receiverName = snapshot.Receiver.ReceiverName
+                            let declarations = pinsByReceiver.[receiverName] |> List.sortBy _.EntryPath
+                            if declarations |> List.exists (validDeclaration >> not)
+                               || declarations.Length
+                                  <> (declarations |> List.map _.EntryPath |> Set.ofList |> Set.count)
+                               || snapshot.Pins |> List.map _.EntryPath
+                                  <> (declarations |> List.map _.EntryPath) then
+                                failwith "pin-population"
+                            let relevantPaths =
+                                snapshot.Receiver.TreeEntries
+                                |> List.filter (fun entry -> isWorkflow entry.EntryPath || isPackage entry.EntryPath)
+                                |> List.map _.EntryPath |> Set.ofList
+                            if relevantPaths <> (declarations |> List.map _.EntryPath |> Set.ofList) then
+                                failwith "pin-tree-census"
+                            List.iter2 (validateBlob snapshot.Receiver) declarations snapshot.Pins
+                            let terminal = snapshot.TerminalRefEvidence
+                            if terminal.RequestUri <> snapshot.Receiver.TerminalRefEvidence.RequestUri
+                               || terminal.RawBody <> snapshot.Receiver.TerminalRefEvidence.RawBody
+                               || terminal.RawSha256 <> sha terminal.RawBody then
+                                failwith "pin-terminal-ref"
+                            let expectedDigest =
+                                [ yield snapshot.Receiver.SnapshotSha256
+                                  for pin in snapshot.Pins do
+                                      yield pin.EntryPath
+                                      yield pin.PinKind
+                                      yield pin.EntryMode
+                                      yield pin.EntrySha
+                                      yield string pin.EntrySize
+                                      yield pin.RequestUri
+                                      yield pin.RequestSha256
+                                      yield pin.RawSha256
+                                      yield pin.BytesSha256
+                                  yield terminal.RequestUri
+                                  yield terminal.RawSha256 ]
+                                |> digestParts
+                            if snapshot.PinSnapshotSha256 <> expectedDigest then
+                                failwith "pin-snapshot-digest"
+                            snapshot)
+                    let firstValidated = validatePass first
+                    let secondValidated = validatePass second
+                    if firstValidated <> secondValidated then failwith "pin-two-pass-drift"
+                    let rows =
+                        firstValidated
+                        |> List.collect (fun snapshot ->
+                            [ for pin in snapshot.Pins do
+                                let observed =
+                                    subject
+                                        $"receiver:{snapshot.Receiver.ReceiverName}:workflow-pin:{pin.EntryPath}"
+                                        pin.BytesSha256 pin.RawBody
+                                yield pin.RequestUri, pin.RawBody, observed
+                              let terminal = snapshot.TerminalRefEvidence
+                              let terminalSubject =
+                                  subject
+                                      $"receiver:{snapshot.Receiver.ReceiverName}:workflow-pin:terminal-ref"
+                                      terminal.RawSha256 terminal.RawBody
+                              yield terminal.RequestUri, terminal.RawBody, terminalSubject ])
+                    let pages =
+                        rows
+                        |> List.mapi (fun index (uri, body, observed) ->
+                            let next =
+                                if index + 1 < rows.Length then
+                                    let nextUri, _, _ = rows.[index + 1]
+                                    Some(sha nextUri)
+                                else None
+                            { RequestedUri=uri; RequestIdentitySha256=sha uri
+                              RawBody=body; PayloadSha256=sha body
+                              NextRequestIdentitySha256=next; Subjects=[ observed ] })
+                    let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
+                    Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                         ScopeVerified=true; SubjectsParsedFromRaw=true
+                         Read={ Authority="workflow-pins/declared"
+                                ObservedAt=DateTimeOffset.UtcNow
+                                PageCount=pages.Length; ItemCount=subjects.Length
+                                Terminal=true; NextCursor=None
+                                HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                                Subjects=subjects }
+                         Pages=pages }
+                with failure -> Error $"workflow-pins-raw-or-scope:{failure.Message}"
+
+    let private allowedNativeActivityRequest (options: MigrationInspectProviderOptions) request =
+        match request with
+        | GraphQL _ -> false
+        | Rest value ->
+            let repository =
+                Uri(options.Repository.ApiBase,
+                    $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+            let relative =
+                if value.Uri.AbsolutePath.StartsWith(repository.AbsolutePath, StringComparison.Ordinal) then
+                    value.Uri.AbsolutePath.Substring(repository.AbsolutePath.Length)
+                else "foreign"
+            let segments = relative.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            let positive (candidate: string) =
+                let mutable number = 0
+                Int32.TryParse(candidate, &number) && number > 0
+            let activityPath =
+                match segments with
+                | [||] -> true
+                | [| "issues" |] | [| "pulls" |] -> true
+                | [| "issues"; number; ("comments" | "events") |] -> positive number
+                | [| "pulls"; number; ("reviews" | "comments") |] -> positive number
+                | _ -> false
+            value.Method = Get && value.Body.IsNone
+            && value.Uri.Scheme = Uri.UriSchemeHttps
+            && value.Uri.Authority = repository.Authority
+            && activityPath
+
+    let bindNativeActivity
+        (options: MigrationInspectProviderOptions)
+        (first: MigrationNativeActivityCapture)
+        (firstCaptures: (GitHubRequest * TransportOutcome) list)
+        (second: MigrationNativeActivityCapture)
+        (secondCaptures: (GitHubRequest * TransportOutcome) list) =
+        if not (repositoryBinding options) then Error "native-activity-cohort"
+        else
+            try
+                let identityUri =
+                    Uri(options.Repository.ApiBase,
+                        $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+                        .AbsoluteUri
+                let pageUris (pages: MigrationRestPageEvidence list) = pages |> List.map _.RequestedUri
+                let streamPages (input: MigrationNativeActivityInput) =
+                    [ yield! input.IssueComments |> List.collect (fun value -> value.Pages)
+                      yield! input.IssueEvents |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestComments |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestReviews |> List.collect (fun value -> value.Pages)
+                      yield! input.PullRequestInlineComments |> List.collect (fun value -> value.Pages) ]
+                let expectedUriCounts (input: MigrationNativeActivityInput) =
+                    let streamReadCount =
+                        input.IssueComments.Length + input.IssueEvents.Length
+                        + input.PullRequestComments.Length + input.PullRequestReviews.Length
+                        + input.PullRequestInlineComments.Length
+                    [ for _ in 1 .. 4 + streamReadCount do yield identityUri
+                      for uri in pageUris input.Issues.Pages do yield uri; yield uri
+                      for uri in pageUris input.PullRequests.Pages do yield uri; yield uri
+                      yield! streamPages input |> pageUris ]
+                    |> List.countBy id |> Map.ofList
+                let rawCalls captures =
+                    captures
+                    |> List.map (fun (request, outcome) ->
+                        if not (allowedNativeActivityRequest options request) then failwith "request-scope"
+                        match request, responseBody outcome with
+                        | Rest value, Ok body -> value.Uri.AbsoluteUri, body, outcome
+                        | _ -> failwith "provider-response")
+                let payloadSubject identity payload =
+                    payload, subject identity (sha payload) payload
+                let typedRows (input: MigrationNativeActivityInput) =
+                    [ yield! input.Issues.Issues
+                              |> List.map (fun item ->
+                                  payloadSubject $"native:issue:{item.NodeId}" item.PayloadJson)
+                      yield! input.PullRequests.PullRequests
+                              |> List.map (fun item ->
+                                  payloadSubject $"native:pull-request:{item.NodeId}" item.PayloadJson)
+                      yield! input.IssueComments |> List.collect (fun stream ->
+                          stream.Comments |> List.map (fun item ->
+                              payloadSubject $"native:issue-comment:{item.NodeId}" item.PayloadJson))
+                      yield! input.IssueEvents |> List.collect (fun stream ->
+                          stream.Events |> List.map (fun item ->
+                              payloadSubject $"native:issue-event:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestComments |> List.collect (fun stream ->
+                          stream.Comments |> List.map (fun item ->
+                              payloadSubject $"native:pull-comment:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestReviews |> List.collect (fun stream ->
+                          stream.Reviews |> List.map (fun item ->
+                              payloadSubject $"native:review:{item.NodeId}" item.PayloadJson))
+                      yield! input.PullRequestInlineComments |> List.collect (fun stream ->
+                          stream.Comments |> List.map (fun item ->
+                              payloadSubject $"native:inline-comment:{item.NodeId}" item.PayloadJson)) ]
+                let validatePass (capture: MigrationNativeActivityCapture) captures =
+                    let reconciled =
+                        MigrationNativeActivity.reconcile options.Repository capture.Input
+                        |> function
+                           | Ok value -> value
+                           | Error failure -> failwith $"typed-reconcile:{failure}"
+                    if reconciled <> capture.Snapshot then failwith "snapshot-mismatch"
+                    let calls = rawCalls captures
+                    let actualCounts = calls |> List.map (fun (uri, _, _) -> uri) |> List.countBy id |> Map.ofList
+                    if actualCounts <> expectedUriCounts capture.Input then failwith "request-population"
+                    let byUri = calls |> List.groupBy (fun (uri, _, _) -> uri) |> Map.ofList
+                    let identities = byUri.[identityUri]
+                    let expectedIdentityCount =
+                        4 + capture.Input.IssueComments.Length + capture.Input.IssueEvents.Length
+                        + capture.Input.PullRequestComments.Length + capture.Input.PullRequestReviews.Length
+                        + capture.Input.PullRequestInlineComments.Length
+                    if identities.Length <> expectedIdentityCount
+                       || (identities |> List.map (fun (_, body, _) -> body) |> List.distinct |> List.length) <> 1 then
+                        failwith "identity-drift"
+                    let identityBody = identities.Head |> fun (_, body, _) -> body
+                    use identityDocument = JsonDocument.Parse identityBody
+                    requireUniqueMembers identityDocument.RootElement
+                    if identityDocument.RootElement.GetProperty("id").GetInt64()
+                           <> options.Repository.ExpectedRepositoryId
+                       || identityDocument.RootElement.GetProperty("full_name").GetString()
+                           <> $"{options.Repository.Owner}/{options.Repository.Repository}" then
+                        failwith "identity"
+                    let rows = typedRows capture.Input
+                    if rows.Length <> (rows |> List.map fst |> Set.ofList |> Set.count) then
+                        failwith "typed-payload-duplicate"
+                    let subjectByPayload = rows |> Map.ofList
+                    let pageSubjects = System.Collections.Generic.Dictionary<string, GitHubDiscoverySubject list>()
+                    let validatePages (pages: MigrationRestPageEvidence list)
+                                      (expectedPayloads: string list) skipPullMarkers expectedCopies =
+                        let rawItems = ResizeArray<string>()
+                        for page in pages do
+                            let occurrences = byUri.[page.RequestedUri]
+                            if occurrences.Length <> expectedCopies then failwith "page-copy-count"
+                            let bodies = occurrences |> List.map (fun (_, body, _) -> body) |> List.distinct
+                            if bodies.Length <> 1 || sha bodies.Head <> page.PayloadSha256 then
+                                failwith "raw-page-drift"
+                            if occurrences
+                               |> List.exists (fun (_, _, outcome) -> capturedNextUri outcome <> Some page.NextUri) then
+                                failwith "page-chain"
+                            use document = JsonDocument.Parse bodies.Head
+                            if document.RootElement.ValueKind <> JsonValueKind.Array then failwith "page-array"
+                            requireUniqueMembers document.RootElement
+                            let retained =
+                                document.RootElement.EnumerateArray()
+                                |> Seq.choose (fun item ->
+                                    let mutable marker = Unchecked.defaultof<JsonElement>
+                                    if skipPullMarkers && item.TryGetProperty("pull_request", &marker) then None
+                                    else Some(item.GetRawText()))
+                                |> Seq.toList
+                            retained |> List.iter rawItems.Add
+                            let subjects =
+                                retained |> List.map (fun payload ->
+                                    Map.tryFind payload subjectByPayload
+                                    |> Option.defaultWith (fun () -> failwith "raw-typed-item"))
+                            pageSubjects.[page.RequestedUri] <- subjects
+                        if (rawItems |> Seq.toList |> List.sort) <> List.sort expectedPayloads then
+                            failwith "raw-typed-population"
+                    validatePages capture.Input.Issues.Pages
+                        (capture.Input.Issues.Issues |> List.map _.PayloadJson) true 2
+                    validatePages capture.Input.PullRequests.Pages
+                        (capture.Input.PullRequests.PullRequests |> List.map _.PayloadJson) false 2
+                    for stream in capture.Input.IssueComments do
+                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.IssueEvents do
+                        validatePages stream.Pages (stream.Events |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.PullRequestComments do
+                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.PullRequestReviews do
+                        validatePages stream.Pages (stream.Reviews |> List.map _.PayloadJson) false 1
+                    for stream in capture.Input.PullRequestInlineComments do
+                        validatePages stream.Pages (stream.Comments |> List.map _.PayloadJson) false 1
+                    let orderedPages =
+                        capture.Input.Issues.Pages @ capture.Input.PullRequests.Pages
+                        @ streamPages capture.Input
+                    orderedPages
+                    |> List.map (fun page ->
+                        let _, body, _ = byUri.[page.RequestedUri].Head
+                        page.RequestedUri, body, pageSubjects.[page.RequestedUri])
+                let firstPages = validatePass first firstCaptures
+                let secondPages = validatePass second secondCaptures
+                let normalizedCalls captures =
+                    rawCalls captures
+                    |> List.map (fun (uri, body, outcome) -> uri, body, capturedNextUri outcome)
+                if first <> second || normalizedCalls firstCaptures <> normalizedCalls secondCaptures
+                   || firstPages <> secondPages then
+                    failwith "two-pass-drift"
+                let pages =
+                    firstPages
+                    |> List.mapi (fun index (uri, body, subjects) ->
+                        let next =
+                            if index + 1 < firstPages.Length then
+                                let nextUri, _, _ = firstPages.[index + 1]
+                                Some(sha nextUri)
+                            else None
+                        { RequestedUri=uri; RequestIdentitySha256=sha uri
+                          RawBody=body; PayloadSha256=sha body
+                          NextRequestIdentitySha256=next; Subjects=subjects })
+                let subjects = pages |> List.collect _.Subjects |> List.sortBy _.Identity
+                Ok { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                     ScopeVerified=true; SubjectsParsedFromRaw=true
+                     Read={ Authority="claim-and-event-streams/native"
+                            ObservedAt=DateTimeOffset.UtcNow
+                            PageCount=pages.Length; ItemCount=subjects.Length
+                            Terminal=true; NextCursor=None
+                            HighWaterMark=digestParts (pages |> List.map _.PayloadSha256)
+                            Subjects=subjects }
+                     Pages=pages }
+            with failure -> Error $"native-activity-raw-or-scope:{failure.Message}"
+
+    let readNativeActivity options (transport: IMigrationGitHubReadTransport) =
+        let capture () =
+            let retained = CapturingTransport(transport, allowedNativeActivityRequest options)
+            MigrationNativeActivity.capture options.Repository retained
+            |> Result.mapError (fun failure -> $"native-activity-read:{failure}")
+            |> Result.map (fun value -> value, retained.Calls)
+        capture ()
+        |> Result.bind (fun (first, firstCalls) ->
+            capture ()
+            |> Result.bind (fun (second, secondCalls) ->
+                bindNativeActivity options first firstCalls second secondCalls))
 
     let bindIssues (options: MigrationInspectProviderOptions) (population: MigrationIssuePopulation)
                    (captures: (GitHubRequest * TransportOutcome) list) =
@@ -879,6 +1883,8 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
     interface IGitHubMigrationInspectSource with
         member _.ReadAuthority(passOrdinal, authority) =
             if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
+            elif authority = "review-delivery-release-records" then
+                MigrationInspectProviderAdapter.readReviewDeliveryRecords options passOrdinal transport
             elif authority = "issues-open-and-relevant-closed" then
                 lock issueProofs (fun () -> issueProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)

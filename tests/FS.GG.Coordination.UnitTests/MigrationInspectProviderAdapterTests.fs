@@ -41,6 +41,495 @@ type private FakeTransport(responses: TransportOutcome list) =
             calls.Add(request, response)
             response
 
+type private RoutingTransport(route: GitHubRequest -> TransportOutcome) =
+    let calls = ResizeArray<GitHubRequest * TransportOutcome>()
+    member _.Calls = calls |> Seq.toList
+    interface IMigrationGitHubReadTransport with
+        member _.Send request =
+            let outcome = route request
+            calls.Add(request, outcome)
+            outcome
+
+let private repositoryCore =
+    """{"id":42,"node_id":"R_42","full_name":"FS-GG/copy","default_branch":"main","visibility":"private","archived":false,"disabled":false,"has_issues":true,"allow_squash_merge":true,"allow_merge_commit":false,"allow_rebase_merge":true,"delete_branch_on_merge":true}"""
+
+let private readRepositoryCore responses =
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readRepositoryCoreSettings options.Repository transport with
+    | Ok settings -> settings, transport.Calls
+    | Error failure -> failwithf "Expected repository core settings: %A" failure
+
+[<Fact>]
+let ``repository core inspect slice binds exact raw settings without completing authority`` () =
+    let settings, calls = readRepositoryCore [ reply repositoryCore ]
+    match MigrationInspectProviderAdapter.bindRepositoryCoreSettings options settings calls with
+    | Error reason -> failwithf "Repository core proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings/core", proof.Read.Authority)
+        Assert.Equal(1, proof.Read.PageCount)
+        Assert.Equal(1, proof.Read.ItemCount)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+        Assert.Equal("repository:42:settings:core", proof.Read.Subjects.Head.Identity)
+        Assert.Equal(repositoryCore, proof.Pages.Head.RawBody)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+                 source.ReadAuthority(1, "repository-settings"))
+
+[<Fact>]
+let ``incomplete authority families remain unavailable without provider calls`` () =
+    let transport = FakeTransport []
+    let source = MigrationInspectProviderAdapter(options, transport)
+                 :> IGitHubMigrationInspectSource
+    let incomplete =
+        [ "claim-and-event-streams"
+          "repository-settings"
+          "workflow-pins"
+          "receiver-identities" ]
+
+    for authority in incomplete do
+        Assert.Equal(Error $"authority-adapter-unavailable:{authority}",
+                     source.ReadAuthority(1, authority))
+
+    Assert.Empty(transport.Calls)
+
+[<Fact>]
+let ``repository core inspect slice refuses typed raw and request drift`` () =
+    let settings, calls = readRepositoryCore [ reply repositoryCore ]
+    Assert.Equal(Error "repository-core-raw-typed-mismatch",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options { settings with DefaultBranch="other" } calls)
+
+    let request, outcome = calls.Head
+    let foreign =
+        match request with
+        | Rest value -> Rest { value with Uri=Uri "https://api.github.test/repos/FS-GG/other" }
+        | _ -> failwith "Expected REST request"
+    Assert.Equal(Error "repository-core-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options settings [ foreign, outcome ])
+    Assert.Equal(Error "repository-core-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options settings (calls @ calls))
+
+    let ambiguous = repositoryCore.Replace("\"default_branch\":\"main\"",
+                                           "\"default_branch\":\"other\",\"default_branch\":\"main\"")
+    Assert.Equal(Error "repository-core-raw-parse",
+                 MigrationInspectProviderAdapter.bindRepositoryCoreSettings
+                     options settings [ request, reply ambiguous ])
+
+[<Fact>]
+let ``repository core inspect guard refuses writes before dispatch`` () =
+    let inner = FakeTransport [ reply repositoryCore ]
+    let guard = MigrationInspectProviderAdapter.guardReadTransport
+                    options "repository-settings/core" inner
+    let write =
+        Rest { Method=Patch; Uri=Uri "https://api.github.test/repos/FS-GG/copy"
+               Headers=Map.empty; Body=Some "{}"; ApiVersion=ApiVersion.required
+               Idempotency=NeverReplay }
+    Assert.Equal(NetworkFailure, guard.Send write)
+    Assert.Empty(inner.Calls)
+
+let private repositoryIdentity = """{"id":42,"full_name":"FS-GG/copy"}"""
+let private actionsAll =
+    """{"enabled":true,"allowed_actions":"all","selected_actions_url":null,"sha_pinning_required":false}"""
+let private actionsSelected =
+    """{"enabled":true,"allowed_actions":"selected","selected_actions_url":"https://api.github.test/repositories/42/actions/permissions/selected-actions","sha_pinning_required":true}"""
+let private selectedActions =
+    """{"github_owned_allowed":true,"verified_allowed":false,"patterns_allowed":["FS-GG/*@*"]}"""
+
+let private readRepositoryActions responses =
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readRepositoryActionsPolicy options.Repository transport with
+    | Ok settings -> settings, transport.Calls
+    | Error failure -> failwithf "Expected repository Actions policy: %A" failure
+
+[<Fact>]
+let ``repository Actions inspect slice binds core and conditional allowlist raw pages`` () =
+    let selected, selectedCalls =
+        readRepositoryActions [ reply repositoryIdentity; reply actionsSelected; reply selectedActions ]
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options selected selectedCalls with
+    | Error reason -> failwithf "Selected Actions proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings/actions", proof.Read.Authority)
+        Assert.Equal(3, proof.Read.PageCount)
+        Assert.Equal(3, proof.Read.ItemCount)
+        Assert.Equal(selectedActions, proof.Pages.[2].RawBody)
+        Assert.Equal(Some proof.Pages.[2].RequestIdentitySha256,
+                     proof.Pages.[1].NextRequestIdentitySha256)
+
+    let all, allCalls = readRepositoryActions [ reply repositoryIdentity; reply actionsAll ]
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options all allCalls with
+    | Error reason -> failwithf "Actions core proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal(2, proof.Pages.Length)
+        Assert.Equal(None, proof.Pages.[1].NextRequestIdentitySha256)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+                 source.ReadAuthority(1, "repository-settings"))
+
+[<Fact>]
+let ``repository Actions inspect slice independently refuses raw typed and request drift`` () =
+    let settings, calls =
+        readRepositoryActions [ reply repositoryIdentity; reply actionsSelected; reply selectedActions ]
+    let changed = { settings with PatternsAllowed=Some [ "FS-GG/other@*" ] }
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options changed calls with
+    | Error reason -> Assert.StartsWith("repository-actions-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed typed Actions policy was accepted"
+
+    let ambiguous = selectedActions.Replace("\"verified_allowed\":false",
+                                            "\"verified_allowed\":true,\"verified_allowed\":false")
+    let duplicateRaw = calls |> List.mapi (fun index (request, outcome) ->
+        if index = 2 then request, reply ambiguous else request, outcome)
+    match MigrationInspectProviderAdapter.bindRepositoryActionsPolicy options settings duplicateRaw with
+    | Error reason -> Assert.StartsWith("repository-actions-raw-or-scope:", reason)
+    | Ok _ -> failwith "Duplicate selected Actions member was accepted"
+
+    let request, outcome = calls.[2]
+    let foreign =
+        match request with
+        | Rest value -> Rest { value with Uri=Uri "https://api.github.test/repositories/43/actions/permissions/selected-actions" }
+        | _ -> failwith "Expected REST request"
+    Assert.Equal(Error "repository-actions-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryActionsPolicy
+                     options settings [ calls.[0]; calls.[1]; foreign, outcome ])
+    Assert.Equal(Error "repository-actions-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryActionsPolicy
+                     options settings (calls @ [ calls.Head ]))
+
+[<Fact>]
+let ``repository Actions inspect guard refuses foreign allowlist and writes before dispatch`` () =
+    let inner = FakeTransport [ reply selectedActions ]
+    let guard = MigrationInspectProviderAdapter.guardReadTransport
+                    options "repository-settings/actions" inner
+    let foreign =
+        Rest { Method=Get
+               Uri=Uri "https://api.github.test/repositories/43/actions/permissions/selected-actions"
+               Headers=Map.empty; Body=None; ApiVersion=ApiVersion.required
+               Idempotency=ReplaySafe }
+    let write =
+        Rest { Method=Put
+               Uri=Uri "https://api.github.test/repositories/42/actions/permissions/selected-actions"
+               Headers=Map.empty; Body=Some "{}"; ApiVersion=ApiVersion.required
+               Idempotency=NeverReplay }
+    Assert.Equal(NetworkFailure, guard.Send foreign)
+    Assert.Equal(NetworkFailure, guard.Send write)
+    Assert.Empty(inner.Calls)
+
+let private propertySchema =
+    """[{"property_name":"environment","source_type":"organization","value_type":"single_select","required":true,"require_explicit_values":true,"values_editable_by":"org_actors","default_value":"production","allowed_values":["production","development"]},{"property_name":"teams","source_type":"organization","value_type":"multi_select","required":false,"values_editable_by":null,"allowed_values":["backend","frontend"]},{"property_name":"approved","source_type":"organization","value_type":"true_false","required":false}]"""
+let private propertyValues =
+    """[{"property_name":"environment","value":"production"},{"property_name":"teams","value":["backend"]},{"property_name":"approved","value":true}]"""
+
+let private readRepositoryCustomProperties responses =
+    let transport = FakeTransport responses
+    match MigrationGitHubRead.readCustomProperties options.Repository transport with
+    | Ok settings -> settings, transport.Calls
+    | Error failure -> failwithf "Expected repository custom properties: %A" failure
+
+[<Fact>]
+let ``repository custom properties inspect slice binds definitions values and exact raw pages`` () =
+    let settings, calls =
+        readRepositoryCustomProperties
+            [ reply repositoryIdentity; reply propertySchema; reply propertyValues ]
+    match MigrationInspectProviderAdapter.bindRepositoryCustomProperties options settings calls with
+    | Error reason -> failwithf "Custom-property proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings/custom-properties", proof.Read.Authority)
+        Assert.Equal(3, proof.Read.PageCount)
+        Assert.Equal(7, proof.Read.ItemCount)
+        Assert.Equal(3, proof.Pages.[1].Subjects.Length)
+        Assert.Equal(3, proof.Pages.[2].Subjects.Length)
+        Assert.Equal(propertySchema, proof.Pages.[1].RawBody)
+        Assert.Equal(propertyValues, proof.Pages.[2].RawBody)
+        Assert.Equal(Some proof.Pages.[2].RequestIdentitySha256,
+                     proof.Pages.[1].NextRequestIdentitySha256)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+                 source.ReadAuthority(1, "repository-settings"))
+
+[<Fact>]
+let ``repository custom properties inspect slice independently refuses raw typed and request drift`` () =
+    let settings, calls =
+        readRepositoryCustomProperties
+            [ reply repositoryIdentity; reply propertySchema; reply propertyValues ]
+    let changed = { settings with Definitions=settings.Definitions.Tail }
+    match MigrationInspectProviderAdapter.bindRepositoryCustomProperties options changed calls with
+    | Error reason -> Assert.StartsWith("repository-custom-properties-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed typed property definitions were accepted"
+
+    let ambiguous = propertyValues.Replace("\"property_name\":\"approved\"",
+                                           "\"property_name\":\"teams\",\"property_name\":\"approved\"")
+    let duplicateRaw = calls |> List.mapi (fun index (request, outcome) ->
+        if index = 2 then request, reply ambiguous else request, outcome)
+    match MigrationInspectProviderAdapter.bindRepositoryCustomProperties options settings duplicateRaw with
+    | Error reason -> Assert.StartsWith("repository-custom-properties-raw-or-scope:", reason)
+    | Ok _ -> failwith "Duplicate raw property member was accepted"
+
+    let schemaRequest, schemaOutcome = calls.[1]
+    let foreign =
+        match schemaRequest with
+        | Rest value -> Rest { value with Uri=Uri "https://api.github.test/orgs/Other/properties/schema" }
+        | _ -> failwith "Expected REST request"
+    Assert.Equal(Error "repository-custom-properties-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCustomProperties
+                     options settings [ calls.[0]; foreign, schemaOutcome; calls.[2] ])
+    Assert.Equal(Error "repository-custom-properties-capture-shape",
+                 MigrationInspectProviderAdapter.bindRepositoryCustomProperties
+                     options settings (calls @ [ calls.Head ]))
+
+[<Fact>]
+let ``repository custom properties inspect guard refuses foreign schema and writes before dispatch`` () =
+    let inner = FakeTransport [ reply propertySchema ]
+    let guard = MigrationInspectProviderAdapter.guardReadTransport
+                    options "repository-settings/custom-properties" inner
+    let foreign =
+        Rest { Method=Get; Uri=Uri "https://api.github.test/orgs/Other/properties/schema"
+               Headers=Map.empty; Body=None; ApiVersion=ApiVersion.required
+               Idempotency=ReplaySafe }
+    let write =
+        Rest { Method=Patch; Uri=Uri "https://api.github.test/repos/FS-GG/copy/properties/values"
+               Headers=Map.empty; Body=Some "[]"; ApiVersion=ApiVersion.required
+               Idempotency=NeverReplay }
+    Assert.Equal(NetworkFailure, guard.Send foreign)
+    Assert.Equal(NetworkFailure, guard.Send write)
+    Assert.Empty(inner.Calls)
+
+let private receiverHead = String.replicate 40 "b"
+let private receiverTree = String.replicate 40 "d"
+let private receiverBlob = String.replicate 40 "e"
+let private receiverIdentity =
+    reply """{"id":42,"node_id":"R_42","full_name":"FS-GG/copy"}"""
+let private receiverRef =
+    reply $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
+let private receiverCommit =
+    reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+let private receiverTreeResponse =
+    reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
+let private receiverResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; receiverTreeResponse; receiverRef ]
+
+let private readReceiverTwoPass () =
+    let transport = FakeTransport (receiverResponses @ receiverResponses)
+    match MigrationReceiverCapture.captureTwoPass cohort options.Repository transport with
+    | Ok proof -> proof
+    | Error failure -> failwithf "Expected receiver two-pass proof: %s" failure
+
+[<Fact>]
+let ``declared receiver inspect slice revalidates two stable raw snapshots`` () =
+    let captured = readReceiverTwoPass ()
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options captured.First captured.Second with
+    | Error reason -> failwithf "Declared receiver proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("receiver-identities/declared", proof.Read.Authority)
+        Assert.Equal(10, proof.Read.PageCount)
+        Assert.Equal(10, proof.Read.ItemCount)
+        let expectedTreeBody =
+            match receiverTreeResponse with
+            | Response value -> value.Body
+            | _ -> failwith "Expected receiver tree response"
+        Assert.Equal(expectedTreeBody, proof.Pages.[3].RawBody)
+        Assert.Equal(None, proof.Pages.[9].NextRequestIdentitySha256)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:receiver-identities",
+                 source.ReadAuthority(1, "receiver-identities"))
+
+[<Fact>]
+let ``declared receiver inspect slice refuses typed raw URI population and pass drift`` () =
+    let captured = readReceiverTwoPass ()
+    let first = captured.First.Head
+    let alteredEntries =
+        [ { first.TreeEntries.Head with EntryMode="100755" } ]
+    let typedDrift = [ { first with TreeEntries=alteredEntries } ]
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options typedDrift captured.Second with
+    | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed typed receiver tree was accepted"
+
+    let foreignEvidence =
+        { first.IdentityEvidence with RequestUri="https://api.github.test/repos/FS-GG/other" }
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options [ { first with IdentityEvidence=foreignEvidence } ] captured.Second with
+    | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
+    | Ok _ -> failwith "Foreign receiver identity URI was accepted"
+
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+                    options captured.First [] |> Result.isError)
+    let changedSecond =
+        [ { captured.Second.Head with SnapshotSha256=String.replicate 64 "f" } ]
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options captured.First changedSecond with
+    | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed receiver second pass was accepted"
+
+let private pinBytes = Encoding.UTF8.GetBytes "name: controlled\n"
+let private pinSha =
+    Array.append (Encoding.ASCII.GetBytes($"blob {pinBytes.LongLength}\u0000")) pinBytes
+    |> SHA1.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private pinPath = ".github/workflows/check.yml"
+let private pinTreeResponse =
+    reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":"{pinPath}","mode":"100644","type":"blob","sha":"{pinSha}","size":{pinBytes.Length}}}]}}"""
+let private pinUri = $"https://api.github.test/repos/FS-GG/copy/git/blobs/{pinSha}"
+let private pinBody =
+    reply $"""{{"sha":"{pinSha}","url":"{pinUri}","encoding":"base64","content":"{Convert.ToBase64String pinBytes}","size":{pinBytes.Length}}}"""
+let private pinResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; pinTreeResponse; receiverRef
+      pinBody; receiverRef ]
+let private pinDeclarations =
+    Map [ "copy-receiver", [ { EntryPath=pinPath; PinKind="workflow" } ] ]
+
+let private readWorkflowPinsTwoPass () =
+    let transport = FakeTransport (pinResponses @ pinResponses)
+    match MigrationReceiverCapture.capturePinBytesTwoPass
+              cohort pinDeclarations options.Repository transport with
+    | Ok proof -> proof
+    | Error failure -> failwithf "Expected workflow pin two-pass proof: %s" failure
+
+[<Fact>]
+let ``declared workflow pin inspect slice binds exact tree blob bytes and stable ref`` () =
+    let captured = readWorkflowPinsTwoPass ()
+    Assert.False(captured.InventoryBound)
+    match MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+              options pinDeclarations captured.First captured.Second with
+    | Error reason -> failwithf "Declared workflow pin proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("workflow-pins/declared", proof.Read.Authority)
+        Assert.Equal(2, proof.Read.PageCount)
+        Assert.Equal(2, proof.Read.ItemCount)
+        let expectedPinBody =
+            match pinBody with
+            | Response value -> value.Body
+            | _ -> failwith "Expected pin response"
+        Assert.Equal(expectedPinBody, proof.Pages.Head.RawBody)
+        Assert.Equal(pinBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant(),
+                     proof.Read.Subjects.Head.Revision)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:workflow-pins",
+                 source.ReadAuthority(1, "workflow-pins"))
+
+[<Fact>]
+let ``declared workflow pin inspect slice refuses missing pins changed source and raw typed drift`` () =
+    let captured = readWorkflowPinsTwoPass ()
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations captured.First [] |> Result.isError)
+    let first = captured.First.Head
+    let missingPins = [ { first with Pins=[] } ]
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations missingPins captured.Second |> Result.isError)
+    let changedReceiver =
+        { first.Receiver with CommitSha=String.replicate 40 "f" }
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations [ { first with Receiver=changedReceiver } ] captured.Second
+                    |> Result.isError)
+    let changedBytes =
+        { first.Pins.Head with Bytes=Encoding.UTF8.GetBytes "name: changed\n" }
+    match MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+              options pinDeclarations [ { first with Pins=[ changedBytes ] } ] captured.Second with
+    | Error reason -> Assert.Contains("raw-or-scope", reason)
+    | Ok _ -> failwith "Changed typed pin bytes were accepted"
+    let changedSecond =
+        [ { captured.Second.Head with PinSnapshotSha256=String.replicate 64 "f" } ]
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredWorkflowPins
+                    options pinDeclarations captured.First changedSecond |> Result.isError)
+
+let private nativeIssue =
+    """{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}"""
+let private nativeComment =
+    """{"id":201,"node_id":"COMMENT_201","issue_url":"https://api.github.test/repos/FS-GG/copy/issues/1","body":"claim","created_at":"2026-09-25T10:00:00Z","updated_at":"2026-09-25T10:00:00Z","user":{"login":"actor"}}"""
+let private nativeEvent =
+    """{"id":202,"node_id":"EVENT_202","event":"assigned","created_at":"2026-09-25T10:00:00Z","actor":{"login":"actor"}}"""
+
+let private nativeRoute request =
+    match request with
+    | GraphQL _ -> NetworkFailure
+    | Rest value ->
+        match value.Uri.AbsolutePath with
+        | "/repos/FS-GG/copy" -> reply repositoryIdentity
+        | "/repos/FS-GG/copy/issues" -> reply $"[{nativeIssue}]"
+        | "/repos/FS-GG/copy/pulls" -> reply "[]"
+        | "/repos/FS-GG/copy/issues/1/comments" -> reply $"[{nativeComment}]"
+        | "/repos/FS-GG/copy/issues/1/events" -> reply $"[{nativeEvent}]"
+        | _ -> NetworkFailure
+
+let private captureNative route =
+    let transport = RoutingTransport route
+    let captured =
+        MigrationNativeActivity.capture options.Repository transport
+        |> function
+           | Ok value -> value
+           | Error failure -> failwithf "Expected native activity capture: %A" failure
+    captured, transport.Calls
+
+[<Fact>]
+let ``native activity inspect slice binds provider derived terminal streams over two raw passes`` () =
+    let transport = RoutingTransport nativeRoute
+    match MigrationInspectProviderAdapter.readNativeActivity options transport with
+    | Error reason -> failwithf "Native activity proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("claim-and-event-streams/native", proof.Read.Authority)
+        Assert.Equal(4, proof.Read.PageCount)
+        Assert.Equal(3, proof.Read.ItemCount)
+        Assert.Equal($"[{nativeComment}]", proof.Pages.[2].RawBody)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+    Assert.Equal(24, transport.Calls.Length)
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:claim-and-event-streams",
+                 source.ReadAuthority(1, "claim-and-event-streams"))
+
+[<Fact>]
+let ``native activity inspect slice refuses missing page raw typed mismatch and pass drift`` () =
+    let missing request =
+        match request with
+        | Rest value when value.Uri.AbsolutePath.EndsWith("/events", StringComparison.Ordinal) ->
+            NetworkFailure
+        | _ -> nativeRoute request
+    Assert.True(MigrationInspectProviderAdapter.readNativeActivity
+                    options (RoutingTransport missing) |> Result.isError)
+
+    let first, firstCalls = captureNative nativeRoute
+    let second, secondCalls = captureNative nativeRoute
+    let stream = first.Input.IssueEvents.Head
+    let changedRaw = "{}"
+    let changedDigest =
+        changedRaw |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    let changedEvent =
+        { stream.Events.Head with PayloadJson=changedRaw; PayloadSha256=changedDigest }
+    let changedInput =
+        { first.Input with IssueEvents=[ { stream with Events=[ changedEvent ] } ] }
+    let changedSnapshot =
+        MigrationNativeActivity.reconcile options.Repository changedInput
+        |> function Ok value -> value | Error failure -> failwithf "Changed typed fixture invalid: %A" failure
+    let changedCapture = { Input=changedInput; Snapshot=changedSnapshot }
+    match MigrationInspectProviderAdapter.bindNativeActivity
+              options changedCapture firstCalls second secondCalls with
+    | Error reason -> Assert.Contains("raw-typed", reason)
+    | Ok _ -> failwith "Raw and typed native activity mismatch was accepted"
+
+    let mutable eventReads = 0
+    let changedEventBody = nativeEvent.Replace("assigned", "closed")
+    let drifting request =
+        match request with
+        | Rest value when value.Uri.AbsolutePath.EndsWith("/events", StringComparison.Ordinal) ->
+            eventReads <- eventReads + 1
+            if eventReads = 2 then reply $"[{changedEventBody}]"
+            else nativeRoute request
+        | _ -> nativeRoute request
+    Assert.True(MigrationInspectProviderAdapter.readNativeActivity
+                    options (RoutingTransport drifting) |> Result.isError)
+
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""
 
