@@ -40,8 +40,20 @@ let ``retained request evidence excludes credentials`` () =
     let request =
         Rest
             { Method=Get; Uri=Uri "https://api.github.test/repos/FS-GG/copy"
-              Headers=Map.ofList [ "authorization", "Bearer secret"; "accept", "application/json" ]
+              Headers=Map.ofList
+                  [ "authorization", "Bearer secret"
+                    "cookie", "session=secret"
+                    "proxy-authorization", "Basic secret"
+                    "x-github-token", "secret"
+                    "x-unrecognized-credential", "secret"
+                    "accept", "application/json"
+                    "user-agent", "controlled-test" ]
               Body=None; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
     let captured = MigrationReviewDeliveryCaptureContract.captureRequest request
     Assert.False(captured.Headers |> Map.containsKey "authorization")
+    Assert.False(captured.Headers |> Map.containsKey "cookie")
+    Assert.False(captured.Headers |> Map.containsKey "proxy-authorization")
+    Assert.False(captured.Headers |> Map.containsKey "x-github-token")
+    Assert.False(captured.Headers |> Map.containsKey "x-unrecognized-credential")
     Assert.Equal(Some "application/json", captured.Headers |> Map.tryFind "accept")
+    Assert.Equal(Some "controlled-test", captured.Headers |> Map.tryFind "user-agent")

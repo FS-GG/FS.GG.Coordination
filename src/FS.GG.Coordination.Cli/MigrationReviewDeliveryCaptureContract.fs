@@ -142,9 +142,11 @@ module MigrationReviewDeliveryCaptureContract =
         $"{repositoryPath}/commits/{commitSha}/statuses?per_page=100"
 
     let private safeHeaders (headers: Map<string, string>) =
+        let allowed =
+            set [ "accept"; "content-type"; "user-agent"; "x-github-api-version" ]
         headers
         |> Map.filter (fun key _ ->
-            not (String.Equals(key, "authorization", StringComparison.OrdinalIgnoreCase)))
+            Set.contains (key.ToLowerInvariant()) allowed)
 
     let captureRequest request =
         match request with
