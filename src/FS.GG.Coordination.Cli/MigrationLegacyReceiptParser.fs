@@ -126,6 +126,15 @@ module MigrationLegacyReceiptParser =
         && not (duplicateMembers element)
         && (element.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) = Set.ofList names
 
+    let private objectHasRequiredAndAllowed required optional (element: JsonElement) =
+        if element.ValueKind <> JsonValueKind.Object || duplicateMembers element then
+            false
+        else
+            let actual = element.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+            let required = Set.ofList required
+            let allowed = Set.union required (Set.ofList optional)
+            Set.isSubset required actual && Set.isSubset actual allowed
+
     let private nonempty (name: string) (element: JsonElement) =
         let mutable value = Unchecked.defaultof<JsonElement>
 
@@ -264,7 +273,7 @@ module MigrationLegacyReceiptParser =
             use document = JsonDocument.Parse(body.Substring(marker.Length).Trim())
             let root = document.RootElement
 
-            let names =
+            let requiredNames =
                 [
                     "schema"
                     "item"
@@ -272,7 +281,6 @@ module MigrationLegacyReceiptParser =
                     "mergeSha"
                     "mergeReachable"
                     "obligationReceipts"
-                    "postMergeVerification"
                     "pendingBoardWrites"
                     "freshnessToken"
                     "actionKey"
@@ -280,7 +288,7 @@ module MigrationLegacyReceiptParser =
                     "digest"
                 ]
 
-            if not (objectHasExactly names root) then
+            if not (objectHasRequiredAndAllowed requiredNames [ "postMergeVerification" ] root) then
                 Error "legacy-receipt-completion-shape"
             else
                 match
@@ -346,10 +354,12 @@ module MigrationLegacyReceiptParser =
                             ->
                             Error "legacy-receipt-completion-obligations"
                         | Some obligations ->
-                            let verification = root.GetProperty("postMergeVerification")
+                            let mutable verification = Unchecked.defaultof<JsonElement>
 
                             let parsedVerification =
-                                if verification.ValueKind = JsonValueKind.Null then
+                                if not (root.TryGetProperty("postMergeVerification", &verification)) then
+                                    Some None
+                                elif verification.ValueKind = JsonValueKind.Null then
                                     Some None
                                 elif objectHasExactly [ "mergeSha"; "defaultBranch"; "runs" ] verification then
                                     match nonempty "mergeSha" verification, nonempty "defaultBranch" verification with
@@ -507,14 +517,18 @@ module MigrationLegacyReceiptParser =
                                 )
                             )
                         )
-            elif body.StartsWith("<!-- fsgg:delivery-completion/v1 -->", StringComparison.Ordinal) then
+            elif body.StartsWith("<!-- fsgg:delivery-completion", StringComparison.Ordinal) then
                 if location <> WorkItemComment then
                     Error "legacy-receipt-location"
+                elif not (body.StartsWith("<!-- fsgg:delivery-completion/v1 -->", StringComparison.Ordinal)) then
+                    Error "legacy-receipt-completion-version"
                 else
                     parseCompletion body
-            elif body.StartsWith("<!-- fsgg:completion-correction/v1 -->", StringComparison.Ordinal) then
+            elif body.StartsWith("<!-- fsgg:completion-correction", StringComparison.Ordinal) then
                 if location <> WorkItemComment then
                     Error "legacy-receipt-location"
+                elif not (body.StartsWith("<!-- fsgg:completion-correction/v1 -->", StringComparison.Ordinal)) then
+                    Error "legacy-receipt-correction-version"
                 else
                     parseCorrection body
             elif body.StartsWith("<!-- fsgg:done-receipt", StringComparison.Ordinal) then

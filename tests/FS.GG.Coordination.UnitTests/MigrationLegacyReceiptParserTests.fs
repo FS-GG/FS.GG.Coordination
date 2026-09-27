@@ -131,6 +131,16 @@ let ``typed completion validates exact schema facts and producer digest`` () =
         MigrationLegacyReceiptParser.tryParse WorkItemComment (completionBody digest)
     )
 
+    let withoutPostMergeVerification =
+        (completionBody digest).Replace("\"postMergeVerification\":null,", "", StringComparison.Ordinal)
+
+    Assert.DoesNotContain("postMergeVerification", withoutPostMergeVerification)
+
+    Assert.Equal(
+        Ok(Some(DeliveryCompletion("FS-GG/.github#10", 20, "abc123", digest))),
+        MigrationLegacyReceiptParser.tryParse WorkItemComment withoutPostMergeVerification
+    )
+
     expectError
         "legacy-receipt-completion-digest"
         (MigrationLegacyReceiptParser.tryParse WorkItemComment (completionBody (String.replicate 64 "0")))
@@ -146,6 +156,25 @@ let ``typed completion rejects duplicate members before interpretation`` () =
         + "{\"schema\":\"fsgg.coord.delivery-completion/v1\",\"schema\":\"fsgg.coord.delivery-completion/v1\"}"
 
     expectError "legacy-receipt-completion-shape" (MigrationLegacyReceiptParser.tryParse WorkItemComment duplicate)
+
+    let baseline = completionBody (String.replicate 64 "0")
+    let unexpected = baseline.Insert(baseline.IndexOf('{') + 1, "\"unexpected\":true,")
+
+    expectError "legacy-receipt-completion-shape" (MigrationLegacyReceiptParser.tryParse WorkItemComment unexpected)
+
+[<Fact>]
+let ``known typed receipt families reject unknown versions`` () =
+    expectError
+        "legacy-receipt-completion-version"
+        (MigrationLegacyReceiptParser.tryParse
+            WorkItemComment
+            "<!-- fsgg:delivery-completion/v2 -->\n{\"schema\":\"future\"}")
+
+    expectError
+        "legacy-receipt-correction-version"
+        (MigrationLegacyReceiptParser.tryParse
+            WorkItemComment
+            "<!-- fsgg:completion-correction/v2 -->\n{\"schema\":\"future\"}")
 
 let private completionWithRun branch digest =
     let run =
