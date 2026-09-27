@@ -144,6 +144,18 @@ type MigrationRepositoryEnvironmentsRead =
     { SurfaceRead: MigrationRepositorySettingsSurfaceRead
       Environments: MigrationEnvironmentObservation list }
 
+/// Repository and organization immutable-release policy from two equal provider
+/// passes, including an exhaustive selected-repository roster when applicable.
+type MigrationRepositoryImmutableReleasesRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      RepositoryEnabled: bool
+      EnforcedByOwner: bool
+      OrganizationPolicy: ImmutableReleasesOrganizationPolicy
+      SelectedRepositories: ImmutableReleasesSelectedRepository list
+      SelectedTotalCount: int option
+      EffectiveEnabled: bool
+      CaptureFingerprint: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     /// GET-only reader for the ReleasesAndTags surface. Repository identity and
@@ -221,6 +233,18 @@ module MigrationRepositorySettingsProviderRead =
         repositoryRevision:string ->
         transport:IMigrationGitHubReadTransport ->
             Result<MigrationRepositoryEnvironmentsRead, MigrationRepositorySettingsSurfaceRefusal>
+
+    /// GET-only two-pass read of repository and organization immutable-release
+    /// policy. Selected organization membership must be exhaustively paginated,
+    /// and both retained repository payloads must bind the requested revision.
+    /// Endpoint contracts: https://docs.github.com/en/rest/repos/repos and
+    /// https://docs.github.com/en/rest/orgs/orgs.
+    val readImmutableReleases:
+        options:MigrationGitHubReadOptions ->
+        identity:RepositoryIdentity ->
+        repositoryRevision:string ->
+        transport:IMigrationGitHubReadTransport ->
+            Result<MigrationRepositoryImmutableReleasesRead, MigrationRepositorySettingsSurfaceRefusal>
 
 /// Concrete partial provider for the implemented repository settings surfaces.
 /// Other incomplete surfaces refuse canonical composition.

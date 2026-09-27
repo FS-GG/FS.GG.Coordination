@@ -136,6 +136,24 @@ let private environmentPassFor repositoryBody =
 let private environmentPass () = environmentPassFor (repository true)
 let private privateEnvironmentPass () = environmentPassFor privateRepository
 
+let private immutableRepository enabled enforced =
+    $"{{\"enabled\":{enabled.ToString().ToLowerInvariant()},\"enforced_by_owner\":{enforced.ToString().ToLowerInvariant()}}}"
+
+let private immutableOrganization mode = $"{{\"enforced_repositories\":\"{mode}\"}}"
+
+let private immutableSelected repositories =
+    let joined = String.concat "," repositories
+    $"{{\"total_count\":{List.length repositories},\"repositories\":[{joined}]}}"
+
+let private immutableSelectedRepository id nodeId fullName =
+    $"{{\"id\":{id},\"node_id\":\"{nodeId}\",\"full_name\":\"{fullName}\"}}"
+
+let private immutablePass enabled enforced mode selected =
+    [ response 200 Map.empty privateRepository
+      response 200 Map.empty (immutableRepository enabled enforced)
+      response 200 Map.empty (immutableOrganization mode)
+      if mode = "selected" then response 200 Map.empty (immutableSelected selected) ]
+
 let private next suffix =
     Map.ofList
         [ "link",
@@ -866,3 +884,116 @@ let ``release reader refuses escaped pagination and unknown release shapes`` () 
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "missing:immutable"),
         MigrationRepositorySettingsProviderRead.readReleasesAndTags options identity revision malformed)
+
+[<Fact>]
+let ``immutable releases reader binds private none all and selected policies`` () =
+    let cases =
+        [ true, false, "none", [], ImmutableReleasesOrganizationPolicy.NoRepositories, true, 4
+          true, true, "all", [], ImmutableReleasesOrganizationPolicy.AllRepositories, true, 4
+          true, true, "selected",
+              [ immutableSelectedRepository 41L "R_settings" "FS-GG/sandbox"
+                immutableSelectedRepository 42L "R_other" "FS-GG/other" ],
+              ImmutableReleasesOrganizationPolicy.SelectedRepositories, true, 11 ]
+    for enabled, enforced, mode, selected, expectedPolicy, effective, expectedSettings in cases do
+        let pass = immutablePass enabled enforced mode selected
+        let transport = FakeTransport(pass @ pass)
+        match MigrationRepositorySettingsProviderRead.readImmutableReleases
+                  options identity revision transport with
+        | Error refusal -> failwithf "immutable releases refused for %s: %A" mode refusal
+        | Ok captured ->
+            Assert.Equal(expectedPolicy, captured.OrganizationPolicy)
+            Assert.Equal(enabled, captured.RepositoryEnabled)
+            Assert.Equal(enforced, captured.EnforcedByOwner)
+            Assert.Equal(effective, captured.EffectiveEnabled)
+            Assert.Equal(expectedSettings, captured.SurfaceRead.Settings.Length)
+            Assert.Equal(pass.Length * 2, captured.SurfaceRead.Pages.Length)
+            Assert.Equal(64, captured.CaptureFingerprint.Length)
+            Assert.All(captured.SurfaceRead.Pages, fun page ->
+                Assert.Equal(64, page.SettingsPayloadSha256.Length))
+            Assert.All(transport.Requests, fun request ->
+                match request with
+                | Rest value -> Assert.Equal(Get, value.Method)
+                | _ -> failwith "immutable reader emitted non-REST request")
+
+[<Fact>]
+let ``immutable releases reader refuses missing and mismatched selected membership`` () =
+    let missingPass =
+        immutablePass true true "selected"
+            [ immutableSelectedRepository 42L "R_other" "FS-GG/other" ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "inheritance-contradiction:unselected"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport missingPass))
+
+    let nonterminalPass =
+        [ response 200 Map.empty privateRepository
+          response 200 Map.empty (immutableRepository true true)
+          response 200 Map.empty (immutableOrganization "selected")
+          response 200
+              (Map.ofList
+                  [ "link",
+                    "<https://evil.test/orgs/FS-GG/settings/immutable-releases/repositories?per_page=100&page=2>; rel=\"next\"" ])
+              (immutableSelected
+                  [ immutableSelectedRepository 41L "R_settings" "FS-GG/sandbox" ]) ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "selected-pagination-continuation"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport nonterminalPass))
+
+    let mismatchedPass =
+        immutablePass true true "selected"
+            [ immutableSelectedRepository 41L "R_wrong" "FS-GG/sandbox" ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+            "selected-membership-identity-drift"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport(mismatchedPass @ mismatchedPass)))
+
+[<Fact>]
+let ``immutable releases reader refuses access ambiguous absence unknown mode and drift`` () =
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized
+            "immutable-releases-read-unknown:http-401"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport([ response 401 Map.empty "{}" ])))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized
+            "immutable-releases-read-unknown:http-403"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport([ response 403 Map.empty "{}" ])))
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable
+            "immutable-releases-read-unknown:http-404"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport([ response 404 Map.empty "{}" ])))
+
+    let unknownMode =
+        [ response 200 Map.empty privateRepository
+          response 200 Map.empty (immutableRepository false false)
+          response 200 Map.empty (immutableOrganization "future") ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "organization-policy-shape"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport unknownMode))
+
+    let first = immutablePass false false "none" []
+    let second = immutablePass true false "none" []
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "immutable-releases-pass-drift"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport(first @ second)))
+
+    let revisionDrift =
+        privateRepository.Replace(revision, "2026-09-28T01:02:04Z")
+    let driftedPass =
+        [ response 200 Map.empty revisionDrift
+          response 200 Map.empty (immutableRepository false false)
+          response 200 Map.empty (immutableOrganization "none") ]
+    Assert.Equal(
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "immutable-releases-repository-identity-drift"),
+        MigrationRepositorySettingsProviderRead.readImmutableReleases
+            options identity revision (FakeTransport(driftedPass @ driftedPass)))

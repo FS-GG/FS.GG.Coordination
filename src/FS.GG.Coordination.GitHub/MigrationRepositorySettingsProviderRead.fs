@@ -124,6 +124,16 @@ type MigrationRepositoryEnvironmentsRead =
     { SurfaceRead: MigrationRepositorySettingsSurfaceRead
       Environments: MigrationEnvironmentObservation list }
 
+type MigrationRepositoryImmutableReleasesRead =
+    { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      RepositoryEnabled: bool
+      EnforcedByOwner: bool
+      OrganizationPolicy: ImmutableReleasesOrganizationPolicy
+      SelectedRepositories: ImmutableReleasesSelectedRepository list
+      SelectedTotalCount: int option
+      EffectiveEnabled: bool
+      CaptureFingerprint: string }
+
 [<RequireQualifiedAccess>]
 module MigrationRepositorySettingsProviderRead =
     let private hashText (value: string) =
@@ -1771,6 +1781,184 @@ module MigrationRepositorySettingsProviderRead =
                                           Pages=identityPage :: (tagPages @ releasePages); Settings=settings }
                                       Tags=tags; Releases=releases })))))
 
+    let private immutableRefusal reason =
+        match reason with
+        | "immutable-releases-read-unknown:http-401"
+        | "immutable-releases-read-unknown:http-403" ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized reason)
+        | "immutable-releases-read-unknown:http-404"
+        | "immutable-releases-read-unknown:network"
+        | "immutable-releases-read-unknown:timeout" ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable reason)
+        | value when
+            value.Contains("pagination", StringComparison.Ordinal)
+            || value.Contains("inheritance-contradiction", StringComparison.Ordinal)
+            || value = "selected-membership-identity-drift"
+            || value = "unexpected-selected-roster" ->
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial value)
+        | value -> Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable value)
+
+    let private validateImmutableRepositoryPayload
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (body: string)
+        =
+        parse body
+        |> Result.bind (fun root ->
+            match positive "id" root, text "node_id" root, text "full_name" root,
+                  text "default_branch" root, text "updated_at" root, sourceNodeId root with
+            | Ok id, Ok nodeId, Ok fullName, Ok defaultBranch, Ok updatedAt, Ok source when
+                id = options.ExpectedRepositoryId
+                && id = identity.DatabaseId
+                && nodeId = identity.NodeId
+                && fullName = $"{identity.Owner}/{identity.Name}"
+                && fullName = $"{options.Owner}/{options.Repository}"
+                && defaultBranch = identity.DefaultBranch
+                && source = identity.SourceRepositoryNodeId
+                && updatedAt = repositoryRevision -> Ok()
+            | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ ->
+                Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+                    "immutable-releases-repository-identity-drift")
+            | Error failure, _, _, _, _, _ | _, Error failure, _, _, _, _
+            | _, _, Error failure, _, _, _ | _, _, _, Error failure, _, _
+            | _, _, _, _, Error failure, _ | _, _, _, _, _, Error failure -> Error failure)
+
+    let private validateImmutableSelectedIdentity
+        (identity: RepositoryIdentity)
+        (policy: ImmutableReleasesOrganizationPolicy)
+        (selected: ImmutableReleasesSelectedRepository list)
+        =
+        let touchesIdentity (item: ImmutableReleasesSelectedRepository) =
+            item.RepositoryId = identity.DatabaseId
+            || item.RepositoryNodeId = identity.NodeId
+            || item.FullName = $"{identity.Owner}/{identity.Name}"
+        let exactIdentity (item: ImmutableReleasesSelectedRepository) =
+            item.RepositoryId = identity.DatabaseId
+            && item.RepositoryNodeId = identity.NodeId
+            && item.FullName = $"{identity.Owner}/{identity.Name}"
+        let touched = selected |> List.filter touchesIdentity
+        if touched |> List.exists (exactIdentity >> not) then
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                "immutable-releases-selected-membership-identity-drift")
+        elif (touched |> List.filter exactIdentity |> List.length) > 1 then
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                "immutable-releases-selected-membership-duplicate")
+        elif policy <> ImmutableReleasesOrganizationPolicy.SelectedRepositories
+             && not selected.IsEmpty then
+            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                "immutable-releases-unexpected-selected-membership")
+        else Ok()
+
+    let private immutablePage passIndex pageIndex (page: ImmutableReleasesRawPage) =
+        let stream =
+            match pageIndex with
+            | 0 -> $"immutable-releases-pass-{passIndex}-repository-identity"
+            | 1 -> $"immutable-releases-pass-{passIndex}-repository-policy"
+            | 2 -> $"immutable-releases-pass-{passIndex}-organization-policy"
+            | value -> $"immutable-releases-pass-{passIndex}-selected-repositories-{value - 2}"
+        { SettingsStream=stream
+          SettingsRequestedUri=page.ImmutableRequestedUri
+          SettingsPayloadJson=page.ImmutableRawBody
+          SettingsPayloadSha256=page.ImmutableRawSha256
+          SettingsNextUri=page.ImmutableNextUri }
+
+    // The reused reader consumes the provider's canonical `Link` spelling.
+    // Normalize a single case-insensitive header so a lower-case transport map
+    // cannot make a nonterminal selected roster appear terminal.
+    let private immutableHeaderTransport (inner: IMigrationGitHubReadTransport) =
+        { new IMigrationGitHubReadTransport with
+            member _.Send request =
+                match inner.Send request with
+                | Response response ->
+                    let links =
+                        response.Headers
+                        |> Map.toList
+                        |> List.filter (fun (name, _) ->
+                            name.Equals("link", StringComparison.OrdinalIgnoreCase))
+                    match links with
+                    | [] -> Response response
+                    | [ (_, value) ] ->
+                        let withoutLinks =
+                            response.Headers
+                            |> Map.filter (fun name _ ->
+                                not (name.Equals("link", StringComparison.OrdinalIgnoreCase)))
+                        Response { response with Headers=Map.add "Link" value withoutLinks }
+                    | _ -> NetworkFailure
+                | outcome -> outcome }
+
+    let readImmutableReleases
+        (options: MigrationGitHubReadOptions)
+        (identity: RepositoryIdentity)
+        (repositoryRevision: string)
+        (transport: IMigrationGitHubReadTransport)
+        =
+        if not (validOptions options) || String.IsNullOrWhiteSpace options.Token then
+            refuse "invalid-options"
+        elif identity.Owner <> options.Owner || identity.Name <> options.Repository then
+            refuse "repository-identity-drift"
+        elif not (validText repositoryRevision) then refuse "invalid-repository-revision"
+        else
+            MigrationImmutableReleasesRead.captureTwoPass options (immutableHeaderTransport transport)
+            |> function
+                | Error reason -> immutableRefusal reason
+                | Ok captured ->
+                    let first = captured.First
+                    let second = captured.Second
+                    let validatePassIdentity (pass: ImmutableReleasesPass) =
+                        match pass.ImmutableReleasePages with
+                        | identityPage :: _ ->
+                            validateImmutableRepositoryPayload
+                                options identity repositoryRevision identityPage.ImmutableRawBody
+                        | [] ->
+                            Error(MigrationRepositorySettingsSurfaceRefusal.Partial
+                                "immutable-releases-capture-missing-identity")
+                    match validatePassIdentity first, validatePassIdentity second,
+                          validateImmutableSelectedIdentity identity first.OrganizationPolicy first.SelectedRepositories with
+                    | Ok(), Ok(), Ok() ->
+                        let policy =
+                            match first.OrganizationPolicy with
+                            | ImmutableReleasesOrganizationPolicy.AllRepositories -> "all"
+                            | ImmutableReleasesOrganizationPolicy.NoRepositories -> "none"
+                            | ImmutableReleasesOrganizationPolicy.SelectedRepositories -> "selected"
+                        let repositorySubject = $"repository:{identity.Owner}/{identity.Name}"
+                        let organizationSubject = $"organization:{identity.Owner}"
+                        let setting subject name value =
+                            { Surface=ImmutableReleases; Subject=subject; Name=name; Value=value }
+                        let settings =
+                            [ setting repositorySubject "enabled" (SettingValue.Boolean first.RepositoryEnabled)
+                              setting repositorySubject "enforced-by-owner" (SettingValue.Boolean first.EnforcedByOwner)
+                              setting repositorySubject "effective-enabled" (SettingValue.Boolean first.EffectiveEnabled)
+                              setting organizationSubject "enforced-repositories" (SettingValue.Text policy)
+                              match first.SelectedTotalCount with
+                              | Some total ->
+                                  setting organizationSubject "selected-total-count" (SettingValue.Integer(int64 total))
+                              | None -> ()
+                              for selected in first.SelectedRepositories do
+                                  let subject = $"selected-repository:{selected.RepositoryId}"
+                                  setting subject "database-id" (SettingValue.Integer selected.RepositoryId)
+                                  setting subject "node-id" (SettingValue.Text selected.RepositoryNodeId)
+                                  setting subject "full-name" (SettingValue.Text selected.FullName) ]
+                        let pages =
+                            [ yield! first.ImmutableReleasePages |> List.mapi (immutablePage 1)
+                              yield! second.ImmutableReleasePages |> List.mapi (immutablePage 2) ]
+                        Ok
+                            { SurfaceRead=
+                                { RepositoryIdentity=identity
+                                  RepositoryRevision=repositoryRevision
+                                  Surface=ImmutableReleases
+                                  Complete=true
+                                  Pages=pages
+                                  Settings=settings }
+                              RepositoryEnabled=first.RepositoryEnabled
+                              EnforcedByOwner=first.EnforcedByOwner
+                              OrganizationPolicy=first.OrganizationPolicy
+                              SelectedRepositories=first.SelectedRepositories
+                              SelectedTotalCount=first.SelectedTotalCount
+                              EffectiveEnabled=first.EffectiveEnabled
+                              CaptureFingerprint=captured.Fingerprint }
+                    | Error failure, _, _ | _, Error failure, _ | _, _, Error failure -> Error failure
+
 type MigrationRepositorySettingsGitHubProvider
     (options: MigrationGitHubReadOptions, transport: IMigrationGitHubReadTransport) =
     interface IMigrationRepositorySettingsSurfaceProvider with
@@ -1802,6 +1990,10 @@ type MigrationRepositorySettingsGitHubProvider
                 |> Result.map _.SurfaceRead
             | Environments ->
                 MigrationRepositorySettingsProviderRead.readEnvironments
+                    options identity repositoryRevision transport
+                |> Result.map _.SurfaceRead
+            | ImmutableReleases ->
+                MigrationRepositorySettingsProviderRead.readImmutableReleases
                     options identity repositoryRevision transport
                 |> Result.map _.SurfaceRead
             | _ ->
