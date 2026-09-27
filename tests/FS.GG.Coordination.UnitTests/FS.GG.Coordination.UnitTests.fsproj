@@ -64,6 +64,8 @@
     <Compile Include="MigrationGitHubReadTests.fs" />
     <Compile Include="MigrationImmutableReleasesReadTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureContractTests.fs" />
+    <Compile Include="MigrationClaimEventCaptureContractTests.fs" />
+    <Compile Include="MigrationClaimJournalCaptureTests.fs" />
     <Compile Include="MigrationReviewDeliveryInspectBinderTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureTests.fs" />
     <Compile Include="MigrationJournalCaptureTests.fs" />

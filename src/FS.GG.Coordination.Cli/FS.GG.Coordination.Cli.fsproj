@@ -27,6 +27,10 @@
     <Compile Include="InstalledOrdinarySettlementProvider.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureContract.fsi" />
     <Compile Include="MigrationReviewDeliveryCaptureContract.fs" />
+    <Compile Include="MigrationClaimEventCaptureContract.fsi" />
+    <Compile Include="MigrationClaimEventCaptureContract.fs" />
+    <Compile Include="MigrationClaimJournalCapture.fsi" />
+    <Compile Include="MigrationClaimJournalCapture.fs" />
     <Compile Include="MigrationReviewDeliveryCapture.fsi" />
     <Compile Include="MigrationReviewDeliveryCapture.fs" />
     <Compile Include="MigrationJournalCapture.fsi" />
