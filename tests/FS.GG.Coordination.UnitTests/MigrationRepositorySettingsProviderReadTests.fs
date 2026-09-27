@@ -48,6 +48,9 @@ let private mergePass () = [ response 200 Map.empty (repository true) ]
 let private organizationActions =
     "{\"enabled_repositories\":\"all\",\"allowed_actions\":\"all\",\"selected_actions_url\":null,\"sha_pinning_required\":true}"
 
+let private actionsOrganizationIdentity =
+    "{\"id\":7,\"node_id\":\"ORG_7\",\"login\":\"FS-GG\"}"
+
 let private repositoryActions =
     "{\"enabled\":true,\"allowed_actions\":\"selected\",\"selected_actions_url\":\"https://api.github.test/repositories/41/actions/permissions/selected-actions\",\"sha_pinning_required\":true}"
 
@@ -66,18 +69,27 @@ let private organizationForkApproval = "{\"approval_policy\":\"first_time_contri
 let private repositoryForkApproval = "{\"approval_policy\":\"all_external_contributors\"}"
 let private noApplicableActionsPolicies = "{\"total_count\":0,\"policies\":[]}"
 
-let private actionsPass () =
-    [ response 200 Map.empty (repository true)
-      response 200 Map.empty organizationActions
-      response 200 Map.empty repositoryActions
-      response 200 Map.empty selectedActions
-      response 200 Map.empty organizationWorkflow
+let private actionsTail () =
+    [ response 200 Map.empty organizationWorkflow
       response 200 Map.empty repositoryWorkflow
       response 200 Map.empty organizationRetention
       response 200 Map.empty repositoryRetention
       response 200 Map.empty organizationForkApproval
       response 200 Map.empty repositoryForkApproval
       response 200 Map.empty noApplicableActionsPolicies ]
+
+let private actionsPass () =
+    [ response 200 Map.empty (repository true)
+      response 200 Map.empty actionsOrganizationIdentity
+      response 200 Map.empty organizationActions
+      response 200 Map.empty repositoryActions
+      response 200 Map.empty selectedActions ] @ actionsTail()
+
+let private privateActionsAccess = "{\"access_level\":\"organization\"}"
+let private organizationPrivateForkWorkflows =
+    "{\"run_workflows_from_fork_pull_requests\":true,\"send_write_tokens_to_workflows\":false,\"send_secrets_and_variables\":false,\"require_approval_for_fork_pr_workflows\":true}"
+let private repositoryPrivateForkWorkflows =
+    "{\"run_workflows_from_fork_pull_requests\":true,\"send_write_tokens_to_workflows\":true,\"send_secrets_and_variables\":false,\"require_approval_for_fork_pr_workflows\":true}"
 
 let private environmentReviewers =
     "[{\"type\":\"User\",\"reviewer\":{\"id\":7,\"node_id\":\"USER_7\",\"login\":\"alice\"}},{\"type\":\"Team\",\"reviewer\":{\"id\":8,\"node_id\":\"TEAM_8\",\"slug\":\"operators\"}}]"
@@ -99,6 +111,16 @@ let private environmentVariables =
 let private privateRepository =
     (repository true).Replace("\"private\":false", "\"private\":true")
                      .Replace("\"visibility\":\"public\"", "\"visibility\":\"private\"")
+
+let private privateActionsPass () =
+    [ response 200 Map.empty privateRepository
+      response 200 Map.empty actionsOrganizationIdentity
+      response 200 Map.empty organizationActions
+      response 200 Map.empty repositoryActions
+      response 200 Map.empty selectedActions
+      response 200 Map.empty privateActionsAccess
+      response 200 Map.empty organizationPrivateForkWorkflows
+      response 200 Map.empty repositoryPrivateForkWorkflows ] @ actionsTail()
 
 let private environmentPassFor repositoryBody =
     [ response 200 Map.empty repositoryBody
@@ -286,13 +308,15 @@ let ``actions policy reader binds explicit organization repository and allowlist
         Assert.Equal(90L, captured.OrganizationArtifactAndLogRetentionDays)
         Assert.Equal(30L, captured.RepositoryArtifactAndLogRetentionDays)
         Assert.Equal(0L, captured.ApplicableActionsPolicyCount)
-        Assert.Equal(11, transport.Requests.Length)
-        Assert.Equal(20, captured.SurfaceRead.Settings.Length)
+        Assert.Equal(7L, captured.OrganizationDatabaseId)
+        Assert.Equal("ORG_7", captured.OrganizationNodeId)
+        Assert.Equal(12, transport.Requests.Length)
+        Assert.Equal(22, captured.SurfaceRead.Settings.Length)
         Assert.Equal(
             "https://api.github.test/repos/FS-GG/sandbox/actions/policies?per_page=100&has_parents=true",
-            captured.SurfaceRead.Pages[10].SettingsRequestedUri)
+            captured.SurfaceRead.Pages[11].SettingsRequestedUri)
         Assert.Equal<string list>(
-            [ "repository-identity"; "organization-actions-permissions"
+            [ "repository-identity"; "actions-organization-identity"; "organization-actions-permissions"
               "repository-actions-permissions"; "repository-selected-actions"
               "organization-workflow-permissions"; "repository-workflow-permissions"
               "organization-artifact-and-log-retention"; "repository-artifact-and-log-retention"
@@ -306,6 +330,52 @@ let ``actions policy reader binds explicit organization repository and allowlist
                 Assert.Null(page.SettingsNextUri |> Option.toObj))
 
 [<Fact>]
+let ``actions policy reader binds private access fork policy and stable passes`` () =
+    let transport = FakeTransport(privateActionsPass() @ privateActionsPass())
+    let first = MigrationRepositorySettingsProviderRead.readActionsPolicy options identity revision transport
+    match first with
+    | Error refusal -> failwithf "private actions refused: %A" refusal
+    | Ok captured ->
+        Assert.Equal(Some "organization", captured.PrivateRepositoryAccessLevel)
+        Assert.True(captured.OrganizationPrivateForkWorkflowPolicy.IsSome)
+        Assert.True(captured.RepositoryPrivateForkWorkflowPolicy.IsSome)
+        Assert.True(captured.RepositoryPrivateForkWorkflowPolicy.Value.SendWriteTokensToWorkflows)
+        Assert.Equal(31, captured.SurfaceRead.Settings.Length)
+        Assert.Equal<string list>(
+            [ "repository-actions-access"; "organization-private-fork-workflows"
+              "repository-private-fork-workflows" ],
+            captured.SurfaceRead.Pages |> List.map _.SettingsStream |> List.skip 5 |> List.take 3)
+        let second = MigrationRepositorySettingsProviderRead.readActionsPolicy options identity revision transport
+        Assert.Equal(first, second)
+        Assert.Equal(30, transport.Requests.Length)
+
+[<Fact>]
+let ``actions policy reader binds selected organization actions and repository population`` () =
+    let selectedOrganization =
+        organizationActions
+            .Replace("\"enabled_repositories\":\"all\"", "\"enabled_repositories\":\"selected\"")
+            .Replace("\"allowed_actions\":\"all\"", "\"allowed_actions\":\"selected\"")
+            .Replace("\"selected_actions_url\":null",
+                     "\"selected_actions_url\":\"https://api.github.test/organizations/7/actions/permissions/selected-actions\"")
+    let selectedRepositories =
+        "{\"total_count\":1,\"repositories\":[{\"id\":41,\"node_id\":\"R_settings\",\"full_name\":\"FS-GG/sandbox\"}]}"
+    let responses =
+        [ response 200 Map.empty (repository true)
+          response 200 Map.empty actionsOrganizationIdentity
+          response 200 Map.empty selectedOrganization
+          response 200 Map.empty selectedActions
+          response 200 Map.empty selectedRepositories
+          response 200 Map.empty repositoryActions
+          response 200 Map.empty selectedActions ] @ actionsTail()
+    match MigrationRepositorySettingsProviderRead.readActionsPolicy
+            options identity revision (FakeTransport(responses)) with
+    | Error refusal -> failwithf "selected Actions policy refused: %A" refusal
+    | Ok captured ->
+        Assert.True(captured.OrganizationSelectedActions.IsSome)
+        Assert.Single(captured.OrganizationSelectedRepositories) |> ignore
+        Assert.Equal(27, captured.SurfaceRead.Settings.Length)
+
+[<Fact>]
 let ``actions policy reader refuses inaccessible partial conditional unknown and drifted evidence`` () =
     let forbidden = FakeTransport([ response 200 Map.empty (repository true); response 403 Map.empty "{}" ])
     Assert.Equal(
@@ -316,46 +386,36 @@ let ``actions policy reader refuses inaccessible partial conditional unknown and
         Error(MigrationRepositorySettingsSurfaceRefusal.Unavailable "http:404"),
         MigrationRepositorySettingsProviderRead.readActionsPolicy options identity revision missing)
 
-    let privateRepository =
-        (repository true).Replace("\"private\":false", "\"private\":true")
-                         .Replace("\"visibility\":\"public\"", "\"visibility\":\"private\"")
+    let missingPrivateAccess =
+        privateActionsPass()
+        |> List.mapi (fun index outcome -> if index = 5 then response 200 Map.empty "{}" else outcome)
     Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Conditional
-            "private-repository-actions-access-and-fork-policy-unmodeled"),
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
+            "unsupported:repository-actions-access-shape"),
         MigrationRepositorySettingsProviderRead.readActionsPolicy
-            options identity revision (FakeTransport([ response 200 Map.empty privateRepository ])))
+            options identity revision (FakeTransport(missingPrivateAccess)))
 
-    let selectedOrganization =
-        organizationActions.Replace("\"enabled_repositories\":\"all\"", "\"enabled_repositories\":\"selected\"")
+    let deniedPrivateFork =
+        privateActionsPass()
+        |> List.mapi (fun index outcome -> if index = 6 then response 403 Map.empty "{}" else outcome)
     Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
-            "organization-selected-repository-scope-unmodeled"),
-        MigrationRepositorySettingsProviderRead.readActionsPolicy options identity revision
-            (FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty selectedOrganization ])))
-
-    let selectedOrganizationActions =
-        organizationActions
-            .Replace("\"allowed_actions\":\"all\"", "\"allowed_actions\":\"selected\"")
-            .Replace("\"selected_actions_url\":null",
-                     "\"selected_actions_url\":\"https://api.github.test/organizations/7/actions/permissions/selected-actions\"")
-    Assert.Equal(
-        Error(MigrationRepositorySettingsSurfaceRefusal.Partial
-            "organization-selected-actions-identity-unmodeled"),
-        MigrationRepositorySettingsProviderRead.readActionsPolicy options identity revision
-            (FakeTransport(
-                [ response 200 Map.empty (repository true)
-                  response 200 Map.empty selectedOrganizationActions ])))
+        Error(MigrationRepositorySettingsSurfaceRefusal.Unauthorized "http:403"),
+        MigrationRepositorySettingsProviderRead.readActionsPolicy
+            options identity revision (FakeTransport(deniedPrivateFork)))
 
     let unknown = organizationActions.Replace("\"allowed_actions\":\"all\"", "\"allowed_actions\":\"future\"")
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "unsupported:allowed_actions:future"),
         MigrationRepositorySettingsProviderRead.readActionsPolicy options identity revision
-            (FakeTransport([ response 200 Map.empty (repository true); response 200 Map.empty unknown ])))
+            (FakeTransport(
+                [ response 200 Map.empty (repository true)
+                  response 200 Map.empty actionsOrganizationIdentity
+                  response 200 Map.empty unknown ])))
 
     let nonemptyPolicies =
         actionsPass()
         |> List.mapi (fun index outcome ->
-            if index = 10 then response 200 Map.empty "{\"total_count\":1,\"policies\":[{}]}" else outcome)
+            if index = 11 then response 200 Map.empty "{\"total_count\":1,\"policies\":[{}]}" else outcome)
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Partial
             "applicable-actions-policies-detail-unmodeled"),
@@ -365,7 +425,7 @@ let ``actions policy reader refuses inaccessible partial conditional unknown and
     let missingWorkflow =
         actionsPass()
         |> List.mapi (fun index outcome ->
-            if index = 4 then response 200 Map.empty "{\"default_workflow_permissions\":\"read\"}" else outcome)
+            if index = 5 then response 200 Map.empty "{\"default_workflow_permissions\":\"read\"}" else outcome)
     Assert.Equal(
         Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable
             "unsupported:organization-workflow-permissions-shape"),
@@ -555,7 +615,7 @@ let ``concrete provider pages join the eleven-surface two-pass composer`` () =
     match MigrationRepositorySettingsRead.captureTwoPass identity revision provider with
     | Error failure -> failwithf "two-pass provider capture refused: %A" failure
     | Ok captured ->
-        Assert.Equal(68, transport.Requests.Length)
+        Assert.Equal(70, transport.Requests.Length)
         Assert.Equal(
             Ok captured,
             MigrationRepositorySettingsRead.validateCapture captured)
@@ -575,7 +635,7 @@ let ``concrete provider pages join the eleven-surface two-pass composer`` () =
             match observation.Surfaces[ActionsPolicy] with
             | Supported(actualRevision, true, settings) ->
                 Assert.Equal(revision, actualRevision)
-                Assert.Equal(20, settings.Length)
+                Assert.Equal(22, settings.Length)
             | state -> failwithf "unexpected actions policy surface: %A" state
             match observation.Surfaces[Environments] with
             | Supported(actualRevision, true, settings) ->

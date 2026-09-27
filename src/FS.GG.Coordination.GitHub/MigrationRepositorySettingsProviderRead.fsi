@@ -93,14 +93,28 @@ type MigrationRepositorySelectedActions =
       VerifiedAllowed: bool
       PatternsAllowed: string list }
 
+type MigrationRepositorySelectedActionsRepository =
+    { DatabaseId: int64
+      NodeId: string
+      FullName: string }
+
+type MigrationRepositoryPrivateForkWorkflowPolicy =
+    { RunWorkflowsFromForkPullRequests: bool
+      SendWriteTokensToWorkflows: bool
+      SendSecretsAndVariables: bool
+      RequireApprovalForForkPullRequestWorkflows: bool }
+
 /// Explicit organization and repository Actions policy for a public organization
 /// repository. This bounded result requires a terminal zero applicable-policy
 /// count; required workflows and other nonempty newer policies remain partial.
 type MigrationRepositoryActionsPolicyRead =
     { SurfaceRead: MigrationRepositorySettingsSurfaceRead
+      OrganizationDatabaseId: int64
+      OrganizationNodeId: string
       OrganizationEnabledRepositories: string
       OrganizationAllowedActions: string
       OrganizationSelectedActions: MigrationRepositorySelectedActions option
+      OrganizationSelectedRepositories: MigrationRepositorySelectedActionsRepository list
       OrganizationShaPinningRequired: bool
       RepositoryEnabled: bool
       RepositoryAllowedActions: string
@@ -116,6 +130,9 @@ type MigrationRepositoryActionsPolicyRead =
       RepositoryMaximumArtifactAndLogRetentionDays: int64
       OrganizationForkPullRequestApprovalPolicy: string
       RepositoryForkPullRequestApprovalPolicy: string
+      PrivateRepositoryAccessLevel: string option
+      OrganizationPrivateForkWorkflowPolicy: MigrationRepositoryPrivateForkWorkflowPolicy option
+      RepositoryPrivateForkWorkflowPolicy: MigrationRepositoryPrivateForkWorkflowPolicy option
       ApplicableActionsPolicyCount: int64 }
 
 /// Complete repository-local environment settings for a bounded public, private,
@@ -176,9 +193,10 @@ module MigrationRepositorySettingsProviderRead =
             Result<MigrationRepositoryMergePolicyRead, MigrationRepositorySettingsSurfaceRefusal>
 
     /// GET-only read of Actions permissions, workflow defaults, retention and
-    /// fork approval at organization and repository scope. This bounded reader
-    /// supports public organization repositories with an explicit all-repository
-    /// organization scope and no applicable newer Actions policies.
+    /// fork approval at organization and repository scope. Private repositories
+    /// additionally require exact access-sharing and private-fork workflow reads.
+    /// Selected organization populations are accepted only as one terminal page;
+    /// nonempty newer or inherited Actions policies remain partial.
     /// Endpoint contracts: https://docs.github.com/en/rest/actions/permissions
     /// and https://docs.github.com/en/rest/actions/policies.
     val readActionsPolicy:
