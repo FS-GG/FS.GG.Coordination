@@ -76,6 +76,14 @@ module MigrationInspectProviderAdapter =
         captures:(GitHubRequest * TransportOutcome) list ->
             Result<GitHubMigrationInspectAuthority, string>
 
+    /// Revalidates two stable raw snapshots for every declared receiver.
+    /// Declaration exhaustiveness and pin bytes remain outside this partial proof.
+    val bindDeclaredReceiverIdentities:
+        options:MigrationInspectProviderOptions ->
+        first:MigrationReceiverSnapshot list ->
+        second:MigrationReceiverSnapshot list ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Requires one exact repository census and raw GraphQL pages for every relation endpoint.
     val bindNativeRelations:
         options:MigrationInspectProviderOptions ->

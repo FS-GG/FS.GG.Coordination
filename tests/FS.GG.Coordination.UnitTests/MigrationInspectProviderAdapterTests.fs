@@ -274,6 +274,77 @@ let ``repository custom properties inspect guard refuses foreign schema and writ
     Assert.Equal(NetworkFailure, guard.Send write)
     Assert.Empty(inner.Calls)
 
+let private receiverHead = String.replicate 40 "b"
+let private receiverTree = String.replicate 40 "d"
+let private receiverBlob = String.replicate 40 "e"
+let private receiverIdentity =
+    reply """{"id":42,"node_id":"R_42","full_name":"FS-GG/copy"}"""
+let private receiverRef =
+    reply $"""{{"ref":"refs/heads/main","object":{{"type":"commit","sha":"{receiverHead}"}}}}"""
+let private receiverCommit =
+    reply $"""{{"sha":"{receiverHead}","tree":{{"sha":"{receiverTree}"}}}}"""
+let private receiverTreeResponse =
+    reply $"""{{"sha":"{receiverTree}","truncated":false,"tree":[{{"path":".github/workflows/check.yml","mode":"100644","type":"blob","sha":"{receiverBlob}","size":3}}]}}"""
+let private receiverResponses =
+    [ receiverIdentity; receiverRef; receiverCommit; receiverTreeResponse; receiverRef ]
+
+let private readReceiverTwoPass () =
+    let transport = FakeTransport (receiverResponses @ receiverResponses)
+    match MigrationReceiverCapture.captureTwoPass cohort options.Repository transport with
+    | Ok proof -> proof
+    | Error failure -> failwithf "Expected receiver two-pass proof: %s" failure
+
+[<Fact>]
+let ``declared receiver inspect slice revalidates two stable raw snapshots`` () =
+    let captured = readReceiverTwoPass ()
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options captured.First captured.Second with
+    | Error reason -> failwithf "Declared receiver proof refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("receiver-identities/declared", proof.Read.Authority)
+        Assert.Equal(10, proof.Read.PageCount)
+        Assert.Equal(10, proof.Read.ItemCount)
+        let expectedTreeBody =
+            match receiverTreeResponse with
+            | Response value -> value.Body
+            | _ -> failwith "Expected receiver tree response"
+        Assert.Equal(expectedTreeBody, proof.Pages.[3].RawBody)
+        Assert.Equal(None, proof.Pages.[9].NextRequestIdentitySha256)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+
+    let source = MigrationInspectProviderAdapter(options, FakeTransport [])
+                 :> IGitHubMigrationInspectSource
+    Assert.Equal(Error "authority-adapter-unavailable:receiver-identities",
+                 source.ReadAuthority(1, "receiver-identities"))
+
+[<Fact>]
+let ``declared receiver inspect slice refuses typed raw URI population and pass drift`` () =
+    let captured = readReceiverTwoPass ()
+    let first = captured.First.Head
+    let alteredEntries =
+        [ { first.TreeEntries.Head with EntryMode="100755" } ]
+    let typedDrift = [ { first with TreeEntries=alteredEntries } ]
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options typedDrift captured.Second with
+    | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed typed receiver tree was accepted"
+
+    let foreignEvidence =
+        { first.IdentityEvidence with RequestUri="https://api.github.test/repos/FS-GG/other" }
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options [ { first with IdentityEvidence=foreignEvidence } ] captured.Second with
+    | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
+    | Ok _ -> failwith "Foreign receiver identity URI was accepted"
+
+    Assert.True(MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+                    options captured.First [] |> Result.isError)
+    let changedSecond =
+        [ { captured.Second.Head with SnapshotSha256=String.replicate 64 "f" } ]
+    match MigrationInspectProviderAdapter.bindDeclaredReceiverIdentities
+              options captured.First changedSecond with
+    | Error reason -> Assert.StartsWith("receiver-declared-raw-or-scope:", reason)
+    | Ok _ -> failwith "Changed receiver second pass was accepted"
+
 let private issueBody =
     """[{"number":1,"id":101,"node_id":"ISSUE_1","state":"open","updated_at":"2026-09-25T10:00:00Z"}]"""
 
