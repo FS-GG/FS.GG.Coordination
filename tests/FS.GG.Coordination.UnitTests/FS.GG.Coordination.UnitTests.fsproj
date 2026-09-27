@@ -62,12 +62,14 @@
     <Compile Include="GitHubRollbackReadbackTests.fs" />
     <Compile Include="MigrationStepExecutionTests.fs" />
     <Compile Include="MigrationGitHubReadTests.fs" />
+    <Compile Include="MigrationReceiverRosterReadTests.fs" />
     <Compile Include="MigrationImmutableReleasesReadTests.fs" />
     <Compile Include="MigrationEnvironmentSettingsReadTests.fs" />
     <Compile Include="MigrationEnvironmentCensusReadTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureContractTests.fs" />
     <Compile Include="MigrationClaimEventCaptureContractTests.fs" />
     <Compile Include="MigrationClaimJournalCaptureTests.fs" />
+    <Compile Include="MigrationClaimEventInspectBinderTests.fs" />
     <Compile Include="MigrationReviewDeliveryInspectBinderTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureTests.fs" />
     <Compile Include="MigrationJournalCaptureTests.fs" />

@@ -31,6 +31,8 @@
     <Compile Include="MigrationClaimEventCaptureContract.fs" />
     <Compile Include="MigrationClaimJournalCapture.fsi" />
     <Compile Include="MigrationClaimJournalCapture.fs" />
+    <Compile Include="MigrationClaimEventInspectBinder.fsi" />
+    <Compile Include="MigrationClaimEventInspectBinder.fs" />
     <Compile Include="MigrationReviewDeliveryCapture.fsi" />
     <Compile Include="MigrationReviewDeliveryCapture.fs" />
     <Compile Include="MigrationJournalCapture.fsi" />
