@@ -99,7 +99,7 @@ class RulesetReaderTests(unittest.TestCase):
     def test_disabled_workflow_and_policy(self):
         workflow = (ROOT / '.github/workflows/v2-ci-ordinary-settlement.yml').read_text()
         policy = json.loads((ROOT / 'policy/v2-ci-ordinary-settlement.json').read_text())
-        self.assertIn('if: ${{ false }}', workflow)
+        self.assertIn("if: ${{ github.event_name == 'pull_request' }}", workflow)
         self.assertNotIn('secrets.', workflow)
         self.assertNotIn('ordinary-settlement execute', workflow)
         self.assertFalse(policy['credentialJob']['installed'])

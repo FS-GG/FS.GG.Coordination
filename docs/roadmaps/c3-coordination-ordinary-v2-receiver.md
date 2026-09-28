@@ -1,6 +1,6 @@
 # C3-COORDINATION-01 ordinary V2 receiver prerequisite
 
-Status: local source prerequisite, disabled. The push workflow's sole job has a static false condition. It has no credential job, package pin, environment, or enrollment. Source merge alone will not enable settlement.
+Status: local source prerequisite, disabled. The push-only workflow's sole job requires a pull-request event, which its trigger cannot produce. It has no credential job, package pin, environment, or enrollment. Source merge alone will not enable settlement.
 
 The secret-free observer binds a protected `main` push to one merged pull request, its exact qualification head, native Bootstrap workflow jobs and the currently protected policy and workflow bytes. Coordination repository ID `1346720714` is pinned. The effective-branch-rules reader uses `GET /repos/FS-GG/FS.GG.Coordination/rules/branches/main` with bounded pagination, unions its required checks with the classic branch list, and refuses missing pages, malformed rules, duplicate rules, conflicting App IDs, extra or missing checks, and policy drift. The six required contexts come from Bootstrap workflow `343352087` and must use GitHub Actions App `15368`. Ruleset `21633423` is the observed protected-main source; classic checks are currently empty.
 
