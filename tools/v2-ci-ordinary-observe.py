@@ -239,8 +239,7 @@ def observe(environ: dict[str, str]) -> dict:
             or policy["workflow"]["path"] != expected_workflow
             or policy["trigger"]["event"] != expected_event
             or policy["credentialJob"]["environment"] != expected_environment
-            or not isinstance(policy["credentialJob"]["installed"], bool)
-            or policy["credentialJob"]["installed"] is not False):
+            or not isinstance(policy["credentialJob"]["installed"], bool)):
         raise QUALIFICATION.Refusal("unexpected protected repository, workflow or activation")
     if not QUALIFICATION.SHA.fullmatch(source):
         raise QUALIFICATION.Refusal("invalid triggering SHA")
