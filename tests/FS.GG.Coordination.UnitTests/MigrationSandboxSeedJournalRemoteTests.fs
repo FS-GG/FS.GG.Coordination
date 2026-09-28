@@ -76,7 +76,7 @@ let private installedBytes includeAdministration =
         writer.WriteString("repositoryNodeId", "R_kgDOUKXpqQ")
         writer.WriteEndObject()
         writer.WriteString("schema", "fsgg.github-substrate-v2.sandbox-seed-execution-binding/1")
-        writer.WriteString("schemaJoin", "coordination-s1-final")
+        writer.WriteString("schemaJoin", "coordination-isolated-cas-final")
         writer.WriteStartObject("source")
         writer.WriteString("approvedArtifactSourceSha256", String.replicate 64 "4")
         writer.WriteString("candidateSha", candidate)
@@ -88,45 +88,7 @@ let private installedBytes includeAdministration =
         writer.WriteString("workflowRef", "refs/heads/main")
         writer.WriteString("workflowSha", workflow)
         writer.WriteEndObject()
-        writer.WriteString("status", "bound-write-authority")
-        writer.WriteEndObject()
-        writer.Flush()
-        Array.append (stream.ToArray()) [| byte '\n' |]
-
-    let withoutFingerprint = write None
-    write (Some(shaBytes withoutFingerprint))
-
-let private installedPolicyBytes () =
-    let write (fingerprint: string option) =
-        use stream = new MemoryStream()
-        use writer = new Utf8JsonWriter(stream)
-        writer.WriteStartObject()
-        writer.WriteString("authority", "authenticated-protected-readback")
-        writer.WriteString("candidateSha256", String.replicate 64 "1")
-        writer.WriteString("classicProtection", "proven-absent")
-
-        fingerprint
-        |> Option.iter (fun value -> writer.WriteString("fingerprint", value))
-
-        writer.WriteStartObject("installation")
-        writer.WriteNumber("actorId", 297630107L)
-        writer.WriteNumber("appId", 4166418L)
-        writer.WriteNumber("installationId", 143110413L)
-        writer.WriteString("permission", "administration:write-or-custom-role-edit-rules")
-        writer.WriteEndObject()
-        writer.WriteBoolean("installed", true)
-        writer.WriteStartObject("repository")
-        writer.WriteString("fullName", "FS-GG/FS.GG.GitHub.Substrate.Sandbox")
-        writer.WriteNumber("id", 1353050537L)
-        writer.WriteEndObject()
-        writer.WriteStartObject("rulesets")
-        writer.WriteNumber("integrityId", 12L)
-        writer.WriteString("integritySha256", String.replicate 64 "2")
-        writer.WriteNumber("writerId", 11L)
-        writer.WriteString("writerSha256", String.replicate 64 "3")
-        writer.WriteEndObject()
-        writer.WriteString("schema", "fsgg.gs2-09-7.seed-journal-policy-installed/1")
-        writer.WriteString("selector", "refs/heads/gs2-09-7/*/seed-journal")
+        writer.WriteString("status", "bound-isolated-cas-authority")
         writer.WriteEndObject()
         writer.Flush()
         Array.append (stream.ToArray()) [| byte '\n' |]
@@ -279,38 +241,39 @@ type private BareTransport(path: string, unknown: bool, applyWrite: bool) =
         member _.ReadFresh refName =
             MigrationSandboxSeedJournal.readLocalBare path refName
 
-let private evidence bindingBytes policyBytes =
+let private nativeCasBytes =
+    raw
+        $"{{\"schema\":\"fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1\",\"refName\":\"refs/heads/gs2-09-7/7-2-{candidate}/seed-journal\",\"repositoryId\":1353050537,\"complete\":true}}"
+
+let private evidence bindingBytes nativeCas =
     {
         BindingBytes = bindingBytes
-        PolicyReadbackBytes = policyBytes
+        NativeCasReadbackBytes = nativeCas
         WorkflowRunId = 7L
         WorkflowRunAttempt = 2
         WorkflowSha = workflow
         ApprovedArtifactSourceSha256 = String.replicate 64 "4"
     }
 
-type private ExactVerifier(expectedBinding: byte array, expectedPolicy: byte array, accept: bool) =
-    interface IMigrationSandboxSeedInstalledProvenanceVerifier with
+type private ExactVerifier(expectedBinding: byte array, expectedNativeCas: byte array, accept: bool) =
+    interface IMigrationSandboxSeedIsolatedProvenanceVerifier with
         member _.VerifyExact actual =
             accept
             && actual.BindingBytes = expectedBinding
-            && actual.PolicyReadbackBytes = expectedPolicy
+            && actual.NativeCasReadbackBytes = expectedNativeCas
             && actual.WorkflowRunId = 7L
             && actual.WorkflowRunAttempt = 2
             && actual.WorkflowSha = workflow
             && actual.ApprovedArtifactSourceSha256 = String.replicate 64 "4"
 
 let private authority bytes =
-    let policy = installedPolicyBytes ()
-
-    MigrationSandboxSeedJournalRemote.establishInstalledAuthority
-        (ExactVerifier(bytes, policy, true))
-        (evidence bytes policy)
+    MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
+        (ExactVerifier(bytes, nativeCasBytes, true))
+        (evidence bytes nativeCasBytes)
     |> Result.defaultWith (fun error -> failwithf "%A" error)
 
 let private writeRemote bytes previous proposal transport =
-    let binding, policy = authority bytes
-    MigrationSandboxSeedJournalRemote.writeAndRead binding policy previous proposal transport
+    MigrationSandboxSeedJournalRemote.writeAndRead (authority bytes) previous proposal transport
 
 let private proposal bytes =
     MigrationSandboxSeedJournal.plan None (state bytes)
@@ -322,51 +285,48 @@ let private snapshot repository refName =
     | value -> failwithf "%A" value
 
 [<Fact>]
-let ``current source only S2 cannot construct installed authority`` () =
+let ``current source only S2 cannot construct isolated CAS authority`` () =
     let current =
         raw
             "{\"activation\":false,\"authority\":\"unavailable\",\"schema\":\"fsgg.github-substrate-v2.sandbox-seed-execution-binding/1\"}\n"
 
-    let policy = installedPolicyBytes ()
-
     Assert.Equal(
-        Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
-        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
-            (ExactVerifier(current, policy, true))
-            (evidence current policy)
+        Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
+        MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
+            (ExactVerifier(current, nativeCasBytes, false))
+            (evidence current nativeCasBytes)
     )
 
-    let excessive = installedBytes true
-
     Assert.Equal(
-        Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
-        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
-            (ExactVerifier(excessive, policy, true))
-            (evidence excessive policy)
+        Error MigrationSandboxSeedRemoteFailure.InvalidIsolatedCasBinding,
+        MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
+            (ExactVerifier(current, [||], true))
+            (evidence current [||])
     )
 
 [<Fact>]
-let ``candidate journal policy cannot construct installed authority`` () =
+let ``repository ruleset bytes cannot substitute for native CAS readback`` () =
     let candidatePolicy =
         raw "{\"authority\":\"unavailable\",\"installed\":false,\"schema\":\"fsgg.gs2-09-7.seed-journal-policy/1\"}\n"
 
+    let binding = installedBytes false
+
     Assert.Equal(
-        Error MigrationSandboxSeedRemoteFailure.InvalidInstalledPolicy,
-        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
-            (ExactVerifier(installedBytes false, candidatePolicy, true))
-            (evidence (installedBytes false) candidatePolicy)
+        Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
+        MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
+            (ExactVerifier(binding, candidatePolicy, false))
+            (evidence binding candidatePolicy)
     )
 
 [<Fact>]
-let ``well formed self asserted receipts cannot create installed authority`` () =
+let ``well formed self asserted receipts cannot create isolated CAS authority`` () =
     let binding = installedBytes false
-    let policy = installedPolicyBytes ()
 
     Assert.Equal(
-        Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected,
-        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
-            (ExactVerifier(binding, policy, false))
-            (evidence binding policy)
+        Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
+        MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
+            (ExactVerifier(binding, nativeCasBytes, false))
+            (evidence binding nativeCasBytes)
     )
 
 [<Fact>]
@@ -499,11 +459,10 @@ let ``altered readback and malformed installed binding refuse`` () =
 
     let malformed = installedBytes false |> Array.map id
     malformed[malformed.Length - 2] <- byte ' '
-    let policy = installedPolicyBytes ()
 
     Assert.Equal(
-        Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
-        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
-            (ExactVerifier(malformed, policy, true))
-            (evidence malformed policy)
+        Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
+        MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
+            (ExactVerifier(malformed, nativeCasBytes, false))
+            (evidence malformed nativeCasBytes)
     )

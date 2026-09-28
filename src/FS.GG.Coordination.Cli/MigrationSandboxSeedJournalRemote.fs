@@ -7,21 +7,7 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 
-type MigrationSandboxSeedInstalledS2Binding = private MigrationSandboxSeedInstalledS2Binding of byte array
-type MigrationSandboxSeedInstalledJournalPolicy = private MigrationSandboxSeedInstalledJournalPolicy of byte array
-
-type MigrationSandboxSeedInstalledProvenanceEvidence =
-    {
-        BindingBytes: byte array
-        PolicyReadbackBytes: byte array
-        WorkflowRunId: int64
-        WorkflowRunAttempt: int
-        WorkflowSha: string
-        ApprovedArtifactSourceSha256: string
-    }
-
-type IMigrationSandboxSeedInstalledProvenanceVerifier =
-    abstract VerifyExact: MigrationSandboxSeedInstalledProvenanceEvidence -> bool
+type MigrationSandboxSeedIsolatedCasAuthority = private MigrationSandboxSeedIsolatedCasAuthority of byte array
 
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedRemotePushOutcome =
@@ -59,68 +45,15 @@ type MigrationSandboxSeedRemoteResult =
 
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedRemoteFailure =
-    | InvalidInstalledBinding
-    | InvalidInstalledPolicy
-    | InstalledProvenanceRejected
-    | InstalledBindingMismatch
+    | InvalidIsolatedCasBinding
+    | IsolatedProvenanceRejected
+    | IsolatedBindingMismatch
     | InvalidJournalProposal
 
 [<RequireQualifiedAccess>]
 module MigrationSandboxSeedJournalRemote =
     let private sha256 (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
-
-    let private hex length (value: string) =
-        not (isNull value)
-        && value.Length = length
-        && value |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
-
-    let private unique (value: JsonElement) =
-        let rec visit (item: JsonElement) =
-            match item.ValueKind with
-            | JsonValueKind.Object ->
-                let names = item.EnumerateObject() |> Seq.map _.Name |> Seq.toList
-
-                if names.Length <> (names |> Set.ofList |> Set.count) then
-                    invalidOp "duplicate-json-member"
-
-                item.EnumerateObject() |> Seq.iter (fun property -> visit property.Value)
-            | JsonValueKind.Array -> item.EnumerateArray() |> Seq.iter visit
-            | _ -> ()
-
-        visit value
-
-    let private canonical (omitFingerprint: bool) (value: JsonElement) =
-        use stream = new MemoryStream()
-        use writer = new Utf8JsonWriter(stream)
-
-        let rec write atRoot (item: JsonElement) =
-            match item.ValueKind with
-            | JsonValueKind.Object ->
-                writer.WriteStartObject()
-
-                item.EnumerateObject()
-                |> Seq.filter (fun property -> not (atRoot && omitFingerprint && property.Name = "fingerprint"))
-                |> Seq.sortBy _.Name
-                |> Seq.iter (fun property ->
-                    writer.WritePropertyName property.Name
-                    write false property.Value)
-
-                writer.WriteEndObject()
-            | JsonValueKind.Array ->
-                writer.WriteStartArray()
-                item.EnumerateArray() |> Seq.iter (write false)
-                writer.WriteEndArray()
-            | JsonValueKind.String -> writer.WriteStringValue(item.GetString())
-            | JsonValueKind.Number -> writer.WriteRawValue(item.GetRawText())
-            | JsonValueKind.True -> writer.WriteBooleanValue true
-            | JsonValueKind.False -> writer.WriteBooleanValue false
-            | JsonValueKind.Null -> writer.WriteNullValue()
-            | _ -> invalidOp "json-kind"
-
-        write true value
-        writer.Flush()
-        Array.append (stream.ToArray()) [| byte '\n' |]
 
     let private text (name: string) (value: JsonElement) =
         let property = value.GetProperty name
@@ -130,178 +63,9 @@ module MigrationSandboxSeedJournalRemote =
 
         property.GetString()
 
-    let private exactNames (expected: string list) (value: JsonElement) =
-        value.ValueKind = JsonValueKind.Object
-        && (value.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq) = Set.ofList expected
-
-    let private installedShape (bytes: byte array) =
-        try
-            let utf8 = UTF8Encoding(false, true)
-            let json = utf8.GetString bytes
-
-            if not (json.EndsWith("\n", StringComparison.Ordinal)) then
-                false
-            else
-                use document = JsonDocument.Parse bytes
-                let root = document.RootElement
-                unique root
-                let source = root.GetProperty "source"
-                let sandbox = root.GetProperty "sandbox"
-                let mint = root.GetProperty "mint"
-                let artifacts = root.GetProperty "artifacts"
-                let journal = root.GetProperty "journal"
-                let permissions = mint.GetProperty "permissions"
-
-                let effects =
-                    journal.GetProperty("allowedClosedEffectKinds").EnumerateArray()
-                    |> Seq.map _.GetString()
-                    |> Seq.toList
-
-                let runId = source.GetProperty("runId").GetInt64()
-                let runAttempt = source.GetProperty("runAttempt").GetInt32()
-                let candidate = text "candidateSha" source
-                let expectedNonce = $"{runId}-{runAttempt}-{candidate}"
-
-                bytes = canonical false root
-                && exactNames
-                    [
-                        "activation"
-                        "artifacts"
-                        "authority"
-                        "fingerprint"
-                        "journal"
-                        "mint"
-                        "sandbox"
-                        "schema"
-                        "schemaJoin"
-                        "source"
-                        "status"
-                    ]
-                    root
-                && exactNames [ "corpus"; "seedPlan" ] artifacts
-                && exactNames [ "sha256" ] (artifacts.GetProperty "corpus")
-                && exactNames [ "sha256" ] (artifacts.GetProperty "seedPlan")
-                && exactNames [ "allowedClosedEffectKinds"; "identity" ] journal
-                && exactNames [ "appId"; "installationId"; "permissions"; "proofSha256" ] mint
-                && exactNames [ "projectNodeId"; "repositoryId"; "repositoryNodeId" ] sandbox
-                && exactNames
-                    [
-                        "candidateSha"
-                        "approvedArtifactSourceSha256"
-                        "repository"
-                        "runAttempt"
-                        "runId"
-                        "runNonce"
-                        "workflowPath"
-                        "workflowRef"
-                        "workflowSha"
-                    ]
-                    source
-                && text "fingerprint" root = sha256 (canonical true root)
-                && text "schema" root = "fsgg.github-substrate-v2.sandbox-seed-execution-binding/1"
-                && text "status" root = "bound-write-authority"
-                && root.GetProperty("activation").GetBoolean()
-                && text "authority" root = "installed-protected-workflow-verified"
-                && text "schemaJoin" root = "coordination-s1-final"
-                && text "repository" source = "FS-GG/.github"
-                && hex 64 (text "approvedArtifactSourceSha256" source)
-                && text "workflowPath" source = ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
-                && text "workflowRef" source = "refs/heads/main"
-                && hex 40 (text "workflowSha" source)
-                && runId > 0L
-                && runAttempt > 0
-                && hex 40 candidate
-                && text "runNonce" source = expectedNonce
-                && sandbox.GetProperty("repositoryId").GetInt64() = 1353050537L
-                && text "repositoryNodeId" sandbox = "R_kgDOUKXpqQ"
-                && text "projectNodeId" sandbox = "PVT_kwDOEYAWY84BiESo"
-                && mint.GetProperty("appId").GetInt64() = 4166418L
-                && mint.GetProperty("installationId").GetInt64() = 143110413L
-                && hex 64 (text "proofSha256" mint)
-                && exactNames [ "contents"; "issues"; "metadata"; "organization_projects" ] permissions
-                && text "contents" permissions = "write"
-                && text "issues" permissions = "write"
-                && text "metadata" permissions = "read"
-                && text "organization_projects" permissions = "write"
-                && [ "seedPlan"; "corpus" ]
-                   |> List.forall (fun name -> hex 64 (text "sha256" (artifacts.GetProperty name)))
-                && not (String.IsNullOrWhiteSpace(text "identity" journal))
-                && effects =
-                    [
-                        "CreateNonceIssue"
-                        "AddProjectMembership"
-                        "RemoveProjectMembership"
-                        "DeleteNonceIssue"
-                    ]
-                && hex 64 (text "fingerprint" root)
-        with
-        | :? JsonException
-        | :? InvalidOperationException
-        | :? KeyNotFoundException
-        | :? FormatException
-        | :? DecoderFallbackException -> false
-
-    let private installedPolicyShape (bytes: byte array) =
-        try
-            let utf8 = UTF8Encoding(false, true)
-            let json = utf8.GetString bytes
-
-            if not (json.EndsWith("\n", StringComparison.Ordinal)) then
-                false
-            else
-                use document = JsonDocument.Parse bytes
-                let root = document.RootElement
-                unique root
-                let installation = root.GetProperty "installation"
-                let repository = root.GetProperty "repository"
-                let rulesets = root.GetProperty "rulesets"
-
-                bytes = canonical false root
-                && exactNames
-                    [
-                        "authority"
-                        "candidateSha256"
-                        "classicProtection"
-                        "fingerprint"
-                        "installation"
-                        "installed"
-                        "repository"
-                        "rulesets"
-                        "schema"
-                        "selector"
-                    ]
-                    root
-                && exactNames [ "actorId"; "appId"; "installationId"; "permission" ] installation
-                && exactNames [ "fullName"; "id" ] repository
-                && exactNames [ "integrityId"; "integritySha256"; "writerId"; "writerSha256" ] rulesets
-                && text "fingerprint" root = sha256 (canonical true root)
-                && text "schema" root = "fsgg.gs2-09-7.seed-journal-policy-installed/1"
-                && root.GetProperty("installed").GetBoolean()
-                && text "authority" root = "authenticated-protected-readback"
-                && text "selector" root = "refs/heads/gs2-09-7/*/seed-journal"
-                && text "classicProtection" root = "proven-absent"
-                && repository.GetProperty("id").GetInt64() = 1353050537L
-                && text "fullName" repository = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
-                && installation.GetProperty("appId").GetInt64() = 4166418L
-                && installation.GetProperty("installationId").GetInt64() = 143110413L
-                && installation.GetProperty("actorId").GetInt64() = 297630107L
-                && text "permission" installation = "administration:write-or-custom-role-edit-rules"
-                && rulesets.GetProperty("writerId").GetInt64() > 0L
-                && rulesets.GetProperty("integrityId").GetInt64() > 0L
-                && hex 64 (text "writerSha256" rulesets)
-                && hex 64 (text "integritySha256" rulesets)
-                && hex 64 (text "candidateSha256" root)
-                && hex 64 (text "fingerprint" root)
-        with
-        | :? JsonException
-        | :? InvalidOperationException
-        | :? KeyNotFoundException
-        | :? FormatException
-        | :? DecoderFallbackException -> false
-
-    let establishInstalledAuthority
-        (verifier: IMigrationSandboxSeedInstalledProvenanceVerifier)
-        (evidence: MigrationSandboxSeedInstalledProvenanceEvidence)
+    let establishIsolatedCasAuthority
+        (verifier: IMigrationSandboxSeedIsolatedProvenanceVerifier)
+        (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence)
         =
         let bindingBytes =
             if isNull evidence.BindingBytes then
@@ -309,53 +73,33 @@ module MigrationSandboxSeedJournalRemote =
             else
                 Array.copy evidence.BindingBytes
 
-        let policyBytes =
-            if isNull evidence.PolicyReadbackBytes then
+        let nativeReadbackBytes =
+            if isNull evidence.NativeCasReadbackBytes then
                 [||]
             else
-                Array.copy evidence.PolicyReadbackBytes
+                Array.copy evidence.NativeCasReadbackBytes
 
         if
             bindingBytes.Length = 0
             || bindingBytes.Length > 1024 * 1024
-            || not (installedShape bindingBytes)
+            || nativeReadbackBytes.Length = 0
+            || nativeReadbackBytes.Length > 1024 * 1024
         then
-            Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding
-        elif
-            policyBytes.Length = 0
-            || policyBytes.Length > 1024 * 1024
-            || not (installedPolicyShape policyBytes)
-        then
-            Error MigrationSandboxSeedRemoteFailure.InvalidInstalledPolicy
+            Error MigrationSandboxSeedRemoteFailure.InvalidIsolatedCasBinding
         else
             try
-                use document = JsonDocument.Parse bindingBytes
-                let source = document.RootElement.GetProperty "source"
+                let verifierEvidence =
+                    { evidence with
+                        BindingBytes = bindingBytes
+                        NativeCasReadbackBytes = nativeReadbackBytes
+                    }
 
-                if
-                    source.GetProperty("runId").GetInt64() <> evidence.WorkflowRunId
-                    || source.GetProperty("runAttempt").GetInt32() <> evidence.WorkflowRunAttempt
-                    || text "workflowSha" source <> evidence.WorkflowSha
-                    || text "approvedArtifactSourceSha256" source
-                       <> evidence.ApprovedArtifactSourceSha256
-                then
-                    Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected
+                if verifier.VerifyExact verifierEvidence then
+                    Ok(MigrationSandboxSeedIsolatedCasAuthority bindingBytes)
                 else
-                    let verifierEvidence =
-                        { evidence with
-                            BindingBytes = Array.copy bindingBytes
-                            PolicyReadbackBytes = Array.copy policyBytes
-                        }
-
-                    if verifier.VerifyExact verifierEvidence then
-                        Ok(
-                            MigrationSandboxSeedInstalledS2Binding bindingBytes,
-                            MigrationSandboxSeedInstalledJournalPolicy policyBytes
-                        )
-                    else
-                        Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected
+                    Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected
             with _ ->
-                Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected
+                Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected
 
     let private proposalSnapshot (proposal: MigrationSandboxSeedJournalPlan) =
         {
@@ -402,8 +146,7 @@ module MigrationSandboxSeedJournalRemote =
             false
 
     let writeAndRead
-        (MigrationSandboxSeedInstalledS2Binding bindingBytes)
-        (MigrationSandboxSeedInstalledJournalPolicy _)
+        (MigrationSandboxSeedIsolatedCasAuthority bindingBytes)
         previous
         proposal
         (transport: IMigrationSandboxSeedJournalRemoteTransport)
@@ -413,7 +156,7 @@ module MigrationSandboxSeedJournalRemote =
         match MigrationSandboxSeedJournal.restore previous current with
         | Error _ -> Error MigrationSandboxSeedRemoteFailure.InvalidJournalProposal
         | Ok restore when not (bindingMatches bindingBytes restore) ->
-            Error MigrationSandboxSeedRemoteFailure.InstalledBindingMismatch
+            Error MigrationSandboxSeedRemoteFailure.IsolatedBindingMismatch
         | Ok restore ->
             let old = proposal.ExpectedParent |> Option.defaultValue ""
 
