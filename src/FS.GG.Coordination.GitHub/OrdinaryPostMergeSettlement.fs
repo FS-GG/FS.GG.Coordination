@@ -175,6 +175,12 @@ module OrdinaryPostMergeSettlement =
         elif repositoryId = 1290990429L
              && String.Equals(repository, "FS-GG/FS.GG.Game", StringComparison.OrdinalIgnoreCase) then
             Some(Set [ "Deterministic gate (locked restore + build) (ubuntu-latest)"; "Full test suite (dotnet test, headless) (ubuntu-latest)" ])
+        elif repositoryId = 1274272672L
+             && String.Equals(repository, "FS-GG/FS.GG.SDD", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "Deterministic gate (locked restore + build + test)"; "Shared-build-config drift check" ])
+        elif repositoryId = 1281961814L
+             && String.Equals(repository, "FS-GG/FS.GG.Templates", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "composition"; "kit / coordination-kit" ])
         else None
 
     let private requiredChecksValid repository repositoryId (checks: OrdinaryCheckFact list) =
