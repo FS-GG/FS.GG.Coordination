@@ -1,0 +1,37 @@
+{
+  "schema": "fsgg.coordination.callable-cli-release-operation/1",
+  "authority": {
+    "operation": "publish-c3-sdd-templates-cli-016",
+    "scope": "dual-feed-package-tag-and-release",
+    "source": "C3 SDD and Templates source profile CLI release"
+  },
+  "artifact": {
+    "packageId": "FS.GG.Coordination.Cli",
+    "version": "0.1.6",
+    "sourceCommit": "275cccb30a5c9ade4b3bba344ede13d7df446d13",
+    "sourceTree": "099007f65150a4d23311c359413dcdcba92a3575",
+    "packageSha256": "0f5d92799af84acb8663df0f524dc2ccfe54cfcc0bc6ad2183e867c8cdd47730",
+    "canonicalSourceRoot": "/home/runner/work/FS.GG.Coordination/FS.GG.Coordination",
+    "preparationRunId": 36450952246,
+    "preparationArtifactId": 10983867658,
+    "preparationArchiveSha256": "ba59e60d053679fd1f7ac631f56ee4f5fc250bb9f8b7fcfd1ea20776f144455f"
+  },
+  "protectedMerge": "275cccb30a5c9ade4b3bba344ede13d7df446d13",
+  "tag": "v0.1.6",
+  "workflow": ".github/workflows/callable-cli-release-publish.yml",
+  "preflightWorkflow": ".github/workflows/callable-cli-release-prepare.yml",
+  "publication": {
+    "order": [
+      "github-packages",
+      "nuget.org-byte-identical-push"
+    ],
+    "provenance": "github-attestation-before-effects",
+    "recovery": "observe-and-verify-existing-before-resume",
+    "servedVerification": "github-exact-archive-and-nuget-payload-excluding-repository-signature",
+    "tagAfterBothFeeds": true
+  },
+  "receiverAdoption": {
+    "authorized": false,
+    "milestone": "C3-SDD-01/C3-TEMPLATES-01"
+  }
+}
