@@ -414,6 +414,15 @@ let ``preparation admits only the closed Templates source profile`` () =
         "routine-eligibility"
 
 [<Fact>]
+let ``preparation admits only the closed Coordination source profile`` () =
+    assertNewSourceProfile
+        "FS-GG/FS.GG.Coordination"
+        1346720714L
+        [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"
+          "deterministic-build"; "evidence-manifest"; "package-install-smoke" ]
+        "routine-eligibility"
+
+[<Fact>]
 let ``preparation refuses stale source qualification epoch and credential scope`` () =
     let observed = observation "OpenV2"
     let associations = [ association true (sha "8") ]

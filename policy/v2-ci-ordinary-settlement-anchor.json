@@ -1,0 +1,28 @@
+{
+  "schema": "fsgg.github.v2-ci-ordinary-settlement-anchor/1",
+  "policyId": "v2-ci-i1-ordinary-settlement-v1",
+  "status": "uninstalled",
+  "operationClass": "ordinary-post-merge-delivery-settlement",
+  "sourceRepository": "FS-GG/FS.GG.Coordination",
+  "sourceRepositoryId": 1346720714,
+  "requiredCheckAuthority": {
+    "branch": "main",
+    "classicChecks": "empty-observed",
+    "effectiveRulesEndpoint": "GET /repos/FS-GG/FS.GG.Coordination/rules/branches/main",
+    "rulesetId": 21633423,
+    "union": "classic-and-effective-rules",
+    "conflict": "refuse"
+  },
+  "requiredCheckAppId": 15368,
+  "requiredChecks": [
+    "bootstrap-recovery",
+    "compiler-and-tests",
+    "dependency-and-security",
+    "deterministic-build",
+    "evidence-manifest",
+    "package-install-smoke"
+  ],
+  "authorizer": null,
+  "writer": null,
+  "acceptedAt": null
+}
