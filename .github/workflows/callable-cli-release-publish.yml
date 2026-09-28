@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: callable-cli-release-v0.1.4
+  group: callable-cli-release-v0.1.5
   cancel-in-progress: false
 
 jobs:
@@ -41,15 +41,15 @@ jobs:
       artifact-metadata: write
     env:
       PACKAGE_ID: FS.GG.Coordination.Cli
-      PACKAGE_VERSION: 0.1.4
-      PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.4.nupkg
-      EXPECTED_SOURCE: f5c8d27ac7497e282774a0c9166981bfcdf82d7f
-      EXPECTED_TREE: 30886226e539159cd7992965aad6f0917672e08e
-      EXPECTED_MERGE: f5c8d27ac7497e282774a0c9166981bfcdf82d7f
-      EXPECTED_SHA256: 10a51295db43e454b7692196533cceda48508165a8023dc98e87639be89f5c50
-      EXPECTED_PREPARATION_RUN_ID: 36424378261
-      EXPECTED_PREPARATION_ARTIFACT_ID: 10970966839
-      EXPECTED_PREPARATION_ARCHIVE_SHA256: 8b67063f835dba2d532a19406e32855636878a8d19dd6838deef5a1a2a6fc634
+      PACKAGE_VERSION: 0.1.5
+      PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.5.nupkg
+      EXPECTED_SOURCE: 1268908d2d5a38d30a764c927f3e0591e53138aa
+      EXPECTED_TREE: 52ef5c36cd3e3eeb94d6b92e3d64df86f81c3f01
+      EXPECTED_MERGE: 1268908d2d5a38d30a764c927f3e0591e53138aa
+      EXPECTED_SHA256: 3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9
+      EXPECTED_PREPARATION_RUN_ID: 36432670335
+      EXPECTED_PREPARATION_ARTIFACT_ID: 10974462005
+      EXPECTED_PREPARATION_ARCHIVE_SHA256: 50d9672f54cce339c6f919f100ccc9e63d51a34ae11ec5085df17be1b5d79ace
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
       CANONICAL_SOURCE: ${{ github.workspace }}
@@ -73,7 +73,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
-          test "$OPERATION" = publish-c3-rendering-cli-014
+          test "$OPERATION" = publish-c3-combined-cli-015
           test "$REQUESTED_SOURCE" = "$EXPECTED_SOURCE"
           test "$REQUESTED_MERGE" = "$EXPECTED_MERGE"
           test "$REQUESTED_SHA256" = "$EXPECTED_SHA256"
@@ -84,7 +84,7 @@ jobs:
           git merge-base --is-ancestor "$EXPECTED_MERGE" refs/remotes/origin/main
           test "$(git rev-parse "$EXPECTED_SOURCE^{tree}")" = "$EXPECTED_TREE"
           test "$(git rev-parse "$EXPECTED_MERGE^{tree}")" = "$EXPECTED_TREE"
-          tagged="$(git ls-remote --tags origin refs/tags/v0.1.4 refs/tags/v0.1.4^\{\} | awk '$2=="refs/tags/v0.1.4^{}"{peeled=$1} $2=="refs/tags/v0.1.4"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.1.5 refs/tags/v0.1.5^\{\} | awk '$2=="refs/tags/v0.1.5^{}"{peeled=$1} $2=="refs/tags/v0.1.5"{plain=$1} END{print peeled ? peeled : plain}')"
           test -z "$tagged" || test "$tagged" = "$EXPECTED_MERGE"
           jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' \
             eng/repository-settings/desired.json >/dev/null || {
@@ -112,7 +112,7 @@ jobs:
       - name: Retrieve the immutable reviewed preparation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: callable-cli-f5c8d27ac7497e282774a0c9166981bfcdf82d7f
+          name: callable-cli-1268908d2d5a38d30a764c927f3e0591e53138aa
           run-id: ${{ env.EXPECTED_PREPARATION_RUN_ID }}
           repository: FS-GG/FS.GG.Coordination
           github-token: ${{ github.token }}
@@ -128,7 +128,7 @@ jobs:
           test "$(jq -r .sourceTree "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_TREE"
           git -C "$CANONICAL_SOURCE" checkout --detach "$EXPECTED_SOURCE"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
-          git -C "$CANONICAL_SOURCE" tag -d v0.1.4 2>/dev/null || true
+          git -C "$CANONICAL_SOURCE" tag -d v0.1.5 2>/dev/null || true
           dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
           mkdir -p "$READBACK_OUTPUT/reproduced"
           (
@@ -281,16 +281,16 @@ jobs:
           set -euo pipefail
           test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org >/dev/null
-          tagged="$(git ls-remote --tags origin refs/tags/v0.1.4 refs/tags/v0.1.4^\{\} | awk '$2=="refs/tags/v0.1.4^{}"{peeled=$1} $2=="refs/tags/v0.1.4"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.1.5 refs/tags/v0.1.5^\{\} | awk '$2=="refs/tags/v0.1.5^{}"{peeled=$1} $2=="refs/tags/v0.1.5"{plain=$1} END{print peeled ? peeled : plain}')"
           if test -z "$tagged"; then
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.1.4 -f sha="$EXPECTED_MERGE"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.1.5 -f sha="$EXPECTED_MERGE"
           else
             test "$tagged" = "$EXPECTED_MERGE"
           fi
-          if ! gh release view v0.1.4 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create v0.1.4 --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "FS.GG.Coordination.Cli 0.1.4" \
-              --notes "C3-RENDERING-01 additive Rendering source profile CLI 0.1.4; receiver adoption remains separately gated." \
+          if ! gh release view v0.1.5 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create v0.1.5 --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "FS.GG.Coordination.Cli 0.1.5" \
+              --notes "C3 combined Net, Governance, and Game source profiles CLI 0.1.5; receiver adoption remains separately gated." \
               "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
               "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" \
               "$READBACK_OUTPUT/release-readback.json"
@@ -299,10 +299,10 @@ jobs:
           mkdir "$release_dir"
           for path in "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$READBACK_OUTPUT/release-readback.json"; do
             name="$(basename "$path")"
-            if ! gh release view v0.1.4 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
-              gh release upload v0.1.4 --repo "$GITHUB_REPOSITORY" "$path"
+            if ! gh release view v0.1.5 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              gh release upload v0.1.5 --repo "$GITHUB_REPOSITORY" "$path"
             fi
-            gh release download v0.1.4 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
+            gh release download v0.1.5 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
             test "$(sha256sum "$release_dir/$name" | cut -d' ' -f1)" = "$(sha256sum "$path" | cut -d' ' -f1)"
           done
       - name: Retain terminal or partial recovery evidence
