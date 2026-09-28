@@ -20,6 +20,7 @@ let private mappings =
     |> List.mapi (fun index receiver ->
         {
             ReceiverCopyId = receiver
+            ReceiverSourceRepository = $"FS-GG/source-{receiver}"
             ReceiverCopyRepository = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
             ReceiverCopySourceRevision = revision (index + 1)
             ReceiverCopySourceTree = tree (index + 1)
@@ -96,6 +97,10 @@ let private installation =
         App = Unchecked.defaultof<_>
         AppFirst = rawPage
         AppSecond = rawPage
+        InstallationPermissions = rosterOptions.RequiredPermissions
+        TokenPermissions = rosterOptions.RequiredPermissions
+        TokenFirst = rawPage
+        TokenSecond = rawPage
         ComposerRosterOptions = rosterOptions
         ComposerRosterCapture =
             {

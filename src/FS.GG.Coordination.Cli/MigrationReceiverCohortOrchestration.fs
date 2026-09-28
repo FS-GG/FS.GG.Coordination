@@ -13,6 +13,8 @@ type MigrationReceiverCohortOrchestrationRequest =
         CopyPlan: MigrationReceiverCopyPlanResult
         BlobBatches: MigrationReceiverCopyBlobBatch list
         BlobArtifacts: MigrationReceiverCopyBlobBatchArtifact list
+        VerifiedTransfer: MigrationReceiverCopyVerifiedTransfer
+        CopyReceipt: MigrationReceiverCopyExecutionReceipt
     }
 
 type MigrationReceiverCohortOrchestrationResult =
@@ -139,13 +141,54 @@ module MigrationReceiverCohortOrchestration =
                                         StringComparison.OrdinalIgnoreCase
                                     )
                                 )
-                                || receiver.RefName <> mapping.ReceiverCopyPlannedRef
-                                || receiver.ExpectedHead <> mapping.ReceiverCopySourceRevision)
+                                || receiver.RefName <> mapping.ReceiverCopyPlannedRef)
 
                     if mismatch then
                         unavailable "copy-plan-ref-mismatch"
                     else
                         Ok()
+
+    let internal validateTargetCopyForTests
+        (options: MigrationInspectProviderOptions)
+        (copyPlan: MigrationReceiverCopyPlanResult)
+        (verifiedTransfer: MigrationReceiverCopyVerifiedTransfer)
+        (receipt: MigrationReceiverCopyExecutionReceipt) =
+        try
+            let manifest = MigrationReceiverCopyTransfer.verifiedManifest verifiedTransfer
+            let expectedRows = manifest.DerivedRefs |> List.sortBy _.ReceiverCopyId
+            let expectedRefs = expectedRows |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
+            if not (MigrationReceiverCopyExecution.verifyReceipt manifest receipt)
+               || receipt.Refs <> expectedRefs then
+                unavailable "copy-receipt-mismatch"
+            elif receipt.TargetObjects.Length <> expectedRows.Length then
+                unavailable "copy-target-object-population"
+            else
+                let mappings = copyPlan.ReceiverCopyMappings |> List.sortBy _.ReceiverCopyId
+                let receivers = options.Cohort.Receivers |> List.sortBy _.Receiver
+                let mismatch =
+                    List.zip3 expectedRows mappings receivers
+                    |> List.exists (fun (row, mapping, receiver) ->
+                        let object' = receipt.TargetObjects |> List.tryFind (fun item -> item.RefName = row.DerivedRef)
+                        mapping.ReceiverCopyId <> row.ReceiverCopyId
+                        || mapping.ReceiverSourceRepository <> row.SourceRepository
+                        || mapping.ReceiverCopySourceRevision <> row.SourceCommit
+                        || mapping.ReceiverCopySourceTree <> row.SourceTree
+                        || row.SourceCommit = row.DerivedCommit
+                        || row.SourceTree <> row.DerivedTree
+                        || receiver.Receiver <> row.ReceiverCopyId
+                        || receiver.RefName <> row.DerivedRef
+                        || receiver.ExpectedHead <> row.DerivedCommit
+                        || match object' with
+                           | None -> true
+                           | Some target ->
+                               target.CommitOid <> row.DerivedCommit || target.TreeOid <> row.DerivedTree
+                               || not target.ParentOids.IsEmpty
+                               || target.SignatureStatus <> "unsigned-derived-copy"
+                               || String.IsNullOrWhiteSpace target.AuthorIdentity
+                               || String.IsNullOrWhiteSpace target.CommitterIdentity
+                               || String.IsNullOrWhiteSpace target.RequestIdentitySha256)
+                if mismatch then unavailable "copy-target-provenance-mismatch" else Ok()
+        with ex -> unavailable ex.Message
 
     let compose request (transport: IMigrationGitHubReadTransport) =
         MigrationReceiverInstallationRead.captureForComposer request.InstallationOptions transport
@@ -156,6 +199,8 @@ module MigrationReceiverCohortOrchestration =
             |> Result.bind (fun copyPlan ->
                 validateBindingsForTests installation request.ProviderOptions copyPlan
                 |> Result.bind (fun () ->
+                    validateTargetCopyForTests request.ProviderOptions copyPlan request.VerifiedTransfer request.CopyReceipt
+                    |> Result.bind (fun () ->
                     MigrationReceiverCapture.captureWorkflowPinsTwoPass
                         request.ProviderOptions.Cohort
                         request.ProviderOptions.Repository
@@ -193,4 +238,4 @@ module MigrationReceiverCohortOrchestration =
                                     PinCapture = pinCapture
                                     BlobCoverage = coverage
                                     AuthorityComposition = composition
-                                }))))))
+                                })))))))

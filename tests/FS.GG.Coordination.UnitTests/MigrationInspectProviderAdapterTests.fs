@@ -551,8 +551,21 @@ let ``provider workflow pin census refuses unsigned heads and mutable tool ident
     let mutableTransport =
         FakeTransport (mutableReceiverPass @ mutableReceiverPass @ mutablePinPass @ mutablePinPass)
     match MigrationReceiverCapture.captureWorkflowPinsTwoPass cohort options.Repository mutableTransport with
-    | Error reason -> Assert.StartsWith("mutable-or-invalid:workflow-tool-identity:", reason)
-    | Ok _ -> failwith "Mutable workflow tool identity was accepted"
+    | Error reason -> failwithf "Mutable workflow reference capture refused: %s" reason
+    | Ok captured ->
+        let tool = Assert.Single(captured.WorkflowTools)
+        Assert.True(tool.RequiresMigration)
+        Assert.True(tool.Kind.IsNone)
+        Assert.Equal("actions/checkout@v4", tool.Literal)
+        Assert.Equal(pinPath, tool.WorkflowPath)
+        Assert.Equal(2, tool.LineNumber)
+        Assert.Equal("actions/checkout", tool.TargetRepository)
+        Assert.Equal("v4", tool.Revision)
+        Assert.Equal(mutableSha, tool.WorkflowBlobSha1)
+        Assert.Equal(SHA256.HashData mutableBytes |> Convert.ToHexString |> _.ToLowerInvariant(), tool.WorkflowBytesSha256)
+        Assert.True(MigrationInspectProviderAdapter.bindProviderWorkflowPins options captured |> Result.isOk)
+        let source = MigrationInspectProviderAdapter(options, FakeTransport []) :> IGitHubMigrationInspectSource
+        Assert.Equal(Error "authority-adapter-unavailable:workflow-pins", source.ReadAuthority(1, "workflow-pins"))
 
 [<Fact>]
 let ``provider workflow pin binder reparses raw signed and tool identity evidence`` () =

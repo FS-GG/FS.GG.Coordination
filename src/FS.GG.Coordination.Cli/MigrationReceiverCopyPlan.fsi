@@ -13,6 +13,7 @@ type MigrationReceiverCopyAcceptedEvidence =
 
 type MigrationReceiverCopyMapping =
     { ReceiverCopyId: string
+      ReceiverSourceRepository: string
       ReceiverCopyRepository: string
       ReceiverCopySourceRevision: string
       ReceiverCopySourceTree: string
@@ -42,6 +43,14 @@ module MigrationReceiverCopyPlan =
         runIdentity:MigrationSandboxSeedRequest ->
         observed:MigrationReceiverCopyPlanResult ->
             Result<MigrationReceiverCopyPlanResult, string>
+
+    /// Reopens the retained archive through the same full parser and returns only
+    /// blob bytes already bound to the verified copy plan. Assembly-internal custody API.
+    val internal readRetainedBlobBytes:
+        acceptedEvidence:MigrationReceiverCopyAcceptedEvidence ->
+        runIdentity:MigrationSandboxSeedRequest ->
+        observed:MigrationReceiverCopyPlanResult ->
+            Result<Map<string, byte[]>, string>
 
     /// Test-only structural validation beneath the immutable accepted-receipt byte boundary.
     val internal deriveUnpinnedForTests:

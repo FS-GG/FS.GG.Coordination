@@ -172,12 +172,18 @@ let ``full local corpus capture is available as an explicit qualification`` () =
         let coverage = MigrationReceiverCopyBlobCapture.verifyCoverage evidence run copyPlan batches artifacts |> unwrap
         Assert.Equal(8999, coverage.ReceiverCopyBlobCoverageSha256BySha1.Count)
         Assert.Equal(batches.Length, coverage.ReceiverCopyBlobCoverageBatchFingerprints.Length)
+        use complete = MigrationReceiverCopyBlobCapture.createVerifiedCompleteObjectSource evidence run copyPlan batches artifacts coverage |> unwrap
+        let capturedBytes = complete.ReadBlob(batches.Head.ReceiverCopyBlobSha1s.Head) |> unwrap
+        Assert.True(capturedBytes.Length > 0)
+        let retainedKey = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.keys |> Seq.head
+        let retainedBytes = complete.ReadBlob retainedKey |> unwrap
+        Assert.True(retainedBytes.Length > 0)
+        Assert.True(complete.ReadBlob(String.replicate 40 "0") |> Result.isError)
         let first, rest = artifacts.Head, artifacts.Tail
         let omitted =
             { first with
                 ReceiverCopyBlobSha256BySha1 = first.ReceiverCopyBlobSha256BySha1 |> Map.remove batches.Head.ReceiverCopyBlobSha1s.Head }
         Assert.True(MigrationReceiverCopyBlobCapture.verifyCoverage evidence run copyPlan batches (omitted :: rest) |> Result.isError)
-        let retainedKey = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.keys |> Seq.head
         let retainedOmitted =
             { copyPlan with
                 ReceiverCopyRetainedBlobSha256BySha1 = copyPlan.ReceiverCopyRetainedBlobSha256BySha1 |> Map.remove retainedKey }

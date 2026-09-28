@@ -11,6 +11,8 @@ type MigrationReceiverCohortOrchestrationRequest =
         CopyPlan: MigrationReceiverCopyPlanResult
         BlobBatches: MigrationReceiverCopyBlobBatch list
         BlobArtifacts: MigrationReceiverCopyBlobBatchArtifact list
+        VerifiedTransfer: MigrationReceiverCopyVerifiedTransfer
+        CopyReceipt: MigrationReceiverCopyExecutionReceipt
     }
 
 type MigrationReceiverCohortOrchestrationResult =
@@ -38,3 +40,9 @@ module MigrationReceiverCohortOrchestration =
         options: MigrationInspectProviderOptions ->
         copyPlan: MigrationReceiverCopyPlanResult ->
             Result<unit, string>
+
+    val internal validateTargetCopyForTests:
+        options: MigrationInspectProviderOptions ->
+        copyPlan: MigrationReceiverCopyPlanResult ->
+        verifiedTransfer: MigrationReceiverCopyVerifiedTransfer ->
+        receipt: MigrationReceiverCopyExecutionReceipt -> Result<unit, string>

@@ -34,7 +34,10 @@ type MigrationReceiverWorkflowToolIdentity =
       TargetRepository: string
       TargetPath: string option
       Revision: string
-      Kind: ImmutableExecutionReferenceKind }
+      Kind: ImmutableExecutionReferenceKind option
+      WorkflowBlobSha1: string
+      WorkflowBytesSha256: string
+      RequiresMigration: bool }
 
 type MigrationReceiverPinEvidenceOrigin =
     private
@@ -153,15 +156,32 @@ module MigrationReceiverCapture =
                                     match unquote withoutComment with
                                     | None -> Error $"ambiguous:workflow-tool-identity:{pin.EntryPath}:{lineNumber + 1}"
                                     | Some literal ->
+                                        let observed kind repository path revision requiresMigration =
+                                            { ReceiverName=snapshot.Receiver.ReceiverName
+                                              WorkflowPath=pin.EntryPath
+                                              LineNumber=lineNumber + 1
+                                              EvidenceRequestUri=pin.RequestUri
+                                              Literal=literal; TargetRepository=repository
+                                              TargetPath=path; Revision=revision; Kind=kind
+                                              WorkflowBlobSha1=pin.EntrySha
+                                              WorkflowBytesSha256=pin.BytesSha256
+                                              RequiresMigration=requiresMigration }
                                         match GitHubImmutableExecutionPinsQualification.classifyReferenceLiteral literal with
-                                        | Error _ -> Error $"mutable-or-invalid:workflow-tool-identity:{pin.EntryPath}:{lineNumber + 1}"
                                         | Ok(kind, repository, path, revision) ->
-                                            Ok ({ ReceiverName=snapshot.Receiver.ReceiverName
-                                                  WorkflowPath=pin.EntryPath
-                                                  LineNumber=lineNumber + 1
-                                                  EvidenceRequestUri=pin.RequestUri
-                                                  Literal=literal; TargetRepository=repository
-                                                  TargetPath=path; Revision=revision; Kind=kind } :: previous))) (Ok [])
+                                            Ok (observed (Some kind) repository path revision false :: previous)
+                                        | Error _ ->
+                                            let marker = literal.LastIndexOf('@')
+                                            if marker <= 0 || marker = literal.Length - 1 then
+                                                Error $"invalid:workflow-tool-identity:{pin.EntryPath}:{lineNumber + 1}"
+                                            else
+                                                let target, revision = literal.Substring(0, marker), literal.Substring(marker + 1)
+                                                let parts = target.Split('/')
+                                                if parts.Length < 2 || parts |> Array.exists String.IsNullOrWhiteSpace then
+                                                    Error $"invalid:workflow-tool-identity:{pin.EntryPath}:{lineNumber + 1}"
+                                                else
+                                                    let repository = parts[0] + "/" + parts[1]
+                                                    let path = if parts.Length > 2 then Some(String.Join('/', parts[2..])) else None
+                                                    Ok (observed None repository path revision true :: previous))) (Ok [])
                     |> Result.bind (fun identities ->
                         let identities = identities |> List.rev
                         let keys = identities |> List.map (fun item -> item.WorkflowPath, item.LineNumber)
