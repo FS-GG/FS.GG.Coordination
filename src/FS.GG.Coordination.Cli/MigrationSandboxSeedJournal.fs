@@ -679,10 +679,7 @@ module MigrationSandboxSeedJournal =
                            MigrationSandboxSeedExecutionMode.Compensated
                    | _ -> false
 
-    let private legalTransition
-        (previous: MigrationSandboxSeedExecution)
-        (current: MigrationSandboxSeedExecution)
-        =
+    let private legalTransition (previous: MigrationSandboxSeedExecution) (current: MigrationSandboxSeedExecution) =
         let unchangedExceptActive index =
             previous.Effects
             |> List.mapi (fun item effect -> item = index || effect = current.Effects[item])
@@ -710,15 +707,9 @@ module MigrationSandboxSeedJournal =
         && current.Generation = previous.Generation + 1L
         && current.Head <> previous.Head
         && ((previous.Mode = current.Mode
-             && (activeStage
-                     MigrationSandboxSeedEffectStage.Planned
-                     MigrationSandboxSeedEffectStage.IntentPersisted
-                 || activeStage
-                     MigrationSandboxSeedEffectStage.IntentPersisted
-                     MigrationSandboxSeedEffectStage.InFlight
-                 || activeStage
-                     MigrationSandboxSeedEffectStage.InFlight
-                     MigrationSandboxSeedEffectStage.RecoveryPending
+             && (activeStage MigrationSandboxSeedEffectStage.Planned MigrationSandboxSeedEffectStage.IntentPersisted
+                 || activeStage MigrationSandboxSeedEffectStage.IntentPersisted MigrationSandboxSeedEffectStage.InFlight
+                 || activeStage MigrationSandboxSeedEffectStage.InFlight MigrationSandboxSeedEffectStage.RecoveryPending
                  || settledActive))
             || (previous.Mode = MigrationSandboxSeedExecutionMode.Forward
                 && current.Mode = MigrationSandboxSeedExecutionMode.Complete
@@ -806,9 +797,7 @@ module MigrationSandboxSeedJournal =
                     Error MigrationSandboxSeedJournalFailure.StaleGeneration
                 | Some value ->
                     match parseState value.StateBytes with
-                    | Some previousState when
-                        validRestoredState previousState && legalTransition previousState state
-                        ->
+                    | Some previousState when validRestoredState previousState && legalTransition previousState state ->
                         Ok(value.JournalGeneration + 1L, Some value.CommitOid)
                     | _ -> Error MigrationSandboxSeedJournalFailure.InvalidState
 
@@ -840,32 +829,81 @@ module MigrationSandboxSeedJournal =
                         CommitBytes = commitData
                     }
 
+    let private trustedGitExecutable = "/usr/bin/git"
+    let private gitOutputLimit = 1_048_576
+    let private gitTimeoutMilliseconds = 60_000
+
+    let private readBounded (stream: Stream) =
+        task {
+            use output = new MemoryStream()
+            let buffer = Array.zeroCreate<byte> 8192
+            let mutable complete = false
+            let mutable overflow = false
+
+            while not complete do
+                let! count = stream.ReadAsync(buffer, 0, buffer.Length)
+
+                if count = 0 then
+                    complete <- true
+                elif output.Length + int64 count <= int64 gitOutputLimit then
+                    output.Write(buffer, 0, count)
+                else
+                    overflow <- true
+
+            return output.ToArray(), overflow
+        }
+
     let private runGit (path: string) (args: string list) =
         try
-            let start = ProcessStartInfo("git")
+            if
+                not (OperatingSystem.IsLinux())
+                || not (File.Exists trustedGitExecutable)
+                || not (isNull (FileInfo trustedGitExecutable).LinkTarget)
+            then
+                invalidOp "trusted-git-unavailable"
+
+            let start = ProcessStartInfo(trustedGitExecutable)
             start.WorkingDirectory <- path
             start.RedirectStandardOutput <- true
             start.RedirectStandardError <- true
             start.UseShellExecute <- false
+            start.CreateNoWindow <- true
+            start.Environment.Clear()
+            start.Environment["HOME"] <- path
+            start.Environment["XDG_CONFIG_HOME"] <- path
+            start.Environment["GIT_CONFIG_NOSYSTEM"] <- "1"
+            start.Environment["GIT_CONFIG_GLOBAL"] <- "/dev/null"
+            start.Environment["GIT_CONFIG_SYSTEM"] <- "/dev/null"
+            start.Environment["GIT_TERMINAL_PROMPT"] <- "0"
+            start.Environment["GIT_CONFIG_COUNT"] <- "1"
+            start.Environment["GIT_CONFIG_KEY_0"] <- "core.hooksPath"
+            start.Environment["GIT_CONFIG_VALUE_0"] <- "/dev/null"
 
             for arg in args do
                 start.ArgumentList.Add arg
 
             use child = Process.Start start
-            use output = new MemoryStream()
-            child.StandardOutput.BaseStream.CopyTo output
-            let error = child.StandardError.ReadToEnd()
-            child.WaitForExit()
+            let output = readBounded child.StandardOutput.BaseStream
+            let error = readBounded child.StandardError.BaseStream
 
-            if child.ExitCode = 0 then
-                Ok(output.ToArray())
+            if not (child.WaitForExit gitTimeoutMilliseconds) then
+                try
+                    child.Kill true
+                with _ ->
+                    ()
+
+                child.WaitForExit()
+                output.GetAwaiter().GetResult() |> ignore
+                error.GetAwaiter().GetResult() |> ignore
+                Error "git-timeout"
             else
-                Error(
-                    if String.IsNullOrWhiteSpace error then
-                        $"git-exit-{child.ExitCode}"
-                    else
-                        error.Trim()
-                )
+                let outputBytes, outputOverflow = output.GetAwaiter().GetResult()
+                let _, errorOverflow = error.GetAwaiter().GetResult()
+
+                if outputOverflow || errorOverflow then
+                    Error "git-output-limit"
+                else
+                    Ok(child.ExitCode, outputBytes)
         with ex ->
             Error ex.Message
 
@@ -905,31 +943,35 @@ module MigrationSandboxSeedJournal =
         then
             MigrationSandboxSeedJournalRead.Indeterminate "invalid-read-scope"
         else
-            match runGit repositoryPath [ "rev-parse"; "--verify"; requestedRef ] with
-            | Error reason when
-                reason.Contains("Needed a single revision", StringComparison.OrdinalIgnoreCase)
-                || reason.Contains("unknown revision", StringComparison.OrdinalIgnoreCase)
-                ->
-                MigrationSandboxSeedJournalRead.Missing
+            match runGit repositoryPath [ "rev-parse"; "--verify"; "--quiet"; requestedRef ] with
             | Error reason -> MigrationSandboxSeedJournalRead.Indeterminate reason
-            | Ok commitOutput ->
+            | Ok(1, _) -> MigrationSandboxSeedJournalRead.Missing
+            | Ok(exitCode, _) when exitCode <> 0 ->
+                MigrationSandboxSeedJournalRead.Indeterminate $"git-ref-exit-{exitCode}"
+            | Ok(_, commitOutput) ->
                 let commit = textBytes commitOutput |> _.Trim()
 
                 match runGit repositoryPath [ "cat-file"; "commit"; commit ] with
                 | Error reason -> MigrationSandboxSeedJournalRead.Indeterminate reason
-                | Ok commitData ->
+                | Ok(exitCode, _) when exitCode <> 0 ->
+                    MigrationSandboxSeedJournalRead.Indeterminate $"git-commit-exit-{exitCode}"
+                | Ok(_, commitData) ->
                     match parseCommit commitData with
                     | None -> MigrationSandboxSeedJournalRead.Indeterminate "invalid-commit"
                     | Some(tree, parent) ->
                         match runGit repositoryPath [ "cat-file"; "tree"; tree ] with
                         | Error reason -> MigrationSandboxSeedJournalRead.Indeterminate reason
-                        | Ok treeData ->
+                        | Ok(exitCode, _) when exitCode <> 0 ->
+                            MigrationSandboxSeedJournalRead.Indeterminate $"git-tree-exit-{exitCode}"
+                        | Ok(_, treeData) ->
                             match parseTree treeData with
                             | None -> MigrationSandboxSeedJournalRead.Indeterminate "invalid-tree"
                             | Some blob ->
                                 match runGit repositoryPath [ "cat-file"; "blob"; blob ] with
                                 | Error reason -> MigrationSandboxSeedJournalRead.Indeterminate reason
-                                | Ok stateBytes ->
+                                | Ok(exitCode, _) when exitCode <> 0 ->
+                                    MigrationSandboxSeedJournalRead.Indeterminate $"git-blob-exit-{exitCode}"
+                                | Ok(_, stateBytes) ->
                                     match metadata stateBytes with
                                     | None -> MigrationSandboxSeedJournalRead.Indeterminate "invalid-state"
                                     | Some(stateGeneration, nonce, seal) ->

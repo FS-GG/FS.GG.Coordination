@@ -165,7 +165,7 @@ let private nextState head current =
     |> fst
 
 let private runGit path args (input: byte array option) =
-    let start = ProcessStartInfo("git")
+    let start = ProcessStartInfo("/usr/bin/git")
     start.WorkingDirectory <- path
     start.RedirectStandardInput <- input.IsSome
     start.RedirectStandardOutput <- true
@@ -199,6 +199,56 @@ let private withBare action =
         action path
     finally
         Directory.Delete(path, true)
+
+let private readJournalInHostileChild
+    (repository: string)
+    (refName: string)
+    (expectedCommit: string)
+    (fakeBin: string)
+    (globalConfig: string)
+    =
+    let start = ProcessStartInfo("/usr/bin/dotnet")
+    start.UseShellExecute <- false
+    start.RedirectStandardOutput <- true
+    start.RedirectStandardError <- true
+    start.ArgumentList.Add "vstest"
+    start.ArgumentList.Add(System.Reflection.Assembly.GetExecutingAssembly().Location)
+    start.ArgumentList.Add "--TestCaseFilter:FullyQualifiedName~hostile child journal readback"
+    start.Environment["PATH"] <- fakeBin
+    start.Environment["HOME"] <- Path.GetDirectoryName globalConfig
+    start.Environment["XDG_CONFIG_HOME"] <- Path.GetDirectoryName globalConfig
+    start.Environment["GIT_CONFIG_GLOBAL"] <- globalConfig
+    start.Environment["GIT_CONFIG_SYSTEM"] <- globalConfig
+    start.Environment["GIT_CONFIG_PARAMETERS"] <- "malformed-attacker-value"
+    start.Environment["GIT_DIR"] <- Path.GetDirectoryName globalConfig
+    start.Environment["GIT_EXEC_PATH"] <- fakeBin
+    start.Environment["FSGG_Q4_HOSTILE_REPOSITORY"] <- repository
+    start.Environment["FSGG_Q4_HOSTILE_REF"] <- refName
+    start.Environment["FSGG_Q4_HOSTILE_COMMIT"] <- expectedCommit
+
+    use child = Process.Start start
+    let output = child.StandardOutput.ReadToEndAsync()
+    let error = child.StandardError.ReadToEndAsync()
+
+    if not (child.WaitForExit 60_000) then
+        child.Kill true
+        failwith "hostile-child-timeout"
+
+    let outputText = output.GetAwaiter().GetResult()
+    let errorText = error.GetAwaiter().GetResult()
+    Assert.True(child.ExitCode = 0, $"hostile child exit {child.ExitCode}: {outputText} {errorText}")
+
+[<Fact>]
+let ``hostile child journal readback`` () =
+    match Environment.GetEnvironmentVariable "FSGG_Q4_HOSTILE_REPOSITORY" with
+    | null -> ()
+    | repository ->
+        let refName = Environment.GetEnvironmentVariable "FSGG_Q4_HOSTILE_REF"
+        let expectedCommit = Environment.GetEnvironmentVariable "FSGG_Q4_HOSTILE_COMMIT"
+
+        match MigrationSandboxSeedJournal.readLocalBare repository refName with
+        | MigrationSandboxSeedJournalRead.Complete value -> Assert.Equal(expectedCommit, value.CommitOid)
+        | actual -> failwithf "%A" actual
 
 type private BareTransport(path: string, unknown: bool, applyWrite: bool) =
     let mutable pushes: MigrationSandboxSeedRemotePush list = []
@@ -488,6 +538,111 @@ let ``trusted runtime Git transport writes only exact genesis objects and fresh 
             MigrationSandboxSeedRemotePushOutcome.DefiniteRefusal "exact-genesis-push-shape",
             transport.PushExact { push with ForceWithLease = "--force" }
         ))
+
+[<Fact>]
+let ``trusted runtime ignores PATH git and ambient remote substitution`` () =
+    withBare (fun repository ->
+        withBare (fun redirectedRepository ->
+            let attacker =
+                Path.Combine(Path.GetTempPath(), $"gs2-q4-git-attacker-{Guid.NewGuid():N}")
+
+            let fakeBin = Path.Combine(attacker, "bin")
+            let fakeGit = Path.Combine(fakeBin, "git")
+            let marker = Path.Combine(attacker, "fake-git-ran")
+            let globalConfig = Path.Combine(attacker, "gitconfig")
+            let templates = Path.Combine(attacker, "templates")
+            Directory.CreateDirectory fakeBin |> ignore
+            Directory.CreateDirectory templates |> ignore
+
+            File.WriteAllText(fakeGit, $"#!/bin/sh\nprintf attacked > '{marker}'\nexit 97\n")
+
+            File.SetUnixFileMode(
+                fakeGit,
+                UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+            )
+
+            File.WriteAllText(
+                globalConfig,
+                $"[url \"{redirectedRepository}\"]\n\tinsteadOf = {repository}\n[core]\n\thooksPath = {attacker}\n"
+            )
+
+            try
+                let bytes = installedBytes false
+                let proposal = proposal bytes
+
+                let hostileEnvironment =
+                    [
+                        "PATH", fakeBin
+                        "HOME", attacker
+                        "XDG_CONFIG_HOME", attacker
+                        "GIT_CONFIG_GLOBAL", globalConfig
+                        "GIT_CONFIG_SYSTEM", globalConfig
+                        "GIT_CONFIG_PARAMETERS", "malformed-attacker-value"
+                        "GIT_DIR", redirectedRepository
+                        "GIT_WORK_TREE", attacker
+                        "GIT_COMMON_DIR", redirectedRepository
+                        "GIT_OBJECT_DIRECTORY", Path.Combine(redirectedRepository, "objects")
+                        "GIT_ALTERNATE_OBJECT_DIRECTORIES", Path.Combine(redirectedRepository, "objects")
+                        "GIT_TEMPLATE_DIR", templates
+                        "GIT_EXEC_PATH", fakeBin
+                    ]
+
+                let transport =
+                    ExactGenesisGitTransport(
+                        repository,
+                        "/usr/bin/git",
+                        String.replicate 24 "t",
+                        inheritedEnvironmentProbe = hostileEnvironment
+                    )
+                    :> IMigrationSandboxSeedJournalRemoteTransport
+
+                let push =
+                    {
+                        RefName = proposal.RefName
+                        Refspec = $"{proposal.CommitOid}:{proposal.RefName}"
+                        ForceWithLease = $"--force-with-lease={proposal.RefName}:"
+                        Objects =
+                            [
+                                {
+                                    Kind = "blob"
+                                    Oid = proposal.BlobOid
+                                    Bytes = proposal.StateBytes
+                                }
+                                {
+                                    Kind = "tree"
+                                    Oid = proposal.TreeOid
+                                    Bytes = proposal.TreeBytes
+                                }
+                                {
+                                    Kind = "commit"
+                                    Oid = proposal.CommitOid
+                                    Bytes = proposal.CommitBytes
+                                }
+                            ]
+                    }
+
+                Assert.Equal(MigrationSandboxSeedRemotePushOutcome.Accepted, transport.PushExact push)
+
+                match transport.ReadFresh proposal.RefName with
+                | MigrationSandboxSeedJournalRead.Complete actual ->
+                    Assert.Equal(proposal.CommitOid, actual.CommitOid)
+                | actual -> failwithf "%A" actual
+
+                readJournalInHostileChild repository proposal.RefName proposal.CommitOid fakeBin globalConfig
+
+                Assert.False(File.Exists marker)
+
+                match MigrationSandboxSeedJournal.readLocalBare repository proposal.RefName with
+                | MigrationSandboxSeedJournalRead.Complete actual ->
+                    Assert.Equal(proposal.CommitOid, actual.CommitOid)
+                | actual -> failwithf "%A" actual
+
+                Assert.Equal(
+                    MigrationSandboxSeedJournalRead.Missing,
+                    MigrationSandboxSeedJournal.readLocalBare redirectedRepository proposal.RefName
+                )
+            finally
+                Directory.Delete(attacker, true)))
 
 [<Fact>]
 let ``lost response always rereads applied or stays journal only`` () =

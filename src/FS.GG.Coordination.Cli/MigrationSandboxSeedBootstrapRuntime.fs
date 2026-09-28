@@ -83,7 +83,31 @@ type private RuntimeEvidenceRead
         member _.ReadNativeCasReadback _ =
             Error "bootstrap-runtime-has-no-prior-cas-readback"
 
-type internal ExactGenesisGitTransport(remote: string, gitExecutable: string, token: string) =
+type internal ExactGenesisGitTransport
+    (remote: string, gitExecutable: string, token: string, ?inheritedEnvironmentProbe: (string * string) list) =
+    let gitOutputLimit = 1_048_576
+    let inheritedEnvironmentProbe = defaultArg inheritedEnvironmentProbe []
+
+    let readBounded (stream: Stream) =
+        task {
+            use output = new MemoryStream()
+            let buffer = Array.zeroCreate<byte> 8192
+            let mutable complete = false
+            let mutable overflow = false
+
+            while not complete do
+                let! count = stream.ReadAsync(buffer, 0, buffer.Length)
+
+                if count = 0 then
+                    complete <- true
+                elif output.Length + int64 count <= int64 gitOutputLimit then
+                    output.Write(buffer, 0, count)
+                else
+                    overflow <- true
+
+            return output.ToArray(), overflow
+        }
+
     let run (workingDirectory: string) (arguments: string list) (input: byte array option) =
         let start = ProcessStartInfo(gitExecutable)
         start.WorkingDirectory <- workingDirectory
@@ -92,14 +116,26 @@ type internal ExactGenesisGitTransport(remote: string, gitExecutable: string, to
         start.RedirectStandardError <- true
         start.UseShellExecute <- false
         start.CreateNoWindow <- true
+
+        inheritedEnvironmentProbe
+        |> List.iter (fun (name, value) -> start.Environment[name] <- value)
+
+        start.Environment.Clear()
+        start.Environment["HOME"] <- workingDirectory
+        start.Environment["XDG_CONFIG_HOME"] <- workingDirectory
+        start.Environment["GIT_CONFIG_NOSYSTEM"] <- "1"
+        start.Environment["GIT_CONFIG_GLOBAL"] <- "/dev/null"
+        start.Environment["GIT_CONFIG_SYSTEM"] <- "/dev/null"
         start.Environment["GIT_TERMINAL_PROMPT"] <- "0"
-        start.Environment["GIT_CONFIG_COUNT"] <- "3"
+        start.Environment["GIT_CONFIG_COUNT"] <- "4"
         start.Environment["GIT_CONFIG_KEY_0"] <- "http.https://github.com/.extraHeader"
         start.Environment["GIT_CONFIG_VALUE_0"] <- "Authorization: Bearer " + token
         start.Environment["GIT_CONFIG_KEY_1"] <- "credential.helper"
         start.Environment["GIT_CONFIG_VALUE_1"] <- ""
         start.Environment["GIT_CONFIG_KEY_2"] <- "http.followRedirects"
         start.Environment["GIT_CONFIG_VALUE_2"] <- "false"
+        start.Environment["GIT_CONFIG_KEY_3"] <- "core.hooksPath"
+        start.Environment["GIT_CONFIG_VALUE_3"] <- "/dev/null"
 
         for argument in arguments do
             start.ArgumentList.Add argument
@@ -111,8 +147,8 @@ type internal ExactGenesisGitTransport(remote: string, gitExecutable: string, to
             child.StandardInput.BaseStream.Write(bytes, 0, bytes.Length)
             child.StandardInput.Close())
 
-        let output = child.StandardOutput.ReadToEndAsync()
-        let error = child.StandardError.ReadToEndAsync()
+        let output = readBounded child.StandardOutput.BaseStream
+        let error = readBounded child.StandardError.BaseStream
 
         if not (child.WaitForExit(60_000)) then
             try
@@ -125,10 +161,13 @@ type internal ExactGenesisGitTransport(remote: string, gitExecutable: string, to
             error.GetAwaiter().GetResult() |> ignore
             124, ""
         else
-            let value = output.GetAwaiter().GetResult()
+            let value, outputOverflow = output.GetAwaiter().GetResult()
+            let _, errorOverflow = error.GetAwaiter().GetResult()
             // Drain stderr so the child cannot block. Provider bytes never leave this process.
-            error.GetAwaiter().GetResult() |> ignore
-            child.ExitCode, value.Trim()
+            if outputOverflow || errorOverflow then
+                125, ""
+            else
+                child.ExitCode, Encoding.UTF8.GetString(value).Trim()
 
     let temporary action =
         let path = Path.Combine(Path.GetTempPath(), $"fsgg-q4-bootstrap-{Guid.NewGuid():N}")
@@ -146,7 +185,7 @@ type internal ExactGenesisGitTransport(remote: string, gitExecutable: string, to
                 ()
 
     let init path =
-        let code, _ = run path [ "init"; "--bare"; "--quiet" ] None
+        let code, _ = run path [ "init"; "--bare"; "--quiet"; "--template=" ] None
         code = 0
 
     interface IMigrationSandboxSeedJournalRemoteTransport with
@@ -524,10 +563,11 @@ module internal MigrationSandboxSeedBootstrapRuntime =
             Error "trusted-bootstrap-runtime-refused"
 
     let execute input =
-        let gitExecutable =
-            if OperatingSystem.IsWindows() then
-                "git.exe"
-            else
-                "/usr/bin/git"
-
-        executeWith gitExecutable input
+        if
+            OperatingSystem.IsLinux()
+            && File.Exists "/usr/bin/git"
+            && isNull (FileInfo "/usr/bin/git").LinkTarget
+        then
+            executeWith "/usr/bin/git" input
+        else
+            Error "trusted-bootstrap-runtime-refused"
