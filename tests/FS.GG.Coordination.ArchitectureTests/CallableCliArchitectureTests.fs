@@ -62,16 +62,16 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     for expected in
         [
             "operation:"
-            "publish-c3-rendering-cli-014"
-            "10a51295db43e454b7692196533cceda48508165a8023dc98e87639be89f5c50"
+            "publish-c3-combined-cli-015"
+            "3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9"
             "packages: write"
             "id-token: write"
             "attestations: write"
             "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-            "EXPECTED_PREPARATION_RUN_ID: 36424378261"
-            "EXPECTED_PREPARATION_ARTIFACT_ID: 10970966839"
-            "EXPECTED_PREPARATION_ARCHIVE_SHA256: 8b67063f835dba2d532a19406e32855636878a8d19dd6838deef5a1a2a6fc634"
+            "EXPECTED_PREPARATION_RUN_ID: 36432670335"
+            "EXPECTED_PREPARATION_ARTIFACT_ID: 10974462005"
+            "EXPECTED_PREPARATION_ARCHIVE_SHA256: 50d9672f54cce339c6f919f100ccc9e63d51a34ae11ec5085df17be1b5d79ace"
             ".workflow_run.id == $run"
             ".workflow_run.head_sha == $source"
             "cmp \"$CANDIDATE_OUTPUT/$PACKAGE_FILE\" \"$READBACK_OUTPUT/reproduced/$PACKAGE_FILE\""
@@ -89,10 +89,10 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
     Assert.True(githubPush >= 0 && publicPush > githubPush)
 
-    let operation = read "eng/callable-cli-release-operation-014.json"
-    Assert.Contains("\"operation\": \"publish-c3-rendering-cli-014\"", operation, StringComparison.Ordinal)
-    Assert.Contains("\"preparationArtifactId\": 10970966839", operation, StringComparison.Ordinal)
-    Assert.Contains("\"protectedMerge\": \"f5c8d27ac7497e282774a0c9166981bfcdf82d7f\"", operation, StringComparison.Ordinal)
+    let operation = read "eng/callable-cli-release-operation-015.json"
+    Assert.Contains("\"operation\": \"publish-c3-combined-cli-015\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"preparationArtifactId\": 10974462005", operation, StringComparison.Ordinal)
+    Assert.Contains("\"protectedMerge\": \"1268908d2d5a38d30a764c927f3e0591e53138aa\"", operation, StringComparison.Ordinal)
     Assert.Contains("\"authorized\": false", operation, StringComparison.Ordinal)
     Assert.Contains("\"tagAfterBothFeeds\": true", operation, StringComparison.Ordinal)
 

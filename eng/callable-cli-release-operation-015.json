@@ -1,0 +1,34 @@
+{
+  "schema": "fsgg.coordination.callable-cli-release-operation/1",
+  "authority": {
+    "operation": "publish-c3-combined-cli-015",
+    "scope": "dual-feed-package-tag-and-release",
+    "source": "C3 combined Net, Governance, and Game source profile CLI release"
+  },
+  "artifact": {
+    "packageId": "FS.GG.Coordination.Cli",
+    "version": "0.1.5",
+    "sourceCommit": "1268908d2d5a38d30a764c927f3e0591e53138aa",
+    "sourceTree": "52ef5c36cd3e3eeb94d6b92e3d64df86f81c3f01",
+    "packageSha256": "3567a92825917a7d537f6c5c545d3a7947bc35edd666fc3a1898de3bf97267c9",
+    "canonicalSourceRoot": "/home/runner/work/FS.GG.Coordination/FS.GG.Coordination",
+    "preparationRunId": 36432670335,
+    "preparationArtifactId": 10974462005,
+    "preparationArchiveSha256": "50d9672f54cce339c6f919f100ccc9e63d51a34ae11ec5085df17be1b5d79ace"
+  },
+  "protectedMerge": "1268908d2d5a38d30a764c927f3e0591e53138aa",
+  "tag": "v0.1.5",
+  "workflow": ".github/workflows/callable-cli-release-publish.yml",
+  "preflightWorkflow": ".github/workflows/callable-cli-release-prepare.yml",
+  "publication": {
+    "order": ["github-packages", "nuget.org-byte-identical-push"],
+    "provenance": "github-attestation-before-effects",
+    "recovery": "observe-and-verify-existing-before-resume",
+    "servedVerification": "github-exact-archive-and-nuget-payload-excluding-repository-signature",
+    "tagAfterBothFeeds": true
+  },
+  "receiverAdoption": {
+    "authorized": false,
+    "milestone": "C3-NET-01/C3-GOVERNANCE-01/C3-GAME-01"
+  }
+}
