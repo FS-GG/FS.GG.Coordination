@@ -40,6 +40,30 @@ profile or installed sidecar refuses instead of rewriting custody. The receipt
 contains hashes and non-secret authority identities; it never reads or emits
 the credential bytes.
 
+The command defaults to installation schema `/1` for existing operators. New
+protected capture custody can opt into schema `/2` by pinning the reviewed
+executable bytes explicitly:
+
+```sh
+TelemetryHostManager install-native-collector \
+  --host-config /absolute/private/host.json \
+  --credential-reference roadmap-native-collector \
+  --executable /absolute/private/codex \
+  --executable-sha256 LOWERCASE_SHA256 \
+  --installation-version 2 \
+  --codex-home /absolute/private/codex-home \
+  --evidence-root /absolute/private/native-collector-evidence \
+  --provider openai --model gpt-6-sol --effort medium
+```
+
+Version 2 requires the executable to be owned by the Host account or root and
+to match the supplied SHA-256. The Codex home, evidence parent and evidence
+root must be private, non-symlink descendants of the Host configuration's
+private parent directory. Its sidecar adds only `ExecutableSha256` to the eight
+version 1 fields. An existing version 1 sidecar cannot be promoted in place;
+prepare prospective Host configuration and evidence paths, inspect them, and
+then activate the new custody separately.
+
 This source command does not activate the collector or authorize a model call.
 Its receipt deliberately reports source verification, snapshot origin and
 shared-cost completeness as `unknown`. Set
