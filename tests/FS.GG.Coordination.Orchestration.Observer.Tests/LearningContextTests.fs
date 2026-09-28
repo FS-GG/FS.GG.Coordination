@@ -70,6 +70,7 @@ let private request arm =
         ExpectedPlanSource = plan.Source
         ExpectedContractRevision = plan.ContractRevision
         RequiredMandatoryReferenceIds = [ "governing"; "acceptance" ]
+        RequiredAuthoritativeObligations = [ "objective"; "authority"; "acceptance" ]
         References = references
         Capacity =
             {
@@ -132,6 +133,7 @@ let ``manifest digest is canonical across caller reference and obligation orderi
                     { plan with
                         AuthoritativeObligations = List.rev plan.AuthoritativeObligations
                     }
+            RequiredAuthoritativeObligations = (request Focused).RequiredAuthoritativeObligations |> List.rev
         }
         |> compiled
 
@@ -148,6 +150,28 @@ let ``manifest digest is canonical across caller reference and obligation orderi
         |> compiled
 
     Assert.NotEqual<string>(baseline.CanonicalSha256, changedBounds.CanonicalSha256)
+
+    let changedAuthority =
+        { request Focused with
+            RequiredAuthoritativeObligations = "maintenance" :: (request Focused).RequiredAuthoritativeObligations
+            Plan =
+                Some
+                    { plan with
+                        AuthoritativeObligations = "maintenance" :: plan.AuthoritativeObligations
+                    }
+            References =
+                references
+                |> List.map (fun value ->
+                    if value.ReferenceId = "governing" then
+                        { value with
+                            Obligations = "maintenance" :: value.Obligations
+                        }
+                    else
+                        value)
+        }
+        |> compiled
+
+    Assert.NotEqual<string>(baseline.CanonicalSha256, changedAuthority.CanonicalSha256)
 
 [<Fact>]
 let ``missing stale incompatible or source-moved plans refuse`` () =
@@ -179,6 +203,46 @@ let ``missing stale incompatible or source-moved plans refuse`` () =
 
 [<Fact>]
 let ``mandatory reference and authoritative obligation coverage cannot be reduced`` () =
+    Assert.Equal(
+        Error AuthoritativeObligationSetMismatch,
+        LearningContext.compile
+            { request Focused with
+                Plan =
+                    Some
+                        { plan with
+                            AuthoritativeObligations = [ "objective"; "authority" ]
+                        }
+            }
+    )
+
+    Assert.Equal(
+        Error AuthoritativeObligationSetMismatch,
+        LearningContext.compile
+            { request Focused with
+                Plan =
+                    Some
+                        { plan with
+                            AuthoritativeObligations = "extra" :: plan.AuthoritativeObligations
+                        }
+            }
+    )
+
+    Assert.Equal(
+        Error(InvalidLearningContextInput "invalid-or-non-synthetic-shadow-request"),
+        LearningContext.compile
+            { request Focused with
+                RequiredAuthoritativeObligations = []
+            }
+    )
+
+    Assert.Equal(
+        Error(InvalidLearningContextInput "invalid-or-non-synthetic-shadow-request"),
+        LearningContext.compile
+            { request Focused with
+                RequiredAuthoritativeObligations = [ "objective"; "objective" ]
+            }
+    )
+
     Assert.Equal(
         Error(MissingMandatoryReference "acceptance"),
         LearningContext.compile

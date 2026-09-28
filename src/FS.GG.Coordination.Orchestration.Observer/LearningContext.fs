@@ -91,6 +91,7 @@ type LearningContextRequest =
         ExpectedPlanSource: LearningContextSource
         ExpectedContractRevision: string
         RequiredMandatoryReferenceIds: string list
+        RequiredAuthoritativeObligations: string list
         References: LearningContextReference list
         Capacity: LearningContextCapacity
         SyntheticShadowOnly: bool
@@ -134,6 +135,7 @@ type LearningContextRefusal =
     | StaleValidPlan
     | IncompatibleValidPlan
     | StalePlanSource
+    | AuthoritativeObligationSetMismatch
     | MissingAuthoritativeObligation of obligation: string
     | MissingMandatoryReference of referenceId: string
     | UntrustedInstructionInjection of referenceId: string
@@ -329,6 +331,8 @@ module LearningContext =
             || duplicateReferences
             || request.References |> List.exists (validReference >> not)
             || invalidObligations request.RequiredMandatoryReferenceIds
+            || List.isEmpty request.RequiredAuthoritativeObligations
+            || invalidObligations request.RequiredAuthoritativeObligations
         then
             Error(InvalidLearningContextInput "invalid-or-non-synthetic-shadow-request")
         elif not (validRelation request) then
@@ -360,118 +364,123 @@ module LearningContext =
                 Error IncompatibleValidPlan
             | Some plan when not (sameSource plan.Source request.ExpectedPlanSource) -> Error StalePlanSource
             | Some plan ->
-                let references = request.References |> List.map normalizeReference
+                let obligations = request.RequiredAuthoritativeObligations |> List.sort
+                let planObligations = plan.AuthoritativeObligations |> List.sort
 
-                let mandatory =
-                    references |> List.filter (fun reference -> reference.Class = Mandatory)
+                if planObligations <> obligations then
+                    Error AuthoritativeObligationSetMismatch
+                else
+                    let references = request.References |> List.map normalizeReference
 
-                let optional =
-                    references |> List.filter (fun reference -> reference.Class = Optional)
+                    let mandatory =
+                        references |> List.filter (fun reference -> reference.Class = Mandatory)
 
-                match
-                    request.RequiredMandatoryReferenceIds
-                    |> List.tryFind (fun required ->
-                        mandatory
-                        |> List.exists (fun reference -> reference.ReferenceId = required)
-                        |> not)
-                with
-                | Some missing -> Error(MissingMandatoryReference missing)
-                | None ->
-                    let coveredObligations = mandatory |> List.collect _.Obligations |> Set.ofList
+                    let optional =
+                        references |> List.filter (fun reference -> reference.Class = Optional)
 
                     match
-                        plan.AuthoritativeObligations
-                        |> List.tryFind (fun obligation -> not (Set.contains obligation coveredObligations))
+                        request.RequiredMandatoryReferenceIds
+                        |> List.tryFind (fun required ->
+                            mandatory
+                            |> List.exists (fun reference -> reference.ReferenceId = required)
+                            |> not)
                     with
-                    | Some missing -> Error(MissingAuthoritativeObligation missing)
+                    | Some missing -> Error(MissingMandatoryReference missing)
                     | None ->
+                        let coveredObligations = mandatory |> List.collect _.Obligations |> Set.ofList
+
                         match
-                            references
-                            |> List.tryFind (fun reference ->
-                                reference.Trust = UntrustedData && reference.ClaimsInstructionAuthority)
+                            obligations
+                            |> List.tryFind (fun obligation -> not (Set.contains obligation coveredObligations))
                         with
-                        | Some injected -> Error(UntrustedInstructionInjection injected.ReferenceId)
+                        | Some missing -> Error(MissingAuthoritativeObligation missing)
                         | None ->
-                            let selectedOptional, omittedOptional =
-                                match request.Treatment.Arm with
-                                | Current -> optional, []
-                                | Focused ->
-                                    optional |> List.filter _.SelectedForFocused,
-                                    optional |> List.filter (_.SelectedForFocused >> not)
+                            match
+                                references
+                                |> List.tryFind (fun reference ->
+                                    reference.Trust = UntrustedData && reference.ClaimsInstructionAuthority)
+                            with
+                            | Some injected -> Error(UntrustedInstructionInjection injected.ReferenceId)
+                            | None ->
+                                let selectedOptional, omittedOptional =
+                                    match request.Treatment.Arm with
+                                    | Current -> optional, []
+                                    | Focused ->
+                                        optional |> List.filter _.SelectedForFocused,
+                                        optional |> List.filter (_.SelectedForFocused >> not)
 
-                            let included = mandatory @ selectedOptional
+                                let included = mandatory @ selectedOptional
 
-                            if included.Length > request.Capacity.MaximumReferences then
-                                Error ContextCapacityConflict
-                            else
-                                match included |> List.map _.EstimatedBytes |> checkedSum with
-                                | None ->
-                                    Error(OversizedContext(Int64.MaxValue, request.Capacity.MaximumEstimatedBytes))
-                                | Some estimatedBytes when estimatedBytes > request.Capacity.MaximumEstimatedBytes ->
-                                    Error(OversizedContext(estimatedBytes, request.Capacity.MaximumEstimatedBytes))
-                                | Some estimatedBytes ->
-                                    let selectedRecipe = recipe request.Treatment.Arm
-                                    let orderedMandatory = mandatory |> List.sortBy _.ReferenceId
-                                    let orderedOptional = selectedOptional |> List.sortBy _.ReferenceId
-                                    let orderedOmitted = omittedOptional |> List.sortBy _.ReferenceId
-                                    let obligations = plan.AuthoritativeObligations |> List.sort
+                                if included.Length > request.Capacity.MaximumReferences then
+                                    Error ContextCapacityConflict
+                                else
+                                    match included |> List.map _.EstimatedBytes |> checkedSum with
+                                    | None ->
+                                        Error(OversizedContext(Int64.MaxValue, request.Capacity.MaximumEstimatedBytes))
+                                    | Some estimatedBytes when estimatedBytes > request.Capacity.MaximumEstimatedBytes ->
+                                        Error(OversizedContext(estimatedBytes, request.Capacity.MaximumEstimatedBytes))
+                                    | Some estimatedBytes ->
+                                        let selectedRecipe = recipe request.Treatment.Arm
+                                        let orderedMandatory = mandatory |> List.sortBy _.ReferenceId
+                                        let orderedOptional = selectedOptional |> List.sortBy _.ReferenceId
+                                        let orderedOmitted = omittedOptional |> List.sortBy _.ReferenceId
 
-                                    let fields =
-                                        [
-                                            ManifestVersion
-                                            request.ItemId
-                                            request.OriginalItemId
-                                            yield! relationFields request.Relation
-                                            armText request.Treatment.Arm
-                                            request.Treatment.ShadowBindingSha256.ToLowerInvariant()
-                                            plan.PlanId
-                                            plan.PlanSha256.ToLowerInvariant()
-                                            yield! sourceFields plan.Source
-                                            plan.ContractRevision
-                                            selectedRecipe.RecipeId
-                                            selectedRecipe.Model
-                                            selectedRecipe.Effort
-                                            string estimatedBytes
-                                            string request.Capacity.MaximumReferences
-                                            string request.Capacity.MaximumEstimatedBytes
-                                            string request.Capacity.MaximumConcurrentPreviews
-                                            string request.Capacity.ActivePreviews
-                                            string request.Capacity.ReservedPreviews
-                                            string obligations.Length
-                                            yield! obligations
-                                            string orderedMandatory.Length
-                                            for reference in orderedMandatory do
-                                                yield! referenceFields reference
-                                            string orderedOptional.Length
-                                            for reference in orderedOptional do
-                                                yield! referenceFields reference
-                                            string orderedOmitted.Length
-                                            for reference in orderedOmitted do
-                                                yield! referenceFields reference
-                                        ]
-
-                                    Ok
-                                        {
-                                            ItemId = request.ItemId
-                                            OriginalItemId = request.OriginalItemId
-                                            Relation = request.Relation
-                                            Arm = request.Treatment.Arm
-                                            TreatmentBindingSha256 =
+                                        let fields =
+                                            [
+                                                ManifestVersion
+                                                request.ItemId
+                                                request.OriginalItemId
+                                                yield! relationFields request.Relation
+                                                armText request.Treatment.Arm
                                                 request.Treatment.ShadowBindingSha256.ToLowerInvariant()
-                                            PlanId = plan.PlanId
-                                            PlanSha256 = plan.PlanSha256.ToLowerInvariant()
-                                            PlanSource = normalizeSource plan.Source
-                                            ContractRevision = plan.ContractRevision
-                                            Recipe = selectedRecipe
-                                            MandatoryReferences = orderedMandatory
-                                            OptionalReferences = orderedOptional
-                                            OmittedOptionalReferences = orderedOmitted
-                                            AuthoritativeObligations = obligations
-                                            EstimatedBytes = estimatedBytes
-                                            Bounds = request.Capacity
-                                            CanonicalSha256 = sha256 fields
-                                            ShadowOnly = true
-                                            CanDispatch = false
-                                            CanWrite = false
-                                            IsAssignmentFact = false
-                                        }
+                                                plan.PlanId
+                                                plan.PlanSha256.ToLowerInvariant()
+                                                yield! sourceFields plan.Source
+                                                plan.ContractRevision
+                                                selectedRecipe.RecipeId
+                                                selectedRecipe.Model
+                                                selectedRecipe.Effort
+                                                string estimatedBytes
+                                                string request.Capacity.MaximumReferences
+                                                string request.Capacity.MaximumEstimatedBytes
+                                                string request.Capacity.MaximumConcurrentPreviews
+                                                string request.Capacity.ActivePreviews
+                                                string request.Capacity.ReservedPreviews
+                                                string obligations.Length
+                                                yield! obligations
+                                                string orderedMandatory.Length
+                                                for reference in orderedMandatory do
+                                                    yield! referenceFields reference
+                                                string orderedOptional.Length
+                                                for reference in orderedOptional do
+                                                    yield! referenceFields reference
+                                                string orderedOmitted.Length
+                                                for reference in orderedOmitted do
+                                                    yield! referenceFields reference
+                                            ]
+
+                                        Ok
+                                            {
+                                                ItemId = request.ItemId
+                                                OriginalItemId = request.OriginalItemId
+                                                Relation = request.Relation
+                                                Arm = request.Treatment.Arm
+                                                TreatmentBindingSha256 =
+                                                    request.Treatment.ShadowBindingSha256.ToLowerInvariant()
+                                                PlanId = plan.PlanId
+                                                PlanSha256 = plan.PlanSha256.ToLowerInvariant()
+                                                PlanSource = normalizeSource plan.Source
+                                                ContractRevision = plan.ContractRevision
+                                                Recipe = selectedRecipe
+                                                MandatoryReferences = orderedMandatory
+                                                OptionalReferences = orderedOptional
+                                                OmittedOptionalReferences = orderedOmitted
+                                                AuthoritativeObligations = obligations
+                                                EstimatedBytes = estimatedBytes
+                                                Bounds = request.Capacity
+                                                CanonicalSha256 = sha256 fields
+                                                ShadowOnly = true
+                                                CanDispatch = false
+                                                CanWrite = false
+                                                IsAssignmentFact = false
+                                            }
