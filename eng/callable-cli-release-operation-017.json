@@ -8,15 +8,15 @@
   "artifact": {
     "packageId": "FS.GG.Coordination.Cli",
     "version": "0.1.7",
-    "sourceCommit": "PENDING_SOURCE_SHA",
-    "sourceTree": "PENDING_TREE_SHA",
-    "packageSha256": "PENDING_PACKAGE_SHA256",
+    "sourceCommit": "fdfdcfc91e65f814b42d8c9e061fec0e6221a139",
+    "sourceTree": "9a31a52256577f3b40e2bfc25463001d5a64c5d8",
+    "packageSha256": "f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c",
     "canonicalSourceRoot": "/home/runner/work/FS.GG.Coordination/FS.GG.Coordination",
-    "preparationRunId": "PENDING_PREPARATION_RUN_ID",
-    "preparationArtifactId": "PENDING_PREPARATION_ARTIFACT_ID",
-    "preparationArchiveSha256": "PENDING_PREPARATION_ARCHIVE_SHA256"
+    "preparationRunId": 36466095004,
+    "preparationArtifactId": 10989613858,
+    "preparationArchiveSha256": "a7fbe0d657ddd50369bcbe7511a28ab33e9760d616999eaa4df9fd6ec3b49d8f"
   },
-  "protectedMerge": "PENDING_PROTECTED_MERGE_SHA",
+  "protectedMerge": "fdfdcfc91e65f814b42d8c9e061fec0e6221a139",
   "tag": "v0.1.7",
   "workflow": ".github/workflows/callable-cli-release-publish.yml",
   "preflightWorkflow": ".github/workflows/callable-cli-release-prepare.yml",

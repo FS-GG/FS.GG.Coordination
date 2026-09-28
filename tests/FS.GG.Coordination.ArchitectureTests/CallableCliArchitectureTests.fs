@@ -64,17 +64,17 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
             "operation:"
             "publish-c3-coordination-cli-017"
             "PACKAGE_VERSION: 0.1.7"
-            "EXPECTED_SOURCE: PENDING_SOURCE_SHA"
-            "EXPECTED_TREE: PENDING_TREE_SHA"
-            "EXPECTED_SHA256: PENDING_PACKAGE_SHA256"
+            "EXPECTED_SOURCE: fdfdcfc91e65f814b42d8c9e061fec0e6221a139"
+            "EXPECTED_TREE: 9a31a52256577f3b40e2bfc25463001d5a64c5d8"
+            "EXPECTED_SHA256: f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c"
             "packages: write"
             "id-token: write"
             "attestations: write"
             "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-            "EXPECTED_PREPARATION_RUN_ID: PENDING_PREPARATION_RUN_ID"
-            "EXPECTED_PREPARATION_ARTIFACT_ID: PENDING_PREPARATION_ARTIFACT_ID"
-            "EXPECTED_PREPARATION_ARCHIVE_SHA256: PENDING_PREPARATION_ARCHIVE_SHA256"
+            "EXPECTED_PREPARATION_RUN_ID: 36466095004"
+            "EXPECTED_PREPARATION_ARTIFACT_ID: 10989613858"
+            "EXPECTED_PREPARATION_ARCHIVE_SHA256: a7fbe0d657ddd50369bcbe7511a28ab33e9760d616999eaa4df9fd6ec3b49d8f"
             "[[ \"$EXPECTED_SOURCE\" =~ ^[0-9a-f]{40}$ ]]"
             "[[ \"$EXPECTED_PREPARATION_ARTIFACT_ID\" =~ ^[0-9]+$ ]]"
             ".workflow_run.id == $run"
@@ -96,8 +96,8 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
 
     let operation = read "eng/callable-cli-release-operation-017.json"
     Assert.Contains("\"operation\": \"publish-c3-coordination-cli-017\"", operation, StringComparison.Ordinal)
-    Assert.Contains("\"preparationArtifactId\": \"PENDING_PREPARATION_ARTIFACT_ID\"", operation, StringComparison.Ordinal)
-    Assert.Contains("\"protectedMerge\": \"PENDING_PROTECTED_MERGE_SHA\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"preparationArtifactId\": 10989613858", operation, StringComparison.Ordinal)
+    Assert.Contains("\"protectedMerge\": \"fdfdcfc91e65f814b42d8c9e061fec0e6221a139\"", operation, StringComparison.Ordinal)
     Assert.Contains("\"version\": \"0.1.7\"", operation, StringComparison.Ordinal)
     Assert.Contains("\"authorized\": false", operation, StringComparison.Ordinal)
     Assert.Contains("\"tagAfterBothFeeds\": true", operation, StringComparison.Ordinal)

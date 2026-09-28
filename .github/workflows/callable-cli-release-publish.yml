@@ -43,13 +43,13 @@ jobs:
       PACKAGE_ID: FS.GG.Coordination.Cli
       PACKAGE_VERSION: 0.1.7
       PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.7.nupkg
-      EXPECTED_SOURCE: PENDING_SOURCE_SHA
-      EXPECTED_TREE: PENDING_TREE_SHA
-      EXPECTED_MERGE: PENDING_PROTECTED_MERGE_SHA
-      EXPECTED_SHA256: PENDING_PACKAGE_SHA256
-      EXPECTED_PREPARATION_RUN_ID: PENDING_PREPARATION_RUN_ID
-      EXPECTED_PREPARATION_ARTIFACT_ID: PENDING_PREPARATION_ARTIFACT_ID
-      EXPECTED_PREPARATION_ARCHIVE_SHA256: PENDING_PREPARATION_ARCHIVE_SHA256
+      EXPECTED_SOURCE: fdfdcfc91e65f814b42d8c9e061fec0e6221a139
+      EXPECTED_TREE: 9a31a52256577f3b40e2bfc25463001d5a64c5d8
+      EXPECTED_MERGE: fdfdcfc91e65f814b42d8c9e061fec0e6221a139
+      EXPECTED_SHA256: f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c
+      EXPECTED_PREPARATION_RUN_ID: 36466095004
+      EXPECTED_PREPARATION_ARTIFACT_ID: 10989613858
+      EXPECTED_PREPARATION_ARCHIVE_SHA256: a7fbe0d657ddd50369bcbe7511a28ab33e9760d616999eaa4df9fd6ec3b49d8f
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
       CANONICAL_SOURCE: ${{ github.workspace }}
@@ -121,7 +121,7 @@ jobs:
       - name: Retrieve the immutable reviewed preparation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: callable-cli-PENDING_SOURCE_SHA
+          name: callable-cli-fdfdcfc91e65f814b42d8c9e061fec0e6221a139
           run-id: ${{ env.EXPECTED_PREPARATION_RUN_ID }}
           repository: FS-GG/FS.GG.Coordination
           github-token: ${{ github.token }}
