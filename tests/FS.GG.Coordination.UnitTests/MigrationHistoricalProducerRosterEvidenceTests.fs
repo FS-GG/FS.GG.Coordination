@@ -62,7 +62,7 @@ let private page repository kind number commentId marker =
 let private pages () =
     [
         page "FS-GG/FS.GG.Coordination" "issue" 274 5522351065L "<!-- fsgg:done-receipt v=1 -->\nverified"
-        page "FS-GG/Net" "issue" 71 5301936886L "<!-- fsgg:done-receipt v=1 -->\nverified"
+        page "FS-GG/FS.GG.Net" "issue" 71 5301936886L "<!-- fsgg:done-receipt v=1 -->\nverified"
         page
             "FS-GG/.github"
             "pull-request"

@@ -114,7 +114,7 @@ module MigrationHistoricalProducerRosterEvidence =
     let private expectedSurvivors =
         [
             "legacy-done-receipt", "FS-GG/FS.GG.Coordination", "issue", 274, 5522351065L
-            "legacy-done-receipt", "FS-GG/Net", "issue", 71, 5301936886L
+            "legacy-done-receipt", "FS-GG/FS.GG.Net", "issue", 71, 5301936886L
             "delivery-receipt", "FS-GG/.github", "pull-request", 2214, 5178100645L
             "delivery-receipt", "FS-GG/.github", "pull-request", 2879, 5386930796L
             "delivery-receipt", "FS-GG/.github", "pull-request", 3231, 5552693865L

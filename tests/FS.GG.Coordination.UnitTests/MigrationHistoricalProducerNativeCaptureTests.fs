@@ -54,7 +54,7 @@ let private emptyBody () = Text.Encoding.UTF8.GetBytes "[]"
 let private subjects =
     [
         "FS-GG/FS.GG.Coordination", 274, 5522351065L, "<!-- fsgg:done-receipt v=1 -->"
-        "FS-GG/Net", 71, 5301936886L, "<!-- fsgg:done-receipt v=1 -->"
+        "FS-GG/FS.GG.Net", 71, 5301936886L, "<!-- fsgg:done-receipt v=1 -->"
         "FS-GG/.github", 2214, 5178100645L, "<!-- fsgg:delivery-receipt id=one head=a evidence=e -->"
         "FS-GG/.github", 2879, 5386930796L, "<!-- fsgg:delivery-receipt id=two head=b evidence=e -->"
         "FS-GG/.github", 3231, 5552693865L, "<!-- fsgg:delivery-receipt id=three head=c evidence=e -->"

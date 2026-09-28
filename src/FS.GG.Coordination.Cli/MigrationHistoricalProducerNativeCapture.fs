@@ -85,7 +85,7 @@ module MigrationHistoricalProducerNativeCapture =
     let private subjects =
         [
             "FS-GG/FS.GG.Coordination", "issue", 274
-            "FS-GG/Net", "issue", 71
+            "FS-GG/FS.GG.Net", "issue", 71
             "FS-GG/.github", "pull-request", 2214
             "FS-GG/.github", "pull-request", 2879
             "FS-GG/.github", "pull-request", 3231
