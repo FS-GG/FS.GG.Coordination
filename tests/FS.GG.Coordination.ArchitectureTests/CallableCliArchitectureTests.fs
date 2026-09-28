@@ -60,14 +60,18 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     for expected in
         [
             "operation:"
-            "publish-v2-ci-i1-cli-012"
-            "5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68"
+            "publish-c3-audio-cli-013"
+            "c505159023f0740c885696ebe24f8e066e197d9cf09cc3e64050d4210bcd0cdb"
             "packages: write"
             "id-token: write"
             "attestations: write"
             "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-            "run-id: 36028503111"
+            "EXPECTED_PREPARATION_RUN_ID: 36404053953"
+            "EXPECTED_PREPARATION_ARTIFACT_ID: 10961805724"
+            "EXPECTED_PREPARATION_ARCHIVE_SHA256: 8455201f8885d541ca795c6f44a65ba54603560b99855d3a3cf480712cbad68c"
+            ".workflow_run.id == $run"
+            ".workflow_run.head_sha == $source"
             "cmp \"$CANDIDATE_OUTPUT/$PACKAGE_FILE\" \"$READBACK_OUTPUT/reproduced/$PACKAGE_FILE\""
             "eng/repository-settings/desired.json"
             "Publish to GitHub Packages first"
@@ -83,8 +87,10 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
     Assert.True(githubPush >= 0 && publicPush > githubPush)
 
-    let operation = read "eng/callable-cli-release-operation-012.json"
-    Assert.Contains("\"operation\": \"publish-v2-ci-i1-cli-012\"", operation, StringComparison.Ordinal)
+    let operation = read "eng/callable-cli-release-operation-013.json"
+    Assert.Contains("\"operation\": \"publish-c3-audio-cli-013\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"preparationArtifactId\": 10961805724", operation, StringComparison.Ordinal)
+    Assert.Contains("\"protectedMerge\": \"eb464f5215d8b1696842eecd367027724add6923\"", operation, StringComparison.Ordinal)
     Assert.Contains("\"authorized\": false", operation, StringComparison.Ordinal)
     Assert.Contains("\"tagAfterBothFeeds\": true", operation, StringComparison.Ordinal)
 
