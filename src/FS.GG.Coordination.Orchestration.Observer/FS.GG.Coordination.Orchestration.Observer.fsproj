@@ -6,6 +6,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="LearningContext.fs" />
+    <Compile Include="LearningProposal.fs" />
     <Compile Include="Observer.fs" />
   </ItemGroup>
   <ItemGroup>
