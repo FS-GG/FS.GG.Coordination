@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
   "policyId": "v2-ci-i1-ordinary-settlement-v1",
-  "status": "source-qualified-not-installed",
+  "status": "installed",
   "repository": "FS-GG/FS.GG.Coordination",
   "repositoryId": 1346720714,
   "selectedSource": {
@@ -11,7 +11,7 @@
   },
   "sourceImplementation": {
     "repository": "FS-GG/FS.GG.Game",
-    "adaptation": "coordination-v1-ruleset-aware-disabled-receiver",
+    "adaptation": "coordination-v1-ruleset-aware-installed-receiver",
     "commit": "6e2558d811037104b0984d17e19a05dfe5a38421",
     "observerSha256": "1c6b12b06d9787da89d88fc2293a58e6e789304c1eaf64649f907b95461c86c9",
     "qualificationSha256": "3880dd6e9bf8b0919a63a7503dbe45d96123699624647826fd38eb1e7ed7bc65"
@@ -108,18 +108,103 @@
     "allowedBranches": [
       "main"
     ],
-    "installed": false
+    "installed": true,
+    "liveObservation": {
+      "observedAt": "2026-09-28T19:42:00Z",
+      "environmentPresent": true,
+      "environmentId": 22954548572,
+      "environmentNodeId": "EN_kwDOUEVTys8AAAAFWDKdXA",
+      "protectionRuleId": 67004485,
+      "protectionRuleNodeId": "GA_kwDOUEVTys4D_mhF",
+      "branchPolicyId": 61333204,
+      "branchPolicyNodeId": "MDE2OkdhdGVCcmFuY2hQb2xpY3k2MTMzMzIwNA==",
+      "customBranchPolicy": "main",
+      "customBranchPolicyCount": 1,
+      "protectedBranches": false,
+      "customBranchPolicies": true,
+      "canAdminsBypass": true,
+      "requiredReviewerCount": 0,
+      "secretCount": 3,
+      "secretNames": [
+        "V2_ORDINARY_APP_ID",
+        "V2_ORDINARY_APP_PRIVATE_KEY",
+        "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY"
+      ],
+      "disposition": "dedicated-custody-enrolled"
+    }
   },
   "packagePin": {
-    "status": "pending",
+    "status": "published-verified",
+    "version": "0.1.7",
+    "sha256": "f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c",
+    "servedPackageVerified": true,
+    "sourceCommit": "fdfdcfc91e65f814b42d8c9e061fec0e6221a139",
+    "releaseTag": "v0.1.7",
+    "publisherRunId": 36473720547,
+    "requiredCapability": "coordination-v1 selected source",
+    "tagProtectionRulesetId": 21633398,
+    "githubReleaseImmutableFlag": false,
+    "githubPackagesReadback": "successful-protected-publisher",
+    "nugetOrgReadback": "independent-anonymous-payload-and-install",
     "requiredBeforeActivation": true
   },
-  "credentialInventory": [],
+  "credentialInventory": [
+    {
+      "name": "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY",
+      "purpose": "sign canonical ordinary-v2 settlement intent",
+      "generation": "new-v2-dedicated",
+      "provisioned": true,
+      "publicIdentity": "ordinary-v2-production-6121c3f2ab38acf3; spki-sha256:6121c3f2ab38acf38a37f782eb7775da78598b9cfabc0054917d3d59fe50e3ee"
+    },
+    {
+      "name": "V2_ORDINARY_APP_ID",
+      "purpose": "identify the repository-scoped ordinary-v2 GitHub App",
+      "generation": "new-v2-dedicated",
+      "provisioned": true,
+      "publicIdentity": "app:5064713; installation:164553252"
+    },
+    {
+      "name": "V2_ORDINARY_APP_PRIVATE_KEY",
+      "purpose": "mint a short-lived repository-scoped installation token",
+      "generation": "new-v2-dedicated",
+      "provisioned": true,
+      "publicIdentity": "app:5064713; installation:164553252"
+    }
+  ],
+  "credentialEnrollmentEvidence": {
+    "status": "sealed-and-independently-read-back",
+    "bridgeRepository": "FS-GG/.github",
+    "bridgeRepositoryId": 1269292704,
+    "bridgeCommit": "4efabebc3f35624b1a40cd327658ba5fc8f533f6",
+    "bridgeWorkflow": ".github/workflows/c3-coordination-ordinary-enrollment-bridge.yml",
+    "bridgeRunId": 36471569823,
+    "bridgeRunAttempt": 1,
+    "bridgeConclusion": "success",
+    "artifactId": 10992540429,
+    "artifactDigest": "sha256:d65ab9f36af5ba6229cb630ae7042530ec451e7ed31f930dedcee87a0605949c",
+    "ciphertextPacketSha256": "6406375542a81ebd7db3af01bfa59047dcdf7f773f1cc8818975ba39aea6ad5b",
+    "ciphertextPacketVerification": "signed-packet-validated",
+    "encryptedPutCount": 3,
+    "readBackAt": "2026-09-28T19:21:46Z"
+  },
+  "activationEvidence": {
+    "observedAt": "2026-09-28T19:42:00Z",
+    "sourceMainSha": "8e8caf18711bf7bc2156bb677cb81eca45248b23",
+    "sourceRepositoryId": 1346720714,
+    "requiredCheckAppId": 15368,
+    "requiredGateChecks": [
+      "bootstrap-recovery",
+      "compiler-and-tests",
+      "dependency-and-security",
+      "deterministic-build",
+      "evidence-manifest",
+      "package-install-smoke"
+    ]
+  },
   "activationPrerequisites": [
-    "published-coordination-v1-cli",
-    "dedicated-environment-and-credentials",
-    "installed-provider-profile",
-    "protected-readback"
+    "protected v0.1.7 tag and exact published Coordination CLI archive with coordination-v1 support: verified",
+    "dedicated ordinary-v2 custody sealed and independently read back on 2026-09-28",
+    "current six-check source population and shared Authority binding read back before activation"
   ],
   "forbiddenCredentialReuse": [
     "CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
