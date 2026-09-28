@@ -66,12 +66,71 @@ module InstalledOrdinarySettlementProvider =
                 [ "Deterministic gate"; "API compatibility gate (breaking-change → SemVer major)"
                   "kit / coordination-kit"; "skill-view-check"; "materialize / receiver-validate" ] }
 
+    let private netSourceProfile =
+        { Name = "net-v1"
+          Repository = "FS-GG/FS.GG.Net"
+          RepositoryId = 1305845505L
+          RequiredSettlementChecks = Set [ "Build + test (locked restore)"; "contract-coherence / coherence" ]
+          RequiredGateChecks =
+            Set
+                [ "Build + test (locked restore)"; "kit / coordination-kit"
+                  "contract-coherence / coherence"; "materialize / receiver-validate" ] }
+
+    let private governanceSourceProfile =
+        { Name = "governance-v1"
+          Repository = "FS-GG/FS.GG.Governance"
+          RepositoryId = 1273065119L
+          RequiredSettlementChecks = Set [ "Deterministic gate (locked restore + build)"; "contract-coherence / coherence" ]
+          RequiredGateChecks =
+            Set
+                [ "Deterministic gate (locked restore + build)"
+                  "Full test suite (dotnet fsi build.fsx test)"
+                  "Full test suite — Release (dotnet fsi build.fsx test -c Release)"
+                  "Build-config drift check (shared-build-config)"
+                  "Reference gate set — pack guard (byte-identity + gated + versioned)"
+                  "contract-coherence / coherence"
+                  "kit / coordination-kit"
+                  "skill-view-check"
+                  "materialize / receiver-validate" ] }
+
+    let private gameSourceProfile =
+        { Name = "game-v1"
+          Repository = "FS-GG/FS.GG.Game"
+          RepositoryId = 1290990429L
+          RequiredSettlementChecks =
+            Set [ "Deterministic gate (locked restore + build) (ubuntu-latest)"
+                  "Full test suite (dotnet test, headless) (ubuntu-latest)" ]
+          RequiredGateChecks =
+            Set
+                [ "Surface baseline drift (readiness/surface-baselines)"
+                  "Build-config drift check (shared-build-config)"
+                  "Lock-range coherence (project refs track declared versions) / lock-ranges"
+                  "Skill-manifest drift (template/skill-manifest)"
+                  "Dangling skill refs (template/product-skills)"
+                  "Skill-refs gate tests (scripts/check-skill-refs.sh)"
+                  "Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)"
+                  "Test-harness selftest (scripts/lib/test-harness.sh)"
+                  "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)"
+                  "Markdown fsharp blocks typecheck (skills + TestSpecs)"
+                  "Scaffold drift (_scaffold.fs == published template geometry)"
+                  "kit / coordination-kit"
+                  "Deterministic gate (locked restore + build) (ubuntu-latest)"
+                  "Deterministic gate (locked restore + build) (windows-latest)"
+                  "Full test suite (dotnet test, headless) (ubuntu-latest)"
+                  "Full test suite (dotnet test, headless) (windows-latest)"
+                  "Determinism & property invariants (constraint face) (ubuntu-latest)"
+                  "Determinism & property invariants (constraint face) (windows-latest)"
+                  "materialize / receiver-validate" ] }
+
     let selectSourceProfile value =
         match value with
         | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
         | "dotgithub-v1" -> Ok dotGitHubSourceProfile
         | "audio-v1" -> Ok audioSourceProfile
         | "rendering-v1" -> Ok renderingSourceProfile
+        | "net-v1" -> Ok netSourceProfile
+        | "governance-v1" -> Ok governanceSourceProfile
+        | "game-v1" -> Ok gameSourceProfile
         | _ -> Error "unsupported-source-profile"
 
     let private apiBase = Uri "https://api.github.com/"

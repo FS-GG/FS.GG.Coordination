@@ -166,6 +166,15 @@ module OrdinaryPostMergeSettlement =
         elif repositoryId = 1269292235L
              && String.Equals(repository, "FS-GG/FS.GG.Rendering", StringComparison.OrdinalIgnoreCase) then
             Some(Set [ "Deterministic gate"; "routine-eligibility" ])
+        elif repositoryId = 1305845505L
+             && String.Equals(repository, "FS-GG/FS.GG.Net", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "Build + test (locked restore)"; "contract-coherence / coherence" ])
+        elif repositoryId = 1273065119L
+             && String.Equals(repository, "FS-GG/FS.GG.Governance", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "Deterministic gate (locked restore + build)"; "contract-coherence / coherence" ])
+        elif repositoryId = 1290990429L
+             && String.Equals(repository, "FS-GG/FS.GG.Game", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "Deterministic gate (locked restore + build) (ubuntu-latest)"; "Full test suite (dotnet test, headless) (ubuntu-latest)" ])
         else None
 
     let private requiredChecksValid repository repositoryId (checks: OrdinaryCheckFact list) =

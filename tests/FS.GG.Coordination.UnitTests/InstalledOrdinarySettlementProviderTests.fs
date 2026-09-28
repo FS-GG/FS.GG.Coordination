@@ -103,6 +103,52 @@ let private renderingFixture () =
           "kit / coordination-kit"; "skill-view-check"; "materialize / receiver-validate" ]
         (Some("rendering-v1", "FS-GG/FS.GG.Rendering", 1269292235L))
 
+let private netFixture () =
+    fixtureFor
+        [ "Build + test (locked restore)"; "contract-coherence / coherence" ]
+        [ "Build + test (locked restore)"; "kit / coordination-kit"
+          "contract-coherence / coherence"; "materialize / receiver-validate" ]
+        (Some("net-v1", "FS-GG/FS.GG.Net", 1305845505L))
+
+let private governanceFixture () =
+    fixtureFor
+        [ "Deterministic gate (locked restore + build)"; "contract-coherence / coherence" ]
+        [ "Deterministic gate (locked restore + build)"
+          "Full test suite (dotnet fsi build.fsx test)"
+          "Full test suite — Release (dotnet fsi build.fsx test -c Release)"
+          "Build-config drift check (shared-build-config)"
+          "Reference gate set — pack guard (byte-identity + gated + versioned)"
+          "contract-coherence / coherence"
+          "kit / coordination-kit"
+          "skill-view-check"
+          "materialize / receiver-validate" ]
+        (Some("governance-v1", "FS-GG/FS.GG.Governance", 1273065119L))
+
+let private gameFixture () =
+    fixtureFor
+        [ "Deterministic gate (locked restore + build) (ubuntu-latest)"
+          "Full test suite (dotnet test, headless) (ubuntu-latest)" ]
+        [ "Surface baseline drift (readiness/surface-baselines)"
+          "Build-config drift check (shared-build-config)"
+          "Lock-range coherence (project refs track declared versions) / lock-ranges"
+          "Skill-manifest drift (template/skill-manifest)"
+          "Dangling skill refs (template/product-skills)"
+          "Skill-refs gate tests (scripts/check-skill-refs.sh)"
+          "Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)"
+          "Test-harness selftest (scripts/lib/test-harness.sh)"
+          "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)"
+          "Markdown fsharp blocks typecheck (skills + TestSpecs)"
+          "Scaffold drift (_scaffold.fs == published template geometry)"
+          "kit / coordination-kit"
+          "Deterministic gate (locked restore + build) (ubuntu-latest)"
+          "Deterministic gate (locked restore + build) (windows-latest)"
+          "Full test suite (dotnet test, headless) (ubuntu-latest)"
+          "Full test suite (dotnet test, headless) (windows-latest)"
+          "Determinism & property invariants (constraint face) (ubuntu-latest)"
+          "Determinism & property invariants (constraint face) (windows-latest)"
+          "materialize / receiver-validate" ]
+        (Some("game-v1", "FS-GG/FS.GG.Game", 1290990429L))
+
 [<Fact>]
 let ``installed provider binds exact two settlement and eight gate facts`` () =
     let receipt, policy = fixture ()
@@ -115,6 +161,9 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
     let explicitLegacy = InstalledOrdinarySettlementProvider.selectSourceProfile "dotgithub-v1" |> ok
     let audio = InstalledOrdinarySettlementProvider.selectSourceProfile "audio-v1" |> ok
     let rendering = InstalledOrdinarySettlementProvider.selectSourceProfile "rendering-v1" |> ok
+    let net = InstalledOrdinarySettlementProvider.selectSourceProfile "net-v1" |> ok
+    let governance = InstalledOrdinarySettlementProvider.selectSourceProfile "governance-v1" |> ok
+    let game = InstalledOrdinarySettlementProvider.selectSourceProfile "game-v1" |> ok
     Assert.Equal("dotgithub-v1", legacy.Name)
     Assert.Equal(1269292704L, legacy.RepositoryId)
     Assert.Equal(legacy, explicitLegacy)
@@ -124,7 +173,163 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
     Assert.Equal("FS-GG/FS.GG.Rendering", rendering.Repository)
     Assert.Equal(1269292235L, rendering.RepositoryId)
     Assert.True(rendering.RequiredSettlementChecks = Set [ "Deterministic gate"; "routine-eligibility" ])
+    Assert.Equal("FS-GG/FS.GG.Net", net.Repository)
+    Assert.Equal(1305845505L, net.RepositoryId)
+    Assert.True(net.RequiredSettlementChecks = Set [ "Build + test (locked restore)"; "contract-coherence / coherence" ])
+    Assert.True(net.RequiredGateChecks = Set [ "Build + test (locked restore)"; "kit / coordination-kit"; "contract-coherence / coherence"; "materialize / receiver-validate" ])
+    Assert.Equal("FS-GG/FS.GG.Governance", governance.Repository)
+    Assert.Equal(1273065119L, governance.RepositoryId)
+    Assert.True(governance.RequiredSettlementChecks = Set [ "Deterministic gate (locked restore + build)"; "contract-coherence / coherence" ])
+    Assert.True(
+        governance.RequiredGateChecks =
+            Set [ "Deterministic gate (locked restore + build)"
+                  "Full test suite (dotnet fsi build.fsx test)"
+                  "Full test suite — Release (dotnet fsi build.fsx test -c Release)"
+                  "Build-config drift check (shared-build-config)"
+                  "Reference gate set — pack guard (byte-identity + gated + versioned)"
+                  "contract-coherence / coherence"
+                  "kit / coordination-kit"
+                  "skill-view-check"
+                  "materialize / receiver-validate" ])
+    Assert.Equal("FS-GG/FS.GG.Game", game.Repository)
+    Assert.Equal(1290990429L, game.RepositoryId)
+    Assert.True(
+        game.RequiredSettlementChecks =
+            Set [ "Deterministic gate (locked restore + build) (ubuntu-latest)"
+                  "Full test suite (dotnet test, headless) (ubuntu-latest)" ])
+    Assert.True(
+        game.RequiredGateChecks =
+            Set [ "Surface baseline drift (readiness/surface-baselines)"
+                  "Build-config drift check (shared-build-config)"
+                  "Lock-range coherence (project refs track declared versions) / lock-ranges"
+                  "Skill-manifest drift (template/skill-manifest)"
+                  "Dangling skill refs (template/product-skills)"
+                  "Skill-refs gate tests (scripts/check-skill-refs.sh)"
+                  "Skill-refs sweep tests (.github/workflows/skill-refs-sweep.yml)"
+                  "Test-harness selftest (scripts/lib/test-harness.sh)"
+                  "Shell lint (actionlint + shellcheck over every run: block, and over the repo's own scripts)"
+                  "Markdown fsharp blocks typecheck (skills + TestSpecs)"
+                  "Scaffold drift (_scaffold.fs == published template geometry)"
+                  "kit / coordination-kit"
+                  "Deterministic gate (locked restore + build) (ubuntu-latest)"
+                  "Deterministic gate (locked restore + build) (windows-latest)"
+                  "Full test suite (dotnet test, headless) (ubuntu-latest)"
+                  "Full test suite (dotnet test, headless) (windows-latest)"
+                  "Determinism & property invariants (constraint face) (ubuntu-latest)"
+                  "Determinism & property invariants (constraint face) (windows-latest)"
+                  "materialize / receiver-validate" ])
     Assert.Equal(Error "unsupported-source-profile", InstalledOrdinarySettlementProvider.selectSourceProfile "audio")
+
+[<Fact>]
+let ``net profile binds selected source and exact native evidence`` () =
+    let receipt, policy = netFixture ()
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "net-v1" |> ok
+    let result =
+        InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+            profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+            (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
+    match result with
+    | Ok(_, _, _, _, _, _, _, checks) ->
+        Assert.Equal<string list>(
+            [ "Build + test (locked restore)"; "contract-coherence / coherence" ],
+            checks |> List.map _.Identity |> List.sort)
+    | Error reason -> failwith reason
+
+    for field, value in
+        [ "sourceProfile", JsonValue.Create("rendering-v1") :> JsonNode
+          "sourceRepository", JsonValue.Create("FS-GG/FS.GG.Rendering") :> JsonNode
+          "sourceRepositoryId", JsonValue.Create(1269292235L) :> JsonNode ] do
+        let foreignReceipt, foreignPolicy = netFixture ()
+        foreignReceipt[field] <- value
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(foreignReceipt.ToJsonString())) foreignPolicy)
+
+    for checkSet in [ "requiredChecks"; "requiredGateChecks" ] do
+        let foreignReceipt, foreignPolicy = netFixture ()
+        let checks = foreignReceipt[checkSet].AsArray()
+        checks[0].AsObject()["name"] <- "routine-eligibility"
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(foreignReceipt.ToJsonString())) foreignPolicy)
+
+[<Fact>]
+let ``governance profile binds selected source and exact native evidence`` () =
+    let receipt, policy = governanceFixture ()
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "governance-v1" |> ok
+    let result =
+        InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+            profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+            (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
+    match result with
+    | Ok(_, _, _, _, _, _, _, checks) ->
+        Assert.Equal<string list>(
+            [ "Deterministic gate (locked restore + build)"; "contract-coherence / coherence" ],
+            checks |> List.map _.Identity |> List.sort)
+    | Error reason -> failwith reason
+
+    for field, value in
+        [ "sourceProfile", JsonValue.Create("rendering-v1") :> JsonNode
+          "sourceRepository", JsonValue.Create("FS-GG/FS.GG.Rendering") :> JsonNode
+          "sourceRepositoryId", JsonValue.Create(1269292235L) :> JsonNode ] do
+        let foreignReceipt, foreignPolicy = governanceFixture ()
+        foreignReceipt[field] <- value
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(foreignReceipt.ToJsonString())) foreignPolicy)
+
+    for checkSet in [ "requiredChecks"; "requiredGateChecks" ] do
+        let foreignReceipt, foreignPolicy = governanceFixture ()
+        let checks = foreignReceipt[checkSet].AsArray()
+        checks[0].AsObject()["name"] <- "routine-eligibility"
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(foreignReceipt.ToJsonString())) foreignPolicy)
+
+[<Fact>]
+let ``game profile binds selected source and exact native evidence`` () =
+    let receipt, policy = gameFixture ()
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "game-v1" |> ok
+    let result =
+        InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+            profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+            (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
+    match result with
+    | Ok(_, _, _, _, _, _, _, checks) ->
+        Assert.Equal<string list>(
+            [ "Deterministic gate (locked restore + build) (ubuntu-latest)"; "Full test suite (dotnet test, headless) (ubuntu-latest)" ],
+            checks |> List.map _.Identity |> List.sort)
+    | Error reason -> failwith reason
+
+    for field, value in
+        [ "sourceProfile", JsonValue.Create("rendering-v1") :> JsonNode
+          "sourceRepository", JsonValue.Create("FS-GG/FS.GG.Rendering") :> JsonNode
+          "sourceRepositoryId", JsonValue.Create(1269292235L) :> JsonNode ] do
+        let foreignReceipt, foreignPolicy = gameFixture ()
+        foreignReceipt[field] <- value
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(foreignReceipt.ToJsonString())) foreignPolicy)
+
+    for checkSet in [ "requiredChecks"; "requiredGateChecks" ] do
+        let foreignReceipt, foreignPolicy = gameFixture ()
+        let checks = foreignReceipt[checkSet].AsArray()
+        checks[0].AsObject()["name"] <- "routine-eligibility"
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(foreignReceipt.ToJsonString())) foreignPolicy)
 
 [<Fact>]
 let ``rendering profile binds selected source and exact native evidence`` () =
