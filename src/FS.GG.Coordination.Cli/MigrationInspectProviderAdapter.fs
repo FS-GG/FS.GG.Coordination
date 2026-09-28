@@ -174,6 +174,203 @@ module MigrationInspectProviderAdapter =
     let private subject identity revision payload =
         { Identity=identity; Revision=revision; PayloadSha256=sha payload }
 
+    let private settingValueText = function
+        | SettingValue.Boolean value -> if value then "b:1" else "b:0"
+        | SettingValue.Integer value -> $"i:{value}"
+        | SettingValue.Text value -> "t:" + Convert.ToBase64String(Encoding.UTF8.GetBytes value)
+        | SettingValue.TextList values ->
+            values
+            |> List.sort
+            |> List.map (Encoding.UTF8.GetBytes >> Convert.ToBase64String)
+            |> String.concat ","
+            |> (+) "l:"
+
+    let private settingPayload (setting: RepositorySetting) =
+        String.concat "|"
+            [ RepositorySettingsAdapter.surfaceId setting.Surface
+              Convert.ToBase64String(Encoding.UTF8.GetBytes setting.Subject)
+              Convert.ToBase64String(Encoding.UTF8.GetBytes setting.Name)
+              settingValueText setting.Value ]
+
+    let internal settingsFailureText = function
+        | MigrationRepositorySettingsReadFailure.InvalidIdentity -> "invalid-identity"
+        | MigrationRepositorySettingsReadFailure.InvalidRevision -> "invalid-revision"
+        | MigrationRepositorySettingsReadFailure.ProviderRefused(surface, refusal) ->
+            let kind, reason =
+                match refusal with
+                | MigrationRepositorySettingsSurfaceRefusal.Unsupported reason -> "unsupported", reason
+                | MigrationRepositorySettingsSurfaceRefusal.Conditional reason -> "conditional", reason
+                | MigrationRepositorySettingsSurfaceRefusal.Partial reason -> "partial", reason
+                | MigrationRepositorySettingsSurfaceRefusal.Unauthorized reason -> "unauthorized", reason
+                | MigrationRepositorySettingsSurfaceRefusal.Unavailable reason -> "unavailable", reason
+                | MigrationRepositorySettingsSurfaceRefusal.Unreadable reason -> "unreadable", reason
+            $"provider-refused:{RepositorySettingsAdapter.surfaceId surface}:{kind}:{reason}"
+        | MigrationRepositorySettingsReadFailure.IdentityDrift surface ->
+            $"identity-drift:{RepositorySettingsAdapter.surfaceId surface}"
+        | MigrationRepositorySettingsReadFailure.RevisionDrift surface ->
+            $"revision-drift:{RepositorySettingsAdapter.surfaceId surface}"
+        | MigrationRepositorySettingsReadFailure.SurfaceDrift(expected, actual) ->
+            $"surface-drift:{RepositorySettingsAdapter.surfaceId expected}:{RepositorySettingsAdapter.surfaceId actual}"
+        | MigrationRepositorySettingsReadFailure.PartialSurface(surface, reason) ->
+            $"partial-surface:{RepositorySettingsAdapter.surfaceId surface}:{reason}"
+        | MigrationRepositorySettingsReadFailure.EvidenceInvalid(surface, reason) ->
+            $"evidence-invalid:{RepositorySettingsAdapter.surfaceId surface}:{reason}"
+        | MigrationRepositorySettingsReadFailure.SnapshotDrift surface ->
+            $"snapshot-drift:{RepositorySettingsAdapter.surfaceId surface}"
+        | MigrationRepositorySettingsReadFailure.CaptureFingerprintDrift -> "capture-fingerprint-drift"
+        | MigrationRepositorySettingsReadFailure.ObservationRefused failure ->
+            $"observation-refused:{failure}"
+
+    let bindRepositorySettingsCapture
+        (options: MigrationInspectProviderOptions)
+        (passOrdinal: int)
+        (captured: MigrationRepositorySettingsCapture) =
+        if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
+        elif not (repositoryBinding options)
+             || options.Cohort.Repositories.Length <> 1
+             || captured.RepositoryIdentity.DatabaseId <> options.Repository.ExpectedRepositoryId
+             || captured.RepositoryIdentity.NodeId <> options.Cohort.Repositories.Head.NodeId
+             || $"{captured.RepositoryIdentity.Owner}/{captured.RepositoryIdentity.Name}"
+                <> options.Cohort.Repositories.Head.FullName then
+            Error "repository-settings-cohort"
+        else
+            MigrationRepositorySettingsRead.validateCapture captured
+            |> Result.mapError (settingsFailureText >> (+) "repository-settings-capture:")
+            |> Result.bind (fun valid ->
+                MigrationRepositorySettingsRead.composeComplete valid
+                |> Result.mapError (settingsFailureText >> (+) "repository-settings-compose:")
+                |> Result.bind (fun observation ->
+                    let reads = if passOrdinal = 1 then valid.First else valid.Second
+                    let retained = ResizeArray<MigrationRepositorySettingsPageEvidence>()
+                    let byUri = System.Collections.Generic.Dictionary<string, MigrationRepositorySettingsPageEvidence>()
+                    let mutable conflict = None
+                    for surface in RepositorySettingsAdapter.surfaces do
+                        for page in reads[surface].Pages do
+                            match byUri.TryGetValue page.SettingsRequestedUri with
+                            | false, _ ->
+                                byUri.Add(page.SettingsRequestedUri, page)
+                                retained.Add page
+                            | true, existing when
+                                existing.SettingsPayloadJson = page.SettingsPayloadJson
+                                && existing.SettingsPayloadSha256 = page.SettingsPayloadSha256
+                                && existing.SettingsNextUri = page.SettingsNextUri -> ()
+                            | true, _ -> conflict <- Some page.SettingsRequestedUri
+                    match conflict with
+                    | Some _ -> Error "repository-settings-cross-surface-page-drift"
+                    | None when retained.Count = 0 -> Error "repository-settings-missing-pages"
+                    | None ->
+                        let subjects =
+                            RepositorySettingsAdapter.surfaces
+                            |> List.collect (fun surface -> reads[surface].Settings)
+                            |> List.map (fun setting ->
+                                let payload = settingPayload setting
+                                let identity =
+                                    $"repository:{valid.RepositoryIdentity.DatabaseId}:settings:{RepositorySettingsAdapter.surfaceId setting.Surface}:{Uri.EscapeDataString setting.Subject}:{Uri.EscapeDataString setting.Name}"
+                                subject identity valid.RepositoryRevision payload)
+                            |> List.sortBy _.Identity
+                        let pages =
+                            retained
+                            |> Seq.toList
+                            |> List.mapi (fun index page ->
+                                let next =
+                                    if index + 1 < retained.Count then
+                                        Some(sha retained.[index + 1].SettingsRequestedUri)
+                                    else None
+                                { RequestedUri=page.SettingsRequestedUri
+                                  RequestIdentitySha256=sha page.SettingsRequestedUri
+                                  RawBody=page.SettingsPayloadJson
+                                  PayloadSha256=page.SettingsPayloadSha256
+                                  NextRequestIdentitySha256=next
+                                  Subjects=if index = 0 then subjects else [] })
+                        Ok
+                            { CohortSha256=GitHubMigrationInspect.cohortSha256 options.Cohort
+                              ScopeVerified=true
+                              SubjectsParsedFromRaw=true
+                              Read=
+                                { Authority="repository-settings"
+                                  ObservedAt=DateTimeOffset.UtcNow
+                                  PageCount=pages.Length
+                                  ItemCount=subjects.Length
+                                  Terminal=true
+                                  NextCursor=None
+                                  HighWaterMark=digestParts [ valid.CaptureFingerprint; observation.Digest ]
+                                  Subjects=subjects }
+                              Pages=pages }))
+
+    let rec private requireUniqueSettingsIdentityMembers (value: JsonElement) =
+        match value.ValueKind with
+        | JsonValueKind.Object ->
+            let properties = value.EnumerateObject() |> Seq.toList
+            let names = properties |> List.map _.Name
+            if names.Length <> (names |> Set.ofList |> Set.count) then
+                failwith "duplicate-json-member"
+            properties
+            |> List.iter (fun property -> requireUniqueSettingsIdentityMembers property.Value)
+        | JsonValueKind.Array ->
+            value.EnumerateArray()
+            |> Seq.iter requireUniqueSettingsIdentityMembers
+        | _ -> ()
+
+    let internal readRepositorySettingsIdentity
+        (options: MigrationInspectProviderOptions)
+        (transport: IMigrationGitHubReadTransport) =
+        let uri =
+            Uri(options.Repository.ApiBase,
+                $"repos/{Uri.EscapeDataString options.Repository.Owner}/{Uri.EscapeDataString options.Repository.Repository}")
+        let request =
+            Rest
+                { Method=Get; Uri=uri
+                  Headers=
+                    Map.ofList
+                        [ "Accept", "application/vnd.github+json"
+                          "Authorization", $"Bearer {options.Repository.Token}"
+                          "X-GitHub-Api-Version", ApiVersion.value ApiVersion.required
+                          "User-Agent", options.Repository.UserAgent ]
+                  Body=None; ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+        match transport.Send request with
+        | NetworkFailure -> Error "repository-settings-identity:unavailable:transport-unavailable"
+        | TimedOut -> Error "repository-settings-identity:unavailable:timeout"
+        | Response response when response.StatusCode = 401 || response.StatusCode = 403 ->
+            Error $"repository-settings-identity:unauthorized:http:{response.StatusCode}"
+        | Response response when response.StatusCode = 404 ->
+            Error "repository-settings-identity:unavailable:http:404"
+        | Response response when response.StatusCode <> 200 ->
+            Error $"repository-settings-identity:unreadable:http:{response.StatusCode}"
+        | Response response ->
+            try
+                use document = JsonDocument.Parse response.Body
+                let root = document.RootElement
+                requireUniqueSettingsIdentityMembers root
+                let databaseId = root.GetProperty("id").GetInt64()
+                let nodeId = root.GetProperty("node_id").GetString()
+                let name = root.GetProperty("name").GetString()
+                let fullName = root.GetProperty("full_name").GetString()
+                let owner = root.GetProperty("owner").GetProperty("login").GetString()
+                let defaultBranch = root.GetProperty("default_branch").GetString()
+                let revision = root.GetProperty("updated_at").GetString()
+                let sourceRepositoryNodeId =
+                    if root.GetProperty("fork").GetBoolean() then
+                        Some(root.GetProperty("parent").GetProperty("node_id").GetString())
+                    else None
+                let identity =
+                    { NodeId=nodeId; DatabaseId=databaseId; Owner=owner; Name=name
+                      DefaultBranch=defaultBranch; SourceRepositoryNodeId=sourceRepositoryNodeId }
+                let expectedFullName = $"{options.Repository.Owner}/{options.Repository.Repository}"
+                let cohortRepository =
+                    options.Cohort.Repositories
+                    |> List.tryFind (fun repository -> repository.Id = options.Repository.ExpectedRepositoryId)
+                if databaseId <> options.Repository.ExpectedRepositoryId
+                   || owner <> options.Repository.Owner || name <> options.Repository.Repository
+                   || fullName <> expectedFullName
+                   || cohortRepository |> Option.exists (fun repository ->
+                        repository.NodeId <> nodeId || repository.FullName <> fullName)
+                   || cohortRepository.IsNone
+                   || [ nodeId; owner; name; defaultBranch; revision ]
+                      |> List.exists String.IsNullOrWhiteSpace then
+                    Error "repository-settings-identity:identity-drift"
+                else Ok(identity, revision)
+            with _ -> Error "repository-settings-identity:unreadable:malformed-response"
+
     let private issuePageScope (options: MigrationInspectProviderOptions) index (uri: Uri) =
         let start =
             Uri(options.Repository.ApiBase,
@@ -1989,6 +2186,7 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
     let fieldProofs = System.Collections.Generic.Dictionary<int * string, string>()
     let issueProofs = System.Collections.Generic.Dictionary<int * string, string>()
     let cohortDigest = GitHubMigrationInspect.cohortSha256 options.Cohort
+    let settingsProofs = ref None
     let fieldFingerprint (proof: GitHubMigrationInspectAuthority) =
         proof.Pages
         |> List.collect (fun page ->
@@ -2002,6 +2200,31 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
             if passOrdinal <> 1 && passOrdinal <> 2 then Error "invalid-pass"
             elif authority = "review-delivery-release-records" then
                 MigrationInspectProviderAdapter.readReviewDeliveryRecords options passOrdinal transport
+            elif authority = "repository-settings" then
+                lock settingsProofs (fun () ->
+                    let result =
+                        match settingsProofs.Value with
+                        | Some result -> result
+                        | None ->
+                            let captured =
+                                MigrationInspectProviderAdapter.readRepositorySettingsIdentity options transport
+                                |> Result.bind (fun (identity, revision) ->
+                                    let provider =
+                                        MigrationRepositorySettingsGitHubProvider(options.Repository, transport)
+                                        :> IMigrationRepositorySettingsSurfaceProvider
+                                    MigrationRepositorySettingsRead.captureTwoPass identity revision provider
+                                    |> Result.mapError (
+                                        MigrationInspectProviderAdapter.settingsFailureText
+                                        >> (+) "repository-settings-read:"))
+                                |> Result.bind (fun capture ->
+                                    MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 1 capture
+                                    |> Result.bind (fun first ->
+                                        MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 2 capture
+                                        |> Result.map (fun second -> first, second)))
+                            settingsProofs.Value <- Some captured
+                            captured
+                    result |> Result.map (fun (first, second) ->
+                        if passOrdinal = 1 then first else second))
             elif authority = "issues-open-and-relevant-closed" then
                 lock issueProofs (fun () -> issueProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
