@@ -474,7 +474,7 @@ module ChoreoTrace =
         if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then
             failwith "source path differs"
 
-        if text source "commit" <> "e1ff2a32649a180121c756f762d174e9c74f6620" then
+        if text source "commit" <> "b7423fa5a6014fe938b247e3b8ece2cefa19b4ef" then
             failwith "source commit differs"
 
         if sha256File (protocolPath ()) <> sourceSha then

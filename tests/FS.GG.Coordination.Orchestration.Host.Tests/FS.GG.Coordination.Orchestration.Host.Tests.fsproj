@@ -4,6 +4,8 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ChoreoTrace.fs" />
     <Compile Include="ChoreoTraceTests.fs" />
+    <Compile Include="LearningTrace.fs" />
+    <Compile Include="LearningTraceTests.fs" />
     <Compile Include="HostedWriterQuintReplayTests.fs" />
     <Compile Include="HostedWriterRuntimeTests.fs" />
     <Compile Include="RunnerWireTests.fs" />
@@ -27,6 +29,9 @@
              CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures\Choreo\**\*"
              Link="Fixtures\Choreo\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures\Learning\**\*"
+             Link="Fixtures\Learning\%(RecursiveDir)%(Filename)%(Extension)"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>
