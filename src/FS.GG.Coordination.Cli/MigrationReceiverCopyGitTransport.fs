@@ -14,7 +14,18 @@ type MigrationReceiverCopyRefUpdate =
 type MigrationReceiverCopyGitReadback =
     { TargetRepository: string
       Refs: Map<string, string>
+      Objects: MigrationReceiverCopyTargetObject list
       UnrelatedRefsFingerprint: string }
+
+and MigrationReceiverCopyTargetObject =
+    { RefName: string
+      CommitOid: string
+      TreeOid: string
+      ParentOids: string list
+      AuthorIdentity: string
+      CommitterIdentity: string
+      SignatureStatus: string
+      RequestIdentitySha256: string }
 
 type IMigrationReceiverCopyGitTransport =
     abstract SupportsAtomic: bool
@@ -90,11 +101,21 @@ module MigrationReceiverCopyGitTransport =
             let expected = manifest.DerivedRefs |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
             require (refs |> Map.filter (fun name _ -> name.StartsWith($"refs/heads/gs2-09-7/{manifest.RunIdentity.RunNonce}/receivers/", StringComparison.Ordinal)) = expected) "receiver-copy-git-verification-refs"
             let blobs = ResizeArray<string>()
+            let objects = ResizeArray<MigrationReceiverCopyTargetObject>()
             for row in manifest.DerivedRefs do
                 let parents = git root [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ] |> function Ok value -> value | Error error -> failwith error
                 require (parents = row.DerivedCommit) "receiver-copy-git-verification-parentless"
                 let tree = git root [ "rev-parse"; $"{row.DerivedCommit}^{{tree}}" ] |> function Ok value -> value | Error error -> failwith error
                 require (tree = row.DerivedTree) "receiver-copy-git-verification-tree"
+                let identity =
+                    git root [ "show"; "-s"; "--format=%an <%ae>%x00%cn <%ce>%x00%G?"; row.DerivedCommit ]
+                    |> function Ok value -> value.Split('\000') | Error error -> failwith error
+                require (identity.Length = 3 && identity[2] = "N") "receiver-copy-git-verification-signature"
+                objects.Add
+                    { RefName=row.DerivedRef; CommitOid=row.DerivedCommit; TreeOid=tree; ParentOids=[]
+                      AuthorIdentity=identity[0]; CommitterIdentity=identity[1]
+                      SignatureStatus="unsigned-derived-copy"
+                      RequestIdentitySha256=fingerprint [ "git-fetch"; fixedTarget; row.DerivedRef; row.DerivedCommit ] }
                 let listing = git root [ "ls-tree"; "-r"; row.DerivedCommit ] |> function Ok value -> value | Error error -> failwith error
                 let rows = listing.Split('\n', StringSplitOptions.RemoveEmptyEntries)
                 require (rows.Length = row.BlobCount) "receiver-copy-git-verification-blob-count"
@@ -130,7 +151,9 @@ module MigrationReceiverCopyGitTransport =
                 require (manifest.BlobSha256BySha1 |> Map.tryFind objectId = Some(sha256 bytes)) "receiver-copy-git-verification-object-sha256"
             child.StandardInput.Close()
             require (child.WaitForExit(30000) && child.ExitCode = 0) "receiver-copy-git-verification-cat-file-exit"
-            Ok { TargetRepository = fixedTarget; Refs = expected; UnrelatedRefsFingerprint = "" }
+            Ok { TargetRepository = fixedTarget; Refs = expected
+                 Objects=objects |> Seq.sortBy _.RefName |> List.ofSeq
+                 UnrelatedRefsFingerprint = "" }
         with ex -> Error ex.Message
 
     type private LocalBare(path: string, supportsAtomic: bool) =
@@ -143,7 +166,7 @@ module MigrationReceiverCopyGitTransport =
                     readAll path |> Result.map (fun refs ->
                         let selected = refs |> Map.filter (fun name _ -> name.StartsWith(refPrefix, StringComparison.Ordinal))
                         let unrelated = refs |> Map.filter (fun name _ -> not (name.StartsWith(refPrefix, StringComparison.Ordinal)))
-                        { TargetRepository = fixedTarget; Refs = selected
+                        { TargetRepository = fixedTarget; Refs = selected; Objects=[]
                           UnrelatedRefsFingerprint = fingerprint [ for KeyValue(name, commit) in unrelated do yield name; yield commit ] })
                 with ex -> Error ex.Message
             member _.VerifyFresh(targetRepository, verificationRoot, manifest) =

@@ -27,6 +27,7 @@ let private repository id nodeId fullName =
 let private page total repositories =
     $"""{{"total_count":{total},"repositories":[{String.concat "," repositories}]}}"""
 let private permissions = "{\"contents\":\"read\",\"metadata\":\"read\"}"
+let private broadPermissions = "{\"contents\":\"write\",\"metadata\":\"read\"}"
 let private repositories = [ repository 1353050537L "R_kgDOUKXpqQ" "FS-GG/FS.GG.GitHub.Substrate.Sandbox" ]
 let private declarations =
     [ { DeclaredRepositoryId=1353050537L; DeclaredRepositoryNodeId="R_kgDOUKXpqQ"
@@ -35,12 +36,14 @@ let private options =
     { ApiBase=Uri "https://api.github.test/"; AppId=8001L; AppNodeId="APP_8001"
       AppSlug="receiver-reader"; InstallationId=7001L; AccountLogin="FS-GG"
       AccountId=9L; AccountNodeId="ORG_9"
-      RequiredPermissions=Map [ "contents", "read"; "metadata", "read" ]
+      ExpectedAppPermissions=Map [ "contents", "write"; "metadata", "read" ]
+      ExpectedInstallationPermissions=Map [ "contents", "write"; "metadata", "read" ]
+      RequiredTokenPermissions=Map [ "contents", "read"; "metadata", "read" ]
       SelectedRepositories=declarations; AppToken="app-jwt"; InstallationToken="installation-token"
       UserAgent="receiver-installation-test" }
 let private cycle appBody installationBody repositoryBody =
     [ ok appBody; ok installationBody; ok repositoryBody ]
-let private stable = cycle (app permissions) (installation "selected" permissions) (page 1 repositories)
+let private stable = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" permissions) ]
 let private expectUnavailable (fragment: string) result =
     match result with
     | Error reason ->
@@ -60,6 +63,9 @@ let ``stable selected App installation and exact sandbox repository scope compos
         Assert.Equal(capture.ComposerRosterCapture.First, capture.ComposerRosterCapture.Second)
         Assert.Equal(64, capture.CaptureFingerprint.Length)
         Assert.Equal(options.InstallationId, capture.ComposerRosterOptions.InstallationId)
+        Assert.True(options.ExpectedInstallationPermissions = capture.InstallationPermissions)
+        Assert.True(options.RequiredTokenPermissions = capture.TokenPermissions)
+        Assert.Equal("https://api.github.test/installation", capture.TokenFirst.RosterRequestedUri)
         Assert.Empty(capture.ComposerRosterOptions.AppToken)
         Assert.Empty(capture.ComposerRosterOptions.InstallationToken)
         let requests =
@@ -69,12 +75,14 @@ let ``stable selected App installation and exact sandbox repository scope compos
             [ "https://api.github.test/app"
               "https://api.github.test/app/installations/7001"
               "https://api.github.test/installation/repositories?per_page=100&page=1"
+              "https://api.github.test/installation"
               "https://api.github.test/app"
               "https://api.github.test/app/installations/7001"
-              "https://api.github.test/installation/repositories?per_page=100&page=1" ],
+              "https://api.github.test/installation/repositories?per_page=100&page=1"
+              "https://api.github.test/installation" ],
             requests |> List.map (fun request -> request.Uri.AbsoluteUri))
         for index, request in requests |> List.indexed do
-            let expectedToken = if index % 3 = 2 then "installation-token" else "app-jwt"
+            let expectedToken = if index % 4 >= 2 then "installation-token" else "app-jwt"
             Assert.Equal(Some $"Bearer {expectedToken}", Map.tryFind "Authorization" request.Headers)
             Assert.Equal(Get, request.Method)
 
@@ -82,29 +90,37 @@ let ``stable selected App installation and exact sandbox repository scope compos
 let ``inaccessible App and incomplete repository census refuse explicitly`` () =
     expectUnavailable "app-inaccessible:http-403"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport [ response 403 Map.empty "forbidden" ]))
-    let partial = cycle (app permissions) (installation "selected" permissions) (page 1 [])
+    let partial = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 [])
     expectUnavailable "receiver-roster-pagination-incomplete"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport partial))
 
 [<Fact>]
 let ``wrong App installation and unknown permission settings refuse`` () =
-    let wrongApp = (app permissions).Replace("8001", "8002")
+    let wrongApp = (app broadPermissions).Replace("8001", "8002")
     expectUnavailable "app-identity-drift"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport [ ok wrongApp ]))
     let extra = "{\"contents\":\"read\",\"issues\":\"read\",\"metadata\":\"read\"}"
     expectUnavailable "app-permission-settings-unknown"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport [ ok (app extra) ]))
-    let mismatchedInstallation = cycle (app permissions) (installation "selected" extra) (page 1 repositories)
-    expectUnavailable "installation-permission-settings-unknown"
+    let mismatchedInstallation = cycle (app broadPermissions) (installation "selected" extra) (page 1 repositories)
+    expectUnavailable "installation-permission"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport mismatchedInstallation))
+    let broadToken = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" broadPermissions) ]
+    expectUnavailable "installation-permission-settings-unknown"
+        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport broadToken))
+    let impossible = { options with ExpectedInstallationPermissions=options.RequiredTokenPermissions
+                                    RequiredTokenPermissions=Map [ "contents", "write"; "metadata", "read" ] }
+    let transport = FakeTransport stable
+    expectUnavailable "invalid-options" (MigrationReceiverInstallationRead.captureForComposer impossible transport)
+    Assert.Empty(transport.Calls)
 
 [<Fact>]
 let ``all repository selection and unselected repository grants refuse`` () =
-    let all = cycle (app permissions) (installation "all" permissions) (page 1 repositories)
+    let all = cycle (app broadPermissions) (installation "all" broadPermissions) (page 1 repositories)
     expectUnavailable "receiver-roster-installation-not-selected"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport all))
     let extraRepository = repository 108L "REPO_108" "FS-GG/copy-108"
-    let extra = cycle (app permissions) (installation "selected" permissions) (page 2 (repositories @ [ extraRepository ]))
+    let extra = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 2 (repositories @ [ extraRepository ]))
     expectUnavailable "unselected-repository-grant"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport extra))
 
@@ -114,15 +130,15 @@ let ``wrong selected repository and changed membership between passes refuse`` (
     expectUnavailable "invalid-options"
         (MigrationReceiverInstallationRead.captureForComposer wrong (FakeTransport stable))
     let changedRepositories = [ repository 201L "REPO_201" "FS-GG/copy-201" ]
-    let changed = cycle (app permissions) (installation "selected" permissions) (page 1 changedRepositories)
+    let changed = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 changedRepositories)
     expectUnavailable "unselected-repository-grant"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport(stable @ changed)))
 
 [<Fact>]
 let ``raw App drift and pagination escape refuse`` () =
-    let originalApp = app permissions
+    let originalApp = app broadPermissions
     let changedApp = originalApp.Insert(originalApp.Length - 1, ",\"name\":\"changed\"")
-    let changed = cycle changedApp (installation "selected" permissions) (page 1 repositories)
+    let changed = cycle changedApp (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" permissions) ]
     expectUnavailable "two-pass-drift"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport(stable @ changed)))
     let escape =
@@ -130,13 +146,13 @@ let ``raw App drift and pagination escape refuse`` () =
             (page 2 repositories)
     expectUnavailable "receiver-roster-pagination-continuation"
         (MigrationReceiverInstallationRead.captureForComposer options
-            (FakeTransport [ ok (app permissions); ok (installation "selected" permissions); escape ]))
+            (FakeTransport [ ok (app broadPermissions); ok (installation "selected" broadPermissions); escape ]))
 
 [<Fact>]
 let ``invalid or non-sandbox local scope refuses before provider access`` () =
     for invalid in
         [ { options with AppToken="" }
-          { options with RequiredPermissions=Map [ "metadata", "read" ] }
+          { options with RequiredTokenPermissions=Map [ "metadata", "read" ] }
           { options with SelectedRepositories=declarations.Tail } ] do
         let transport = FakeTransport stable
         expectUnavailable "invalid-options"

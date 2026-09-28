@@ -376,7 +376,7 @@ module MigrationReceiverCopyTransfer =
                         require (sha256 bytes = digest) "receiver-copy-transfer-object-sha256"
                         require (blobSha1 bytes = entry.EntrySha) "receiver-copy-transfer-object-sha1"
                         yield entry.EntryPath, entry.EntryMode, entry.EntryKind, bytes ]
-            yield mapping.ReceiverCopyId, mapping.ReceiverCopyRepository, mapping.ReceiverCopySourceRevision,
+            yield mapping.ReceiverCopyId, mapping.ReceiverSourceRepository, mapping.ReceiverCopySourceRevision,
                   mapping.ReceiverCopySourceTree, mapping.ReceiverCopyPlannedRef, entries ]
 
     let prepare acceptedEvidence runIdentity verifiedCopyPlan batches artifacts verifiedCoverage objectStoreRoot =

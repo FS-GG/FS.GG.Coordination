@@ -20,6 +20,7 @@ type MigrationReceiverCopyExecutionReceipt =
       Applied: bool
       DispatchCount: int
       Refs: Map<string, string>
+      TargetObjects: MigrationReceiverCopyTargetObject list
       Fingerprint: string }
 
 [<RequireQualifiedAccess>]

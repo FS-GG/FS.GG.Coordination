@@ -13,6 +13,7 @@ type MigrationReceiverCopyAcceptedEvidence =
 
 type MigrationReceiverCopyMapping =
     { ReceiverCopyId: string
+      ReceiverSourceRepository: string
       ReceiverCopyRepository: string
       ReceiverCopySourceRevision: string
       ReceiverCopySourceTree: string

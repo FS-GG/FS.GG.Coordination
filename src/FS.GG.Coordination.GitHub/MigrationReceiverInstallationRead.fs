@@ -14,7 +14,9 @@ type MigrationReceiverInstallationReadOptions =
       AccountLogin: string
       AccountId: int64
       AccountNodeId: string
-      RequiredPermissions: Map<string, string>
+      ExpectedAppPermissions: Map<string, string>
+      ExpectedInstallationPermissions: Map<string, string>
+      RequiredTokenPermissions: Map<string, string>
       SelectedRepositories: MigrationReceiverRosterDeclaredRepository list
       AppToken: string
       InstallationToken: string
@@ -33,6 +35,10 @@ type MigrationReceiverInstallationCapture =
     { App: MigrationReceiverProviderApp
       AppFirst: MigrationReceiverRosterRawPage
       AppSecond: MigrationReceiverRosterRawPage
+      InstallationPermissions: Map<string, string>
+      TokenPermissions: Map<string, string>
+      TokenFirst: MigrationReceiverRosterRawPage
+      TokenSecond: MigrationReceiverRosterRawPage
       ComposerRosterOptions: MigrationReceiverRosterReadOptions
       ComposerRosterCapture: MigrationReceiverRosterCapture
       CaptureFingerprint: string }
@@ -106,27 +112,35 @@ module MigrationReceiverInstallationRead =
                         if id <> options.AppId || nodeId <> options.AppNodeId
                            || not (String.Equals(slug, options.AppSlug, StringComparison.OrdinalIgnoreCase)) then
                             unavailable "app-identity-drift"
-                        elif permissions <> options.RequiredPermissions then unavailable "app-permission-settings-unknown"
+                        elif permissions <> options.ExpectedAppPermissions then unavailable "app-permission-settings-unknown"
                         else Ok app
                     | _ -> unavailable "app-owner-shape"
                 | _ -> unavailable "app-shape"
         with :? JsonException -> unavailable "app-json"
 
-    let private parseInstallationBinding (options: MigrationReceiverInstallationReadOptions) (body: string) =
+    let private parseInstallationBinding (options: MigrationReceiverInstallationReadOptions) expectedPermissions (body: string) =
         try
             use document = JsonDocument.Parse body
             let root = document.RootElement
             if not (uniqueMembers root) then unavailable "installation-shape"
             else
-                match int64 "app_id" root, text "app_slug" root, permissionMap "permissions" root,
+                match int64 "id" root, int64 "app_id" root, text "app_slug" root,
+                      property "account" root, permissionMap "permissions" root,
                       text "repository_selection" root with
-                | Ok appId, Ok slug, Ok permissions, Ok selection ->
-                    if appId <> options.AppId
-                       || not (String.Equals(slug, options.AppSlug, StringComparison.OrdinalIgnoreCase)) then
-                        unavailable "installation-app-drift"
-                    elif selection <> "selected" then unavailable "installation-not-selected"
-                    elif permissions <> options.RequiredPermissions then unavailable "installation-permission-settings-unknown"
-                    else Ok()
+                | Ok installationId, Ok appId, Ok slug, Ok account, Ok permissions, Ok selection when uniqueMembers account ->
+                    match text "login" account, int64 "id" account, text "node_id" account with
+                    | Ok login, Ok accountId, Ok accountNodeId when
+                        installationId = options.InstallationId
+                        && login = options.AccountLogin
+                        && accountId = options.AccountId
+                        && accountNodeId = options.AccountNodeId ->
+                        if appId <> options.AppId
+                           || not (String.Equals(slug, options.AppSlug, StringComparison.OrdinalIgnoreCase)) then
+                            unavailable "installation-app-drift"
+                        elif selection <> "selected" then unavailable "installation-not-selected"
+                        elif permissions <> expectedPermissions then unavailable "installation-permission-settings-unknown"
+                        else Ok permissions
+                    | _ -> unavailable "installation-account-drift"
                 | _ -> unavailable "installation-settings-unknown"
         with :? JsonException -> unavailable "installation-json"
 
@@ -158,8 +172,25 @@ module MigrationReceiverInstallationRead =
     let private expectedRoster options =
         { ApiBase=options.ApiBase; InstallationId=options.InstallationId
           AccountLogin=options.AccountLogin; AccountId=options.AccountId; AccountNodeId=options.AccountNodeId
-          RequiredPermissions=options.RequiredPermissions; AppToken=options.AppToken
+          RequiredPermissions=options.ExpectedInstallationPermissions; AppToken=options.AppToken
           InstallationToken=options.InstallationToken; UserAgent=options.UserAgent }
+
+    let private tokenRead options (transport: IMigrationGitHubReadTransport) =
+        let uri = combine options.ApiBase "installation"
+        let request =
+            Rest { Method=Get; Uri=uri; Headers=headers options.InstallationToken options.UserAgent; Body=None
+                   ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
+        match transport.Send request with
+        | Response response when response.StatusCode = 200 ->
+            parseInstallationBinding options options.RequiredTokenPermissions response.Body
+            |> Result.map (fun permissions ->
+                permissions,
+                { RosterRequestedUri=uri.AbsoluteUri
+                  RosterRequestIdentitySha256=sha256 ($"GET\n{uri.AbsoluteUri}\ninstallation-token")
+                  RosterRawBody=response.Body; RosterRawSha256=sha256 response.Body; RosterNextUri=None })
+        | Response response -> unavailable $"token-inaccessible:http-{response.StatusCode}"
+        | NetworkFailure -> unavailable "token-inaccessible:network"
+        | TimedOut -> unavailable "token-inaccessible:timeout"
 
     let private validText value = not (String.IsNullOrWhiteSpace value)
     let private validPermissionName (value: string) =
@@ -169,17 +200,30 @@ module MigrationReceiverInstallationRead =
             || character >= '0' && character <= '9'
             || character = '_')
 
+    let private permissionRank = function
+        | "read" -> 1 | "write" -> 2 | "admin" -> 3 | _ -> 0
+
+    let private containedBy (narrow: Map<string, string>) (broad: Map<string, string>) =
+        narrow
+        |> Map.forall (fun name level ->
+            broad |> Map.tryFind name |> Option.exists (fun maximum -> permissionRank level <= permissionRank maximum))
+
     let private validOptions options =
         not (isNull options.ApiBase) && options.ApiBase.IsAbsoluteUri && options.ApiBase.Scheme = Uri.UriSchemeHttps
         && options.AppId > 0L && options.InstallationId > 0L && options.AccountId > 0L
         && validText options.AppNodeId && validText options.AppSlug
         && validText options.AccountLogin && validText options.AccountNodeId
         && validText options.AppToken && validText options.InstallationToken && validText options.UserAgent
-        && not options.RequiredPermissions.IsEmpty
-        && Map.tryFind "contents" options.RequiredPermissions = Some "read"
-        && Map.tryFind "metadata" options.RequiredPermissions = Some "read"
-        && options.RequiredPermissions |> Map.forall (fun name level ->
-            validPermissionName name && Set.contains level (set [ "read"; "write"; "admin" ]))
+        && not options.ExpectedAppPermissions.IsEmpty
+        && not options.ExpectedInstallationPermissions.IsEmpty
+        && not options.RequiredTokenPermissions.IsEmpty
+        && Map.tryFind "contents" options.RequiredTokenPermissions = Some "read"
+        && Map.tryFind "metadata" options.RequiredTokenPermissions = Some "read"
+        && ([ options.ExpectedAppPermissions; options.ExpectedInstallationPermissions; options.RequiredTokenPermissions ]
+            |> List.forall (Map.forall (fun name level ->
+                validPermissionName name && Set.contains level (set [ "read"; "write"; "admin" ]))))
+        && containedBy options.RequiredTokenPermissions options.ExpectedInstallationPermissions
+        && containedBy options.ExpectedInstallationPermissions options.ExpectedAppPermissions
         && options.SelectedRepositories =
             [ { DeclaredRepositoryId=sandboxRepositoryId
                 DeclaredRepositoryNodeId=sandboxRepositoryNodeId
@@ -194,9 +238,9 @@ module MigrationReceiverInstallationRead =
         && (options.SelectedRepositories |> List.map (fun item -> item.DeclaredRepositoryFullName.ToLowerInvariant()) |> Set.ofList |> Set.count) = 1
 
     let private exactScope options (pass: MigrationReceiverRosterPass) =
-        parseInstallationBinding options pass.Pages.Head.RosterRawBody
-        |> Result.bind (fun () ->
-            if pass.ScopeSettings.Permissions <> options.RequiredPermissions then
+        parseInstallationBinding options options.ExpectedInstallationPermissions pass.Pages.Head.RosterRawBody
+        |> Result.bind (fun _ ->
+            if pass.ScopeSettings.Permissions <> options.ExpectedInstallationPermissions then
                 unavailable "installation-permission-settings-unknown"
             elif pass.RepositoryTotalCount <> 1 then unavailable "unselected-repository-grant"
             elif pass.Repositories |> List.exists (fun item -> not item.RosterPrivate || item.RosterArchived || item.RosterDisabled) then
@@ -221,21 +265,30 @@ module MigrationReceiverInstallationRead =
                 |> Result.bind (fun (app, raw) ->
                     MigrationReceiverRosterRead.capturePass rosterOptions transport
                     |> Result.mapError (fun reason -> $"receiver-installation-authority-adapter-unavailable:{reason}")
-                    |> Result.bind (fun roster -> exactScope options roster |> Result.map (fun () -> app, raw, roster)))
+                    |> Result.bind (fun roster ->
+                        exactScope options roster
+                        |> Result.bind (fun () -> tokenRead options transport)
+                        |> Result.map (fun (tokenPermissions, tokenRaw) -> app, raw, roster, tokenPermissions, tokenRaw)))
             pass ()
-            |> Result.bind (fun (firstApp, firstRaw, firstRoster) ->
+            |> Result.bind (fun (firstApp, firstRaw, firstRoster, firstTokenPermissions, firstTokenRaw) ->
                 pass ()
-                |> Result.bind (fun (secondApp, secondRaw, secondRoster) ->
-                    if firstApp <> secondApp || firstRaw <> secondRaw || firstRoster <> secondRoster then
+                |> Result.bind (fun (secondApp, secondRaw, secondRoster, secondTokenPermissions, secondTokenRaw) ->
+                    if firstApp <> secondApp || firstRaw <> secondRaw || firstRoster <> secondRoster
+                       || firstTokenPermissions <> secondTokenPermissions || firstTokenRaw <> secondTokenRaw then
                         unavailable "two-pass-drift"
                     else
                         let rosterCapture =
                             { First=firstRoster; Second=secondRoster
                               CaptureFingerprint=sha256 (firstRoster.PassFingerprint + "\n" + secondRoster.PassFingerprint) }
                         let fingerprint =
-                            sha256 (firstRaw.RosterRawSha256 + "\n" + secondRaw.RosterRawSha256 + "\n" + rosterCapture.CaptureFingerprint)
+                            sha256 (firstRaw.RosterRawSha256 + "\n" + secondRaw.RosterRawSha256 + "\n"
+                                    + firstTokenRaw.RosterRawSha256 + "\n" + secondTokenRaw.RosterRawSha256 + "\n"
+                                    + rosterCapture.CaptureFingerprint)
                         let composerOptions =
                             { rosterOptions with AppToken=""; InstallationToken="" }
                         Ok { App=firstApp; AppFirst=firstRaw; AppSecond=secondRaw
+                             InstallationPermissions=options.ExpectedInstallationPermissions
+                             TokenPermissions=firstTokenPermissions
+                             TokenFirst=firstTokenRaw; TokenSecond=secondTokenRaw
                              ComposerRosterOptions=composerOptions; ComposerRosterCapture=rosterCapture
                              CaptureFingerprint=fingerprint }))

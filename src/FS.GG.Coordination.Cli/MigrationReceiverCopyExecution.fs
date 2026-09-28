@@ -27,6 +27,7 @@ type MigrationReceiverCopyExecutionReceipt =
       Applied: bool
       DispatchCount: int
       Refs: Map<string, string>
+      TargetObjects: MigrationReceiverCopyTargetObject list
       Fingerprint: string }
 
 [<RequireQualifiedAccess>]
@@ -57,12 +58,19 @@ module MigrationReceiverCopyExecution =
             require (Native.fsync(handle.DangerousGetHandle().ToInt32()) = 0) "receiver-copy-execution-directory-fsync"
     let private prefix (manifest: MigrationReceiverCopyTransferManifest) = $"refs/heads/gs2-09-7/{manifest.RunIdentity.RunNonce}/receivers/"
     let private expectedRefs manifest = manifest.DerivedRefs |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
-    let private fingerprint operation attempt manifest applied dispatch refs =
-        String.concat "\000" ([ "fsgg.receiver-copy-execution-receipt/1"; operationName operation; attempt; manifest; string applied; string dispatch ] @ [ for KeyValue(name, commit) in refs do yield name; yield commit ]) |> sha256
-    let private receipt operation attempt manifest applied dispatch refs =
-        { Schema = "fsgg.receiver-copy-execution-receipt/1"; Operation = operation; AttemptId = attempt
+    let private fingerprint operation attempt manifest applied dispatch refs objects =
+        String.concat "\000"
+            ([ "fsgg.receiver-copy-execution-receipt/2"; operationName operation; attempt; manifest; string applied; string dispatch ]
+             @ [ for KeyValue(name, commit) in refs do yield name; yield commit ]
+             @ [ for item in objects do
+                    yield item.RefName; yield item.CommitOid; yield item.TreeOid
+                    yield String.concat "," item.ParentOids; yield item.AuthorIdentity; yield item.CommitterIdentity
+                    yield item.SignatureStatus; yield item.RequestIdentitySha256 ]) |> sha256
+    let private receipt operation attempt manifest applied dispatch refs objects =
+        { Schema = "fsgg.receiver-copy-execution-receipt/2"; Operation = operation; AttemptId = attempt
           ManifestFingerprint = manifest; Applied = applied; DispatchCount = dispatch; Refs = refs
-          Fingerprint = fingerprint operation attempt manifest applied dispatch refs }
+          TargetObjects=objects
+          Fingerprint = fingerprint operation attempt manifest applied dispatch refs objects }
 
     let private validateAuthority (authority: MigrationReceiverCopyExecutionAuthority) =
         require (authority.TargetRepository = fixedTarget) "receiver-copy-execution-target"
@@ -158,7 +166,16 @@ module MigrationReceiverCopyExecution =
                     if not (OperatingSystem.IsWindows()) then File.SetUnixFileMode(readbacks, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
                 let store = Path.Combine(readbacks, Guid.NewGuid().ToString("N") + ".git")
                 match transport.VerifyFresh(fixedTarget, store, manifest) with
-                | Ok value when value.Refs = expected -> value
+                | Ok value when value.Refs = expected
+                                && value.Objects.Length = manifest.DerivedRefs.Length
+                                && List.forall2 (fun object' row ->
+                                    object'.RefName = row.DerivedRef
+                                    && object'.CommitOid = row.DerivedCommit
+                                    && object'.TreeOid = row.DerivedTree
+                                    && object'.ParentOids.IsEmpty
+                                    && object'.SignatureStatus = "unsigned-derived-copy")
+                                    (value.Objects |> List.sortBy _.RefName)
+                                    (manifest.DerivedRefs |> List.sortBy _.DerivedRef) -> value
                 | Ok _ -> failwith "receiver-copy-execution-fresh-readback"
                 | Error error -> failwith error
             let read () =
@@ -169,18 +186,18 @@ module MigrationReceiverCopyExecution =
             | ReadReceiverCopies ->
                 let observed = read ()
                 match classify expected observed.Refs with
-                | "empty" -> Ok(receipt operation attempt manifest.Fingerprint true 0 Map.empty)
+                | "empty" -> Ok(receipt operation attempt manifest.Fingerprint true 0 Map.empty [])
                 | "exact" ->
-                    verifyFresh () |> ignore
-                    Ok(receipt operation attempt manifest.Fingerprint true 0 observed.Refs)
+                    let verified = verifyFresh ()
+                    Ok(receipt operation attempt manifest.Fingerprint true 0 observed.Refs verified.Objects)
                 | code -> Error($"receiver-copy-execution-read-{code}")
             | CreateReceiverCopies ->
                 let before = read ()
                 match classify expected before.Refs with
                 | "exact" ->
-                    verifyFresh () |> ignore
+                    let verified = verifyFresh ()
                     persistApplied root operation attempt manifest.Fingerprint
-                    Ok(receipt operation attempt manifest.Fingerprint true 0 before.Refs)
+                    Ok(receipt operation attempt manifest.Fingerprint true 0 before.Refs verified.Objects)
                 | "empty" ->
                     let fresh = reserve root operation attempt manifest.Fingerprint
                     if not fresh then Error "receiver-copy-execution-recovery-absent"
@@ -193,9 +210,9 @@ module MigrationReceiverCopyExecution =
                             let after = read ()
                             require (after.UnrelatedRefsFingerprint = before.UnrelatedRefsFingerprint) "receiver-copy-execution-unrelated-ref-drift"
                             require (after.Refs = expected) "receiver-copy-execution-create-readback"
-                            verifyFresh () |> ignore
+                            let verified = verifyFresh ()
                             persistApplied root operation attempt manifest.Fingerprint
-                            Ok(receipt operation attempt manifest.Fingerprint true 1 after.Refs)
+                            Ok(receipt operation attempt manifest.Fingerprint true 1 after.Refs verified.Objects)
                 | code -> Error($"receiver-copy-execution-create-{code}")
             | RemoveReceiverCopies ->
                 let createAttempt = sha256 ($"{operationName CreateReceiverCopies}\000{manifest.Fingerprint}")
@@ -204,7 +221,7 @@ module MigrationReceiverCopyExecution =
                 match classify expected before.Refs with
                 | "empty" ->
                     persistApplied root operation attempt manifest.Fingerprint
-                    Ok(receipt operation attempt manifest.Fingerprint true 0 Map.empty)
+                    Ok(receipt operation attempt manifest.Fingerprint true 0 Map.empty [])
                 | "exact" ->
                     let fresh = reserve root operation attempt manifest.Fingerprint
                     if not fresh then Error "receiver-copy-execution-cleanup-recovery-present"
@@ -218,7 +235,7 @@ module MigrationReceiverCopyExecution =
                             require (after.UnrelatedRefsFingerprint = before.UnrelatedRefsFingerprint) "receiver-copy-execution-unrelated-ref-drift"
                             require after.Refs.IsEmpty "receiver-copy-execution-cleanup-readback"
                             persistApplied root operation attempt manifest.Fingerprint
-                            Ok(receipt operation attempt manifest.Fingerprint true 1 Map.empty)
+                            Ok(receipt operation attempt manifest.Fingerprint true 1 Map.empty [])
                 | code -> Error($"receiver-copy-execution-cleanup-{code}")
         with ex -> Error ex.Message
 

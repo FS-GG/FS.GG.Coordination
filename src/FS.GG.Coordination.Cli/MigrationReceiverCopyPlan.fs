@@ -25,6 +25,7 @@ type MigrationReceiverCopyAcceptedEvidence =
 
 type MigrationReceiverCopyMapping =
     { ReceiverCopyId: string
+      ReceiverSourceRepository: string
       ReceiverCopyRepository: string
       ReceiverCopySourceRevision: string
       ReceiverCopySourceTree: string
@@ -523,7 +524,8 @@ module MigrationReceiverCopyPlan =
         manifests |> List.map (fun manifest ->
             let missing = manifest.Entries |> List.filter (fun e -> e.EntryKind = "blob" && not (retained.ContainsKey e.EntrySha))
                           |> List.map _.EntrySha |> List.distinct |> List.sort
-            { ReceiverCopyId = manifest.Description.Id; ReceiverCopyRepository = sandboxRepositoryName
+            { ReceiverCopyId = manifest.Description.Id; ReceiverSourceRepository = manifest.Description.Repository
+              ReceiverCopyRepository = sandboxRepositoryName
               ReceiverCopySourceRevision = manifest.Description.Revision; ReceiverCopySourceTree = manifest.Description.Tree
               ReceiverCopyPlannedRef = $"refs/heads/gs2-09-7/{runIdentity.RunNonce}/receivers/{manifest.Description.Id}"
               ReceiverCopyRequiredEntries = manifest.Entries; ReceiverCopyMissingBlobSha1s = missing })
@@ -572,7 +574,7 @@ module MigrationReceiverCopyPlan =
                        receiptVerification.StoredDigest; receiptVerification.CanonicalDigest; string receiptVerification.CompatibilityApplied
                        census.Schema; census.ProducerRevision; census.ProducerTree ] do feedString value
         for mapping in mappings do
-            for value in [ mapping.ReceiverCopyId; mapping.ReceiverCopyRepository; mapping.ReceiverCopySourceRevision
+            for value in [ mapping.ReceiverCopyId; mapping.ReceiverSourceRepository; mapping.ReceiverCopyRepository; mapping.ReceiverCopySourceRevision
                            mapping.ReceiverCopySourceTree; mapping.ReceiverCopyPlannedRef ] do feedString value
             for entry in mapping.ReceiverCopyRequiredEntries do
                 for value in [ entry.EntryPath; entry.EntryMode; entry.EntryKind; entry.EntrySha

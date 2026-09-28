@@ -62,6 +62,7 @@ let ``seven deterministic parentless copies roundtrip through one local atomic c
         Assert.Equal(7, manifest.DerivedRefs.Length)
         Assert.All(manifest.DerivedRefs, fun row ->
             Assert.Equal(row.DerivedCommit, git manifest.ObjectStorePath [ "rev-list"; "--parents"; "-n"; "1"; row.DerivedCommit ])
+            Assert.NotEqual(row.SourceCommit, row.DerivedCommit)
             Assert.Equal(row.SourceTree, row.DerivedTree))
         let target = bare root "target.git"
         git manifest.ObjectStorePath [ "push"; target; manifest.DerivedRefs.Head.DerivedCommit + ":refs/heads/unrelated" ] |> ignore
@@ -69,6 +70,14 @@ let ``seven deterministic parentless copies roundtrip through one local atomic c
         let attempts = Path.Combine(root, "attempts")
         let created = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap
         Assert.True(created.Applied); Assert.Equal(1, created.DispatchCount); Assert.Equal(7, created.Refs.Count)
+        Assert.Equal(7, created.TargetObjects.Length)
+        Assert.All(created.TargetObjects, fun observed ->
+            let planned = manifest.DerivedRefs |> List.find (fun row -> row.DerivedRef = observed.RefName)
+            Assert.Equal(planned.DerivedCommit, observed.CommitOid)
+            Assert.Equal(planned.SourceTree, observed.TreeOid)
+            Assert.Empty(observed.ParentOids)
+            Assert.Equal("unsigned-derived-copy", observed.SignatureStatus)
+            Assert.Equal(64, observed.RequestIdentitySha256.Length))
         let replay = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap
         Assert.Equal(0, replay.DispatchCount)
         let read = MigrationReceiverCopyExecution.execute authority verified ReadReceiverCopies attempts transport |> unwrap
@@ -170,9 +179,18 @@ type private ControlledTransport(initial: Map<string, string>) =
     member _.Pushes = pushed
     interface IMigrationReceiverCopyGitTransport with
         member _.SupportsAtomic = true
-        member _.Read(target, _) = Ok { TargetRepository = target; Refs = refs; UnrelatedRefsFingerprint = String.replicate 64 "0" }
+        member _.Read(target, _) = Ok { TargetRepository = target; Refs = refs; Objects=[]; UnrelatedRefsFingerprint = String.replicate 64 "0" }
         member _.VerifyFresh(target, _, manifest) =
-            Ok { TargetRepository = target; Refs = manifest.DerivedRefs |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList; UnrelatedRefsFingerprint = "" }
+            let objects =
+                manifest.DerivedRefs
+                |> List.map (fun row ->
+                    { RefName=row.DerivedRef; CommitOid=row.DerivedCommit; TreeOid=row.DerivedTree
+                      ParentOids=[]; AuthorIdentity="FS.GG Migration Copy <migration-copy@invalid>"
+                      CommitterIdentity="FS.GG Migration Copy <migration-copy@invalid>"
+                      SignatureStatus="unsigned-derived-copy"; RequestIdentitySha256=String.replicate 64 "a" })
+            Ok { TargetRepository = target
+                 Refs = manifest.DerivedRefs |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
+                 Objects=objects; UnrelatedRefsFingerprint = "" }
         member _.PushAtomic(_, _, updates) =
             pushed <- pushed + 1
             Assert.Equal(7, updates.Length)

@@ -21,6 +21,7 @@ let private repository =
       SourceHead=String.replicate 40 "a"; TargetHead=String.replicate 40 "b" }
 
 let private revision index = String.replicate 39 "a" + string index
+let private targetRevision index = String.replicate 39 "d" + string index
 let private tree index = String.replicate 39 "b" + string index
 let private receiverRef receiver = $"refs/heads/gs2-09-7/run/receivers/{receiver}"
 
@@ -30,7 +31,7 @@ let private cohort =
         receiverNames
         |> List.mapi (fun index receiver ->
             { Receiver=receiver; RepositoryId=repository.Id; RefName=receiverRef receiver
-              ExpectedHead=revision (index + 1) })
+              ExpectedHead=targetRevision (index + 1) })
       ProjectOrganization="FS-GG"; ProjectNumber=2; ProjectNodeId="PVT_2"
       SourceRevision=String.replicate 40 "c"; Isolated=true }
 
@@ -51,7 +52,7 @@ let private proof authority uri =
 let private mappings =
     receiverNames
     |> List.mapi (fun index receiver ->
-        { ReceiverCopyId=receiver; ReceiverCopyRepository=repository.FullName
+        { ReceiverCopyId=receiver; ReceiverSourceRepository=$"FS-GG/source-{receiver}"; ReceiverCopyRepository=repository.FullName
           ReceiverCopySourceRevision=revision (index + 1); ReceiverCopySourceTree=tree (index + 1)
           ReceiverCopyPlannedRef=receiverRef receiver; ReceiverCopyRequiredEntries=[]
           ReceiverCopyMissingBlobSha1s=[] })
@@ -61,7 +62,7 @@ let private bindings =
     |> List.mapi (fun index receiver ->
         { ReceiverName=receiver; RepositoryId=repository.Id; RepositoryNodeId=repository.NodeId
           RepositoryFullName=repository.FullName; RefName=receiverRef receiver
-          CommitSha=revision (index + 1); TreeSha=tree (index + 1) })
+          CommitSha=targetRevision (index + 1); TreeSha=tree (index + 1) })
 
 let private rosterRepository =
     { RosterRepositoryId=repository.Id; RosterRepositoryNodeId=repository.NodeId

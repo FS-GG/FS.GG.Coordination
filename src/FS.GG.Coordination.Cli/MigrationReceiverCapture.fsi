@@ -33,7 +33,10 @@ type MigrationReceiverWorkflowToolIdentity =
       TargetRepository: string
       TargetPath: string option
       Revision: string
-      Kind: ImmutableExecutionReferenceKind }
+      Kind: ImmutableExecutionReferenceKind option
+      WorkflowBlobSha1: string
+      WorkflowBytesSha256: string
+      RequiresMigration: bool }
 
 /// Two stable reads of pin bytes. InventoryBound distinguishes caller declarations from a
 /// provider-tree-derived workflow/package census.

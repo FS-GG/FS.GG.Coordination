@@ -379,7 +379,7 @@ module MigrationReceiverAuthorityComposer =
                           Map.tryFind binding.ReceiverName cohortByName with
                     | Some mapping, Some receiver ->
                         mapping.ReceiverCopyRepository <> binding.RepositoryFullName
-                        || mapping.ReceiverCopySourceRevision <> binding.CommitSha
+                        || mapping.ReceiverCopySourceRevision = binding.CommitSha
                         || mapping.ReceiverCopySourceTree <> binding.TreeSha
                         || mapping.ReceiverCopyPlannedRef <> binding.RefName
                         || receiver.RepositoryId <> binding.RepositoryId
@@ -422,6 +422,9 @@ module MigrationReceiverAuthorityComposer =
             unavailable "receiver-identities" "invalid-cohort"
         elif request.RosterCapture.First <> request.RosterCapture.Second then
             unavailable "receiver-identities" "roster-pass-drift"
+        elif not (isNull (box request.PinCapture))
+             && request.PinCapture.WorkflowTools |> List.exists _.RequiresMigration then
+            unavailable "workflow-pins" "mutable-legacy-reference-requires-migration"
         else
             match parseRosterPass request.RosterOptions request.RosterCapture.First,
                   parseRosterPass request.RosterOptions request.RosterCapture.Second with

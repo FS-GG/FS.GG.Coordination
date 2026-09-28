@@ -8,7 +8,18 @@ type MigrationReceiverCopyRefUpdate =
 type MigrationReceiverCopyGitReadback =
     { TargetRepository: string
       Refs: Map<string, string>
+      Objects: MigrationReceiverCopyTargetObject list
       UnrelatedRefsFingerprint: string }
+
+and MigrationReceiverCopyTargetObject =
+    { RefName: string
+      CommitOid: string
+      TreeOid: string
+      ParentOids: string list
+      AuthorIdentity: string
+      CommitterIdentity: string
+      SignatureStatus: string
+      RequestIdentitySha256: string }
 
 type IMigrationReceiverCopyGitTransport =
     abstract SupportsAtomic: bool

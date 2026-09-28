@@ -9,7 +9,9 @@ type MigrationReceiverInstallationReadOptions =
       AccountLogin: string
       AccountId: int64
       AccountNodeId: string
-      RequiredPermissions: Map<string, string>
+      ExpectedAppPermissions: Map<string, string>
+      ExpectedInstallationPermissions: Map<string, string>
+      RequiredTokenPermissions: Map<string, string>
       SelectedRepositories: MigrationReceiverRosterDeclaredRepository list
       AppToken: string
       InstallationToken: string
@@ -28,6 +30,10 @@ type MigrationReceiverInstallationCapture =
     { App: MigrationReceiverProviderApp
       AppFirst: MigrationReceiverRosterRawPage
       AppSecond: MigrationReceiverRosterRawPage
+      InstallationPermissions: Map<string, string>
+      TokenPermissions: Map<string, string>
+      TokenFirst: MigrationReceiverRosterRawPage
+      TokenSecond: MigrationReceiverRosterRawPage
       ComposerRosterOptions: MigrationReceiverRosterReadOptions
       ComposerRosterCapture: MigrationReceiverRosterCapture
       CaptureFingerprint: string }
