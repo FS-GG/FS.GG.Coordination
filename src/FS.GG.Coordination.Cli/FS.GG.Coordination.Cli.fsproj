@@ -10,7 +10,7 @@
     <PackageVersion>0.1.5</PackageVersion>
     <Authors>FS-GG</Authors>
     <Description>Callable FS.GG Coordination boundary. Production effects remain governed by authoritative epoch and journal policy.</Description>
-    <PackageReleaseNotes>Adds the explicit net-v1 ordinary settlement source profile with Net's existing build and contract-coherence checks.</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds net-v1, governance-v1 and game-v1 ordinary settlement source profiles while preserving dotgithub-v1, audio-v1 and rendering-v1.</PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/FS-GG/FS.GG.Coordination</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

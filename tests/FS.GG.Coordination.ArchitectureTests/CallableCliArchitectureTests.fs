@@ -24,7 +24,7 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
             "<Version>0.1.5</Version>"
             "<PackageVersion>0.1.5</PackageVersion>"
-            "<PackageReleaseNotes>Adds the explicit net-v1 ordinary settlement source profile with Net's existing build and contract-coherence checks.</PackageReleaseNotes>"
+            "<PackageReleaseNotes>Adds net-v1, governance-v1 and game-v1 ordinary settlement source profiles while preserving dotgithub-v1, audio-v1 and rendering-v1.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =
