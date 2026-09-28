@@ -79,6 +79,10 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
             let nonce = $"{evidence.WorkflowRunId}-{evidence.WorkflowRunAttempt}-{candidate}"
             let refName = $"refs/heads/gs2-09-7/{nonce}/seed-journal"
             if str "schema" root <> "fsgg.github-substrate-v2.sandbox-seed-execution-binding/1"
+               || str "status" root <> "bound-isolated-cas-authority"
+               || not (root.GetProperty("activation").GetBoolean())
+               || str "authority" root <> "installed-protected-workflow-verified"
+               || str "schemaJoin" root <> "coordination-isolated-cas-final"
                || str "repository" source <> "FS-GG/.github"
                || str "workflowPath" source <> ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
                || str "workflowRef" source <> "refs/heads/main"
