@@ -8,14 +8,23 @@ type MigrationInspectProviderOptions =
       Repository: MigrationGitHubReadOptions
       Project: MigrationProjectReadOptions }
 
-/// Issue census, Project membership/schema/values and single-repository native relations
-/// have concrete raw-to-typed adapters. Remaining GS2-09.1 authorities refuse.
+/// Issue census, Project membership/schema/values, repository settings and
+/// single-repository native relations have concrete raw-to-typed adapters.
+/// Remaining GS2-09.1 authorities refuse.
 type MigrationInspectProviderAdapter =
     new: options:MigrationInspectProviderOptions * transport:IMigrationGitHubReadTransport -> MigrationInspectProviderAdapter
     interface IGitHubMigrationInspectSource
 
 [<RequireQualifiedAccess>]
 module MigrationInspectProviderAdapter =
+    /// Revalidates and binds one pass of a complete, stable eleven-surface capture
+    /// to the canonical repository-settings discovery authority.
+    val bindRepositorySettingsCapture:
+        options:MigrationInspectProviderOptions ->
+        passOrdinal:int ->
+        captured:MigrationRepositorySettingsCapture ->
+            Result<GitHubMigrationInspectAuthority, string>
+
     /// Pure canonical binder over independently captured native and journal evidence.
     /// ReadAuthority remains unavailable until both provider readers join this adapter.
     val bindReviewDeliveryRecords:

@@ -74,7 +74,7 @@ let ``repository core inspect slice binds exact raw settings without completing 
 
     let source = MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource
-    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+    Assert.Equal(Error "repository-settings-identity:unavailable:transport-unavailable",
                  source.ReadAuthority(1, "repository-settings"))
 
 [<Fact>]
@@ -84,7 +84,6 @@ let ``incomplete authority families remain unavailable without provider calls`` 
                  :> IGitHubMigrationInspectSource
     let incomplete =
         [ "claim-and-event-streams"
-          "repository-settings"
           "workflow-pins"
           "receiver-identities" ]
 
@@ -93,6 +92,135 @@ let ``incomplete authority families remain unavailable without provider calls`` 
                      source.ReadAuthority(1, authority))
 
     Assert.Empty(transport.Calls)
+
+let private hashText (value: string) =
+    value |> Encoding.UTF8.GetBytes |> SHA256.HashData
+    |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let private settingsIdentity =
+    { NodeId="R_42"; DatabaseId=42L; Owner="FS-GG"; Name="copy"
+      DefaultBranch="main"; SourceRepositoryNodeId=None }
+
+type private SettingsProvider(reads: Map<SettingsSurface, MigrationRepositorySettingsSurfaceRead>) =
+    interface IMigrationRepositorySettingsSurfaceProvider with
+        member _.Read(identity, revision, surface) =
+            match Map.tryFind surface reads with
+            | Some read when read.RepositoryIdentity = identity && read.RepositoryRevision = revision -> Ok read
+            | Some _ -> Error(MigrationRepositorySettingsSurfaceRefusal.Unreadable "test-identity-drift")
+            | None -> Error(MigrationRepositorySettingsSurfaceRefusal.Unsupported "test-surface-missing")
+
+let private settingsCapture duplicateUriWithDifferentBody =
+    let revision = "2026-09-28T01:02:03Z"
+    let reads =
+        RepositorySettingsAdapter.surfaces
+        |> List.map (fun surface ->
+            let surfaceId = RepositorySettingsAdapter.surfaceId surface
+            let uri =
+                if duplicateUriWithDifferentBody && (surface = BranchRulesets || surface = TagRulesets) then
+                    "https://api.github.test/settings/rulesets"
+                else $"https://api.github.test/settings/{surfaceId}"
+            let body = $"{{\"surface\":\"{surfaceId}\"}}"
+            let page =
+                { SettingsStream=surfaceId; SettingsRequestedUri=uri
+                  SettingsPayloadJson=body; SettingsPayloadSha256=hashText body
+                  SettingsNextUri=None }
+            let setting =
+                { Surface=surface; Subject="repository:42"; Name=$"observed-{surfaceId}"
+                  Value=SettingValue.Text surfaceId }
+            surface,
+                { RepositoryIdentity=settingsIdentity; RepositoryRevision=revision
+                  Surface=surface; Complete=true; Pages=[ page ]; Settings=[ setting ] })
+        |> Map.ofList
+    let provider = SettingsProvider(reads) :> IMigrationRepositorySettingsSurfaceProvider
+    match MigrationRepositorySettingsRead.captureTwoPass settingsIdentity revision provider with
+    | Ok capture -> capture
+    | Error failure -> failwithf "Expected complete settings capture: %A" failure
+
+[<Fact>]
+let ``complete settings capture becomes one canonical exact-identity authority`` () =
+    let captured = settingsCapture false
+    match MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 1 captured with
+    | Error reason -> failwithf "Complete settings authority refused: %s" reason
+    | Ok proof ->
+        Assert.Equal("repository-settings", proof.Read.Authority)
+        Assert.Equal(11, proof.Read.PageCount)
+        Assert.Equal(11, proof.Read.ItemCount)
+        Assert.True(proof.ScopeVerified && proof.SubjectsParsedFromRaw)
+        Assert.All(proof.Read.Subjects, fun observed ->
+            Assert.StartsWith("repository:42:settings:", observed.Identity)
+            Assert.Equal(captured.RepositoryRevision, observed.Revision)
+            Assert.Equal(64, observed.PayloadSha256.Length))
+        Assert.True(proof.Read.Subjects = proof.Pages.Head.Subjects)
+        Assert.Equal(None, proof.Pages |> List.last |> _.NextRequestIdentitySha256)
+        let representedSurfaces =
+            proof.Read.Subjects
+            |> List.map (fun observed ->
+                RepositorySettingsAdapter.surfaces
+                |> List.find (fun surface ->
+                    observed.Identity.Contains(
+                        $":settings:{RepositorySettingsAdapter.surfaceId surface}:")))
+            |> Set.ofList
+        Assert.Equal(11, representedSurfaces.Count)
+
+        match MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 2 captured with
+        | Error reason -> failwithf "Second complete settings authority refused: %s" reason
+        | Ok second ->
+            Assert.Equal(proof.Read.HighWaterMark, second.Read.HighWaterMark)
+            let pageIdentity pages =
+                pages
+                |> List.map (fun page ->
+                    page.RequestedUri, page.RequestIdentitySha256, page.PayloadSha256,
+                    page.NextRequestIdentitySha256)
+            Assert.True(pageIdentity proof.Pages = pageIdentity second.Pages)
+
+[<Fact>]
+let ``settings authority refuses cross-surface raw disagreement and cohort drift`` () =
+    Assert.Equal(
+        Error "repository-settings-cross-surface-page-drift",
+        MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 1 (settingsCapture true))
+
+    let captured = settingsCapture false
+    let foreign =
+        { captured with RepositoryIdentity={ captured.RepositoryIdentity with NodeId="R_other" } }
+    Assert.Equal(
+        Error "repository-settings-cohort",
+        MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 1 foreign)
+
+[<Fact>]
+let ``canonical settings source retains explicit identity unknown and authorization refusal`` () =
+    let unavailable =
+        MigrationInspectProviderAdapter(options, FakeTransport [])
+        :> IGitHubMigrationInspectSource
+    Assert.Equal(
+        Error "repository-settings-identity:unavailable:transport-unavailable",
+        unavailable.ReadAuthority(1, "repository-settings"))
+
+    let forbidden =
+        MigrationInspectProviderAdapter(
+            options,
+            FakeTransport
+                [ Response
+                    { StatusCode=403; Headers=Map.empty; Body="{}"; ETag=None
+                      RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } } ])
+        :> IGitHubMigrationInspectSource
+    Assert.Equal(
+        Error "repository-settings-identity:unauthorized:http:403",
+        forbidden.ReadAuthority(1, "repository-settings"))
+
+    let identity =
+        """{"id":42,"node_id":"R_42","name":"copy","full_name":"FS-GG/copy","owner":{"login":"FS-GG"},"default_branch":"main","updated_at":"2026-09-28T01:02:03Z","fork":false}"""
+    let providerForbidden =
+        MigrationInspectProviderAdapter(
+            options,
+            FakeTransport
+                [ reply identity
+                  Response
+                    { StatusCode=403; Headers=Map.empty; Body="{}"; ETag=None
+                      RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } } ])
+        :> IGitHubMigrationInspectSource
+    Assert.Equal(
+        Error "repository-settings-read:provider-refused:repository:unauthorized:http:403",
+        providerForbidden.ReadAuthority(1, "repository-settings"))
 
 [<Fact>]
 let ``repository core inspect slice refuses typed raw and request drift`` () =
@@ -168,7 +296,7 @@ let ``repository Actions inspect slice binds core and conditional allowlist raw 
 
     let source = MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource
-    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+    Assert.Equal(Error "repository-settings-identity:unavailable:transport-unavailable",
                  source.ReadAuthority(1, "repository-settings"))
 
 [<Fact>]
@@ -250,7 +378,7 @@ let ``repository custom properties inspect slice binds definitions values and ex
 
     let source = MigrationInspectProviderAdapter(options, FakeTransport [])
                  :> IGitHubMigrationInspectSource
-    Assert.Equal(Error "authority-adapter-unavailable:repository-settings",
+    Assert.Equal(Error "repository-settings-identity:unavailable:transport-unavailable",
                  source.ReadAuthority(1, "repository-settings"))
 
 [<Fact>]
