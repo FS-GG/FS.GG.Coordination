@@ -106,6 +106,20 @@ independently refuse any other Project node. The live Coordination Project and p
 remain read-only observation subjects. A sandbox Git ref exercises CAS and recovery; accepted GS2-08.2
 evidence separately covers production journal protection.
 
+The seed journal uses a two-stage, versioned isolated-CAS contract. Before mint, a static source manifest
+binds the exact candidate, seed-plan and corpus bytes and explicitly grants no bootstrap or provider-effect
+authority. After an independent prepare admission, the same protected run mints and verifies the sandbox
+credential, freezes the immutable S2 `/2` declaration, captures an exact empty nonce prestate, and invokes
+the pinned Coordination composer to seal generation-zero `state.json` plus its Git blob, tree and commit
+bytes. A separate journal-only admission may then authorize an expected-absent lease for that exact object
+set. Post-write authority exists only after a fresh ref/commit/tree/blob reread binds the detached native
+receipt to the frozen S2 declaration; a changed observation timestamp is allowed, while any stable identity
+or byte digest drift refuses. Unknown responses remain recovery-only. The raw mint response and token stay
+ephemeral inside the protected job, and the retained evidence contains only sanitized proof. Journal bytes
+and verifier evidence are retained before authorized nonce-ref cleanup. Private-repository ruleset HTTP 403
+is recorded as an unsupported settings surface and cannot be rewritten as an empty ruleset; accepted
+GS2-08.2 evidence remains the separate production-protection proof.
+
 The workflow extension must seed nonce-owned representative issues, PRs, fields and Project items from the
 frozen corpus, capture complete prestate and heads, run migration and interruption controls, then restore
 or delete only its own resources and verify zero residue. The remaining work is the seed, full nine-authority
