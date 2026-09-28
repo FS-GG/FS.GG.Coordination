@@ -1,0 +1,136 @@
+{
+  "schema": "fsgg.github.v2-ci-ordinary-settlement-policy/1",
+  "policyId": "v2-ci-i1-ordinary-settlement-v1",
+  "status": "source-qualified-not-installed",
+  "repository": "FS-GG/FS.GG.Coordination",
+  "repositoryId": 1346720714,
+  "selectedSource": {
+    "profile": "coordination-v1",
+    "repository": "FS-GG/FS.GG.Coordination",
+    "repositoryId": 1346720714
+  },
+  "sourceImplementation": {
+    "repository": "FS-GG/FS.GG.Game",
+    "adaptation": "coordination-v1-ruleset-aware-disabled-receiver",
+    "commit": "6e2558d811037104b0984d17e19a05dfe5a38421",
+    "observerSha256": "d0b5dbaf69629de20c431a6f3a8c3c99984ca87f8beef21761b33f7fa6ed590f",
+    "qualificationSha256": "3880dd6e9bf8b0919a63a7503dbe45d96123699624647826fd38eb1e7ed7bc65"
+  },
+  "operationClass": "ordinary-post-merge-delivery-settlement",
+  "trigger": {
+    "event": "push",
+    "ref": "refs/heads/main",
+    "associationEndpoint": "GET /repos/FS-GG/FS.GG.Coordination/commits/{sourceSha}/pulls",
+    "associationCount": 1,
+    "requireMerged": true,
+    "requireMergeCommitMatch": true
+  },
+  "workflow": {
+    "path": ".github/workflows/v2-ci-ordinary-settlement.yml",
+    "revision": "sourceSha",
+    "requestEventsForbidden": [
+      "pull_request",
+      "pull_request_target"
+    ],
+    "manualEventsForbidden": [
+      "workflow_dispatch",
+      "repository_dispatch"
+    ]
+  },
+  "qualification": {
+    "phase": "secret-free-predecessor",
+    "credentialAccess": false,
+    "producerStatus": "trusted-main-push-predecessor",
+    "currentValidatorRole": "native-API-derived-evidence",
+    "requiredCheckAppId": 15368,
+    "requiredChecks": [
+      "bootstrap-recovery",
+      "compiler-and-tests",
+      "dependency-and-security",
+      "deterministic-build",
+      "evidence-manifest",
+      "package-install-smoke"
+    ],
+    "requiredGateChecks": [
+      "bootstrap-recovery",
+      "compiler-and-tests",
+      "dependency-and-security",
+      "deterministic-build",
+      "evidence-manifest",
+      "package-install-smoke"
+    ],
+    "checkProducers": {
+      "bootstrap-recovery": {
+        "workflowId": 343352087,
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "pull_request"
+      },
+      "compiler-and-tests": {
+        "workflowId": 343352087,
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "pull_request"
+      },
+      "dependency-and-security": {
+        "workflowId": 343352087,
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "pull_request"
+      },
+      "deterministic-build": {
+        "workflowId": 343352087,
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "pull_request"
+      },
+      "evidence-manifest": {
+        "workflowId": 343352087,
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "pull_request"
+      },
+      "package-install-smoke": {
+        "workflowId": 343352087,
+        "path": ".github/workflows/bootstrap-qualification.yml",
+        "event": "pull_request"
+      }
+    },
+    "requiredCheckAuthority": {
+      "branch": "main",
+      "classicChecks": "empty-observed",
+      "effectiveRulesEndpoint": "GET /repos/FS-GG/FS.GG.Coordination/rules/branches/main",
+      "rulesetId": 21633423,
+      "union": "classic-and-effective-rules",
+      "conflict": "refuse"
+    }
+  },
+  "credentialJob": {
+    "environment": "ordinary-v2",
+    "runner": "github-hosted-ephemeral",
+    "requiredReviewers": 0,
+    "protectedBranchesOnly": true,
+    "allowedBranches": [
+      "main"
+    ],
+    "installed": false
+  },
+  "packagePin": {
+    "status": "pending",
+    "requiredBeforeActivation": true
+  },
+  "credentialInventory": [],
+  "activationPrerequisites": [
+    "published-coordination-v1-cli",
+    "dedicated-environment-and-credentials",
+    "installed-provider-profile",
+    "protected-readback"
+  ],
+  "forbiddenCredentialReuse": [
+    "CALLABLE_ISOLATED_OPERATION_APP_PRIVATE_KEY",
+    "V1_ADMISSION_AUTHORIZER_PRIVATE_KEY",
+    "V1_ADMISSION_APP_PRIVATE_KEY"
+  ],
+  "unchangedGates": [
+    "OpenV2"
+  ],
+  "migration": {
+    "v1Admission": false,
+    "receiverStateImport": false
+  }
+}

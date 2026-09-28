@@ -1,0 +1,33 @@
+name: V2 ordinary post-merge settlement (disabled prerequisite)
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  actions: read
+  contents: read
+  checks: read
+  pull-requests: read
+
+jobs:
+  preflight:
+    name: ordinary-v2-secret-free-preflight
+    # Source prerequisite only. Activation requires a separately reviewed change.
+    if: ${{ false }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Check out exact protected source without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Observe native source and required-check evidence
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_WORKFLOW_SHA: ${{ github.workflow_sha }}
+          FSGG_V2_SOURCE_PROFILE: coordination-v1
+        run: python3 tools/v2-ci-ordinary-observe.py produce "$RUNNER_TEMP/ordinary-v2-preflight.json"
