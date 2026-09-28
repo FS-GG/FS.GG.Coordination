@@ -8,6 +8,7 @@
     <Compile Include="LearningContext.fs" />
     <Compile Include="LearningProposal.fs" />
     <Compile Include="Observer.fs" />
+    <Compile Include="LearningAssignmentAdapter.fs" />
   </ItemGroup>
   <ItemGroup>
     <PackageReference Include="FSharp.SystemTextJson" />

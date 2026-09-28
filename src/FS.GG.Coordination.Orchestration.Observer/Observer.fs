@@ -560,6 +560,7 @@ module Observer =
         && worker.Effort = LearningContext.WorkerEffort
         && (match directSmall, planner with
             | true, None -> true
+            | false, None -> true
             | false, Some value ->
                 value.Model = LearningProposal.PlannerModel
                 && value.Effort = LearningProposal.PlannerEffort
