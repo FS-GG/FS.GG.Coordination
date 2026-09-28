@@ -1,0 +1,42 @@
+{
+  "schema": "fsgg.coordination.learning-quint-traces/1",
+  "source": "src/FS.GG.Coordination.Protocol/Protocol.md#LearningAdmissionTests",
+  "quintSha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+  "traces": [
+    {
+      "file": "testDirectSmallDisposition.itf.json",
+      "sha256": "1bc3615c783993388632ddfeb9dba6b48f1fe5f23ead1103dcefb67119566d3e",
+      "states": 2
+    },
+    {
+      "file": "testExecutionTreatmentMutationFails.itf.json",
+      "sha256": "be7518447e14f3451415c0757ed774327e3ec116bad1198d00e5e5705adbaeb0",
+      "states": 5
+    },
+    {
+      "file": "testKeepLostResponseRestartUnknown.itf.json",
+      "sha256": "c6cf88a2fcfa86d1e0ae86a72458539ec324550bcd172b12bf00e3c44bb096a0",
+      "states": 17
+    },
+    {
+      "file": "testLaunchWithoutTreatmentMutationFails.itf.json",
+      "sha256": "d4da28d771a1b481add61f215cae26533d56a64184143229df732f930e3eda78",
+      "states": 2
+    },
+    {
+      "file": "testPlannedDisposition.itf.json",
+      "sha256": "595e8e8444ccc7884cbdc5dbfa8a3a147f8d101128f573e2490f6dd353aa1c56",
+      "states": 2
+    },
+    {
+      "file": "testRawReuseValidPlanMutationFails.itf.json",
+      "sha256": "07773d9d51f89a10323325f5f7b94bc6c02676a9cbcfc7b76579d189b6f20343",
+      "states": 2
+    },
+    {
+      "file": "testUnsupportedCapabilityNoLaunch.itf.json",
+      "sha256": "b5d0bbe2da668068a0bdb6c48985f5cd96d64d0b017e1bd2a4873bfcd929658e",
+      "states": 6
+    }
+  ]
+}

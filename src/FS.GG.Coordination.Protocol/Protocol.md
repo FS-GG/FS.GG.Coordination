@@ -4285,6 +4285,373 @@ module O2AdministrativeRetirementOldPlanModel {
   val oldPlanNotRetired = not(old.retired)
 }
 
+// LEARN-01.3-J3 is a bounded shared-state composition over the existing Observer treatment
+// authority and the planned Host execution binding. Dispositions are preparation guards; the
+// durable v1 treatment remains immutable, while every execution has a separate acyclic binding.
+// preparationVersion 1 denotes the opaque learn-01-assignment-preparation/1 command; raw legacy
+// commands have version 0 and cannot assert ReuseValidPlan, Planned, or DirectSmall.
+// Capability evidence is exact and fresh only in status 1 (supported). Status 0 is unknown and
+// status 2 is unsupported; neither may launch. This source model is partial until J4/J6 replay
+// these transitions through the production Host boundary.
+module LearningAdmissionModel {
+  type LearningState = {
+    generation: int,
+    treatmentDigest: int,
+    treatmentOwner: int,
+    preparationVersion: int,
+    disposition: int,
+    plannerPresent: bool,
+    contextPresent: bool,
+    rootManifest: int,
+    childBound: bool,
+    childManifest: int,
+    executionBound: bool,
+    executionTreatmentDigest: int,
+    capabilityStatus: int,
+    capabilityFresh: bool,
+    capabilityExact: bool,
+    launchIntent: bool,
+    launchCount: int,
+    activeCount: int,
+    budgetRemaining: int,
+    responseLost: bool,
+    replayAccepted: bool,
+    restarted: bool,
+    duplicateRejected: bool,
+    staleRejected: bool,
+    missingContextRejected: bool,
+    capabilityRejected: bool,
+    capacityRejected: bool,
+    budgetRejected: bool,
+    shadowAttempted: bool,
+    shadowEffectCount: int,
+    outcomeUnknown: bool,
+  }
+
+  var learning: LearningState
+
+  action init = learning' = {
+    generation: 1,
+    treatmentDigest: 0,
+    treatmentOwner: 0,
+    preparationVersion: 0,
+    disposition: 0,
+    plannerPresent: false,
+    contextPresent: false,
+    rootManifest: 0,
+    childBound: false,
+    childManifest: 0,
+    executionBound: false,
+    executionTreatmentDigest: 0,
+    capabilityStatus: 0,
+    capabilityFresh: false,
+    capabilityExact: false,
+    launchIntent: false,
+    launchCount: 0,
+    activeCount: 0,
+    budgetRemaining: 1,
+    responseLost: false,
+    replayAccepted: false,
+    restarted: false,
+    duplicateRejected: false,
+    staleRejected: false,
+    missingContextRejected: false,
+    capabilityRejected: false,
+    capacityRejected: false,
+    budgetRejected: false,
+    shadowAttempted: false,
+    shadowEffectCount: 0,
+    outcomeUnknown: false,
+  }
+
+  action rejectMissingContext = all {
+    learning.treatmentDigest == 0,
+    learning' = { ...learning, missingContextRejected: true },
+  }
+
+  // ReuseValidPlan is disposition 1. It requires mandatory compiled context and no planner.
+  // The append is durable even when its caller loses the response.
+  action prepareKeepWithLostResponse = all {
+    learning.treatmentDigest == 0,
+    learning.missingContextRejected,
+    learning' = { ...learning,
+      treatmentDigest: 101,
+      treatmentOwner: 1,
+      preparationVersion: 1,
+      disposition: 1,
+      plannerPresent: false,
+      contextPresent: true,
+      rootManifest: 11,
+      responseLost: true },
+  }
+
+  // Planned and DirectSmall remain distinct legal preparation alternatives. They are included
+  // in the state closure even though the primary trace exercises Keep.
+  action preparePlanned = all {
+    learning.treatmentDigest == 0,
+    learning' = { ...learning,
+      treatmentDigest: 102,
+      treatmentOwner: 1,
+      preparationVersion: 1,
+      disposition: 2,
+      plannerPresent: true,
+      contextPresent: true,
+      rootManifest: 12 },
+  }
+  action prepareDirectSmall = all {
+    learning.treatmentDigest == 0,
+    learning' = { ...learning,
+      treatmentDigest: 103,
+      treatmentOwner: 1,
+      preparationVersion: 1,
+      disposition: 3,
+      plannerPresent: false,
+      contextPresent: true,
+      rootManifest: 13 },
+  }
+
+  action restartAfterTreatment = all {
+    learning.treatmentDigest != 0,
+    not(learning.restarted),
+    learning' = { ...learning, restarted: true },
+  }
+  action replayLostTreatment = all {
+    learning.responseLost,
+    learning.restarted,
+    not(learning.replayAccepted),
+    learning' = { ...learning, replayAccepted: true },
+  }
+  action rejectConcurrentDuplicate = all {
+    learning.treatmentDigest != 0,
+    not(learning.duplicateRejected),
+    learning' = { ...learning, duplicateRejected: true },
+  }
+  action rejectStaleGeneration = all {
+    learning.treatmentDigest != 0,
+    learning.generation == 1,
+    not(learning.staleRejected),
+    learning' = { ...learning, staleRejected: true },
+  }
+  action attemptShadowEffect = all {
+    not(learning.shadowAttempted),
+    learning' = { ...learning, shadowAttempted: true },
+  }
+
+  // A descendant inherits the immutable treatment but owns a distinct manifest. The execution
+  // binding references both; it never embeds or rewrites its own digest.
+  action bindChild = all {
+    learning.treatmentDigest != 0,
+    not(learning.childBound),
+    learning' = { ...learning, childBound: true, childManifest: learning.rootManifest + 1 },
+  }
+  action bindExecution = all {
+    learning.childBound,
+    learning.contextPresent,
+    not(learning.executionBound),
+    learning' = { ...learning,
+      executionBound: true,
+      executionTreatmentDigest: learning.treatmentDigest },
+  }
+
+  action rejectUnknownCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0,
+    learning.launchCount == 0,
+    not(learning.capabilityRejected),
+    learning' = { ...learning, capabilityRejected: true },
+  }
+  action rejectStaleCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0,
+    learning.launchCount == 0,
+    learning' = { ...learning,
+      capabilityStatus: 1, capabilityFresh: false, capabilityExact: true,
+      capabilityRejected: true },
+  }
+  action rejectUnsupportedCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0,
+    learning.launchCount == 0,
+    learning' = { ...learning,
+      capabilityStatus: 2, capabilityFresh: true, capabilityExact: true,
+      capabilityRejected: true },
+  }
+  action observeExactSupportedCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0 or not(learning.capabilityFresh),
+    learning' = { ...learning,
+      capabilityStatus: 1, capabilityFresh: true, capabilityExact: true },
+  }
+  action launch = all {
+    learning.executionBound,
+    learning.executionTreatmentDigest == learning.treatmentDigest,
+    learning.capabilityStatus == 1,
+    learning.capabilityFresh,
+    learning.capabilityExact,
+    learning.activeCount < 1,
+    learning.budgetRemaining > 0,
+    learning.launchCount == 0,
+    learning' = { ...learning,
+      launchIntent: true,
+      launchCount: 1,
+      activeCount: 1,
+      budgetRemaining: learning.budgetRemaining - 1 },
+  }
+  action rejectCapacity = all {
+    learning.activeCount == 1,
+    not(learning.capacityRejected),
+    learning' = { ...learning, capacityRejected: true },
+  }
+  action settleOutcomeUnknown = all {
+    learning.launchIntent,
+    learning.activeCount == 1,
+    not(learning.outcomeUnknown),
+    learning' = { ...learning, activeCount: 0, outcomeUnknown: true },
+  }
+  action rejectExhaustedBudget = all {
+    learning.outcomeUnknown,
+    learning.budgetRemaining == 0,
+    not(learning.budgetRejected),
+    learning' = { ...learning, budgetRejected: true },
+  }
+  action hold = learning' = learning
+
+  action step = any {
+    rejectMissingContext,
+    prepareKeepWithLostResponse,
+    preparePlanned,
+    prepareDirectSmall,
+    restartAfterTreatment,
+    replayLostTreatment,
+    rejectConcurrentDuplicate,
+    rejectStaleGeneration,
+    attemptShadowEffect,
+    bindChild,
+    bindExecution,
+    rejectUnknownCapability,
+    rejectStaleCapability,
+    rejectUnsupportedCapability,
+    observeExactSupportedCapability,
+    launch,
+    rejectCapacity,
+    settleOutcomeUnknown,
+    rejectExhaustedBudget,
+    hold,
+  }
+
+  val dispositionIsQualified = or {
+    learning.treatmentDigest == 0,
+    and { learning.preparationVersion == 1, learning.disposition == 1, not(learning.plannerPresent), learning.contextPresent },
+    and { learning.preparationVersion == 1, learning.disposition == 2, learning.plannerPresent, learning.contextPresent },
+    and { learning.preparationVersion == 1, learning.disposition == 3, not(learning.plannerPresent), learning.contextPresent },
+  }
+  val treatmentAndBindingAreAcyclic = and {
+    not(learning.childBound) or and {
+      learning.treatmentDigest != 0,
+      learning.childManifest != learning.rootManifest,
+    },
+    not(learning.executionBound) or and {
+      learning.childBound,
+      learning.executionTreatmentDigest == learning.treatmentDigest,
+    },
+  }
+  val launchIsQualified = learning.launchCount == 0 or and {
+    learning.executionBound,
+    learning.executionTreatmentDigest == learning.treatmentDigest,
+    learning.capabilityStatus == 1,
+    learning.capabilityFresh,
+    learning.capabilityExact,
+    learning.budgetRemaining == 0,
+  }
+  val safety = and {
+    dispositionIsQualified,
+    treatmentAndBindingAreAcyclic,
+    launchIsQualified,
+    learning.launchCount <= 1,
+    learning.activeCount <= 1,
+    learning.budgetRemaining >= 0,
+    learning.shadowEffectCount == 0,
+    not(learning.outcomeUnknown) or learning.activeCount == 0,
+  }
+  val reached = and {
+    learning.disposition == 1,
+    learning.replayAccepted,
+    learning.duplicateRejected,
+    learning.staleRejected,
+    learning.shadowAttempted,
+    learning.childBound,
+    learning.capabilityRejected,
+    learning.capacityRejected,
+    learning.outcomeUnknown,
+    learning.budgetRejected,
+    safety,
+  }
+
+  // Independent mutation controls used by the J3 oracle. Each bypasses an actual production
+  // transition guard and must violate the safety projection at first divergence.
+  action invalidLaunchWithoutTreatment = learning' = { ...learning,
+    launchIntent: true, launchCount: 1, activeCount: 1, budgetRemaining: 0 }
+  action invalidExecutionRebind = learning' = { ...learning,
+    executionBound: true, executionTreatmentDigest: learning.treatmentDigest + 1 }
+  action invalidRawReuseValidPlan = learning' = { ...learning,
+    treatmentDigest: 104, treatmentOwner: 1, preparationVersion: 0, disposition: 1,
+    plannerPresent: false, contextPresent: true, rootManifest: 14 }
+}
+
+module LearningAdmissionTests {
+  import LearningAdmissionModel.*
+
+  run testKeepLostResponseRestartUnknown = init
+    .then(rejectMissingContext)
+    .then(prepareKeepWithLostResponse)
+    .then(restartAfterTreatment)
+    .then(replayLostTreatment)
+    .then(rejectConcurrentDuplicate)
+    .then(rejectStaleGeneration)
+    .then(attemptShadowEffect)
+    .then(bindChild)
+    .then(bindExecution)
+    .then(rejectUnknownCapability)
+    .then(rejectStaleCapability)
+    .then(observeExactSupportedCapability)
+    .then(launch)
+    .then(rejectCapacity)
+    .then(settleOutcomeUnknown)
+    .then(rejectExhaustedBudget)
+    .expect(reached)
+
+  run testPlannedDisposition = init
+    .then(preparePlanned)
+    .expect(safety and learning.disposition == 2 and learning.plannerPresent)
+
+  run testDirectSmallDisposition = init
+    .then(prepareDirectSmall)
+    .expect(safety and learning.disposition == 3 and not(learning.plannerPresent))
+
+  run testUnsupportedCapabilityNoLaunch = init
+    .then(rejectMissingContext)
+    .then(prepareKeepWithLostResponse)
+    .then(bindChild)
+    .then(bindExecution)
+    .then(rejectUnsupportedCapability)
+    .expect(safety and learning.capabilityRejected and learning.launchCount == 0)
+
+  run testLaunchWithoutTreatmentMutationFails = init
+    .then(invalidLaunchWithoutTreatment)
+    .expect(not(safety))
+
+  run testExecutionTreatmentMutationFails = init
+    .then(rejectMissingContext)
+    .then(prepareKeepWithLostResponse)
+    .then(bindChild)
+    .then(invalidExecutionRebind)
+    .expect(not(safety))
+
+  run testRawReuseValidPlanMutationFails = init
+    .then(invalidRawReuseValidPlan)
+    .expect(not(safety))
+}
+
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
 // the actions and properties needed for one independently qualified closure. Quint flattening
 // therefore retains the used transitive closure instead of the all-actions integration root.
