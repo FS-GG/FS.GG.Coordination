@@ -1,6 +1,6 @@
 # C3-COORDINATION-01 ordinary V2 receiver adoption
 
-Status: activation source prepared against published Coordination CLI `0.1.7` and enrolled dedicated custody. Installed settlement and its normal idempotent rerun remain pending until this exact qualified change merges.
+Status: complete. Coordination CLI `0.1.7` is published and independently verified, dedicated main-only custody is enrolled, the repaired receiver is active, one real settlement succeeded, and its normal unchanged rerun proved idempotent against an unchanged Authority ref.
 
 The secret-free observer binds a protected `main` push to one merged pull request, its exact qualification head, native Bootstrap workflow jobs and the currently protected policy and workflow bytes. Coordination repository ID `1346720714` is pinned. The effective-branch-rules reader uses `GET /repos/FS-GG/FS.GG.Coordination/rules/branches/main` with bounded pagination, unions its required checks with the classic branch list, and refuses missing pages, malformed rules, duplicate rules, conflicting App IDs, extra or missing checks, and policy drift. The six required contexts come from Bootstrap workflow `343352087` and must use GitHub Actions App `15368`. Ruleset `21633423` is the observed protected-main source; classic checks are currently empty.
 
@@ -13,3 +13,13 @@ The main-only `ordinary-v2` environment is ID `22954548572`, with sole custom br
 Admit this source only through a reviewed PR whose exact head passes all six native Bootstrap checks and whose base equals its native merge base, then merge that exact head. The protected-main run must produce its secret-free receipt, execute one installed settlement attempt, and write one Authority effect. Read back the exact Authority shard and operation independently, then normally rerun the whole workflow and require `SettlementAlreadyComplete` with an unchanged shard, one effect, and unchanged Authority ref.
 
 Generated SDD workspaces are unaffected. This repository-owned activation changes coordination settlement behavior only; it changes no fresh scaffold, generated-workspace default, lifecycle API, package version, or retained workspace. No workspace upgrade or live efficiency claim is implied.
+
+## Authoritative closure
+
+CLI `0.1.7` publication is immutable and complete. Recovery run `36473720547` verified the existing GitHub Packages and nuget.org payloads, passed anonymous public-only installation, and created/read back release `v0.1.7`. The protected tag targets source `fdfdcfc91e65f814b42d8c9e061fec0e6221a139`; the reviewed GitHub Packages/release archive SHA-256 is `f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c`.
+
+Activation PR `#881` merged at `09c361897d18d8f7fe43c344f0414c197f370c5a`. Its first protected-main run `36479774649` refused in the secret-free preflight because the adapted observer still accepted only the historical `installed: false` state. The credential job was skipped and no Authority effect occurred. Repair PR `#883` admitted both strict boolean states, preserved inactive historical fixtures, refused non-boolean activation, and updated the exact observer digest. It merged after current exact-head qualification at `4589cd685d2b62b588a120e37d4429dea5b61062`.
+
+Protected-main settlement run `36484724833` attempt 1 completed successfully from that repaired source. It installed the pinned public `0.1.7` archive and returned `SettlementSucceeded` with receipt digest `e70ebd05401b4a229cfd07139ebd36baa45bd316185a4e3c258faaec73e067ef`. A normal unchanged rerun of the whole workflow, attempt 2, returned `SettlementAlreadyComplete` with the same digest.
+
+Independent Authority reads before and after the rerun found `refs/heads/fsgg/v2/journal/operation/31` unchanged at `851f28b1e5f326c5015ba6f0a6d239700eac0177`, tree `93e227768bde7d810e9ed367922151f5e8147330`, and blob `edc94fb9b95ee0e1f948d29d76ce2209e22c1856`. The raw Authority blob SHA-256 is `1ccfda9fbcc49ec775f9778c4546f0a8ad904ffec9dc4f6f5dc20f59d535f7eb`; its canonical compact, key-sorted JSON SHA-256 is `5c20d786c76853eb1c15b3160b7b4f86d1c49780935a8f4b7f1e644ddc0a22af`. The document contains exactly one completed entry and one effect for operation `ordinary-settlement:62d80f284996750756f9d124cd6386924c075de7f0f242f63ad9cb64c8600ba9`, attempt 1, generation 3. C3-COORDINATION-01 is complete.
