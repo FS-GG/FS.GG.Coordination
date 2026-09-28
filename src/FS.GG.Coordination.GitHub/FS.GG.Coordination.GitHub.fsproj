@@ -95,6 +95,10 @@
     <Compile Include="RulesetPlanAdapter.fs" />
     <Compile Include="RepositorySettingsAdapter.fsi" />
     <Compile Include="RepositorySettingsAdapter.fs" />
+    <Compile Include="MigrationRepositorySettingsRead.fsi" />
+    <Compile Include="MigrationRepositorySettingsRead.fs" />
+    <Compile Include="MigrationRepositorySettingsProviderRead.fsi" />
+    <Compile Include="MigrationRepositorySettingsProviderRead.fs" />
     <Compile Include="ActionsReleaseFeedAdapter.fsi" />
     <Compile Include="ActionsReleaseFeedAdapter.fs" />
     <Compile Include="GitHubSandboxClosure.fsi" />

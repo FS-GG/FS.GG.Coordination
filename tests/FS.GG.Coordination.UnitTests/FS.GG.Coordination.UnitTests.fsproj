@@ -70,6 +70,8 @@
     <Compile Include="MigrationImmutableReleasesReadTests.fs" />
     <Compile Include="MigrationEnvironmentSettingsReadTests.fs" />
     <Compile Include="MigrationEnvironmentCensusReadTests.fs" />
+    <Compile Include="MigrationRepositorySettingsReadTests.fs" />
+    <Compile Include="MigrationRepositorySettingsProviderReadTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureContractTests.fs" />
     <Compile Include="MigrationClaimEventCaptureContractTests.fs" />
     <Compile Include="MigrationLegacyReceiptParserTests.fs" />
