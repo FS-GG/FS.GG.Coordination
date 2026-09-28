@@ -79,6 +79,8 @@
     <Compile Include="MigrationClaimJournalCaptureTests.fs" />
     <Compile Include="MigrationClaimEventInspectBinderTests.fs" />
     <Compile Include="MigrationHistoricalLossCensusTests.fs" />
+    <Compile Include="MigrationHistoricalProducerRosterEvidenceTests.fs" />
+    <Compile Include="MigrationHistoricalProducerNativeCaptureTests.fs" />
     <Compile Include="MigrationReviewDeliveryInspectBinderTests.fs" />
     <Compile Include="MigrationReviewDeliveryCaptureTests.fs" />
     <Compile Include="MigrationJournalCaptureTests.fs" />
