@@ -86,6 +86,14 @@ module MigrationReceiverRosterRead =
         transport: IMigrationGitHubReadTransport ->
             Result<MigrationReceiverRosterPass, string>
 
+    /// Uses the exact minted bearer for one roster pass. The digest is taken
+    /// from the protected mint response; a mismatch refuses before provider reads.
+    val capturePassForMintedToken:
+        options: MigrationReceiverRosterReadOptions ->
+        expectedTokenSha256: string ->
+        transport: IMigrationGitHubReadTransport ->
+            Result<MigrationReceiverRosterPass, string>
+
     val captureTwoPass:
         options: MigrationReceiverRosterReadOptions ->
         transport: IMigrationGitHubReadTransport ->

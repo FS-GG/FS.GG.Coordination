@@ -33,6 +33,14 @@ module MigrationReceiverCohortOrchestration =
     let private unavailable reason =
         Error $"receiver-cohort-orchestration-unavailable:{reason}"
 
+    let internal validateMintRunBindingForTests
+        (options: MigrationReceiverInstallationReadOptions)
+        (run: MigrationSandboxSeedRequest) =
+        if options.WorkflowRunId = run.WorkflowRunId
+           && options.WorkflowRunAttempt = run.WorkflowRunAttempt
+           && options.RunNonce = run.RunNonce then Ok()
+        else unavailable "mint-run-binding"
+
     let private splitRepositoryName (value: string) =
         if isNull value then
             None
@@ -190,8 +198,10 @@ module MigrationReceiverCohortOrchestration =
                 if mismatch then unavailable "copy-target-provenance-mismatch" else Ok()
         with ex -> unavailable ex.Message
 
-    let compose request (transport: IMigrationGitHubReadTransport) =
-        MigrationReceiverInstallationRead.captureForComposer request.InstallationOptions transport
+    let compose request (mintTransport: IMigrationReceiverTokenMintTransport) (transport: IMigrationGitHubReadTransport) =
+        validateMintRunBindingForTests request.InstallationOptions request.RunIdentity
+        |> Result.bind (fun () ->
+        MigrationReceiverInstallationRead.captureForComposer request.InstallationOptions mintTransport transport)
         |> Result.mapError (fun reason -> $"receiver-cohort-orchestration-unavailable:installation:{reason}")
         |> Result.bind (fun installation ->
             MigrationReceiverCopyPlan.verify request.AcceptedEvidence request.RunIdentity request.CopyPlan

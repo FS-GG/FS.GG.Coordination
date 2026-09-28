@@ -589,6 +589,15 @@ module MigrationReceiverRosterRead =
                                             PassFingerprint = passFingerprint settings total sorted pages
                                         }))))
 
+    let capturePassForMintedToken
+        (options: MigrationReceiverRosterReadOptions)
+        expectedTokenSha256
+        (transport: IMigrationGitHubReadTransport) =
+        if String.IsNullOrWhiteSpace expectedTokenSha256
+           || sha256 options.InstallationToken <> expectedTokenSha256 then
+            Error "receiver-roster-minted-token-binding"
+        else capturePass options transport
+
     let captureTwoPass (options: MigrationReceiverRosterReadOptions) (transport: IMigrationGitHubReadTransport) =
         capturePass options transport
         |> Result.bind (fun first ->

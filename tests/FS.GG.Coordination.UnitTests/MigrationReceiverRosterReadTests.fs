@@ -274,3 +274,10 @@ let ``invalid local configuration refuses before transport`` () =
         let transport = FakeTransport onePass
         expectError "receiver-roster-invalid-options" (MigrationReceiverRosterRead.capturePass invalid transport)
         Assert.Empty(transport.Calls)
+
+[<Fact>]
+let ``minted bearer digest mismatch refuses before observer access`` () =
+    let transport = FakeTransport onePass
+    expectError "receiver-roster-minted-token-binding"
+        (MigrationReceiverRosterRead.capturePassForMintedToken options (String.replicate 64 "0") transport)
+    Assert.Empty(transport.Calls)

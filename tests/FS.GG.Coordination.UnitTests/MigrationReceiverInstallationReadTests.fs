@@ -2,10 +2,12 @@ module FS.GG.Coordination.MigrationReceiverInstallationReadTests
 
 open System
 open System.Collections.Generic
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coordination.GitHub
 
-type private FakeTransport(outcomes: TransportOutcome list) =
+type private FakeRead(outcomes: TransportOutcome list) =
     let queue = Queue<TransportOutcome>(outcomes)
     let calls = ResizeArray<GitHubRequest>()
     member _.Calls = calls |> Seq.toList
@@ -14,115 +16,162 @@ type private FakeTransport(outcomes: TransportOutcome list) =
             calls.Add request
             if queue.Count = 0 then NetworkFailure else queue.Dequeue()
 
-let private response status headers body =
-    Response { StatusCode=status; Headers=headers; Body=body; ETag=None
+type private FakeMint(outcome: TransportOutcome) =
+    let calls = ResizeArray<RestRequest>()
+    member _.Calls = calls |> Seq.toList
+    interface IMigrationReceiverTokenMintTransport with
+        member _.Mint request = calls.Add request; outcome
+
+let private response status body =
+    Response { StatusCode=status; Headers=Map.empty; Body=body; ETag=None
                RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
-let private ok body = response 200 Map.empty body
-let private app permissions =
-    $"""{{"id":8001,"node_id":"APP_8001","slug":"receiver-reader","owner":{{"login":"app-builder","id":19,"node_id":"USER_19"}},"permissions":{permissions}}}"""
-let private installation selection permissions =
-    $"""{{"id":7001,"app_id":8001,"app_slug":"receiver-reader","target_id":9,"target_type":"Organization","account":{{"login":"FS-GG","id":9,"node_id":"ORG_9"}},"repository_selection":"{selection}","permissions":{permissions},"repositories_url":"https://api.github.test/installation/repositories","suspended_at":null}}"""
-let private repository id nodeId fullName =
-    $"""{{"id":{id},"node_id":"{nodeId}","full_name":"{fullName}","private":true,"archived":false,"disabled":false,"permissions":{{"pull":true,"push":false,"admin":false}}}}"""
-let private page total repositories =
-    $"""{{"total_count":{total},"repositories":[{String.concat "," repositories}]}}"""
-let private permissions = "{\"contents\":\"read\",\"metadata\":\"read\"}"
-let private broadPermissions = "{\"contents\":\"write\",\"metadata\":\"read\"}"
-let private repositories = [ repository 1353050537L "R_kgDOUKXpqQ" "FS-GG/FS.GG.GitHub.Substrate.Sandbox" ]
-let private declarations =
-    [ { DeclaredRepositoryId=1353050537L; DeclaredRepositoryNodeId="R_kgDOUKXpqQ"
-        DeclaredRepositoryFullName="FS-GG/FS.GG.GitHub.Substrate.Sandbox" } ]
+let private ok body = response 200 body
+let private sha256 (value: string) =
+    value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+let private broad = """{"contents":"write","metadata":"read"}"""
+let private app =
+    $"""{{"id":8001,"node_id":"APP_8001","slug":"receiver-reader","owner":{{"login":"app-builder","id":19,"node_id":"USER_19"}},"permissions":{broad}}}"""
+let private installation =
+    $"""{{"id":143110413,"app_id":8001,"app_slug":"receiver-reader","target_id":9,"target_type":"Organization","account":{{"login":"FS-GG","id":9,"node_id":"ORG_9"}},"repository_selection":"selected","permissions":{broad},"repositories_url":"https://api.github.com/installation/repositories","suspended_at":null}}"""
+let private repository =
+    """{"id":1353050537,"node_id":"R_kgDOUKXpqQ","full_name":"FS-GG/FS.GG.GitHub.Substrate.Sandbox","private":true,"archived":false,"disabled":false,"permissions":{"pull":true,"push":false,"admin":false}}"""
+let private page = $"""{{"total_count":1,"repositories":[{repository}]}}"""
+let private reads = [ ok app; ok installation; ok page; ok installation; ok page; ok app ]
 let private options =
-    { ApiBase=Uri "https://api.github.test/"; AppId=8001L; AppNodeId="APP_8001"
-      AppSlug="receiver-reader"; InstallationId=7001L; AccountLogin="FS-GG"
+    { ApiBase=Uri "https://api.github.com/"; AppId=8001L; AppNodeId="APP_8001"
+      AppSlug="receiver-reader"; InstallationId=143110413L; AccountLogin="FS-GG"
       AccountId=9L; AccountNodeId="ORG_9"
       ExpectedAppPermissions=Map [ "contents", "write"; "metadata", "read" ]
       ExpectedInstallationPermissions=Map [ "contents", "write"; "metadata", "read" ]
       RequiredTokenPermissions=Map [ "contents", "read"; "metadata", "read" ]
-      SelectedRepositories=declarations; AppToken="app-jwt"; InstallationToken="installation-token"
-      UserAgent="receiver-installation-test" }
-let private cycle appBody installationBody repositoryBody =
-    [ ok appBody; ok installationBody; ok repositoryBody ]
-let private stable = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" broadPermissions) ]
-let private expectUnavailable (fragment: string) result =
+      SelectedRepositories=[ { DeclaredRepositoryId=1353050537L; DeclaredRepositoryNodeId="R_kgDOUKXpqQ"
+                               DeclaredRepositoryFullName="FS-GG/FS.GG.GitHub.Substrate.Sandbox" } ]
+      AppToken="app-jwt"; WorkflowRunId=991L; WorkflowRunAttempt=2
+      RunNonce="991-2-source"; UserAgent="receiver-installation-test" }
+let private mintResponse permissions repositories token expiry =
+    $"""{{"token":"{token}","expires_at":"{expiry}","permissions":{permissions},"repository_selection":"selected","repositories":{repositories}}}"""
+let private expiry () = DateTimeOffset.UtcNow.AddMinutes(30.0).ToString("O")
+let private narrowMint () =
+    mintResponse """{"contents":"read"}""" $"[{repository}]" "minted-token" (expiry ())
+let private capture options mint read =
+    MigrationReceiverInstallationRead.captureForComposer options (mint :> IMigrationReceiverTokenMintTransport) (read :> IMigrationGitHubReadTransport)
+let private expectUnavailable fragment result =
     match result with
     | Error reason ->
         Assert.StartsWith("receiver-installation-authority-adapter-unavailable:", reason)
-        Assert.True(reason.Contains(fragment, StringComparison.Ordinal), reason)
-    | Ok _ -> Assert.Fail("expected provider authority refusal")
+        Assert.Contains(fragment, reason)
+    | Ok _ -> Assert.Fail($"expected {fragment}")
 
 [<Fact>]
-let ``broad installation does not attest narrow minted token permissions`` () =
-    let transport = FakeTransport(stable @ stable)
-    expectUnavailable "token-permission-attestation-unavailable"
-        (MigrationReceiverInstallationRead.captureForComposer options transport)
-    let requests =
-        transport.Calls
-        |> List.map (function Rest request -> request | GraphQL _ -> failwith "unexpected GraphQL")
-    Assert.Equal(3, requests.Length)
-    Assert.DoesNotContain(requests, fun request -> request.Uri.AbsolutePath = "/installation")
-    Assert.All(requests, fun request -> Assert.Equal(Get, request.Method))
+let ``exact protected mint binds narrow token and reuses bearer for two native roster passes`` () =
+    let raw = narrowMint ()
+    let mint = FakeMint(response 201 raw)
+    let observer = FakeRead reads
+    match capture options mint observer with
+    | Error reason -> Assert.Fail reason
+    | Ok observed ->
+        Assert.True(options.RequiredTokenPermissions = observed.TokenPermissions)
+        Assert.True(options.ExpectedInstallationPermissions = observed.InstallationPermissions)
+        Assert.Equal(options.WorkflowRunId, observed.MintAttestation.WorkflowRunId)
+        Assert.Equal(options.WorkflowRunAttempt, observed.MintAttestation.WorkflowRunAttempt)
+        Assert.Equal(options.RunNonce, observed.MintAttestation.RunNonce)
+        Assert.Equal(64, observed.MintAttestation.TokenSha256.Length)
+        Assert.Equal(64, observed.MintAttestation.ResponseSha256.Length)
+        Assert.Equal(64, observed.MintAttestation.Fingerprint.Length)
+        Assert.DoesNotContain("minted-token", string observed)
+        Assert.Equal(observed.ComposerRosterCapture.First, observed.ComposerRosterCapture.Second)
+        let repositoryPage = observed.ComposerRosterCapture.First.Pages[1]
+        Assert.Equal(sha256 repositoryPage.RosterRequestedUri, repositoryPage.RosterRequestIdentitySha256)
+        let request = Assert.Single(mint.Calls)
+        Assert.Equal(Post, request.Method)
+        Assert.Equal("https://api.github.com/app/installations/143110413/access_tokens", request.Uri.AbsoluteUri)
+        Assert.Equal(Some """{"repository_ids":[1353050537],"permissions":{"contents":"read"}}""", request.Body)
+        Assert.Equal("Bearer app-jwt", request.Headers.["Authorization"])
+        Assert.Equal(NeverReplay, request.Idempotency)
+        Assert.Equal(6, observer.Calls.Length)
+        for index in [ 2; 4 ] do
+            match observer.Calls[index] with
+            | Rest call ->
+                Assert.Equal(Get, call.Method)
+                Assert.Equal("Bearer minted-token", call.Headers.["Authorization"])
+            | _ -> Assert.Fail "expected roster GET"
+        for index in [ 1; 3 ] do
+            match observer.Calls[index] with
+            | Rest call ->
+                Assert.Equal("Bearer app-jwt", call.Headers.["Authorization"])
+                Assert.Equal("https://api.github.com/app/installations/143110413", call.Uri.AbsoluteUri)
+            | _ -> Assert.Fail "expected installation settings GET"
 
 [<Fact>]
-let ``inaccessible App and incomplete repository census refuse explicitly`` () =
-    expectUnavailable "app-inaccessible:http-403"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport [ response 403 Map.empty "forbidden" ]))
-    let partial = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 [])
-    expectUnavailable "receiver-roster-pagination-incomplete"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport partial))
+let ``mint refuses broad grants extra repositories and wrong identities`` () =
+    let foreignRepository = repository.Replace("R_kgDOUKXpqQ", "R_foreign")
+    let foreignId = repository.Replace("1353050537", "1353050538")
+    let foreignName = repository.Replace("FS.GG.GitHub.Substrate.Sandbox", "Other")
+    let invalid =
+        [ "mint-permissions", mintResponse broad $"[{repository}]" "minted-token" (expiry ())
+          "mint-permissions", mintResponse """{"contents":"read","issues":"read"}""" $"[{repository}]" "minted-token" (expiry ())
+          "mint-response-shape", mintResponse """{"contents":"read","contents":"write"}""" $"[{repository}]" "minted-token" (expiry ())
+          "mint-repository-scope", mintResponse """{"contents":"read"}""" "[]" "minted-token" (expiry ())
+          "mint-repository-scope", mintResponse """{"contents":"read"}""" $"[{repository},{repository}]" "minted-token" (expiry ())
+          "mint-repository-scope", mintResponse """{"contents":"read"}""" $"[{foreignRepository}]" "minted-token" (expiry ())
+          "mint-repository-scope", mintResponse """{"contents":"read"}""" $"[{foreignId}]" "minted-token" (expiry ())
+          "mint-repository-scope", mintResponse """{"contents":"read"}""" $"[{foreignName}]" "minted-token" (expiry ()) ]
+    for reason, raw in invalid do
+        let mint = FakeMint(response 201 raw)
+        let observer = FakeRead reads
+        expectUnavailable reason (capture options mint observer)
+        Assert.Single(observer.Calls) |> ignore
 
 [<Fact>]
-let ``wrong App installation and unknown permission settings refuse`` () =
-    let wrongApp = (app broadPermissions).Replace("8001", "8002")
-    expectUnavailable "app-identity-drift"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport [ ok wrongApp ]))
-    let extra = "{\"contents\":\"read\",\"issues\":\"read\",\"metadata\":\"read\"}"
-    expectUnavailable "app-permission-settings-unknown"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport [ ok (app extra) ]))
-    let mismatchedInstallation = cycle (app broadPermissions) (installation "selected" extra) (page 1 repositories)
-    expectUnavailable "installation-permission"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport mismatchedInstallation))
-    let broadToken = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" broadPermissions) ]
-    expectUnavailable "token-permission-attestation-unavailable"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport broadToken))
-    let impossible = { options with ExpectedInstallationPermissions=options.RequiredTokenPermissions
-                                    RequiredTokenPermissions=Map [ "contents", "write"; "metadata", "read" ] }
-    let transport = FakeTransport stable
-    expectUnavailable "invalid-options" (MigrationReceiverInstallationRead.captureForComposer impossible transport)
-    Assert.Empty(transport.Calls)
-
-[<Fact>]
-let ``all repository selection and unselected repository grants refuse`` () =
-    let all = cycle (app broadPermissions) (installation "all" broadPermissions) (page 1 repositories)
-    expectUnavailable "receiver-roster-installation-not-selected"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport all))
-    let extraRepository = repository 108L "REPO_108" "FS-GG/copy-108"
-    let extra = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 2 (repositories @ [ extraRepository ]))
-    expectUnavailable "unselected-repository-grant"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport extra))
-
-[<Fact>]
-let ``wrong selected repository refuses`` () =
-    let wrong = { options with SelectedRepositories=[ { declarations.Head with DeclaredRepositoryNodeId="REPO_WRONG" } ] }
+let ``mint failure expiry and invalid protected installation refuse`` () =
+    let stale = mintResponse """{"contents":"read"}""" $"[{repository}]" "minted-token" (DateTimeOffset.UtcNow.AddMinutes(-1.0).ToString("O"))
+    expectUnavailable "mint-expiry" (capture options (FakeMint(response 201 stale)) (FakeRead reads))
+    expectUnavailable "mint-inaccessible:http-403" (capture options (FakeMint(response 403 "forbidden")) (FakeRead reads))
+    expectUnavailable "mint-inaccessible:http-200" (capture options (FakeMint(response 200 (narrowMint ()))) (FakeRead reads))
+    let mint = FakeMint(response 201 (narrowMint ()))
+    let observer = FakeRead reads
+    expectUnavailable "invalid-options" (capture { options with InstallationId=7001L } mint observer)
+    Assert.Empty(mint.Calls)
+    Assert.Empty(observer.Calls)
     expectUnavailable "invalid-options"
-        (MigrationReceiverInstallationRead.captureForComposer wrong (FakeTransport stable))
+        (capture { options with ApiBase=Uri "https://api.github.test/" } mint observer)
+    Assert.Empty(mint.Calls)
+    Assert.Empty(observer.Calls)
 
 [<Fact>]
-let ``pagination escape refuses`` () =
-    let escape =
-        response 200 (Map [ "Link", "<https://evil.test/installation/repositories?per_page=100&page=2>; rel=\"next\"" ])
-            (page 2 repositories)
-    expectUnavailable "receiver-roster-pagination-continuation"
-        (MigrationReceiverInstallationRead.captureForComposer options
-            (FakeTransport [ ok (app broadPermissions); ok (installation "selected" broadPermissions); escape ]))
+let ``explicit metadata grant is accepted and run binding changes attestation`` () =
+    let raw = mintResponse """{"contents":"read","metadata":"read"}""" $"[{repository}]" "minted-token" (expiry ())
+    let first = capture options (FakeMint(response 201 raw)) (FakeRead reads) |> Result.defaultWith failwith
+    let changed = { options with WorkflowRunId=992L; RunNonce="992-2-source" }
+    let second = capture changed (FakeMint(response 201 raw)) (FakeRead reads) |> Result.defaultWith failwith
+    Assert.NotEqual(first.MintAttestation.RequestIdentitySha256, second.MintAttestation.RequestIdentitySha256)
+    Assert.NotEqual(first.MintAttestation.Fingerprint, second.MintAttestation.Fingerprint)
+    Assert.Equal(first.MintAttestation.ResponseSha256, second.MintAttestation.ResponseSha256)
 
 [<Fact>]
-let ``invalid or non-sandbox local scope refuses before provider access`` () =
-    for invalid in
-        [ { options with AppToken="" }
-          { options with RequiredTokenPermissions=Map [ "metadata", "read" ] }
-          { options with SelectedRepositories=declarations.Tail } ] do
-        let transport = FakeTransport stable
-        expectUnavailable "invalid-options"
-            (MigrationReceiverInstallationRead.captureForComposer invalid transport)
-        Assert.Empty(transport.Calls)
+let ``observer scope drift refuses after mint and never treats installation grants as token grants`` () =
+    let changed = installation.Replace("\"contents\":\"write\"", "\"contents\":\"read\"")
+    let observer = FakeRead [ ok app; ok changed ]
+    expectUnavailable "receiver-roster-installation-permission-drift"
+        (capture options (FakeMint(response 201 (narrowMint ()))) observer)
+
+[<Fact>]
+let ``App identity and second-pass roster drift refuse`` () =
+    let wrongApp = app.Replace("APP_8001", "APP_FOREIGN")
+    let mint = FakeMint(response 201 (narrowMint ()))
+    let observer = FakeRead [ ok wrongApp ]
+    expectUnavailable "app-identity-drift" (capture options mint observer)
+    Assert.Empty(mint.Calls)
+    let changedPage = page.Replace("\"push\":false", "\"push\":true")
+    expectUnavailable "two-pass-drift"
+        (capture options (FakeMint(response 201 (narrowMint ())))
+            (FakeRead [ ok app; ok installation; ok page; ok installation; ok changedPage; ok app ]))
+
+[<Fact>]
+let ``unknown selected repository grant refuses`` () =
+    let extra =
+        """{"id":99,"node_id":"R_99","full_name":"FS-GG/other","private":true,"archived":false,"disabled":false,"permissions":{"pull":true}}"""
+    let changedPage = $"""{{"total_count":2,"repositories":[{repository},{extra}]}}"""
+    expectUnavailable "unselected-repository-grant"
+        (capture options (FakeMint(response 201 (narrowMint ())))
+            (FakeRead [ ok app; ok installation; ok changedPage ]))
