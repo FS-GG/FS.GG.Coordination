@@ -1,6 +1,7 @@
 module FS.GG.Coordination.Orchestration.Observer.Tests.ObserverTests
 
 open System
+open System.Collections.Generic
 open System.Threading
 open System.Threading.Tasks
 open Xunit
@@ -155,6 +156,39 @@ let approvedState () =
         }
 
     apply state2 (ApproveProposal approval), commandId
+
+let learningAssignment relation itemId originalItemId =
+    {
+        SourceObserverId = ObserverJournal.observerId sessionId
+        SourceSequence = 2L
+        SourceObservationSha256 = (observation "project-rev-1" (now.AddMinutes -1.)).ObservationSha256
+        ItemId = itemId
+        OriginalItemId = originalItemId
+        Relation = relation
+        Arm = Focused
+        ProposalSha256 = sha "4"
+        ContextManifestSha256 = sha "5"
+        Planner =
+            Some
+                {
+                    Model = LearningProposal.PlannerModel
+                    Effort = LearningProposal.PlannerEffort
+                }
+        Worker =
+            {
+                Model = LearningContext.WorkerModel
+                Effort = LearningContext.WorkerEffort
+            }
+        DirectSmallEligible = false
+        ExpectedWorkflowRevision = Id.revision 7L
+        ExpectedGeneration = Id.generation 3L
+        AssignedAt = now
+    }
+
+let treatmentState () =
+    { Observer.initial with
+        Observation = (observed ()).Observation
+    }
 
 [<Fact>]
 let ``complete typed lifecycle keeps every presentation stage distinct`` () =
@@ -506,6 +540,126 @@ let ``proposal actions must name observed work and approval principal and live b
     Assert.Equal("stale-or-unbound-approval", (Observer.decide later state2 laterEnvelope).Receipt.Detail)
 
 [<Fact>]
+let ``original treatment is durable before any executor authority exists`` () =
+    let state0 = treatmentState ()
+    let input = learningAssignment Original "FS-GG/Coordination#42" "FS-GG/Coordination#42"
+    let sessionDecision = decide (observed ()) (AssignLearningTreatment input)
+    Assert.Equal(ObserverRejected, sessionDecision.Receipt.Disposition)
+    Assert.Equal("learning-treatment-canonical-runtime-required", sessionDecision.Receipt.Detail)
+    Assert.Empty(sessionDecision.Events)
+
+    let decision = decide state0 (AssignLearningTreatment input)
+
+    Assert.Equal(ObserverAccepted, decision.Receipt.Disposition)
+    Assert.Equal("learning-treatment-assigned", decision.Receipt.Detail)
+    let assigned = Assert.Single(decision.Events)
+    let state1 = Observer.evolve state0 assigned
+    let treatment = state1.LearningTreatments[input.OriginalItemId]
+    let binding = state1.LearningTreatmentBindings[input.ItemId]
+
+    Assert.Equal(Focused, treatment.Arm)
+    Assert.Equal(LearningProposal.PlannerModel, treatment.Planner.Value.Model)
+    Assert.Equal(LearningContext.WorkerModel, treatment.Worker.Model)
+    Assert.Equal(Observer.learningTreatmentSha256 "planner-owner" input, treatment.AssignmentSha256)
+    Assert.Equal(Original, binding.Relation)
+    Assert.Empty(state1.Acceptances)
+    Assert.Empty(state1.Effects)
+
+[<Fact>]
+let ``crash replay returns the same durable treatment without redrawing`` () =
+    let state0 = treatmentState ()
+    let input = learningAssignment Original "FS-GG/Coordination#42" "FS-GG/Coordination#42"
+    let first = decide state0 (AssignLearningTreatment input)
+    let assignedEvent = Assert.Single(first.Events)
+    let recovered = Observer.evolve state0 assignedEvent
+    let replayed = decide recovered (AssignLearningTreatment input)
+
+    Assert.Equal(ObserverAccepted, replayed.Receipt.Disposition)
+    Assert.Equal("learning-treatment-replayed", replayed.Receipt.Detail)
+    Assert.Empty(replayed.Events)
+    Assert.Equal(recovered.Sequence, replayed.Receipt.Sequence)
+    Assert.Equal(
+        recovered.LearningTreatments[input.OriginalItemId].AssignmentSha256,
+        Observer.learningTreatmentSha256 "planner-owner" input
+    )
+
+    let bytes = ObserverEventCodec.encode assignedEvent
+    Assert.Equal(Ok assignedEvent, ObserverEventCodec.tryDecode bytes)
+
+[<Fact>]
+let ``descendants and retries inherit one original owner and cannot redraw`` () =
+    let originalId = "FS-GG/Coordination#42"
+    let state0 = apply (treatmentState ()) (AssignLearningTreatment(learningAssignment Original originalId originalId))
+
+    let missingParent =
+        learningAssignment (Descendant "FS-GG/Coordination#missing") "FS-GG/Coordination#46" originalId
+
+    let missingParentDecision = decide state0 (AssignLearningTreatment missingParent)
+    Assert.Equal(ObserverRejected, missingParentDecision.Receipt.Disposition)
+    Assert.Equal("learning-treatment-lineage-missing", missingParentDecision.Receipt.Detail)
+    Assert.Empty(missingParentDecision.Events)
+
+    let descendant = learningAssignment (Descendant originalId) "FS-GG/Coordination#43" originalId
+    let inherited = decide state0 (AssignLearningTreatment descendant)
+    let inheritedEvent = Assert.Single(inherited.Events)
+    let inheritedBytes = ObserverEventCodec.encode inheritedEvent
+    Assert.Equal(Ok inheritedEvent, ObserverEventCodec.tryDecode inheritedBytes)
+    let state1 = Observer.evolve state0 inheritedEvent
+    let retry = learningAssignment (Retry descendant.ItemId) "FS-GG/Coordination#44" originalId
+    let state2 = apply state1 (AssignLearningTreatment retry)
+    let treatment = state2.LearningTreatments[originalId]
+
+    for item in [ originalId; descendant.ItemId; retry.ItemId ] do
+        Assert.Equal(treatment.AssignmentSha256, state2.LearningTreatmentBindings[item].AssignmentSha256)
+        Assert.Equal("planner-owner", state2.LearningTreatmentBindings[item].OwnerPrincipalId)
+
+    let redraw =
+        { learningAssignment (Descendant originalId) "FS-GG/Coordination#45" originalId with
+            Arm = Current
+        }
+
+    let redrawDecision = decide state2 (AssignLearningTreatment redraw)
+    Assert.Equal(ObserverRejected, redrawDecision.Receipt.Disposition)
+    Assert.Equal("learning-treatment-conflict", redrawDecision.Receipt.Detail)
+    Assert.Empty(redrawDecision.Events)
+
+    let foreign =
+        { envelope state2 (AssignLearningTreatment retry) with
+            PrincipalId = "second-owner"
+        }
+
+    let foreignDecision = Observer.decide now state2 foreign
+    Assert.Equal(ObserverRejected, foreignDecision.Receipt.Disposition)
+    Assert.Equal("learning-treatment-owner-conflict", foreignDecision.Receipt.Detail)
+    Assert.Empty(foreignDecision.Events)
+
+[<Fact>]
+let ``stale generation and invalid fixed profile refuse before persistence`` () =
+    let state = treatmentState ()
+    let originalId = "FS-GG/Coordination#42"
+
+    let stale =
+        { learningAssignment Original originalId originalId with
+            ExpectedGeneration = Id.generation 2L
+        }
+
+    let staleDecision = decide state (AssignLearningTreatment stale)
+    Assert.Equal(ObserverRejected, staleDecision.Receipt.Disposition)
+    Assert.Equal("stale-learning-treatment-generation", staleDecision.Receipt.Detail)
+    Assert.Empty(staleDecision.Events)
+
+    let wrongProfile =
+        { learningAssignment Original originalId originalId with
+            Worker = { Model = "unqualified"; Effort = "medium" }
+        }
+
+    let profileDecision = decide state (AssignLearningTreatment wrongProfile)
+    Assert.Equal(ObserverRejected, profileDecision.Receipt.Disposition)
+    Assert.Equal("invalid-learning-treatment-assignment", profileDecision.Receipt.Detail)
+    Assert.Empty(profileDecision.Events)
+    Assert.Empty(state.LearningTreatments)
+
+[<Fact>]
 let ``event codec roundtrip replays private identities and durable budget`` () =
     let state = observed ()
 
@@ -673,6 +827,100 @@ type private Journal() =
         member _.RecoverObserver(_, _) =
             Task.FromResult(Error [ ObserverStoreUnavailable "not-run" ])
 
+type private InMemoryObserverJournal() =
+    let streams = Dictionary<string, ResizeArray<ObserverStoredEvent>>()
+    let mutable appendCount = 0
+
+    member _.AppendCount = appendCount
+    member _.StreamLength observerId =
+        lock streams (fun () ->
+            match streams.TryGetValue observerId with
+            | true, events -> events.Count
+            | _ -> 0)
+
+    interface IObserverJournalStore with
+        member _.AppendObserver(request, _) =
+            lock streams (fun () ->
+                let stream =
+                    match streams.TryGetValue request.ObserverId with
+                    | true, value -> value
+                    | _ ->
+                        let value = ResizeArray<ObserverStoredEvent>()
+                        streams.Add(request.ObserverId, value)
+                        value
+
+                let currentState =
+                    stream |> Seq.map _.Event |> Seq.toList |> Observer.replay
+
+                let expected =
+                    if stream.Count = 0 then 1L else stream[stream.Count - 1].Sequence + 1L
+
+                match request.Events with
+                | [] -> Task.FromResult(ObserverInvalidAppend "empty-append")
+                | first :: _ when first.Sequence <> expected ->
+                    Task.FromResult(ObserverWrongExpectedSequence(expected - 1L))
+                | events ->
+                    let decisionState =
+                        match request.Command.Command with
+                        | AssignLearningTreatment input when
+                            request.ObserverId = ObserverJournal.learningTreatmentObserverId input.OriginalItemId
+                            ->
+                            match streams.TryGetValue input.SourceObserverId with
+                            | true, sourceEvents ->
+                                let sourceState =
+                                    sourceEvents |> Seq.map _.Event |> Seq.toList |> Observer.replay
+
+                                if
+                                    sourceState.Sequence = input.SourceSequence
+                                    && (sourceState.SessionId
+                                        |> Option.exists (fun sessionId ->
+                                            ObserverJournal.observerId sessionId = input.SourceObserverId))
+                                    && (sourceState.Observation
+                                        |> Option.exists (fun observation ->
+                                            observation.ObservationSha256 = input.SourceObservationSha256
+                                            && observation.WorkflowRevision = input.ExpectedWorkflowRevision
+                                            && observation.Generation = input.ExpectedGeneration))
+                                then
+                                    Some
+                                        { currentState with
+                                            Observation = sourceState.Observation
+                                        }
+                                else
+                                    None
+                            | _ -> None
+                        | AssignLearningTreatment _ -> None
+                        | _ -> Some currentState
+
+                    match decisionState with
+                    | None -> Task.FromResult(ObserverInvalidAppend "source-reference-mismatch")
+                    | Some value ->
+                        let decision = Observer.decide request.ReceivedAt value request.Command
+
+                        if
+                            decision.Receipt.Disposition <> ObserverAccepted
+                            || decision.Events <> (events |> List.map _.Event)
+                        then
+                            Task.FromResult(ObserverInvalidAppend "events-do-not-match-command-decision")
+                        else
+                            events |> List.iter stream.Add
+                            appendCount <- appendCount + 1
+                            Task.FromResult(ObserverAppended(stream[stream.Count - 1].Sequence)))
+
+        member _.RecoverObserver(observerId, _) =
+            lock streams (fun () ->
+                let events =
+                    match streams.TryGetValue observerId with
+                    | true, value -> List.ofSeq value
+                    | _ -> []
+
+                Task.FromResult(
+                    Ok
+                        {
+                            Events = events
+                            State = Observer.replay (events |> List.map _.Event)
+                        }
+                ))
+
 [<Fact>]
 let ``composition exposes only read planning and observer journal capabilities`` () =
     let composition =
@@ -700,6 +948,121 @@ let ``composition exposes only read planning and observer journal capabilities``
                 || value.Contains("Runner")
                 || value.Contains("Mutation"))
     )
+
+[<Fact>]
+let ``canonical treatment stream survives a new observer session and refuses another owner`` () =
+    task {
+        let originalId = "FS-GG/Coordination#42"
+        let secondSession = Id.session (Guid.Parse "20000000-0000-0000-0000-000000000099")
+        let journal = InMemoryObserverJournal()
+        let clock = { new TimeProvider() with override _.GetUtcNow() = now }
+
+        let composition =
+            ObserverComposition.create (ReadCapability()) (PlanningCapability()) (ReadbackCapability()) journal
+
+        let persistSource session =
+            task {
+                let observerId = ObserverJournal.observerId session
+                let mutable state = Observer.initial
+
+                let append command =
+                    task {
+                        let commandEnvelope = envelope state command
+                        let decision = Observer.decide now state commandEnvelope
+                        let request = ObserverJournal.appendRequest observerId now commandEnvelope decision
+                        let! outcome = (journal :> IObserverJournalStore).AppendObserver(request, CancellationToken.None)
+                        Assert.Equal<ObserverAppendOutcome>(ObserverAppended decision.Receipt.Sequence, outcome)
+                        state <- decision.Events |> List.fold Observer.evolve state
+                    }
+
+                do! append (OpenSession(session, projectId, budget))
+                do! append (RecordProjectObservation(observation "project-rev-1" (now.AddMinutes -1.)))
+                return state
+            }
+
+        let! firstSource = persistSource sessionId
+        let! secondSource = persistSource secondSession
+        let input = learningAssignment Original originalId originalId
+
+        let request (source: ObserverState) principal treatment =
+            let sourceObserverId = ObserverJournal.observerId source.SessionId.Value
+
+            {
+                SourceObserverId = sourceObserverId
+                SourceState = source
+                Input =
+                    { treatment with
+                        SourceObserverId = sourceObserverId
+                        SourceSequence = source.Sequence
+                        SourceObservationSha256 = source.Observation.Value.ObservationSha256
+                    }
+                CommandId = Id.command (Guid.NewGuid())
+                PrincipalId = principal
+                IssuedAt = now.AddSeconds -1.
+                ExpiresAt = now.AddMinutes 1.
+            }
+
+        let! first =
+            ObserverRuntime.assignLearningTreatment
+                clock
+                composition
+                (request firstSource "planner-owner" input)
+                CancellationToken.None
+
+        let assigned =
+            match first with
+            | LearningTreatmentPersisted(treatment, binding) ->
+                Assert.Equal(Original, binding.Relation)
+                treatment
+            | other -> failwithf "unexpected %A" other
+
+        let! replayed =
+            ObserverRuntime.assignLearningTreatment
+                clock
+                composition
+                (request secondSource "planner-owner" input)
+                CancellationToken.None
+
+        match replayed with
+        | LearningTreatmentReplayed(treatment, binding) ->
+            Assert.Equal(assigned.AssignmentSha256, treatment.AssignmentSha256)
+            Assert.Equal(assigned.AssignmentSha256, binding.AssignmentSha256)
+        | other -> failwithf "unexpected %A" other
+
+        let! foreign =
+            ObserverRuntime.assignLearningTreatment
+                clock
+                composition
+                (request secondSource "second-owner" input)
+                CancellationToken.None
+
+        match foreign with
+        | LearningTreatmentCommandRefused receipt ->
+            Assert.Equal("learning-treatment-owner-conflict", receipt.Detail)
+        | other -> failwithf "unexpected %A" other
+
+        let redraw = { input with Arm = Current }
+
+        let! redrawn =
+            ObserverRuntime.assignLearningTreatment
+                clock
+                composition
+                (request secondSource "planner-owner" redraw)
+                CancellationToken.None
+
+        match redrawn with
+        | LearningTreatmentCommandRefused receipt ->
+            Assert.Equal("learning-treatment-conflict", receipt.Detail)
+        | other -> failwithf "unexpected %A" other
+
+        Assert.Equal(5, journal.AppendCount)
+        Assert.Equal(1, journal.StreamLength(ObserverJournal.learningTreatmentObserverId originalId))
+        Assert.NotEqual(ObserverJournal.observerId sessionId, ObserverJournal.observerId secondSession)
+        Assert.Equal(
+            ObserverJournal.learningTreatmentObserverId originalId,
+            ObserverJournal.learningTreatmentObserverId input.OriginalItemId
+        )
+    }
 
 type private RecordingJournal(outcomes: ObserverAppendOutcome list) =
     let requests = ResizeArray<ObserverAppendRequest>()
