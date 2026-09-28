@@ -96,6 +96,7 @@
     <Compile Include="MigrationSandboxProviderObservationTests.fs" />
     <Compile Include="MigrationSandboxSeedExecutorTests.fs" />
     <Compile Include="MigrationSandboxSeedJournalTests.fs" />
+    <Compile Include="MigrationSandboxSeedBootstrapArtifactTests.fs" />
     <Compile Include="MigrationSandboxSeedNativeProvenanceTests.fs" />
     <Compile Include="MigrationSandboxSeedJournalRemoteTests.fs" />
     <Compile Include="MigrationSandboxSeedProviderTests.fs" />

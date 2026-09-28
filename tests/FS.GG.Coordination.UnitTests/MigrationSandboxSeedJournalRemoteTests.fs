@@ -147,7 +147,7 @@ let private state bindingBytes =
             draft
         |> Result.defaultWith (fun error -> failwithf "%A" error)
 
-    MigrationSandboxSeedExecutor.create sealedBinding 10L (String.replicate 40 "c")
+    MigrationSandboxSeedExecutor.create sealedBinding 0L (String.replicate 40 "c")
     |> Result.defaultWith (fun error -> failwithf "%A" error)
 
 let private nextState head current =
@@ -257,6 +257,15 @@ let private evidence bindingBytes nativeCas =
 
 type private ExactVerifier(expectedBinding: byte array, expectedNativeCas: byte array, accept: bool) =
     interface IMigrationSandboxSeedIsolatedProvenanceVerifier with
+        member _.VerifyBootstrapExact actual =
+            accept
+            && actual.BindingBytes = expectedBinding
+            && actual.NativeCasReadbackBytes.Length = 0
+            && actual.WorkflowRunId = 7L
+            && actual.WorkflowRunAttempt = 2
+            && actual.WorkflowSha = workflow
+            && actual.ApprovedArtifactSourceSha256 = String.replicate 64 "4"
+
         member _.VerifyExact actual =
             accept
             && actual.BindingBytes = expectedBinding
@@ -272,8 +281,16 @@ let private authority bytes =
         (evidence bytes nativeCasBytes)
     |> Result.defaultWith (fun error -> failwithf "%A" error)
 
+let private bootstrap bytes =
+    MigrationSandboxSeedJournalRemote.establishBootstrapAdmission
+        (ExactVerifier(bytes, [||], true))
+        (evidence bytes [||])
+    |> Result.defaultWith (fun error -> failwithf "%A" error)
+
 let private writeRemote bytes previous proposal transport =
-    MigrationSandboxSeedJournalRemote.writeAndRead (authority bytes) previous proposal transport
+    match previous with
+    | None -> MigrationSandboxSeedJournalRemote.writeGenesisAndRead (bootstrap bytes) proposal transport
+    | Some snapshot -> MigrationSandboxSeedJournalRemote.writeAndRead (authority bytes) snapshot proposal transport
 
 let private proposal bytes =
     MigrationSandboxSeedJournal.plan None (state bytes)

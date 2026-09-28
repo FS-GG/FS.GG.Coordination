@@ -8,6 +8,7 @@ open System.Text
 open System.Text.Json
 
 type MigrationSandboxSeedIsolatedCasAuthority = private MigrationSandboxSeedIsolatedCasAuthority of byte array
+type MigrationSandboxSeedBootstrapAdmission = private MigrationSandboxSeedBootstrapAdmission of byte array
 
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedRemotePushOutcome =
@@ -63,10 +64,7 @@ module MigrationSandboxSeedJournalRemote =
 
         property.GetString()
 
-    let establishIsolatedCasAuthority
-        (verifier: IMigrationSandboxSeedIsolatedProvenanceVerifier)
-        (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence)
-        =
+    let private evidenceBytes evidence =
         let bindingBytes =
             if isNull evidence.BindingBytes then
                 [||]
@@ -78,6 +76,41 @@ module MigrationSandboxSeedJournalRemote =
                 [||]
             else
                 Array.copy evidence.NativeCasReadbackBytes
+
+        bindingBytes, nativeReadbackBytes
+
+    let establishBootstrapAdmission
+        (verifier: IMigrationSandboxSeedIsolatedProvenanceVerifier)
+        (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence)
+        =
+        let bindingBytes, nativeReadbackBytes = evidenceBytes evidence
+
+        if
+            bindingBytes.Length = 0
+            || bindingBytes.Length > 1024 * 1024
+            || nativeReadbackBytes.Length <> 0
+        then
+            Error MigrationSandboxSeedRemoteFailure.InvalidIsolatedCasBinding
+        else
+            try
+                let exact =
+                    { evidence with
+                        BindingBytes = bindingBytes
+                        NativeCasReadbackBytes = [||]
+                    }
+
+                if verifier.VerifyBootstrapExact exact then
+                    Ok(MigrationSandboxSeedBootstrapAdmission bindingBytes)
+                else
+                    Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected
+            with _ ->
+                Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected
+
+    let establishIsolatedCasAuthority
+        (verifier: IMigrationSandboxSeedIsolatedProvenanceVerifier)
+        (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence)
+        =
+        let bindingBytes, nativeReadbackBytes = evidenceBytes evidence
 
         if
             bindingBytes.Length = 0
@@ -145,12 +178,7 @@ module MigrationSandboxSeedJournalRemote =
         with _ ->
             false
 
-    let writeAndRead
-        (MigrationSandboxSeedIsolatedCasAuthority bindingBytes)
-        previous
-        proposal
-        (transport: IMigrationSandboxSeedJournalRemoteTransport)
-        =
+    let private transact bindingBytes previous proposal (transport: IMigrationSandboxSeedJournalRemoteTransport) =
         let current = proposalSnapshot proposal
 
         match MigrationSandboxSeedJournal.restore previous current with
@@ -219,3 +247,23 @@ module MigrationSandboxSeedJournalRemote =
             | _, MigrationSandboxSeedJournalReconciliation.Conflict -> Ok MigrationSandboxSeedRemoteResult.Conflict
             | _, MigrationSandboxSeedJournalReconciliation.Indeterminate reason ->
                 Ok(MigrationSandboxSeedRemoteResult.Indeterminate reason)
+
+    let writeGenesisAndRead (MigrationSandboxSeedBootstrapAdmission bindingBytes) proposal transport =
+        if
+            proposal.ExpectedParent.IsSome
+            || proposal.JournalGeneration <> 0L
+            || proposal.StateGeneration <> 0L
+        then
+            Error MigrationSandboxSeedRemoteFailure.InvalidJournalProposal
+        else
+            transact bindingBytes None proposal transport
+
+    let writeAndRead (MigrationSandboxSeedIsolatedCasAuthority bindingBytes) previous proposal transport =
+        if
+            proposal.ExpectedParent <> Some previous.CommitOid
+            || proposal.JournalGeneration <= 0L
+            || proposal.StateGeneration <= 0L
+        then
+            Error MigrationSandboxSeedRemoteFailure.InvalidJournalProposal
+        else
+            transact bindingBytes (Some previous) proposal transport

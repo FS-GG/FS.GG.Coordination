@@ -16,6 +16,10 @@ type MigrationSandboxSeedIsolatedProvenanceEvidence =
     }
 
 type IMigrationSandboxSeedIsolatedProvenanceVerifier =
+    /// Validate the immutable protected-host declaration before the journal exists. This
+    /// authorizes only an exact generation-zero journal proposal; it is not an effect authority.
+    abstract VerifyBootstrapExact: MigrationSandboxSeedIsolatedProvenanceEvidence -> bool
+
     abstract VerifyExact: MigrationSandboxSeedIsolatedProvenanceEvidence -> bool
 
 /// Protected-host implementation only. Reads use the current App token or immutable evidence
@@ -26,6 +30,9 @@ type IMigrationSandboxSeedNativeProvenanceRead =
     abstract ReadRunAttempt: runId: int64 * attempt: int -> Result<byte array, string>
     abstract ReadGitBlob: commitSha: string * path: string -> Result<byte array, string>
     abstract ReadRetained: name: string -> Result<byte array, string>
+    /// Read an in-process, mode-0600 temporary response. Implementations must never publish,
+    /// upload or persist this channel as a workflow artifact because the mint response has a token.
+    abstract ReadPrivateEphemeral: name: string -> Result<byte array, string>
     abstract CurrentTokenSha256: unit -> Result<string, string>
     abstract ReadSandboxRepository: unit -> Result<byte array, string>
     abstract ReadSandboxProject: unit -> Result<byte array, string>
@@ -82,11 +89,23 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
 
         raw
 
-    let verify (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence) =
+    let privateEphemeral name digest limit =
+        let raw = read.ReadPrivateEphemeral name |> required limit
+
+        if sha raw <> digest then
+            invalidOp (name + "-private-custody")
+
+        raw
+
+    let verify requireNativeReadback (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence) =
         if
             isNull (box read)
             || not (bounded (1024 * 1024) evidence.BindingBytes)
-            || not (bounded (1024 * 1024) evidence.NativeCasReadbackBytes)
+            || (requireNativeReadback
+                && not (bounded (1024 * 1024) evidence.NativeCasReadbackBytes))
+            || (not requireNativeReadback
+                && not (isNull evidence.NativeCasReadbackBytes)
+                && evidence.NativeCasReadbackBytes.Length <> 0)
             || evidence.WorkflowRunId <= 0L
             || evidence.WorkflowRunAttempt <= 0
             || not (hex 40 evidence.WorkflowSha)
@@ -106,11 +125,12 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
             let refName = $"refs/heads/gs2-09-7/{nonce}/seed-journal"
 
             if
-                str "schema" root <> "fsgg.github-substrate-v2.sandbox-seed-execution-binding/1"
-                || str "status" root <> "bound-isolated-cas-authority"
-                || not (root.GetProperty("activation").GetBoolean())
-                || str "authority" root <> "installed-protected-workflow-verified"
-                || str "schemaJoin" root <> "coordination-isolated-cas-final"
+                str "schema" root <> "fsgg.github-substrate-v2.sandbox-seed-execution-binding/2"
+                || str "status" root <> "bound-no-write-authority"
+                || root.GetProperty("activation").GetBoolean()
+                || str "authority" root
+                   <> "unavailable-without-protected-host-install-and-native-readback"
+                || str "schemaJoin" root <> "coordination-s1-provenance-interface-v1"
                 || str "repository" source <> "FS-GG/.github"
                 || str "workflowPath" source
                    <> ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
@@ -128,7 +148,8 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                 || str "projectNodeId" sandbox <> "PVT_kwDOEYAWY84BiESo"
                 || num "appId" mint <> 4166418L
                 || num "installationId" mint <> 143110413L
-                || str "identity" journal <> refName
+                || str "seedJournalRef" source <> refName
+                || str "ref" (field "profile" journal) <> refName
             then
                 false
             else
@@ -209,15 +230,16 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                             false
                         else
                             let mintResponse =
-                                retained "mint-response" (str "mintResponseSha256" proof) (1024 * 1024)
+                                privateEphemeral "mint-response" (str "mintResponseSha256" proof) (1024 * 1024)
 
                             let viewerResponse =
-                                retained "viewer-response" (str "viewerResponseSha256" proof) (1024 * 1024)
+                                privateEphemeral "viewer-response" (str "viewerResponseSha256" proof) (1024 * 1024)
 
                             use mintDocument = parse mintResponse
                             use viewerDocument = parse viewerResponse
                             let minted = mintDocument.RootElement
-                            let viewer = viewerDocument.RootElement
+                            let viewerRoot = viewerDocument.RootElement
+                            let viewer = field "viewer" (field "data" viewerRoot)
                             let mintGrants = field "permissions" minted
                             let mintedGrantNames = mintGrants.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
 
@@ -237,7 +259,7 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                     expectedGrants |> List.forall (fun (name, value) -> str name mintGrants = value)
                                 )
                                 || str "login" viewer <> "fs-gg-cross-repo-dispatch[bot]"
-                                || num "id" viewer <> 297630107L
+                                || num "databaseId" viewer <> 297630107L
                             then
                                 false
                             else
@@ -264,40 +286,109 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                 then
                                     false
                                 else
-                                    let nativeCas = read.ReadNativeCasReadback refName |> required (1024 * 1024)
+                                    let planDigest = str "sha256" (field "seedPlan" artifacts)
+                                    let corpusDigest = str "sha256" (field "corpus" artifacts)
 
-                                    if nativeCas <> evidence.NativeCasReadbackBytes then
-                                        false
+                                    let retainedInputs =
+                                        hex 64 planDigest
+                                        && hex 64 corpusDigest
+                                        && (retained "seed-plan" planDigest (64 * 1024 * 1024)).Length > 0
+                                        && (retained "corpus" corpusDigest (64 * 1024 * 1024)).Length > 0
+                                        && (retained
+                                                "approved-source"
+                                                evidence.ApprovedArtifactSourceSha256
+                                                (64 * 1024 * 1024))
+                                            .Length
+                                            >
+                                            0
+
+                                    if not retainedInputs || not requireNativeReadback then
+                                        retainedInputs
                                     else
-                                        use casDocument = parse nativeCas
-                                        let cas = casDocument.RootElement
+                                        let freshCas = read.ReadNativeCasReadback refName |> required (1024 * 1024)
+                                        use retainedDocument = parse evidence.NativeCasReadbackBytes
+                                        use freshDocument = parse freshCas
+                                        let retainedCas = retainedDocument.RootElement
+                                        let fresh = freshDocument.RootElement
 
-                                        if
-                                            str "schema" cas <> "fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1"
-                                            || str "refName" cas <> refName
-                                            || num "repositoryId" cas <> 1353050537L
-                                            || not (cas.GetProperty("complete").GetBoolean())
-                                        then
-                                            false
-                                        else
-                                            let planDigest = str "sha256" (field "seedPlan" artifacts)
-                                            let corpusDigest = str "sha256" (field "corpus" artifacts)
+                                        let casTuple (cas: JsonElement) =
+                                            let repository = field "repository" cas
+                                            let oldOid = cas.GetProperty("oldOid")
+                                            let parentOid = cas.GetProperty("commitParentOid")
+                                            let observedParent = cas.GetProperty("observedCommitParentOid")
 
-                                            hex 64 planDigest
-                                            && hex 64 corpusDigest
-                                            && (retained "seed-plan" planDigest (64 * 1024 * 1024)).Length > 0
-                                            && (retained "corpus" corpusDigest (64 * 1024 * 1024)).Length > 0
-                                            && (retained
-                                                    "approved-source"
-                                                    evidence.ApprovedArtifactSourceSha256
-                                                    (64 * 1024 * 1024))
-                                                .Length
-                                                >
-                                                0
+                                            if
+                                                str "schema" cas <> "fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1"
+                                                || str "status" cas <> "readback-complete"
+                                                || str "outcome" cas <> "applied-or-already-applied"
+                                                || not (cas.GetProperty("complete").GetBoolean())
+                                                || num "repositoryId" cas <> 1353050537L
+                                                || num "id" repository <> 1353050537L
+                                                || str "nodeId" repository <> "R_kgDOUKXpqQ"
+                                                || str "fullName" repository <> "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
+                                                || str "refName" cas <> refName
+                                                || num "runId" cas <> evidence.WorkflowRunId
+                                                || num "runAttempt" cas <> int64 evidence.WorkflowRunAttempt
+                                                || str "runNonce" cas <> nonce
+                                                || str "candidateSha" cas <> candidate
+                                                || str "workflowSha" cas <> evidence.WorkflowSha
+                                                || str "s2DeclarationSha256" cas <> sha evidence.BindingBytes
+                                                || str "seedPlanSha256" cas <> planDigest
+                                                || oldOid.ValueKind <> JsonValueKind.Null
+                                                || parentOid.ValueKind <> JsonValueKind.Null
+                                                || observedParent.ValueKind <> JsonValueKind.Null
+                                                || num "journalGeneration" cas <> 0L
+                                                || num "stateGeneration" cas <> 0L
+                                                || str "readbackSource" cas
+                                                   <> "fresh-git-fetch-cat-file-terminal-ref-reread"
+                                            then
+                                                invalidOp "native-cas-shape"
+
+                                            let commit = str "commitOid" cas
+                                            let tree = str "treeOid" cas
+                                            let blob = str "blobOid" cas
+                                            let payload = str "payloadSha256" cas
+
+                                            let observedAt =
+                                                DateTimeOffset.Parse(
+                                                    str "observedAt" cas,
+                                                    Globalization.CultureInfo.InvariantCulture
+                                                )
+
+                                            if
+                                                not (hex 40 commit && hex 40 tree && hex 40 blob && hex 64 payload)
+                                                || str "newOid" cas <> commit
+                                                || str "observedRefOid" cas <> commit
+                                                || str "observedTreeOid" cas <> tree
+                                                || str "observedBlobOid" cas <> blob
+                                                || str "observedPayloadSha256" cas <> payload
+                                            then
+                                                invalidOp "native-cas-objects"
+
+                                            (commit, tree, blob, payload, observedAt)
+
+                                        let retainedTuple = casTuple retainedCas
+                                        let freshTuple = casTuple fresh
+                                        let _, _, _, _, retainedAt = retainedTuple
+                                        let _, _, _, _, freshAt = freshTuple
+                                        let retainedObjects = retainedTuple |> fun (c, t, b, p, _) -> (c, t, b, p)
+                                        let freshObjects = freshTuple |> fun (c, t, b, p, _) -> (c, t, b, p)
+
+                                        retainedObjects = freshObjects
+                                        && freshAt > retainedAt
+                                        && not (
+                                            freshCas.AsSpan().SequenceEqual(evidence.NativeCasReadbackBytes.AsSpan())
+                                        )
 
     interface IMigrationSandboxSeedIsolatedProvenanceVerifier with
+        member _.VerifyBootstrapExact evidence =
+            try
+                verify false evidence
+            with _ ->
+                false
+
         member _.VerifyExact evidence =
             try
-                verify evidence
+                verify true evidence
             with _ ->
                 false
