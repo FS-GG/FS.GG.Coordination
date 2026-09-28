@@ -371,6 +371,125 @@ let ``exact objects absent lease and fresh readback apply`` () =
         Assert.Equal<string list>([ "blob"; "tree"; "commit" ], push.Objects |> List.map _.Kind))
 
 [<Fact>]
+let ``trusted bootstrap runtime keeps verification admission and genesis write in one call`` () =
+    withBare (fun repository ->
+        let bytes = installedBytes false
+        let proposal = proposal bytes
+        let mutable verified = false
+        let transport = BareTransport(repository, false, true)
+
+        let verifier =
+            { new IMigrationSandboxSeedIsolatedProvenanceVerifier with
+                member _.VerifyBootstrapExact(actual, actualProposal) =
+                    verified <- true
+
+                    actual.BindingBytes = bytes
+                    && actual.NativeCasReadbackBytes.Length = 0
+                    && actualProposal = proposal
+
+                member _.VerifyExact _ = false
+            }
+
+        let guardedTransport =
+            { new IMigrationSandboxSeedJournalRemoteTransport with
+                member _.PushExact push =
+                    Assert.True(verified)
+                    (transport :> IMigrationSandboxSeedJournalRemoteTransport).PushExact push
+
+                member _.ReadFresh refName =
+                    (transport :> IMigrationSandboxSeedJournalRemoteTransport).ReadFresh refName
+            }
+
+        match
+            MigrationSandboxSeedBootstrapRuntime.establishAndWrite
+                verifier
+                (evidence bytes [||] (Some proposal))
+                proposal
+                guardedTransport
+        with
+        | Ok(MigrationSandboxSeedRemoteResult.Applied _) -> ()
+        | value -> failwithf "%A" value
+
+        Assert.True(verified)
+        Assert.Single(transport.Pushes) |> ignore)
+
+[<Fact>]
+let ``trusted bootstrap runtime cannot write when exact verification refuses`` () =
+    let bytes = installedBytes false
+    let proposal = proposal bytes
+    let mutable pushed = false
+
+    let transport =
+        { new IMigrationSandboxSeedJournalRemoteTransport with
+            member _.PushExact _ =
+                pushed <- true
+                MigrationSandboxSeedRemotePushOutcome.Accepted
+
+            member _.ReadFresh _ = MigrationSandboxSeedJournalRead.Missing
+        }
+
+    Assert.Equal(
+        Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
+        MigrationSandboxSeedBootstrapRuntime.establishAndWrite
+            (ExactVerifier(bytes, [||], false))
+            (evidence bytes [||] (Some proposal))
+            proposal
+            transport
+    )
+
+    Assert.False(pushed)
+
+[<Fact>]
+let ``trusted runtime Git transport writes only exact genesis objects and fresh reads`` () =
+    withBare (fun repository ->
+        let bytes = installedBytes false
+        let proposal = proposal bytes
+
+        let transport =
+            ExactGenesisGitTransport(repository, "/usr/bin/git", String.replicate 24 "t")
+            :> IMigrationSandboxSeedJournalRemoteTransport
+
+        let push =
+            {
+                RefName = proposal.RefName
+                Refspec = $"{proposal.CommitOid}:{proposal.RefName}"
+                ForceWithLease = $"--force-with-lease={proposal.RefName}:"
+                Objects =
+                    [
+                        {
+                            Kind = "blob"
+                            Oid = proposal.BlobOid
+                            Bytes = proposal.StateBytes
+                        }
+                        {
+                            Kind = "tree"
+                            Oid = proposal.TreeOid
+                            Bytes = proposal.TreeBytes
+                        }
+                        {
+                            Kind = "commit"
+                            Oid = proposal.CommitOid
+                            Bytes = proposal.CommitBytes
+                        }
+                    ]
+            }
+
+        Assert.Equal(MigrationSandboxSeedRemotePushOutcome.Accepted, transport.PushExact push)
+
+        match transport.ReadFresh proposal.RefName with
+        | MigrationSandboxSeedJournalRead.Complete actual ->
+            Assert.Equal(proposal.CommitOid, actual.CommitOid)
+            Assert.Equal(proposal.TreeOid, actual.TreeOid)
+            Assert.Equal(proposal.BlobOid, actual.BlobOid)
+            Assert.Equal(proposal.StateBytes, actual.StateBytes)
+        | actual -> failwithf "%A" actual
+
+        Assert.Equal(
+            MigrationSandboxSeedRemotePushOutcome.DefiniteRefusal "exact-genesis-push-shape",
+            transport.PushExact { push with ForceWithLease = "--force" }
+        ))
+
+[<Fact>]
 let ``lost response always rereads applied or stays journal only`` () =
     withBare (fun repository ->
         let bytes = installedBytes false

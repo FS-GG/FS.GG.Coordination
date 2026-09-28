@@ -16,6 +16,7 @@ let private workflow = raw "protected-workflow"
 let private builder = raw "protected-builder"
 let private plan = raw "seed-plan"
 let private corpus = raw "corpus"
+
 let private sourceArtifact =
     MigrationSandboxSeedBootstrapArtifact.prepareSource
         {
@@ -25,6 +26,7 @@ let private sourceArtifact =
         }
     |> Result.map _.ManifestBytes
     |> Result.defaultWith (fun error -> failwithf "%A" error)
+
 let private token = raw "protected-app-token"
 
 let private mintResponse =
@@ -59,11 +61,15 @@ let private bootstrapPrestateEvidence =
     let requests =
         [
             request "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox" 200
-            request "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/issues?state=all&per_page=100" 200
+            request
+                "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/issues?state=all&per_page=100"
+                200
             request "https://api.github.com/graphql?query=project" 200
             request "https://api.github.com/graphql?query=items" 200
             request "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/git/ref/heads/main" 200
-            request $"https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/git/ref/heads/gs2-09-7/{nonce}/seed-journal" 404
+            request
+                $"https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/git/ref/heads/gs2-09-7/{nonce}/seed-journal"
+                404
         ]
         |> String.concat ","
 
@@ -71,6 +77,10 @@ let private bootstrapPrestateEvidence =
 
     raw
         $"{{\"schema\":\"fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1\",\"runNonce\":\"{nonce}\",\"refName\":\"{refName}\",\"repositoryId\":1353050537,\"projectNodeId\":\"PVT_kwDOEYAWY84BiESo\",\"expectedRefAbsent\":true,\"snapshotSha256\":\"{bootstrapSnapshotSha}\",\"summarySha256\":\"{sha bootstrapPrestate}\",\"observedAt\":\"2026-09-28T10:00:00Z\",\"passes\":[{pass},{pass}],\"complete\":true}}"
+
+let private freshBootstrapPrestateEvidence =
+    Encoding.UTF8.GetString(bootstrapPrestateEvidence).Replace("2026-09-28T10:00:00Z", "2026-09-28T10:01:00Z")
+    |> raw
 
 let private bootstrapProposal =
     let request =
@@ -158,11 +168,12 @@ let private casAt observedAt =
 let private cas = casAt "2026-09-28T10:00:00Z"
 let private freshCas = casAt "2026-09-28T10:01:00Z"
 
-type private Reads(
-    ?casResult: Result<byte[], string>,
-    ?repoResult: Result<byte[], string>,
-    ?bootstrapEvidenceResult: Result<byte[], string>
-) =
+type private Reads
+    (
+        ?casResult: Result<byte[], string>,
+        ?repoResult: Result<byte[], string>,
+        ?bootstrapEvidenceResult: Result<byte[], string>
+    ) =
     interface IMigrationSandboxSeedNativeProvenanceRead with
         member _.ReadRunAttempt(_, _) = Ok run
 
@@ -189,8 +200,10 @@ type private Reads(
         member _.CurrentTokenSha256() = Ok(sha token)
         member _.ReadSandboxRepository() = defaultArg repoResult (Ok repo)
         member _.ReadSandboxProject() = Ok project
+
         member _.ReadBootstrapPrestateEvidence() =
-            defaultArg bootstrapEvidenceResult (Ok bootstrapPrestateEvidence)
+            defaultArg bootstrapEvidenceResult (Ok freshBootstrapPrestateEvidence)
+
         member _.ReadNativeCasReadback _ = defaultArg casResult (Ok freshCas)
 
 let private evidence =
@@ -238,26 +251,24 @@ let ``bootstrap admission refuses altered tuple and changed fresh prestate`` () 
         }
 
     let alteredAdmission =
-        Encoding.UTF8.GetString(bootstrapAdmission).Replace(
-            bootstrapProposal.CommitOid,
-            String.replicate 40 "8"
-        )
-        |> raw
-
-    Assert.False(verifyBootstrap (Reads()) { admitted with BootstrapAdmissionBytes = alteredAdmission })
-
-    let changedFresh =
-        Encoding.UTF8.GetString(bootstrapPrestateEvidence).Replace(
-            bootstrapSnapshotSha,
-            String.replicate 64 "8"
-        )
+        Encoding.UTF8.GetString(bootstrapAdmission).Replace(bootstrapProposal.CommitOid, String.replicate 40 "8")
         |> raw
 
     Assert.False(
         verifyBootstrap
-            (Reads(bootstrapEvidenceResult = Ok changedFresh))
-            admitted
+            (Reads())
+            { admitted with
+                BootstrapAdmissionBytes = alteredAdmission
+            }
     )
+
+    let changedFresh =
+        Encoding.UTF8.GetString(bootstrapPrestateEvidence).Replace(bootstrapSnapshotSha, String.replicate 64 "8")
+        |> raw
+
+    Assert.False(verifyBootstrap (Reads(bootstrapEvidenceResult = Ok changedFresh)) admitted)
+
+    Assert.False(verifyBootstrap (Reads(bootstrapEvidenceResult = Ok bootstrapPrestateEvidence)) admitted)
 
 [<Fact>]
 let ``exact protected source and isolated CAS readback qualify controlled input`` () =
@@ -265,20 +276,29 @@ let ``exact protected source and isolated CAS readback qualify controlled input`
 
 [<Fact>]
 let ``native run branch must corroborate protected main declaration`` () =
-    let nonMain = Encoding.UTF8.GetString(run).Replace("\"head_branch\":\"main\"", "\"head_branch\":\"topic\"") |> raw
+    let nonMain =
+        Encoding.UTF8.GetString(run).Replace("\"head_branch\":\"main\"", "\"head_branch\":\"topic\"")
+        |> raw
 
     let reader =
         { new IMigrationSandboxSeedNativeProvenanceRead with
             member _.ReadRunAttempt(_, _) = Ok nonMain
-            member _.ReadGitBlob(_, path) = Ok(if path.StartsWith(".github/") then workflow else builder)
-            member _.ReadRetained name = (Reads() :> IMigrationSandboxSeedNativeProvenanceRead).ReadRetained name
+
+            member _.ReadGitBlob(_, path) =
+                Ok(if path.StartsWith(".github/") then workflow else builder)
+
+            member _.ReadRetained name =
+                (Reads() :> IMigrationSandboxSeedNativeProvenanceRead).ReadRetained name
+
             member _.ReadPrivateEphemeral name =
                 (Reads() :> IMigrationSandboxSeedNativeProvenanceRead).ReadPrivateEphemeral name
+
             member _.CurrentTokenSha256() = Ok(sha token)
             member _.ReadSandboxRepository() = Ok repo
             member _.ReadSandboxProject() = Ok project
             member _.ReadBootstrapPrestateEvidence() = Ok bootstrapPrestateEvidence
-            member _.ReadNativeCasReadback _ = Ok freshCas }
+            member _.ReadNativeCasReadback _ = Ok freshCas
+        }
 
     Assert.False(verify reader evidence)
 

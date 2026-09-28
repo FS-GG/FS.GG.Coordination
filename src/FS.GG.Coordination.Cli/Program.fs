@@ -11,11 +11,12 @@ let main arguments =
     | "delivery" :: rest -> DeliveryCommand.run (List.toArray rest)
     | "ordinary-settlement" :: rest -> OrdinarySettlementCommand.run (List.toArray rest)
     | "seed-bootstrap-artifacts" :: rest -> MigrationSandboxSeedBootstrapCommand.run (List.toArray rest)
+    | "seed-bootstrap-runtime" :: rest -> MigrationSandboxSeedBootstrapRuntimeCommand.run (List.toArray rest)
     | [] ->
         printfn "FS.GG.Coordination CLI boundary is installed; no production commands are enabled."
         0
     | _ ->
         eprintfn
-            "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view, delivery, ordinary-settlement, seed-bootstrap-artifacts"
+            "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view, delivery, ordinary-settlement, seed-bootstrap-artifacts, seed-bootstrap-runtime"
 
         2

@@ -61,8 +61,8 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
         | Ok raw when bounded limit raw -> raw
         | _ -> invalidOp "protected-read-unavailable"
 
-    let parse raw =
-        if not (bounded (1024 * 1024) raw) then
+    let parseBounded limit raw =
+        if not (bounded limit raw) then
             invalidOp "json-size"
 
         let document = JsonDocument.Parse raw
@@ -81,6 +81,8 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
 
         unique document.RootElement
         document
+
+    let parse raw = parseBounded (1024 * 1024) raw
 
     let str (name: string) (value: JsonElement) = value.GetProperty(name).GetString()
     let num (name: string) (value: JsonElement) = value.GetProperty(name).GetInt64()
@@ -327,12 +329,10 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                         | None -> false
                                         | Some proposal ->
                                             let retainedAdmission =
-                                                read.ReadRetained "bootstrap-final-admission"
-                                                |> required (1024 * 1024)
+                                                read.ReadRetained "bootstrap-final-admission" |> required (1024 * 1024)
 
                                             let retainedPrestate =
-                                                read.ReadRetained "bootstrap-prestate"
-                                                |> required (1024 * 1024)
+                                                read.ReadRetained "bootstrap-prestate" |> required (1024 * 1024)
 
                                             if
                                                 retainedAdmission <> evidence.BootstrapAdmissionBytes
@@ -351,11 +351,15 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                                     retained
                                                         "bootstrap-prestate-evidence"
                                                         prestateEvidenceDigest
-                                                        (4 * 1024 * 1024)
+                                                        (64 * 1024 * 1024)
 
-                                                use prestateEvidenceDocument = parse prestateEvidence
+                                                use prestateEvidenceDocument =
+                                                    parseBounded (64 * 1024 * 1024) prestateEvidence
+
                                                 let prestateProof = prestateEvidenceDocument.RootElement
-                                                let passes = prestateProof.GetProperty("passes").EnumerateArray() |> Seq.toArray
+
+                                                let passes =
+                                                    prestateProof.GetProperty("passes").EnumerateArray() |> Seq.toArray
 
                                                 let requestValid (request: JsonElement) =
                                                     let names = request.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
@@ -366,10 +370,13 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                                     && str "method" request = "GET"
                                                     && Uri.IsWellFormedUriString(url, UriKind.Absolute)
                                                     && (status = 200L || status = 404L)
-                                                    && (Convert.FromBase64String(str "bodyBase64" request)).Length <= 1024 * 1024
+                                                    && (Convert.FromBase64String(str "bodyBase64" request)).Length
+                                                       <= 16 * 1024 * 1024
 
                                                 let passValid (pass: JsonElement) =
-                                                    let requests = pass.GetProperty("requests").EnumerateArray() |> Seq.toArray
+                                                    let requests =
+                                                        pass.GetProperty("requests").EnumerateArray() |> Seq.toArray
+
                                                     let nonceUrl = "/git/ref/heads/gs2-09-7/" + nonce + "/seed-journal"
 
                                                     requests.Length >= 5
@@ -381,7 +388,8 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                                             && num "status" item = 200L))
                                                     && (requests
                                                         |> Array.exists (fun item ->
-                                                            (str "url" item).EndsWith(nonceUrl, StringComparison.Ordinal)
+                                                            (str "url" item)
+                                                                .EndsWith(nonceUrl, StringComparison.Ordinal)
                                                             && num "status" item = 404L))
 
                                                 let evidenceValid =
@@ -403,19 +411,35 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                                         System.Text.Encoding.UTF8.GetBytes(
                                                             passes[0].GetProperty("snapshot").GetRawText()
                                                         )
-                                                    ) = str "snapshotSha256" prestateProof
+                                                    )
+                                                        =
+                                                        str "snapshotSha256" prestateProof
                                                     && (passes |> Array.forall passValid)
 
                                                 let freshPrestateEvidence =
-                                                    read.ReadBootstrapPrestateEvidence()
-                                                    |> required (4 * 1024 * 1024)
+                                                    read.ReadBootstrapPrestateEvidence() |> required (64 * 1024 * 1024)
 
-                                                use freshPrestateDocument = parse freshPrestateEvidence
+                                                use freshPrestateDocument =
+                                                    parseBounded (64 * 1024 * 1024) freshPrestateEvidence
+
                                                 let freshPrestate = freshPrestateDocument.RootElement
+
                                                 let freshPasses =
                                                     freshPrestate.GetProperty("passes").EnumerateArray() |> Seq.toArray
 
                                                 let freshEvidenceValid =
+                                                    let initialObservedAt =
+                                                        DateTimeOffset.Parse(
+                                                            str "observedAt" prestateProof,
+                                                            Globalization.CultureInfo.InvariantCulture
+                                                        )
+
+                                                    let freshObservedAt =
+                                                        DateTimeOffset.Parse(
+                                                            str "observedAt" freshPrestate,
+                                                            Globalization.CultureInfo.InvariantCulture
+                                                        )
+
                                                     str "schema" freshPrestate =
                                                         "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1"
                                                     && str "runNonce" freshPrestate = nonce
@@ -428,13 +452,21 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                                         sha evidence.BootstrapPrestateBytes
                                                     && str "snapshotSha256" freshPrestate =
                                                         str "snapshotSha256" prestateProof
+                                                    && freshObservedAt > initialObservedAt
+                                                    && not (
+                                                        freshPrestateEvidence
+                                                            .AsSpan()
+                                                            .SequenceEqual(prestateEvidence.AsSpan())
+                                                    )
                                                     && freshPasses.Length = 2
                                                     && freshPasses[0].GetRawText() = freshPasses[1].GetRawText()
                                                     && sha (
                                                         System.Text.Encoding.UTF8.GetBytes(
                                                             freshPasses[0].GetProperty("snapshot").GetRawText()
                                                         )
-                                                    ) = str "snapshotSha256" freshPrestate
+                                                    )
+                                                        =
+                                                        str "snapshotSha256" freshPrestate
                                                     && (freshPasses |> Array.forall passValid)
 
                                                 let proposed: MigrationSandboxSeedJournalSnapshot =
@@ -489,10 +521,12 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                                         && str "blobOid" subject = proposal.BlobOid
                                                         && str "treeOid" subject = proposal.TreeOid
                                                         && str "commitOid" subject = proposal.CommitOid
-                                                        && (field "expectedOldOid" subject).ValueKind = JsonValueKind.Null
+                                                        && (field "expectedOldOid" subject).ValueKind =
+                                                            JsonValueKind.Null
                                                         && str "operation" subject = "genesis-nonce-seed-journal"
                                                         && subject.GetProperty("expectedRefAbsent").GetBoolean()
-                                                        && str "prestateSha256" subject = sha evidence.BootstrapPrestateBytes
+                                                        && str "prestateSha256" subject =
+                                                            sha evidence.BootstrapPrestateBytes
                                                         && str "prestateSnapshotSha256" subject =
                                                             expectedPrestate.SnapshotSha256
                                                         && hex 64 prestateEvidenceDigest

@@ -114,8 +114,16 @@ the pinned Coordination composer to seal generation-zero `state.json` plus its G
 bytes. A separate journal-only admission may then authorize an expected-absent lease for that exact object
 set. Post-write authority exists only after a fresh ref/commit/tree/blob reread binds the detached native
 receipt to the frozen S2 declaration; a changed observation timestamp is allowed, while any stable identity
-or byte digest drift refuses. Unknown responses remain recovery-only. The raw mint response and token stay
-ephemeral inside the protected job, and the retained evidence contains only sanitized proof. Journal bytes
+or byte digest drift refuses. Unknown responses remain recovery-only. The raw mint/viewer responses and token
+stay in mode-0600 host-private custody inside the protected job, and published retained evidence contains only
+sanitized proof. The single-process `seed-bootstrap-runtime establish-and-write` command treats the sealed
+manifest, plan and corpus only as bounded data: it recomposes the exact generation-zero object set, runs native
+provenance verification into an opaque journal-only admission, issues one compiled-target expected-absence Git
+lease, and performs a separate fresh fetch/readback before emitting a sanitized receipt. It accepts no remote,
+ref, executable or extension argument and never loads candidate code. The command remains source-only and
+uninstalled. A protected run must independently select and pin reviewed Coordination package bytes plus the
+runner, .NET and `/usr/bin/git` runtime closure, and must retain the required private raw response/blob inputs,
+before the `.github` bootstrap port may be installed. Journal bytes
 and verifier evidence are retained before authorized nonce-ref cleanup. Private-repository ruleset HTTP 403
 is recorded as an unsupported settings surface and cannot be rewritten as an empty ruleset; accepted
 GS2-08.2 evidence remains the separate production-protection proof.

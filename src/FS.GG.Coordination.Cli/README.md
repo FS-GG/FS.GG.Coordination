@@ -12,6 +12,15 @@ the production Authority profile. It reads the dedicated App ID/private key and 
 `V2_ORDINARY_AUTHORIZER_PRIVATE_KEY`. Missing enrollment, a disabled policy, pre-`OpenV2` authority, a
 changed source/anchor/ruleset, or the rehearsal profile returns a typed refusal before a journal ref write.
 
+`fsgg-coordination seed-bootstrap-runtime establish-and-write` is the fixed-target Q4 generation-zero
+journal entry point. It accepts only bounded sealed artifacts and protected private evidence files, recomposes
+their exact journal proposal, verifies native provenance, consumes the resulting opaque bootstrap admission in
+the same process, pushes one expected-absent nonce ref, and fresh-fetches the commit/tree/blob before writing a
+sanitized receipt. The sandbox repository and Git remote are compiled constants. Candidate executables,
+dynamic extensions, caller-selected remotes and later journal generations are outside this command. Source
+availability does not install or authorize it; the protected host must independently pin reviewed package and
+runtime-closure bytes before supplying its scoped token and mode-0600 private evidence.
+
 `fsgg-coordination ordinary-settlement rehearse` is a separate sandbox-only entry point. It pins repository
 `FS-GG/FS.GG.Coordination.Authority.Sandbox`, environment `ordinary-v2-rehearsal`, epoch ref
 `refs/heads/ordinary-v2-rehearsal-epoch`, and the rehearsal rulesets. It reads

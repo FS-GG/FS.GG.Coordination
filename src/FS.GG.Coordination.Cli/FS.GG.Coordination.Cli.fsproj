@@ -112,10 +112,12 @@
     <Compile Include="MigrationSandboxSeedNativeProvenance.fs" />
     <Compile Include="MigrationSandboxSeedJournalRemote.fsi" />
     <Compile Include="MigrationSandboxSeedJournalRemote.fs" />
+    <Compile Include="MigrationSandboxSeedBootstrapRuntime.fs" />
     <Compile Include="MigrationSandboxSeedProvider.fsi" />
     <Compile Include="MigrationSandboxSeedProvider.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
     <Compile Include="MigrationSandboxSeedBootstrapCommand.fs" />
+    <Compile Include="MigrationSandboxSeedBootstrapRuntimeCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
