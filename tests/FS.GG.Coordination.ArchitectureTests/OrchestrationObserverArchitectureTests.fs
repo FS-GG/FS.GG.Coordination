@@ -36,7 +36,13 @@ let ``observer assembly is inert and has no writer runner or App edge`` () =
     )
 
     Assert.Equal("false", project.Descendants(XName.Get "IsPackable") |> Seq.exactlyOne |> _.Value)
-    let source = read "src/FS.GG.Coordination.Orchestration.Observer/Observer.fs"
+
+    let sourceDirectory =
+        Path.Combine(root, "src/FS.GG.Coordination.Orchestration.Observer")
+
+    let sources =
+        Directory.GetFiles(sourceDirectory, "*.fs", SearchOption.TopDirectoryOnly)
+        |> Array.map (fun path -> path, File.ReadAllText path)
 
     for forbidden in
         [
@@ -48,7 +54,11 @@ let ``observer assembly is inert and has no writer runner or App edge`` () =
             "HttpClient"
             "BackgroundService"
         ] do
-        Assert.DoesNotContain(forbidden, source, StringComparison.Ordinal)
+        for path, source in sources do
+            Assert.False(
+                source.Contains(forbidden, StringComparison.Ordinal),
+                $"observer source {Path.GetFileName path} contains forbidden dependency {forbidden}"
+            )
 
     let app = read "src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj"
     Assert.DoesNotContain("Orchestration.Observer", app, StringComparison.Ordinal)
