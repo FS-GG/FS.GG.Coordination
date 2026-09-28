@@ -76,6 +76,23 @@ module InstalledOrdinarySettlementProvider =
                 [ "Build + test (locked restore)"; "kit / coordination-kit"
                   "contract-coherence / coherence"; "materialize / receiver-validate" ] }
 
+    let private governanceSourceProfile =
+        { Name = "governance-v1"
+          Repository = "FS-GG/FS.GG.Governance"
+          RepositoryId = 1273065119L
+          RequiredSettlementChecks = Set [ "Deterministic gate (locked restore + build)"; "contract-coherence / coherence" ]
+          RequiredGateChecks =
+            Set
+                [ "Deterministic gate (locked restore + build)"
+                  "Full test suite (dotnet fsi build.fsx test)"
+                  "Full test suite — Release (dotnet fsi build.fsx test -c Release)"
+                  "Build-config drift check (shared-build-config)"
+                  "Reference gate set — pack guard (byte-identity + gated + versioned)"
+                  "contract-coherence / coherence"
+                  "kit / coordination-kit"
+                  "skill-view-check"
+                  "materialize / receiver-validate" ] }
+
     let selectSourceProfile value =
         match value with
         | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
@@ -83,6 +100,7 @@ module InstalledOrdinarySettlementProvider =
         | "audio-v1" -> Ok audioSourceProfile
         | "rendering-v1" -> Ok renderingSourceProfile
         | "net-v1" -> Ok netSourceProfile
+        | "governance-v1" -> Ok governanceSourceProfile
         | _ -> Error "unsupported-source-profile"
 
     let private apiBase = Uri "https://api.github.com/"
