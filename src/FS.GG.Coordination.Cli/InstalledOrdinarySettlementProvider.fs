@@ -56,11 +56,22 @@ module InstalledOrdinarySettlementProvider =
                 [ "Build + test (locked restore, net10.0, headless)"; "lock-ranges / lock-ranges"
                   "kit / coordination-kit"; "materialize / receiver-validate" ] }
 
+    let private renderingSourceProfile =
+        { Name = "rendering-v1"
+          Repository = "FS-GG/FS.GG.Rendering"
+          RepositoryId = 1269292235L
+          RequiredSettlementChecks = Set [ "Deterministic gate"; "routine-eligibility" ]
+          RequiredGateChecks =
+            Set
+                [ "Deterministic gate"; "API compatibility gate (breaking-change → SemVer major)"
+                  "kit / coordination-kit"; "skill-view-check"; "materialize / receiver-validate" ] }
+
     let selectSourceProfile value =
         match value with
         | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
         | "dotgithub-v1" -> Ok dotGitHubSourceProfile
         | "audio-v1" -> Ok audioSourceProfile
+        | "rendering-v1" -> Ok renderingSourceProfile
         | _ -> Error "unsupported-source-profile"
 
     let private apiBase = Uri "https://api.github.com/"

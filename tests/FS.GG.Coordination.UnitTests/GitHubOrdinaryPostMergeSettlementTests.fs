@@ -233,6 +233,40 @@ let ``preparation admits only the closed Audio source profile`` () =
     Assert.Contains(SettlementRequiredCheckSetMismatch, prepare foreignChecks [ associated ] reader writerBinding |> errors)
 
 [<Fact>]
+let ``preparation admits only the closed Rendering source profile`` () =
+    let renderingChecks =
+        [ { Identity = "Deterministic gate"; AppId = 15368L; Conclusion = CheckPassed }
+          { Identity = "routine-eligibility"; AppId = 15368L; Conclusion = CheckPassed } ]
+    let observed =
+        { observation "OpenV2" with
+            Repository = "FS-GG/FS.GG.Rendering"
+            RepositoryId = 1269292235L
+            Checks = renderingChecks }
+    let associated =
+        { association true (sha "8") with Repository = "FS-GG/FS.GG.Rendering" }
+    let reader = { readBinding with RepositoryId = 1269292235L }
+    let plan =
+        prepare observed [ associated ] reader writerBinding
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+        |> fst
+    Assert.Equal("fs-gg/fs.gg.rendering", plan.Repository)
+    Assert.Equal(1269292235L, plan.RepositoryId)
+    Assert.Equal<string list>(
+        [ "Deterministic gate"; "routine-eligibility" ],
+        plan.RequiredChecks |> List.map _.Identity)
+
+    let wrongName = { observed with Repository = "FS-GG/FS.GG.Audio" }
+    let wrongId = { observed with RepositoryId = 1292226968L }
+    let foreignChecks =
+        { observed with
+            Checks =
+                [ { Identity = "API compatibility gate (breaking-change → SemVer major)"; AppId = 15368L; Conclusion = CheckPassed }
+                  { Identity = "routine-eligibility"; AppId = 15368L; Conclusion = CheckPassed } ] }
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongName [ associated ] reader writerBinding |> errors)
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongId [ associated ] reader writerBinding |> errors)
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare foreignChecks [ associated ] reader writerBinding |> errors)
+
+[<Fact>]
 let ``preparation refuses stale source qualification epoch and credential scope`` () =
     let observed = observation "OpenV2"
     let associations = [ association true (sha "8") ]
