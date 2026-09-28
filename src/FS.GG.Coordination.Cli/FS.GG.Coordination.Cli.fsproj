@@ -103,6 +103,14 @@
     <Compile Include="MigrationReceiverCohortOrchestration.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
     <Compile Include="MigrationSandboxProviderObservation.fs" />
+    <Compile Include="MigrationSandboxSeedExecutor.fsi" />
+    <Compile Include="MigrationSandboxSeedExecutor.fs" />
+    <Compile Include="MigrationSandboxSeedJournal.fsi" />
+    <Compile Include="MigrationSandboxSeedJournal.fs" />
+    <Compile Include="MigrationSandboxSeedJournalRemote.fsi" />
+    <Compile Include="MigrationSandboxSeedJournalRemote.fs" />
+    <Compile Include="MigrationSandboxSeedProvider.fsi" />
+    <Compile Include="MigrationSandboxSeedProvider.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
