@@ -39,6 +39,10 @@
     <Compile Include="MigrationClaimEventInspectBinder.fs" />
     <Compile Include="MigrationHistoricalLossCensus.fsi" />
     <Compile Include="MigrationHistoricalLossCensus.fs" />
+    <Compile Include="MigrationHistoricalProducerRosterEvidence.fsi" />
+    <Compile Include="MigrationHistoricalProducerRosterEvidence.fs" />
+    <Compile Include="MigrationHistoricalProducerNativeCapture.fsi" />
+    <Compile Include="MigrationHistoricalProducerNativeCapture.fs" />
     <Compile Include="MigrationReviewDeliveryCapture.fsi" />
     <Compile Include="MigrationReviewDeliveryCapture.fs" />
     <Compile Include="MigrationJournalCapture.fsi" />
