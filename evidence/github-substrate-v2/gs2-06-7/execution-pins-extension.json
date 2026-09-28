@@ -157,6 +157,15 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/v2-ci-ordinary-settlement.yml",
+      "sha256": "1a9d2fac126898adca98b4f4210b97d264b981d2e25494cb94a0781fa81021f1",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1"
+      ],
+      "localReferences": []
     }
   ]
 }
