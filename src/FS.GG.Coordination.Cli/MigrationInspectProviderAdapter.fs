@@ -21,6 +21,35 @@ type private CapturingTransport(inner: IMigrationGitHubReadTransport, allow: Git
             calls.Add(request, outcome)
             outcome
 
+type private RetainedSettingsTransport(pages: MigrationRepositorySettingsPageEvidence list) =
+    let byUri =
+        pages
+        |> List.map (fun page -> page.SettingsRequestedUri, page)
+        |> Map.ofList
+    let observed = System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+    member _.AllPagesObserved = observed.Count = pages.Length
+    interface IMigrationGitHubReadTransport with
+        member _.Send request =
+            match request with
+            | Rest value when value.Method = Get && value.Body.IsNone ->
+                match Map.tryFind value.Uri.AbsoluteUri byUri with
+                | None -> NetworkFailure
+                | Some page ->
+                    observed.Add page.SettingsRequestedUri |> ignore
+                    let headers =
+                        match page.SettingsNextUri with
+                        | Some next -> Map.ofList [ "Link", $"<{next}>; rel=\"next\"" ]
+                        | None -> Map.empty
+                    let statusCode =
+                        if value.Uri.AbsolutePath.EndsWith(
+                            "/vulnerability-alerts", StringComparison.Ordinal) then 204
+                        else 200
+                    Response
+                        { StatusCode=statusCode; Headers=headers; Body=page.SettingsPayloadJson
+                          ETag=None
+                          RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+            | _ -> NetworkFailure
+
 [<RequireQualifiedAccess>]
 module MigrationInspectProviderAdapter =
     let bindReviewDeliveryRecords options native journals =
@@ -237,10 +266,32 @@ module MigrationInspectProviderAdapter =
             MigrationRepositorySettingsRead.validateCapture captured
             |> Result.mapError (settingsFailureText >> (+) "repository-settings-capture:")
             |> Result.bind (fun valid ->
-                MigrationRepositorySettingsRead.composeComplete valid
-                |> Result.mapError (settingsFailureText >> (+) "repository-settings-compose:")
+                let reads = if passOrdinal = 1 then valid.First else valid.Second
+                let reparseSurface surface =
+                    let claimed = reads[surface]
+                    let replay = RetainedSettingsTransport(claimed.Pages)
+                    let provider =
+                        MigrationRepositorySettingsGitHubProvider(options.Repository, replay)
+                        :> IMigrationRepositorySettingsSurfaceProvider
+                    match provider.Read(valid.RepositoryIdentity, valid.RepositoryRevision, surface) with
+                    | Error refusal ->
+                        Error(
+                            settingsFailureText (
+                                MigrationRepositorySettingsReadFailure.ProviderRefused(surface, refusal)))
+                    | Ok reparsed when not replay.AllPagesObserved -> Error "unobserved-retained-page"
+                    | Ok reparsed when reparsed <> claimed -> Error "raw-typed-mismatch"
+                    | Ok _ -> Ok()
+                RepositorySettingsAdapter.surfaces
+                |> List.fold (fun state surface ->
+                    state
+                    |> Result.bind (fun () ->
+                        reparseSurface surface
+                        |> Result.mapError (fun reason ->
+                            $"repository-settings-raw:{RepositorySettingsAdapter.surfaceId surface}:{reason}"))) (Ok())
+                |> Result.bind (fun () ->
+                    MigrationRepositorySettingsRead.composeComplete valid
+                    |> Result.mapError (settingsFailureText >> (+) "repository-settings-compose:"))
                 |> Result.bind (fun observation ->
-                    let reads = if passOrdinal = 1 then valid.First else valid.Second
                     let retained = ResizeArray<MigrationRepositorySettingsPageEvidence>()
                     let byUri = System.Collections.Generic.Dictionary<string, MigrationRepositorySettingsPageEvidence>()
                     let mutable conflict = None
@@ -2186,7 +2237,6 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
     let fieldProofs = System.Collections.Generic.Dictionary<int * string, string>()
     let issueProofs = System.Collections.Generic.Dictionary<int * string, string>()
     let cohortDigest = GitHubMigrationInspect.cohortSha256 options.Cohort
-    let settingsProofs = ref None
     let fieldFingerprint (proof: GitHubMigrationInspectAuthority) =
         proof.Pages
         |> List.collect (fun page ->
@@ -2201,30 +2251,17 @@ type MigrationInspectProviderAdapter(options: MigrationInspectProviderOptions,
             elif authority = "review-delivery-release-records" then
                 MigrationInspectProviderAdapter.readReviewDeliveryRecords options passOrdinal transport
             elif authority = "repository-settings" then
-                lock settingsProofs (fun () ->
-                    let result =
-                        match settingsProofs.Value with
-                        | Some result -> result
-                        | None ->
-                            let captured =
-                                MigrationInspectProviderAdapter.readRepositorySettingsIdentity options transport
-                                |> Result.bind (fun (identity, revision) ->
-                                    let provider =
-                                        MigrationRepositorySettingsGitHubProvider(options.Repository, transport)
-                                        :> IMigrationRepositorySettingsSurfaceProvider
-                                    MigrationRepositorySettingsRead.captureTwoPass identity revision provider
-                                    |> Result.mapError (
-                                        MigrationInspectProviderAdapter.settingsFailureText
-                                        >> (+) "repository-settings-read:"))
-                                |> Result.bind (fun capture ->
-                                    MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 1 capture
-                                    |> Result.bind (fun first ->
-                                        MigrationInspectProviderAdapter.bindRepositorySettingsCapture options 2 capture
-                                        |> Result.map (fun second -> first, second)))
-                            settingsProofs.Value <- Some captured
-                            captured
-                    result |> Result.map (fun (first, second) ->
-                        if passOrdinal = 1 then first else second))
+                MigrationInspectProviderAdapter.readRepositorySettingsIdentity options transport
+                |> Result.bind (fun (identity, revision) ->
+                    let provider =
+                        MigrationRepositorySettingsGitHubProvider(options.Repository, transport)
+                        :> IMigrationRepositorySettingsSurfaceProvider
+                    MigrationRepositorySettingsRead.captureTwoPass identity revision provider
+                    |> Result.mapError (
+                        MigrationInspectProviderAdapter.settingsFailureText
+                        >> (+) "repository-settings-read:"))
+                |> Result.bind (
+                    MigrationInspectProviderAdapter.bindRepositorySettingsCapture options passOrdinal)
             elif authority = "issues-open-and-relevant-closed" then
                 lock issueProofs (fun () -> issueProofs.Remove((passOrdinal, cohortDigest)) |> ignore)
                 let capture = CapturingTransport(transport, MigrationInspectProviderAdapter.allowedRequest options authority)
