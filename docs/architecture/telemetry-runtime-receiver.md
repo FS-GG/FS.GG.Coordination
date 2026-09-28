@@ -49,6 +49,24 @@ only future repository-owned `codex-exec` launches. It does not discover histori
 import an existing database, start a hosted daemon, mutate a provider, or claim coverage for platform-native
 `collaboration.spawn_agent` calls.
 
+Platform-native collaboration has a separate protected collection path. The
+Coordination telemetry Host manager's `install-native-collector` command binds
+one existing Host v2 `native-collector` grant to an exact executable, private
+Codex home, private evidence root, provider and requested profile. It writes the
+fixed sidecar expected by `fsgg-telemetry-host collect-native` and a non-secret
+hash receipt without accepting a credential, executable, inventory, total or
+source binding from the runtime caller. Version 1 Host configuration, an
+ambiguous or revoked grant, linked paths, non-private custody, and changed
+installed bytes refuse.
+
+The roadmap adapter may select that installed Host configuration through
+`FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG`; its request still carries only durable
+dispatch, parent-thread and native-agent selectors. Installation does not make
+provider source or snapshot origin verified. Until a protected installed
+readback and trusted acquisition prove those properties, native usage and
+shared-cost completeness remain `unknown` and no live efficiency result is
+qualified.
+
 `.fsgg/telemetry-ci-attribution.json` also activates the packaged exact-head CI observer. Its initial empty rule
 set is deliberate: native run, attempt, job, step and check population is retained, while activity classification
 stays explicitly unknown until exact workflow/job/step rules are measured and adopted. Unknown classification is

@@ -185,6 +185,310 @@ let private verifyEngineRelease values =
     verifyEngineManifest (required "--manifest" values) (required "--manifest-sha256" values) version digest
     printfn "%s" (json {| status = "verified"; version = version; packageSha256 = digest |})
 
+let private currentUid () =
+    let value = checkedCommand 10000 "/usr/bin/id" [ "-u" ]
+
+    match Int32.TryParse value with
+    | true, uid when uid >= 0 -> uid
+    | _ -> fail "current user identity is invalid"
+
+let private ownedBy uid path =
+    checkedCommand 10000 "/usr/bin/stat" [ "-c"; "%u"; path ] = string uid
+
+let private noLinkedAncestor path =
+    let mutable current = Path.GetFullPath path
+    let mutable safe = true
+
+    while safe && not (String.IsNullOrEmpty current) do
+        if File.Exists current then
+            safe <- isNull (FileInfo(current).LinkTarget)
+        elif Directory.Exists current then
+            safe <- isNull (DirectoryInfo(current).LinkTarget)
+
+        let parent = Path.GetDirectoryName current
+        current <- if parent = current then null else parent
+
+    safe
+
+let private privateFile uid path =
+    let info = FileInfo path
+
+    info.Exists
+    && Path.IsPathFullyQualified path
+    && noLinkedAncestor path
+    && ownedBy uid path
+    && File.GetUnixFileMode(path) = (UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+let private privateDirectory uid path =
+    let info = DirectoryInfo path
+
+    info.Exists
+    && Path.IsPathFullyQualified path
+    && noLinkedAncestor path
+    && ownedBy uid path
+    && File.GetUnixFileMode(path) = (UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+let private executableFile path =
+    let info = FileInfo path
+    let mode = if info.Exists then File.GetUnixFileMode path else enum 0
+
+    info.Exists
+    && Path.IsPathFullyQualified path
+    && noLinkedAncestor path
+    && (mode
+        &&& (UnixFileMode.UserExecute
+             ||| UnixFileMode.GroupExecute
+             ||| UnixFileMode.OtherExecute))
+       <> enum 0
+    && (mode &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
+
+let private atomicPrivateWrite (path: string) (bytes: byte array) =
+    let directory = Path.GetDirectoryName path
+
+    let temporary =
+        Path.Combine(directory, ".native-collector-" + Guid.NewGuid().ToString("N"))
+
+    try
+        use stream =
+            new FileStream(
+                temporary,
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None,
+                4096,
+                FileOptions.WriteThrough
+            )
+
+        stream.Write bytes
+        stream.Flush true
+        File.SetUnixFileMode(temporary, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+        File.Move(temporary, path, false)
+    finally
+        if File.Exists temporary then
+            File.Delete temporary
+
+let private installNativeCollector values =
+    only
+        (Set.ofList
+            [
+                "--host-config"
+                "--credential-reference"
+                "--executable"
+                "--codex-home"
+                "--evidence-root"
+                "--provider"
+                "--model"
+                "--effort"
+            ])
+        values
+
+    if not (OperatingSystem.IsLinux()) then
+        fail "native collector installation supports Linux only"
+
+    let uid = currentUid ()
+    let hostConfig = required "--host-config" values |> Path.GetFullPath
+    let credentialReference = required "--credential-reference" values
+    let executable = required "--executable" values |> Path.GetFullPath
+    let codexHome = required "--codex-home" values |> Path.GetFullPath
+    let evidenceRoot = required "--evidence-root" values |> Path.GetFullPath
+
+    let bounded name value =
+        if
+            String.IsNullOrWhiteSpace value
+            || value.Length > 128
+            || value
+               |> Seq.exists (fun c -> not (Char.IsAsciiLetterOrDigit c || ".:_-/@+".Contains c))
+        then
+            fail ("invalid " + name)
+
+        value
+
+    let provider = required "--provider" values |> bounded "provider"
+    let model = required "--model" values |> bounded "model"
+    let effort = required "--effort" values |> bounded "effort"
+
+    if not (Regex.IsMatch(credentialReference, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")) then
+        fail "invalid credential reference"
+
+    if not (privateFile uid hostConfig) then
+        fail "Host configuration must be an owner-private regular file"
+
+    if not (privateDirectory uid (Path.GetDirectoryName hostConfig)) then
+        fail "Host configuration parent must be an owner-private directory"
+
+    if not (privateDirectory uid codexHome) then
+        fail "Codex home must be an owner-private directory"
+
+    if not (executableFile executable) then
+        fail "Codex executable is unsafe"
+
+    let evidenceParent = Path.GetDirectoryName evidenceRoot
+
+    if String.IsNullOrEmpty evidenceParent || not (privateDirectory uid evidenceParent) then
+        fail "evidence parent must be an owner-private directory"
+
+    if Directory.Exists evidenceRoot then
+        if not (privateDirectory uid evidenceRoot) then
+            fail "evidence root must be an owner-private directory"
+    elif File.Exists evidenceRoot then
+        fail "evidence root is not a directory"
+    else
+        Directory.CreateDirectory evidenceRoot |> ignore
+
+        File.SetUnixFileMode(
+            evidenceRoot,
+            UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+        )
+
+    let configBytes = File.ReadAllBytes hostConfig
+
+    if configBytes.Length > 1024 * 1024 then
+        fail "Host configuration is oversized"
+
+    use document = JsonDocument.Parse configBytes
+    let root = document.RootElement
+    let mutable schema = Unchecked.defaultof<JsonElement>
+
+    if
+        root.ValueKind <> JsonValueKind.Object
+        || not (root.TryGetProperty("Schema", &schema))
+        || schema.ValueKind <> JsonValueKind.String
+        || schema.GetString() <> "fsgg.telemetry.host-config/2"
+    then
+        fail "native collector requires Host configuration v2"
+
+    let mutable credentials = Unchecked.defaultof<JsonElement>
+
+    if
+        not (root.TryGetProperty("Credentials", &credentials))
+        || credentials.ValueKind <> JsonValueKind.Array
+    then
+        fail "Host credential inventory is unavailable"
+
+    let matches =
+        credentials.EnumerateArray()
+        |> Seq.filter (fun entry ->
+            let mutable reference = Unchecked.defaultof<JsonElement>
+
+            entry.ValueKind = JsonValueKind.Object
+            && entry.TryGetProperty("Reference", &reference)
+            && reference.ValueKind = JsonValueKind.String
+            && reference.GetString() = credentialReference)
+        |> Seq.toArray
+
+    if matches.Length <> 1 then
+        fail "native collector credential reference must resolve exactly once"
+
+    let credential = matches[0]
+
+    let stringProperty (name: string) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+
+        if
+            not (credential.TryGetProperty(name, &property))
+            || property.ValueKind <> JsonValueKind.String
+            || String.IsNullOrWhiteSpace(property.GetString())
+        then
+            fail ("native collector credential " + name + " is invalid")
+
+        property.GetString()
+
+    let int64Property (name: string) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        let mutable value = 0L
+
+        if
+            not (credential.TryGetProperty(name, &property))
+            || not (property.TryGetInt64(&value))
+            || value <= 0L
+        then
+            fail ("native collector credential " + name + " is invalid")
+
+        value
+
+    let mutable revokedProperty = Unchecked.defaultof<JsonElement>
+
+    if
+        not (credential.TryGetProperty("Revoked", &revokedProperty))
+        || (revokedProperty.ValueKind <> JsonValueKind.True
+            && revokedProperty.ValueKind <> JsonValueKind.False)
+    then
+        fail "native collector credential Revoked is invalid"
+
+    let revoked = revokedProperty.GetBoolean()
+
+    if stringProperty "Role" <> "native-collector" || revoked then
+        fail "native collector credential is not active"
+
+    let secretFile = stringProperty "SecretFile" |> Path.GetFullPath
+
+    if not (privateFile uid secretFile) then
+        fail "native collector credential secret must be owner-private"
+
+    let workspace = stringProperty "WorkspaceId"
+    let producer = stringProperty "ProducerId"
+    let stream = stringProperty "StreamId"
+    let grantId = stringProperty "GrantId"
+    let generation = int64Property "GrantGeneration"
+
+    let validIdentity (value: string) =
+        Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+
+    if [ workspace; producer; stream; grantId ] |> List.exists (validIdentity >> not) then
+        fail "native collector credential scope or grant is invalid"
+
+    let sidecar = hostConfig + ".native-collector.json"
+    let receiptPath = hostConfig + ".native-collector.receipt.json"
+
+    let sidecarBytes =
+        JsonSerializer.SerializeToUtf8Bytes
+            {|
+                Schema = "fsgg.telemetry.native-collector-installation/1"
+                CredentialReference = credentialReference
+                ExecutablePath = executable
+                CodexHome = codexHome
+                EvidenceRoot = evidenceRoot
+                Provider = provider
+                Model = model
+                Effort = effort
+            |}
+
+    let executableDigest =
+        use source = File.OpenRead executable
+        Convert.ToHexString(SHA256.HashData source).ToLowerInvariant()
+
+    let receiptBytes =
+        JsonSerializer.SerializeToUtf8Bytes
+            {|
+                schema = "fsgg.telemetry.native-collector-installation-receipt/1"
+                status = "installed"
+                ownerUid = uid
+                hostConfigSha256 = sha256 configBytes
+                sidecarSha256 = sha256 sidecarBytes
+                executableSha256 = executableDigest
+                credentialReference = credentialReference
+                workspaceId = workspace
+                producerId = producer
+                streamId = stream
+                grantId = grantId
+                grantGeneration = generation
+                sourceVerification = "unknown"
+                snapshotOrigin = "unknown"
+                sharedCostCompleteness = "unknown"
+                activationAuthorized = false
+            |}
+
+    let installExact path bytes =
+        if File.Exists path then
+            if not (privateFile uid path) || File.ReadAllBytes path <> bytes then
+                fail "installed native collector custody differs"
+        else
+            atomicPrivateWrite path bytes
+
+    installExact sidecar sidecarBytes
+    installExact receiptPath receiptBytes
+    printfn "%s" (System.Text.Encoding.UTF8.GetString receiptBytes)
+
 let private serviceAccount = "fsgg-telemetry-podman"
 let private serviceHome = "/var/lib/fs-gg/telemetry-podman"
 
@@ -599,13 +903,14 @@ let main arguments =
         | "build-host-image" :: rest -> buildHostImage (options rest); 0
         | "verify-host-release" :: rest -> verifyHostRelease (options rest); 0
         | "verify-engine-release" :: rest -> verifyEngineRelease (options rest); 0
+        | "install-native-collector" :: rest -> installNativeCollector (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
         | "migrate-host" :: rest -> migrateHost (options rest); 0
         | "retry-host" :: rest -> retryHost (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|migrate-host|retry-host|build-host-image|verify-host-release|verify-engine-release|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|migrate-host|retry-host|build-host-image|verify-host-release|verify-engine-release|install-native-collector|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message
