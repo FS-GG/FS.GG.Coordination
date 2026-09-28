@@ -1,6 +1,6 @@
 # GS2-09.7 clean V2 pilot
 
-GS2-09.7 is a clean-start pilot of the already installed ordinary V2 settlement path. It does not migrate V1 state. The first pilot repository is `FS-GG/.github`, using its protected-main workflow `.github/workflows/v2-ci-ordinary-settlement.yml` and the published `FS.GG.Coordination.Cli` 0.1.2 `ordinary-settlement execute` command.
+GS2-09.7 is a clean-start pilot of the built and enrolled, currently inactive ordinary V2 settlement path. It does not migrate V1 state. The first pilot repository is `FS-GG/.github`, using its protected-main workflow `.github/workflows/v2-ci-ordinary-settlement.yml` and the published `FS.GG.Coordination.Cli` 0.1.2 `ordinary-settlement execute` command.
 
 The source route already captures the merged pull request and required checks, mints the repository-scoped ordinary V2 App credential, observes the protected fleet epoch, signs the settlement intent, appends through expected-parent Git CAS, and rereads an unknown response before reporting success. GS2-09.7 therefore adds no migration interpreter, V1 admission service, controller, or new runtime.
 
@@ -24,7 +24,7 @@ The native owner sequence is:
 4. Use that normal protected-main merge as the pilot operation. Verify the workflow conclusion, journal CAS result, fresh provider readback, and settled replay.
 5. Perform one normal rerun smoke. A failure disables the policy or lands a conventional repair-forward change; no old data is overwritten or deleted.
 
-The workflow triggers on every qualifying `.github` main push. The activation merge is the first pilot and successful readback moves directly to GS2-09.8 continuous rollout. This route does not promise a single-run selector.
+The workflow triggers on every qualifying `.github` main push. The activation merge is the first pilot and successful readback moves directly to GS2-09.8 continuous use in `.github`. Other repositories require later explicit enrollment; this pilot does not start a fleetwide rollout or promise a single-run selector.
 
 ## Acceptance boundary
 
