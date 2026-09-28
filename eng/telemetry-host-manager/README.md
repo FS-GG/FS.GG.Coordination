@@ -13,6 +13,41 @@ dotnet build eng/telemetry-host-manager/TelemetryHostManager.fsproj --no-restore
 dotnet run --project eng/telemetry-host-manager/TelemetryHostManager.fsproj -- status
 ```
 
+## Protected native collector installation
+
+`install-native-collector` installs the owner-private sidecar consumed by the
+Telemetry Host's `collect-native` command. Run it as the same operating-system
+account that owns the Host configuration, collector credential, Codex home and
+evidence directory. It accepts only a mode-`0600`
+`fsgg.telemetry.host-config/2` file with one active `native-collector`
+credential reference. Version 1 configuration is deliberately refused.
+
+```sh
+TelemetryHostManager install-native-collector \
+  --host-config /absolute/private/host.json \
+  --credential-reference roadmap-native-collector \
+  --executable /absolute/reviewed/codex \
+  --codex-home /absolute/private/codex-home \
+  --evidence-root /absolute/private/native-collector-evidence \
+  --provider openai --model gpt-6-sol --effort medium
+```
+
+The command checks ownership, exact private modes, symlink ancestry, executable
+write/execute permissions, the selected scope and grant, and then atomically
+creates `host.json.native-collector.json` plus an owner-private custody receipt.
+An exact replay is idempotent. A changed executable, configuration, grant,
+profile or installed sidecar refuses instead of rewriting custody. The receipt
+contains hashes and non-secret authority identities; it never reads or emits
+the credential bytes.
+
+This source command does not activate the collector or authorize a model call.
+Its receipt deliberately reports source verification, snapshot origin and
+shared-cost completeness as `unknown`. Set
+`FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG` to the installed Host configuration
+only after the separate installed readback verifies the exact Host executable,
+sidecar, credential grant and private roots. A successful source fixture or
+installation receipt is not live collection or qualified capture custody.
+
 Publish the framework-dependent Linux executable with `dotnet publish -c
 Release -o ABSOLUTE_STAGING_DIRECTORY`, then run its `install-manager --root
 /opt/fs-gg/telemetry-host-manager --version VERSION` command as root. It
