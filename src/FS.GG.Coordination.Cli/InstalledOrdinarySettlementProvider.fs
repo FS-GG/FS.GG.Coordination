@@ -122,6 +122,29 @@ module InstalledOrdinarySettlementProvider =
                   "Determinism & property invariants (constraint face) (windows-latest)"
                   "materialize / receiver-validate" ] }
 
+    let private sddSourceProfile =
+        { Name = "sdd-v1"
+          Repository = "FS-GG/FS.GG.SDD"
+          RepositoryId = 1274272672L
+          RequiredSettlementChecks =
+            Set [ "Deterministic gate (locked restore + build + test)"; "Shared-build-config drift check" ]
+          RequiredGateChecks =
+            Set
+                [ "Deterministic gate (locked restore + build + test)"
+                  "Shared-build-config drift check"
+                  "API compatibility gate (breaking-change → SemVer major)"
+                  "kit / coordination-kit"
+                  "skill-view-check"
+                  "materialize / receiver-validate" ] }
+
+    let private templatesSourceProfile =
+        { Name = "templates-v1"
+          Repository = "FS-GG/FS.GG.Templates"
+          RepositoryId = 1281961814L
+          RequiredSettlementChecks = Set [ "composition"; "kit / coordination-kit" ]
+          RequiredGateChecks =
+            Set [ "composition"; "kit / coordination-kit"; "materialize / receiver-validate" ] }
+
     let selectSourceProfile value =
         match value with
         | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
@@ -131,6 +154,8 @@ module InstalledOrdinarySettlementProvider =
         | "net-v1" -> Ok netSourceProfile
         | "governance-v1" -> Ok governanceSourceProfile
         | "game-v1" -> Ok gameSourceProfile
+        | "sdd-v1" -> Ok sddSourceProfile
+        | "templates-v1" -> Ok templatesSourceProfile
         | _ -> Error "unsupported-source-profile"
 
     let private apiBase = Uri "https://api.github.com/"

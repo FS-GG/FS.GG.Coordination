@@ -368,6 +368,51 @@ let ``preparation admits only the closed Game source profile`` () =
     Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongId [ associated ] reader writerBinding |> errors)
     Assert.Contains(SettlementRequiredCheckSetMismatch, prepare foreignChecks [ associated ] reader writerBinding |> errors)
 
+let private assertNewSourceProfile repository repositoryId checkIdentities foreignCheck =
+    let checks =
+        checkIdentities
+        |> List.map (fun identity -> { Identity = identity; AppId = 15368L; Conclusion = CheckPassed })
+    let observed =
+        { observation "OpenV2" with
+            Repository = repository
+            RepositoryId = repositoryId
+            Checks = checks }
+    let associated = { association true (sha "8") with Repository = repository }
+    let reader = { readBinding with RepositoryId = repositoryId }
+    let plan =
+        prepare observed [ associated ] reader writerBinding
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+        |> fst
+    Assert.Equal(repository.ToLowerInvariant(), plan.Repository)
+    Assert.Equal(repositoryId, plan.RepositoryId)
+    Assert.Equal<string list>(checkIdentities, plan.RequiredChecks |> List.map _.Identity)
+
+    let wrongName = { observed with Repository = "FS-GG/FS.GG.Audio" }
+    let wrongId = { observed with RepositoryId = 1292226968L }
+    let foreignChecks =
+        { observed with Checks = { checks.Head with Identity = foreignCheck } :: checks.Tail }
+    let wrongApp =
+        { observed with Checks = { checks.Head with AppId = 1L } :: checks.Tail }
+    let missingCheck = { observed with Checks = [ checks.Head ] }
+    for invalid in [ wrongName; wrongId; foreignChecks; wrongApp; missingCheck ] do
+        Assert.Contains(SettlementRequiredCheckSetMismatch, prepare invalid [ associated ] reader writerBinding |> errors)
+
+[<Fact>]
+let ``preparation admits only the closed SDD source profile`` () =
+    assertNewSourceProfile
+        "FS-GG/FS.GG.SDD"
+        1274272672L
+        [ "Deterministic gate (locked restore + build + test)"; "Shared-build-config drift check" ]
+        "routine-eligibility"
+
+[<Fact>]
+let ``preparation admits only the closed Templates source profile`` () =
+    assertNewSourceProfile
+        "FS-GG/FS.GG.Templates"
+        1281961814L
+        [ "composition"; "kit / coordination-kit" ]
+        "routine-eligibility"
+
 [<Fact>]
 let ``preparation refuses stale source qualification epoch and credential scope`` () =
     let observed = observation "OpenV2"
