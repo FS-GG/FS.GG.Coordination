@@ -78,6 +78,7 @@ let private installedBytes includeAdministration =
         writer.WriteString("schema", "fsgg.github-substrate-v2.sandbox-seed-execution-binding/1")
         writer.WriteString("schemaJoin", "coordination-s1-final")
         writer.WriteStartObject("source")
+        writer.WriteString("approvedArtifactSourceSha256", String.replicate 64 "4")
         writer.WriteString("candidateSha", candidate)
         writer.WriteString("repository", "FS-GG/.github")
         writer.WriteNumber("runAttempt", 2)
@@ -278,16 +279,38 @@ type private BareTransport(path: string, unknown: bool, applyWrite: bool) =
         member _.ReadFresh refName =
             MigrationSandboxSeedJournal.readLocalBare path refName
 
-let private authenticate bytes =
-    MigrationSandboxSeedJournalRemote.authenticateInstalledS2 (ReadOnlyMemory bytes)
+let private evidence bindingBytes policyBytes =
+    {
+        BindingBytes = bindingBytes
+        PolicyReadbackBytes = policyBytes
+        WorkflowRunId = 7L
+        WorkflowRunAttempt = 2
+        WorkflowSha = workflow
+        ApprovedArtifactSourceSha256 = String.replicate 64 "4"
+    }
+
+type private ExactVerifier(expectedBinding: byte array, expectedPolicy: byte array, accept: bool) =
+    interface IMigrationSandboxSeedInstalledProvenanceVerifier with
+        member _.VerifyExact actual =
+            accept
+            && actual.BindingBytes = expectedBinding
+            && actual.PolicyReadbackBytes = expectedPolicy
+            && actual.WorkflowRunId = 7L
+            && actual.WorkflowRunAttempt = 2
+            && actual.WorkflowSha = workflow
+            && actual.ApprovedArtifactSourceSha256 = String.replicate 64 "4"
+
+let private authority bytes =
+    let policy = installedPolicyBytes ()
+
+    MigrationSandboxSeedJournalRemote.establishInstalledAuthority
+        (ExactVerifier(bytes, policy, true))
+        (evidence bytes policy)
     |> Result.defaultWith (fun error -> failwithf "%A" error)
 
-let private authenticatePolicy () =
-    MigrationSandboxSeedJournalRemote.authenticateInstalledPolicy (ReadOnlyMemory(installedPolicyBytes ()))
-    |> Result.defaultWith (fun error -> failwithf "%A" error)
-
-let private writeRemote binding previous proposal transport =
-    MigrationSandboxSeedJournalRemote.writeAndRead binding (authenticatePolicy ()) previous proposal transport
+let private writeRemote bytes previous proposal transport =
+    let binding, policy = authority bytes
+    MigrationSandboxSeedJournalRemote.writeAndRead binding policy previous proposal transport
 
 let private proposal bytes =
     MigrationSandboxSeedJournal.plan None (state bytes)
@@ -304,14 +327,22 @@ let ``current source only S2 cannot construct installed authority`` () =
         raw
             "{\"activation\":false,\"authority\":\"unavailable\",\"schema\":\"fsgg.github-substrate-v2.sandbox-seed-execution-binding/1\"}\n"
 
-    Assert.Equal(
-        Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
-        MigrationSandboxSeedJournalRemote.authenticateInstalledS2 (ReadOnlyMemory current)
-    )
+    let policy = installedPolicyBytes ()
 
     Assert.Equal(
         Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
-        MigrationSandboxSeedJournalRemote.authenticateInstalledS2 (ReadOnlyMemory(installedBytes true))
+        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
+            (ExactVerifier(current, policy, true))
+            (evidence current policy)
+    )
+
+    let excessive = installedBytes true
+
+    Assert.Equal(
+        Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
+        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
+            (ExactVerifier(excessive, policy, true))
+            (evidence excessive policy)
     )
 
 [<Fact>]
@@ -321,17 +352,30 @@ let ``candidate journal policy cannot construct installed authority`` () =
 
     Assert.Equal(
         Error MigrationSandboxSeedRemoteFailure.InvalidInstalledPolicy,
-        MigrationSandboxSeedJournalRemote.authenticateInstalledPolicy (ReadOnlyMemory candidatePolicy)
+        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
+            (ExactVerifier(installedBytes false, candidatePolicy, true))
+            (evidence (installedBytes false) candidatePolicy)
+    )
+
+[<Fact>]
+let ``well formed self asserted receipts cannot create installed authority`` () =
+    let binding = installedBytes false
+    let policy = installedPolicyBytes ()
+
+    Assert.Equal(
+        Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected,
+        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
+            (ExactVerifier(binding, policy, false))
+            (evidence binding policy)
     )
 
 [<Fact>]
 let ``exact objects absent lease and fresh readback apply`` () =
     withBare (fun repository ->
         let bytes = installedBytes false
-        let binding = authenticate bytes
         let proposal = proposal bytes
         let transport = BareTransport(repository, false, true)
-        let result = writeRemote binding None proposal transport
+        let result = writeRemote bytes None proposal transport
 
         match result with
         | Ok(MigrationSandboxSeedRemoteResult.Applied restored) -> Assert.False(restored.RecoveryOnly)
@@ -346,11 +390,10 @@ let ``exact objects absent lease and fresh readback apply`` () =
 let ``lost response always rereads applied or stays journal only`` () =
     withBare (fun repository ->
         let bytes = installedBytes false
-        let binding = authenticate bytes
         let proposal = proposal bytes
 
         let applied =
-            writeRemote binding None proposal (BareTransport(repository, true, true))
+            writeRemote bytes None proposal (BareTransport(repository, true, true))
 
         match applied with
         | Ok(MigrationSandboxSeedRemoteResult.Applied _) -> ()
@@ -358,12 +401,11 @@ let ``lost response always rereads applied or stays journal only`` () =
 
     withBare (fun repository ->
         let bytes = installedBytes false
-        let binding = authenticate bytes
         let proposal = proposal bytes
 
         Assert.Equal(
             Ok(MigrationSandboxSeedRemoteResult.JournalRetryOnly "response-unknown-old-head"),
-            writeRemote binding None proposal (BareTransport(repository, true, false))
+            writeRemote bytes None proposal (BareTransport(repository, true, false))
         ))
 
     let bytes = installedBytes false
@@ -380,7 +422,7 @@ let ``lost response always rereads applied or stays journal only`` () =
 
     Assert.Equal(
         Ok(MigrationSandboxSeedRemoteResult.JournalRetryOnly "response-unknown-old-head"),
-        writeRemote (authenticate bytes) None (proposal bytes) timeout
+        writeRemote bytes None (proposal bytes) timeout
     )
 
     Assert.True(reread)
@@ -389,25 +431,23 @@ let ``lost response always rereads applied or stays journal only`` () =
 let ``identical stale absent retry is journal only`` () =
     withBare (fun repository ->
         let bytes = installedBytes false
-        let binding = authenticate bytes
         let proposal = proposal bytes
 
-        writeRemote binding None proposal (BareTransport(repository, false, true))
+        writeRemote bytes None proposal (BareTransport(repository, false, true))
         |> ignore
 
         Assert.Equal(
             Ok(MigrationSandboxSeedRemoteResult.JournalRetryOnly "parent-conflict-identical-object"),
-            writeRemote binding None proposal (BareTransport(repository, false, true))
+            writeRemote bytes None proposal (BareTransport(repository, false, true))
         ))
 
 [<Fact>]
 let ``stale parent loses to a competing writer`` () =
     withBare (fun repository ->
         let bytes = installedBytes false
-        let binding = authenticate bytes
         let genesis = proposal bytes
 
-        writeRemote binding None genesis (BareTransport(repository, false, true))
+        writeRemote bytes None genesis (BareTransport(repository, false, true))
         |> ignore
 
         let previous = snapshot repository genesis.RefName
@@ -420,18 +460,17 @@ let ``stale parent loses to a competing writer`` () =
             MigrationSandboxSeedJournal.plan (Some previous) (nextState (String.replicate 40 "e") (state bytes))
             |> Result.defaultWith (fun error -> failwithf "%A" error)
 
-        writeRemote binding (Some previous) left (BareTransport(repository, false, true))
+        writeRemote bytes (Some previous) left (BareTransport(repository, false, true))
         |> ignore
 
         Assert.Equal(
             Ok MigrationSandboxSeedRemoteResult.Conflict,
-            writeRemote binding (Some previous) right (BareTransport(repository, false, true))
+            writeRemote bytes (Some previous) right (BareTransport(repository, false, true))
         ))
 
 [<Fact>]
 let ``altered readback and malformed installed binding refuse`` () =
     let bytes = installedBytes false
-    let binding = authenticate bytes
     let proposal = proposal bytes
 
     let altered =
@@ -445,7 +484,7 @@ let ``altered readback and malformed installed binding refuse`` () =
 
     Assert.Equal(
         Ok(MigrationSandboxSeedRemoteResult.Indeterminate "altered-object"),
-        writeRemote binding None proposal altered
+        writeRemote bytes None proposal altered
     )
 
     let alteredProposal =
@@ -455,13 +494,16 @@ let ``altered readback and malformed installed binding refuse`` () =
 
     Assert.Equal(
         Error MigrationSandboxSeedRemoteFailure.InvalidJournalProposal,
-        writeRemote binding None alteredProposal altered
+        writeRemote bytes None alteredProposal altered
     )
 
     let malformed = installedBytes false |> Array.map id
     malformed[malformed.Length - 2] <- byte ' '
+    let policy = installedPolicyBytes ()
 
     Assert.Equal(
         Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding,
-        MigrationSandboxSeedJournalRemote.authenticateInstalledS2 (ReadOnlyMemory malformed)
+        MigrationSandboxSeedJournalRemote.establishInstalledAuthority
+            (ExactVerifier(malformed, policy, true))
+            (evidence malformed policy)
     )

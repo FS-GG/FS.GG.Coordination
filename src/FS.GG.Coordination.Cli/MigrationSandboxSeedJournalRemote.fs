@@ -10,6 +10,19 @@ open System.Text.Json
 type MigrationSandboxSeedInstalledS2Binding = private MigrationSandboxSeedInstalledS2Binding of byte array
 type MigrationSandboxSeedInstalledJournalPolicy = private MigrationSandboxSeedInstalledJournalPolicy of byte array
 
+type MigrationSandboxSeedInstalledProvenanceEvidence =
+    {
+        BindingBytes: byte array
+        PolicyReadbackBytes: byte array
+        WorkflowRunId: int64
+        WorkflowRunAttempt: int
+        WorkflowSha: string
+        ApprovedArtifactSourceSha256: string
+    }
+
+type IMigrationSandboxSeedInstalledProvenanceVerifier =
+    abstract VerifyExact: MigrationSandboxSeedInstalledProvenanceEvidence -> bool
+
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedRemotePushOutcome =
     | Accepted
@@ -48,6 +61,7 @@ type MigrationSandboxSeedRemoteResult =
 type MigrationSandboxSeedRemoteFailure =
     | InvalidInstalledBinding
     | InvalidInstalledPolicy
+    | InstalledProvenanceRejected
     | InstalledBindingMismatch
     | InvalidJournalProposal
 
@@ -173,6 +187,7 @@ module MigrationSandboxSeedJournalRemote =
                 && exactNames
                     [
                         "candidateSha"
+                        "approvedArtifactSourceSha256"
                         "repository"
                         "runAttempt"
                         "runId"
@@ -189,6 +204,7 @@ module MigrationSandboxSeedJournalRemote =
                 && text "authority" root = "installed-protected-workflow-verified"
                 && text "schemaJoin" root = "coordination-s1-final"
                 && text "repository" source = "FS-GG/.github"
+                && hex 64 (text "approvedArtifactSourceSha256" source)
                 && text "workflowPath" source = ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
                 && text "workflowRef" source = "refs/heads/main"
                 && hex 40 (text "workflowSha" source)
@@ -224,14 +240,6 @@ module MigrationSandboxSeedJournalRemote =
         | :? KeyNotFoundException
         | :? FormatException
         | :? DecoderFallbackException -> false
-
-    let authenticateInstalledS2 (bindingBytes: ReadOnlyMemory<byte>) =
-        let bytes = bindingBytes.ToArray()
-
-        if bytes.Length = 0 || bytes.Length > 1024 * 1024 || not (installedShape bytes) then
-            Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding
-        else
-            Ok(MigrationSandboxSeedInstalledS2Binding bytes)
 
     let private installedPolicyShape (bytes: byte array) =
         try
@@ -291,17 +299,63 @@ module MigrationSandboxSeedJournalRemote =
         | :? FormatException
         | :? DecoderFallbackException -> false
 
-    let authenticateInstalledPolicy (policyBytes: ReadOnlyMemory<byte>) =
-        let bytes = policyBytes.ToArray()
+    let establishInstalledAuthority
+        (verifier: IMigrationSandboxSeedInstalledProvenanceVerifier)
+        (evidence: MigrationSandboxSeedInstalledProvenanceEvidence)
+        =
+        let bindingBytes =
+            if isNull evidence.BindingBytes then
+                [||]
+            else
+                Array.copy evidence.BindingBytes
+
+        let policyBytes =
+            if isNull evidence.PolicyReadbackBytes then
+                [||]
+            else
+                Array.copy evidence.PolicyReadbackBytes
 
         if
-            bytes.Length = 0
-            || bytes.Length > 1024 * 1024
-            || not (installedPolicyShape bytes)
+            bindingBytes.Length = 0
+            || bindingBytes.Length > 1024 * 1024
+            || not (installedShape bindingBytes)
+        then
+            Error MigrationSandboxSeedRemoteFailure.InvalidInstalledBinding
+        elif
+            policyBytes.Length = 0
+            || policyBytes.Length > 1024 * 1024
+            || not (installedPolicyShape policyBytes)
         then
             Error MigrationSandboxSeedRemoteFailure.InvalidInstalledPolicy
         else
-            Ok(MigrationSandboxSeedInstalledJournalPolicy bytes)
+            try
+                use document = JsonDocument.Parse bindingBytes
+                let source = document.RootElement.GetProperty "source"
+
+                if
+                    source.GetProperty("runId").GetInt64() <> evidence.WorkflowRunId
+                    || source.GetProperty("runAttempt").GetInt32() <> evidence.WorkflowRunAttempt
+                    || text "workflowSha" source <> evidence.WorkflowSha
+                    || text "approvedArtifactSourceSha256" source
+                       <> evidence.ApprovedArtifactSourceSha256
+                then
+                    Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected
+                else
+                    let verifierEvidence =
+                        { evidence with
+                            BindingBytes = Array.copy bindingBytes
+                            PolicyReadbackBytes = Array.copy policyBytes
+                        }
+
+                    if verifier.VerifyExact verifierEvidence then
+                        Ok(
+                            MigrationSandboxSeedInstalledS2Binding bindingBytes,
+                            MigrationSandboxSeedInstalledJournalPolicy policyBytes
+                        )
+                    else
+                        Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected
+            with _ ->
+                Error MigrationSandboxSeedRemoteFailure.InstalledProvenanceRejected
 
     let private proposalSnapshot (proposal: MigrationSandboxSeedJournalPlan) =
         {
