@@ -335,6 +335,40 @@ let ``preparation admits only the closed Governance source profile`` () =
     Assert.Contains(SettlementRequiredCheckSetMismatch, prepare foreignChecks [ associated ] reader writerBinding |> errors)
 
 [<Fact>]
+let ``preparation admits only the closed Game source profile`` () =
+    let gameChecks =
+        [ { Identity = "Deterministic gate (locked restore + build) (ubuntu-latest)"; AppId = 15368L; Conclusion = CheckPassed }
+          { Identity = "Full test suite (dotnet test, headless) (ubuntu-latest)"; AppId = 15368L; Conclusion = CheckPassed } ]
+    let observed =
+        { observation "OpenV2" with
+            Repository = "FS-GG/FS.GG.Game"
+            RepositoryId = 1290990429L
+            Checks = gameChecks }
+    let associated =
+        { association true (sha "8") with Repository = "FS-GG/FS.GG.Game" }
+    let reader = { readBinding with RepositoryId = 1290990429L }
+    let plan =
+        prepare observed [ associated ] reader writerBinding
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+        |> fst
+    Assert.Equal("fs-gg/fs.gg.game", plan.Repository)
+    Assert.Equal(1290990429L, plan.RepositoryId)
+    Assert.Equal<string list>(
+        [ "Deterministic gate (locked restore + build) (ubuntu-latest)"; "Full test suite (dotnet test, headless) (ubuntu-latest)" ],
+        plan.RequiredChecks |> List.map _.Identity)
+
+    let wrongName = { observed with Repository = "FS-GG/FS.GG.Rendering" }
+    let wrongId = { observed with RepositoryId = 1269292235L }
+    let foreignChecks =
+        { observed with
+            Checks =
+                [ { Identity = "Deterministic gate (locked restore + build) (ubuntu-latest)"; AppId = 15368L; Conclusion = CheckPassed }
+                  { Identity = "routine-eligibility"; AppId = 15368L; Conclusion = CheckPassed } ] }
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongName [ associated ] reader writerBinding |> errors)
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongId [ associated ] reader writerBinding |> errors)
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare foreignChecks [ associated ] reader writerBinding |> errors)
+
+[<Fact>]
 let ``preparation refuses stale source qualification epoch and credential scope`` () =
     let observed = observation "OpenV2"
     let associations = [ association true (sha "8") ]
