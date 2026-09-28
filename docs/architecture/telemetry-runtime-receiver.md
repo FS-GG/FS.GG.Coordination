@@ -59,6 +59,16 @@ source binding from the runtime caller. Version 1 Host configuration, an
 ambiguous or revoked grant, linked paths, non-private custody, and changed
 installed bytes refuse.
 
+Installation schema `/1` remains the default and retains those UNKNOWN
+properties. An operator may select schema `/2` only with an explicit lowercase
+SHA-256 for the exact executable. Version 2 admits a Host- or root-owned
+executable only after the bytes match that pin, anchors the Codex home and
+evidence root beneath the private Host configuration directory, and validates
+every custody descendant as owner-private and non-symlinked. Its exact
+nine-field sidecar adds `ExecutableSha256`; its versioned receipt still reports
+source verification, snapshot origin and shared-cost completeness as
+`unknown`. Existing version 1 custody is never promoted in place.
+
 The roadmap adapter may select that installed Host configuration through
 `FSGG_TELEMETRY_NATIVE_COLLECTOR_CONFIG`; its request still carries only durable
 dispatch, parent-thread and native-agent selectors. Installation does not make

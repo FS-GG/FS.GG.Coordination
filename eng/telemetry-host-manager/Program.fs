@@ -242,6 +242,32 @@ let private executableFile path =
        <> enum 0
     && (mode &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
 
+let private ownedByHostOrRoot uid path =
+    let owner = checkedCommand 10000 "/usr/bin/stat" [ "-c"; "%u"; path ]
+    owner = "0" || owner = string uid
+
+let private privateDescendantDirectory uid anchor path =
+    let anchor = Path.GetFullPath anchor |> Path.TrimEndingDirectorySeparator
+    let path = Path.GetFullPath path |> Path.TrimEndingDirectorySeparator
+    let relative = Path.GetRelativePath(anchor, path)
+
+    if
+        relative = "."
+        || Path.IsPathFullyQualified relative
+        || relative = ".."
+        || relative.StartsWith(".." + string Path.DirectorySeparatorChar, StringComparison.Ordinal)
+    then
+        false
+    else
+        let mutable current = path
+        let mutable safe = true
+
+        while safe && current <> anchor do
+            safe <- privateDirectory uid current
+            current <- Path.GetDirectoryName current |> Path.TrimEndingDirectorySeparator
+
+        safe && current = anchor
+
 let private atomicPrivateWrite (path: string) (bytes: byte array) =
     let directory = Path.GetDirectoryName path
 
@@ -279,6 +305,8 @@ let private installNativeCollector values =
                 "--provider"
                 "--model"
                 "--effort"
+                "--installation-version"
+                "--executable-sha256"
             ])
         values
 
@@ -291,6 +319,19 @@ let private installNativeCollector values =
     let executable = required "--executable" values |> Path.GetFullPath
     let codexHome = required "--codex-home" values |> Path.GetFullPath
     let evidenceRoot = required "--evidence-root" values |> Path.GetFullPath
+    let installationVersion = values |> Map.tryFind "--installation-version" |> Option.defaultValue "1"
+
+    if installationVersion <> "1" && installationVersion <> "2" then
+        fail "installation version must be 1 or 2"
+
+    let executablePin =
+        match installationVersion, Map.tryFind "--executable-sha256" values with
+        | "1", None -> None
+        | "1", Some _ -> fail "executable SHA-256 is valid only for installation version 2"
+        | "2", None -> fail "missing --executable-sha256"
+        | "2", Some value when hex64 value -> Some value
+        | "2", Some _ -> fail "executable SHA-256 must be lowercase hex"
+        | _ -> None
 
     let bounded name value =
         if
@@ -322,10 +363,33 @@ let private installNativeCollector values =
     if not (executableFile executable) then
         fail "Codex executable is unsafe"
 
+    if installationVersion = "2" && not (ownedByHostOrRoot uid executable) then
+        fail "Codex executable must be owned by the Host account or root"
+
+    let executableDigest =
+        use source = File.OpenRead executable
+        Convert.ToHexString(SHA256.HashData source).ToLowerInvariant()
+
+    match executablePin with
+    | Some expected when executableDigest <> expected -> fail "Codex executable SHA-256 differs"
+    | _ -> ()
+
+    let custodyAnchor = Path.GetDirectoryName hostConfig
+
+    if installationVersion = "2" && not (privateDescendantDirectory uid custodyAnchor codexHome) then
+        fail "Codex home must be a private descendant of the Host configuration parent"
+
     let evidenceParent = Path.GetDirectoryName evidenceRoot
 
     if String.IsNullOrEmpty evidenceParent || not (privateDirectory uid evidenceParent) then
         fail "evidence parent must be an owner-private directory"
+
+    if
+        installationVersion = "2"
+        && Path.TrimEndingDirectorySeparator evidenceParent <> Path.TrimEndingDirectorySeparator custodyAnchor
+        && not (privateDescendantDirectory uid custodyAnchor evidenceParent)
+    then
+        fail "evidence root must be beneath private Host configuration custody"
 
     if Directory.Exists evidenceRoot then
         if not (privateDirectory uid evidenceRoot) then
@@ -339,6 +403,9 @@ let private installNativeCollector values =
             evidenceRoot,
             UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
         )
+
+    if installationVersion = "2" && not (privateDescendantDirectory uid custodyAnchor evidenceRoot) then
+        fail "evidence root must be a private descendant of the Host configuration parent"
 
     let configBytes = File.ReadAllBytes hostConfig
 
@@ -441,26 +508,36 @@ let private installNativeCollector values =
     let receiptPath = hostConfig + ".native-collector.receipt.json"
 
     let sidecarBytes =
-        JsonSerializer.SerializeToUtf8Bytes
-            {|
-                Schema = "fsgg.telemetry.native-collector-installation/1"
-                CredentialReference = credentialReference
-                ExecutablePath = executable
-                CodexHome = codexHome
-                EvidenceRoot = evidenceRoot
-                Provider = provider
-                Model = model
-                Effort = effort
-            |}
-
-    let executableDigest =
-        use source = File.OpenRead executable
-        Convert.ToHexString(SHA256.HashData source).ToLowerInvariant()
+        if installationVersion = "2" then
+            JsonSerializer.SerializeToUtf8Bytes
+                {|
+                    Schema = "fsgg.telemetry.native-collector-installation/2"
+                    CredentialReference = credentialReference
+                    ExecutablePath = executable
+                    CodexHome = codexHome
+                    EvidenceRoot = evidenceRoot
+                    Provider = provider
+                    Model = model
+                    Effort = effort
+                    ExecutableSha256 = executableDigest
+                |}
+        else
+            JsonSerializer.SerializeToUtf8Bytes
+                {|
+                    Schema = "fsgg.telemetry.native-collector-installation/1"
+                    CredentialReference = credentialReference
+                    ExecutablePath = executable
+                    CodexHome = codexHome
+                    EvidenceRoot = evidenceRoot
+                    Provider = provider
+                    Model = model
+                    Effort = effort
+                |}
 
     let receiptBytes =
         JsonSerializer.SerializeToUtf8Bytes
             {|
-                schema = "fsgg.telemetry.native-collector-installation-receipt/1"
+                schema = "fsgg.telemetry.native-collector-installation-receipt/" + installationVersion
                 status = "installed"
                 ownerUid = uid
                 hostConfigSha256 = sha256 configBytes
@@ -484,6 +561,18 @@ let private installNativeCollector values =
                 fail "installed native collector custody differs"
         else
             atomicPrivateWrite path bytes
+
+    if installationVersion = "2" && File.Exists sidecar && privateFile uid sidecar then
+        use installed = JsonDocument.Parse(File.ReadAllBytes sidecar)
+        let mutable installedSchema = Unchecked.defaultof<JsonElement>
+
+        if
+            installed.RootElement.ValueKind = JsonValueKind.Object
+            && installed.RootElement.TryGetProperty("Schema", &installedSchema)
+            && installedSchema.ValueKind = JsonValueKind.String
+            && installedSchema.GetString() = "fsgg.telemetry.native-collector-installation/1"
+        then
+            fail "installation version 1 cannot be promoted in place; choose prospective custody paths"
 
     installExact sidecar sidecarBytes
     installExact receiptPath receiptBytes
