@@ -10,8 +10,8 @@ open FS.GG.Coordination.GitHub
 let private sha character = String.replicate 40 character
 
 let private observation epoch =
-    { Repository = "FS-GG/FS.GG.Coordination"
-      RepositoryId = 101L
+    { Repository = "FS-GG/.github"
+      RepositoryId = 1269292704L
       PullRequestNumber = 421
       PullRequestNodeId = "PR_kwDOordinary"
       BaseRef = "main"
@@ -34,7 +34,7 @@ let private observation epoch =
 let private association merged commit =
     { Number = 421
       NodeId = "PR_kwDOordinary"
-      Repository = "FS-GG/FS.GG.Coordination"
+      Repository = "FS-GG/.github"
       BaseRef = "main"
       HeadCommit = sha "b"
       MergeCommit = commit
@@ -48,7 +48,7 @@ let private writerBinding: OrdinarySettlementCredentialBinding =
 
 let private readBinding: OrdinarySettlementReadBinding =
     { CredentialKind = "github-actions-repository-token"
-      RepositoryId = 101L
+      RepositoryId = 1269292704L
       Permissions =
         Map [ "actions", "read"; "checks", "read"; "contents", "read"; "pull_requests", "read" ] }
 
@@ -173,7 +173,7 @@ let ``preparation binds one merged main PR and stable workflow identity`` () =
             writerBinding
     Assert.Equal(first, afterJournalMutation)
     let plan = first |> Result.defaultWith (sprintf "%A" >> failwith) |> fst
-    Assert.Equal(101L, plan.RepositoryId)
+    Assert.Equal(1269292704L, plan.RepositoryId)
     Assert.Equal(202L, plan.AuthorityRepositoryId)
     Assert.Equal(observed.HeadSha, plan.PullRequestHeadCommit)
     Assert.Equal(sha "8", plan.SourceCommit)
@@ -197,6 +197,40 @@ let ``preparation binds one merged main PR and stable workflow identity`` () =
     Assert.Equal(Error [ MismatchedMergedPullRequest ], prepare observed [ association true (sha "0") ] readBinding writerBinding)
     let wrongHead = { (association true (sha "8")) with HeadCommit = sha "0" }
     Assert.Equal(Error [ MismatchedMergedPullRequest ], prepare observed [ wrongHead ] readBinding writerBinding)
+
+[<Fact>]
+let ``preparation admits only the closed Audio source profile`` () =
+    let audioChecks =
+        [ { Identity = "Build + test (locked restore, net10.0, headless)"; AppId = 15368L; Conclusion = CheckPassed }
+          { Identity = "routine-eligibility"; AppId = 15368L; Conclusion = CheckPassed } ]
+    let observed =
+        { observation "OpenV2" with
+            Repository = "FS-GG/FS.GG.Audio"
+            RepositoryId = 1292226968L
+            Checks = audioChecks }
+    let associated =
+        { association true (sha "8") with Repository = "FS-GG/FS.GG.Audio" }
+    let reader = { readBinding with RepositoryId = 1292226968L }
+    let plan =
+        prepare observed [ associated ] reader writerBinding
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+        |> fst
+    Assert.Equal("fs-gg/fs.gg.audio", plan.Repository)
+    Assert.Equal(1292226968L, plan.RepositoryId)
+    Assert.Equal<string list>(
+        [ "Build + test (locked restore, net10.0, headless)"; "routine-eligibility" ],
+        plan.RequiredChecks |> List.map _.Identity)
+
+    let wrongName = { observed with Repository = "FS-GG/.github" }
+    let wrongId = { observed with RepositoryId = 1269292704L }
+    let foreignChecks =
+        { observed with
+            Checks =
+                [ { Identity = "contract-coherence / coherence"; AppId = 15368L; Conclusion = CheckPassed }
+                  { Identity = "routine-eligibility"; AppId = 15368L; Conclusion = CheckPassed } ] }
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongName [ associated ] reader writerBinding |> errors)
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare wrongId [ associated ] reader writerBinding |> errors)
+    Assert.Contains(SettlementRequiredCheckSetMismatch, prepare foreignChecks [ associated ] reader writerBinding |> errors)
 
 [<Fact>]
 let ``preparation refuses stale source qualification epoch and credential scope`` () =

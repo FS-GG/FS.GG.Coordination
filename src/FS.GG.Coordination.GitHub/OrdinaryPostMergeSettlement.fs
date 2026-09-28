@@ -156,13 +156,22 @@ module OrdinaryPostMergeSettlement =
     let private operationClass = "ordinary-post-merge-delivery-settlement"
     let private environments = Set [ "ordinary-v2"; "ordinary-v2-rehearsal" ]
     let private githubActionsAppId = 15368L
-    let private requiredCheckIdentities =
-        Set [ "contract-coherence / coherence"; "routine-eligibility" ]
+    let private requiredCheckIdentities repository repositoryId =
+        if repositoryId = 1269292704L
+           && String.Equals(repository, "FS-GG/.github", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "contract-coherence / coherence"; "routine-eligibility" ])
+        elif repositoryId = 1292226968L
+             && String.Equals(repository, "FS-GG/FS.GG.Audio", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "Build + test (locked restore, net10.0, headless)"; "routine-eligibility" ])
+        else None
 
-    let private requiredChecksValid (checks: OrdinaryCheckFact list) =
-        checks.Length = requiredCheckIdentities.Count
-        && (checks |> List.map _.Identity |> Set.ofList) = requiredCheckIdentities
-        && checks |> List.forall (fun check -> check.AppId = githubActionsAppId && check.Conclusion = CheckPassed)
+    let private requiredChecksValid repository repositoryId (checks: OrdinaryCheckFact list) =
+        match requiredCheckIdentities repository repositoryId with
+        | None -> false
+        | Some required ->
+            checks.Length = required.Count
+            && (checks |> List.map _.Identity |> Set.ofList) = required
+            && checks |> List.forall (fun check -> check.AppId = githubActionsAppId && check.Conclusion = CheckPassed)
 
     let private validText (value: string) =
         not (String.IsNullOrWhiteSpace value) && value = value.Trim()
@@ -307,7 +316,7 @@ module OrdinaryPostMergeSettlement =
                 if authorityRepositoryId <= 0L then yield InvalidSettlementIdentity "authority-repository-id"
                 if not (readBindingValid observation.RepositoryId readBinding) then yield SettlementCredentialMismatch
                 if not (bindingValid authorityRepositoryId binding) then yield SettlementCredentialMismatch
-                if not (requiredChecksValid observation.Checks) then
+                if not (requiredChecksValid observation.Repository observation.RepositoryId observation.Checks) then
                     yield SettlementRequiredCheckSetMismatch
             ]
 
