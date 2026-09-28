@@ -26,8 +26,43 @@ module InstalledOrdinarySettlementProvider =
             try binder resource finally if not (obj.ReferenceEquals(resource, null)) then resource.Dispose()
     let private result = ResultBuilder()
 
-    let private sourceRepository = "FS-GG/.github"
-    let private sourceRepositoryId = 1269292704L
+    type SourceProfile =
+        {
+            Name: string
+            Repository: string
+            RepositoryId: int64
+            RequiredSettlementChecks: Set<string>
+            RequiredGateChecks: Set<string>
+        }
+
+    let private dotGitHubSourceProfile =
+        { Name = "dotgithub-v1"
+          Repository = "FS-GG/.github"
+          RepositoryId = 1269292704L
+          RequiredSettlementChecks = Set [ "contract-coherence / coherence"; "routine-eligibility" ]
+          RequiredGateChecks =
+            Set
+                [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "claim-generation"
+                  "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile" ] }
+
+    let private audioSourceProfile =
+        { Name = "audio-v1"
+          Repository = "FS-GG/FS.GG.Audio"
+          RepositoryId = 1292226968L
+          RequiredSettlementChecks =
+            Set [ "Build + test (locked restore, net10.0, headless)"; "routine-eligibility" ]
+          RequiredGateChecks =
+            Set
+                [ "Build + test (locked restore, net10.0, headless)"; "lock-ranges / lock-ranges"
+                  "kit / coordination-kit"; "materialize / receiver-validate" ] }
+
+    let selectSourceProfile value =
+        match value with
+        | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
+        | "dotgithub-v1" -> Ok dotGitHubSourceProfile
+        | "audio-v1" -> Ok audioSourceProfile
+        | _ -> Error "unsupported-source-profile"
+
     let private apiBase = Uri "https://api.github.com/"
     let private userAgent = "fsgg-coordination/0.1.2"
     let private policyPath = "policy/v2-ci-ordinary-settlement.json"
@@ -35,7 +70,6 @@ module InstalledOrdinarySettlementProvider =
     let private anchorPath = "policy/v2-ci-ordinary-settlement-anchor.json"
     let private rehearsalAnchorPath = "policy/v2-ci-ordinary-settlement-rehearsal-anchor.json"
     let private observerPath = "tools/v2-ci-ordinary-observe.py"
-    let private requiredSettlementChecks = Set [ "contract-coherence / coherence"; "routine-eligibility" ]
 
     let private requiredEnvironment name =
         match Environment.GetEnvironmentVariable name with
@@ -213,7 +247,40 @@ module InstalledOrdinarySettlementProvider =
             | _, Error reason, _
             | _, _, Error reason -> Error reason
 
-    let validateReceiptFacts expectedEnvironment expectedPolicyId (receiptBytes: byte array) (policyBytes: byte array) =
+    let private selectedPolicySourceValid required (profile: SourceProfile) (root: JsonElement) =
+        let mutable selected = Unchecked.defaultof<JsonElement>
+        if root.TryGetProperty("selectedSource", &selected) then
+            try
+                selected.ValueKind = JsonValueKind.Object
+                && selected.GetProperty("profile").GetString() = profile.Name
+                && selected.GetProperty("repository").GetString() = profile.Repository
+                && selected.GetProperty("repositoryId").GetInt64() = profile.RepositoryId
+            with _ -> false
+        else not required
+
+    let private selectedReceiptSourceValid required (profile: SourceProfile) (root: JsonElement) =
+        let mutable name = Unchecked.defaultof<JsonElement>
+        let mutable repository = Unchecked.defaultof<JsonElement>
+        let mutable repositoryId = Unchecked.defaultof<JsonElement>
+        let hasName = root.TryGetProperty("sourceProfile", &name)
+        let hasRepository = root.TryGetProperty("sourceRepository", &repository)
+        let hasRepositoryId = root.TryGetProperty("sourceRepositoryId", &repositoryId)
+        if hasName && hasRepository && hasRepositoryId then
+            try
+                name.GetString() = profile.Name
+                && repository.GetString() = profile.Repository
+                && repositoryId.GetInt64() = profile.RepositoryId
+            with _ -> false
+        elif hasName || hasRepository || hasRepositoryId then false
+        else not required
+
+    let validateReceiptFactsForSourceProfile
+        (profile: SourceProfile)
+        expectedEnvironment
+        expectedPolicyId
+        (receiptBytes: byte array)
+        (policyBytes: byte array)
+        =
         try
             use receipt = JsonDocument.Parse receiptBytes
             use policy = JsonDocument.Parse policyBytes
@@ -238,7 +305,7 @@ module InstalledOrdinarySettlementProvider =
             let actualGateChecks = gateChecksElement.EnumerateArray() |> Seq.map (fun value -> value.GetProperty("name").GetString()) |> Set.ofSeq
             let checks =
                 checksElement.EnumerateArray()
-                |> Seq.filter (fun value -> requiredSettlementChecks.Contains(value.GetProperty("name").GetString()))
+                |> Seq.filter (fun value -> profile.RequiredSettlementChecks.Contains(value.GetProperty("name").GetString()))
                 |> Seq.map (fun value ->
                     { Identity = value.GetProperty("name").GetString()
                       AppId = value.GetProperty("appId").GetInt64()
@@ -257,21 +324,29 @@ module InstalledOrdinarySettlementProvider =
                || root.GetProperty("activation").GetBoolean() <> true
                || policyDigest <> sha256 policyBytes
                || policy.RootElement.GetProperty("credentialJob").GetProperty("installed").GetBoolean() <> true
-               || expectedChecks <> requiredSettlementChecks || actualChecks <> expectedChecks
-               || actualGateChecks <> expectedGateChecks
+               || not (selectedReceiptSourceValid (profile.Name <> dotGitHubSourceProfile.Name) profile receipt.RootElement)
+               || not (selectedPolicySourceValid (profile.Name <> dotGitHubSourceProfile.Name) profile policy.RootElement)
+               || expectedChecks <> profile.RequiredSettlementChecks || actualChecks <> expectedChecks
+               || expectedGateChecks <> profile.RequiredGateChecks || actualGateChecks <> expectedGateChecks
                || (checksElement.EnumerateArray() |> Seq.forall checkValid |> not)
                || (gateChecksElement.EnumerateArray() |> Seq.forall checkValid |> not)
-               || checks.Length <> 2 then Error "preflight-receipt-binding"
+               || checks.Length <> profile.RequiredSettlementChecks.Count then Error "preflight-receipt-binding"
             else Ok(source, head, tree, nodeId, baseSha, pr, policyDigest, checks)
         with _ -> Error "preflight-receipt-json"
 
+    let validateReceiptFacts expectedEnvironment expectedPolicyId receiptBytes policyBytes =
+        validateReceiptFactsForSourceProfile
+            dotGitHubSourceProfile expectedEnvironment expectedPolicyId receiptBytes policyBytes
+
     type private Provider
-        (profile: OrdinarySettlementAuthorityProfile, receiptVariable, selectedPolicyPath, selectedAnchorPath, observerAction, rehearsal,
+        (profile: OrdinarySettlementAuthorityProfile, sourceProfile: Result<SourceProfile, string>, receiptVariable,
+         selectedPolicyPath, selectedAnchorPath, observerAction, rehearsal,
          appIdVariable, appPrivateKeyVariable, authorizerPrivateKeyVariable) =
         interface IOrdinarySettlementCommandProvider with
             member _.LoadOneAttempt() =
                 let result =
                     result {
+                        let! sourceProfile = sourceProfile
                         let! receiptPath = requiredEnvironment receiptVariable
                         let! workspace = requiredEnvironment "GITHUB_WORKSPACE"
                         let workspace = Path.GetFullPath workspace
@@ -289,7 +364,8 @@ module InstalledOrdinarySettlementProvider =
                         let! anchor = OrdinarySettlementPublicAnchor.parse profile (ReadOnlyMemory anchorBytes)
                         if anchor.Trust.AppId <> appId then return! Error "app-id-anchor"
                         let! source, head, tree, nodeId, baseSha, pr, policyDigest, checks =
-                            validateReceiptFacts profile.Environment profile.PolicyId receiptBytes policyBytes
+                            validateReceiptFactsForSourceProfile
+                                sourceProfile profile.Environment profile.PolicyId receiptBytes policyBytes
                         let sourceToken = Environment.GetEnvironmentVariable "GH_TOKEN"
                         if String.IsNullOrWhiteSpace sourceToken then return! Error "missing-environment:GH_TOKEN"
                         let handler = new HttpClientHandler(AllowAutoRedirect = false)
@@ -304,16 +380,16 @@ module InstalledOrdinarySettlementProvider =
                             { AppId = appId; InstallationId = anchor.Trust.InstallationId
                               RepositoryIds = [ profile.RepositoryId ]; Permissions = anchor.Trust.Permissions }
                         let readBinding =
-                            { CredentialKind = "github-actions-repository-token"; RepositoryId = sourceRepositoryId
+                            { CredentialKind = "github-actions-repository-token"; RepositoryId = sourceProfile.RepositoryId
                               Permissions = Map [ "actions", "read"; "checks", "read"; "contents", "read"; "pull_requests", "read" ] }
                         let observation =
-                            { Repository = sourceRepository; RepositoryId = sourceRepositoryId; PullRequestNumber = pr
+                            { Repository = sourceProfile.Repository; RepositoryId = sourceProfile.RepositoryId; PullRequestNumber = pr
                               PullRequestNodeId = nodeId; BaseRef = "main"; BaseSha = baseSha; HeadSha = head
                               PolicyRevision = policyDigest; Checks = checks; Epoch = epoch; EpochGeneration = epochGeneration
                               EpochCommit = epochCommit; JournalGeneration = 0L; JournalHead = String.replicate 40 "0"
                               SourceComplete = true; ChecksComplete = true; Authorized = true; Supported = true }
                         let association =
-                            { Number = pr; NodeId = nodeId; Repository = sourceRepository; BaseRef = "main"
+                            { Number = pr; NodeId = nodeId; Repository = sourceProfile.Repository; BaseRef = "main"
                               HeadCommit = head; MergeCommit = source; Merged = true }
                         let! plan, _ =
                             OrdinaryPostMergeSettlement.prepare
@@ -341,6 +417,7 @@ module InstalledOrdinarySettlementProvider =
         Some(
             Provider(
                 OrdinarySettlementAuthorityProfiles.production,
+                selectSourceProfile (Environment.GetEnvironmentVariable "FSGG_V2_SOURCE_PROFILE"),
                 "FSGG_V2_PREFLIGHT_RECEIPT", policyPath, anchorPath, "verify", false,
                 "V2_ORDINARY_APP_ID", "V2_ORDINARY_APP_PRIVATE_KEY", "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY")
             :> IOrdinarySettlementCommandProvider)
@@ -349,6 +426,7 @@ module InstalledOrdinarySettlementProvider =
         Some(
             Provider(
                 OrdinarySettlementAuthorityProfiles.rehearsal,
+                Ok dotGitHubSourceProfile,
                 "FSGG_V2_REHEARSAL_PREFLIGHT_RECEIPT", rehearsalPolicyPath, rehearsalAnchorPath, "verify-rehearsal", true,
                 "V2_ORDINARY_REHEARSAL_APP_ID", "V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY",
                 "V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY")

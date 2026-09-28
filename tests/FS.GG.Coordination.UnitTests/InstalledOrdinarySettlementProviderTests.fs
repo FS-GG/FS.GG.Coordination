@@ -12,6 +12,8 @@ open FS.GG.Coordination.GitHub
 
 let private sha character = String.replicate 40 character
 
+let private ok = function Ok value -> value | Error reason -> failwith reason
+
 let private check name source =
     let value = JsonObject()
     value.Add("name", name)
@@ -20,12 +22,12 @@ let private check name source =
     value.Add("sourceSha", source)
     value
 
-let private fixture () =
+let private fixtureFor
+    (settlement: string list)
+    (gates: string list)
+    (selectedSource: (string * string * int64) option)
+    =
     let source, head = sha "a", sha "b"
-    let settlement = [ "contract-coherence / coherence"; "routine-eligibility" ]
-    let gates =
-        [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "claim-generation"
-          "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile" ]
     let strings (values: string list) =
         let array = JsonArray()
         for value in values do array.Add value
@@ -39,6 +41,14 @@ let private fixture () =
     let credential = JsonObject()
     credential.Add("installed", true)
     policy.Add("credentialJob", credential)
+    match selectedSource with
+    | Some(profile, repository, repositoryId) ->
+        let selected = JsonObject()
+        selected.Add("profile", profile)
+        selected.Add("repository", repository)
+        selected.Add("repositoryId", repositoryId)
+        policy.Add("selectedSource", selected)
+    | None -> ()
     let policyBytes = Encoding.UTF8.GetBytes(policy.ToJsonString())
     let digest = SHA256.HashData policyBytes |> Convert.ToHexString |> _.ToLowerInvariant()
     let receipt = JsonObject()
@@ -64,13 +74,85 @@ let private fixture () =
     receipt.Add("operationClass", "ordinary-post-merge-delivery-settlement")
     receipt.Add("credentialAccess", false)
     receipt.Add("activation", true)
+    match selectedSource with
+    | Some(profile, repository, repositoryId) ->
+        receipt.Add("sourceProfile", profile)
+        receipt.Add("sourceRepository", repository)
+        receipt.Add("sourceRepositoryId", repositoryId)
+    | None -> ()
     receipt, policyBytes
+
+let private fixture () =
+    fixtureFor
+        [ "contract-coherence / coherence"; "routine-eligibility" ]
+        [ "contract-coherence / coherence"; "projection"; "roster-closure"; "drift"; "claim-generation"
+          "Lint every shell file in the repo (pinned shellcheck)"; "claim-fence"; "architecture-map reconcile" ]
+        None
+
+let private audioFixture () =
+    fixtureFor
+        [ "Build + test (locked restore, net10.0, headless)"; "routine-eligibility" ]
+        [ "Build + test (locked restore, net10.0, headless)"; "lock-ranges / lock-ranges"
+          "kit / coordination-kit"; "materialize / receiver-validate" ]
+        (Some("audio-v1", "FS-GG/FS.GG.Audio", 1292226968L))
 
 [<Fact>]
 let ``installed provider binds exact two settlement and eight gate facts`` () =
     let receipt, policy = fixture ()
     let result = InstalledOrdinarySettlementProvider.validateReceiptFacts "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1" (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
     Assert.True(Result.isOk result)
+
+[<Fact>]
+let ``source profiles are additive versioned and unknown selectors refuse`` () =
+    let legacy = InstalledOrdinarySettlementProvider.selectSourceProfile null |> ok
+    let explicitLegacy = InstalledOrdinarySettlementProvider.selectSourceProfile "dotgithub-v1" |> ok
+    let audio = InstalledOrdinarySettlementProvider.selectSourceProfile "audio-v1" |> ok
+    Assert.Equal("dotgithub-v1", legacy.Name)
+    Assert.Equal(1269292704L, legacy.RepositoryId)
+    Assert.Equal(legacy, explicitLegacy)
+    Assert.Equal("FS-GG/FS.GG.Audio", audio.Repository)
+    Assert.Equal(1292226968L, audio.RepositoryId)
+    Assert.True(audio.RequiredSettlementChecks = Set [ "Build + test (locked restore, net10.0, headless)"; "routine-eligibility" ])
+    Assert.Equal(Error "unsupported-source-profile", InstalledOrdinarySettlementProvider.selectSourceProfile "audio")
+
+[<Fact>]
+let ``audio profile binds selected source and exact native evidence`` () =
+    let receipt, policy = audioFixture ()
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "audio-v1" |> ok
+    let result =
+        InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+            profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+            (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
+    match result with
+    | Ok(_, _, _, _, _, _, _, checks) ->
+        Assert.Equal<string list>(
+            [ "Build + test (locked restore, net10.0, headless)"; "routine-eligibility" ],
+            checks |> List.map _.Identity |> List.sort)
+    | Error reason -> failwith reason
+
+[<Fact>]
+let ``audio profile refuses wrong selected identity and foreign checks`` () =
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "audio-v1" |> ok
+    for field, value in
+        [ "sourceProfile", JsonValue.Create("dotgithub-v1") :> JsonNode
+          "sourceRepository", JsonValue.Create("FS-GG/.github") :> JsonNode
+          "sourceRepositoryId", JsonValue.Create(1269292704L) :> JsonNode ] do
+        let receipt, policy = audioFixture ()
+        receipt[field] <- value
+        Assert.Equal(
+            Error "preflight-receipt-binding",
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy)
+    let receipt, policy = audioFixture ()
+    let requiredChecks = receipt["requiredChecks"].AsArray()
+    let firstCheck = requiredChecks[0].AsObject()
+    firstCheck["name"] <- "foreign / check"
+    Assert.Equal(
+        Error "preflight-receipt-binding",
+        InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+            profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+            (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy)
 
 [<Fact>]
 let ``installed provider refuses stale gate source and changed policy bytes`` () =
