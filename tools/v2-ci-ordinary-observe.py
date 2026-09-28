@@ -96,7 +96,7 @@ def required_checks(repository: str, selected_source: dict) -> dict:
     required = protection.get("required_status_checks") if isinstance(protection, dict) else None
     classic = required.get("checks") if isinstance(required, dict) else None
     contexts = required.get("contexts") if isinstance(required, dict) else None
-    if not isinstance(classic, list) or not isinstance(contexts, list) or contexts:
+    if not isinstance(classic, list) or not isinstance(contexts, list):
         raise QUALIFICATION.Refusal("classic required-check population unavailable or ambiguous")
     combined = {}
     provenance = {}
@@ -118,6 +118,10 @@ def required_checks(repository: str, selected_source: dict) -> dict:
             raise QUALIFICATION.Refusal("duplicate classic required check")
         classic_seen.add(check.get("context"))
         add(check.get("context"), check.get("app_id"), "classic")
+    if (any(not isinstance(context, str) or not context for context in contexts)
+            or len(contexts) != len(set(contexts))
+            or not set(contexts).issubset(classic_seen)):
+        raise QUALIFICATION.Refusal("classic context lacks a unique App-bound check")
 
     # The effective branch-rules endpoint includes applicable repository and
     # inherited rulesets. Page explicitly; a missing or malformed page refuses.

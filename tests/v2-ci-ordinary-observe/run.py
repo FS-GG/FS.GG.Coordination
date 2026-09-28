@@ -24,7 +24,8 @@ def rule(rule_id=21633423, names=NAMES, app=15368, source='FS-GG/FS.GG.Coordinat
 
 def classic(names=(), app=15368):
     return {'protected': True, 'protection': {'required_status_checks': {
-        'checks': [{'context': name, 'app_id': app} for name in names], 'contexts': []}}}
+        'checks': [{'context': name, 'app_id': app} for name in names],
+        'contexts': list(names)}}}
 
 
 class RulesetReaderTests(unittest.TestCase):
@@ -51,8 +52,10 @@ class RulesetReaderTests(unittest.TestCase):
         profile = dict(PROFILE, requiredRulesetId=None)
         result, _ = self.read([[]], branch=classic(NAMES), profile=profile)
         self.assertTrue(all(c['sources'] == ['classic'] for c in result['checks']))
+        self.assertEqual(NAMES, [c['context'] for c in result['classic']])
         result, _ = self.read([[rule(names=NAMES[3:])]], branch=classic(NAMES[:3]))
         self.assertEqual(set(NAMES), {c['context'] for c in result['checks']})
+        self.assertEqual(set(NAMES[:3]), {c['context'] for c in result['classic']})
         result, _ = self.read([[rule()]], branch=classic(NAMES))
         self.assertTrue(all(len(c['sources']) == 2 for c in result['checks']))
 
@@ -72,6 +75,11 @@ class RulesetReaderTests(unittest.TestCase):
             ([[rule(names=NAMES + NAMES[:1])]], classic(), 'duplicate'),
             ([[rule(), rule()]], classic(), 'duplicate'),
             ([[rule()]], classic(NAMES[:1] + NAMES[:1]), 'duplicate'),
+            ([[rule()]], dict(classic(), protection={'required_status_checks': {
+                'checks': [], 'contexts': [NAMES[0]]}}), 'App-bound'),
+            ([[rule()]], dict(classic(NAMES[:1]), protection={'required_status_checks': {
+                'checks': [{'context': NAMES[0], 'app_id': 15368}],
+                'contexts': [NAMES[0], NAMES[0]]}}), 'App-bound'),
             ([[rule(app=7)]], classic(), 'population'),
             ([[rule(names=NAMES + ['unexpected'])]], classic(), 'population'),
             ([[dict(rule(), parameters={'required_status_checks': [{'context': NAMES[0]}]})]],
