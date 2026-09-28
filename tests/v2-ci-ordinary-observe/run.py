@@ -118,6 +118,55 @@ class RulesetReaderTests(unittest.TestCase):
             self.assertEqual(policy['sourceImplementation'][field],
                              hashlib.sha256((ROOT / path).read_bytes()).hexdigest())
 
+    def test_installed_policy_is_admitted_before_runtime_event_fences(self):
+        policy = json.loads((ROOT / 'policy/v2-ci-ordinary-settlement.json').read_text())
+        env = {
+            'FSGG_V2_SOURCE_PROFILE': 'coordination-v1',
+            'GITHUB_SHA': 'a' * 40,
+            'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination',
+            'GITHUB_EVENT_NAME': 'pull_request',
+            'GITHUB_REF': 'refs/heads/main',
+        }
+        repository = {
+            'id': 1346720714,
+            'full_name': 'FS-GG/FS.GG.Coordination',
+            'default_branch': 'main',
+        }
+        with patch.object(OBSERVER.QUALIFICATION, 'read_json', return_value=policy), \
+                patch.object(OBSERVER, 'api', return_value=repository):
+            with self.assertRaisesRegex(OBSERVER.QUALIFICATION.Refusal,
+                                        'pinned protected-main event'):
+                OBSERVER.observe(env)
+
+    def test_non_boolean_activation_refuses(self):
+        policy = json.loads((ROOT / 'policy/v2-ci-ordinary-settlement.json').read_text())
+        policy['credentialJob']['installed'] = 'true'
+        with patch.object(OBSERVER.QUALIFICATION, 'read_json', return_value=policy):
+            with self.assertRaisesRegex(OBSERVER.QUALIFICATION.Refusal,
+                                        'workflow or activation'):
+                OBSERVER.observe({'FSGG_V2_SOURCE_PROFILE': 'coordination-v1'})
+
+    def test_historical_false_activation_remains_a_valid_boolean(self):
+        policy = json.loads((ROOT / 'policy/v2-ci-ordinary-settlement.json').read_text())
+        policy['credentialJob']['installed'] = False
+        env = {
+            'FSGG_V2_SOURCE_PROFILE': 'coordination-v1',
+            'GITHUB_SHA': 'a' * 40,
+            'GITHUB_REPOSITORY': 'FS-GG/FS.GG.Coordination',
+            'GITHUB_EVENT_NAME': 'pull_request',
+            'GITHUB_REF': 'refs/heads/main',
+        }
+        repository = {
+            'id': 1346720714,
+            'full_name': 'FS-GG/FS.GG.Coordination',
+            'default_branch': 'main',
+        }
+        with patch.object(OBSERVER.QUALIFICATION, 'read_json', return_value=policy), \
+                patch.object(OBSERVER, 'api', return_value=repository):
+            with self.assertRaisesRegex(OBSERVER.QUALIFICATION.Refusal,
+                                        'pinned protected-main event'):
+                OBSERVER.observe(env)
+
 
 if __name__ == '__main__':
     unittest.main()
