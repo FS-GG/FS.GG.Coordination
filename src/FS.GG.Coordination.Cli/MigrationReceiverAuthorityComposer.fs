@@ -120,6 +120,11 @@ module MigrationReceiverAuthorityComposer =
             item.Name, enabled)
         |> Map.ofSeq
 
+    let private optionalBoolMap (name: string) (value: JsonElement) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        if value.TryGetProperty(name, &property) then boolMap name value
+        else Map.empty
+
     let private scopeFingerprint (settings: MigrationReceiverScopeSettings) =
         seq {
             string settings.InstallationId
@@ -171,11 +176,11 @@ module MigrationReceiverAuthorityComposer =
               RosterPrivate=boolProperty "private" value
               RosterArchived=boolProperty "archived" value
               RosterDisabled=boolProperty "disabled" value
-              RosterPermissions=boolMap "permissions" value }
+              RosterPermissions=optionalBoolMap "permissions" value }
         let pieces = repository.RosterRepositoryFullName.Split('/')
         if pieces.Length <> 2
            || not (String.Equals(pieces.[0], expectedOwner, StringComparison.OrdinalIgnoreCase))
-           || Map.tryFind "pull" repository.RosterPermissions <> Some true then
+           || Map.tryFind "pull" repository.RosterPermissions = Some false then
             failwith "roster-repository-scope"
         repository
 
@@ -366,7 +371,7 @@ module MigrationReceiverAuthorityComposer =
                     && cohort.NodeId = repository.RosterRepositoryNodeId
                     && String.Equals(cohort.FullName, repository.RosterRepositoryFullName, StringComparison.OrdinalIgnoreCase)
                     && repository.RosterPrivate && not repository.RosterArchived && not repository.RosterDisabled
-                    && Map.tryFind "pull" repository.RosterPermissions = Some true)
+                    && Map.tryFind "pull" repository.RosterPermissions <> Some false)
                     cohortRepositories rosterRepositories) then
             unavailable "receiver-identities" "provider-roster-mismatch"
         else

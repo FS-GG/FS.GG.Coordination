@@ -25,12 +25,17 @@ type MigrationReceiverCohortOrchestrationResult =
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverCohortOrchestration =
+    val internal validateMintRunBindingForTests:
+        options: MigrationReceiverInstallationReadOptions ->
+        run: MigrationSandboxSeedRequest -> Result<unit, string>
+
     /// Performs the read-only receiver authority join. It first captures the exact selected
     /// sandbox installation, binds its sole repository and all seven plan-derived refs to the
     /// declared cohort, captures workflow pins in two passes, reopens every blob artifact, and
     /// only then delegates canonical proof construction to the authority composer.
     val compose:
         request: MigrationReceiverCohortOrchestrationRequest ->
+        mintTransport: HttpMigrationReceiverTokenMintTransport ->
         transport: IMigrationGitHubReadTransport ->
             Result<MigrationReceiverCohortOrchestrationResult, string>
 

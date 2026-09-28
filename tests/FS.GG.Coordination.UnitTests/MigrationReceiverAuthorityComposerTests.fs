@@ -162,6 +162,14 @@ let private rosterCapture () =
     | Ok capture -> capture
     | Error reason -> failwith reason
 
+let private rosterCaptureWithoutPermissions () =
+    let body = repositoryPage.Replace(",\"permissions\":{\"pull\":true}", "")
+    match MigrationReceiverRosterRead.captureTwoPass rosterOptions
+              (FakeRosterTransport [ response installation; response body
+                                     response installation; response body ]) with
+    | Ok capture -> capture
+    | Error reason -> failwith reason
+
 let private providerOptions =
     { Cohort=cohort
       Repository=
@@ -191,6 +199,9 @@ let private incompletePublicRequest capture options =
 let ``public boundary reparses roster settings and raw pages before custody`` () =
     let captured = rosterCapture ()
     MigrationReceiverAuthorityComposer.compose (incompletePublicRequest captured rosterOptions)
+    |> expectError "copy-plan:"
+    MigrationReceiverAuthorityComposer.compose
+        (incompletePublicRequest (rosterCaptureWithoutPermissions ()) rosterOptions)
     |> expectError "copy-plan:"
 
     let alteredPage = { captured.First.Pages.Head with RosterRawSha256=String.replicate 64 "0" }

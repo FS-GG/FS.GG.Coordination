@@ -99,8 +99,7 @@ let private installation =
         AppSecond = rawPage
         InstallationPermissions = rosterOptions.RequiredPermissions
         TokenPermissions = rosterOptions.RequiredPermissions
-        TokenFirst = rawPage
-        TokenSecond = rawPage
+        MintAttestation = Unchecked.defaultof<_>
         ComposerRosterOptions = rosterOptions
         ComposerRosterCapture =
             {
@@ -165,6 +164,26 @@ let private options =
 
 let private validate captured provider plan =
     MigrationReceiverCohortOrchestration.validateBindingsForTests captured provider plan
+
+[<Fact>]
+let ``mint workflow run and attempt must bind orchestration run`` () =
+    let run =
+        { CandidateSha=String.replicate 40 "a"; WorkflowRunId=991L
+          WorkflowRunAttempt=2; RunNonce="991-2-source"; CorpusSha256=String.replicate 64 "b" }
+    let installationOptions: MigrationReceiverInstallationReadOptions =
+        { ApiBase=Uri "https://api.github.test/"; AppId=8001L; AppNodeId="APP_8001"
+          AppSlug="receiver-reader"; InstallationId=143110413L; AccountLogin="FS-GG"
+          AccountId=9L; AccountNodeId="ORG_9"; ExpectedAppPermissions=Map.empty
+          ExpectedInstallationPermissions=Map.empty; RequiredTokenPermissions=Map.empty
+          SelectedRepositories=[]; AppToken="jwt"; WorkflowRunId=991L
+          WorkflowRunAttempt=2; RunNonce="991-2-source"; UserAgent="test" }
+    let validate candidate =
+        MigrationReceiverCohortOrchestration.validateMintRunBindingForTests candidate run
+    Assert.Equal(Ok(), validate installationOptions)
+    let refused = Error "receiver-cohort-orchestration-unavailable:mint-run-binding"
+    Assert.Equal(refused, validate { installationOptions with WorkflowRunId=992L })
+    Assert.Equal(refused, validate { installationOptions with WorkflowRunAttempt=3 })
+    Assert.Equal(refused, validate { installationOptions with RunNonce="foreign" })
 
 let private expectUnavailable fragment result =
     match result with

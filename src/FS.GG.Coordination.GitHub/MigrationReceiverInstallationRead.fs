@@ -1,9 +1,15 @@
 namespace FS.GG.Coordination.GitHub
 
 open System
+open System.Collections.Concurrent
+open System.Net.Http
+open System.Runtime.CompilerServices
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+
+[<assembly: InternalsVisibleTo("FS.GG.Coordination.UnitTests")>]
+do ()
 
 type MigrationReceiverInstallationReadOptions =
     { ApiBase: Uri
@@ -19,8 +25,62 @@ type MigrationReceiverInstallationReadOptions =
       RequiredTokenPermissions: Map<string, string>
       SelectedRepositories: MigrationReceiverRosterDeclaredRepository list
       AppToken: string
-      InstallationToken: string
+      WorkflowRunId: int64
+      WorkflowRunAttempt: int
+      RunNonce: string
       UserAgent: string }
+
+/// The protected mint effect has its own port; observer reads cannot mint tokens.
+type IMigrationReceiverTokenMintTransport =
+    abstract Mint: RestRequest -> TransportOutcome
+
+type MigrationReceiverTokenMintAttestation =
+    { RequestIdentitySha256: string
+      ResponseSha256: string
+      TokenSha256: string
+      ExpiresAt: DateTimeOffset
+      WorkflowRunId: int64
+      WorkflowRunAttempt: int
+      RunNonce: string
+      Fingerprint: string }
+
+/// Performs one protected mint POST with redirects disabled and no response cache.
+[<Sealed>]
+type HttpMigrationReceiverTokenMintTransport() =
+    let handler = new HttpClientHandler(AllowAutoRedirect=false, UseCookies=false)
+    let client = new HttpClient(handler)
+    do client.Timeout <- TimeSpan.FromSeconds(30.0)
+    interface IMigrationReceiverTokenMintTransport with
+        member _.Mint request =
+            let expectedBody = "{\"repository_ids\":[1353050537],\"permissions\":{\"contents\":\"read\"}}"
+            if request.Method <> Post
+               || request.Uri.AbsoluteUri <> "https://api.github.com/app/installations/143110413/access_tokens"
+               || request.Body <> Some expectedBody
+               || request.Idempotency <> NeverReplay
+               || request.ApiVersion <> ApiVersion.required
+               || Map.tryFind "Accept" request.Headers <> Some "application/vnd.github+json"
+               || not (request.Headers |> Map.tryFind "Authorization" |> Option.exists (fun value -> value.StartsWith("Bearer ", StringComparison.Ordinal) && value.Length > 7)) then
+                NetworkFailure
+            else
+                try
+                    use message = new HttpRequestMessage(HttpMethod.Post, request.Uri)
+                    for KeyValue(name, value) in request.Headers do
+                        message.Headers.TryAddWithoutValidation(name, value) |> ignore
+                    message.Content <- new StringContent(expectedBody, Encoding.UTF8, "application/json")
+                    use response = client.Send message
+                    if isNull response.RequestMessage
+                       || isNull response.RequestMessage.RequestUri
+                       || response.RequestMessage.RequestUri.AbsoluteUri <> request.Uri.AbsoluteUri then
+                        NetworkFailure
+                    else
+                        let body = response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                        Response { StatusCode=int response.StatusCode; Headers=Map.empty; Body=body; ETag=None
+                                   RateBudget={ Limit=None; Remaining=None; ResetAt=None; Cost=None } }
+                with
+                | :? OperationCanceledException -> TimedOut
+                | :? HttpRequestException -> NetworkFailure
+    interface IDisposable with
+        member _.Dispose() = client.Dispose(); handler.Dispose()
 
 type MigrationReceiverProviderApp =
     { ProviderAppId: int64
@@ -37,20 +97,22 @@ type MigrationReceiverInstallationCapture =
       AppSecond: MigrationReceiverRosterRawPage
       InstallationPermissions: Map<string, string>
       TokenPermissions: Map<string, string>
-      TokenFirst: MigrationReceiverRosterRawPage
-      TokenSecond: MigrationReceiverRosterRawPage
+      MintAttestation: MigrationReceiverTokenMintAttestation
       ComposerRosterOptions: MigrationReceiverRosterReadOptions
       ComposerRosterCapture: MigrationReceiverRosterCapture
       CaptureFingerprint: string }
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverInstallationRead =
+    let private tokenRunBindings = ConcurrentDictionary<string, string>()
     [<Literal>]
     let private sandboxRepositoryId = 1353050537L
     [<Literal>]
     let private sandboxRepositoryNodeId = "R_kgDOUKXpqQ"
     [<Literal>]
     let private sandboxRepositoryName = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
+    [<Literal>]
+    let private protectedProbeInstallationId = 143110413L
     let private unavailable reason = Error $"receiver-installation-authority-adapter-unavailable:{reason}"
     let private sha256 (value: string) =
         value |> Encoding.UTF8.GetBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -173,12 +235,70 @@ module MigrationReceiverInstallationRead =
         { ApiBase=options.ApiBase; InstallationId=options.InstallationId
           AccountLogin=options.AccountLogin; AccountId=options.AccountId; AccountNodeId=options.AccountNodeId
           RequiredPermissions=options.ExpectedInstallationPermissions; AppToken=options.AppToken
-          InstallationToken=options.InstallationToken; UserAgent=options.UserAgent }
+          InstallationToken=""; UserAgent=options.UserAgent }
 
-    let private tokenRead _ _ =
-        // Installation-token permissions are only known from the exact mint
-        // response. No installation-token GET can attest them.
-        unavailable "token-permission-attestation-unavailable"
+    let private mintToken options (transport: IMigrationReceiverTokenMintTransport) now =
+        let uri = combine options.ApiBase $"app/installations/{options.InstallationId}/access_tokens"
+        let body = $"{{\"repository_ids\":[{sandboxRepositoryId}],\"permissions\":{{\"contents\":\"read\"}}}}"
+        let request =
+            { Method=Post; Uri=uri; Headers=headers options.AppToken options.UserAgent
+              Body=Some body; ApiVersion=ApiVersion.required; Idempotency=NeverReplay }
+        let requestIdentity = sha256 ($"POST\000{uri.AbsoluteUri}\000{body}\000{options.WorkflowRunId}\000{options.WorkflowRunAttempt}\000{options.RunNonce}")
+        match transport.Mint request with
+        | Response response when response.StatusCode = 201 ->
+            try
+                use document = JsonDocument.Parse response.Body
+                let root = document.RootElement
+                if not (uniqueMembers root) then unavailable "mint-response-shape"
+                else
+                    match text "token" root, text "expires_at" root, permissionMap "permissions" root,
+                          text "repository_selection" root, property "repositories" root with
+                    | Ok token, Ok expiryText, Ok grants, Ok selection, Ok repositories when repositories.ValueKind = JsonValueKind.Array ->
+                        let mutable expiry = DateTimeOffset.MinValue
+                        let observedAt = now ()
+                        let selected = repositories.EnumerateArray() |> Seq.toList
+                        let repositoryMatches =
+                            match selected with
+                            | [ repository ] when uniqueMembers repository ->
+                                int64 "id" repository = Ok sandboxRepositoryId
+                                && text "node_id" repository = Ok sandboxRepositoryNodeId
+                                && text "full_name" repository = Ok sandboxRepositoryName
+                            | _ -> false
+                        let effectiveGrants =
+                            if grants = Map [ "contents", "read" ] then
+                                Map.add "metadata" "read" grants
+                            else grants
+                        if not (DateTimeOffset.TryParse(expiryText, &expiry))
+                           || expiry <= observedAt || expiry > observedAt.AddHours(1.0) then
+                            unavailable "mint-expiry"
+                        elif effectiveGrants <> options.RequiredTokenPermissions then
+                            unavailable "mint-permissions"
+                        elif selection <> "selected" || not repositoryMatches then
+                            unavailable "mint-repository-scope"
+                        else
+                            let responseDigest = sha256 response.Body
+                            let tokenDigest = sha256 token
+                            let runBinding =
+                                sha256 (String.concat "\000" [ string options.WorkflowRunId;
+                                                                 string options.WorkflowRunAttempt; options.RunNonce ])
+                            let firstRun = tokenRunBindings.GetOrAdd(tokenDigest, runBinding)
+                            if firstRun <> runBinding then unavailable "mint-token-run-replay"
+                            else
+                                let fingerprint =
+                                    sha256 (String.concat "\000" [ requestIdentity; responseDigest; tokenDigest;
+                                                                     expiry.ToUniversalTime().ToString("O");
+                                                                     string options.WorkflowRunId; string options.WorkflowRunAttempt; options.RunNonce ])
+                                let attestation =
+                                    { RequestIdentitySha256=requestIdentity; ResponseSha256=responseDigest
+                                      TokenSha256=tokenDigest; ExpiresAt=expiry
+                                      WorkflowRunId=options.WorkflowRunId; WorkflowRunAttempt=options.WorkflowRunAttempt
+                                      RunNonce=options.RunNonce; Fingerprint=fingerprint }
+                                Ok(token, effectiveGrants, attestation)
+                    | _ -> unavailable "mint-response-shape"
+            with :? JsonException -> unavailable "mint-response-json"
+        | Response response -> unavailable $"mint-inaccessible:http-{response.StatusCode}"
+        | NetworkFailure -> unavailable "mint-inaccessible:network"
+        | TimedOut -> unavailable "mint-inaccessible:timeout"
 
     let private validText value = not (String.IsNullOrWhiteSpace value)
     let private validPermissionName (value: string) =
@@ -197,16 +317,15 @@ module MigrationReceiverInstallationRead =
             broad |> Map.tryFind name |> Option.exists (fun maximum -> permissionRank level <= permissionRank maximum))
 
     let private validOptions options =
-        not (isNull options.ApiBase) && options.ApiBase.IsAbsoluteUri && options.ApiBase.Scheme = Uri.UriSchemeHttps
-        && options.AppId > 0L && options.InstallationId > 0L && options.AccountId > 0L
+        not (isNull options.ApiBase) && options.ApiBase.AbsoluteUri = "https://api.github.com/"
+        && options.AppId > 0L && options.InstallationId = protectedProbeInstallationId && options.AccountId > 0L
         && validText options.AppNodeId && validText options.AppSlug
         && validText options.AccountLogin && validText options.AccountNodeId
-        && validText options.AppToken && validText options.InstallationToken && validText options.UserAgent
+        && validText options.AppToken && validText options.UserAgent
+        && options.WorkflowRunId > 0L && options.WorkflowRunAttempt > 0 && validText options.RunNonce
         && not options.ExpectedAppPermissions.IsEmpty
         && not options.ExpectedInstallationPermissions.IsEmpty
-        && not options.RequiredTokenPermissions.IsEmpty
-        && Map.tryFind "contents" options.RequiredTokenPermissions = Some "read"
-        && Map.tryFind "metadata" options.RequiredTokenPermissions = Some "read"
+        && options.RequiredTokenPermissions = Map [ "contents", "read"; "metadata", "read" ]
         && ([ options.ExpectedAppPermissions; options.ExpectedInstallationPermissions; options.RequiredTokenPermissions ]
             |> List.forall (Map.forall (fun name level ->
                 validPermissionName name && Set.contains level (set [ "read"; "write"; "admin" ]))))
@@ -244,39 +363,52 @@ module MigrationReceiverInstallationRead =
                     |> List.sortBy _.DeclaredRepositoryId
                 if observed <> expected then unavailable "unselected-repository-grant" else Ok())
 
-    let captureForComposer options (transport: IMigrationGitHubReadTransport) =
+    let private ensureNotExpired expiry observedAt =
+        if observedAt < expiry then Ok()
+        else unavailable "mint-expired-before-consumption"
+
+    let ensureFreshForComposer (capture: MigrationReceiverInstallationCapture) observedAt =
+        ensureNotExpired capture.MintAttestation.ExpiresAt observedAt
+
+    let internal captureWithMintForTests options (mintTransport: IMigrationReceiverTokenMintTransport) (transport: IMigrationGitHubReadTransport) now =
         if not (validOptions options) then unavailable "invalid-options"
         else
-            let rosterOptions = expectedRoster options
-            let pass () =
-                appRead options transport
-                |> Result.bind (fun (app, raw) ->
-                    MigrationReceiverRosterRead.capturePass rosterOptions transport
-                    |> Result.mapError (fun reason -> $"receiver-installation-authority-adapter-unavailable:{reason}")
-                    |> Result.bind (fun roster ->
-                        exactScope options roster
-                        |> Result.bind (fun () -> tokenRead options transport)
-                        |> Result.map (fun (tokenPermissions, tokenRaw) -> app, raw, roster, tokenPermissions, tokenRaw)))
-            pass ()
-            |> Result.bind (fun (firstApp, firstRaw, firstRoster, firstTokenPermissions, firstTokenRaw) ->
-                pass ()
-                |> Result.bind (fun (secondApp, secondRaw, secondRoster, secondTokenPermissions, secondTokenRaw) ->
-                    if firstApp <> secondApp || firstRaw <> secondRaw || firstRoster <> secondRoster
-                       || firstTokenPermissions <> secondTokenPermissions || firstTokenRaw <> secondTokenRaw then
-                        unavailable "two-pass-drift"
-                    else
-                        let rosterCapture =
-                            { First=firstRoster; Second=secondRoster
-                              CaptureFingerprint=sha256 (firstRoster.PassFingerprint + "\n" + secondRoster.PassFingerprint) }
-                        let fingerprint =
-                            sha256 (firstRaw.RosterRawSha256 + "\n" + secondRaw.RosterRawSha256 + "\n"
-                                    + firstTokenRaw.RosterRawSha256 + "\n" + secondTokenRaw.RosterRawSha256 + "\n"
-                                    + rosterCapture.CaptureFingerprint)
-                        let composerOptions =
-                            { rosterOptions with AppToken=""; InstallationToken="" }
-                        Ok { App=firstApp; AppFirst=firstRaw; AppSecond=secondRaw
-                             InstallationPermissions=options.ExpectedInstallationPermissions
-                             TokenPermissions=firstTokenPermissions
-                             TokenFirst=firstTokenRaw; TokenSecond=secondTokenRaw
-                             ComposerRosterOptions=composerOptions; ComposerRosterCapture=rosterCapture
-                             CaptureFingerprint=fingerprint }))
+            appRead options transport
+            |> Result.bind (fun (firstApp, firstRaw) ->
+                mintToken options mintTransport now
+                |> Result.bind (fun (token, tokenPermissions, attestation) ->
+                    let rosterOptions = { expectedRoster options with InstallationToken=token }
+                    let pass () =
+                        ensureNotExpired attestation.ExpiresAt (now ())
+                        |> Result.bind (fun () ->
+                            MigrationReceiverRosterRead.capturePassForMintedToken rosterOptions attestation.TokenSha256 transport)
+                        |> Result.mapError (fun reason -> $"receiver-installation-authority-adapter-unavailable:{reason}")
+                        |> Result.bind (fun roster ->
+                            if now () >= attestation.ExpiresAt then unavailable "mint-expired-during-capture"
+                            else exactScope options roster |> Result.map (fun () -> roster))
+                    pass ()
+                    |> Result.bind (fun firstRoster ->
+                        pass ()
+                        |> Result.bind (fun secondRoster ->
+                            if now () >= attestation.ExpiresAt then unavailable "mint-expired-during-capture"
+                            else appRead options transport
+                            |> Result.bind (fun (secondApp, secondRaw) ->
+                                if now () >= attestation.ExpiresAt then unavailable "mint-expired-during-capture"
+                                elif firstApp <> secondApp || firstRaw <> secondRaw || firstRoster <> secondRoster then
+                                    unavailable "two-pass-drift"
+                                else
+                                    let rosterCapture =
+                                        { First=firstRoster; Second=secondRoster
+                                          CaptureFingerprint=sha256 (firstRoster.PassFingerprint + "\n" + secondRoster.PassFingerprint) }
+                                    let fingerprint =
+                                        sha256 (String.concat "\n" [ firstRaw.RosterRawSha256; secondRaw.RosterRawSha256
+                                                                     attestation.Fingerprint; rosterCapture.CaptureFingerprint ])
+                                    let composerOptions = { rosterOptions with AppToken=""; InstallationToken="" }
+                                    Ok { App=firstApp; AppFirst=firstRaw; AppSecond=secondRaw
+                                         InstallationPermissions=options.ExpectedInstallationPermissions
+                                         TokenPermissions=tokenPermissions; MintAttestation=attestation
+                                         ComposerRosterOptions=composerOptions; ComposerRosterCapture=rosterCapture
+                                         CaptureFingerprint=fingerprint })))))
+
+    let captureForComposer options (mintTransport: HttpMigrationReceiverTokenMintTransport) (transport: IMigrationGitHubReadTransport) =
+        captureWithMintForTests options (mintTransport :> IMigrationReceiverTokenMintTransport) transport (fun () -> DateTimeOffset.UtcNow)
