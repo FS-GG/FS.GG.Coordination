@@ -40,6 +40,24 @@ The installed composer must acquire a protected journal capability with reservat
 
 S6 native reads, S6 host loading and S7 journal source may be prepared in parallel because their file touch sets are disjoint. Integration owns shared interface decisions, the exact seven-member artifact roster, the candidate workflow and the final source qualification. A hosted candidate must be rebuilt from the final integrated source revision; an earlier candidate cannot qualify later runtime bytes.
 
+## S8: installed composition source qualification
+
+`callable_isolated_v2_installed_composer.py` joins the independently authenticated,
+read-only candidate observation to the protected host loader. The host supplies the
+candidate selection, observation time, installed workflow bytes and expected runtime;
+the composer binds repository, source, tree, producer run and attempt, artifact and
+workflow digest before any native read. It then derives the source-only candidate
+witness through separate read and download roles. The protected loader independently
+rereads the expected identity and candidate bytes before obtaining the authority that
+can reach a journal, token or provider write. Mismatched selection, failed native
+observation, shared reader custody and swapped installed bytes refuse before protected
+authority access. Read-only recovery traverses the same candidate qualification.
+
+Focused qualification exercises the positive handoff and the pre-authority refusal
+ordering. This is an installed-composition source contract with injected transports and
+authority. It does not install a production host, identify a protected runner, produce a
+hosted candidate for the integrated revision, or authorize a native `/5` operation.
+
 ## Protected activation boundary
 
 Source qualification is followed by an actual successful hosted candidate, protected installation and readback of the archive, host, verifier, interpreter and runner, then real configuration, issuer/key custody, scoped credentials, protected journal backend and a distinct reviewer. Only fresh approval and grant evidence bound to the chosen source, artifact, target and execution attempt can precede a bounded native operation. Provider response, recovery, independent readback and cleanup remain required for `/5` acceptance. Any missing protected dependency leaves the roadmap prepared, not authorized.
