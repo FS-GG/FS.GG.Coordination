@@ -57,20 +57,13 @@ module MigrationSandboxSeedBootstrapArtifact =
         && value.Length = length
         && value |> Seq.forall (fun c -> c >= '0' && c <= '9' || c >= 'a' && c <= 'f')
 
-    let private approvedSourceSha256 candidateSha (seedPlan: ReadOnlyMemory<byte>) (corpus: ReadOnlyMemory<byte>) =
-        let identity =
-            $"fsgg.gs2-09-7.sandbox-seed-approved-source/1\ncandidateSha={candidateSha}\nseed-plan.json={sha seedPlan}\ncorpus.json={sha corpus}\n"
-
-        sha (ReadOnlyMemory(Encoding.UTF8.GetBytes identity))
-
-    let private sourceManifest (request: MigrationSandboxSeedBootstrapSourceRequest) (approvedSource: string) =
+    let private sourceManifest (request: MigrationSandboxSeedBootstrapSourceRequest) =
         use stream = new MemoryStream()
         use writer = new Utf8JsonWriter(stream)
         writer.WriteStartObject()
         writer.WriteString("schema", "fsgg.gs2-09-7.sandbox-seed-source-artifacts/1")
         writer.WriteString("status", "source-only-no-authority")
         writer.WriteString("candidateSha", request.CandidateSha)
-        writer.WriteString("approvedArtifactSourceSha256", approvedSource)
         writer.WriteStartObject("seedPlan")
         writer.WriteString("path", "seed-plan.json")
         writer.WriteNumber("byteLength", request.SeedPlanBytes.Length)
@@ -105,10 +98,8 @@ module MigrationSandboxSeedBootstrapArtifact =
                     "corpus.json", request.CorpusBytes.ToArray()
                 ]
 
-            let approvedSource =
-                approvedSourceSha256 request.CandidateSha request.SeedPlanBytes request.CorpusBytes
-
-            let bytes = sourceManifest request approvedSource
+            let bytes = sourceManifest request
+            let approvedSource = sha (ReadOnlyMemory bytes)
 
             Ok
                 {
@@ -125,8 +116,7 @@ module MigrationSandboxSeedBootstrapArtifact =
             let plan = root.GetProperty("seedPlan")
             let corpus = root.GetProperty("corpus")
 
-            let approvedSource =
-                approvedSourceSha256 request.CandidateSha request.SeedPlanBytes request.CorpusBytes
+            let approvedSource = sha request.SourceManifestBytes
 
             properties =
                 set
@@ -134,7 +124,6 @@ module MigrationSandboxSeedBootstrapArtifact =
                         "schema"
                         "status"
                         "candidateSha"
-                        "approvedArtifactSourceSha256"
                         "seedPlan"
                         "corpus"
                         "postMintSealRequired"
@@ -144,7 +133,6 @@ module MigrationSandboxSeedBootstrapArtifact =
             && root.GetProperty("schema").GetString() = "fsgg.gs2-09-7.sandbox-seed-source-artifacts/1"
             && root.GetProperty("status").GetString() = "source-only-no-authority"
             && root.GetProperty("candidateSha").GetString() = request.CandidateSha
-            && root.GetProperty("approvedArtifactSourceSha256").GetString() = approvedSource
             && root.GetProperty("postMintSealRequired").GetBoolean()
             && not (root.GetProperty("bootstrapAuthority").GetBoolean())
             && not (root.GetProperty("providerEffectsAuthorized").GetBoolean())
@@ -171,8 +159,7 @@ module MigrationSandboxSeedBootstrapArtifact =
             let nonce =
                 $"{request.WorkflowRunId}-{request.WorkflowRunAttempt}-{request.CandidateSha}"
 
-            let approvedSource =
-                approvedSourceSha256 request.CandidateSha request.SeedPlanBytes request.CorpusBytes
+            let approvedSource = sha request.SourceManifestBytes
 
             root.GetProperty("schema").GetString() = "fsgg.github-substrate-v2.sandbox-seed-execution-binding/2"
             && root.GetProperty("status").GetString() = "bound-no-write-authority"

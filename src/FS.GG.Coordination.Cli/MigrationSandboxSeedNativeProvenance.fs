@@ -9,6 +9,8 @@ type MigrationSandboxSeedIsolatedProvenanceEvidence =
     {
         BindingBytes: byte array
         NativeCasReadbackBytes: byte array
+        BootstrapAdmissionBytes: byte array
+        BootstrapPrestateBytes: byte array
         WorkflowRunId: int64
         WorkflowRunAttempt: int
         WorkflowSha: string
@@ -18,7 +20,8 @@ type MigrationSandboxSeedIsolatedProvenanceEvidence =
 type IMigrationSandboxSeedIsolatedProvenanceVerifier =
     /// Validate the immutable protected-host declaration before the journal exists. This
     /// authorizes only an exact generation-zero journal proposal; it is not an effect authority.
-    abstract VerifyBootstrapExact: MigrationSandboxSeedIsolatedProvenanceEvidence -> bool
+    abstract VerifyBootstrapExact:
+        evidence: MigrationSandboxSeedIsolatedProvenanceEvidence * proposal: MigrationSandboxSeedJournalPlan -> bool
 
     abstract VerifyExact: MigrationSandboxSeedIsolatedProvenanceEvidence -> bool
 
@@ -36,6 +39,8 @@ type IMigrationSandboxSeedNativeProvenanceRead =
     abstract CurrentTokenSha256: unit -> Result<string, string>
     abstract ReadSandboxRepository: unit -> Result<byte array, string>
     abstract ReadSandboxProject: unit -> Result<byte array, string>
+    /// Fresh post-decision two-pass issue/Project/ref-absence evidence from host-private custody.
+    abstract ReadBootstrapPrestateEvidence: unit -> Result<byte array, string>
     abstract ReadNativeCasReadback: refName: string -> Result<byte array, string>
 
 /// No ambient-token constructor or default transport exists. Installation and CAS remain separate.
@@ -97,7 +102,11 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
 
         raw
 
-    let verify requireNativeReadback (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence) =
+    let verify
+        requireNativeReadback
+        (proposal: MigrationSandboxSeedJournalPlan option)
+        (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence)
+        =
         if
             isNull (box read)
             || not (bounded (1024 * 1024) evidence.BindingBytes)
@@ -106,6 +115,14 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
             || (not requireNativeReadback
                 && not (isNull evidence.NativeCasReadbackBytes)
                 && evidence.NativeCasReadbackBytes.Length <> 0)
+            || (requireNativeReadback
+                && ((not (isNull evidence.BootstrapAdmissionBytes)
+                     && evidence.BootstrapAdmissionBytes.Length <> 0)
+                    || (not (isNull evidence.BootstrapPrestateBytes)
+                        && evidence.BootstrapPrestateBytes.Length <> 0)))
+            || (not requireNativeReadback
+                && (not (bounded (1024 * 1024) evidence.BootstrapAdmissionBytes)
+                    || not (bounded (1024 * 1024) evidence.BootstrapPrestateBytes)))
             || evidence.WorkflowRunId <= 0L
             || evidence.WorkflowRunAttempt <= 0
             || not (hex 40 evidence.WorkflowSha)
@@ -164,6 +181,7 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                     num "id" run <> evidence.WorkflowRunId
                     || num "run_attempt" run <> int64 evidence.WorkflowRunAttempt
                     || str "head_sha" run <> evidence.WorkflowSha
+                    || str "head_branch" run <> "main"
                     || str "event" run <> "workflow_dispatch"
                     || str "path" run
                        <> ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
@@ -302,8 +320,196 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                             >
                                             0
 
-                                    if not retainedInputs || not requireNativeReadback then
-                                        retainedInputs
+                                    if not retainedInputs then
+                                        false
+                                    elif not requireNativeReadback then
+                                        match proposal with
+                                        | None -> false
+                                        | Some proposal ->
+                                            let retainedAdmission =
+                                                read.ReadRetained "bootstrap-final-admission"
+                                                |> required (1024 * 1024)
+
+                                            let retainedPrestate =
+                                                read.ReadRetained "bootstrap-prestate"
+                                                |> required (1024 * 1024)
+
+                                            if
+                                                retainedAdmission <> evidence.BootstrapAdmissionBytes
+                                                || retainedPrestate <> evidence.BootstrapPrestateBytes
+                                            then
+                                                false
+                                            else
+                                                use admissionDocument = parse evidence.BootstrapAdmissionBytes
+                                                use prestateDocument = parse evidence.BootstrapPrestateBytes
+                                                let admission = admissionDocument.RootElement
+                                                let subject = field "subject" admission
+                                                let prestate = prestateDocument.RootElement
+                                                let prestateEvidenceDigest = str "prestateEvidenceSha256" subject
+
+                                                let prestateEvidence =
+                                                    retained
+                                                        "bootstrap-prestate-evidence"
+                                                        prestateEvidenceDigest
+                                                        (4 * 1024 * 1024)
+
+                                                use prestateEvidenceDocument = parse prestateEvidence
+                                                let prestateProof = prestateEvidenceDocument.RootElement
+                                                let passes = prestateProof.GetProperty("passes").EnumerateArray() |> Seq.toArray
+
+                                                let requestValid (request: JsonElement) =
+                                                    let names = request.EnumerateObject() |> Seq.map _.Name |> Set.ofSeq
+                                                    let status = num "status" request
+                                                    let url = str "url" request
+
+                                                    names = set [ "method"; "url"; "status"; "link"; "bodyBase64" ]
+                                                    && str "method" request = "GET"
+                                                    && Uri.IsWellFormedUriString(url, UriKind.Absolute)
+                                                    && (status = 200L || status = 404L)
+                                                    && (Convert.FromBase64String(str "bodyBase64" request)).Length <= 1024 * 1024
+
+                                                let passValid (pass: JsonElement) =
+                                                    let requests = pass.GetProperty("requests").EnumerateArray() |> Seq.toArray
+                                                    let nonceUrl = "/git/ref/heads/gs2-09-7/" + nonce + "/seed-journal"
+
+                                                    requests.Length >= 5
+                                                    && (requests |> Array.forall requestValid)
+                                                    && (requests
+                                                        |> Array.exists (fun item ->
+                                                            str "url" item =
+                                                                "https://api.github.com/repos/FS-GG/FS.GG.GitHub.Substrate.Sandbox/git/ref/heads/main"
+                                                            && num "status" item = 200L))
+                                                    && (requests
+                                                        |> Array.exists (fun item ->
+                                                            (str "url" item).EndsWith(nonceUrl, StringComparison.Ordinal)
+                                                            && num "status" item = 404L))
+
+                                                let evidenceValid =
+                                                    str "schema" prestateProof =
+                                                        "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1"
+                                                    && str "runNonce" prestateProof = nonce
+                                                    && str "refName" prestateProof = refName
+                                                    && num "repositoryId" prestateProof = 1353050537L
+                                                    && str "projectNodeId" prestateProof = "PVT_kwDOEYAWY84BiESo"
+                                                    && prestateProof.GetProperty("expectedRefAbsent").GetBoolean()
+                                                    && prestateProof.GetProperty("complete").GetBoolean()
+                                                    && str "summarySha256" prestateProof =
+                                                        sha evidence.BootstrapPrestateBytes
+                                                    && str "snapshotSha256" prestateProof =
+                                                        str "snapshotSha256" prestate
+                                                    && passes.Length = 2
+                                                    && passes[0].GetRawText() = passes[1].GetRawText()
+                                                    && sha (
+                                                        System.Text.Encoding.UTF8.GetBytes(
+                                                            passes[0].GetProperty("snapshot").GetRawText()
+                                                        )
+                                                    ) = str "snapshotSha256" prestateProof
+                                                    && (passes |> Array.forall passValid)
+
+                                                let freshPrestateEvidence =
+                                                    read.ReadBootstrapPrestateEvidence()
+                                                    |> required (4 * 1024 * 1024)
+
+                                                use freshPrestateDocument = parse freshPrestateEvidence
+                                                let freshPrestate = freshPrestateDocument.RootElement
+                                                let freshPasses =
+                                                    freshPrestate.GetProperty("passes").EnumerateArray() |> Seq.toArray
+
+                                                let freshEvidenceValid =
+                                                    str "schema" freshPrestate =
+                                                        "fsgg.gs2-09-7.sandbox-seed-prestate-evidence/1"
+                                                    && str "runNonce" freshPrestate = nonce
+                                                    && str "refName" freshPrestate = refName
+                                                    && num "repositoryId" freshPrestate = 1353050537L
+                                                    && str "projectNodeId" freshPrestate = "PVT_kwDOEYAWY84BiESo"
+                                                    && freshPrestate.GetProperty("expectedRefAbsent").GetBoolean()
+                                                    && freshPrestate.GetProperty("complete").GetBoolean()
+                                                    && str "summarySha256" freshPrestate =
+                                                        sha evidence.BootstrapPrestateBytes
+                                                    && str "snapshotSha256" freshPrestate =
+                                                        str "snapshotSha256" prestateProof
+                                                    && freshPasses.Length = 2
+                                                    && freshPasses[0].GetRawText() = freshPasses[1].GetRawText()
+                                                    && sha (
+                                                        System.Text.Encoding.UTF8.GetBytes(
+                                                            freshPasses[0].GetProperty("snapshot").GetRawText()
+                                                        )
+                                                    ) = str "snapshotSha256" freshPrestate
+                                                    && (freshPasses |> Array.forall passValid)
+
+                                                let proposed: MigrationSandboxSeedJournalSnapshot =
+                                                    {
+                                                        RefName = proposal.RefName
+                                                        JournalGeneration = proposal.JournalGeneration
+                                                        StateGeneration = proposal.StateGeneration
+                                                        RunNonce = proposal.RunNonce
+                                                        BindingSeal = proposal.BindingSeal
+                                                        CommitOid = proposal.CommitOid
+                                                        ParentOid = proposal.ExpectedParent
+                                                        StateSha256 = proposal.StateSha256
+                                                        StateBytes = proposal.StateBytes
+                                                        BlobOid = proposal.BlobOid
+                                                        TreeOid = proposal.TreeOid
+                                                        TreeBytes = proposal.TreeBytes
+                                                        CommitBytes = proposal.CommitBytes
+                                                    }
+
+                                                match MigrationSandboxSeedJournal.restore None proposed with
+                                                | Error _ -> false
+                                                | Ok restored ->
+                                                    let expectedPrestate = restored.State.Binding.Prestate
+
+                                                    let admissionMatches =
+                                                        str "schema" admission =
+                                                            "fsgg.gs2-09-7.seed-admission-request/1"
+                                                        && str "phase" admission = "final"
+                                                        && str "workflowRepository" subject = "FS-GG/.github"
+                                                        && str "workflowPath" subject =
+                                                            ".github/workflows/github-substrate-v2-sandbox-qualification.yml"
+                                                        && str "environment" subject = "github-substrate-v2-sandbox"
+                                                        && str "workflowSha" subject = evidence.WorkflowSha
+                                                        && num "runId" subject = evidence.WorkflowRunId
+                                                        && num "runAttempt" subject = int64 evidence.WorkflowRunAttempt
+                                                        && str "candidateSha" subject = candidate
+                                                        && str "runNonce" subject = nonce
+                                                        && str "approvedArtifactSourceSha256" subject =
+                                                            evidence.ApprovedArtifactSourceSha256
+                                                        && str "sourceManifestSha256" subject =
+                                                            evidence.ApprovedArtifactSourceSha256
+                                                        && num "sandboxRepositoryId" subject = 1353050537L
+                                                        && str "sandboxRepositoryNodeId" subject = "R_kgDOUKXpqQ"
+                                                        && str "projectNodeId" subject = "PVT_kwDOEYAWY84BiESo"
+                                                        && num "appId" subject = 4166418L
+                                                        && num "installationId" subject = 143110413L
+                                                        && str "seedPlanSha256" subject = planDigest
+                                                        && str "s2DeclarationSha256" subject = sha evidence.BindingBytes
+                                                        && str "mintProofSha256" subject = str "proofSha256" mint
+                                                        && str "tokenSha256" subject = str "tokenSha256" mint
+                                                        && str "refName" subject = refName
+                                                        && str "blobOid" subject = proposal.BlobOid
+                                                        && str "treeOid" subject = proposal.TreeOid
+                                                        && str "commitOid" subject = proposal.CommitOid
+                                                        && (field "expectedOldOid" subject).ValueKind = JsonValueKind.Null
+                                                        && str "operation" subject = "genesis-nonce-seed-journal"
+                                                        && subject.GetProperty("expectedRefAbsent").GetBoolean()
+                                                        && str "prestateSha256" subject = sha evidence.BootstrapPrestateBytes
+                                                        && str "prestateSnapshotSha256" subject =
+                                                            expectedPrestate.SnapshotSha256
+                                                        && hex 64 prestateEvidenceDigest
+                                                        && prestateEvidence.Length > 0
+                                                        && evidenceValid
+                                                        && freshEvidenceValid
+                                                        && prestate.GetProperty("complete").GetBoolean()
+                                                        && num "repositoryId" prestate = expectedPrestate.RepositoryId
+                                                        && str "projectNodeId" prestate = expectedPrestate.ProjectNodeId
+                                                        && num "nonceIssueCount" prestate =
+                                                            int64 expectedPrestate.NonceIssueCount
+                                                        && num "nonceProjectItemCount" prestate =
+                                                            int64 expectedPrestate.NonceProjectItemCount
+                                                        && str "snapshotSha256" prestate =
+                                                            expectedPrestate.SnapshotSha256
+
+                                                    admissionMatches
                                     else
                                         let freshCas = read.ReadNativeCasReadback refName |> required (1024 * 1024)
                                         use retainedDocument = parse evidence.NativeCasReadbackBytes
@@ -381,14 +587,14 @@ type MigrationSandboxSeedNativeProvenanceVerifier(read: IMigrationSandboxSeedNat
                                         )
 
     interface IMigrationSandboxSeedIsolatedProvenanceVerifier with
-        member _.VerifyBootstrapExact evidence =
+        member _.VerifyBootstrapExact(evidence, proposal) =
             try
-                verify false evidence
+                verify false (Some proposal) evidence
             with _ ->
                 false
 
         member _.VerifyExact evidence =
             try
-                verify true evidence
+                verify true None evidence
             with _ ->
                 false

@@ -8,7 +8,9 @@ type MigrationSandboxSeedIsolatedCasAuthority = private MigrationSandboxSeedIsol
 
 /// Journal-only admission for the exact generation-zero S1 proposal. It cannot authorize a
 /// seed provider effect or a later journal generation.
-type MigrationSandboxSeedBootstrapAdmission = private MigrationSandboxSeedBootstrapAdmission of byte array
+type MigrationSandboxSeedBootstrapAdmission =
+    private
+    | MigrationSandboxSeedBootstrapAdmission of bindingBytes: byte array * admissionBytes: byte array
 
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedRemotePushOutcome =
@@ -62,6 +64,7 @@ module MigrationSandboxSeedJournalRemote =
     val establishBootstrapAdmission:
         verifier: IMigrationSandboxSeedIsolatedProvenanceVerifier ->
         evidence: MigrationSandboxSeedIsolatedProvenanceEvidence ->
+        proposal: MigrationSandboxSeedJournalPlan ->
             Result<MigrationSandboxSeedBootstrapAdmission, MigrationSandboxSeedRemoteFailure>
 
     /// Join retained S2 bytes and native nonce-ref CAS readback to the independent protected-host

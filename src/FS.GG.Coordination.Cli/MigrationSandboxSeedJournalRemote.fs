@@ -8,7 +8,9 @@ open System.Text
 open System.Text.Json
 
 type MigrationSandboxSeedIsolatedCasAuthority = private MigrationSandboxSeedIsolatedCasAuthority of byte array
-type MigrationSandboxSeedBootstrapAdmission = private MigrationSandboxSeedBootstrapAdmission of byte array
+type MigrationSandboxSeedBootstrapAdmission =
+    private
+    | MigrationSandboxSeedBootstrapAdmission of bindingBytes: byte array * admissionBytes: byte array
 
 [<RequireQualifiedAccess>]
 type MigrationSandboxSeedRemotePushOutcome =
@@ -82,6 +84,7 @@ module MigrationSandboxSeedJournalRemote =
     let establishBootstrapAdmission
         (verifier: IMigrationSandboxSeedIsolatedProvenanceVerifier)
         (evidence: MigrationSandboxSeedIsolatedProvenanceEvidence)
+        (proposal: MigrationSandboxSeedJournalPlan)
         =
         let bindingBytes, nativeReadbackBytes = evidenceBytes evidence
 
@@ -89,6 +92,12 @@ module MigrationSandboxSeedJournalRemote =
             bindingBytes.Length = 0
             || bindingBytes.Length > 1024 * 1024
             || nativeReadbackBytes.Length <> 0
+            || isNull evidence.BootstrapAdmissionBytes
+            || evidence.BootstrapAdmissionBytes.Length = 0
+            || evidence.BootstrapAdmissionBytes.Length > 1024 * 1024
+            || isNull evidence.BootstrapPrestateBytes
+            || evidence.BootstrapPrestateBytes.Length = 0
+            || evidence.BootstrapPrestateBytes.Length > 1024 * 1024
         then
             Error MigrationSandboxSeedRemoteFailure.InvalidIsolatedCasBinding
         else
@@ -99,8 +108,13 @@ module MigrationSandboxSeedJournalRemote =
                         NativeCasReadbackBytes = [||]
                     }
 
-                if verifier.VerifyBootstrapExact exact then
-                    Ok(MigrationSandboxSeedBootstrapAdmission bindingBytes)
+                if verifier.VerifyBootstrapExact(exact, proposal) then
+                    Ok(
+                        MigrationSandboxSeedBootstrapAdmission(
+                            bindingBytes,
+                            Array.copy evidence.BootstrapAdmissionBytes
+                        )
+                    )
                 else
                     Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected
             with _ ->
@@ -117,6 +131,10 @@ module MigrationSandboxSeedJournalRemote =
             || bindingBytes.Length > 1024 * 1024
             || nativeReadbackBytes.Length = 0
             || nativeReadbackBytes.Length > 1024 * 1024
+            || (not (isNull evidence.BootstrapAdmissionBytes)
+                && evidence.BootstrapAdmissionBytes.Length <> 0)
+            || (not (isNull evidence.BootstrapPrestateBytes)
+                && evidence.BootstrapPrestateBytes.Length <> 0)
         then
             Error MigrationSandboxSeedRemoteFailure.InvalidIsolatedCasBinding
         else
@@ -248,11 +266,34 @@ module MigrationSandboxSeedJournalRemote =
             | _, MigrationSandboxSeedJournalReconciliation.Indeterminate reason ->
                 Ok(MigrationSandboxSeedRemoteResult.Indeterminate reason)
 
-    let writeGenesisAndRead (MigrationSandboxSeedBootstrapAdmission bindingBytes) proposal transport =
+    let private admissionMatches (bytes: byte array) (proposal: MigrationSandboxSeedJournalPlan) =
+        try
+            use document = JsonDocument.Parse bytes
+            let root = document.RootElement
+            let subject = root.GetProperty "subject"
+
+            root.GetProperty("schema").GetString() = "fsgg.gs2-09-7.seed-admission-request/1"
+            && root.GetProperty("phase").GetString() = "final"
+            && subject.GetProperty("refName").GetString() = proposal.RefName
+            && subject.GetProperty("blobOid").GetString() = proposal.BlobOid
+            && subject.GetProperty("treeOid").GetString() = proposal.TreeOid
+            && subject.GetProperty("commitOid").GetString() = proposal.CommitOid
+            && subject.GetProperty("expectedOldOid").ValueKind = JsonValueKind.Null
+            && subject.GetProperty("expectedRefAbsent").GetBoolean()
+            && subject.GetProperty("operation").GetString() = "genesis-nonce-seed-journal"
+        with _ ->
+            false
+
+    let writeGenesisAndRead
+        (MigrationSandboxSeedBootstrapAdmission(bindingBytes, admissionBytes))
+        proposal
+        transport
+        =
         if
             proposal.ExpectedParent.IsSome
             || proposal.JournalGeneration <> 0L
             || proposal.StateGeneration <> 0L
+            || not (admissionMatches admissionBytes proposal)
         then
             Error MigrationSandboxSeedRemoteFailure.InvalidJournalProposal
         else

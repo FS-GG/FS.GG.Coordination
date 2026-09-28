@@ -679,6 +679,61 @@ module MigrationSandboxSeedJournal =
                            MigrationSandboxSeedExecutionMode.Compensated
                    | _ -> false
 
+    let private legalTransition
+        (previous: MigrationSandboxSeedExecution)
+        (current: MigrationSandboxSeedExecution)
+        =
+        let unchangedExceptActive index =
+            previous.Effects
+            |> List.mapi (fun item effect -> item = index || effect = current.Effects[item])
+            |> List.forall id
+
+        let activeStage fromStage toStage =
+            previous.ActiveIndex = current.ActiveIndex
+            && previous.ActiveIndex >= 0
+            && previous.ActiveIndex < previous.Effects.Length
+            && unchangedExceptActive previous.ActiveIndex
+            && previous.Effects[previous.ActiveIndex].Stage = fromStage
+            && current.Effects[current.ActiveIndex].Stage = toStage
+            && previous.Effects[previous.ActiveIndex].Ownership = current.Effects[current.ActiveIndex].Ownership
+
+        let settledActive =
+            previous.ActiveIndex >= 0
+            && previous.ActiveIndex < previous.Effects.Length
+            && current.ActiveIndex = previous.ActiveIndex + 1
+            && unchangedExceptActive previous.ActiveIndex
+            && (previous.Effects[previous.ActiveIndex].Stage = MigrationSandboxSeedEffectStage.InFlight
+                || previous.Effects[previous.ActiveIndex].Stage = MigrationSandboxSeedEffectStage.RecoveryPending)
+            && current.Effects[previous.ActiveIndex].Stage = MigrationSandboxSeedEffectStage.Settled
+
+        previous.Binding = current.Binding
+        && current.Generation = previous.Generation + 1L
+        && current.Head <> previous.Head
+        && ((previous.Mode = current.Mode
+             && (activeStage
+                     MigrationSandboxSeedEffectStage.Planned
+                     MigrationSandboxSeedEffectStage.IntentPersisted
+                 || activeStage
+                     MigrationSandboxSeedEffectStage.IntentPersisted
+                     MigrationSandboxSeedEffectStage.InFlight
+                 || activeStage
+                     MigrationSandboxSeedEffectStage.InFlight
+                     MigrationSandboxSeedEffectStage.RecoveryPending
+                 || settledActive))
+            || (previous.Mode = MigrationSandboxSeedExecutionMode.Forward
+                && current.Mode = MigrationSandboxSeedExecutionMode.Complete
+                && settledActive)
+            || (previous.Mode = MigrationSandboxSeedExecutionMode.Compensation
+                && current.Mode = MigrationSandboxSeedExecutionMode.Compensated
+                && settledActive)
+            || (previous.Mode = MigrationSandboxSeedExecutionMode.Complete
+                && current.Mode = MigrationSandboxSeedExecutionMode.Compensation
+                && current.ActiveIndex = 0
+                && (current.Effects
+                    |> List.forall (fun effect -> effect.Stage = MigrationSandboxSeedEffectStage.Planned))
+                && current.Effects[0].Ownership = previous.Effects[1].Ownership
+                && current.Effects[1].Ownership = previous.Effects[0].Ownership))
+
     let restore previous current =
         if not (snapshotValid current) then
             Error MigrationSandboxSeedJournalFailure.InvalidSnapshot
@@ -705,6 +760,12 @@ module MigrationSandboxSeedJournal =
                     && state.Binding.Seal = current.BindingSeal
                     && encodeState state = current.StateBytes
                     && validRestoredState state
+                    && (match previous with
+                        | None -> genesisState state
+                        | Some prior ->
+                            match parseState prior.StateBytes with
+                            | Some priorState when validRestoredState priorState -> legalTransition priorState state
+                            | _ -> false)
                     ->
                     let active =
                         if state.ActiveIndex >= 0 && state.ActiveIndex < state.Effects.Length then
@@ -743,7 +804,13 @@ module MigrationSandboxSeedJournal =
                     Error MigrationSandboxSeedJournalFailure.InvalidPrevious
                 | Some value when state.Generation <> value.StateGeneration + 1L ->
                     Error MigrationSandboxSeedJournalFailure.StaleGeneration
-                | Some value -> Ok(value.JournalGeneration + 1L, Some value.CommitOid)
+                | Some value ->
+                    match parseState value.StateBytes with
+                    | Some previousState when
+                        validRestoredState previousState && legalTransition previousState state
+                        ->
+                        Ok(value.JournalGeneration + 1L, Some value.CommitOid)
+                    | _ -> Error MigrationSandboxSeedJournalFailure.InvalidState
 
             match next with
             | Error failure -> Error failure

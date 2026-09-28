@@ -245,10 +245,16 @@ let private nativeCasBytes =
     raw
         $"{{\"schema\":\"fsgg.gs2-09-7.sandbox-nonce-ref-cas-readback/1\",\"refName\":\"refs/heads/gs2-09-7/7-2-{candidate}/seed-journal\",\"repositoryId\":1353050537,\"complete\":true}}"
 
-let private evidence bindingBytes nativeCas =
+let private admissionBytes (proposal: MigrationSandboxSeedJournalPlan) =
+    raw
+        $"{{\"schema\":\"fsgg.gs2-09-7.seed-admission-request/1\",\"phase\":\"final\",\"subject\":{{\"refName\":\"{proposal.RefName}\",\"blobOid\":\"{proposal.BlobOid}\",\"treeOid\":\"{proposal.TreeOid}\",\"commitOid\":\"{proposal.CommitOid}\",\"expectedOldOid\":null,\"expectedRefAbsent\":true,\"operation\":\"genesis-nonce-seed-journal\"}}}}"
+
+let private evidence bindingBytes nativeCas proposal =
     {
         BindingBytes = bindingBytes
         NativeCasReadbackBytes = nativeCas
+        BootstrapAdmissionBytes = proposal |> Option.map admissionBytes |> Option.defaultValue [||]
+        BootstrapPrestateBytes = proposal |> Option.map (fun _ -> raw "{}") |> Option.defaultValue [||]
         WorkflowRunId = 7L
         WorkflowRunAttempt = 2
         WorkflowSha = workflow
@@ -257,7 +263,7 @@ let private evidence bindingBytes nativeCas =
 
 type private ExactVerifier(expectedBinding: byte array, expectedNativeCas: byte array, accept: bool) =
     interface IMigrationSandboxSeedIsolatedProvenanceVerifier with
-        member _.VerifyBootstrapExact actual =
+        member _.VerifyBootstrapExact(actual, _) =
             accept
             && actual.BindingBytes = expectedBinding
             && actual.NativeCasReadbackBytes.Length = 0
@@ -278,18 +284,19 @@ type private ExactVerifier(expectedBinding: byte array, expectedNativeCas: byte 
 let private authority bytes =
     MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
         (ExactVerifier(bytes, nativeCasBytes, true))
-        (evidence bytes nativeCasBytes)
+        (evidence bytes nativeCasBytes None)
     |> Result.defaultWith (fun error -> failwithf "%A" error)
 
-let private bootstrap bytes =
+let private bootstrap bytes proposal =
     MigrationSandboxSeedJournalRemote.establishBootstrapAdmission
         (ExactVerifier(bytes, [||], true))
-        (evidence bytes [||])
+        (evidence bytes [||] (Some proposal))
+        proposal
     |> Result.defaultWith (fun error -> failwithf "%A" error)
 
 let private writeRemote bytes previous proposal transport =
     match previous with
-    | None -> MigrationSandboxSeedJournalRemote.writeGenesisAndRead (bootstrap bytes) proposal transport
+    | None -> MigrationSandboxSeedJournalRemote.writeGenesisAndRead (bootstrap bytes proposal) proposal transport
     | Some snapshot -> MigrationSandboxSeedJournalRemote.writeAndRead (authority bytes) snapshot proposal transport
 
 let private proposal bytes =
@@ -311,14 +318,14 @@ let ``current source only S2 cannot construct isolated CAS authority`` () =
         Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
         MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
             (ExactVerifier(current, nativeCasBytes, false))
-            (evidence current nativeCasBytes)
+            (evidence current nativeCasBytes None)
     )
 
     Assert.Equal(
         Error MigrationSandboxSeedRemoteFailure.InvalidIsolatedCasBinding,
         MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
             (ExactVerifier(current, [||], true))
-            (evidence current [||])
+            (evidence current [||] None)
     )
 
 [<Fact>]
@@ -332,7 +339,7 @@ let ``repository ruleset bytes cannot substitute for native CAS readback`` () =
         Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
         MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
             (ExactVerifier(binding, candidatePolicy, false))
-            (evidence binding candidatePolicy)
+            (evidence binding candidatePolicy None)
     )
 
 [<Fact>]
@@ -343,7 +350,7 @@ let ``well formed self asserted receipts cannot create isolated CAS authority`` 
         Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
         MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
             (ExactVerifier(binding, nativeCasBytes, false))
-            (evidence binding nativeCasBytes)
+            (evidence binding nativeCasBytes None)
     )
 
 [<Fact>]
@@ -481,5 +488,5 @@ let ``altered readback and malformed installed binding refuse`` () =
         Error MigrationSandboxSeedRemoteFailure.IsolatedProvenanceRejected,
         MigrationSandboxSeedJournalRemote.establishIsolatedCasAuthority
             (ExactVerifier(malformed, nativeCasBytes, false))
-            (evidence malformed nativeCasBytes)
+            (evidence malformed nativeCasBytes None)
     )

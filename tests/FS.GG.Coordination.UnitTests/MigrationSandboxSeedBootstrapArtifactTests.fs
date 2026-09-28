@@ -66,6 +66,7 @@ let private unwrap =
 
 [<Fact>]
 let ``offline composer emits deterministic exact generation zero artifacts without authority`` () =
+    Assert.Equal(sha source.ManifestBytes, source.ApprovedArtifactSourceSha256)
     use sourceDocument = JsonDocument.Parse source.ManifestBytes
     Assert.Equal("source-only-no-authority", sourceDocument.RootElement.GetProperty("status").GetString())
     Assert.True(sourceDocument.RootElement.GetProperty("postMintSealRequired").GetBoolean())

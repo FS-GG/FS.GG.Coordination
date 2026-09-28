@@ -55,6 +55,23 @@ let private rebuildSnapshot (snapshot: MigrationSandboxSeedJournalSnapshot) stat
         CommitOid = gitOid "commit" commitBytes
     }
 
+let private snapshotOf (plan: MigrationSandboxSeedJournalPlan) =
+    {
+        RefName = plan.RefName
+        JournalGeneration = plan.JournalGeneration
+        StateGeneration = plan.StateGeneration
+        RunNonce = plan.RunNonce
+        BindingSeal = plan.BindingSeal
+        CommitOid = plan.CommitOid
+        ParentOid = plan.ExpectedParent
+        StateSha256 = plan.StateSha256
+        StateBytes = plan.StateBytes
+        BlobOid = plan.BlobOid
+        TreeOid = plan.TreeOid
+        TreeBytes = plan.TreeBytes
+        CommitBytes = plan.CommitBytes
+    }
+
 let private candidate = String.replicate 40 "a"
 
 let private mint, host, seedPlan, corpus =
@@ -465,6 +482,26 @@ let ``journal retains in flight recovery result and reverse compensation custody
             |> Result.defaultWith (fun e -> failwithf "%A" e)
 
         let completeSnapshot = snapshot
+
+        let replacedCustody =
+            { compensation with
+                Effects =
+                    { compensation.Effects[0] with
+                        Ownership =
+                            compensation.Effects[0].Ownership
+                            |> Option.map (fun owned ->
+                                { owned with
+                                    ReadbackSha256 = String.replicate 64 "8"
+                                })
+                    }
+                    :: compensation.Effects.Tail
+            }
+
+        Assert.Equal(
+            Error MigrationSandboxSeedJournalFailure.InvalidState,
+            MigrationSandboxSeedJournal.plan (Some completeSnapshot) replacedCustody
+        )
+
         persist compensation
 
         let restoredCompensation =
@@ -552,4 +589,57 @@ let ``typed restore rejects extra missing forged and broken chain snapshots`` ()
     Assert.Equal(
         Error MigrationSandboxSeedJournalFailure.BrokenChain,
         MigrationSandboxSeedJournal.restore (Some wrongPrevious) nextSnapshot
+    )
+
+[<Fact>]
+let ``journal refuses shaped states that skip or reverse executor transitions`` () =
+    let unwrap = Result.defaultWith (fun error -> failwithf "%A" error)
+    let genesis = MigrationSandboxSeedJournal.plan None (initial ()) |> unwrap
+    let genesisSnapshot = snapshotOf genesis
+
+    let genesisJson = Encoding.UTF8.GetString genesis.StateBytes
+    let planned = "\"stage\":\"planned\""
+    let firstPlanned = genesisJson.IndexOf(planned, StringComparison.Ordinal)
+
+    let inFlightGenesis =
+        genesisJson.Substring(0, firstPlanned)
+        + "\"stage\":\"in-flight\""
+        + genesisJson.Substring(firstPlanned + planned.Length)
+        |> Encoding.UTF8.GetBytes
+        |> rebuildSnapshot genesisSnapshot
+
+    Assert.Equal(
+        Error MigrationSandboxSeedJournalFailure.InvalidState,
+        MigrationSandboxSeedJournal.restore None inFlightGenesis
+    )
+
+    let initialState = initial ()
+    let effectId = initialState.Effects.Head.EffectId
+    let intent = advance (String.replicate 40 "d") (MigrationSandboxSeedAction.PersistIntent effectId) initialState
+    let intentPlan = MigrationSandboxSeedJournal.plan (Some genesisSnapshot) intent |> unwrap
+    let intentSnapshot = snapshotOf intentPlan
+    let inFlight = advance (String.replicate 40 "e") (MigrationSandboxSeedAction.MarkInFlight effectId) intent
+    let inFlightPlan = MigrationSandboxSeedJournal.plan (Some intentSnapshot) inFlight |> unwrap
+    let inFlightSnapshot = snapshotOf inFlightPlan
+
+    let pending =
+        advance (String.replicate 40 "f") (MigrationSandboxSeedAction.RecordResponseUnknown effectId) inFlight
+
+    let pendingPlan = MigrationSandboxSeedJournal.plan (Some inFlightSnapshot) pending |> unwrap
+    let pendingSnapshot = snapshotOf pendingPlan
+
+    let reversed =
+        { pending with
+            Generation = pending.Generation + 1L
+            Head = String.replicate 40 "1"
+            Effects =
+                { pending.Effects.Head with
+                    Stage = MigrationSandboxSeedEffectStage.IntentPersisted
+                }
+                :: pending.Effects.Tail
+        }
+
+    Assert.Equal(
+        Error MigrationSandboxSeedJournalFailure.InvalidState,
+        MigrationSandboxSeedJournal.plan (Some pendingSnapshot) reversed
     )
