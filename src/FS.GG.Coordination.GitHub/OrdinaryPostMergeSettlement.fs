@@ -166,6 +166,9 @@ module OrdinaryPostMergeSettlement =
         elif repositoryId = 1269292235L
              && String.Equals(repository, "FS-GG/FS.GG.Rendering", StringComparison.OrdinalIgnoreCase) then
             Some(Set [ "Deterministic gate"; "routine-eligibility" ])
+        elif repositoryId = 1305845505L
+             && String.Equals(repository, "FS-GG/FS.GG.Net", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "Build + test (locked restore)"; "contract-coherence / coherence" ])
         else None
 
     let private requiredChecksValid repository repositoryId (checks: OrdinaryCheckFact list) =

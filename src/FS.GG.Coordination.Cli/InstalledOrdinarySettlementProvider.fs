@@ -66,12 +66,23 @@ module InstalledOrdinarySettlementProvider =
                 [ "Deterministic gate"; "API compatibility gate (breaking-change → SemVer major)"
                   "kit / coordination-kit"; "skill-view-check"; "materialize / receiver-validate" ] }
 
+    let private netSourceProfile =
+        { Name = "net-v1"
+          Repository = "FS-GG/FS.GG.Net"
+          RepositoryId = 1305845505L
+          RequiredSettlementChecks = Set [ "Build + test (locked restore)"; "contract-coherence / coherence" ]
+          RequiredGateChecks =
+            Set
+                [ "Build + test (locked restore)"; "kit / coordination-kit"
+                  "contract-coherence / coherence"; "materialize / receiver-validate" ] }
+
     let selectSourceProfile value =
         match value with
         | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
         | "dotgithub-v1" -> Ok dotGitHubSourceProfile
         | "audio-v1" -> Ok audioSourceProfile
         | "rendering-v1" -> Ok renderingSourceProfile
+        | "net-v1" -> Ok netSourceProfile
         | _ -> Error "unsupported-source-profile"
 
     let private apiBase = Uri "https://api.github.com/"
