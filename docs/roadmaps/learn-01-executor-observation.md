@@ -1,6 +1,6 @@
 # LEARN-01.3 — Existing executor and observation source integration
 
-Status: proposed bounded source window, 2026-09-29. Owner: `FS-GG/FS.GG.Coordination`; feature/original lineage remains **LEARN-01 / LEARN-01.3**. Stages: E0 source qualification and selected E1 context support. Route: routine. Proposed durable path: `docs/roadmaps/learn-01-executor-observation.md` in Coordination. This draft is at `/tmp/learn-01-executor-observation-plan-20260929.md`; it is not protected source.
+Status: accepted source window in implementation, 2026-09-29. Owner: `FS-GG/FS.GG.Coordination`; feature/original lineage remains **LEARN-01 / LEARN-01.3**. Stages: E0 source qualification and selected E1 context support. Route: routine. Durable source path: `docs/roadmaps/learn-01-executor-observation.md` in Coordination. J1 and J2 are joined locally; J3 correspondence and final native qualification remain required before source acceptance.
 
 Backlinks: [Unified §9.8](https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index), [original LEARN-01 design and .3 acceptance](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), [delivered context/proposal window](learn-01-context-shadow.md), [O0–O3 owner](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md).
 
@@ -8,7 +8,7 @@ Deliver one source-qualified journey from an accepted learning decision through 
 
 ## Evidence and concrete gaps
 
-Inspection used Coordination qualified head `9095099753d1a9a333fa5391a9c08cb7d761fc29` in `/tmp/roadmap-learn-treatment-assignment` and the current `.github` closure checkout in `/tmp/unified-learn-assignment-closure-20260929`. Before execution, resolve protected main containing these delivered changes and the parent's immediate Unified §0 assignment projection.
+Inspection started from delivered assignment head `9095099753d1a9a333fa5391a9c08cb7d761fc29`. Implementation uses protected Coordination merge `39cb47312586a8e5a0b949c89cfce4bcb4a1955c` after the parent's Unified §0 assignment projection landed. Later milestones must refresh from current protected main before admission.
 
 | Reuse | Evidence and actual limit |
 |---|---|
@@ -95,4 +95,4 @@ Use existing roadmap/runtime/CI observation with stable feature/original/item/at
 
 No user decision is needed for the bounded source window. The implementer must resolve the actual provider capability discovery surface against the pinned executable; if it cannot provide trustworthy evidence, ship explicit unknown/refusal and keep native support pending. J1 must version any changed persisted disposition without altering old assignment bytes. J4 must bind source read/recheck and execution authority at the actual consumed boundary; synthetic fields cannot replace it. A need to replace the executor, widen work class, change model policy, create a new private collector authority or revise experiment enrollment invalidates this bounded plan and returns to the owning feature decision.
 
-For the Unified §9.8 LEARN row, preserve the original design and #882/#885 links and append: `next bounded executor/observation source window: [draft at /tmp/learn-01-executor-observation-plan-20260929.md]` while local. Once landed with implementation, replace the draft location with `[executor/observation source window](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/learn-01-executor-observation.md)`. Record completed source milestones and actual remaining gaps in §0 only after native merge readback; do not mark full .3 complete from this plan or the existing assignment proof.
+For the Unified §9.8 LEARN row, preserve the original design and #882/#885 links and add the durable [executor/observation source window](https://github.com/FS-GG/FS.GG.Coordination/blob/main/docs/roadmaps/learn-01-executor-observation.md) after this implementation lands. Record completed source milestones and actual remaining gaps in §0 only after native merge readback; do not mark full .3 complete from this plan or the existing assignment proof.

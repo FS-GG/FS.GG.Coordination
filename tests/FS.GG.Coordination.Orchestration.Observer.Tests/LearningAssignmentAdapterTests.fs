@@ -3,6 +3,9 @@ module FS.GG.Coordination.Orchestration.Observer.Tests.LearningAssignmentAdapter
 open System
 open System.IO
 open System.Security.Cryptography
+open System.Text.Json
+open System.Threading
+open System.Threading.Tasks
 open Xunit
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Orchestration.Observer
@@ -108,6 +111,66 @@ type private Fixture =
         RetrievedSources: RetrievedLearningSource list
         Preparation: LearningAssignmentPreparationRequest
     }
+
+type private FixedClock() =
+    inherit TimeProvider()
+    override _.GetUtcNow() = now
+
+type private UnusedCapabilities() =
+    interface IProjectReadCapability with
+        member _.ObserveProject(_, _) = Task.FromResult(Error InvalidObservationProvenance)
+
+    interface IBoundedPlanningCapability with
+        member _.CreateProposal(_, _) = Task.FromResult(Error "not-run")
+
+    interface ICommandReadbackCapability with
+        member _.ReadCommandAcceptance(_, _) = Task.FromResult(Error "not-run")
+        member _.ReadEffectCompletions(_, _) = Task.FromResult(Error "not-run")
+
+type private SourceBoundJournal(sourceState: ObserverState) =
+    let mutable events: ObserverStoredEvent list = []
+
+    interface IObserverJournalStore with
+        member _.RecoverObserver(_, _) =
+            Task.FromResult(
+                Ok
+                    {
+                        Events = events
+                        State = events |> List.map _.Event |> Observer.replay
+                    }
+            )
+
+        member _.AppendObserver(request, _) =
+            let input = ObserverCommand.tryLearningTreatmentInput request.Command.Command
+            let state = events |> List.map _.Event |> Observer.replay
+
+            let decisionState =
+                { state with
+                    Observation = sourceState.Observation
+                }
+
+            let sourceMatches =
+                input
+                |> Option.exists (fun value ->
+                    value.SourceObserverId = ObserverJournal.observerId sourceState.SessionId.Value
+                    && value.SourceSequence = sourceState.Sequence
+                    && (sourceState.Observation
+                        |> Option.exists (fun observation ->
+                            value.SourceObservationSha256 = observation.ObservationSha256
+                            && value.ExpectedWorkflowRevision = observation.WorkflowRevision
+                            && value.ExpectedGeneration = observation.Generation)))
+
+            let decision = Observer.decide request.ReceivedAt decisionState request.Command
+
+            if
+                not sourceMatches
+                || decision.Receipt.Disposition <> ObserverAccepted
+                || decision.Events <> (request.Events |> List.map _.Event)
+            then
+                Task.FromResult(ObserverInvalidAppend "events-do-not-match-command-decision")
+            else
+                events <- events @ request.Events
+                Task.FromResult(ObserverAppended(int64 events.Length))
 
 let private fixture () =
     let planSource, planBytes = actualSource "docs/roadmaps/learn-01-context-shadow.md"
@@ -234,7 +297,16 @@ let ``real keep proposal and source bytes become a replayable assignment without
             Observation = value.SourceState.Observation
         }
 
-    let decision = Observer.decide now canonicalState (envelope canonicalState (AssignLearningTreatment prepared.Assignment))
+    let raw = Observer.decide now canonicalState (envelope canonicalState (AssignLearningTreatment prepared.Assignment))
+    Assert.Equal(ObserverRejected, raw.Receipt.Disposition)
+    Assert.Equal("invalid-learning-treatment-assignment", raw.Receipt.Detail)
+
+    let decision =
+        Observer.decide
+            now
+            canonicalState
+            (envelope canonicalState (AssignPreparedLearningTreatment prepared.PreparedTreatment))
+
     Assert.Equal(ObserverAccepted, decision.Receipt.Disposition)
     let encoded = decision.Events |> List.map ObserverEventCodec.encode
     let decoded = encoded |> List.map (ObserverEventCodec.tryDecode >> Result.defaultWith failwith)
@@ -245,6 +317,53 @@ let ``real keep proposal and source bytes become a replayable assignment without
     Assert.Equal(prepared.Assignment.ProposalSha256, treatment.ProposalSha256)
     Assert.Equal(prepared.Assignment.ContextManifestSha256, treatment.ContextManifestSha256)
     Assert.True(treatment.Planner.IsNone)
+
+    let capabilities = UnusedCapabilities()
+    let journal = SourceBoundJournal(value.SourceState)
+
+    let composition =
+        ObserverComposition.create
+            (capabilities :> IProjectReadCapability)
+            (capabilities :> IBoundedPlanningCapability)
+            (capabilities :> ICommandReadbackCapability)
+            (journal :> IObserverJournalStore)
+
+    let persistenceRequest =
+        {
+            SourceObserverId = prepared.Assignment.SourceObserverId
+            SourceState = value.SourceState
+            PreparedTreatment = prepared.PreparedTreatment
+            CommandId = Id.command(Guid.NewGuid())
+            PrincipalId = "learning-owner"
+            IssuedAt = now.AddMinutes -1.
+            ExpiresAt = now.AddMinutes 5.
+        }
+
+    let persisted =
+        ObserverRuntime.assignPreparedLearningTreatment
+            (FixedClock())
+            composition
+            persistenceRequest
+            CancellationToken.None
+        |> _.GetAwaiter().GetResult()
+
+    match persisted with
+    | LearningTreatmentPersisted(durable, binding) ->
+        Assert.Equal(itemId, durable.OriginalItemId)
+        Assert.Equal(durable.AssignmentSha256, binding.AssignmentSha256)
+    | other -> failwithf "prepared treatment was not durably appended: %A" other
+
+    let replayed =
+        ObserverRuntime.assignPreparedLearningTreatment
+            (FixedClock())
+            composition
+            { persistenceRequest with CommandId = Id.command(Guid.NewGuid()) }
+            CancellationToken.None
+        |> _.GetAwaiter().GetResult()
+
+    match replayed with
+    | LearningTreatmentReplayed(durable, _) -> Assert.Equal(itemId, durable.OriginalItemId)
+    | other -> failwithf "prepared treatment did not replay from durable state: %A" other
 
 [<Fact>]
 let ``preparation verifies actual content obligations source head and canonical work item`` () =
@@ -338,3 +457,14 @@ let ``planning disposition distinguishes fixed planner and eligible direct-small
         |> Result.defaultWith (sprintf "%A" >> failwith)
 
     Assert.Equal(Ok LearningPlanningDisposition.DirectSmall, LearningAssignmentAdapter.tryPlanningDisposition direct)
+
+[<Fact>]
+let ``prepared command proof cannot be reconstructed from caller supplied JSON`` () =
+    Assert.Empty(typeof<PreparedLearningTreatment>.GetConstructors())
+
+    let crafted =
+        """{"contractVersion":"learn-01-assignment-preparation/1","disposition":"reuseValidPlan","input":{}}"""
+
+    Assert.ThrowsAny<NotSupportedException>(fun () ->
+        JsonSerializer.Deserialize<PreparedLearningTreatment>(crafted) |> ignore)
+    |> ignore

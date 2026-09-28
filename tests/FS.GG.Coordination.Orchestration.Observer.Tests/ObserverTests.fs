@@ -861,8 +861,8 @@ type private InMemoryObserverJournal() =
                     Task.FromResult(ObserverWrongExpectedSequence(expected - 1L))
                 | events ->
                     let decisionState =
-                        match request.Command.Command with
-                        | AssignLearningTreatment input when
+                        match ObserverCommand.tryLearningTreatmentInput request.Command.Command with
+                        | Some input when
                             request.ObserverId = ObserverJournal.learningTreatmentObserverId input.OriginalItemId
                             ->
                             match streams.TryGetValue input.SourceObserverId with
@@ -888,8 +888,8 @@ type private InMemoryObserverJournal() =
                                 else
                                     None
                             | _ -> None
-                        | AssignLearningTreatment _ -> None
-                        | _ -> Some currentState
+                        | Some _ -> None
+                        | None -> Some currentState
 
                     match decisionState with
                     | None -> Task.FromResult(ObserverInvalidAppend "source-reference-mismatch")

@@ -172,6 +172,26 @@ type LearningTreatmentAssignmentInput =
         AssignedAt: DateTimeOffset
     }
 
+[<RequireQualifiedAccess>]
+type LearningPlanningDisposition =
+    | ReuseValidPlan
+    | Planned
+    | DirectSmall
+
+/// Opaque proof that the trusted in-process preparation boundary validated the proposal,
+/// canonical observation and independently retrieved source bytes. There is deliberately
+/// no command decoder or public constructor that can recreate this proof from caller fields.
+[<Sealed>]
+type PreparedLearningTreatment internal
+    (
+        contractVersion: string,
+        disposition: LearningPlanningDisposition,
+        input: LearningTreatmentAssignmentInput
+    ) =
+    member _.ContractVersion = contractVersion
+    member _.Disposition = disposition
+    member _.Input = input
+
 type DurableLearningTreatment =
     {
         SourceObserverId: string
@@ -288,6 +308,15 @@ type ObserverCommand =
     | RecordCommandAcceptance of DurableCommandAcceptance
     | RecordEffectCompletion of DurableEffectCompletion
     | AssignLearningTreatment of LearningTreatmentAssignmentInput
+    | AssignPreparedLearningTreatment of PreparedLearningTreatment
+
+[<RequireQualifiedAccess>]
+module ObserverCommand =
+    let tryLearningTreatmentInput =
+        function
+        | AssignLearningTreatment input -> Some input
+        | AssignPreparedLearningTreatment prepared -> Some prepared.Input
+        | _ -> None
 
 type ObserverCommandEnvelope =
     {
@@ -560,8 +589,23 @@ module Observer =
         && worker.Effort = LearningContext.WorkerEffort
         && (match directSmall, planner with
             | true, None -> true
-            | false, None -> true
             | false, Some value ->
+                value.Model = LearningProposal.PlannerModel
+                && value.Effort = LearningProposal.PlannerEffort
+            | _ -> false)
+
+    let private validPreparedLearningProfile
+        disposition
+        directSmall
+        planner
+        (worker: LearningModelProfile)
+        =
+        worker.Model = LearningContext.WorkerModel
+        && worker.Effort = LearningContext.WorkerEffort
+        && (match disposition, directSmall, planner with
+            | LearningPlanningDisposition.ReuseValidPlan, false, None -> true
+            | LearningPlanningDisposition.DirectSmall, true, None -> true
+            | LearningPlanningDisposition.Planned, false, Some value ->
                 value.Model = LearningProposal.PlannerModel
                 && value.Effort = LearningProposal.PlannerEffort
             | _ -> false)
@@ -828,14 +872,14 @@ module Observer =
                     reject envelope body state "invalid-planning-budget"
                 else
                     accept envelope body state [ SessionOpened(sessionId, projectId, budget) ] "session-opened"
-            | AssignLearningTreatment _ when state.SessionId.IsSome ->
+            | command when (ObserverCommand.tryLearningTreatmentInput command).IsSome && state.SessionId.IsSome ->
                 reject envelope body state "learning-treatment-canonical-runtime-required"
-            | AssignLearningTreatment _ when state.Observation.IsNone ->
+            | command when (ObserverCommand.tryLearningTreatmentInput command).IsSome && state.Observation.IsNone ->
                 reject envelope body state "learning-treatment-source-observation-required"
             | _ when
                 state.SessionId.IsNone
                 && (match envelope.Command with
-                    | AssignLearningTreatment _ -> false
+                    | command when (ObserverCommand.tryLearningTreatmentInput command).IsSome -> false
                     | _ -> true)
                 ->
                 reject envelope body state "session-not-open"
@@ -1091,7 +1135,22 @@ module Observer =
                         [ CommandAcceptanceRecorded acceptance ]
                         "durable-command-acceptance-recorded"
                 | _ -> reject envelope body state "unbound-command-acceptance"
-            | AssignLearningTreatment input ->
+            | command when (ObserverCommand.tryLearningTreatmentInput command).IsSome ->
+                let input = ObserverCommand.tryLearningTreatmentInput command |> Option.get
+
+                let profileValid =
+                    match command with
+                    | AssignLearningTreatment _ ->
+                        validLearningProfile input.DirectSmallEligible input.Planner input.Worker
+                    | AssignPreparedLearningTreatment prepared ->
+                        prepared.ContractVersion = "learn-01-assignment-preparation/1"
+                        && validPreparedLearningProfile
+                            prepared.Disposition
+                            input.DirectSmallEligible
+                            input.Planner
+                            input.Worker
+                    | _ -> false
+
                 let relationValid =
                     match input.Relation with
                     | Original -> input.ItemId = input.OriginalItemId
@@ -1112,7 +1171,7 @@ module Observer =
                     && validText input.OriginalItemId
                     && validSha input.ProposalSha256
                     && validSha input.ContextManifestSha256
-                    && validLearningProfile input.DirectSmallEligible input.Planner input.Worker
+                    && profileValid
                     && relationValid
                     && input.AssignedAt <= now
                     && (treatmentRelationFields input.Relation |> List.forall validText)
@@ -1202,6 +1261,9 @@ module Observer =
                                         [ LearningTreatmentInherited binding ]
                                         "learning-treatment-inherited"
                                 | _ -> reject envelope body state "learning-treatment-lineage-missing"
+            | AssignLearningTreatment _
+            | AssignPreparedLearningTreatment _ ->
+                reject envelope body state "invalid-learning-treatment-command"
             | RecordEffectCompletion completion ->
                 if
                     not (Map.containsKey completion.CommandId state.Acceptances)
@@ -1563,6 +1625,29 @@ type LearningTreatmentAssignmentRequest =
         ExpiresAt: DateTimeOffset
     }
 
+type PreparedLearningTreatmentAssignmentRequest =
+    {
+        SourceObserverId: string
+        SourceState: ObserverState
+        PreparedTreatment: PreparedLearningTreatment
+        CommandId: CommandId
+        PrincipalId: string
+        IssuedAt: DateTimeOffset
+        ExpiresAt: DateTimeOffset
+    }
+
+type private LearningTreatmentRuntimeRequest =
+    {
+        SourceObserverId: string
+        SourceState: ObserverState
+        Input: LearningTreatmentAssignmentInput
+        Command: ObserverCommand
+        CommandId: CommandId
+        PrincipalId: string
+        IssuedAt: DateTimeOffset
+        ExpiresAt: DateTimeOffset
+    }
+
 type LearningTreatmentAssignmentOutcome =
     | LearningTreatmentPersisted of DurableLearningTreatment * DurableLearningTreatmentBinding
     | LearningTreatmentReplayed of DurableLearningTreatment * DurableLearningTreatmentBinding
@@ -1586,10 +1671,10 @@ module ObserverRuntime =
         =
         journal.AppendObserver(ObserverJournal.appendRequest observerId receivedAt envelope decision, cancellationToken)
 
-    let assignLearningTreatment
+    let private assignLearningTreatmentCommand
         (clock: TimeProvider)
         (ObserverComposition(_, _, _, journal))
-        (request: LearningTreatmentAssignmentRequest)
+        (request: LearningTreatmentRuntimeRequest)
         cancellationToken
         =
         task {
@@ -1640,7 +1725,7 @@ module ObserverRuntime =
                             PrincipalId = request.PrincipalId
                             IssuedAt = request.IssuedAt
                             ExpiresAt = request.ExpiresAt
-                            Command = AssignLearningTreatment request.Input
+                            Command = request.Command
                         }
 
                     let decision = Observer.decide now decisionState envelope
@@ -1663,6 +1748,50 @@ module ObserverRuntime =
                             return LearningTreatmentPersisted(treatment, binding)
                         | other -> return LearningTreatmentPersistenceRefused other
         }
+
+    let assignLearningTreatment
+        (clock: TimeProvider)
+        composition
+        (request: LearningTreatmentAssignmentRequest)
+        cancellationToken
+        =
+        assignLearningTreatmentCommand
+            clock
+            composition
+            {
+                SourceObserverId = request.SourceObserverId
+                SourceState = request.SourceState
+                Input = request.Input
+                Command = AssignLearningTreatment request.Input
+                CommandId = request.CommandId
+                PrincipalId = request.PrincipalId
+                IssuedAt = request.IssuedAt
+                ExpiresAt = request.ExpiresAt
+            }
+            cancellationToken
+
+    let assignPreparedLearningTreatment
+        (clock: TimeProvider)
+        composition
+        (request: PreparedLearningTreatmentAssignmentRequest)
+        cancellationToken
+        =
+        let input = request.PreparedTreatment.Input
+
+        assignLearningTreatmentCommand
+            clock
+            composition
+            {
+                SourceObserverId = request.SourceObserverId
+                SourceState = request.SourceState
+                Input = input
+                Command = AssignPreparedLearningTreatment request.PreparedTreatment
+                CommandId = request.CommandId
+                PrincipalId = request.PrincipalId
+                IssuedAt = request.IssuedAt
+                ExpiresAt = request.ExpiresAt
+            }
+            cancellationToken
 
     let refreshObservation
         (clock: TimeProvider)

@@ -223,10 +223,10 @@ WHERE r.singleton FOR SHARE OF r,o
                 then
                     return ObserverInvalidAppend "invalid-observer-command"
                 elif
-                    match request.Command.Command with
-                    | AssignLearningTreatment input ->
+                    match ObserverCommand.tryLearningTreatmentInput request.Command.Command with
+                    | Some input ->
                         request.ObserverId <> ObserverJournal.learningTreatmentObserverId input.OriginalItemId
-                    | _ -> false
+                    | None -> false
                 then
                     return ObserverInvalidAppend "learning-treatment-stream-identity-mismatch"
                 else
@@ -332,8 +332,8 @@ WHERE r.singleton FOR SHARE OF r,o
 
                                 let! decisionState =
                                     task {
-                                        match request.Command.Command with
-                                        | AssignLearningTreatment input ->
+                                        match ObserverCommand.tryLearningTreatmentInput request.Command.Command with
+                                        | Some input ->
                                             use sourceHead =
                                                 new NpgsqlCommand(
                                                     "SELECT last_sequence FROM fsgg_orchestration.observer_stream WHERE observer_id=$1 FOR SHARE",
@@ -384,7 +384,7 @@ WHERE r.singleton FOR SHARE OF r,o
                                                 { state with
                                                     Observation = sourceState.Observation
                                                 }
-                                        | _ -> return state
+                                        | None -> return state
                                     }
 
                                 let decision = Observer.decide request.ReceivedAt decisionState request.Command

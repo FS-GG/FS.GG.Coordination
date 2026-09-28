@@ -4,12 +4,6 @@ open System
 open System.Security.Cryptography
 open FS.GG.Coordination.Core.Orchestration
 
-[<RequireQualifiedAccess>]
-type LearningPlanningDisposition =
-    | ReuseValidPlan
-    | Planned
-    | DirectSmall
-
 type RetrievedLearningSource =
     {
         Source: LearningContextSource
@@ -34,6 +28,7 @@ type PreparedLearningAssignment =
         Proposal: LearningProposal
         ContextManifest: LearningContextManifest
         Assignment: LearningTreatmentAssignmentInput
+        PreparedTreatment: PreparedLearningTreatment
     }
 
 type LearningAssignmentPreparationRefusal =
@@ -215,26 +210,30 @@ module LearningAssignmentAdapter =
                                 let sourceObserverId =
                                     ObserverJournal.observerId request.SourceState.SessionId.Value
 
+                                let assignment =
+                                    {
+                                        SourceObserverId = sourceObserverId
+                                        SourceSequence = request.SourceState.Sequence
+                                        SourceObservationSha256 = observation.ObservationSha256
+                                        ItemId = produced.ItemId
+                                        OriginalItemId = produced.OriginalItemId
+                                        Relation = manifest.Relation
+                                        Arm = manifest.Arm
+                                        ProposalSha256 = produced.CanonicalSha256
+                                        ContextManifestSha256 = manifest.CanonicalSha256
+                                        Planner = produced.Planner
+                                        Worker = produced.Worker
+                                        DirectSmallEligible = produced.DirectSmallEligible
+                                        ExpectedWorkflowRevision = observation.WorkflowRevision
+                                        ExpectedGeneration = observation.Generation
+                                        AssignedAt = request.AssignedAt
+                                    }
+
                                 {
                                     Disposition = disposition
                                     Proposal = produced
                                     ContextManifest = manifest
-                                    Assignment =
-                                        {
-                                            SourceObserverId = sourceObserverId
-                                            SourceSequence = request.SourceState.Sequence
-                                            SourceObservationSha256 = observation.ObservationSha256
-                                            ItemId = produced.ItemId
-                                            OriginalItemId = produced.OriginalItemId
-                                            Relation = manifest.Relation
-                                            Arm = manifest.Arm
-                                            ProposalSha256 = produced.CanonicalSha256
-                                            ContextManifestSha256 = manifest.CanonicalSha256
-                                            Planner = produced.Planner
-                                            Worker = produced.Worker
-                                            DirectSmallEligible = produced.DirectSmallEligible
-                                            ExpectedWorkflowRevision = observation.WorkflowRevision
-                                            ExpectedGeneration = observation.Generation
-                                            AssignedAt = request.AssignedAt
-                                        }
+                                    Assignment = assignment
+                                    PreparedTreatment =
+                                        PreparedLearningTreatment(ContractVersion, disposition, assignment)
                                 })))
