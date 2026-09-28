@@ -59,9 +59,9 @@ let ``broad installation does not attest narrow minted token permissions`` () =
     let requests =
         transport.Calls
         |> List.map (function Rest request -> request | GraphQL _ -> failwith "unexpected GraphQL")
-    Assert.Equal(4, requests.Length)
-    Assert.Equal("https://api.github.test/installation", requests[3].Uri.AbsoluteUri)
-    Assert.Equal(Some "Bearer installation-token", Map.tryFind "Authorization" requests[3].Headers)
+    Assert.Equal(3, requests.Length)
+    Assert.DoesNotContain(requests, fun request -> request.Uri.AbsolutePath = "/installation")
+    Assert.All(requests, fun request -> Assert.Equal(Get, request.Method))
 
 [<Fact>]
 let ``inaccessible App and incomplete repository census refuse explicitly`` () =
