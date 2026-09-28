@@ -37,6 +37,8 @@
     <Compile Include="MigrationClaimJournalCapture.fs" />
     <Compile Include="MigrationClaimEventInspectBinder.fsi" />
     <Compile Include="MigrationClaimEventInspectBinder.fs" />
+    <Compile Include="MigrationHistoricalLossCensus.fsi" />
+    <Compile Include="MigrationHistoricalLossCensus.fs" />
     <Compile Include="MigrationReviewDeliveryCapture.fsi" />
     <Compile Include="MigrationReviewDeliveryCapture.fs" />
     <Compile Include="MigrationJournalCapture.fsi" />
@@ -85,6 +87,10 @@
     <Compile Include="MigrationReceiverCopyPlan.fs" />
     <Compile Include="MigrationReceiverCopyBlobCapture.fsi" />
     <Compile Include="MigrationReceiverCopyBlobCapture.fs" />
+    <Compile Include="MigrationReceiverAuthorityComposer.fsi" />
+    <Compile Include="MigrationReceiverAuthorityComposer.fs" />
+    <Compile Include="MigrationReceiverCohortOrchestration.fsi" />
+    <Compile Include="MigrationReceiverCohortOrchestration.fs" />
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
     <Compile Include="MigrationSandboxProviderObservation.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
