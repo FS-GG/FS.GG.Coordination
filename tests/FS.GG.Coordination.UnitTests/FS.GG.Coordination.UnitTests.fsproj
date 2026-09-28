@@ -67,6 +67,7 @@
     <Compile Include="MigrationReceiverInstallationReadTests.fs" />
     <Compile Include="MigrationReceiverCopyPlanTests.fs" />
     <Compile Include="MigrationReceiverCopyBlobCaptureTests.fs" />
+    <Compile Include="MigrationReceiverCopyTransferTests.fs" />
     <Compile Include="MigrationImmutableReleasesReadTests.fs" />
     <Compile Include="MigrationEnvironmentSettingsReadTests.fs" />
     <Compile Include="MigrationEnvironmentCensusReadTests.fs" />

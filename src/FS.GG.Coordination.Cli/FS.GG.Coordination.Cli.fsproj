@@ -91,6 +91,12 @@
     <Compile Include="MigrationReceiverCopyPlan.fs" />
     <Compile Include="MigrationReceiverCopyBlobCapture.fsi" />
     <Compile Include="MigrationReceiverCopyBlobCapture.fs" />
+    <Compile Include="MigrationReceiverCopyTransfer.fsi" />
+    <Compile Include="MigrationReceiverCopyTransfer.fs" />
+    <Compile Include="MigrationReceiverCopyGitTransport.fsi" />
+    <Compile Include="MigrationReceiverCopyGitTransport.fs" />
+    <Compile Include="MigrationReceiverCopyExecution.fsi" />
+    <Compile Include="MigrationReceiverCopyExecution.fs" />
     <Compile Include="MigrationReceiverAuthorityComposer.fsi" />
     <Compile Include="MigrationReceiverAuthorityComposer.fs" />
     <Compile Include="MigrationReceiverCohortOrchestration.fsi" />
