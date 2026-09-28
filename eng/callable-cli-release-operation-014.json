@@ -1,0 +1,34 @@
+{
+  "schema": "fsgg.coordination.callable-cli-release-operation/1",
+  "authority": {
+    "operation": "publish-c3-rendering-cli-014",
+    "scope": "dual-feed-package-tag-and-release",
+    "source": "C3-RENDERING-01 additive Rendering source profile CLI release"
+  },
+  "artifact": {
+    "packageId": "FS.GG.Coordination.Cli",
+    "version": "0.1.4",
+    "sourceCommit": "f5c8d27ac7497e282774a0c9166981bfcdf82d7f",
+    "sourceTree": "30886226e539159cd7992965aad6f0917672e08e",
+    "packageSha256": "10a51295db43e454b7692196533cceda48508165a8023dc98e87639be89f5c50",
+    "canonicalSourceRoot": "/home/runner/work/FS.GG.Coordination/FS.GG.Coordination",
+    "preparationRunId": 36424378261,
+    "preparationArtifactId": 10970966839,
+    "preparationArchiveSha256": "8b67063f835dba2d532a19406e32855636878a8d19dd6838deef5a1a2a6fc634"
+  },
+  "protectedMerge": "f5c8d27ac7497e282774a0c9166981bfcdf82d7f",
+  "tag": "v0.1.4",
+  "workflow": ".github/workflows/callable-cli-release-publish.yml",
+  "preflightWorkflow": ".github/workflows/callable-cli-release-prepare.yml",
+  "publication": {
+    "order": ["github-packages", "nuget.org-byte-identical-push"],
+    "provenance": "github-attestation-before-effects",
+    "recovery": "observe-and-verify-existing-before-resume",
+    "servedVerification": "github-exact-archive-and-nuget-payload-excluding-repository-signature",
+    "tagAfterBothFeeds": true
+  },
+  "receiverAdoption": {
+    "authorized": false,
+    "milestone": "C3-RENDERING-01"
+  }
+}
