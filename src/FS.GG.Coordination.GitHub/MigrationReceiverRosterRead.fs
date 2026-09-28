@@ -240,6 +240,11 @@ module MigrationReceiverRosterRead =
 
                 permissions.EnumerateObject() |> Seq.fold add (Ok Map.empty)))
 
+    let private optionalBoolMap (name: string) (value: JsonElement) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        if value.TryGetProperty(name, &property) then boolMap name value
+        else Ok Map.empty
+
     let private nextLink (response: ResponseEnvelope) =
         let link =
             response.Headers
@@ -370,7 +375,7 @@ module MigrationReceiverRosterRead =
                 boolean "private" value,
                 boolean "archived" value,
                 boolean "disabled" value,
-                boolMap "permissions" value
+                optionalBoolMap "permissions" value
             with
             | Ok id, Ok nodeId, Ok fullName, Ok privateRepository, Ok archived, Ok disabled, Ok permissions ->
                 let pieces = fullName.Split('/')
@@ -381,7 +386,7 @@ module MigrationReceiverRosterRead =
                     || String.IsNullOrWhiteSpace pieces.[1]
                 then
                     Error "receiver-roster-repository-scope-drift"
-                elif Map.tryFind "pull" permissions <> Some true then
+                elif Map.tryFind "pull" permissions = Some false then
                     Error "receiver-roster-repository-permission-drift"
                 else
                     Ok

@@ -281,3 +281,14 @@ let ``minted bearer digest mismatch refuses before observer access`` () =
     expectError "receiver-roster-minted-token-binding"
         (MigrationReceiverRosterRead.capturePassForMintedToken options (String.replicate 64 "0") transport)
     Assert.Empty(transport.Calls)
+
+[<Fact>]
+let ``native repository without optional permissions retains roster identity`` () =
+    let withoutPermissions =
+        (repository 42L "REPO_42" "copy").Replace(",\"permissions\":{\"admin\":false,\"push\":false,\"pull\":true}", "")
+    let captured =
+        MigrationReceiverRosterRead.capturePass options
+            (FakeTransport [ ok selected; ok (page 1 [ withoutPermissions ]) ])
+        |> Result.defaultWith failwith
+    Assert.Empty(captured.Repositories.Head.RosterPermissions)
+    Assert.Equal(42L, captured.Repositories.Head.RosterRepositoryId)

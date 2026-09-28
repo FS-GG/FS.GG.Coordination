@@ -198,7 +198,7 @@ module MigrationReceiverCohortOrchestration =
                 if mismatch then unavailable "copy-target-provenance-mismatch" else Ok()
         with ex -> unavailable ex.Message
 
-    let compose request (mintTransport: IMigrationReceiverTokenMintTransport) (transport: IMigrationGitHubReadTransport) =
+    let compose request (mintTransport: HttpMigrationReceiverTokenMintTransport) (transport: IMigrationGitHubReadTransport) =
         validateMintRunBindingForTests request.InstallationOptions request.RunIdentity
         |> Result.bind (fun () ->
         MigrationReceiverInstallationRead.captureForComposer request.InstallationOptions mintTransport transport)
@@ -227,6 +227,9 @@ module MigrationReceiverCohortOrchestration =
                         |> Result.mapError (fun reason ->
                             $"receiver-cohort-orchestration-unavailable:blob-coverage:{reason}")
                         |> Result.bind (fun coverage ->
+                            MigrationReceiverInstallationRead.ensureFreshForComposer installation DateTimeOffset.UtcNow
+                            |> Result.mapError (fun reason -> $"receiver-cohort-orchestration-unavailable:installation:{reason}")
+                            |> Result.bind (fun () ->
                             MigrationReceiverAuthorityComposer.compose
                                 {
                                     Options = request.ProviderOptions
@@ -242,10 +245,13 @@ module MigrationReceiverCohortOrchestration =
                                 }
                             |> Result.mapError (fun reason ->
                                 $"receiver-cohort-orchestration-unavailable:composer:{reason}")
-                            |> Result.map (fun composition ->
-                                {
-                                    Installation = installation
-                                    PinCapture = pinCapture
-                                    BlobCoverage = coverage
-                                    AuthorityComposition = composition
-                                })))))))
+                            |> Result.bind (fun composition ->
+                                MigrationReceiverInstallationRead.ensureFreshForComposer installation DateTimeOffset.UtcNow
+                                |> Result.mapError (fun reason -> $"receiver-cohort-orchestration-unavailable:installation:{reason}")
+                                |> Result.map (fun () ->
+                                    {
+                                        Installation = installation
+                                        PinCapture = pinCapture
+                                        BlobCoverage = coverage
+                                        AuthorityComposition = composition
+                                    })))))))))

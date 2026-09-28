@@ -22,6 +22,12 @@ type MigrationReceiverInstallationReadOptions =
 type IMigrationReceiverTokenMintTransport =
     abstract Mint: RestRequest -> TransportOutcome
 
+[<Sealed>]
+type HttpMigrationReceiverTokenMintTransport =
+    new: unit -> HttpMigrationReceiverTokenMintTransport
+    interface IMigrationReceiverTokenMintTransport
+    interface System.IDisposable
+
 type MigrationReceiverTokenMintAttestation =
     { RequestIdentitySha256: string
       ResponseSha256: string
@@ -59,6 +65,17 @@ module MigrationReceiverInstallationRead =
     /// The token is never returned; only digests and scope facts are retained.
     val captureForComposer:
         options: MigrationReceiverInstallationReadOptions ->
+        mintTransport: HttpMigrationReceiverTokenMintTransport ->
+        transport: IMigrationGitHubReadTransport ->
+            Result<MigrationReceiverInstallationCapture, string>
+
+    val ensureFreshForComposer:
+        capture: MigrationReceiverInstallationCapture ->
+        observedAt: System.DateTimeOffset -> Result<unit, string>
+
+    val internal captureWithMintForTests:
+        options: MigrationReceiverInstallationReadOptions ->
         mintTransport: IMigrationReceiverTokenMintTransport ->
         transport: IMigrationGitHubReadTransport ->
+        now: (unit -> System.DateTimeOffset) ->
             Result<MigrationReceiverInstallationCapture, string>

@@ -35,7 +35,7 @@ module MigrationReceiverCohortOrchestration =
     /// only then delegates canonical proof construction to the authority composer.
     val compose:
         request: MigrationReceiverCohortOrchestrationRequest ->
-        mintTransport: IMigrationReceiverTokenMintTransport ->
+        mintTransport: HttpMigrationReceiverTokenMintTransport ->
         transport: IMigrationGitHubReadTransport ->
             Result<MigrationReceiverCohortOrchestrationResult, string>
 

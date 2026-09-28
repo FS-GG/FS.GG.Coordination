@@ -54,7 +54,9 @@ let private expiry () = DateTimeOffset.UtcNow.AddMinutes(30.0).ToString("O")
 let private narrowMint () =
     mintResponse """{"contents":"read"}""" $"[{repository}]" "minted-token" (expiry ())
 let private capture options mint read =
-    MigrationReceiverInstallationRead.captureForComposer options (mint :> IMigrationReceiverTokenMintTransport) (read :> IMigrationGitHubReadTransport)
+    MigrationReceiverInstallationRead.captureWithMintForTests options
+        (mint :> IMigrationReceiverTokenMintTransport) (read :> IMigrationGitHubReadTransport)
+        (fun () -> DateTimeOffset.UtcNow)
 let private expectUnavailable fragment result =
     match result with
     | Error reason ->
@@ -80,6 +82,9 @@ let ``exact protected mint binds narrow token and reuses bearer for two native r
         Assert.Equal(64, observed.MintAttestation.Fingerprint.Length)
         Assert.DoesNotContain("minted-token", string observed)
         Assert.Equal(observed.ComposerRosterCapture.First, observed.ComposerRosterCapture.Second)
+        Assert.Equal(Ok(), MigrationReceiverInstallationRead.ensureFreshForComposer observed (observed.MintAttestation.ExpiresAt.AddSeconds(-1.0)))
+        expectUnavailable "mint-expired-before-consumption"
+            (MigrationReceiverInstallationRead.ensureFreshForComposer observed observed.MintAttestation.ExpiresAt)
         let repositoryPage = observed.ComposerRosterCapture.First.Pages[1]
         Assert.Equal(sha256 repositoryPage.RosterRequestedUri, repositoryPage.RosterRequestIdentitySha256)
         let request = Assert.Single(mint.Calls)
@@ -137,16 +142,19 @@ let ``mint failure expiry and invalid protected installation refuse`` () =
         (capture { options with ApiBase=Uri "https://api.github.test/" } mint observer)
     Assert.Empty(mint.Calls)
     Assert.Empty(observer.Calls)
+    expectUnavailable "invalid-options"
+        (capture { options with RequiredTokenPermissions=Map [ "contents", "read"; "metadata", "read"; "issues", "write" ] } mint observer)
+    Assert.Empty(mint.Calls)
+    Assert.Empty(observer.Calls)
 
 [<Fact>]
-let ``explicit metadata grant is accepted and run binding changes attestation`` () =
+let ``explicit metadata grant is accepted but same token cannot cross runs`` () =
     let raw = mintResponse """{"contents":"read","metadata":"read"}""" $"[{repository}]" "minted-token" (expiry ())
     let first = capture options (FakeMint(response 201 raw)) (FakeRead reads) |> Result.defaultWith failwith
     let changed = { options with WorkflowRunId=992L; RunNonce="992-2-source" }
-    let second = capture changed (FakeMint(response 201 raw)) (FakeRead reads) |> Result.defaultWith failwith
-    Assert.NotEqual(first.MintAttestation.RequestIdentitySha256, second.MintAttestation.RequestIdentitySha256)
-    Assert.NotEqual(first.MintAttestation.Fingerprint, second.MintAttestation.Fingerprint)
-    Assert.Equal(first.MintAttestation.ResponseSha256, second.MintAttestation.ResponseSha256)
+    Assert.True(first.TokenPermissions = options.RequiredTokenPermissions)
+    expectUnavailable "mint-token-run-replay"
+        (capture changed (FakeMint(response 201 raw)) (FakeRead reads))
 
 [<Fact>]
 let ``observer scope drift refuses after mint and never treats installation grants as token grants`` () =
@@ -154,6 +162,22 @@ let ``observer scope drift refuses after mint and never treats installation gran
     let observer = FakeRead [ ok app; ok changed ]
     expectUnavailable "receiver-roster-installation-permission-drift"
         (capture options (FakeMint(response 201 (narrowMint ()))) observer)
+
+[<Fact>]
+let ``mint expiry during first roster pass refuses before second pass`` () =
+    let start = DateTimeOffset.UtcNow
+    let expiresAt = start.AddMinutes(10.0)
+    let raw = mintResponse """{"contents":"read"}""" $"[{repository}]" "minted-token" (expiresAt.ToString("O"))
+    let observer = FakeRead reads
+    let mutable calls = 0
+    let clock () =
+        calls <- calls + 1
+        if calls < 3 then start else expiresAt.AddSeconds(1.0)
+    expectUnavailable "mint-expired-during-capture"
+        (MigrationReceiverInstallationRead.captureWithMintForTests options
+            (FakeMint(response 201 raw) :> IMigrationReceiverTokenMintTransport)
+            (observer :> IMigrationGitHubReadTransport) clock)
+    Assert.Equal(3, observer.Calls.Length)
 
 [<Fact>]
 let ``App identity and second-pass roster drift refuse`` () =
