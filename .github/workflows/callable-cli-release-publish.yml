@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: callable-cli-release-v0.1.2
+  group: callable-cli-release-v0.1.3
   cancel-in-progress: false
 
 jobs:
@@ -41,12 +41,15 @@ jobs:
       artifact-metadata: write
     env:
       PACKAGE_ID: FS.GG.Coordination.Cli
-      PACKAGE_VERSION: 0.1.2
-      PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.2.nupkg
-      EXPECTED_SOURCE: a6c1155591836582e28a0651def31cb6afeb8859
-      EXPECTED_TREE: 7e6888613fd7bb5d40c5e27f00d048af9535a437
-      EXPECTED_MERGE: 57f1328345fd58915da3f398e5c442dbd40b891a
-      EXPECTED_SHA256: 5633d9be2263e77437619a75a2411e4e82e48d763124df472b8e1b7c9e1dfd68
+      PACKAGE_VERSION: 0.1.3
+      PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.3.nupkg
+      EXPECTED_SOURCE: eb464f5215d8b1696842eecd367027724add6923
+      EXPECTED_TREE: 3eb88817ff98b06401a71311046fa7052b865ed8
+      EXPECTED_MERGE: eb464f5215d8b1696842eecd367027724add6923
+      EXPECTED_SHA256: c505159023f0740c885696ebe24f8e066e197d9cf09cc3e64050d4210bcd0cdb
+      EXPECTED_PREPARATION_RUN_ID: 36404053953
+      EXPECTED_PREPARATION_ARTIFACT_ID: 10961805724
+      EXPECTED_PREPARATION_ARCHIVE_SHA256: 8455201f8885d541ca795c6f44a65ba54603560b99855d3a3cf480712cbad68c
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
       CANONICAL_SOURCE: ${{ github.workspace }}
@@ -70,30 +73,47 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REF" = refs/heads/main
-          test "$OPERATION" = publish-v2-ci-i1-cli-012
+          test "$OPERATION" = publish-c3-audio-cli-013
           test "$REQUESTED_SOURCE" = "$EXPECTED_SOURCE"
           test "$REQUESTED_MERGE" = "$EXPECTED_MERGE"
           test "$REQUESTED_SHA256" = "$EXPECTED_SHA256"
           [[ "$GITHUB_SHA" =~ ^[0-9a-f]{40}$ ]]
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
-          git fetch --no-tags origin +refs/pull/515/head:refs/remotes/origin/callable-cli-prepared
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
-          test "$(git rev-parse refs/remotes/origin/callable-cli-prepared)" = "$EXPECTED_SOURCE"
+          git merge-base --is-ancestor "$EXPECTED_SOURCE" refs/remotes/origin/main
           git merge-base --is-ancestor "$EXPECTED_MERGE" refs/remotes/origin/main
           test "$(git rev-parse "$EXPECTED_SOURCE^{tree}")" = "$EXPECTED_TREE"
           test "$(git rev-parse "$EXPECTED_MERGE^{tree}")" = "$EXPECTED_TREE"
-          tagged="$(git ls-remote --tags origin refs/tags/v0.1.2 refs/tags/v0.1.2^\{\} | awk '$2=="refs/tags/v0.1.2^{}"{peeled=$1} $2=="refs/tags/v0.1.2"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.1.3 refs/tags/v0.1.3^\{\} | awk '$2=="refs/tags/v0.1.3^{}"{peeled=$1} $2=="refs/tags/v0.1.3"{plain=$1} END{print peeled ? peeled : plain}')"
           test -z "$tagged" || test "$tagged" = "$EXPECTED_MERGE"
           jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' \
             eng/repository-settings/desired.json >/dev/null || {
             echo "::error::protected-main desired state does not admit only the exact NuGet/login action"
             exit 1
           }
+      - name: Bind the immutable preparation run and artifact
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$EXPECTED_PREPARATION_RUN_ID")"
+          jq -e --argjson id "$EXPECTED_PREPARATION_RUN_ID" \
+            '.id == $id and .path == ".github/workflows/callable-cli-release-prepare.yml" and .conclusion == "success"' \
+            <<<"$run" >/dev/null
+          artifact="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_PREPARATION_ARTIFACT_ID")"
+          jq -e --argjson id "$EXPECTED_PREPARATION_ARTIFACT_ID" \
+            --argjson run "$EXPECTED_PREPARATION_RUN_ID" \
+            --arg name "callable-cli-$EXPECTED_SOURCE" \
+            --arg digest "sha256:$EXPECTED_PREPARATION_ARCHIVE_SHA256" \
+            --arg source "$EXPECTED_SOURCE" \
+            '.id == $id and .name == $name and .digest == $digest and .expired == false and .workflow_run.id == $run and .workflow_run.head_sha == $source' \
+            <<<"$artifact" >/dev/null
       - name: Retrieve the immutable reviewed preparation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: callable-cli-a6c1155591836582e28a0651def31cb6afeb8859
-          run-id: 36028503111
+          name: callable-cli-eb464f5215d8b1696842eecd367027724add6923
+          run-id: ${{ env.EXPECTED_PREPARATION_RUN_ID }}
           repository: FS-GG/FS.GG.Coordination
           github-token: ${{ github.token }}
           path: ${{ env.CANDIDATE_OUTPUT }}
@@ -108,7 +128,7 @@ jobs:
           test "$(jq -r .sourceTree "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_TREE"
           git -C "$CANONICAL_SOURCE" checkout --detach "$EXPECTED_SOURCE"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
-          git -C "$CANONICAL_SOURCE" tag -d v0.1.2 2>/dev/null || true
+          git -C "$CANONICAL_SOURCE" tag -d v0.1.3 2>/dev/null || true
           dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
           mkdir -p "$READBACK_OUTPUT/reproduced"
           (
@@ -261,16 +281,16 @@ jobs:
           set -euo pipefail
           test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org >/dev/null
-          tagged="$(git ls-remote --tags origin refs/tags/v0.1.2 refs/tags/v0.1.2^\{\} | awk '$2=="refs/tags/v0.1.2^{}"{peeled=$1} $2=="refs/tags/v0.1.2"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.1.3 refs/tags/v0.1.3^\{\} | awk '$2=="refs/tags/v0.1.3^{}"{peeled=$1} $2=="refs/tags/v0.1.3"{plain=$1} END{print peeled ? peeled : plain}')"
           if test -z "$tagged"; then
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.1.2 -f sha="$EXPECTED_MERGE"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.1.3 -f sha="$EXPECTED_MERGE"
           else
             test "$tagged" = "$EXPECTED_MERGE"
           fi
-          if ! gh release view v0.1.2 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create v0.1.2 --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "FS.GG.Coordination.Cli 0.1.2" \
-              --notes "V2-CI-I1 ordinary settlement CLI 0.1.2; receiver adoption remains separately gated." \
+          if ! gh release view v0.1.3 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create v0.1.3 --repo "$GITHUB_REPOSITORY" --verify-tag \
+              --title "FS.GG.Coordination.Cli 0.1.3" \
+              --notes "C3-AUDIO-01.2 additive Audio source profile CLI 0.1.3; receiver adoption remains separately gated." \
               "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
               "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" \
               "$READBACK_OUTPUT/release-readback.json"
@@ -279,10 +299,10 @@ jobs:
           mkdir "$release_dir"
           for path in "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$READBACK_OUTPUT/release-readback.json"; do
             name="$(basename "$path")"
-            if ! gh release view v0.1.2 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
-              gh release upload v0.1.2 --repo "$GITHUB_REPOSITORY" "$path"
+            if ! gh release view v0.1.3 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+              gh release upload v0.1.3 --repo "$GITHUB_REPOSITORY" "$path"
             fi
-            gh release download v0.1.2 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
+            gh release download v0.1.3 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
             test "$(sha256sum "$release_dir/$name" | cut -d' ' -f1)" = "$(sha256sum "$path" | cut -d' ' -f1)"
           done
       - name: Retain terminal or partial recovery evidence
