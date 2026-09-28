@@ -181,6 +181,10 @@ module OrdinaryPostMergeSettlement =
         elif repositoryId = 1281961814L
              && String.Equals(repository, "FS-GG/FS.GG.Templates", StringComparison.OrdinalIgnoreCase) then
             Some(Set [ "composition"; "kit / coordination-kit" ])
+        elif repositoryId = 1346720714L
+             && String.Equals(repository, "FS-GG/FS.GG.Coordination", StringComparison.OrdinalIgnoreCase) then
+            Some(Set [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"
+                       "deterministic-build"; "evidence-manifest"; "package-install-smoke" ])
         else None
 
     let private requiredChecksValid repository repositoryId (checks: OrdinaryCheckFact list) =

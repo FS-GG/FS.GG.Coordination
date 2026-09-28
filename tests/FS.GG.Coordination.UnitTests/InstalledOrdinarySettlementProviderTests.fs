@@ -164,6 +164,14 @@ let private templatesFixture () =
         [ "composition"; "kit / coordination-kit"; "materialize / receiver-validate" ]
         (Some("templates-v1", "FS-GG/FS.GG.Templates", 1281961814L))
 
+let private coordinationFixture () =
+    fixtureFor
+        [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"
+          "deterministic-build"; "evidence-manifest"; "package-install-smoke" ]
+        [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"
+          "deterministic-build"; "evidence-manifest"; "package-install-smoke" ]
+        (Some("coordination-v1", "FS-GG/FS.GG.Coordination", 1346720714L))
+
 [<Fact>]
 let ``installed provider binds exact two settlement and eight gate facts`` () =
     let receipt, policy = fixture ()
@@ -181,6 +189,7 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
     let game = InstalledOrdinarySettlementProvider.selectSourceProfile "game-v1" |> ok
     let sdd = InstalledOrdinarySettlementProvider.selectSourceProfile "sdd-v1" |> ok
     let templates = InstalledOrdinarySettlementProvider.selectSourceProfile "templates-v1" |> ok
+    let coordination = InstalledOrdinarySettlementProvider.selectSourceProfile "coordination-v1" |> ok
     Assert.Equal("dotgithub-v1", legacy.Name)
     Assert.Equal(1269292704L, legacy.RepositoryId)
     Assert.Equal(legacy, explicitLegacy)
@@ -216,6 +225,10 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
     Assert.Equal("FS-GG/FS.GG.Templates", templates.Repository)
     Assert.Equal(1281961814L, templates.RepositoryId)
     Assert.True(templates.RequiredSettlementChecks = Set [ "composition"; "kit / coordination-kit" ])
+    Assert.Equal("FS-GG/FS.GG.Coordination", coordination.Repository)
+    Assert.Equal(1346720714L, coordination.RepositoryId)
+    Assert.True(coordination.RequiredSettlementChecks = Set [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"; "deterministic-build"; "evidence-manifest"; "package-install-smoke" ])
+    Assert.True(coordination.RequiredSettlementChecks = coordination.RequiredGateChecks)
     Assert.True(
         game.RequiredSettlementChecks =
             Set [ "Deterministic gate (locked restore + build) (ubuntu-latest)"
@@ -270,6 +283,30 @@ let ``sdd and templates profiles bind exact native evidence and reject foreign f
             let checks = wrongReceipt[checkSet].AsArray()
             checks[0].AsObject()["name"] <- "routine-eligibility"
             Assert.Equal(Error "preflight-receipt-binding", validate wrongReceipt wrongPolicy)
+
+[<Fact>]
+let ``coordination profile requires exact native checks and refuses unproved reuse`` () =
+    let profile = InstalledOrdinarySettlementProvider.selectSourceProfile "coordination-v1" |> ok
+    let validate (receipt: JsonObject) (policy: byte array) =
+        InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+            profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+            (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
+    let receipt, policy = coordinationFixture ()
+    Assert.True(Result.isOk (validate receipt policy))
+
+    let wrongSource, wrongPolicy = coordinationFixture ()
+    wrongSource["sourceRepositoryId"] <- JsonValue.Create(1290990429L)
+    Assert.Equal(Error "preflight-receipt-binding", validate wrongSource wrongPolicy)
+
+    let skipped, skippedPolicy = coordinationFixture ()
+    let skippedGates = skipped["requiredGateChecks"].AsArray()
+    let firstGate = skippedGates[0].AsObject()
+    firstGate["conclusion"] <- JsonValue.Create("skipped")
+    Assert.Equal(Error "preflight-receipt-binding", validate skipped skippedPolicy)
+
+    let missing, missingPolicy = coordinationFixture ()
+    missing["requiredChecks"].AsArray().RemoveAt(1)
+    Assert.Equal(Error "preflight-receipt-binding", validate missing missingPolicy)
 
 [<Fact>]
 let ``net profile binds selected source and exact native evidence`` () =

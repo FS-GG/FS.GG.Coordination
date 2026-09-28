@@ -145,6 +145,22 @@ module InstalledOrdinarySettlementProvider =
           RequiredGateChecks =
             Set [ "composition"; "kit / coordination-kit"; "materialize / receiver-validate" ] }
 
+    // The disabled receiver's /1 receipt carries these six native checks.
+    // A skipped check remains invalid until a later receipt binds Bootstrap's
+    // validated reuse decision and prior evidence to the exact qualification head.
+    let private coordinationSourceProfile =
+        { Name = "coordination-v1"
+          Repository = "FS-GG/FS.GG.Coordination"
+          RepositoryId = 1346720714L
+          RequiredSettlementChecks =
+            Set
+                [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"
+                  "deterministic-build"; "evidence-manifest"; "package-install-smoke" ]
+          RequiredGateChecks =
+            Set
+                [ "bootstrap-recovery"; "compiler-and-tests"; "dependency-and-security"
+                  "deterministic-build"; "evidence-manifest"; "package-install-smoke" ] }
+
     let selectSourceProfile value =
         match value with
         | value when String.IsNullOrWhiteSpace value -> Ok dotGitHubSourceProfile
@@ -156,6 +172,7 @@ module InstalledOrdinarySettlementProvider =
         | "game-v1" -> Ok gameSourceProfile
         | "sdd-v1" -> Ok sddSourceProfile
         | "templates-v1" -> Ok templatesSourceProfile
+        | "coordination-v1" -> Ok coordinationSourceProfile
         | _ -> Error "unsupported-source-profile"
 
     let private apiBase = Uri "https://api.github.com/"
