@@ -22,8 +22,9 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.1.4</Version>"
-            "<PackageReleaseNotes>Adds the explicit rendering-v1 ordinary settlement source profile while preserving dotgithub-v1 and audio-v1.</PackageReleaseNotes>"
+            "<Version>0.1.5</Version>"
+            "<PackageVersion>0.1.5</PackageVersion>"
+            "<PackageReleaseNotes>Adds the explicit net-v1 ordinary settlement source profile with Net's existing build and contract-coherence checks.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =
@@ -49,7 +50,7 @@ let ``callable CLI release preparation binds reviewed version project and tag`` 
     let script = read "eng/callable-cli-release.fsx"
     for expected in
         [
-            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\" ]"
+            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\" ]"
             "projectPackageVersion () = version"
             "let tag = $\"v{version}\""
             "root.GetProperty(\"tag\").GetString() = tag"
