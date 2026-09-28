@@ -130,6 +130,41 @@ module TelemetryFactBatches =
 
         batch context (if parent.IsSome then [ expected; lineage; admission; admissionTime ] else [ activation; expected; lineage; admission; admissionTime ])
 
+    /// Project an immutable treatment and explicitly sourced receiver configuration.
+    let learningPreparation (_context: TelemetryInvocation) (prepared: PreparedLearningTelemetry) =
+        let treatment = prepared.Treatment
+        let configuration = prepared.Configuration
+        let learningContext =
+            { ItemId = treatment.OriginalItemId
+              AttemptId = "learning-treatment-" + treatment.AssignmentSha256
+              ActivationId = "learning-treatment-" + treatment.AssignmentSha256
+              DispatchId = "learning-treatment-" + treatment.AssignmentSha256
+              InvocationId = "learning-treatment-" + treatment.AssignmentSha256 }
+
+        let snapshot = event "learn-task-snapshot" prepared.SnapshotIdentity learningContext
+        snapshot["revision"] <- treatment.Generation
+        snapshot["snapshotId"] <- configuration.SnapshotId
+        snapshot["rubricVersion"] <- configuration.RubricVersion
+        snapshot["snapshotDigest"] <- configuration.SnapshotDigest
+        snapshot["capturedAt"] <- configuration.CapturedAt.ToString("O")
+
+        let manifest = event "learn-context-manifest" prepared.ManifestIdentity learningContext
+        manifest["revision"] <- treatment.Generation
+        manifest["recipeId"] <- configuration.RecipeId
+        manifest["recipeDigest"] <- configuration.RecipeDigest
+        manifest["manifestId"] <- configuration.ManifestId
+        manifest["manifestDigest"] <- configuration.ManifestDigest
+
+        let assignment = event "learn-experiment-assignment" prepared.AssignmentIdentity learningContext
+        assignment["revision"] <- treatment.Generation
+        assignment["windowId"] <- "qualification:learn-01.3:" + treatment.AssignmentSha256
+        assignment["policyId"] <- configuration.ExperimentContractId
+        assignment["arm"] <- LearningTelemetryFacts.arm prepared
+        assignment["assignedAt"] <- treatment.AssignedAt.ToString("O")
+        optional assignment "deviation" prepared.Deviation
+
+        batch learningContext [ snapshot; manifest; assignment ]
+
     let completedTurn (context: TelemetryInvocation) requestedModel requestedEffort (turn: CodexTurnUsage) =
         let nativeKey = turn.TurnId |> Option.defaultValue (string turn.TurnSequence)
         let identity = "runtime-usage-" + hash (context.InvocationId + "\u001f" + turn.ThreadId + "\u001f" + nativeKey)

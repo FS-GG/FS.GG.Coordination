@@ -7,7 +7,8 @@ open FS.GG.Coordination.Orchestration.Runner.Protocol
 type TelemetryRunnerObserver(
     stateRoot: string,
     command: ExecutorCommandV2,
-    publisher: TelemetryCliPublisher option
+    publisher: TelemetryCliPublisher option,
+    ?learning: PreparedLearningTelemetry
 ) =
     let concreteJournal = TelemetryTurnJournal(stateRoot, command)
     let journal = concreteJournal :> ICodexTurnObserver
@@ -21,6 +22,37 @@ type TelemetryRunnerObserver(
             | Ok _ -> ()
             | Error code -> journal.Gap code)
 
+    let recordGap code =
+        let gapId = concreteJournal.RecordGap code
+        TelemetryFactBatches.gap context gapId code |> queue
+
+    let selectionGaps (turn: CodexTurnUsage) =
+        let compare codeMissing codeMismatch requested observed =
+            match requested, observed with
+            | Some _, None -> Some codeMissing
+            | Some expected, Some actual when not (System.String.Equals(expected, actual, System.StringComparison.Ordinal)) ->
+                Some codeMismatch
+            | _ -> None
+
+        [ compare
+              "learning-native-model-unobserved"
+              "learning-native-model-mismatch"
+              (Option.ofObj command.RequestedModel)
+              turn.ObservedModel
+          compare
+              "learning-native-effort-unobserved"
+              "learning-native-effort-mismatch"
+              (Option.ofObj command.RequestedEffort)
+              turn.ObservedEffort ]
+        |> List.choose id
+
+    do
+        learning
+        |> Option.iter (fun prepared ->
+            let learningBatch = TelemetryFactBatches.learningPreparation context prepared
+            concreteJournal.RecordLearningBatch learningBatch
+            queue learningBatch)
+
     interface ICodexTurnObserver with
         member _.TurnCompleted turn =
             journal.TurnCompleted turn
@@ -33,9 +65,11 @@ type TelemetryRunnerObserver(
                 turn
             |> queue
 
+            if learning.IsSome then
+                selectionGaps turn |> List.iter recordGap
+
         member _.Gap code =
-            let gapId = concreteJournal.RecordGap code
-            TelemetryFactBatches.gap context gapId code |> queue
+            recordGap code
 
         member _.ProcessStarted(processId, at) =
             journal.ProcessStarted(processId, at)
