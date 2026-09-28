@@ -62,19 +62,19 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     for expected in
         [
             "operation:"
-            "publish-c3-sdd-templates-cli-016"
-            "PACKAGE_VERSION: 0.1.6"
-            "EXPECTED_SOURCE: 275cccb30a5c9ade4b3bba344ede13d7df446d13"
-            "EXPECTED_TREE: 099007f65150a4d23311c359413dcdcba92a3575"
-            "EXPECTED_SHA256: 0f5d92799af84acb8663df0f524dc2ccfe54cfcc0bc6ad2183e867c8cdd47730"
+            "publish-c3-coordination-cli-017"
+            "PACKAGE_VERSION: 0.1.7"
+            "EXPECTED_SOURCE: PENDING_SOURCE_SHA"
+            "EXPECTED_TREE: PENDING_TREE_SHA"
+            "EXPECTED_SHA256: PENDING_PACKAGE_SHA256"
             "packages: write"
             "id-token: write"
             "attestations: write"
             "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-            "EXPECTED_PREPARATION_RUN_ID: 36450952246"
-            "EXPECTED_PREPARATION_ARTIFACT_ID: 10983867658"
-            "EXPECTED_PREPARATION_ARCHIVE_SHA256: ba59e60d053679fd1f7ac631f56ee4f5fc250bb9f8b7fcfd1ea20776f144455f"
+            "EXPECTED_PREPARATION_RUN_ID: PENDING_PREPARATION_RUN_ID"
+            "EXPECTED_PREPARATION_ARTIFACT_ID: PENDING_PREPARATION_ARTIFACT_ID"
+            "EXPECTED_PREPARATION_ARCHIVE_SHA256: PENDING_PREPARATION_ARCHIVE_SHA256"
             "[[ \"$EXPECTED_SOURCE\" =~ ^[0-9a-f]{40}$ ]]"
             "[[ \"$EXPECTED_PREPARATION_ARTIFACT_ID\" =~ ^[0-9]+$ ]]"
             ".workflow_run.id == $run"
@@ -94,11 +94,11 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
     Assert.True(githubPush >= 0 && publicPush > githubPush)
 
-    let operation = read "eng/callable-cli-release-operation-016.json"
-    Assert.Contains("\"operation\": \"publish-c3-sdd-templates-cli-016\"", operation, StringComparison.Ordinal)
-    Assert.Contains("\"preparationArtifactId\": 10983867658", operation, StringComparison.Ordinal)
-    Assert.Contains("\"protectedMerge\": \"275cccb30a5c9ade4b3bba344ede13d7df446d13\"", operation, StringComparison.Ordinal)
-    Assert.Contains("\"version\": \"0.1.6\"", operation, StringComparison.Ordinal)
+    let operation = read "eng/callable-cli-release-operation-017.json"
+    Assert.Contains("\"operation\": \"publish-c3-coordination-cli-017\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"preparationArtifactId\": \"PENDING_PREPARATION_ARTIFACT_ID\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"protectedMerge\": \"PENDING_PROTECTED_MERGE_SHA\"", operation, StringComparison.Ordinal)
+    Assert.Contains("\"version\": \"0.1.7\"", operation, StringComparison.Ordinal)
     Assert.Contains("\"authorized\": false", operation, StringComparison.Ordinal)
     Assert.Contains("\"tagAfterBothFeeds\": true", operation, StringComparison.Ordinal)
 

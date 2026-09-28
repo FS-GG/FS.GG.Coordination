@@ -1,0 +1,37 @@
+{
+  "schema": "fsgg.coordination.callable-cli-release-operation/1",
+  "authority": {
+    "operation": "publish-c3-coordination-cli-017",
+    "scope": "dual-feed-package-tag-and-release",
+    "source": "C3 Coordination full-qualification source profile CLI release"
+  },
+  "artifact": {
+    "packageId": "FS.GG.Coordination.Cli",
+    "version": "0.1.7",
+    "sourceCommit": "PENDING_SOURCE_SHA",
+    "sourceTree": "PENDING_TREE_SHA",
+    "packageSha256": "PENDING_PACKAGE_SHA256",
+    "canonicalSourceRoot": "/home/runner/work/FS.GG.Coordination/FS.GG.Coordination",
+    "preparationRunId": "PENDING_PREPARATION_RUN_ID",
+    "preparationArtifactId": "PENDING_PREPARATION_ARTIFACT_ID",
+    "preparationArchiveSha256": "PENDING_PREPARATION_ARCHIVE_SHA256"
+  },
+  "protectedMerge": "PENDING_PROTECTED_MERGE_SHA",
+  "tag": "v0.1.7",
+  "workflow": ".github/workflows/callable-cli-release-publish.yml",
+  "preflightWorkflow": ".github/workflows/callable-cli-release-prepare.yml",
+  "publication": {
+    "order": [
+      "github-packages",
+      "nuget.org-byte-identical-push"
+    ],
+    "provenance": "github-attestation-before-effects",
+    "recovery": "observe-and-verify-existing-before-resume",
+    "servedVerification": "github-exact-archive-and-nuget-payload-excluding-repository-signature",
+    "tagAfterBothFeeds": true
+  },
+  "receiverAdoption": {
+    "authorized": false,
+    "milestone": "C3-COORDINATION-01"
+  }
+}

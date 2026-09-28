@@ -96,7 +96,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-publish.yml",
-      "sha256": "9d577dea0d55780fb6050011ea4678b94bebe88071e8ed9be0c7c971cee8b51f",
+      "sha256": "f7dc772a86e2a98d34d8eff63fa01d02c44379e2a7107fb4e20ae1fcec5ab3e8",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
