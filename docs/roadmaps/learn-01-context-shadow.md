@@ -1,0 +1,15 @@
+# LEARN-01.3 context shadow source window
+
+This source window adds a pure current/focused context compiler to the inert orchestration Observer assembly. It is a synthetic shadow preview only. It does not dispatch work, write provider or GitHub state, persist an experiment assignment, call a model, publish an artifact, install a route, or enroll an item.
+
+The compiler reuses an exact caller-supplied valid plan. The plan is accepted only when its identity and digest, source repository/path/revision/digest, work class, LEARN-01 contract identity and revision all match the expected request. Missing, stale and incompatible plans are distinct refusals. The compiler does not create or refresh a plan.
+
+Every authoritative plan obligation must be covered by a mandatory context reference, and every required mandatory reference must be present. Mandatory material is always included in both arms. The `current` recipe includes all optional references. The `focused` recipe includes the prospectively selected optional references and retains exact identities for omitted optional references. An untrusted reference that claims instruction authority is refused rather than promoted across the instruction boundary.
+
+Both recipes fix the execution preview to `gpt-5.6-sol` with `medium` effort. The canonical manifest sorts obligations and reference identities, binds each source revision and digest, recipe, treatment binding and capacity bounds, and hashes length-prefixed UTF-8 fields. The preview refuses reference-count, estimated-byte and concurrent-capacity conflicts. It never trims mandatory content to fit.
+
+Treatment is supplied as a synthetic shadow binding; there is no randomizer or assignment writer in this assembly. An original item has no inherited binding. A descendant or retry must provide the exact same original-item treatment and binding, which prevents a redraw in the preview boundary. The output marks `ShadowOnly = true`, `CanDispatch = false`, `CanWrite = false` and `IsAssignmentFact = false`.
+
+Focused tests cover deterministic current/focused assembly, exact fixed profile, canonical ordering, missing/stale/incompatible plan and source refusals, mandatory obligation coverage, injected authority, size and capacity bounds, descendant/retry inheritance and the non-shadow boundary. The architecture test scans every F# source file in the Observer project for runner, effect, writer, HTTP and hosted-service dependencies.
+
+This is the first LEARN-01.3 source/shadow window. Remaining `.3` work includes typed create/keep/investigate/decompose proposal and assignment integration, Astra-high planning and explicit direct-small eligibility, durable assignment-before-dispatch through the existing authority, observation/executor integration, provider capability and requested/observed checks, crash/replay ownership evidence, and affected canonical model correspondence. Those later changes must preserve the accepted O0–O3 boundaries and do not imply V1 migration, runtime publication, installation, activation, live randomization, or O2/O3 completion.

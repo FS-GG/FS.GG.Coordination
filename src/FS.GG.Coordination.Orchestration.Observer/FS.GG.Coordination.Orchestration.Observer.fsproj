@@ -5,6 +5,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="LearningContext.fs" />
     <Compile Include="Observer.fs" />
   </ItemGroup>
   <ItemGroup>
