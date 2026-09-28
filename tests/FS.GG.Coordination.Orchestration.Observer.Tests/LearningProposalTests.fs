@@ -231,6 +231,49 @@ let ``decompose refuses overlapping touch sets`` () =
     | other -> failwithf "unexpected result: %A" other
 
 [<Fact>]
+let ``decompose refuses nested file scopes across slices`` () =
+    let slice id path =
+        {
+            SliceId = id
+            TouchSet = [ path ]
+            IntegrationObligations = [ "contract" ]
+        }
+
+    match
+        LearningProposal.propose
+            { request Decompose with
+                Slices = [ slice "producer" "src"; slice "consumer" "src/file.fs" ]
+                IntegrationContract = Some "producer-before-consumer-v1"
+            }
+    with
+    | Error(DecompositionTouchSetOverlap "src") -> ()
+    | other -> failwithf "unexpected result: %A" other
+
+[<Theory>]
+[<InlineData("src/")>]
+[<InlineData("src/**")>]
+[<InlineData("src/../shared.fs")>]
+[<InlineData("./src/file.fs")>]
+[<InlineData("src\\file.fs")>]
+let ``decompose refuses noncanonical aliases directories and patterns`` path =
+    let slice id selectedPath =
+        {
+            SliceId = id
+            TouchSet = [ selectedPath ]
+            IntegrationObligations = [ "contract" ]
+        }
+
+    match
+        LearningProposal.propose
+            { request Decompose with
+                Slices = [ slice "producer" path; slice "consumer" "tests/file.fs" ]
+                IntegrationContract = Some "producer-before-consumer-v1"
+            }
+    with
+    | Error(InvalidLearningProposalInput "invalid-decomposition-slice") -> ()
+    | other -> failwithf "unexpected result: %A" other
+
+[<Fact>]
 let ``actions cannot borrow evidence or authority from another proposal route`` () =
     let invalidKeep =
         { request Keep with

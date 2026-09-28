@@ -114,6 +114,22 @@ module LearningProposal =
     let private uniqueValid values =
         values |> List.forall validText && (values |> List.distinct |> List.length) = values.Length
 
+    let private canonicalRepositoryFile (value: string) =
+        validText value
+        && value.Length <= 512
+        && not (value.StartsWith('/') || value.EndsWith('/'))
+        && not (value.Contains("//") || value.Contains('\\'))
+        && value
+           |> Seq.forall (fun character ->
+               Char.IsAsciiLetterOrDigit character || "._-/@+".Contains character)
+        && value.Split('/')
+           |> Array.forall (fun segment -> segment <> "" && segment <> "." && segment <> "..")
+
+    let private overlappingRepositoryFiles (left: string) (right: string) =
+        left = right
+        || left.StartsWith(right + "/", StringComparison.Ordinal)
+        || right.StartsWith(left + "/", StringComparison.Ordinal)
+
     let private actionText =
         function
         | Create -> "create"
@@ -174,6 +190,7 @@ module LearningProposal =
                 || not (uniqueValid slice.TouchSet)
                 || List.isEmpty slice.TouchSet
                 || slice.TouchSet.Length > MaximumSlicePaths
+                || slice.TouchSet |> List.exists (canonicalRepositoryFile >> not)
                 || not (uniqueValid slice.IntegrationObligations)
                 || List.isEmpty slice.IntegrationObligations)
         then
@@ -181,12 +198,23 @@ module LearningProposal =
         elif (slices |> List.map _.SliceId |> List.distinct |> List.length) <> slices.Length then
             Error(InvalidLearningProposalInput "duplicate-decomposition-slice")
         else
-            slices
-            |> List.collect _.TouchSet
-            |> List.countBy id
-            |> List.tryFind (fun (_, count) -> count > 1)
+            let declared =
+                slices
+                |> List.collect (fun slice -> slice.TouchSet |> List.map (fun path -> slice.SliceId, path))
+
+            declared
+            |> List.tryPick (fun (leftSlice, leftPath) ->
+                declared
+                |> List.tryPick (fun (rightSlice, rightPath) ->
+                    if
+                        leftSlice < rightSlice
+                        && overlappingRepositoryFiles leftPath rightPath
+                    then
+                        Some(if leftPath.Length <= rightPath.Length then leftPath else rightPath)
+                    else
+                        None))
             |> function
-                | Some(path, _) -> Error(DecompositionTouchSetOverlap path)
+                | Some path -> Error(DecompositionTouchSetOverlap path)
                 | None -> Ok()
 
     let propose (request: LearningProposalRequest) : Result<LearningProposal, LearningProposalRefusal> =
