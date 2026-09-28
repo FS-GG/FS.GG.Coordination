@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Codex
 
 open System
 open System.Text.Json
+open FS.GG.Coordination.Orchestration.Execution
 
 /// Minimal native usage fact. No Codex prompt, output body, or authentication material crosses this boundary.
 type CodexTurnUsage =
@@ -25,7 +26,9 @@ module CodexTurnProjection =
     let private text (root: JsonElement) (name: string) =
         match root.TryGetProperty name with
         | true, value when value.ValueKind = JsonValueKind.String ->
-            value.GetString() |> Option.ofObj |> Option.filter (String.IsNullOrWhiteSpace >> not)
+            value.GetString()
+            |> Option.ofObj
+            |> Option.filter (String.IsNullOrWhiteSpace >> not)
         | _ -> None
 
     let private count (root: JsonElement) (name: string) =
@@ -48,8 +51,7 @@ module CodexTurnProjection =
             else
                 match root.TryGetProperty "usage" with
                 | false, _ -> Some(Error "missing-turn-usage")
-                | true, usage when usage.ValueKind <> JsonValueKind.Object ->
-                    Some(Error "malformed-turn-usage")
+                | true, usage when usage.ValueKind <> JsonValueKind.Object -> Some(Error "malformed-turn-usage")
                 | true, usage ->
                     let reasoning =
                         match usage.TryGetProperty "reasoning_output_tokens" with
@@ -92,3 +94,16 @@ module CodexTurnProjection =
                     | _ -> Some(Error "invalid-turn-counters")
         with :? JsonException ->
             Some(Error "malformed-json-frame")
+
+    /// Preserve requested and locally resolved selections separately from native provider evidence.
+    /// Missing native fields remain unknown and a mismatch never changes the assigned treatment.
+    let learningSelection requested resolved (turn: CodexTurnUsage) =
+        LearningSelectionObservation.create
+            requested
+            resolved
+            {
+                Provider = turn.Provider
+                Model = turn.ObservedModel
+                Effort = turn.ObservedEffort
+                Backend = turn.Backend
+            }
