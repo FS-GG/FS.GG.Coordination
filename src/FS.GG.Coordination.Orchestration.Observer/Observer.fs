@@ -153,6 +153,54 @@ type DurableEffectCompletion =
         CompletedAt: DateTimeOffset
     }
 
+type LearningTreatmentAssignmentInput =
+    {
+        SourceObserverId: string
+        SourceSequence: int64
+        SourceObservationSha256: string
+        ItemId: string
+        OriginalItemId: string
+        Relation: LearningContextRelation
+        Arm: LearningContextArm
+        ProposalSha256: string
+        ContextManifestSha256: string
+        Planner: LearningModelProfile option
+        Worker: LearningModelProfile
+        DirectSmallEligible: bool
+        ExpectedWorkflowRevision: WorkflowRevision
+        ExpectedGeneration: Generation
+        AssignedAt: DateTimeOffset
+    }
+
+type DurableLearningTreatment =
+    {
+        SourceObserverId: string
+        SourceSequence: int64
+        SourceObservationSha256: string
+        OriginalItemId: string
+        Arm: LearningContextArm
+        ProposalSha256: string
+        ContextManifestSha256: string
+        Planner: LearningModelProfile option
+        Worker: LearningModelProfile
+        DirectSmallEligible: bool
+        WorkflowRevision: WorkflowRevision
+        Generation: Generation
+        OwnerPrincipalId: string
+        AssignmentSha256: string
+        AssignedAt: DateTimeOffset
+    }
+
+type DurableLearningTreatmentBinding =
+    {
+        ItemId: string
+        OriginalItemId: string
+        Relation: LearningContextRelation
+        AssignmentSha256: string
+        OwnerPrincipalId: string
+        BoundAt: DateTimeOffset
+    }
+
 type ConversationRole =
     | Operator
     | PlanningAgent
@@ -180,6 +228,8 @@ type ObserverState =
         Approvals: Map<ProposalId, ProposalApproval>
         Acceptances: Map<CommandId, DurableCommandAcceptance>
         Effects: Map<OperationId, DurableEffectCompletion>
+        LearningTreatments: Map<string, DurableLearningTreatment>
+        LearningTreatmentBindings: Map<string, DurableLearningTreatmentBinding>
         Conversation: ConversationEntry list
     }
 
@@ -195,6 +245,8 @@ type ObserverEvent =
     | ProposalApproved of ProposalApproval
     | CommandAcceptanceRecorded of DurableCommandAcceptance
     | EffectCompletionRecorded of DurableEffectCompletion
+    | LearningTreatmentAssigned of DurableLearningTreatment
+    | LearningTreatmentInherited of DurableLearningTreatmentBinding
 
 type ProposalInput =
     {
@@ -235,6 +287,7 @@ type ObserverCommand =
     | ApproveProposal of ApprovalInput
     | RecordCommandAcceptance of DurableCommandAcceptance
     | RecordEffectCompletion of DurableEffectCompletion
+    | AssignLearningTreatment of LearningTreatmentAssignmentInput
 
 type ObserverCommandEnvelope =
     {
@@ -292,6 +345,8 @@ module Observer =
             Approvals = Map.empty
             Acceptances = Map.empty
             Effects = Map.empty
+            LearningTreatments = Map.empty
+            LearningTreatmentBindings = Map.empty
             Conversation = []
         }
 
@@ -494,6 +549,69 @@ module Observer =
             ]
         |> digest
 
+    let private treatmentRelationFields =
+        function
+        | Original -> [ "original" ]
+        | Descendant parent -> [ "descendant"; parent ]
+        | Retry prior -> [ "retry"; prior ]
+
+    let private validLearningProfile directSmall planner (worker: LearningModelProfile) =
+        worker.Model = LearningContext.WorkerModel
+        && worker.Effort = LearningContext.WorkerEffort
+        && (match directSmall, planner with
+            | true, None -> true
+            | false, Some value ->
+                value.Model = LearningProposal.PlannerModel
+                && value.Effort = LearningProposal.PlannerEffort
+            | _ -> false)
+
+    let learningTreatmentSha256 owner (input: LearningTreatmentAssignmentInput) =
+        let plannerModel, plannerEffort =
+            input.Planner
+            |> Option.map (fun value -> value.Model, value.Effort)
+            |> Option.defaultValue ("", "")
+
+        canonicalFields
+            [
+                "learn-01-treatment-assignment/1"
+                input.SourceObserverId
+                string input.SourceSequence
+                input.SourceObservationSha256.ToLowerInvariant()
+                input.OriginalItemId
+                string input.Arm
+                input.ProposalSha256.ToLowerInvariant()
+                input.ContextManifestSha256.ToLowerInvariant()
+                plannerModel
+                plannerEffort
+                input.Worker.Model
+                input.Worker.Effort
+                string input.DirectSmallEligible
+                string (Id.revisionValue input.ExpectedWorkflowRevision)
+                string (Id.generationValue input.ExpectedGeneration)
+                owner
+            ]
+        |> digest
+
+    let private sameLearningTreatment
+        (input: LearningTreatmentAssignmentInput)
+        (assignment: DurableLearningTreatment)
+        (owner: string)
+        =
+        input.OriginalItemId = assignment.OriginalItemId
+        && input.Arm = assignment.Arm
+        && String.Equals(input.ProposalSha256, assignment.ProposalSha256, StringComparison.OrdinalIgnoreCase)
+        && String.Equals(
+            input.ContextManifestSha256,
+            assignment.ContextManifestSha256,
+            StringComparison.OrdinalIgnoreCase
+        )
+        && input.Planner = assignment.Planner
+        && input.Worker = assignment.Worker
+        && input.DirectSmallEligible = assignment.DirectSmallEligible
+        && input.ExpectedWorkflowRevision = assignment.WorkflowRevision
+        && input.ExpectedGeneration = assignment.Generation
+        && owner = assignment.OwnerPrincipalId
+
     let evolve (state: ObserverState) (eventValue: ObserverEvent) : ObserverState =
         let next = state.Sequence + 1L
 
@@ -612,6 +730,30 @@ module Observer =
                 Effects = Map.add completion.OperationId completion state.Effects
                 Sequence = next
             }
+        | LearningTreatmentAssigned assignment ->
+            let binding =
+                {
+                    ItemId = assignment.OriginalItemId
+                    OriginalItemId = assignment.OriginalItemId
+                    Relation = Original
+                    AssignmentSha256 = assignment.AssignmentSha256
+                    OwnerPrincipalId = assignment.OwnerPrincipalId
+                    BoundAt = assignment.AssignedAt
+                }
+
+            { state with
+                LearningTreatments =
+                    Map.add assignment.OriginalItemId assignment state.LearningTreatments
+                LearningTreatmentBindings =
+                    Map.add assignment.OriginalItemId binding state.LearningTreatmentBindings
+                Sequence = next
+            }
+        | LearningTreatmentInherited binding ->
+            { state with
+                LearningTreatmentBindings =
+                    Map.add binding.ItemId binding state.LearningTreatmentBindings
+                Sequence = next
+            }
 
     let private reject (envelope: ObserverCommandEnvelope) body (state: ObserverState) detail : ObserverDecision =
         {
@@ -685,7 +827,17 @@ module Observer =
                     reject envelope body state "invalid-planning-budget"
                 else
                     accept envelope body state [ SessionOpened(sessionId, projectId, budget) ] "session-opened"
-            | _ when state.SessionId.IsNone -> reject envelope body state "session-not-open"
+            | AssignLearningTreatment _ when state.SessionId.IsSome ->
+                reject envelope body state "learning-treatment-canonical-runtime-required"
+            | AssignLearningTreatment _ when state.Observation.IsNone ->
+                reject envelope body state "learning-treatment-source-observation-required"
+            | _ when
+                state.SessionId.IsNone
+                && (match envelope.Command with
+                    | AssignLearningTreatment _ -> false
+                    | _ -> true)
+                ->
+                reject envelope body state "session-not-open"
             | RecordConversation entry ->
                 if
                     entry.EntryId = Guid.Empty
@@ -938,6 +1090,117 @@ module Observer =
                         [ CommandAcceptanceRecorded acceptance ]
                         "durable-command-acceptance-recorded"
                 | _ -> reject envelope body state "unbound-command-acceptance"
+            | AssignLearningTreatment input ->
+                let relationValid =
+                    match input.Relation with
+                    | Original -> input.ItemId = input.OriginalItemId
+                    | Descendant parent ->
+                        input.ItemId <> input.OriginalItemId
+                        && validText parent
+                        && parent <> input.ItemId
+                    | Retry prior ->
+                        input.ItemId <> input.OriginalItemId
+                        && validText prior
+                        && prior <> input.ItemId
+
+                let inputValid =
+                    validText input.SourceObserverId
+                    && input.SourceSequence > 0L
+                    && validSha input.SourceObservationSha256
+                    && validText input.ItemId
+                    && validText input.OriginalItemId
+                    && validSha input.ProposalSha256
+                    && validSha input.ContextManifestSha256
+                    && validLearningProfile input.DirectSmallEligible input.Planner input.Worker
+                    && relationValid
+                    && input.AssignedAt <= now
+                    && (treatmentRelationFields input.Relation |> List.forall validText)
+
+                if not inputValid then
+                    reject envelope body state "invalid-learning-treatment-assignment"
+                else
+                    match Map.tryFind input.OriginalItemId state.LearningTreatments with
+                    | None ->
+                        match state.Observation, input.Relation with
+                        | Some observation, Original when
+                            String.Equals(
+                                observation.ObservationSha256,
+                                input.SourceObservationSha256,
+                                StringComparison.OrdinalIgnoreCase
+                            )
+                            && observation.WorkflowRevision = input.ExpectedWorkflowRevision
+                            && observation.Generation = input.ExpectedGeneration
+                            && not (Map.containsKey input.ItemId state.LearningTreatmentBindings)
+                            ->
+                            let assignment =
+                                {
+                                    SourceObserverId = input.SourceObserverId
+                                    SourceSequence = input.SourceSequence
+                                    SourceObservationSha256 = input.SourceObservationSha256.ToLowerInvariant()
+                                    OriginalItemId = input.OriginalItemId
+                                    Arm = input.Arm
+                                    ProposalSha256 = input.ProposalSha256.ToLowerInvariant()
+                                    ContextManifestSha256 = input.ContextManifestSha256.ToLowerInvariant()
+                                    Planner = input.Planner
+                                    Worker = input.Worker
+                                    DirectSmallEligible = input.DirectSmallEligible
+                                    WorkflowRevision = input.ExpectedWorkflowRevision
+                                    Generation = input.ExpectedGeneration
+                                    OwnerPrincipalId = envelope.PrincipalId
+                                    AssignmentSha256 = learningTreatmentSha256 envelope.PrincipalId input
+                                    AssignedAt = input.AssignedAt
+                                }
+
+                            accept
+                                envelope
+                                body
+                                state
+                                [ LearningTreatmentAssigned assignment ]
+                                "learning-treatment-assigned"
+                        | Some _, Original -> reject envelope body state "stale-learning-treatment-generation"
+                        | _ -> reject envelope body state "learning-treatment-original-missing"
+                    | Some assignment when assignment.OwnerPrincipalId <> envelope.PrincipalId ->
+                        reject envelope body state "learning-treatment-owner-conflict"
+                    | Some assignment when not (sameLearningTreatment input assignment envelope.PrincipalId) ->
+                        reject envelope body state "learning-treatment-conflict"
+                    | Some assignment ->
+                        match Map.tryFind input.ItemId state.LearningTreatmentBindings with
+                        | Some binding when
+                            binding.OriginalItemId = input.OriginalItemId
+                            && binding.Relation = input.Relation
+                            && binding.AssignmentSha256 = assignment.AssignmentSha256
+                            && binding.OwnerPrincipalId = assignment.OwnerPrincipalId
+                            ->
+                            accept envelope body state [] "learning-treatment-replayed"
+                        | Some _ -> reject envelope body state "learning-treatment-lineage-conflict"
+                        | None ->
+                            match input.Relation with
+                            | Original -> reject envelope body state "learning-treatment-lineage-conflict"
+                            | Descendant parent
+                            | Retry parent ->
+                                match Map.tryFind parent state.LearningTreatmentBindings with
+                                | Some parentBinding when
+                                    parentBinding.OriginalItemId = input.OriginalItemId
+                                    && parentBinding.AssignmentSha256 = assignment.AssignmentSha256
+                                    && parentBinding.OwnerPrincipalId = assignment.OwnerPrincipalId
+                                    ->
+                                    let binding =
+                                        {
+                                            ItemId = input.ItemId
+                                            OriginalItemId = input.OriginalItemId
+                                            Relation = input.Relation
+                                            AssignmentSha256 = assignment.AssignmentSha256
+                                            OwnerPrincipalId = assignment.OwnerPrincipalId
+                                            BoundAt = input.AssignedAt
+                                        }
+
+                                    accept
+                                        envelope
+                                        body
+                                        state
+                                        [ LearningTreatmentInherited binding ]
+                                        "learning-treatment-inherited"
+                                | _ -> reject envelope body state "learning-treatment-lineage-missing"
             | RecordEffectCompletion completion ->
                 if
                     not (Map.containsKey completion.CommandId state.Acceptances)
@@ -1034,6 +1297,11 @@ module ObserverJournal =
     let observerId sessionId =
         let value = (Id.sessionValue sessionId).ToString("N")
         $"observer-session-v1-{value}"
+
+    let learningTreatmentObserverId originalItemId =
+        let bytes = Encoding.UTF8.GetBytes($"learn-01-treatment-stream/1\n{originalItemId}")
+        let value = SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+        $"observer-learning-treatment-v1-{value}"
 
     let appendRequest observerId receivedAt (envelope: ObserverCommandEnvelope) (decision: ObserverDecision) =
         {
@@ -1283,6 +1551,25 @@ type EffectReadbackOutcome =
     | EffectReadbackCommandRefused of ObserverReceipt
     | EffectReadbackPersistenceRefused of ObserverAppendOutcome
 
+type LearningTreatmentAssignmentRequest =
+    {
+        SourceObserverId: string
+        SourceState: ObserverState
+        Input: LearningTreatmentAssignmentInput
+        CommandId: CommandId
+        PrincipalId: string
+        IssuedAt: DateTimeOffset
+        ExpiresAt: DateTimeOffset
+    }
+
+type LearningTreatmentAssignmentOutcome =
+    | LearningTreatmentPersisted of DurableLearningTreatment * DurableLearningTreatmentBinding
+    | LearningTreatmentReplayed of DurableLearningTreatment * DurableLearningTreatmentBinding
+    | LearningTreatmentSourceRefused of string
+    | LearningTreatmentRecoveryRefused of ObserverRecoveryFailure list
+    | LearningTreatmentCommandRefused of ObserverReceipt
+    | LearningTreatmentPersistenceRefused of ObserverAppendOutcome
+
 [<RequireQualifiedAccess>]
 module ObserverRuntime =
     let private evolveDecision (state: ObserverState) (decision: ObserverDecision) =
@@ -1297,6 +1584,84 @@ module ObserverRuntime =
         cancellationToken
         =
         journal.AppendObserver(ObserverJournal.appendRequest observerId receivedAt envelope decision, cancellationToken)
+
+    let assignLearningTreatment
+        (clock: TimeProvider)
+        (ObserverComposition(_, _, _, journal))
+        (request: LearningTreatmentAssignmentRequest)
+        cancellationToken
+        =
+        task {
+            let sourceIdentityValid =
+                request.SourceState.SessionId
+                |> Option.exists (fun sessionId ->
+                    ObserverJournal.observerId sessionId = request.SourceObserverId
+                    && request.Input.SourceObserverId = request.SourceObserverId
+                    && request.Input.SourceSequence = request.SourceState.Sequence)
+
+            let sourceObservationValid =
+                request.SourceState.Observation
+                |> Option.exists (fun observation ->
+                    String.Equals(
+                        observation.ObservationSha256,
+                        request.Input.SourceObservationSha256,
+                        StringComparison.OrdinalIgnoreCase
+                    )
+                    && observation.WorkflowRevision = request.Input.ExpectedWorkflowRevision
+                    && observation.Generation = request.Input.ExpectedGeneration)
+
+            if not sourceIdentityValid then
+                return LearningTreatmentSourceRefused "learning-treatment-source-observer-mismatch"
+            elif not sourceObservationValid then
+                return LearningTreatmentSourceRefused "learning-treatment-source-generation-mismatch"
+            else
+                let treatmentObserverId =
+                    ObserverJournal.learningTreatmentObserverId request.Input.OriginalItemId
+
+                let! recovered = journal.RecoverObserver(treatmentObserverId, cancellationToken)
+
+                match recovered with
+                | Error failures -> return LearningTreatmentRecoveryRefused failures
+                | Ok recovery ->
+                    let now = clock.GetUtcNow()
+
+                    // The source observation is qualified in its session stream. It is supplied only
+                    // while deciding the canonical treatment stream and is not copied into that stream.
+                    let decisionState =
+                        { recovery.State with
+                            Observation = request.SourceState.Observation
+                        }
+
+                    let envelope =
+                        {
+                            CommandId = request.CommandId
+                            ExpectedSequence = recovery.State.Sequence
+                            PrincipalId = request.PrincipalId
+                            IssuedAt = request.IssuedAt
+                            ExpiresAt = request.ExpiresAt
+                            Command = AssignLearningTreatment request.Input
+                        }
+
+                    let decision = Observer.decide now decisionState envelope
+
+                    if decision.Receipt.Disposition = ObserverRejected then
+                        return LearningTreatmentCommandRefused decision.Receipt
+                    elif decision.Events.IsEmpty then
+                        let treatment = recovery.State.LearningTreatments[request.Input.OriginalItemId]
+                        let binding = recovery.State.LearningTreatmentBindings[request.Input.ItemId]
+                        return LearningTreatmentReplayed(treatment, binding)
+                    else
+                        let! stored =
+                            append journal treatmentObserverId now envelope decision cancellationToken
+
+                        match stored with
+                        | ObserverAppended _ ->
+                            let persisted = evolveDecision recovery.State decision
+                            let treatment = persisted.LearningTreatments[request.Input.OriginalItemId]
+                            let binding = persisted.LearningTreatmentBindings[request.Input.ItemId]
+                            return LearningTreatmentPersisted(treatment, binding)
+                        | other -> return LearningTreatmentPersistenceRefused other
+        }
 
     let refreshObservation
         (clock: TimeProvider)

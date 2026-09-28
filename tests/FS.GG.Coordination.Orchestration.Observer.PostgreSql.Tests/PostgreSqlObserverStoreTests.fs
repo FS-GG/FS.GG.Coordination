@@ -202,9 +202,174 @@ module private Fixture =
             ObservationSha256 = Observer.observationSha256 draft
         }
 
+    let learningAssignment
+        sourceObserverId
+        sourceSequence
+        (sourceObservation: ProjectObservationSnapshot)
+        arm
+        =
+        {
+            SourceObserverId = sourceObserverId
+            SourceSequence = sourceSequence
+            SourceObservationSha256 = sourceObservation.ObservationSha256
+            ItemId = "FS-GG/Coordination#42"
+            OriginalItemId = "FS-GG/Coordination#42"
+            Relation = Original
+            Arm = arm
+            ProposalSha256 = sha "4"
+            ContextManifestSha256 = sha "5"
+            Planner =
+                Some
+                    {
+                        Model = LearningProposal.PlannerModel
+                        Effort = LearningProposal.PlannerEffort
+                    }
+            Worker =
+                {
+                    Model = LearningContext.WorkerModel
+                    Effort = LearningContext.WorkerEffort
+                }
+            DirectSmallEligible = false
+            ExpectedWorkflowRevision = sourceObservation.WorkflowRevision
+            ExpectedGeneration = sourceObservation.Generation
+            AssignedAt = now
+        }
+
 
 type PostgreSqlObserverStoreTests() =
     let cancellationToken = CancellationToken.None
+
+    [<Fact>]
+    member _.``canonical learning treatment survives store restart and concurrent ownership``() =
+        task {
+            let! source, identity = Fixture.reset ()
+            use source = source
+
+            let store =
+                PostgreSqlObserverStore(Fixture.options source identity 0L) :> IObserverJournalStore
+
+            let sourceObserverId = ObserverJournal.observerId Fixture.sessionId
+            let mutable sourceState = Observer.initial
+
+            let appendSource command =
+                task {
+                    let commandEnvelope = Fixture.envelope sourceState command
+                    let decision = Observer.decide Fixture.now sourceState commandEnvelope
+                    let request = ObserverJournal.appendRequest sourceObserverId Fixture.now commandEnvelope decision
+                    let! outcome = store.AppendObserver(request, cancellationToken)
+                    Assert.Equal<ObserverAppendOutcome>(ObserverAppended decision.Receipt.Sequence, outcome)
+                    sourceState <- decision.Events |> List.fold Observer.evolve sourceState
+                }
+
+            do! appendSource (OpenSession(Fixture.sessionId, Fixture.projectId, Fixture.budget))
+            let sourceObservation = Fixture.observation ()
+            do! appendSource (RecordProjectObservation sourceObservation)
+
+            let originalId = "FS-GG/Coordination#42"
+            let treatmentObserverId = ObserverJournal.learningTreatmentObserverId originalId
+            let focusedInput =
+                Fixture.learningAssignment sourceObserverId sourceState.Sequence sourceObservation Focused
+
+            let decisionState =
+                { Observer.initial with
+                    Observation = Some sourceObservation
+                }
+
+            let focusedEnvelope = Fixture.envelope decisionState (AssignLearningTreatment focusedInput)
+            let focusedDecision = Observer.decide Fixture.now decisionState focusedEnvelope
+            let focusedRequest =
+                ObserverJournal.appendRequest treatmentObserverId Fixture.now focusedEnvelope focusedDecision
+
+            let! wrongStream =
+                store.AppendObserver(
+                    { focusedRequest with
+                        ObserverId = "observer-learning-treatment-v1-wrong"
+                    },
+                    cancellationToken
+                )
+
+            Assert.Equal<ObserverAppendOutcome>(
+                ObserverInvalidAppend "learning-treatment-stream-identity-mismatch",
+                wrongStream
+            )
+
+            let currentInput = { focusedInput with Arm = Current }
+            let currentEnvelope = Fixture.envelope decisionState (AssignLearningTreatment currentInput)
+            let currentDecision = Observer.decide Fixture.now decisionState currentEnvelope
+            let currentRequest =
+                ObserverJournal.appendRequest treatmentObserverId Fixture.now currentEnvelope currentDecision
+
+            let! competing =
+                Task.WhenAll(
+                    store.AppendObserver(focusedRequest, cancellationToken),
+                    store.AppendObserver(currentRequest, cancellationToken)
+                )
+
+            Assert.Equal(1, competing |> Array.filter (function ObserverAppended 1L -> true | _ -> false) |> Array.length)
+            Assert.Equal(1, competing |> Array.filter (function ObserverAppended _ -> false | _ -> true) |> Array.length)
+
+            Fixture.stop ()
+            NpgsqlConnection.ClearAllPools()
+            Fixture.start ()
+            do! Fixture.waitReady ()
+
+            let restarted =
+                PostgreSqlObserverStore(Fixture.options source identity 0L) :> IObserverJournalStore
+
+            let! recovered = restarted.RecoverObserver(treatmentObserverId, cancellationToken)
+
+            let recovery =
+                match recovered with
+                | Ok value -> value
+                | Error failures -> failwithf "treatment restart recovery failed: %A" failures
+
+            Assert.Equal(1L, recovery.State.Sequence)
+            let durable = recovery.State.LearningTreatments[originalId]
+            Assert.Equal(sourceObserverId, durable.SourceObserverId)
+            Assert.Equal(sourceState.Sequence, durable.SourceSequence)
+            Assert.Equal(sourceObservation.ObservationSha256, durable.SourceObservationSha256)
+
+            let replayInput =
+                { focusedInput with
+                    Arm = durable.Arm
+                }
+
+            let replayState =
+                { recovery.State with
+                    Observation = Some sourceObservation
+                }
+
+            let replayEnvelope = Fixture.envelope replayState (AssignLearningTreatment replayInput)
+            let replayDecision = Observer.decide Fixture.now replayState replayEnvelope
+            Assert.Equal(ObserverAccepted, replayDecision.Receipt.Disposition)
+            Assert.Empty(replayDecision.Events)
+
+            let foreignEnvelope =
+                { Fixture.envelope replayState (AssignLearningTreatment replayInput) with
+                    PrincipalId = "second-owner"
+                }
+
+            let foreignDecision = Observer.decide Fixture.now replayState foreignEnvelope
+            Assert.Equal(ObserverRejected, foreignDecision.Receipt.Disposition)
+            Assert.Equal("learning-treatment-owner-conflict", foreignDecision.Receipt.Detail)
+
+            let! foreignWrite =
+                restarted.AppendObserver(
+                    ObserverJournal.appendRequest
+                        treatmentObserverId
+                        Fixture.now
+                        foreignEnvelope
+                        foreignDecision,
+                    cancellationToken
+                )
+
+            Assert.Equal<ObserverAppendOutcome>(ObserverInvalidAppend "new-command-requires-events", foreignWrite)
+
+            let! finalRecovery = restarted.RecoverObserver(treatmentObserverId, cancellationToken)
+            match finalRecovery with
+            | Ok value -> Assert.Equal(1L, value.State.Sequence)
+            | Error failures -> failwithf "final treatment recovery failed: %A" failures
+        }
 
     [<Fact>]
     member _.``typed budget attempt proposal lifecycle roundtrips through PostgreSQL``() =

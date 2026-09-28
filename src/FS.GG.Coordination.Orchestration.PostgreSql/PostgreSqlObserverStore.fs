@@ -222,6 +222,13 @@ WHERE r.singleton FOR SHARE OF r,o
                     || request.Command.ExpectedSequence < 0L
                 then
                     return ObserverInvalidAppend "invalid-observer-command"
+                elif
+                    match request.Command.Command with
+                    | AssignLearningTreatment input ->
+                        request.ObserverId <> ObserverJournal.learningTreatmentObserverId input.OriginalItemId
+                    | _ -> false
+                then
+                    return ObserverInvalidAppend "learning-treatment-stream-identity-mismatch"
                 else
                     let bodyHash = Observer.commandSha256 request.Command
 
@@ -323,7 +330,64 @@ WHERE r.singleton FOR SHARE OF r,o
                                 if state.Sequence <> actual then
                                     raise (ObserverAppendException "observer-state-head-mismatch")
 
-                                let decision = Observer.decide request.ReceivedAt state request.Command
+                                let! decisionState =
+                                    task {
+                                        match request.Command.Command with
+                                        | AssignLearningTreatment input ->
+                                            use sourceHead =
+                                                new NpgsqlCommand(
+                                                    "SELECT last_sequence FROM fsgg_orchestration.observer_stream WHERE observer_id=$1 FOR SHARE",
+                                                    connection,
+                                                    transaction
+                                                )
+
+                                            ObserverStoreSupport.add sourceHead input.SourceObserverId
+                                            let! sourceHeadValue = sourceHead.ExecuteScalarAsync cancellationToken
+
+                                            if isNull sourceHeadValue then
+                                                raise (ObserverAppendException "learning-treatment-source-stream-missing")
+
+                                            let sourceHeadSequence = Convert.ToInt64 sourceHeadValue
+
+                                            if sourceHeadSequence <> input.SourceSequence then
+                                                raise (ObserverAppendException "learning-treatment-source-sequence-mismatch")
+
+                                            let! sourceHistory =
+                                                loadEvents connection transaction input.SourceObserverId cancellationToken
+
+                                            let sourceEvents =
+                                                match sourceHistory with
+                                                | Ok value -> value
+                                                | Error failures -> raise (ObserverGateException failures)
+
+                                            let sourceState = sourceEvents |> List.map _.Event |> Observer.replay
+
+                                            let sourceValid =
+                                                sourceState.Sequence = input.SourceSequence
+                                                && (sourceState.SessionId
+                                                    |> Option.exists (fun sessionId ->
+                                                        ObserverJournal.observerId sessionId = input.SourceObserverId))
+                                                && (sourceState.Observation
+                                                    |> Option.exists (fun observation ->
+                                                        String.Equals(
+                                                            observation.ObservationSha256,
+                                                            input.SourceObservationSha256,
+                                                            StringComparison.OrdinalIgnoreCase
+                                                        )
+                                                        && observation.WorkflowRevision = input.ExpectedWorkflowRevision
+                                                        && observation.Generation = input.ExpectedGeneration))
+
+                                            if not sourceValid then
+                                                raise (ObserverAppendException "learning-treatment-source-reference-mismatch")
+
+                                            return
+                                                { state with
+                                                    Observation = sourceState.Observation
+                                                }
+                                        | _ -> return state
+                                    }
+
+                                let decision = Observer.decide request.ReceivedAt decisionState request.Command
                                 let requestedEvents = request.Events |> List.map _.Event
 
                                 if
