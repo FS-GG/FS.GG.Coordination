@@ -149,6 +149,21 @@ let private gameFixture () =
           "materialize / receiver-validate" ]
         (Some("game-v1", "FS-GG/FS.GG.Game", 1290990429L))
 
+let private sddFixture () =
+    fixtureFor
+        [ "Deterministic gate (locked restore + build + test)"; "Shared-build-config drift check" ]
+        [ "Deterministic gate (locked restore + build + test)"
+          "Shared-build-config drift check"
+          "API compatibility gate (breaking-change → SemVer major)"
+          "kit / coordination-kit"; "skill-view-check"; "materialize / receiver-validate" ]
+        (Some("sdd-v1", "FS-GG/FS.GG.SDD", 1274272672L))
+
+let private templatesFixture () =
+    fixtureFor
+        [ "composition"; "kit / coordination-kit" ]
+        [ "composition"; "kit / coordination-kit"; "materialize / receiver-validate" ]
+        (Some("templates-v1", "FS-GG/FS.GG.Templates", 1281961814L))
+
 [<Fact>]
 let ``installed provider binds exact two settlement and eight gate facts`` () =
     let receipt, policy = fixture ()
@@ -164,6 +179,8 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
     let net = InstalledOrdinarySettlementProvider.selectSourceProfile "net-v1" |> ok
     let governance = InstalledOrdinarySettlementProvider.selectSourceProfile "governance-v1" |> ok
     let game = InstalledOrdinarySettlementProvider.selectSourceProfile "game-v1" |> ok
+    let sdd = InstalledOrdinarySettlementProvider.selectSourceProfile "sdd-v1" |> ok
+    let templates = InstalledOrdinarySettlementProvider.selectSourceProfile "templates-v1" |> ok
     Assert.Equal("dotgithub-v1", legacy.Name)
     Assert.Equal(1269292704L, legacy.RepositoryId)
     Assert.Equal(legacy, explicitLegacy)
@@ -193,6 +210,12 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
                   "materialize / receiver-validate" ])
     Assert.Equal("FS-GG/FS.GG.Game", game.Repository)
     Assert.Equal(1290990429L, game.RepositoryId)
+    Assert.Equal("FS-GG/FS.GG.SDD", sdd.Repository)
+    Assert.Equal(1274272672L, sdd.RepositoryId)
+    Assert.True(sdd.RequiredSettlementChecks = Set [ "Deterministic gate (locked restore + build + test)"; "Shared-build-config drift check" ])
+    Assert.Equal("FS-GG/FS.GG.Templates", templates.Repository)
+    Assert.Equal(1281961814L, templates.RepositoryId)
+    Assert.True(templates.RequiredSettlementChecks = Set [ "composition"; "kit / coordination-kit" ])
     Assert.True(
         game.RequiredSettlementChecks =
             Set [ "Deterministic gate (locked restore + build) (ubuntu-latest)"
@@ -219,6 +242,34 @@ let ``source profiles are additive versioned and unknown selectors refuse`` () =
                   "Determinism & property invariants (constraint face) (windows-latest)"
                   "materialize / receiver-validate" ])
     Assert.Equal(Error "unsupported-source-profile", InstalledOrdinarySettlementProvider.selectSourceProfile "audio")
+
+[<Fact>]
+let ``sdd and templates profiles bind exact native evidence and reject foreign facts`` () =
+    for profileName, buildFixture in [ "sdd-v1", sddFixture; "templates-v1", templatesFixture ] do
+        let profile = InstalledOrdinarySettlementProvider.selectSourceProfile profileName |> ok
+        let receipt, policy = buildFixture ()
+        let validate (receipt: JsonObject) (policy: byte array) =
+            InstalledOrdinarySettlementProvider.validateReceiptFactsForSourceProfile
+                profile "ordinary-v2" "v2-ci-i1-ordinary-settlement-v1"
+                (Encoding.UTF8.GetBytes(receipt.ToJsonString())) policy
+        match validate receipt policy with
+        | Ok(_, _, _, _, _, _, _, checks) ->
+            Assert.Equal<string list>(profile.RequiredSettlementChecks |> Set.toList, checks |> List.map _.Identity |> List.sort)
+        | Error reason -> failwith reason
+
+        for field, value in
+            [ "sourceProfile", JsonValue.Create("net-v1") :> JsonNode
+              "sourceRepository", JsonValue.Create("FS-GG/FS.GG.Net") :> JsonNode
+              "sourceRepositoryId", JsonValue.Create(1305845505L) :> JsonNode ] do
+            let wrongReceipt, wrongPolicy = buildFixture ()
+            wrongReceipt[field] <- value
+            Assert.Equal(Error "preflight-receipt-binding", validate wrongReceipt wrongPolicy)
+
+        for checkSet in [ "requiredChecks"; "requiredGateChecks" ] do
+            let wrongReceipt, wrongPolicy = buildFixture ()
+            let checks = wrongReceipt[checkSet].AsArray()
+            checks[0].AsObject()["name"] <- "routine-eligibility"
+            Assert.Equal(Error "preflight-receipt-binding", validate wrongReceipt wrongPolicy)
 
 [<Fact>]
 let ``net profile binds selected source and exact native evidence`` () =
