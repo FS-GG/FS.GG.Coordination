@@ -182,12 +182,11 @@ module MigrationReceiverInstallationRead =
                    ApiVersion=ApiVersion.required; Idempotency=ReplaySafe }
         match transport.Send request with
         | Response response when response.StatusCode = 200 ->
-            parseInstallationBinding options options.RequiredTokenPermissions response.Body
-            |> Result.map (fun permissions ->
-                permissions,
-                { RosterRequestedUri=uri.AbsoluteUri
-                  RosterRequestIdentitySha256=sha256 ($"GET\n{uri.AbsoluteUri}\ninstallation-token")
-                  RosterRawBody=response.Body; RosterRawSha256=sha256 response.Body; RosterNextUri=None })
+            // GET /installation reports the installation's grants, not the
+            // permissions of the bearer token. Until the exact mint response is
+            // available for this token, its narrowed permissions are unknown.
+            parseInstallationBinding options options.ExpectedInstallationPermissions response.Body
+            |> Result.bind (fun _ -> unavailable "token-permission-attestation-unavailable")
         | Response response -> unavailable $"token-inaccessible:http-{response.StatusCode}"
         | NetworkFailure -> unavailable "token-inaccessible:network"
         | TimedOut -> unavailable "token-inaccessible:timeout"

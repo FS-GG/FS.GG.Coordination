@@ -25,6 +25,10 @@ type MigrationReceiverCopyExecutionReceipt =
 
 [<RequireQualifiedAccess>]
 module MigrationReceiverCopyExecution =
+    val internal verifyReceipt:
+        manifest:MigrationReceiverCopyTransferManifest ->
+        candidate:MigrationReceiverCopyExecutionReceipt -> bool
+
     /// Executes only CreateReceiverCopies, ReadReceiverCopies, or
     /// RemoveReceiverCopies. Create reserves durable intent before its single
     /// atomic push. A restored reservation performs readback only and never

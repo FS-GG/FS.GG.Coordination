@@ -157,10 +157,7 @@ module MigrationReceiverCohortOrchestration =
             let manifest = MigrationReceiverCopyTransfer.verifiedManifest verifiedTransfer
             let expectedRows = manifest.DerivedRefs |> List.sortBy _.ReceiverCopyId
             let expectedRefs = expectedRows |> List.map (fun row -> row.DerivedRef, row.DerivedCommit) |> Map.ofList
-            if receipt.Schema <> "fsgg.receiver-copy-execution-receipt/2"
-               || not receipt.Applied
-               || receipt.ManifestFingerprint <> manifest.Fingerprint
-               || (receipt.Operation <> CreateReceiverCopies && receipt.Operation <> ReadReceiverCopies)
+            if not (MigrationReceiverCopyExecution.verifyReceipt manifest receipt)
                || receipt.Refs <> expectedRefs then
                 unavailable "copy-receipt-mismatch"
             elif receipt.TargetObjects.Length <> expectedRows.Length then
@@ -189,7 +186,7 @@ module MigrationReceiverCohortOrchestration =
                                || target.SignatureStatus <> "unsigned-derived-copy"
                                || String.IsNullOrWhiteSpace target.AuthorIdentity
                                || String.IsNullOrWhiteSpace target.CommitterIdentity
-                               || target.RequestIdentitySha256.Length <> 64)
+                               || String.IsNullOrWhiteSpace target.RequestIdentitySha256)
                 if mismatch then unavailable "copy-target-provenance-mismatch" else Ok()
         with ex -> unavailable ex.Message
 

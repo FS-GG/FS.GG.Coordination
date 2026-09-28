@@ -3,6 +3,8 @@ module FS.GG.Coordination.MigrationReceiverCopyTransferTests
 open System
 open System.Diagnostics
 open System.IO
+open System.Security.Cryptography
+open System.Text
 open Xunit
 open FS.GG.Coordination.Cli
 
@@ -55,6 +57,26 @@ let private authority =
     { TargetRepository = "https://github.com/FS-GG/FS.GG.GitHub.Substrate.Sandbox.git"
       ContentsWrite = true; WorkflowsWrite = true; ActionsSuppressed = true; ProtectedCustody = true }
 
+let private reseal (candidate: MigrationReceiverCopyExecutionReceipt) =
+    let operation =
+        match candidate.Operation with
+        | CreateReceiverCopies -> "create"
+        | ReadReceiverCopies -> "read"
+        | RemoveReceiverCopies -> "remove"
+    let fields =
+        [ "fsgg.receiver-copy-execution-receipt/2"; operation; candidate.AttemptId
+          candidate.ManifestFingerprint; string candidate.Applied; string candidate.DispatchCount ]
+        @ [ for KeyValue(name, commit) in candidate.Refs do yield name; yield commit ]
+        @ [ for item in candidate.TargetObjects do
+                yield item.RefName; yield item.CommitOid; yield item.TreeOid
+                yield String.concat "," item.ParentOids; yield item.AuthorIdentity
+                yield item.CommitterIdentity; yield item.SignatureStatus
+                yield item.RequestIdentitySha256 ]
+    let digest =
+        fields |> String.concat "\000" |> Encoding.UTF8.GetBytes |> SHA256.HashData
+        |> Convert.ToHexString |> _.ToLowerInvariant()
+    { candidate with Fingerprint=digest }
+
 [<Fact>]
 let ``seven deterministic parentless copies roundtrip through one local atomic create and cleanup`` () =
     withTemp (fun root ->
@@ -69,6 +91,16 @@ let ``seven deterministic parentless copies roundtrip through one local atomic c
         let transport = MigrationReceiverCopyGitTransport.localBare target |> unwrap
         let attempts = Path.Combine(root, "attempts")
         let created = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap
+        Assert.True(MigrationReceiverCopyExecution.verifyReceipt manifest created)
+        let wrongObject =
+            { created.TargetObjects.Head with RequestIdentitySha256=String.replicate 64 "0" }
+        let tampered =
+            [ { created with Fingerprint=String.replicate 64 "0" }
+              reseal { created with AttemptId=String.replicate 64 "0" }
+              reseal { created with DispatchCount=2 }
+              reseal { created with TargetObjects=wrongObject :: created.TargetObjects.Tail } ]
+        Assert.All(tampered, fun candidate ->
+            Assert.False(MigrationReceiverCopyExecution.verifyReceipt manifest candidate))
         Assert.True(created.Applied); Assert.Equal(1, created.DispatchCount); Assert.Equal(7, created.Refs.Count)
         Assert.Equal(7, created.TargetObjects.Length)
         Assert.All(created.TargetObjects, fun observed ->
@@ -81,6 +113,8 @@ let ``seven deterministic parentless copies roundtrip through one local atomic c
         let replay = MigrationReceiverCopyExecution.execute authority verified CreateReceiverCopies attempts transport |> unwrap
         Assert.Equal(0, replay.DispatchCount)
         let read = MigrationReceiverCopyExecution.execute authority verified ReadReceiverCopies attempts transport |> unwrap
+        Assert.True(MigrationReceiverCopyExecution.verifyReceipt manifest read)
+        Assert.False(MigrationReceiverCopyExecution.verifyReceipt manifest (reseal { read with DispatchCount=1 }))
         Assert.True(created.Refs = read.Refs)
         let removed = MigrationReceiverCopyExecution.execute authority verified RemoveReceiverCopies attempts transport |> unwrap
         Assert.Equal(1, removed.DispatchCount); Assert.Empty(removed.Refs)

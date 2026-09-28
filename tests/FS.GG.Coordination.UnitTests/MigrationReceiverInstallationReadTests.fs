@@ -43,7 +43,7 @@ let private options =
       UserAgent="receiver-installation-test" }
 let private cycle appBody installationBody repositoryBody =
     [ ok appBody; ok installationBody; ok repositoryBody ]
-let private stable = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" permissions) ]
+let private stable = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" broadPermissions) ]
 let private expectUnavailable (fragment: string) result =
     match result with
     | Error reason ->
@@ -52,39 +52,16 @@ let private expectUnavailable (fragment: string) result =
     | Ok _ -> Assert.Fail("expected provider authority refusal")
 
 [<Fact>]
-let ``stable selected App installation and exact sandbox repository scope compose roster input`` () =
+let ``broad installation does not attest narrow minted token permissions`` () =
     let transport = FakeTransport(stable @ stable)
-    match MigrationReceiverInstallationRead.captureForComposer options transport with
-    | Error reason -> Assert.Fail reason
-    | Ok capture ->
-        Assert.Equal(8001L, capture.App.ProviderAppId)
-        Assert.Equal("receiver-reader", capture.App.ProviderAppSlug)
-        Assert.Equal(1, capture.ComposerRosterCapture.First.RepositoryTotalCount)
-        Assert.Equal(capture.ComposerRosterCapture.First, capture.ComposerRosterCapture.Second)
-        Assert.Equal(64, capture.CaptureFingerprint.Length)
-        Assert.Equal(options.InstallationId, capture.ComposerRosterOptions.InstallationId)
-        Assert.True(options.ExpectedInstallationPermissions = capture.InstallationPermissions)
-        Assert.True(options.RequiredTokenPermissions = capture.TokenPermissions)
-        Assert.Equal("https://api.github.test/installation", capture.TokenFirst.RosterRequestedUri)
-        Assert.Empty(capture.ComposerRosterOptions.AppToken)
-        Assert.Empty(capture.ComposerRosterOptions.InstallationToken)
-        let requests =
-            transport.Calls
-            |> List.map (function Rest request -> request | GraphQL _ -> failwith "unexpected GraphQL")
-        Assert.Equal<string list>(
-            [ "https://api.github.test/app"
-              "https://api.github.test/app/installations/7001"
-              "https://api.github.test/installation/repositories?per_page=100&page=1"
-              "https://api.github.test/installation"
-              "https://api.github.test/app"
-              "https://api.github.test/app/installations/7001"
-              "https://api.github.test/installation/repositories?per_page=100&page=1"
-              "https://api.github.test/installation" ],
-            requests |> List.map (fun request -> request.Uri.AbsoluteUri))
-        for index, request in requests |> List.indexed do
-            let expectedToken = if index % 4 >= 2 then "installation-token" else "app-jwt"
-            Assert.Equal(Some $"Bearer {expectedToken}", Map.tryFind "Authorization" request.Headers)
-            Assert.Equal(Get, request.Method)
+    expectUnavailable "token-permission-attestation-unavailable"
+        (MigrationReceiverInstallationRead.captureForComposer options transport)
+    let requests =
+        transport.Calls
+        |> List.map (function Rest request -> request | GraphQL _ -> failwith "unexpected GraphQL")
+    Assert.Equal(4, requests.Length)
+    Assert.Equal("https://api.github.test/installation", requests[3].Uri.AbsoluteUri)
+    Assert.Equal(Some "Bearer installation-token", Map.tryFind "Authorization" requests[3].Headers)
 
 [<Fact>]
 let ``inaccessible App and incomplete repository census refuse explicitly`` () =
@@ -106,7 +83,7 @@ let ``wrong App installation and unknown permission settings refuse`` () =
     expectUnavailable "installation-permission"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport mismatchedInstallation))
     let broadToken = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" broadPermissions) ]
-    expectUnavailable "installation-permission-settings-unknown"
+    expectUnavailable "token-permission-attestation-unavailable"
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport broadToken))
     let impossible = { options with ExpectedInstallationPermissions=options.RequiredTokenPermissions
                                     RequiredTokenPermissions=Map [ "contents", "write"; "metadata", "read" ] }
@@ -125,22 +102,13 @@ let ``all repository selection and unselected repository grants refuse`` () =
         (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport extra))
 
 [<Fact>]
-let ``wrong selected repository and changed membership between passes refuse`` () =
+let ``wrong selected repository refuses`` () =
     let wrong = { options with SelectedRepositories=[ { declarations.Head with DeclaredRepositoryNodeId="REPO_WRONG" } ] }
     expectUnavailable "invalid-options"
         (MigrationReceiverInstallationRead.captureForComposer wrong (FakeTransport stable))
-    let changedRepositories = [ repository 201L "REPO_201" "FS-GG/copy-201" ]
-    let changed = cycle (app broadPermissions) (installation "selected" broadPermissions) (page 1 changedRepositories)
-    expectUnavailable "unselected-repository-grant"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport(stable @ changed)))
 
 [<Fact>]
-let ``raw App drift and pagination escape refuse`` () =
-    let originalApp = app broadPermissions
-    let changedApp = originalApp.Insert(originalApp.Length - 1, ",\"name\":\"changed\"")
-    let changed = cycle changedApp (installation "selected" broadPermissions) (page 1 repositories) @ [ ok (installation "selected" permissions) ]
-    expectUnavailable "two-pass-drift"
-        (MigrationReceiverInstallationRead.captureForComposer options (FakeTransport(stable @ changed)))
+let ``pagination escape refuses`` () =
     let escape =
         response 200 (Map [ "Link", "<https://evil.test/installation/repositories?per_page=100&page=2>; rel=\"next\"" ])
             (page 2 repositories)

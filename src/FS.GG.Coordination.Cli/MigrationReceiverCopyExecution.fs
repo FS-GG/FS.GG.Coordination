@@ -72,6 +72,38 @@ module MigrationReceiverCopyExecution =
           TargetObjects=objects
           Fingerprint = fingerprint operation attempt manifest applied dispatch refs objects }
 
+    /// Checks a public receipt as data. Its digest and every deterministic field must
+    /// agree with the verified transfer before the receipt is used as custody evidence.
+    let internal verifyReceipt (manifest: MigrationReceiverCopyTransferManifest) (candidate: MigrationReceiverCopyExecutionReceipt) =
+        let expected = expectedRefs manifest
+        let rows = manifest.DerivedRefs |> List.sortBy _.DerivedRef
+        let objects = candidate.TargetObjects |> List.sortBy _.RefName
+        let requestIdentity row =
+            String.concat "\000" [ "git-fetch"; fixedTarget; row.DerivedRef; row.DerivedCommit ] |> sha256
+        let validObjects =
+            objects.Length = rows.Length
+            && List.forall2 (fun object' row ->
+                object'.RefName = row.DerivedRef
+                && object'.CommitOid = row.DerivedCommit
+                && object'.TreeOid = row.DerivedTree
+                && object'.ParentOids.IsEmpty
+                && not (String.IsNullOrWhiteSpace object'.AuthorIdentity)
+                && not (String.IsNullOrWhiteSpace object'.CommitterIdentity)
+                && object'.SignatureStatus = "unsigned-derived-copy"
+                && object'.RequestIdentitySha256 = requestIdentity row) objects rows
+        candidate.Schema = "fsgg.receiver-copy-execution-receipt/2"
+        && candidate.Applied
+        && (candidate.Operation = CreateReceiverCopies || candidate.Operation = ReadReceiverCopies)
+        && candidate.AttemptId = sha256 ($"{operationName candidate.Operation}\000{manifest.Fingerprint}")
+        && candidate.ManifestFingerprint = manifest.Fingerprint
+        && (if candidate.Operation = ReadReceiverCopies then candidate.DispatchCount = 0
+            else candidate.DispatchCount = 0 || candidate.DispatchCount = 1)
+        && candidate.Refs = expected
+        && validObjects
+        && candidate.Fingerprint =
+            fingerprint candidate.Operation candidate.AttemptId candidate.ManifestFingerprint
+                candidate.Applied candidate.DispatchCount candidate.Refs candidate.TargetObjects
+
     let private validateAuthority (authority: MigrationReceiverCopyExecutionAuthority) =
         require (authority.TargetRepository = fixedTarget) "receiver-copy-execution-target"
         require authority.ProtectedCustody "receiver-copy-execution-protected-custody"
