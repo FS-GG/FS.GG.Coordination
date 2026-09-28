@@ -656,6 +656,47 @@ type private HybridProvider(concrete: IMigrationRepositorySettingsSurfaceProvide
                         [ { Surface=surface; Subject="FS-GG/sandbox"; Name="present"
                             Value=SettingValue.Boolean true } ] }
 
+let completeConcreteSettingsResponses () =
+    let publicRepository = repository true
+    let completeOrganization =
+        """{"id":7,"node_id":"ORG_7","login":"FS-GG","updated_at":"2026-09-28T00:00:00Z","has_repository_projects":true,"members_can_fork_private_repositories":true,"web_commit_signoff_required":false}"""
+    let normalize =
+        List.map (function
+            | Response value when value.Body = privateRepository ->
+                Response { value with Body=publicRepository }
+            | Response value when value.Body = organizationPolicy
+                                  || value.Body = actionsOrganizationIdentity ->
+                Response { value with Body=completeOrganization }
+            | outcome -> outcome)
+    let custom = customPropertiesPass customPropertySchema customPropertyValues
+    let rulesets =
+        rulesetsPass settingsRulesetList branchRulesetDetail tagRulesetDetail
+    let immutable = immutablePass true true "all" []
+    let pass () =
+        repositoryPass()
+        @ custom @ custom
+        @ rulesets @ rulesets
+        @ rulesets @ rulesets
+        @ mergePass()
+        @ actionsPass()
+        @ environmentPass()
+        @ successPass()
+        @ securityPass()
+        @ dependencyPass()
+        @ immutable @ immutable
+        |> normalize
+    options, identity, pass()
+
+let completeConcreteSettingsCapture () =
+    let concreteOptions, concreteIdentity, pass = completeConcreteSettingsResponses()
+    let transport = FakeTransport(pass @ pass)
+    let provider =
+        MigrationRepositorySettingsGitHubProvider(concreteOptions, transport)
+        :> IMigrationRepositorySettingsSurfaceProvider
+    match MigrationRepositorySettingsRead.captureTwoPass concreteIdentity revision provider with
+    | Ok capture -> concreteOptions, concreteIdentity, capture
+    | Error failure -> failwithf "complete concrete settings capture refused: %A" failure
+
 [<Fact>]
 let ``concrete provider pages join the eleven-surface two-pass composer`` () =
     let pass () =
