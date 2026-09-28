@@ -96,15 +96,22 @@ class RulesetReaderTests(unittest.TestCase):
             with self.assertRaisesRegex(OBSERVER.QUALIFICATION.Refusal, 'native page unavailable'):
                 OBSERVER.required_checks('FS-GG/FS.GG.Coordination', PROFILE)
 
-    def test_disabled_workflow_and_policy(self):
+    def test_installed_workflow_policy_and_public_anchor(self):
         workflow = (ROOT / '.github/workflows/v2-ci-ordinary-settlement.yml').read_text()
         policy = json.loads((ROOT / 'policy/v2-ci-ordinary-settlement.json').read_text())
-        self.assertIn("if: ${{ github.event_name == 'pull_request' }}", workflow)
-        self.assertNotIn('secrets.', workflow)
-        self.assertNotIn('ordinary-settlement execute', workflow)
-        self.assertFalse(policy['credentialJob']['installed'])
-        self.assertEqual('pending', policy['packagePin']['status'])
+        anchor = json.loads((ROOT / 'policy/v2-ci-ordinary-settlement-anchor.json').read_text())
+        self.assertNotIn("if: ${{ github.event_name == 'pull_request' }}", workflow)
+        self.assertIn('environment: ordinary-v2', workflow)
+        self.assertIn('PACKAGE_VERSION: 0.1.7', workflow)
+        self.assertIn('f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c', workflow)
+        self.assertIn('ordinary-settlement execute', workflow)
+        self.assertTrue(policy['credentialJob']['installed'])
+        self.assertEqual('published-verified', policy['packagePin']['status'])
+        self.assertEqual(3, policy['credentialJob']['liveObservation']['secretCount'])
         self.assertEqual(21633423, policy['qualification']['requiredCheckAuthority']['rulesetId'])
+        self.assertEqual(5064713, anchor['writer']['appId'])
+        self.assertEqual(164553252, anchor['writer']['installationId'])
+        self.assertEqual(0, len(anchor['rulesets']['integrity']['bypassActors']))
         for path, field in [('tools/v2-ci-ordinary-observe.py', 'observerSha256'),
                             ('tools/v2-ci-ordinary-qualification.py', 'qualificationSha256')]:
             import hashlib
