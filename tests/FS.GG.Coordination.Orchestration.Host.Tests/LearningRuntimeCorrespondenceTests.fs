@@ -286,7 +286,7 @@ let private preparedInherited relation (treatment: DurableLearningTreatment) =
         { ProjectId = projectId
           SourceRevision = revision
           WorkflowRevision = Id.revision 8L
-          Generation = Id.generation 2L
+          Generation = Id.generation 1L
           ObservationSha256 = String.replicate 64 "0"
           Provenance =
             { Provider = "github-graphql"
@@ -312,6 +312,7 @@ let private preparedInherited relation (treatment: DurableLearningTreatment) =
             [ { Source = planSource; Content = planBytes }
               { Source = instructionSource; Content = instructionBytes } ]
           AssignedAt = Fixture.now }
+    |> Result.map (fun prepared -> prepared, observed, child)
 
 let private selectionFor (prepared: PreparedLearningTreatment) =
     let request =
@@ -386,10 +387,10 @@ let ``valid root admission corresponds to root and identical-context child oracl
         Assert.Equal(1, executor.AttemptCount)
         Assert.Equal(prepared.CurrentContextManifestSha256, accepted.Binding.ContextManifestSha256)
 
-        let childPrepared =
+        let childPrepared, childObserved, childIdentity =
             preparedInherited (Descendant prepared.Input.ItemId) treatment
             |> Result.defaultWith (sprintf "%A" >> failwith)
-        let retryPrepared =
+        let retryPrepared, retryObserved, retryIdentity =
             preparedInherited (Retry prepared.Input.ItemId) treatment
             |> Result.defaultWith (sprintf "%A" >> failwith)
         for inherited in [ childPrepared; retryPrepared ] do
@@ -417,6 +418,62 @@ let ``valid root admission corresponds to root and identical-context child oracl
         Assert.Equal(accepted.Binding.TreatmentContextManifestSha256, child.TreatmentContextManifestSha256)
         Assert.NotEqual<string>(accepted.Binding.ContextManifestSha256, child.ContextManifestSha256)
         Assert.NotEqual<string>(accepted.Binding.BindingSha256, child.BindingSha256)
+
+        for inherited, sourceState, identity in
+            [ childPrepared, childObserved, childIdentity
+              retryPrepared, retryObserved, retryIdentity ] do
+            let childSubject =
+                { ItemId = inherited.Assignment.ItemId
+                  OriginalItemId = inherited.Assignment.OriginalItemId
+                  Relation = inherited.Assignment.Relation
+                  AssignmentSha256 = treatment.AssignmentSha256
+                  OwnerPrincipalId = treatment.OwnerPrincipalId
+                  BoundAt = Fixture.now }
+            let durableState =
+                { sourceState with
+                    LearningTreatments = Map.ofList [ treatment.OriginalItemId, treatment ]
+                    LearningTreatmentBindings = Map.ofList [ childSubject.ItemId, childSubject ] }
+            let childRequest0, childQuery, childEvidence = selectionFor inherited.PreparedTreatment
+            let childRequest =
+                { childRequest0 with
+                    WorkflowRevision = Id.revisionValue inherited.PreparedTreatment.CurrentWorkflowRevision }
+            let childJournal = Fixture.MemoryJournal()
+            let childExecutor = Fixture.MemoryExecutor(fun () -> childJournal.State)
+            let childBindings = Fixture.MemoryLearningBindings(fun () -> childExecutor.AttemptCount)
+            let! childResult =
+                LearningMainAdmission.prepare (Fixture.FixedClock()) (Fixture.MemoryObserverLearning(durableState))
+                    childJournal childExecutor childExecutor childBindings identity "pilot-route" childRequest
+                    inherited.PreparedTreatment treatment childSubject childQuery childEvidence CancellationToken.None
+            let admitted = childResult |> Result.defaultWith failwith
+            Assert.True(childBindings.BeforeIntent)
+            Assert.Equal(1, childExecutor.AttemptCount)
+            Assert.Equal(treatment.AssignmentSha256, admitted.Binding.TreatmentAssignmentSha256)
+            Assert.Equal(treatment.ProposalSha256, admitted.Binding.TreatmentProposalSha256)
+            Assert.Equal(treatment.ContextManifestSha256, admitted.Binding.TreatmentContextManifestSha256)
+            Assert.Equal(inherited.PreparedTreatment.CurrentContextManifestSha256, admitted.Binding.ContextManifestSha256)
+            Assert.NotEqual<string>(admitted.Binding.TreatmentContextManifestSha256, admitted.Binding.ContextManifestSha256)
+
+            let wrongJournal = Fixture.MemoryJournal()
+            let wrongExecutor = Fixture.MemoryExecutor(fun () -> wrongJournal.State)
+            let wrongBindings = Fixture.MemoryLearningBindings(fun () -> wrongExecutor.AttemptCount)
+            let! wrongItem =
+                LearningMainAdmission.prepare (Fixture.FixedClock()) (Fixture.MemoryObserverLearning(durableState))
+                    wrongJournal wrongExecutor wrongExecutor wrongBindings Fixture.permit.SubjectId "pilot-route" childRequest
+                    inherited.PreparedTreatment treatment childSubject childQuery childEvidence CancellationToken.None
+            Assert.Equal(Error "learning-main-admission-work-item-refused", wrongItem)
+            Assert.Equal(0, wrongExecutor.AttemptCount)
+            Assert.Equal(0, wrongExecutor.Writes)
+
+            let staleJournal = Fixture.MemoryJournal()
+            let staleExecutor = Fixture.MemoryExecutor(fun () -> staleJournal.State)
+            let staleBindings = Fixture.MemoryLearningBindings(fun () -> staleExecutor.AttemptCount)
+            let staleRequest = { childRequest with WorkflowRevision = childRequest.WorkflowRevision - 1L }
+            let! stale =
+                LearningMainAdmission.prepare (Fixture.FixedClock()) (Fixture.MemoryObserverLearning(durableState))
+                    staleJournal staleExecutor staleExecutor staleBindings identity "pilot-route" staleRequest
+                    inherited.PreparedTreatment treatment childSubject childQuery childEvidence CancellationToken.None
+            Assert.Equal(Error "learning-main-admission-authority-stale", stale)
+            Assert.Equal(0, staleExecutor.AttemptCount)
     }
 
 [<Fact>]
