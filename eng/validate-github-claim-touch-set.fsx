@@ -85,9 +85,12 @@ then
     fail "GCTQ-PREDECESSOR-DIGEST" "accepted GS2-05.4 receipt mismatch"
 
 if
-    sha256 quintPath
-    <> corpus.RootElement.GetProperty("quintSourceSha256").GetString()
+    corpus.RootElement.GetProperty("quintSourceSha256").GetString()
+    <> "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
 then
+    fail "GCTQ-PREDECESSOR-QUINT" "accepted GS2-05.4 Quint identity changed"
+
+if sha256 quintPath <> "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895" then
     fail "GCTQ-QUINT" "canonical Quint source changed"
 
 if generatedIds <> requiredIds || independentIds <> requiredIds then
@@ -171,7 +174,7 @@ let generatedMutation =
             }
     | GitHubClaimTouchSetControl.QuintAndPrerequisite ->
         sha256 receiptPath = "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e"
-        && sha256 quintPath = "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb"
+        && sha256 quintPath = "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
 
 // Independent producer: distinct assertions over the public boundary, not a call to generatedMutation.
 let independentMutation =

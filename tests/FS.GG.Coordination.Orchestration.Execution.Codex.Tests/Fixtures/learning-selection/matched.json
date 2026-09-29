@@ -1,0 +1,1 @@
+{"type":"turn.completed","thread_id":"thread-learning","turn_id":"turn-matched","provider":"openai","model":"gpt-5.6-sol","effort":"medium","backend":"chatgpt-subscription","usage":{"input_tokens":21,"cached_input_tokens":4,"output_tokens":8,"reasoning_output_tokens":3}}

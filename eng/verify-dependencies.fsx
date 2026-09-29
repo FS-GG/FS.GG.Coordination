@@ -164,6 +164,7 @@ let private allowedDependencies =
                     "FS.GG.Coordination.Core"
                     "FS.GG.Coordination.Orchestration.Pilot"
                     "FS.GG.Coordination.Orchestration.PostgreSql"
+                    "FS.GG.Coordination.Orchestration.Observer"
                     "FS.GG.Coordination.Orchestration.Runner.Protocol"
                 ]
             "FS.GG.Coordination.Orchestration.PostgreSql",

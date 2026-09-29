@@ -134,8 +134,9 @@ type CodexExecutionProvider
         options: CodexExecutionProviderOptions,
         input: ICodexExecutionInput,
         candidateInspector: ICodexCandidateInspector,
-        clock: TimeProvider
-    ) =
+        clock: TimeProvider,
+        ?learningCapabilityDiscovery: ICodexLearningCapabilityDiscovery
+    ) as this =
     let identity =
         {
             Provider = "Codex"
@@ -147,6 +148,36 @@ type CodexExecutionProvider
     let sha256File path =
         use stream = File.OpenRead path
         SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let resolveExecutablePath () =
+        if
+            Path.IsPathRooted options.Executable
+            || options.Executable.Contains(Path.DirectorySeparatorChar)
+        then
+            Path.GetFullPath options.Executable
+        else
+            Environment.GetEnvironmentVariable "PATH"
+            |> Option.ofObj
+            |> Option.defaultValue ""
+            |> fun value -> value.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            |> Array.map (fun directory -> Path.Combine(directory, options.Executable))
+            |> Array.tryFind File.Exists
+            |> Option.defaultValue options.Executable
+
+    let executableIdentity version =
+        let path = resolveExecutablePath ()
+
+        let digest =
+            try
+                if File.Exists path then Some(sha256File path) else None
+            with _ ->
+                None
+
+        {
+            Path = path
+            Version = version
+            Sha256 = digest
+        }
 
     let sessionValue reference =
         ProviderSessionReference.value reference
@@ -324,6 +355,54 @@ type CodexExecutionProvider
             with
             | :? OperationCanceledException -> return AuthenticationUnknown "codex-login-status-cancelled"
             | _ -> return AuthenticationUnknown "codex-login-status-unavailable"
+        }
+
+    let learningCapability requested cancellationToken =
+        task {
+            let observedAt = clock.GetUtcNow()
+
+            let! version, unavailable =
+                task {
+                    try
+                        let! exitCode, stdout, stderr = probe [ "--version" ] cancellationToken
+                        let value = (stdout + stderr).Trim()
+
+                        if exitCode = 0 && not (String.IsNullOrWhiteSpace value) then
+                            return Some value, None
+                        else
+                            return None, Some "codex-version-unavailable"
+                    with
+                    | :? OperationCanceledException -> return None, Some "codex-version-cancelled"
+                    | _ -> return None, Some "codex-version-unavailable"
+                }
+
+            let query =
+                {
+                    Provider = identity
+                    Executable = executableIdentity version
+                    Requested = requested
+                    MaximumAge = TimeSpan.FromMinutes 5.
+                }
+
+            let! evidence =
+                match unavailable, version, learningCapabilityDiscovery with
+                | Some code, _, _ -> Task.FromResult(CodexLearningProviderCapability.unknown observedAt query code)
+                | None, Some actual, _ when actual <> options.ExpectedVersion ->
+                    Task.FromResult(CodexLearningProviderCapability.unknown observedAt query "codex-version-mismatch")
+                | None, Some _, Some discovery -> discovery.Discover(query, cancellationToken)
+                | None, Some _, None ->
+                    Task.FromResult(
+                        CodexLearningProviderCapability.unknown
+                            observedAt
+                            query
+                            "codex-native-selection-capability-unavailable"
+                    )
+                | _ ->
+                    Task.FromResult(
+                        CodexLearningProviderCapability.unknown observedAt query "codex-version-unavailable"
+                    )
+
+            return query, evidence
         }
 
     let writeSchema path =
@@ -522,71 +601,81 @@ type CodexExecutionProvider
                     telemetryGap "process-start-observer-failed")
 
             let stdoutPump =
-                pumpBounded proc.StandardOutput.BaseStream stdoutPath options.MaximumStreamBytes (fun line ->
-                    let usage = parseUsage [ line ]
+                pumpBounded
+                    proc.StandardOutput.BaseStream
+                    stdoutPath
+                    options.MaximumStreamBytes
+                    (fun line ->
+                        let usage = parseUsage [ line ]
 
-                    if not (usage.Values.ContainsKey "provider-usage") then
-                        completedUsage <- Some usage
+                        if not (usage.Values.ContainsKey "provider-usage") then
+                            completedUsage <- Some usage
 
-                    fatalClassification [ line ]
-                    |> Option.iter (fun value -> fatalEvent <- Some value)
+                        fatalClassification [ line ]
+                        |> Option.iter (fun value -> fatalEvent <- Some value)
 
-                    try
-                        use document = JsonDocument.Parse line
-                        let eventType = document.RootElement.GetProperty("type").GetString()
+                        try
+                            use document = JsonDocument.Parse line
+                            let eventType = document.RootElement.GetProperty("type").GetString()
 
-                        if eventType = "thread.started" then
-                            let nativeThread = document.RootElement.GetProperty("thread_id").GetString()
-                            telemetryThread <- Some nativeThread
-                            threadStarted.TrySetResult nativeThread |> ignore
-                            options.TurnObserver
-                            |> Option.iter (fun observer ->
-                                try observer.ThreadStarted(proc.Id, nativeThread, DateTimeOffset.UtcNow)
-                                with _ -> telemetryGap "thread-start-observer-failed")
-                        elif eventType = "turn.started" then
-                            let nativeThread =
-                                match document.RootElement.TryGetProperty "thread_id" with
-                                | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
-                                | _ -> telemetryThread
+                            if eventType = "thread.started" then
+                                let nativeThread = document.RootElement.GetProperty("thread_id").GetString()
+                                telemetryThread <- Some nativeThread
+                                threadStarted.TrySetResult nativeThread |> ignore
 
-                            let nativeTurn =
-                                match document.RootElement.TryGetProperty "turn_id" with
-                                | true, value when value.ValueKind = JsonValueKind.String -> Some(value.GetString())
-                                | _ -> None
-
-                            match nativeThread with
-                            | Some thread ->
                                 options.TurnObserver
                                 |> Option.iter (fun observer ->
                                     try
-                                        observer.NativeTurnStarted(
-                                            proc.Id,
-                                            thread,
-                                            nativeTurn,
-                                            telemetryTurnSequence + 1L,
-                                            DateTimeOffset.UtcNow
-                                        )
-                                    with _ -> telemetryGap "turn-start-observer-failed")
-                            | None -> telemetryGap "missing-turn-thread"
-                        elif eventType = "turn.completed" then
-                            turnCompleted <- true
-                    with _ ->
-                        ()
+                                        observer.ThreadStarted(proc.Id, nativeThread, DateTimeOffset.UtcNow)
+                                    with _ ->
+                                        telemetryGap "thread-start-observer-failed")
+                            elif eventType = "turn.started" then
+                                let nativeThread =
+                                    match document.RootElement.TryGetProperty "thread_id" with
+                                    | true, value when value.ValueKind = JsonValueKind.String ->
+                                        Some(value.GetString())
+                                    | _ -> telemetryThread
 
-                    match CodexTurnProjection.project telemetryThread (telemetryTurnSequence + 1L) line with
-                    | Some(Ok turn) ->
-                        telemetryTurnSequence <- telemetryTurnSequence + 1L
+                                let nativeTurn =
+                                    match document.RootElement.TryGetProperty "turn_id" with
+                                    | true, value when value.ValueKind = JsonValueKind.String ->
+                                        Some(value.GetString())
+                                    | _ -> None
 
-                        options.TurnObserver
-                        |> Option.iter (fun observer ->
-                            try
-                                observer.TurnCompleted turn
-                            with _ ->
-                                telemetryGap "turn-observer-failed")
-                    | Some(Error code) ->
-                        telemetryTurnSequence <- telemetryTurnSequence + 1L
-                        telemetryGap code
-                    | None -> ())
+                                match nativeThread with
+                                | Some thread ->
+                                    options.TurnObserver
+                                    |> Option.iter (fun observer ->
+                                        try
+                                            observer.NativeTurnStarted(
+                                                proc.Id,
+                                                thread,
+                                                nativeTurn,
+                                                telemetryTurnSequence + 1L,
+                                                DateTimeOffset.UtcNow
+                                            )
+                                        with _ ->
+                                            telemetryGap "turn-start-observer-failed")
+                                | None -> telemetryGap "missing-turn-thread"
+                            elif eventType = "turn.completed" then
+                                turnCompleted <- true
+                        with _ ->
+                            ()
+
+                        match CodexTurnProjection.project telemetryThread (telemetryTurnSequence + 1L) line with
+                        | Some(Ok turn) ->
+                            telemetryTurnSequence <- telemetryTurnSequence + 1L
+
+                            options.TurnObserver
+                            |> Option.iter (fun observer ->
+                                try
+                                    observer.TurnCompleted turn
+                                with _ ->
+                                    telemetryGap "turn-observer-failed")
+                        | Some(Error code) ->
+                            telemetryTurnSequence <- telemetryTurnSequence + 1L
+                            telemetryGap code
+                        | None -> ())
                     (fun () -> telemetryGap "oversized-jsonl-line")
 
             let stderrPump =
@@ -624,6 +713,7 @@ type CodexExecutionProvider
                     do! inputWrite
                     do! stdoutPump
                     do! stderrPump
+
                     options.TurnObserver
                     |> Option.iter (fun observer ->
                         try
@@ -813,6 +903,22 @@ type CodexExecutionProvider
                 do! completion :> Task
                 return Error "codex-thread-start-timeout"
         }
+
+    interface ILearningExecutionProvider with
+        member _.ObserveLearningSelection(requested, cancellationToken) =
+            task {
+                let! _, evidence = learningCapability requested cancellationToken
+                return evidence
+            }
+
+        member _.LaunchLearning(intent, cancellationToken) =
+            task {
+                let! query, evidence = learningCapability intent.Requested cancellationToken
+
+                match LearningSelectionEvidence.authorize (clock.GetUtcNow()) query evidence with
+                | Ok() -> return! (this :> IExecutionProvider).Launch(intent, cancellationToken)
+                | Error code -> return LaunchRefused code
+            }
 
     interface IExecutionProvider with
         member _.ObserveReadiness cancellationToken =

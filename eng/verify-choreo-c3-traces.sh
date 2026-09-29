@@ -24,7 +24,13 @@ test -x "$quint_bin"
 printf '%s  %s\n' "$quint_sha" "$quint_bin" | sha256sum --check --status
 
 test "$(jq -r '.schema' "$manifest")" = "fsgg.quint.choreo-trace-manifest/1"
-test "$(jq -r '.source.sha256' "$manifest")" = "$(sha256sum "$repo_root/src/FS.GG.Coordination.Protocol/Protocol.md" | cut -d' ' -f1)"
+expected_source_sha="$(jq -r '.source.sha256' "$manifest")"
+actual_source_sha="$(sha256sum "$repo_root/src/FS.GG.Coordination.Protocol/Protocol.md" | cut -d' ' -f1)"
+if [[ "$expected_source_sha" != "$actual_source_sha" ]]; then
+  printf 'CHOREO_C3_TRACE_REFUSED protocol source identity differs expected=%s actual=%s\n' \
+    "$expected_source_sha" "$actual_source_sha" >&2
+  exit 1
+fi
 test "$(jq -r '.quint.binarySha256' "$manifest")" = "$quint_sha"
 test "$(jq -r '.choreo.commit' "$manifest")" = "$(jq -r '.commit' "$repo_root/eng/choreo-source-pin.json")"
 

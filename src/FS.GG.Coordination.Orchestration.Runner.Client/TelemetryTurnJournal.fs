@@ -42,13 +42,12 @@ type TelemetryTurnJournal(stateRoot: string, command: ExecutorCommandV2) =
         stream.Write bytes
         stream.Flush true
 
-    let save kind identity payload =
+    let saveBytes kind identity (bytes: byte array) =
         Directory.CreateDirectory directory |> ignore
 
         if OperatingSystem.IsLinux() then
             File.SetUnixFileMode(directory, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
 
-        let bytes = JsonSerializer.SerializeToUtf8Bytes payload
         let path = Path.Combine(directory, kind + "-" + digest identity + ".json")
 
         try
@@ -56,6 +55,9 @@ type TelemetryTurnJournal(stateRoot: string, command: ExecutorCommandV2) =
         with :? IOException ->
             if not (File.Exists path) || File.ReadAllBytes path <> bytes then
                 raise (InvalidOperationException "telemetry-turn-journal-identity-conflict")
+
+    let save kind identity payload =
+        saveBytes kind identity (JsonSerializer.SerializeToUtf8Bytes payload)
 
     member _.RecordGap code =
         let identity = Guid.NewGuid().ToString("N")
@@ -66,6 +68,17 @@ type TelemetryTurnJournal(stateRoot: string, command: ExecutorCommandV2) =
         let identity = "recovery-" + code
         save "gap" identity {| Identity = identity; Code = code; ObservedAt = command.RecordedAt |}
         identity
+
+    member _.RecordLearningBatch(name: string, payload: byte array) =
+        if
+            String.IsNullOrWhiteSpace name
+            || name.Length > 100
+            || payload.Length = 0
+            || payload.Length > 65536
+        then
+            invalidArg "payload" "learning-telemetry-batch-invalid"
+
+        saveBytes "learning" name payload
 
     interface ICodexTurnObserver with
         member _.TurnCompleted turn =

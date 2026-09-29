@@ -138,6 +138,8 @@ module private Fixture =
                 ParentAttemptId = Nullable()
                 ParentGeneration = Nullable()
                 TelemetryRelation = null
+                LearningOriginalItemId = null
+                LearningExecutionBindingBase64 = null
             }
 
         { unsigned with

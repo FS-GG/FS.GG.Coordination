@@ -61,6 +61,16 @@ module ChoreoTrace =
 
     let private choreoCommit = "000cf4eed315187dc6f216a148781cff7dde6521"
 
+    let private currentSourceCommit = "e265ac246e8eaa7637d87f15ea422a4b409e39b8"
+
+    let private currentSourceSha =
+        "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+
+    // The whole source is bound to the current qualification while this independent
+    // region digest retains the identity of the Choreo model that produced the ITFs.
+    let private choreoSourceSha =
+        "cd5b58dea391bf1afd6a84eb5e8b74f99b9dc3cf665f9ad78881e53cf7c9b6e1"
+
     let private sha256Bytes (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -84,6 +94,38 @@ module ChoreoTrace =
 
     let private protocolPath () =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
+
+    let private currentChoreoSourceSha () =
+        let lines = File.ReadAllLines(protocolPath ())
+        let first = lines |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoModel {")
+        let last =
+            lines
+            |> Array.indexed
+            |> Array.find (fun (index, line) -> index > first && line.Trim() = "```")
+            |> fst
+
+        lines[first .. last - 1]
+        |> String.concat "\n"
+        |> fun value -> value + "\n"
+        |> sha256Text
+
+    let internal validateSourceProvenance (source: JsonObject) protocolBytes =
+        exactProperties "manifest source" [ "path"; "commit"; "sha256" ] source
+        let sourceSha = text source "sha256"
+
+        if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then
+            failwith "source path differs"
+
+        if text source "commit" <> currentSourceCommit then
+            failwith "source commit differs"
+
+        if sourceSha <> currentSourceSha then
+            failwith "manifest protocol source digest differs"
+
+        if sha256Bytes protocolBytes <> currentSourceSha then
+            failwith "protocol source digest differs"
+
+        sourceSha
 
     let private mapValue name (value: JsonObject) =
         value["#map"].AsArray()
@@ -468,17 +510,10 @@ module ChoreoTrace =
             failwith "Choreo raw variable differs"
 
         let source = root["source"].AsObject()
-        exactProperties "manifest source" [ "path"; "commit"; "sha256" ] source
-        let sourceSha = text source "sha256"
+        let sourceSha = validateSourceProvenance source (File.ReadAllBytes(protocolPath ()))
 
-        if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then
-            failwith "source path differs"
-
-        if text source "commit" <> "e1ff2a32649a180121c756f762d174e9c74f6620" then
-            failwith "source commit differs"
-
-        if sha256File (protocolPath ()) <> sourceSha then
-            failwith "protocol source digest differs"
+        if currentChoreoSourceSha () <> choreoSourceSha then
+            failwith "historical Choreo protocol region differs"
 
         let quint = root["quint"].AsObject()
         exactProperties "manifest Quint" [ "version"; "binarySha256"; "backend"; "maxSamples" ] quint

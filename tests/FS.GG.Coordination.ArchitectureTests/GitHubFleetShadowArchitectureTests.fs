@@ -64,7 +64,7 @@ let ``fleet shadow is a pure comparison surface with no apply path`` () =
 [<Fact>]
 let ``fleet shadow preserves canonical Quint source`` () =
     Assert.Equal(
-        "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb",
+        "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895",
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )
 

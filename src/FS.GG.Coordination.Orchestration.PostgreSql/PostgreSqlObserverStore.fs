@@ -223,10 +223,10 @@ WHERE r.singleton FOR SHARE OF r,o
                 then
                     return ObserverInvalidAppend "invalid-observer-command"
                 elif
-                    match request.Command.Command with
-                    | AssignLearningTreatment input ->
+                    match ObserverCommand.tryLearningTreatmentInput request.Command.Command with
+                    | Some input ->
                         request.ObserverId <> ObserverJournal.learningTreatmentObserverId input.OriginalItemId
-                    | _ -> false
+                    | None -> false
                 then
                     return ObserverInvalidAppend "learning-treatment-stream-identity-mismatch"
                 else
@@ -332,8 +332,8 @@ WHERE r.singleton FOR SHARE OF r,o
 
                                 let! decisionState =
                                     task {
-                                        match request.Command.Command with
-                                        | AssignLearningTreatment input ->
+                                        match ObserverCommand.tryLearningTreatmentInput request.Command.Command with
+                                        | Some input ->
                                             use sourceHead =
                                                 new NpgsqlCommand(
                                                     "SELECT last_sequence FROM fsgg_orchestration.observer_stream WHERE observer_id=$1 FOR SHARE",
@@ -362,6 +362,12 @@ WHERE r.singleton FOR SHARE OF r,o
 
                                             let sourceState = sourceEvents |> List.map _.Event |> Observer.replay
 
+                                            let sourceWorkflowRevision, sourceGeneration =
+                                                match request.Command.Command with
+                                                | AssignPreparedLearningTreatment prepared ->
+                                                    prepared.CurrentWorkflowRevision, prepared.CurrentGeneration
+                                                | _ -> input.ExpectedWorkflowRevision, input.ExpectedGeneration
+
                                             let sourceValid =
                                                 sourceState.Sequence = input.SourceSequence
                                                 && (sourceState.SessionId
@@ -374,8 +380,8 @@ WHERE r.singleton FOR SHARE OF r,o
                                                             input.SourceObservationSha256,
                                                             StringComparison.OrdinalIgnoreCase
                                                         )
-                                                        && observation.WorkflowRevision = input.ExpectedWorkflowRevision
-                                                        && observation.Generation = input.ExpectedGeneration))
+                                                        && observation.WorkflowRevision = sourceWorkflowRevision
+                                                        && observation.Generation = sourceGeneration))
 
                                             if not sourceValid then
                                                 raise (ObserverAppendException "learning-treatment-source-reference-mismatch")
@@ -384,7 +390,7 @@ WHERE r.singleton FOR SHARE OF r,o
                                                 { state with
                                                     Observation = sourceState.Observation
                                                 }
-                                        | _ -> return state
+                                        | None -> return state
                                     }
 
                                 let decision = Observer.decide request.ReceivedAt decisionState request.Command

@@ -360,6 +360,12 @@ module MainAdmissionPreparer =
         principal
         (request: MainAdmissionPreparationRequest)
         (inputBytes: byte array)
+        (beforeLaunch:
+            PlanningSnapshot ->
+            Generation ->
+            LaunchIntent ->
+            CancellationToken ->
+            Task<Result<unit, string>>)
         token
         =
         task {
@@ -604,20 +610,25 @@ module MainAdmissionPreparer =
                                     match bound with
                                     | Error reason -> return Error reason
                                     | Ok _ ->
-                                        let! intent =
-                                            executionJournal.AppendAttempt(
-                                                request.ProcessOperationId,
-                                                request.AttemptId,
-                                                0L,
-                                                LaunchIntentRecorded launch,
-                                                token
-                                            )
+                                        let! preIntent = beforeLaunch snapshot generation launch token
 
-                                        match intent with
-                                        | AppendConflict ->
-                                            return Error "main-admission-preparation-launch-intent-conflict"
-                                        | Appended
-                                        | DuplicateEvent ->
+                                        match preIntent with
+                                        | Error reason -> return Error reason
+                                        | Ok() ->
+                                          let! intent =
+                                              executionJournal.AppendAttempt(
+                                                  request.ProcessOperationId,
+                                                  request.AttemptId,
+                                                  0L,
+                                                  LaunchIntentRecorded launch,
+                                                  token
+                                              )
+
+                                          match intent with
+                                          | AppendConflict ->
+                                              return Error "main-admission-preparation-launch-intent-conflict"
+                                          | Appended
+                                          | DuplicateEvent ->
                                             let! reserved =
                                                 executions.ReserveSubscription(
                                                     SubscriptionAccountingCodec.encodeReservation executionReservation,
@@ -709,7 +720,7 @@ module MainAdmissionPreparer =
                                                     )
         }
 
-    let prepare
+    let internal prepareWithPreIntent
         clock
         workItems
         executions
@@ -718,6 +729,12 @@ module MainAdmissionPreparer =
         principal
         request
         (inputBytes: byte array)
+        (beforeLaunch:
+            PlanningSnapshot ->
+            Generation ->
+            LaunchIntent ->
+            CancellationToken ->
+            Task<Result<unit, string>>)
         token
         =
         if isNull inputBytes || inputBytes.Length = 0 || inputBytes.Length > 1024 * 1024 then
@@ -754,12 +771,17 @@ module MainAdmissionPreparer =
             | Ok _, Ok _ ->
                 task {
                     try
-                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes token
+                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes beforeLaunch token
                     with TelemetryParentRefused reason ->
                         return Error reason
                 }
             | Error reason, _
             | _, Error reason -> Task.FromResult(Error reason)
+
+    let prepare clock workItems executions executionJournal workItemId principal request inputBytes token =
+        prepareWithPreIntent
+            clock workItems executions executionJournal workItemId principal request inputBytes
+            (fun _ _ _ _ -> Task.FromResult(Ok())) token
 
     let writeAtomicPrivate (path: string) (bytes: byte array) =
         let directory = Path.GetDirectoryName path

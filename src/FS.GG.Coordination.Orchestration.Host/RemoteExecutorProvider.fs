@@ -23,6 +23,7 @@ type ResolvedExecutorRouteBinding =
         ParentAttemptId: Nullable<Guid>
         ParentGeneration: Nullable<int64>
         TelemetryRelation: string
+        LearningExecutionBinding: LearningExecutionBinding option
     }
 
 type ExecutorTransportReadback = { Frames: byte array list }
@@ -44,7 +45,7 @@ type IExecutorBindingResolver =
 /// deliberately absent, so reconnecting a launcher cannot renew execution authority.
 [<Sealed>]
 type PostgreSqlExecutorBindingResolver
-    (store: IExecutorCommandStore, journal: IExecutionSessionJournal, readinessAssignment: Guid, readinessAttempt: Guid)
+    (store: IExecutorCommandStore, journal: IExecutionSessionJournal, readinessAssignment: Guid, readinessAttempt: Guid, ?learningStore: ILearningExecutionBindingStore)
     =
     let resolve assignmentId attemptId expectedIntent token =
         task {
@@ -72,6 +73,22 @@ type PostgreSqlExecutorBindingResolver
                             && workspaceManifest.BaselineObjectId = route.BaselineObjectId
                             && workspaceManifest.RepositoryBinding = route.RepositoryBinding
                             ->
+                            let! learning =
+                                match learningStore with
+                                | None -> Task.FromResult(Ok None)
+                                | Some source ->
+                                    task {
+                                        let! result = source.ReadLearningExecution(assignmentId, attemptId, token)
+                                        return
+                                            match result with
+                                            | Ok value -> Ok(Some value)
+                                            | Error "learning-execution-binding-missing" -> Ok None
+                                            | Error reason -> Error reason
+                                    }
+
+                            match learning with
+                            | Error reason -> return Error reason
+                            | Ok learning ->
                             let inputManifest =
                                 {
                                     Schema = ExecutorWire.inputManifestSchema
@@ -96,6 +113,7 @@ type PostgreSqlExecutorBindingResolver
                                         ParentAttemptId = route.ParentAttemptId
                                         ParentGeneration = route.ParentGeneration
                                         TelemetryRelation = route.TelemetryRelation
+                                        LearningExecutionBinding = learning
                                     }
                                 )
                         | _ -> return Error "execution-route-workspace-binding-refused"
@@ -349,7 +367,9 @@ type RemoteExecutorProvider
         let value =
             {
                 Schema =
-                    if binding.ParentAttemptId.HasValue then
+                    if binding.LearningExecutionBinding.IsSome then
+                        ExecutorWire.commandSchemaV4
+                    elif binding.ParentAttemptId.HasValue then
                         ExecutorWire.commandSchemaV3
                     else
                         ExecutorWire.commandSchemaV2
@@ -380,6 +400,11 @@ type RemoteExecutorProvider
                 ParentAttemptId = binding.ParentAttemptId
                 ParentGeneration = binding.ParentGeneration
                 TelemetryRelation = binding.TelemetryRelation
+                LearningOriginalItemId = binding.LearningExecutionBinding |> Option.map _.OriginalItemId |> Option.toObj
+                LearningExecutionBindingBase64 =
+                    binding.LearningExecutionBinding
+                    |> Option.map (LearningExecutionBinding.canonicalBytes >> Convert.ToBase64String)
+                    |> Option.toObj
             }
 
         { value with

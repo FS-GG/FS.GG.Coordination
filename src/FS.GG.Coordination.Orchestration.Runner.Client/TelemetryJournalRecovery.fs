@@ -77,12 +77,15 @@ module TelemetryJournalRecovery =
             for path in files |> Array.truncate 4096 do
                 try
                     let info = FileInfo path
+                    let filename = Path.GetFileName path
+                    let maximumLength =
+                        if filename.StartsWith("learning-", StringComparison.Ordinal) then 65536L else 4096L
 
                     if
                         not info.Exists
                         || not (isNull info.LinkTarget)
                         || info.Length < 2L
-                        || info.Length > 4096L
+                        || info.Length > maximumLength
                         || (OperatingSystem.IsLinux()
                             && File.GetUnixFileMode(path) <> (UnixFileMode.UserRead ||| UnixFileMode.UserWrite))
                     then
@@ -90,10 +93,11 @@ module TelemetryJournalRecovery =
 
                     use document = JsonDocument.Parse(File.ReadAllBytes path, JsonDocumentOptions(MaxDepth = 8))
                     let evidence = document.RootElement
-                    let filename = Path.GetFileName path
 
                     let batch =
-                        if
+                        if filename.StartsWith("learning-", StringComparison.Ordinal) then
+                            requiredString evidence "ingestId", File.ReadAllBytes path
+                        elif
                             filename.StartsWith("turn-", StringComparison.Ordinal)
                             && not (filename.StartsWith("turn-start-", StringComparison.Ordinal))
                         then

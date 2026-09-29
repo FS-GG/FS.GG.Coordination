@@ -8,6 +8,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="LearningContextTests.fs" />
     <Compile Include="LearningProposalTests.fs" />
+    <Compile Include="LearningAssignmentAdapterTests.fs" />
     <Compile Include="ObserverTests.fs" />
   </ItemGroup>
   <ItemGroup>
