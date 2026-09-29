@@ -2,6 +2,7 @@ module FS.GG.Coordination.Orchestration.Host.Tests.ChoreoTraceTests
 
 open System
 open System.IO
+open System.Security.Cryptography
 open System.Text.Json.Nodes
 open FsQuint
 open Xunit
@@ -29,6 +30,41 @@ let ``all deterministic Choreo scenarios are raw identity-bound Quint traces`` (
     Assert.True((terminal "stale-generation").StaleRejected)
     Assert.True((terminal "wrong-identity").IdentityRejected)
     Assert.Equal(6, (terminal "missing-native-readback").Stage)
+
+[<Fact>]
+let ``current Choreo manifest binds the qualified protocol while retaining exact traces`` () =
+    let fixtureRoot = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo")
+    let manifest = JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
+    let source = manifest["source"].AsObject()
+    let expectedSourceSha = "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+    let protocolBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md"))
+
+    Assert.Equal("e265ac246e8eaa7637d87f15ea422a4b409e39b8", source["commit"].GetValue<string>())
+    Assert.Equal(expectedSourceSha, source["sha256"].GetValue<string>())
+
+    let actualSourceSha =
+        protocolBytes |> SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    Assert.Equal(expectedSourceSha, actualSourceSha)
+
+    for scenario in manifest["scenarios"].AsArray() do
+        let value = scenario.AsObject()
+        let actualTraceSha =
+            File.ReadAllBytes(Path.Combine(fixtureRoot, value["file"].GetValue<string>()))
+            |> SHA256.HashData
+            |> Convert.ToHexString
+            |> _.ToLowerInvariant()
+
+        Assert.Equal(value["traceSha256"].GetValue<string>(), actualTraceSha)
+
+    let changedProtocolBytes = Array.append protocolBytes [| byte '\n' |]
+    let error =
+        Assert.ThrowsAny<Exception>(fun () ->
+            ChoreoTrace.validateSourceProvenance source changedProtocolBytes |> ignore)
+
+    Assert.Contains("protocol source digest differs", error.Message)
 
 [<Fact>]
 let ``raw Choreo projection rejects a crossed generation even when JSON remains valid`` () =
