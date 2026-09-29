@@ -81,6 +81,17 @@ type InstalledAdoptionVerificationConfiguration =
         RequestBytes: byte array
     }
 
+type CompatibilityDiagnosticConfiguration =
+    {
+        RunnerExecutable: string
+        RunnerSha256: string
+        ProviderExecutable: string
+        ProviderSha256: string
+        WorkingDirectory: string
+        ExpectedCodexVersion: string
+        Timeout: TimeSpan
+    }
+
 [<RequireQualifiedAccess>]
 module HostConfiguration =
     [<Struct; StructLayout(LayoutKind.Sequential)>]
@@ -558,6 +569,60 @@ module HostConfiguration =
                         MaximumConcurrentRequests = 4
                     }
             | _ -> return! Error "invalid-fence-backup-permit-or-work-item-identity"
+        }
+
+    let parseCompatibilityDiagnostic arguments =
+        result {
+            let allowed =
+                set
+                    [
+                        "--runner-executable"
+                        "--runner-sha256"
+                        "--provider-executable"
+                        "--provider-sha256"
+                        "--working-directory"
+                        "--expected-codex-version"
+                        "--timeout-seconds"
+                    ]
+
+            do! validateArguments allowed arguments
+            let! runner = value "--runner-executable" arguments
+            let! runnerSha = value "--runner-sha256" arguments
+            let! provider = value "--provider-executable" arguments
+            let! providerSha = value "--provider-sha256" arguments
+            let! working = value "--working-directory" arguments
+
+            let expected =
+                optionalValue "--expected-codex-version" arguments
+                |> Option.defaultValue "0.154.0"
+
+            let! timeoutText = value "--timeout-seconds" arguments
+
+            let digest (value: string) =
+                value.Length = 64 && (value |> Seq.forall Char.IsAsciiHexDigitLower)
+
+            match canonicalCodexVersion expected, Int32.TryParse timeoutText with
+            | Some version, (true, timeout) when
+                Path.IsPathFullyQualified runner
+                && Path.IsPathFullyQualified provider
+                && Path.IsPathFullyQualified working
+                && Directory.Exists working
+                && digest runnerSha
+                && digest providerSha
+                && timeout >= 1
+                && timeout <= 30
+                ->
+                return
+                    {
+                        RunnerExecutable = runner
+                        RunnerSha256 = runnerSha
+                        ProviderExecutable = provider
+                        ProviderSha256 = providerSha
+                        WorkingDirectory = working
+                        ExpectedCodexVersion = version
+                        Timeout = TimeSpan.FromSeconds(float timeout)
+                    }
+            | _ -> return! Error "compatibility-diagnostic-option-refused"
         }
 
     let parseInit arguments =
