@@ -397,6 +397,7 @@ type ExecutorRuntimeTests() =
                     [ "--expected-codex-version"; "codex-cli 0.158.0" ], "executor-option-refused"
                     [ "--expected-codex-version"; "01.158.0" ], "executor-option-refused"
                     [ "--expected-codex-version"; "0.158" ], "executor-option-refused"
+                    [ "--expected-codex-version"; "0.158.0\n" ], "executor-option-refused"
                     [
                         "--expected-codex-version"
                         "0.158.0"

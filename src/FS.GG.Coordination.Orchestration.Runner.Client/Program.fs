@@ -73,7 +73,7 @@ let private exactCodexVersion value =
     if
         String.IsNullOrWhiteSpace value
         || value.Length > 64
-        || not (Regex.IsMatch(value, "^(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)$"))
+        || not (Regex.IsMatch(value, "\\A(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z"))
     then
         None
     else
