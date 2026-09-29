@@ -89,6 +89,24 @@ type LearningOperationalWindowBinding =
 type PreparedLearningOperationalWindow internal (binding: LearningOperationalWindowBinding) =
     member _.Binding = binding
 
+type LearningOperationalWindowKey =
+    {
+        WindowId: string
+        OriginalItemId: string
+    }
+
+type LearningOperationalReadinessSnapshot =
+    {
+        Request: LearningOperationalWindowRequest
+        Evidence: LearningOperationalReadinessEvidence
+    }
+
+/// Owner boundary for independently retained plan, work-item, coverage, delivery and cost evidence.
+/// Production admission never accepts a caller-supplied readiness record directly.
+type ILearningOperationalReadinessSource =
+    abstract ReadLearningOperationalReadiness:
+        LearningOperationalWindowKey * CancellationToken -> Task<Result<LearningOperationalReadinessSnapshot, string>>
+
 type ILearningOperationalWindowStore =
     abstract BindLearningOperationalWindow:
         LearningOperationalWindowBinding * CancellationToken -> Task<Result<LearningOperationalWindowBinding, string>>
@@ -357,6 +375,18 @@ module LearningOperationalWindow =
             Error "learning-operational-window-order-refused"
         else
             Ok value
+
+    let validateCurrent (now: DateTimeOffset) (value: LearningOperationalWindowBinding) =
+        validate value
+        |> Result.bind (fun valid ->
+            if not (utc now) then
+                Error "learning-operational-window-current-time-refused"
+            elif now < valid.EnrollmentOpensAt || now >= valid.EnrollmentClosesAt then
+                Error "learning-operational-window-not-open"
+            elif now < valid.EligibilityObservedAt || now >= valid.EligibilityExpiresAt then
+                Error "learning-operational-window-readiness-stale"
+            else
+                Ok valid)
 
     let decode (bytes: byte array) =
         try

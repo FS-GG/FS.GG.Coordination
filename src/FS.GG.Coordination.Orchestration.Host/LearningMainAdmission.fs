@@ -98,43 +98,99 @@ module LearningMainAdmission =
         |> String.concat "\n"
         |> sha
 
+    let private validateOperationalReadiness
+        (clock: TimeProvider)
+        (source: ILearningOperationalReadinessSource)
+        (key: LearningOperationalWindowKey)
+        (expected: PreparedLearningOperationalWindow)
+        (token: CancellationToken)
+        =
+        task {
+            let! current = source.ReadLearningOperationalReadiness(key, token)
+
+            return
+                match current with
+                | Error _ -> Error "learning-main-admission-operational-readiness-unavailable"
+                | Ok current ->
+                    match
+                        LearningOperationalWindow.prepare expected.Binding.AssignedAt current.Request current.Evidence
+                    with
+                    | Error reason -> Error reason
+                    | Ok preparedCurrent when preparedCurrent.Binding <> expected.Binding ->
+                        Error "learning-main-admission-operational-readiness-changed"
+                    | Ok preparedCurrent ->
+                        LearningOperationalWindow.validateCurrent (clock.GetUtcNow()) preparedCurrent.Binding
+                        |> Result.map ignore
+        }
+
     let prepareOperationalAssignment
+        (clock: TimeProvider)
+        (readiness: ILearningOperationalReadinessSource)
         (operationalWindows: ILearningOperationalWindowStore)
-        (operationalWindow: PreparedLearningOperationalWindow)
+        (windowKey: LearningOperationalWindowKey)
         (request: LearningAssignmentPreparationRequest)
         (token: CancellationToken)
         =
         task {
-            let expected = operationalWindow.Binding
-
             if request.InheritedDurableTreatment.IsSome then
                 return Error "learning-operational-assignment-original-required"
-            elif request.AssignedAt <> expected.AssignedAt then
-                return Error "learning-operational-assignment-time-refused"
             else
-                let! persisted = operationalWindows.BindLearningOperationalWindow(expected, token)
+                let! resolved = readiness.ReadLearningOperationalReadiness(windowKey, token)
 
-                match persisted with
-                | Error reason -> return Error reason
-                | Ok durable when durable <> expected -> return Error "learning-operational-assignment-window-conflict"
-                | Ok _ ->
-                    match LearningAssignmentAdapter.prepare request with
-                    | Error reason -> return Error(sprintf "learning-operational-assignment-prepare-refused:%A" reason)
-                    | Ok prepared ->
-                        let arm =
-                            match prepared.Assignment.Arm with
-                            | Current -> "current"
-                            | Focused -> "focused"
+                match resolved with
+                | Error _ -> return Error "learning-operational-assignment-readiness-unavailable"
+                | Ok snapshot ->
+                    let planSource = request.AcceptedProposal.ContextManifest |> Option.map _.PlanSource
 
-                        if
-                            prepared.Assignment.ItemId <> expected.OriginalItemId
-                            || prepared.Assignment.OriginalItemId <> expected.OriginalItemId
-                            || arm <> expected.Arm
-                            || prepared.Assignment.AssignedAt <> expected.AssignedAt
-                        then
-                            return Error "learning-operational-assignment-window-refused"
-                        else
-                            return Ok prepared
+                    let observationSha =
+                        request.SourceState.Observation |> Option.map Observer.observationSha256
+
+                    if
+                        snapshot.Request.WindowId <> windowKey.WindowId
+                        || snapshot.Request.OriginalItemId <> windowKey.OriginalItemId
+                        || snapshot.Evidence.WindowId <> windowKey.WindowId
+                        || snapshot.Evidence.OriginalItemId <> windowKey.OriginalItemId
+                        || planSource |> Option.map _.Sha256 <> Some snapshot.Evidence.AcceptedPlanSha256
+                        || observationSha <> Some snapshot.Evidence.CanonicalWorkItemSha256
+                    then
+                        return Error "learning-operational-assignment-readiness-refused"
+                    else
+                        match
+                            LearningOperationalWindow.prepare request.AssignedAt snapshot.Request snapshot.Evidence
+                        with
+                        | Error reason -> return Error reason
+                        | Ok operationalWindow ->
+                            let expected = operationalWindow.Binding
+
+                            match LearningOperationalWindow.validateCurrent (clock.GetUtcNow()) expected with
+                            | Error reason -> return Error reason
+                            | Ok _ ->
+                                let! persisted = operationalWindows.BindLearningOperationalWindow(expected, token)
+
+                                match persisted with
+                                | Error reason -> return Error reason
+                                | Ok durable when durable <> expected ->
+                                    return Error "learning-operational-assignment-window-conflict"
+                                | Ok _ ->
+                                    match LearningAssignmentAdapter.prepare request with
+                                    | Error reason ->
+                                        return
+                                            Error(sprintf "learning-operational-assignment-prepare-refused:%A" reason)
+                                    | Ok prepared ->
+                                        let arm =
+                                            match prepared.Assignment.Arm with
+                                            | Current -> "current"
+                                            | Focused -> "focused"
+
+                                        if
+                                            prepared.Assignment.ItemId <> expected.OriginalItemId
+                                            || prepared.Assignment.OriginalItemId <> expected.OriginalItemId
+                                            || arm <> expected.Arm
+                                            || prepared.Assignment.AssignedAt <> expected.AssignedAt
+                                        then
+                                            return Error "learning-operational-assignment-window-refused"
+                                        else
+                                            return Ok(prepared, operationalWindow)
         }
 
     let private prepareVerified
@@ -150,6 +206,7 @@ module LearningMainAdmission =
         (treatment: DurableLearningTreatment)
         (subject: DurableLearningTreatmentBinding)
         (operationalWindow: PreparedLearningOperationalWindow option)
+        (operationalReadiness: (ILearningOperationalReadinessSource * LearningOperationalWindowKey) option)
         (capabilityQuery: LearningSelectionQuery)
         (capabilityEvidence: LearningSelectionEvidence)
         (token: CancellationToken)
@@ -185,6 +242,7 @@ module LearningMainAdmission =
                 && window.AssignedAt = treatment.AssignedAt
                 && window.AuthorityId = principal
                 && window.AuthorityRevision = string (Id.revisionValue treatment.WorkflowRevision)
+                && window.AuthoritySha256 = request.RouteEvidenceSha256
 
         if not durableMatches then
             Task.FromResult(Error "learning-main-admission-treatment-refused")
@@ -200,7 +258,16 @@ module LearningMainAdmission =
 
                 let beforeLaunch (snapshot: PlanningSnapshot) generation (launch: LaunchIntent) cancellationToken =
                     task {
-                        if
+                        let! readinessResult =
+                            match operationalWindow, operationalReadiness with
+                            | None, None -> Task.FromResult(Ok())
+                            | Some expected, Some(source, key) ->
+                                validateOperationalReadiness clock source key expected cancellationToken
+                            | _ -> Task.FromResult(Error "learning-main-admission-operational-readiness-refused")
+
+                        if Result.isError readinessResult then
+                            return readinessResult
+                        elif
                             generation <> prepared.CurrentGeneration
                             || snapshot.WorkflowRevision <> prepared.CurrentWorkflowRevision
                         then
@@ -388,6 +455,7 @@ module LearningMainAdmission =
                                 treatment
                                 subject
                                 None
+                                None
                                 capabilityQuery
                                 capabilityEvidence
                                 token
@@ -400,6 +468,7 @@ module LearningMainAdmission =
         (executions: IExecutorCommandStore)
         (executionJournal: IExecutionSessionJournal)
         (learningBindings: ILearningExecutionBindingStore)
+        (operationalReadiness: ILearningOperationalReadinessSource)
         (operationalWindows: ILearningOperationalWindowStore)
         workItemId
         principal
@@ -430,47 +499,60 @@ module LearningMainAdmission =
                 | Ok durableWindow when durableWindow <> expectedWindow ->
                     return Error "learning-main-admission-operational-window-not-durable"
                 | Ok _ ->
-                    let observerId =
-                        ObserverJournal.learningTreatmentObserverId prepared.Input.OriginalItemId
+                    let key =
+                        {
+                            WindowId = expectedWindow.WindowId
+                            OriginalItemId = expectedWindow.OriginalItemId
+                        }
 
-                    let! recovered = observerJournal.RecoverObserver(observerId, token)
+                    let! readinessCurrent =
+                        validateOperationalReadiness clock operationalReadiness key operationalWindow token
 
-                    match recovered with
-                    | Error _ -> return Error "learning-main-admission-treatment-unavailable"
-                    | Ok recovery ->
-                        let storedTreatment =
-                            recovery.State.LearningTreatments |> Map.tryFind prepared.Input.OriginalItemId
+                    match readinessCurrent with
+                    | Error reason -> return Error reason
+                    | Ok() ->
+                        let observerId =
+                            ObserverJournal.learningTreatmentObserverId prepared.Input.OriginalItemId
 
-                        let storedSubject =
-                            recovery.State.LearningTreatmentBindings |> Map.tryFind prepared.Input.ItemId
+                        let! recovered = observerJournal.RecoverObserver(observerId, token)
 
-                        let expectedAssignment =
-                            Observer.learningTreatmentSha256 principal (treatmentInput treatment)
+                        match recovered with
+                        | Error _ -> return Error "learning-main-admission-treatment-unavailable"
+                        | Ok recovery ->
+                            let storedTreatment =
+                                recovery.State.LearningTreatments |> Map.tryFind prepared.Input.OriginalItemId
 
-                        if
-                            storedTreatment <> Some treatment
-                            || storedSubject <> Some subject
-                            || treatment.AssignmentSha256 <> expectedAssignment
-                        then
-                            return Error "learning-main-admission-treatment-not-durable"
-                        else
-                            return!
-                                prepareVerified
-                                    clock
-                                    workItems
-                                    executions
-                                    executionJournal
-                                    learningBindings
-                                    workItemId
-                                    principal
-                                    request
-                                    prepared
-                                    treatment
-                                    subject
-                                    (Some operationalWindow)
-                                    capabilityQuery
-                                    capabilityEvidence
-                                    token
+                            let storedSubject =
+                                recovery.State.LearningTreatmentBindings |> Map.tryFind prepared.Input.ItemId
+
+                            let expectedAssignment =
+                                Observer.learningTreatmentSha256 principal (treatmentInput treatment)
+
+                            if
+                                storedTreatment <> Some treatment
+                                || storedSubject <> Some subject
+                                || treatment.AssignmentSha256 <> expectedAssignment
+                            then
+                                return Error "learning-main-admission-treatment-not-durable"
+                            else
+                                return!
+                                    prepareVerified
+                                        clock
+                                        workItems
+                                        executions
+                                        executionJournal
+                                        learningBindings
+                                        workItemId
+                                        principal
+                                        request
+                                        prepared
+                                        treatment
+                                        subject
+                                        (Some operationalWindow)
+                                        (Some(operationalReadiness, key))
+                                        capabilityQuery
+                                        capabilityEvidence
+                                        token
         }
 
     let prepareOperationalWithProvider
@@ -482,6 +564,7 @@ module LearningMainAdmission =
         (executions: IExecutorCommandStore)
         (executionJournal: IExecutionSessionJournal)
         (learningBindings: ILearningExecutionBindingStore)
+        (operationalReadiness: ILearningOperationalReadinessSource)
         (operationalWindows: ILearningOperationalWindowStore)
         workItemId
         principal
@@ -522,6 +605,7 @@ module LearningMainAdmission =
                         executions
                         executionJournal
                         learningBindings
+                        operationalReadiness
                         operationalWindows
                         workItemId
                         principal
