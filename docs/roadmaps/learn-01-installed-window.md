@@ -124,6 +124,42 @@ evidence.
 
 The preceding direct-runner source is delivered in [#889](https://github.com/FS-GG/FS.GG.Coordination/pull/889) at protected `424f0c7bcba19e512ac425c2f64a56d53bae8d43`. Its [newly served candidate](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36558581557) passed independent downloaded-byte verification. On the [replacement work-main channel](https://github.com/FS-GG/.github/blob/mailbox/work-main-unified-20260929/MAILBOX.md), work-main reported an actual ordinary Home native-ELF readiness-only result at11:00:49Z: authenticated subscription provenance, ready lifecycle, exact command correlation and no provider/model session. This is direct-runner receiver qualification only. This Host forwarding change still needs its own protected source, newly qualified affected Host bytes and separate integrated adoption; neither result supplies protected collector custody or operational experiment authority.
 
+**LEARN-01.4-W8 — Non-execution served executor compatibility diagnostic — route: routine.**
+The selected technical window adds `probe-executor-compatibility` to the actual
+Host executable and `diagnostic-stdio` to the runner before execution-runtime
+construction. It uses a distinct closed,16 KiB,one-request/one-response protocol
+with only a request schema and fresh correlation ID. Host and runner configuration
+require absolute component paths, lowercase SHA-256 pins, an existing working
+directory and a1–30-second deadline. An optional canonical exact Codex version
+preserves0.154.0 by default. The Host records actual executable hashes and verifies
+runner/provider pins before and after the bounded probe.
+
+The runner invokes the same extracted production version/login helper as ordinary
+Codex provider readiness: `--version`, followed only on an exact match by
+`login status`, with the existing environment allowlist and bounded streams.
+The result is `compatibility-diagnostic-only`; it is not `ProviderReadiness` or
+Learning admission evidence. No assignment, attempt, generation, workspace,
+execution intent, database, outbox, service or model turn is created. Third-party
+incidental filesystem behavior is not certified absent. Old runners refuse the
+new command; the Host never falls back to execution readiness.
+
+Controlled actual Host/runner apphost tests passed8/8 after rebase onto protected
+#890, covering explicit match, default mismatch before login, malformed/duplicate
+options, missing/wrong/drifting pins, execution/stale/malformed/extra/oversized
+frames, hung process cleanup and an old-runner refusal. Codex provider controls
+passed20/20 and the full Host suite passed114/114 on the identical source tree.
+An independently built actual old runner424 additionally refused the new command
+with `compatibility-runner-unsupported`. Native protected source delivery remains
+mandatory. Both newly affected Host and runner archives must then be served and
+freshly qualified as a pair before any receiver diagnostic is selected; the
+forwarding-only Host5fe and runner424 do not qualify W8.
+
+Full V2 acceptance follows the user's [2026-09-29 amendment](https://github.com/FS-GG/.github/blob/fc4c2145d9caae5c8e5003e4fb6c2a91a4118afa/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#full-v2-acceptance-amendment--2026-09-29).
+Bounded source/artifact/diagnostic qualification remains required. Genuine W6
+composition, installed collector custody, owner inputs and experiment enrollment
+remain follow-up work with their original operational guards and frozen research
+contract. They cannot be manufactured by a diagnostic success or imported JSON.
+
 **Gate to LEARN-01.4-W6 — Genuine owner adapter and explicit production composition.**
 The policy/telemetry owners must supply real, independently retained window
 authority and prospective census/allocation contracts. The installed owner must
@@ -169,3 +205,35 @@ Telemetry begin for planning and served-roadmap synthesis returned `not-configur
 The next Unified §9.8 projection should preserve all existing LEARN links, point to this protected roadmap and record: “`.4` source preparation and exact served-candidate qualification delivered; promotion, installed adoption/readiness and the native experiment remain pending.” The programme integrator owns that projection. Correct stale `.2` missing-source language only to distinguish implemented #3940 custody/export from absent installed proof. Do not change §0 to `.4 Done` because W1–W3 source delivery does not close the installed window.
 
 No unresolved user choice remains in the delivered source window. Replan only for a demonstrated need to alter the frozen work class/statistical design, replace provider execution, widen installed scope, change custody authority or add an incompatible receiver contract. Artifact promotion, authenticated readiness and installed qualification stay with their named owners and existing operation controls.
+
+## W5 fresh affected Host qualification
+
+[Coordination #890](https://github.com/FS-GG/FS.GG.Coordination/pull/890) delivered
+at protected `5fe45df2ba70bc5e12aa3a0518dc145f7e632941`, equal qualified candidate
+tree `b0e4979e6d9bbd0c0e52a9da710557b0e02781d4`. The newly affected
+[Host run36564698130](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36564698130)
+passed on that exact source. Candidate11031147563 and verification11031267447
+were separately downloaded by immutable ID and their API outer digests matched.
+The exact protected helpers passed prepared and fresh served verification;
+root reran both and matched its generated receipt to hosted verification
+`sha256:d440212ab9e7573ecea91223306894e3776a939beb0ebe7744d493335a290469`.
+Inner archive `sha256:1fa9219a2645cee64f974997d98cdbd59330269f4d35b37b60cf68a774081ac1`
+and actual Host payload
+`sha256:d48f9d51e96e3493c4eafb06656e33e2547440b81736e91fbca5ee609f0303a5`
+are qualified for forwarding-only5fe. Retention expires2026-12-28T11:54:51Z;
+this is Actions-storage qualification, not release promotion or installation.
+
+W7 primary native-delivery capture source is delivered in
+[.github #3973](https://github.com/FS-GG/.github/pull/3973), protected
+`e575c517c566155bcc21ae5846d0697b7af8a677`. Its analyzer keeps original/window
+binding unverified and operational readiness false. Native packaging found a
+missing transitive test-lock project; [.github #3974](https://github.com/FS-GG/.github/pull/3974)
+is the bounded closure repair and does not turn the initial red package result
+into a pass. Its native technical qualification is separate from W8 and installed
+operation.
+
+§9.9 impact: W8 adds an opt-in diagnostic command to the Host/runner artifacts.
+Fresh workspace creation and default `executor-stdio` behavior do not change.
+A receiver must select the newly qualified paired artifacts explicitly; old-runner
+upgrade is separate and fails closed until those bytes are adopted. No scaffold,
+installer, provider account, collector credential or service is changed here.
