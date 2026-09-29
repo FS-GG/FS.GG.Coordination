@@ -102,14 +102,25 @@ capability and launch fences. There is no range, automatic installed-version tru
 or version-spoofing wrapper. Existing `ExecutorRuntime` callers retain the default
 through an optional constructor argument.
 
+The production Host `serve` configuration accepts the same optional exact version
+when a local executor is selected and forwards it unchanged to the supervised
+`executor-stdio` child. Omission sends no version argument, preserving the runner's
+`codex-cli 0.154.0` default. Host parsing and transport construction enforce the
+same canonical grammar before process creation; executor frames cannot select or
+alter the trusted operator value.
+
 Actual subprocess tests cover old defaults, the configured matching version,
 version mismatch and malformed options. The full executor suite passed 36 checks;
 the final absolute-anchor repair passed all five focused subprocess cases,
 including terminal-LF refusal. Existing executable/config drift controls passed
-with zero model starts. Native qualification and merged-state readback determine
-source delivery; these controlled results do not prove installed authentication,
-protected capability or a live experiment. Work-main's ordinary-account discovery
-and private service-account refusal are separate owner evidence.
+with zero model starts. Host integration coverage additionally traverses
+`LocalExecutorTransport`, the actual runner apphost and production provider for
+the omitted default, configured `0.158.0` and both mismatch directions; the full
+Host suite passed 106 checks. Native qualification and merged-state readback
+determine source delivery; these controlled results do not prove installed
+authentication, protected capability or a live experiment. Work-main's
+ordinary-account discovery and private service-account refusal are separate owner
+evidence.
 
 **Gate to LEARN-01.4-W6 — Genuine owner adapter and explicit production composition.**
 The policy/telemetry owners must supply real, independently retained window

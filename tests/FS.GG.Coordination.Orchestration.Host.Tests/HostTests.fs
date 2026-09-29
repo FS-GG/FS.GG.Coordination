@@ -1303,6 +1303,55 @@ let ``serve configuration requires private files loopback and explicit identitie
         )
 
         Assert.Equal(None, parsed |> Result.toOption |> Option.bind _.RunnerToken)
+        Assert.Equal(
+            None,
+            parsed
+            |> Result.toOption
+            |> Option.bind _.LocalExecutor
+            |> Option.bind _.ExpectedCodexVersion
+        )
+
+        let configuredVersion =
+            HostConfiguration.parseServe (
+                Array.append localArguments [| "--expected-codex-version"; "0.158.0" |]
+            )
+
+        Assert.Equal(
+            Some "0.158.0",
+            configuredVersion
+            |> Result.toOption
+            |> Option.bind _.LocalExecutor
+            |> Option.bind _.ExpectedCodexVersion
+        )
+
+        for refused in [ ""; "0.158"; "codex-cli 0.158.0"; "01.158.0"; "0.158.0\n" ] do
+            Assert.Equal(
+                Error "local-executor-expected-codex-version-refused",
+                HostConfiguration.parseServe (
+                    Array.append localArguments [| "--expected-codex-version"; refused |]
+                )
+            )
+
+        Assert.Equal(
+            Error "duplicate-option",
+            HostConfiguration.parseServe (
+                Array.append
+                    localArguments
+                    [|
+                        "--expected-codex-version"
+                        "0.158.0"
+                        "--expected-codex-version"
+                        "0.158.0"
+                    |]
+            )
+        )
+
+        Assert.Equal(
+            Error "expected-codex-version-requires-local-executor",
+            HostConfiguration.parseServe (
+                Array.append arguments [| "--expected-codex-version"; "0.158.0" |]
+            )
+        )
 
         Assert.Equal(
             Error "runner-token-not-allowed-with-local-executor",
@@ -1396,6 +1445,7 @@ let ``linux wildcard prefix starts accepts loopback request and stops`` () =
                     StateRoot = "/srv/state"
                     ArtifactRoot = "/srv/artifacts"
                     CodexExecutable = "/usr/bin/codex"
+                    ExpectedCodexVersion = None
                     ExecutorBinding = "codex-main"
                     Telemetry = None
                 }
@@ -1709,6 +1759,7 @@ let ``local child mode exposes no legacy runner HTTP route`` () =
                 StateRoot = "/srv/state"
                 ArtifactRoot = "/srv/artifacts"
                 CodexExecutable = "/usr/bin/codex"
+                ExpectedCodexVersion = None
                 ExecutorBinding = "codex-main"
                 Telemetry = None
             }

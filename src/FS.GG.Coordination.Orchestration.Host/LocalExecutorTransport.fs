@@ -41,6 +41,11 @@ type LocalExecutorTransport
         if String.IsNullOrWhiteSpace configuration.ExecutorBinding then
             invalidArg "executorBinding" "nonblank binding required"
 
+        match configuration.ExpectedCodexVersion with
+        | Some version when HostConfiguration.canonicalCodexVersion version <> Some version ->
+            invalidArg "expectedCodexVersion" "canonical MAJOR.MINOR.PATCH version required"
+        | _ -> ()
+
         if
             maximumAggregateBytes < ExecutorWire.maximumControlBytes
             || maximumAggregateBytes > 150 * 1024 * 1024
@@ -108,6 +113,11 @@ type LocalExecutorTransport
                     "--telemetry-repository"; telemetry.Repository
                 ]
 
+        let versionArguments =
+            configuration.ExpectedCodexVersion
+            |> Option.map (fun version -> [ "--expected-codex-version"; version ])
+            |> Option.defaultValue []
+
         for argument in
             [
                 "executor-stdio"
@@ -125,7 +135,7 @@ type LocalExecutorTransport
                 configuration.CodexExecutable
                 "--executor-binding"
                 configuration.ExecutorBinding
-            ] @ telemetryArguments do
+            ] @ versionArguments @ telemetryArguments do
             info.ArgumentList.Add argument
 
         let childProcess = Process.Start info
