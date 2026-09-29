@@ -61,6 +61,12 @@ module ChoreoTrace =
 
     let private choreoCommit = "000cf4eed315187dc6f216a148781cff7dde6521"
 
+    // The manifest intentionally retains the whole-source identity from the historical
+    // Choreo generation commit. Later independent protocol modules may be appended, so
+    // correspondence is checked against the exact unchanged Choreo module region.
+    let private choreoSourceSha =
+        "cd5b58dea391bf1afd6a84eb5e8b74f99b9dc3cf665f9ad78881e53cf7c9b6e1"
+
     let private sha256Bytes (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -84,6 +90,20 @@ module ChoreoTrace =
 
     let private protocolPath () =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
+
+    let private currentChoreoSourceSha () =
+        let lines = File.ReadAllLines(protocolPath ())
+        let first = lines |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoModel {")
+        let last =
+            lines
+            |> Array.indexed
+            |> Array.find (fun (index, line) -> index > first && line.Trim() = "```")
+            |> fst
+
+        lines[first .. last - 1]
+        |> String.concat "\n"
+        |> fun value -> value + "\n"
+        |> sha256Text
 
     let private mapValue name (value: JsonObject) =
         value["#map"].AsArray()
@@ -477,8 +497,8 @@ module ChoreoTrace =
         if text source "commit" <> "b7423fa5a6014fe938b247e3b8ece2cefa19b4ef" then
             failwith "source commit differs"
 
-        if sha256File (protocolPath ()) <> sourceSha then
-            failwith "protocol source digest differs"
+        if currentChoreoSourceSha () <> choreoSourceSha then
+            failwith "historical Choreo protocol region differs"
 
         let quint = root["quint"].AsObject()
         exactProperties "manifest Quint" [ "version"; "binarySha256"; "backend"; "maxSamples" ] quint

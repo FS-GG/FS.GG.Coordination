@@ -129,6 +129,8 @@ type private UnusedCapabilities() =
 
 type private SourceBoundJournal(sourceState: ObserverState) =
     let mutable events: ObserverStoredEvent list = []
+    let mutable currentSourceState = sourceState
+    member _.SetSourceState value = currentSourceState <- value
 
     interface IObserverJournalStore with
         member _.RecoverObserver(_, _) =
@@ -146,19 +148,25 @@ type private SourceBoundJournal(sourceState: ObserverState) =
 
             let decisionState =
                 { state with
-                    Observation = sourceState.Observation
+                    Observation = currentSourceState.Observation
                 }
 
             let sourceMatches =
                 input
                 |> Option.exists (fun value ->
-                    value.SourceObserverId = ObserverJournal.observerId sourceState.SessionId.Value
-                    && value.SourceSequence = sourceState.Sequence
-                    && (sourceState.Observation
+                    let sourceWorkflowRevision, sourceGeneration =
+                        match request.Command.Command with
+                        | AssignPreparedLearningTreatment prepared ->
+                            prepared.CurrentWorkflowRevision, prepared.CurrentGeneration
+                        | _ -> value.ExpectedWorkflowRevision, value.ExpectedGeneration
+
+                    value.SourceObserverId = ObserverJournal.observerId currentSourceState.SessionId.Value
+                    && value.SourceSequence = currentSourceState.Sequence
+                    && (currentSourceState.Observation
                         |> Option.exists (fun observation ->
                             value.SourceObservationSha256 = observation.ObservationSha256
-                            && value.ExpectedWorkflowRevision = observation.WorkflowRevision
-                            && value.ExpectedGeneration = observation.Generation)))
+                            && sourceWorkflowRevision = observation.WorkflowRevision
+                            && sourceGeneration = observation.Generation)))
 
             let decision = Observer.decide request.ReceivedAt decisionState request.Command
 
@@ -263,6 +271,7 @@ let private fixture () =
             ExpectedContractId = LearningContext.ContractId
             ExpectedContractRevision = revision
             ExpectedAuthoritativeObligations = [ obligation ]
+            InheritedDurableTreatment = None
             RetrievedSources = retrieved
             AssignedAt = now.AddSeconds -1.
         }
@@ -366,6 +375,134 @@ let ``real keep proposal and source bytes become a replayable assignment without
     match replayed with
     | LearningTreatmentReplayed(durable, _) -> Assert.Equal(itemId, durable.OriginalItemId)
     | other -> failwithf "prepared treatment did not replay from durable state: %A" other
+
+[<Fact>]
+let ``descendant and retry keep immutable treatment while binding their actual current context`` () =
+    let root = fixture ()
+    let rootPrepared =
+        LearningAssignmentAdapter.prepare root.Preparation
+        |> Result.defaultWith (sprintf "root preparation refused: %A" >> failwith)
+
+    let capabilities = UnusedCapabilities()
+    let journal = SourceBoundJournal(root.SourceState)
+    let composition =
+        ObserverComposition.create
+            (capabilities :> IProjectReadCapability)
+            (capabilities :> IBoundedPlanningCapability)
+            (capabilities :> ICommandReadbackCapability)
+            (journal :> IObserverJournalStore)
+
+    let persist sourceState prepared =
+        journal.SetSourceState sourceState
+        ObserverRuntime.assignPreparedLearningTreatment
+            (FixedClock())
+            composition
+            { SourceObserverId = prepared.Assignment.SourceObserverId
+              SourceState = sourceState
+              PreparedTreatment = prepared.PreparedTreatment
+              CommandId = Id.command(Guid.NewGuid())
+              PrincipalId = "learning-owner"
+              IssuedAt = now.AddMinutes -1.
+              ExpiresAt = now.AddMinutes 5. }
+            CancellationToken.None
+        |> _.GetAwaiter().GetResult()
+
+    let rootTreatment, rootBinding =
+        match persist root.SourceState rootPrepared with
+        | LearningTreatmentPersisted(treatment, binding) -> treatment, binding
+        | other -> failwithf "root treatment was not persisted: %A" other
+
+    let baseContext = root.ProposalRequest.ContextRequest.Value
+
+    let advanceSource (state: ObserverState) identity revision generation =
+        let prior = state.Observation.Value
+        let draft =
+            { prior with
+                WorkflowRevision = revision
+                Generation = generation
+                ObservationSha256 = String.replicate 64 "0"
+                WorkItems =
+                    prior.WorkItems
+                    @ [ { Identity = identity; MembershipItemId = $"PVTI_{WorkItemIdentity.persistenceId identity}"; Archived = false } ] }
+        let observation = { draft with ObservationSha256 = Observer.observationSha256 draft }
+        apply state (RecordProjectObservation observation)
+
+    let prepareInherited itemIdentity relation sourceState =
+        let childId = WorkItemIdentity.persistenceId itemIdentity
+        let context =
+            { baseContext with
+                ItemId = childId
+                Relation = relation
+                InheritedTreatment = Some baseContext.Treatment }
+        let proposalRequest =
+            { root.ProposalRequest with
+                ProposalId = $"learn-01.3-{childId}"
+                ItemId = childId
+                ContextRequest = Some context }
+        let proposal =
+            LearningProposal.propose proposalRequest
+            |> Result.defaultWith (sprintf "inherited proposal refused: %A" >> failwith)
+        let request =
+            { root.Preparation with
+                ProposalRequest = proposalRequest
+                AcceptedProposal = proposal
+                SourceState = sourceState
+                InheritedDurableTreatment = Some rootTreatment
+                AssignedAt = now }
+        request,
+        (LearningAssignmentAdapter.prepare request
+         |> Result.defaultWith (sprintf "inherited preparation refused: %A" >> failwith))
+
+    let childIdentity = WorkItemIdentity.create "R_learning" 101L "I_learning_child" 14L
+    let childId = WorkItemIdentity.persistenceId childIdentity
+    let childSource = advanceSource root.SourceState childIdentity (Id.revision 18L) (Id.generation 5L)
+    let childRequest, childPrepared = prepareInherited childIdentity (Descendant itemId) childSource
+
+    Assert.Equal(rootTreatment.ProposalSha256, childPrepared.Assignment.ProposalSha256)
+    Assert.Equal(rootTreatment.ContextManifestSha256, childPrepared.Assignment.ContextManifestSha256)
+    Assert.Equal(rootTreatment.WorkflowRevision, childPrepared.Assignment.ExpectedWorkflowRevision)
+    Assert.Equal(rootTreatment.Generation, childPrepared.Assignment.ExpectedGeneration)
+    Assert.NotEqual(rootTreatment.ContextManifestSha256, childPrepared.PreparedTreatment.CurrentContextManifestSha256)
+    Assert.NotEqual(rootTreatment.ProposalSha256, childPrepared.PreparedTreatment.CurrentProposalSha256)
+    Assert.Equal(Id.revision 18L, childPrepared.PreparedTreatment.CurrentWorkflowRevision)
+    Assert.Equal(Id.generation 5L, childPrepared.PreparedTreatment.CurrentGeneration)
+    Assert.Equal(sha256 childPrepared.PreparedTreatment.RenderedInput, childPrepared.PreparedTreatment.RenderedInputSha256)
+
+    let childBinding =
+        match persist childSource childPrepared with
+        | LearningTreatmentPersisted(treatment, binding) ->
+            Assert.Equal(rootTreatment, treatment)
+            binding
+        | other -> failwithf "child treatment binding was not persisted: %A" other
+
+    Assert.Equal(rootTreatment.AssignmentSha256, childBinding.AssignmentSha256)
+    Assert.Equal(childId, childBinding.ItemId)
+    Assert.Equal(Descendant itemId, childBinding.Relation)
+
+    let retryIdentity = WorkItemIdentity.create "R_learning" 101L "I_learning_retry" 15L
+    let retrySource = advanceSource childSource retryIdentity (Id.revision 19L) (Id.generation 6L)
+    let _, retryPrepared = prepareInherited retryIdentity (Retry childId) retrySource
+
+    match persist retrySource retryPrepared with
+    | LearningTreatmentPersisted(treatment, binding) ->
+        Assert.Equal(rootTreatment, treatment)
+        Assert.Equal(rootTreatment.AssignmentSha256, binding.AssignmentSha256)
+        Assert.Equal(Retry childId, binding.Relation)
+        Assert.NotEqual(childPrepared.PreparedTreatment.CurrentContextManifestSha256, retryPrepared.PreparedTreatment.CurrentContextManifestSha256)
+    | other -> failwithf "retry treatment binding was not persisted: %A" other
+
+    match LearningAssignmentAdapter.prepare { childRequest with InheritedDurableTreatment = None } with
+    | Error InheritedTreatmentMismatch -> ()
+    | other -> failwithf "expected missing-parent treatment refusal, got %A" other
+
+    match LearningAssignmentAdapter.prepare { childRequest with InheritedDurableTreatment = Some { rootTreatment with OriginalItemId = childId } } with
+    | Error InheritedTreatmentMismatch -> ()
+    | other -> failwithf "expected wrong-original treatment refusal, got %A" other
+
+    let wrongArm = if rootTreatment.Arm = Focused then Current else Focused
+    match LearningAssignmentAdapter.prepare { childRequest with InheritedDurableTreatment = Some { rootTreatment with Arm = wrongArm } } with
+    | Error InheritedTreatmentMismatch -> ()
+    | other -> failwithf "expected wrong-arm treatment refusal, got %A" other
 
 [<Fact>]
 let ``preparation verifies actual content obligations source head and canonical work item`` () =

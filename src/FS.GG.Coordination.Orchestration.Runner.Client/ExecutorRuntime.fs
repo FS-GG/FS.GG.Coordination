@@ -147,6 +147,8 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
         && left.RequestedModel = right.RequestedModel
         && left.RequestedEffort = right.RequestedEffort
         && left.WorkItemPersistenceId = right.WorkItemPersistenceId
+        && left.LearningOriginalItemId = right.LearningOriginalItemId
+        && left.LearningExecutionBindingBase64 = right.LearningExecutionBindingBase64
 
     let sha (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
@@ -161,6 +163,24 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
         if runtime = DateTimeOffset.MinValue then runtime
         elif runtime < command.Deadline then runtime
         else command.Deadline
+
+    let learningBinding (command: ExecutorCommandV2) =
+        if command.Schema <> ExecutorWire.commandSchemaV4 then Ok None
+        else
+            try
+                Convert.FromBase64String command.LearningExecutionBindingBase64
+                |> LearningExecutionBinding.decode
+                |> Result.bind (fun binding ->
+                    if binding.AssignmentId <> command.AssignmentId
+                       || binding.AttemptId <> command.AttemptId
+                       || binding.Generation <> command.Generation
+                       || binding.RenderedInputSha256 <> command.InputDigest
+                       || binding.OriginalItemId <> command.LearningOriginalItemId
+                       || binding.Requested.Model <> Option.ofObj command.RequestedModel
+                       || binding.Requested.Effort <> Option.ofObj command.RequestedEffort then
+                        Error "executor-learning-binding-command-conflict"
+                    else Ok(Some binding))
+            with :? FormatException -> Error "executor-learning-binding-format-refused"
 
     let writeFrame (output: Stream) (bytes: byte array) =
         task {
@@ -386,6 +406,9 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
         elif command.ExecutorBinding <> options.ExecutorBinding then
             Error "executor-binding-refused"
         else
+          match learningBinding command with
+          | Error reason -> Error reason
+          | Ok learning ->
             ExecutorWorkspace.materialize
                 options.RepositoryRoot
                 options.WorkspaceRoot
@@ -425,7 +448,7 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                         MaximumStreamBytes = 1024 * 1024
                         TurnObserver =
                             Some(
-                                TelemetryRunnerObserver(options.StateRoot, command, publisher)
+                                TelemetryRunnerObserver(options.StateRoot, command, publisher, ?learningBinding = learning)
                                 :> ICodexTurnObserver
                             )
                     }
@@ -879,7 +902,12 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                                     match telemetryPublisher selected.Manifest with
                                     | Some publisher ->
                                         let observer =
-                                            TelemetryRunnerObserver(options.StateRoot, command, Some publisher)
+                                            TelemetryRunnerObserver(
+                                                options.StateRoot,
+                                                command,
+                                                Some publisher,
+                                                ?learningBinding = (learningBinding command |> Result.toOption |> Option.flatten)
+                                            )
                                             :> ICodexTurnObserver
 
                                         match TelemetryRootGuard.claim options.StateRoot command (clock.GetUtcNow()) with
@@ -1331,7 +1359,7 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
 
                                         stream.Close()
                                         File.Move(temporary, completed, false)
-                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 ->
+                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 || value = ExecutorWire.commandSchemaV4 ->
                         match ExecutorWire.parseCommandV2 bytes with
                         | Error reason -> raise (InvalidDataException reason)
                         | Ok command ->

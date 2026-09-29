@@ -1,6 +1,7 @@
 namespace FS.GG.Coordination.Orchestration.Runner.Client
 
 open FS.GG.Coordination.Orchestration.Execution.Codex
+open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 
 /// Keep native evidence first; queue compact Host facts without waiting on network in the stdout pump.
@@ -8,12 +9,18 @@ type TelemetryRunnerObserver(
     stateRoot: string,
     command: ExecutorCommandV2,
     publisher: TelemetryCliPublisher option,
-    ?learning: PreparedLearningTelemetry
+    ?learning: PreparedLearningTelemetry,
+    ?learningBinding: LearningExecutionBinding
 ) =
     let concreteJournal = TelemetryTurnJournal(stateRoot, command)
     let journal = concreteJournal :> ICodexTurnObserver
     let context = TelemetryFactBatches.rootInvocation command
     let mutable turnCount = 0L
+    let preparedLearning =
+        match learning with
+        | Some prepared -> Some prepared
+        | None -> learningBinding |> Option.bind (LearningTelemetryFacts.fromExecutionBinding >> Result.toOption >> Option.flatten)
+    let learningActive = learning.IsSome || learningBinding.IsSome
 
     let queue (name, payload) =
         publisher
@@ -47,7 +54,7 @@ type TelemetryRunnerObserver(
         |> List.choose id
 
     do
-        learning
+        preparedLearning
         |> Option.iter (fun prepared ->
             let learningBatch = TelemetryFactBatches.learningPreparation context prepared
             concreteJournal.RecordLearningBatch learningBatch
@@ -65,7 +72,7 @@ type TelemetryRunnerObserver(
                 turn
             |> queue
 
-            if learning.IsSome then
+            if learningActive then
                 selectionGaps turn |> List.iter recordGap
 
         member _.Gap code =

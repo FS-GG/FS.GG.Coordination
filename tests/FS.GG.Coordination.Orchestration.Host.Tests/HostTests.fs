@@ -404,6 +404,11 @@ module Fixture =
             member _.ReadLearningExecution(_, _, _) =
                 value |> Option.map Ok |> Option.defaultValue (Error "learning-execution-binding-missing") |> Task.FromResult
 
+    type MemoryObserverLearning(state: ObserverState) =
+        interface IObserverJournalStore with
+            member _.AppendObserver(_, _) = Task.FromResult(ObserverInvalidAppend "read-only")
+            member _.RecoverObserver(_, _) = Task.FromResult(Ok { Events = []; State = state })
+
 [<Fact>]
 let ``Main route stage identity is stable inside and distinct across attempt scopes`` () =
     let work = WorkItemIdentity.create "R_route" 1L "I_route" 2L
@@ -1606,6 +1611,7 @@ let private realPreparedLearning () =
             { ProposalRequest = proposalRequest; AcceptedProposal = proposal; SourceState = observed
               ExpectedContractId = LearningContext.ContractId; ExpectedContractRevision = plan.ContractRevision
               ExpectedAuthoritativeObligations = [ obligation ]
+              InheritedDurableTreatment = None
               RetrievedSources = [ { Source = planSource; Content = planBytes }; { Source = instructionSource; Content = instructionBytes } ]
               AssignedAt = Fixture.now.AddSeconds -1. }
         |> Result.defaultWith (sprintf "%A" >> failwith)
@@ -1621,15 +1627,20 @@ let private realPreparedLearning () =
     let binding =
         { ItemId = itemId; OriginalItemId = itemId; Relation = Original; AssignmentSha256 = treatment.AssignmentSha256
           OwnerPrincipalId = treatment.OwnerPrincipalId; BoundAt = Fixture.now }
-    prepared.PreparedTreatment, treatment, binding
+    let durableState =
+        { observed with
+            LearningTreatments = Map.ofList [ itemId, treatment ]
+            LearningTreatmentBindings = Map.ofList [ itemId, binding ] }
+    prepared.PreparedTreatment, treatment, binding, durableState
 
 [<Fact>]
 let ``learning admission binds actual rendered context before existing launch intent`` () =
     task {
-        let prepared, treatment, subject = realPreparedLearning ()
+        let prepared, treatment, subject, observerState = realPreparedLearning ()
         let journal = Fixture.MemoryJournal()
         let executor = Fixture.MemoryExecutor(fun () -> journal.State)
         let learning = Fixture.MemoryLearningBindings(fun () -> executor.AttemptCount)
+        let observer = Fixture.MemoryObserverLearning(observerState)
         let request =
             { Fixture.preparationRequest () with RequestedModel = prepared.Input.Worker.Model
                                                  RequestedEffort = prepared.Input.Worker.Effort
@@ -1644,18 +1655,29 @@ let ``learning admission binds actual rendered context before existing launch in
         let refusedExecutor = Fixture.MemoryExecutor(fun () -> refusedJournal.State)
         let refusedBindings = Fixture.MemoryLearningBindings(fun () -> refusedExecutor.AttemptCount)
         let! absentTreatment =
-            LearningMainAdmission.prepare (Fixture.FixedClock()) refusedJournal refusedExecutor refusedExecutor refusedBindings
+            LearningMainAdmission.prepare (Fixture.FixedClock()) observer refusedJournal refusedExecutor refusedExecutor refusedBindings
                 Fixture.permit.SubjectId "pilot-route" request prepared
                 { treatment with ProposalSha256 = String.replicate 64 "f" } subject query evidence CancellationToken.None
-        Assert.Equal(Error "learning-main-admission-treatment-refused", absentTreatment)
+        Assert.Equal(Error "learning-main-admission-treatment-not-durable", absentTreatment)
         Assert.Equal(0, refusedExecutor.AttemptCount)
         Assert.Equal(0, refusedExecutor.Writes)
+
+        let fabricatedJournal = Fixture.MemoryJournal()
+        let fabricatedExecutor = Fixture.MemoryExecutor(fun () -> fabricatedJournal.State)
+        let fabricatedBindings = Fixture.MemoryLearningBindings(fun () -> fabricatedExecutor.AttemptCount)
+        let fabricatedObserver = Fixture.MemoryObserverLearning(Observer.initial)
+        let! fabricated =
+            LearningMainAdmission.prepare (Fixture.FixedClock()) fabricatedObserver fabricatedJournal fabricatedExecutor
+                fabricatedExecutor fabricatedBindings Fixture.permit.SubjectId "pilot-route" request prepared treatment subject
+                query evidence CancellationToken.None
+        Assert.Equal(Error "learning-main-admission-treatment-not-durable", fabricated)
+        Assert.Equal(0, fabricatedExecutor.Writes)
 
         let unknownJournal = Fixture.MemoryJournal()
         let unknownExecutor = Fixture.MemoryExecutor(fun () -> unknownJournal.State)
         let unknownBindings = Fixture.MemoryLearningBindings(fun () -> unknownExecutor.AttemptCount)
         let! unsupported =
-            LearningMainAdmission.prepare (Fixture.FixedClock()) unknownJournal unknownExecutor unknownExecutor unknownBindings
+            LearningMainAdmission.prepare (Fixture.FixedClock()) observer unknownJournal unknownExecutor unknownExecutor unknownBindings
                 Fixture.permit.SubjectId "pilot-route" request prepared treatment subject query
                 { evidence with Status = LearningCapabilityStatus.Unknown "native-attestation-unavailable" } CancellationToken.None
         Assert.Equal(Error "learning-selection-unknown:native-attestation-unavailable", unsupported)
@@ -1663,7 +1685,7 @@ let ``learning admission binds actual rendered context before existing launch in
         Assert.Equal(0, unknownExecutor.Writes)
 
         let! result =
-            LearningMainAdmission.prepare (Fixture.FixedClock()) journal executor executor learning Fixture.permit.SubjectId
+            LearningMainAdmission.prepare (Fixture.FixedClock()) observer journal executor executor learning Fixture.permit.SubjectId
                 "pilot-route" request prepared treatment subject query evidence CancellationToken.None
         let accepted = result |> Result.defaultWith failwith
         Assert.True(learning.BeforeIntent)

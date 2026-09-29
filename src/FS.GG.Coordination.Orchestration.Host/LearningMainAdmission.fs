@@ -24,10 +24,7 @@ module LearningMainAdmission =
 
     let private treatmentMatches (prepared: PreparedLearningTreatment) (treatment: DurableLearningTreatment) =
         let input = prepared.Input
-        treatment.SourceObserverId = input.SourceObserverId
-        && treatment.SourceSequence = input.SourceSequence
-        && treatment.SourceObservationSha256 = input.SourceObservationSha256
-        && treatment.OriginalItemId = input.OriginalItemId
+        treatment.OriginalItemId = input.OriginalItemId
         && treatment.Arm = input.Arm
         && treatment.ProposalSha256 = input.ProposalSha256
         && treatment.ContextManifestSha256 = input.ContextManifestSha256
@@ -38,6 +35,23 @@ module LearningMainAdmission =
         && treatment.Generation = input.ExpectedGeneration
         && treatment.AssignedAt = input.AssignedAt
 
+    let private treatmentInput (treatment: DurableLearningTreatment) =
+        { SourceObserverId = treatment.SourceObserverId
+          SourceSequence = treatment.SourceSequence
+          SourceObservationSha256 = treatment.SourceObservationSha256
+          ItemId = treatment.OriginalItemId
+          OriginalItemId = treatment.OriginalItemId
+          Relation = Original
+          Arm = treatment.Arm
+          ProposalSha256 = treatment.ProposalSha256
+          ContextManifestSha256 = treatment.ContextManifestSha256
+          Planner = treatment.Planner
+          Worker = treatment.Worker
+          DirectSmallEligible = treatment.DirectSmallEligible
+          ExpectedWorkflowRevision = treatment.WorkflowRevision
+          ExpectedGeneration = treatment.Generation
+          AssignedAt = treatment.AssignedAt }
+
     let private subjectDigest (treatment: DurableLearningTreatment) (binding: DurableLearningTreatmentBinding) =
         let relationName, parent = relation binding.Relation
         [ binding.ItemId; binding.OriginalItemId; relationName; Option.defaultValue "" parent
@@ -46,7 +60,7 @@ module LearningMainAdmission =
         |> String.concat "\n"
         |> sha
 
-    let prepare
+    let private prepareVerified
         (clock: TimeProvider)
         (workItems: IJournalStore)
         (executions: IExecutorCommandStore)
@@ -83,7 +97,7 @@ module LearningMainAdmission =
                 let mutable durableBinding = None
                 let beforeLaunch (snapshot: PlanningSnapshot) generation (launch: LaunchIntent) cancellationToken =
                     task {
-                        if generation <> prepared.Input.ExpectedGeneration || snapshot.WorkflowRevision <> prepared.Input.ExpectedWorkflowRevision then
+                        if generation <> prepared.CurrentGeneration || snapshot.WorkflowRevision <> prepared.CurrentWorkflowRevision then
                             return Error "learning-main-admission-authority-stale"
                         elif launch.InputDigest <> prepared.RenderedInputSha256 || launch.Requested <> requested then
                             return Error "learning-main-admission-input-refused"
@@ -93,6 +107,13 @@ module LearningMainAdmission =
                                 { Schema = LearningExecutionBinding.schema
                                   BindingSha256 = ""
                                   TreatmentAssignmentSha256 = treatment.AssignmentSha256
+                                  TreatmentOwnerPrincipalId = treatment.OwnerPrincipalId
+                                  TreatmentWorkflowRevision = string (Id.revisionValue treatment.WorkflowRevision)
+                                  TreatmentGeneration = Id.generationValue treatment.Generation
+                                  TreatmentAssignedAt = treatment.AssignedAt
+                                  TreatmentProposalSha256 = treatment.ProposalSha256
+                                  TreatmentContextManifestSha256 = treatment.ContextManifestSha256
+                                  TreatmentArm = arm treatment.Arm
                                   SubjectBindingSha256 = subjectDigest treatment subject
                                   ItemId = subject.ItemId
                                   OriginalItemId = subject.OriginalItemId
@@ -101,8 +122,8 @@ module LearningMainAdmission =
                                   AssignmentId = launch.Key.AssignmentId
                                   AttemptId = launch.Key.AttemptId
                                   Generation = launch.Key.Generation
-                                  ProposalSha256 = treatment.ProposalSha256
-                                  ContextManifestSha256 = treatment.ContextManifestSha256
+                                  ProposalSha256 = prepared.CurrentProposalSha256
+                                  ContextManifestSha256 = prepared.CurrentContextManifestSha256
                                   RenderedInputSha256 = launch.InputDigest
                                   Requested = launch.Requested
                                   Deadline = launch.Limits.Deadline
@@ -111,7 +132,7 @@ module LearningMainAdmission =
                                   SnapshotId = $"{request.ProjectId:D}:{request.WorkflowRevision}"
                                   SnapshotDigest = request.CanonicalSha256
                                   SnapshotCapturedAt = request.SelectedAt
-                                  ManifestId = $"context:{treatment.ContextManifestSha256}"
+                                  ManifestId = $"context:{prepared.CurrentContextManifestSha256}"
                                   ManifestVersion = prepared.ManifestVersion
                                   ExperimentContractId = LearningContext.ContractId
                                   PolicyRepository = "FS-GG/.github"
@@ -122,6 +143,7 @@ module LearningMainAdmission =
                                   WorkClassId = LearningContext.WorkClassId
                                   RubricVersion = "1"
                                   RecipeId = prepared.RecipeId
+                                  RecipeDigest = prepared.RecipeDigest
                                   Arm = arm treatment.Arm
                                   QualificationOnly = true }
                             let value = { value0 with BindingSha256 = LearningExecutionBinding.digest value0 }
@@ -138,3 +160,40 @@ module LearningMainAdmission =
                         | Error reason, _ -> Error reason
                         | Ok _, None -> Error "learning-main-admission-binding-missing"
                 }
+
+    let prepare
+        (clock: TimeProvider)
+        (observerJournal: IObserverJournalStore)
+        (workItems: IJournalStore)
+        (executions: IExecutorCommandStore)
+        (executionJournal: IExecutionSessionJournal)
+        (learningBindings: ILearningExecutionBindingStore)
+        workItemId
+        principal
+        (request: MainAdmissionPreparationRequest)
+        (prepared: PreparedLearningTreatment)
+        (treatment: DurableLearningTreatment)
+        (subject: DurableLearningTreatmentBinding)
+        (capabilityQuery: LearningSelectionQuery)
+        (capabilityEvidence: LearningSelectionEvidence)
+        (token: CancellationToken)
+        =
+        task {
+            if WorkItemIdentity.persistenceId workItemId <> prepared.Input.ItemId then
+                return Error "learning-main-admission-work-item-refused"
+            else
+                let observerId = ObserverJournal.learningTreatmentObserverId prepared.Input.OriginalItemId
+                let! recovered = observerJournal.RecoverObserver(observerId, token)
+                match recovered with
+                | Error _ -> return Error "learning-main-admission-treatment-unavailable"
+                | Ok recovery ->
+                    let storedTreatment = recovery.State.LearningTreatments |> Map.tryFind prepared.Input.OriginalItemId
+                    let storedSubject = recovery.State.LearningTreatmentBindings |> Map.tryFind prepared.Input.ItemId
+                    let expectedAssignment = Observer.learningTreatmentSha256 principal (treatmentInput treatment)
+                    if storedTreatment <> Some treatment || storedSubject <> Some subject || treatment.AssignmentSha256 <> expectedAssignment then
+                        return Error "learning-main-admission-treatment-not-durable"
+                    else
+                        return!
+                            prepareVerified clock workItems executions executionJournal learningBindings workItemId principal
+                                request prepared treatment subject capabilityQuery capabilityEvidence token
+        }

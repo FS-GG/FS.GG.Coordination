@@ -43,7 +43,10 @@ module TelemetryFactBatches =
         }
 
     let rootInvocation (command: ExecutorCommandV2) =
-        invocation command.WorkItemPersistenceId (command.AttemptId.ToString("N")) command.Generation
+        let itemId =
+            if String.IsNullOrWhiteSpace command.LearningOriginalItemId then command.WorkItemPersistenceId
+            else command.LearningOriginalItemId
+        invocation itemId (command.AttemptId.ToString("N")) command.Generation
 
     let private optional (event: JsonObject) (key: string) (value: string option) =
         event[key] <-
@@ -79,10 +82,10 @@ module TelemetryFactBatches =
         let timestamp = (observedAt: DateTimeOffset).ToString("O")
         let parent =
             if command.ParentAttemptId.HasValue && command.ParentGeneration.HasValue then
-                Some(invocation command.WorkItemPersistenceId (command.ParentAttemptId.Value.ToString("N")) command.ParentGeneration.Value)
+                Some(invocation context.ItemId (command.ParentAttemptId.Value.ToString("N")) command.ParentGeneration.Value)
             else
                 None
-        let root = invocation command.WorkItemPersistenceId rootAttemptId rootGeneration
+        let root = invocation context.ItemId rootAttemptId rootGeneration
         let relation = if parent.IsSome then command.TelemetryRelation else "root"
 
         let activation = event "operational-activation" ("operational-activation-" + context.ActivationId) context

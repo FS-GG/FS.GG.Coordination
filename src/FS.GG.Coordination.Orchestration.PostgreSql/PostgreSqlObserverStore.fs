@@ -362,6 +362,12 @@ WHERE r.singleton FOR SHARE OF r,o
 
                                             let sourceState = sourceEvents |> List.map _.Event |> Observer.replay
 
+                                            let sourceWorkflowRevision, sourceGeneration =
+                                                match request.Command.Command with
+                                                | AssignPreparedLearningTreatment prepared ->
+                                                    prepared.CurrentWorkflowRevision, prepared.CurrentGeneration
+                                                | _ -> input.ExpectedWorkflowRevision, input.ExpectedGeneration
+
                                             let sourceValid =
                                                 sourceState.Sequence = input.SourceSequence
                                                 && (sourceState.SessionId
@@ -374,8 +380,8 @@ WHERE r.singleton FOR SHARE OF r,o
                                                             input.SourceObservationSha256,
                                                             StringComparison.OrdinalIgnoreCase
                                                         )
-                                                        && observation.WorkflowRevision = input.ExpectedWorkflowRevision
-                                                        && observation.Generation = input.ExpectedGeneration))
+                                                        && observation.WorkflowRevision = sourceWorkflowRevision
+                                                        && observation.Generation = sourceGeneration))
 
                                             if not sourceValid then
                                                 raise (ObserverAppendException "learning-treatment-source-reference-mismatch")

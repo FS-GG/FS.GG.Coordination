@@ -87,6 +87,8 @@ type LearningTelemetryFactsTests() =
                 ParentAttemptId = Nullable()
                 ParentGeneration = Nullable()
                 TelemetryRelation = null
+                LearningOriginalItemId = null
+                LearningExecutionBindingBase64 = null
             }
 
         { unsigned with BodySha256 = ExecutorWire.commandV2Digest unsigned }

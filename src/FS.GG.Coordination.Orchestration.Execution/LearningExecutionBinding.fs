@@ -10,6 +10,13 @@ type LearningExecutionBinding =
     { Schema: string
       BindingSha256: string
       TreatmentAssignmentSha256: string
+      TreatmentOwnerPrincipalId: string
+      TreatmentWorkflowRevision: string
+      TreatmentGeneration: int64
+      TreatmentAssignedAt: DateTimeOffset
+      TreatmentProposalSha256: string
+      TreatmentContextManifestSha256: string
+      TreatmentArm: string
       SubjectBindingSha256: string
       ItemId: string
       OriginalItemId: string
@@ -39,6 +46,7 @@ type LearningExecutionBinding =
       WorkClassId: string
       RubricVersion: string
       RecipeId: string
+      RecipeDigest: string
       Arm: string
       QualificationOnly: bool }
 
@@ -58,7 +66,10 @@ module LearningExecutionBinding =
     let private optional (value: string option) = value |> Option.defaultValue ""
 
     let canonicalBytes (value: LearningExecutionBinding) =
-        [ value.Schema; value.TreatmentAssignmentSha256; value.SubjectBindingSha256; value.ItemId
+        [ value.Schema; value.TreatmentAssignmentSha256; value.TreatmentOwnerPrincipalId
+          value.TreatmentWorkflowRevision; string value.TreatmentGeneration; value.TreatmentAssignedAt.ToString("O")
+          value.TreatmentProposalSha256; value.TreatmentContextManifestSha256; value.TreatmentArm
+          value.SubjectBindingSha256; value.ItemId
           value.OriginalItemId; value.Relation; optional value.ParentItemId; string value.AssignmentId
           string value.AttemptId; string value.Generation; value.ProposalSha256; value.ContextManifestSha256
           value.RenderedInputSha256; optional value.Requested.Model; optional value.Requested.Effort
@@ -66,7 +77,7 @@ module LearningExecutionBinding =
           value.SnapshotId; value.SnapshotDigest; value.SnapshotCapturedAt.ToString("O"); value.ManifestId
           value.ManifestVersion; value.ExperimentContractId; value.PolicyRepository; value.PolicyRevision
           value.PolicyPath; value.PolicySha256; value.PolicyStatus; value.WorkClassId; value.RubricVersion
-          value.RecipeId; value.Arm; string value.QualificationOnly ]
+          value.RecipeId; value.RecipeDigest; value.Arm; string value.QualificationOnly ]
         |> List.map line
         |> String.concat "\n"
         |> Encoding.UTF8.GetBytes
@@ -80,13 +91,24 @@ module LearningExecutionBinding =
     let private text maximum (value: string) =
         not (String.IsNullOrWhiteSpace value) && value = value.Trim() && value.Length <= maximum
 
+    let private arm value = value = "current" || value = "focused"
+
+    let private lineage value =
+        match value.Relation, value.ParentItemId with
+        | "original", None -> value.ItemId = value.OriginalItemId
+        | ("descendant" | "retry"), Some parent ->
+            value.ItemId <> value.OriginalItemId && parent <> value.ItemId
+        | _ -> false
+
     let validate value =
         if value.Schema <> schema || value.BindingSha256 <> digest value then Error "learning-execution-binding-digest-refused"
-        elif [ value.TreatmentAssignmentSha256; value.SubjectBindingSha256; value.ProposalSha256; value.ContextManifestSha256; value.RenderedInputSha256; value.SnapshotDigest; value.PolicySha256 ] |> List.exists (sha >> not) then Error "learning-execution-binding-sha-refused"
+        elif [ value.TreatmentAssignmentSha256; value.TreatmentProposalSha256; value.TreatmentContextManifestSha256; value.SubjectBindingSha256; value.ProposalSha256; value.ContextManifestSha256; value.RenderedInputSha256; value.SnapshotDigest; value.PolicySha256; value.RecipeDigest ] |> List.exists (sha >> not) then Error "learning-execution-binding-sha-refused"
         elif value.AssignmentId = Guid.Empty || value.AttemptId = Guid.Empty || value.Generation < 0L then Error "learning-execution-binding-identity-refused"
-        elif value.Deadline.Offset <> TimeSpan.Zero || value.SnapshotCapturedAt.Offset <> TimeSpan.Zero || value.MaximumRuntimeSeconds < 1L || value.MaximumAttempts < 1 then Error "learning-execution-binding-limit-refused"
+        elif value.Deadline.Offset <> TimeSpan.Zero || value.SnapshotCapturedAt.Offset <> TimeSpan.Zero || value.TreatmentAssignedAt.Offset <> TimeSpan.Zero || value.TreatmentGeneration < 0L || value.MaximumRuntimeSeconds < 1L || value.MaximumAttempts < 1 then Error "learning-execution-binding-limit-refused"
         elif not value.QualificationOnly || value.PolicyStatus <> "source-contract-not-enrolled" then Error "learning-execution-binding-enrollment-refused"
-        elif [ value.ItemId; value.OriginalItemId; value.Relation; value.SnapshotId; value.ManifestId; value.ManifestVersion; value.ExperimentContractId; value.PolicyRepository; value.PolicyRevision; value.PolicyPath; value.WorkClassId; value.RubricVersion; value.RecipeId; value.Arm ] |> List.exists (text 512 >> not) then Error "learning-execution-binding-text-refused"
+        elif not (arm value.TreatmentArm) || not (arm value.Arm) || value.TreatmentArm <> value.Arm then Error "learning-execution-binding-arm-refused"
+        elif not (lineage value) then Error "learning-execution-binding-lineage-refused"
+        elif [ value.TreatmentOwnerPrincipalId; value.TreatmentWorkflowRevision; value.TreatmentArm; value.ItemId; value.OriginalItemId; value.Relation; value.SnapshotId; value.ManifestId; value.ManifestVersion; value.ExperimentContractId; value.PolicyRepository; value.PolicyRevision; value.PolicyPath; value.WorkClassId; value.RubricVersion; value.RecipeId; value.Arm ] |> List.exists (text 512 >> not) then Error "learning-execution-binding-text-refused"
         else Ok value
 
     let decode (bytes: byte array) =
@@ -95,43 +117,51 @@ module LearningExecutionBinding =
                 (Encoding.UTF8.GetString bytes).Split('\n', StringSplitOptions.None)
                 |> Array.map (fun value -> Convert.FromBase64String value |> Encoding.UTF8.GetString)
 
-            if values.Length <> 34 then Error "learning-execution-binding-shape-refused"
+            if values.Length <> 42 then Error "learning-execution-binding-shape-refused"
             else
                 let option value = if value = "" then None else Some value
                 { Schema = values[0]
                   BindingSha256 = ""
                   TreatmentAssignmentSha256 = values[1]
-                  SubjectBindingSha256 = values[2]
-                  ItemId = values[3]
-                  OriginalItemId = values[4]
-                  Relation = values[5]
-                  ParentItemId = option values[6]
-                  AssignmentId = Guid.Parse values[7]
-                  AttemptId = Guid.Parse values[8]
-                  Generation = Int64.Parse values[9]
-                  ProposalSha256 = values[10]
-                  ContextManifestSha256 = values[11]
-                  RenderedInputSha256 = values[12]
-                  Requested = { Model = option values[13]; Effort = option values[14] }
-                  Deadline = DateTimeOffset.Parse values[15]
-                  MaximumRuntimeSeconds = Int64.Parse values[16]
-                  MaximumAttempts = Int32.Parse values[17]
-                  SnapshotId = values[18]
-                  SnapshotDigest = values[19]
-                  SnapshotCapturedAt = DateTimeOffset.Parse values[20]
-                  ManifestId = values[21]
-                  ManifestVersion = values[22]
-                  ExperimentContractId = values[23]
-                  PolicyRepository = values[24]
-                  PolicyRevision = values[25]
-                  PolicyPath = values[26]
-                  PolicySha256 = values[27]
-                  PolicyStatus = values[28]
-                  WorkClassId = values[29]
-                  RubricVersion = values[30]
-                  RecipeId = values[31]
-                  Arm = values[32]
-                  QualificationOnly = Boolean.Parse values[33] }
+                  TreatmentOwnerPrincipalId = values[2]
+                  TreatmentWorkflowRevision = values[3]
+                  TreatmentGeneration = Int64.Parse values[4]
+                  TreatmentAssignedAt = DateTimeOffset.Parse values[5]
+                  TreatmentProposalSha256 = values[6]
+                  TreatmentContextManifestSha256 = values[7]
+                  TreatmentArm = values[8]
+                  SubjectBindingSha256 = values[9]
+                  ItemId = values[10]
+                  OriginalItemId = values[11]
+                  Relation = values[12]
+                  ParentItemId = option values[13]
+                  AssignmentId = Guid.Parse values[14]
+                  AttemptId = Guid.Parse values[15]
+                  Generation = Int64.Parse values[16]
+                  ProposalSha256 = values[17]
+                  ContextManifestSha256 = values[18]
+                  RenderedInputSha256 = values[19]
+                  Requested = { Model = option values[20]; Effort = option values[21] }
+                  Deadline = DateTimeOffset.Parse values[22]
+                  MaximumRuntimeSeconds = Int64.Parse values[23]
+                  MaximumAttempts = Int32.Parse values[24]
+                  SnapshotId = values[25]
+                  SnapshotDigest = values[26]
+                  SnapshotCapturedAt = DateTimeOffset.Parse values[27]
+                  ManifestId = values[28]
+                  ManifestVersion = values[29]
+                  ExperimentContractId = values[30]
+                  PolicyRepository = values[31]
+                  PolicyRevision = values[32]
+                  PolicyPath = values[33]
+                  PolicySha256 = values[34]
+                  PolicyStatus = values[35]
+                  WorkClassId = values[36]
+                  RubricVersion = values[37]
+                  RecipeId = values[38]
+                  RecipeDigest = values[39]
+                  Arm = values[40]
+                  QualificationOnly = Boolean.Parse values[41] }
                 |> fun value -> { value with BindingSha256 = digest value }
                 |> validate
         with

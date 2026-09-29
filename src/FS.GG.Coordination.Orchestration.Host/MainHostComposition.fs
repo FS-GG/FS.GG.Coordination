@@ -298,7 +298,8 @@ type MainProductionAdmission
                         executions :> IExecutorCommandStore,
                         executions :> IExecutionSessionJournal,
                         preparation.LaunchIntent.Key.AssignmentId,
-                        preparation.LaunchIntent.Key.AttemptId
+                        preparation.LaunchIntent.Key.AttemptId,
+                        learningStore = (executions :> ILearningExecutionBindingStore)
                     )
                     :> IExecutorBindingResolver
 

@@ -19,6 +19,7 @@ type LearningAssignmentPreparationRequest =
         ExpectedContractId: string
         ExpectedContractRevision: string
         ExpectedAuthoritativeObligations: string list
+        InheritedDurableTreatment: DurableLearningTreatment option
         RetrievedSources: RetrievedLearningSource list
         AssignedAt: DateTimeOffset
     }
@@ -51,6 +52,7 @@ type LearningAssignmentPreparationRefusal =
     | RetrievedSourceSizeMismatch of repository: string * path: string
     | RetrievedSourceTextInvalid of repository: string * path: string
     | RenderedInputOversized of bytes: int
+    | InheritedTreatmentMismatch
 
 [<RequireQualifiedAccess>]
 module LearningAssignmentAdapter =
@@ -261,7 +263,7 @@ module LearningAssignmentAdapter =
                                 let sourceObserverId =
                                     ObserverJournal.observerId request.SourceState.SessionId.Value
 
-                                let assignment =
+                                let currentAssignment =
                                     {
                                         SourceObserverId = sourceObserverId
                                         SourceSequence = request.SourceState.Sequence
@@ -280,19 +282,51 @@ module LearningAssignmentAdapter =
                                         AssignedAt = request.AssignedAt
                                     }
 
-                                {
-                                    Disposition = disposition
-                                    Proposal = produced
-                                    ContextManifest = manifest
-                                    Assignment = assignment
-                                    PreparedTreatment =
-                                        PreparedLearningTreatment(
-                                            ContractVersion,
-                                            disposition,
-                                            assignment,
-                                            renderedInput,
-                                            sha256 renderedInput,
-                                            manifest.Recipe.RecipeId,
-                                            manifest.Recipe.ManifestVersion
-                                        )
-                                })))
+                                let assignmentResult =
+                                    match manifest.Relation, request.InheritedDurableTreatment with
+                                    | Original, None -> Ok currentAssignment
+                                    | (Descendant _ | Retry _), Some inherited when
+                                        inherited.OriginalItemId = produced.OriginalItemId
+                                        && inherited.Arm = manifest.Arm ->
+                                        Ok
+                                            { currentAssignment with
+                                                ProposalSha256 = inherited.ProposalSha256
+                                                ContextManifestSha256 = inherited.ContextManifestSha256
+                                                Planner = inherited.Planner
+                                                Worker = inherited.Worker
+                                                DirectSmallEligible = inherited.DirectSmallEligible
+                                                ExpectedWorkflowRevision = inherited.WorkflowRevision
+                                                ExpectedGeneration = inherited.Generation
+                                                AssignedAt = inherited.AssignedAt }
+                                    | _ -> Error InheritedTreatmentMismatch
+
+                                assignmentResult
+                                |> Result.map (fun assignment ->
+                                    let assignmentDisposition =
+                                        match assignment.DirectSmallEligible, assignment.Planner with
+                                        | false, None -> LearningPlanningDisposition.ReuseValidPlan
+                                        | true, None -> LearningPlanningDisposition.DirectSmall
+                                        | false, Some _ -> LearningPlanningDisposition.Planned
+                                        | _ -> disposition
+                                    {
+                                        Disposition = disposition
+                                        Proposal = produced
+                                        ContextManifest = manifest
+                                        Assignment = assignment
+                                        PreparedTreatment =
+                                            PreparedLearningTreatment(
+                                                ContractVersion,
+                                                assignmentDisposition,
+                                                assignment,
+                                                renderedInput,
+                                                sha256 renderedInput,
+                                                produced.CanonicalSha256,
+                                                manifest.CanonicalSha256,
+                                                manifest.Recipe.RecipeId,
+                                                sha256 (Encoding.UTF8.GetBytes($"{manifest.Recipe.RecipeId}\n{manifest.Recipe.ManifestVersion}\n{manifest.Recipe.Model}\n{manifest.Recipe.Effort}")),
+                                                manifest.Recipe.ManifestVersion,
+                                                observation.WorkflowRevision,
+                                                observation.Generation
+                                            )
+                                    }))
+                            |> Result.bind id))

@@ -4,6 +4,7 @@ open System
 open System.Security.Cryptography
 open System.Text
 open System.Text.RegularExpressions
+open FS.GG.Coordination.Orchestration.Execution
 
 [<RequireQualifiedAccess>]
 type LearningTreatmentArm =
@@ -164,6 +165,42 @@ module LearningTelemetryFacts =
                     Some "qualification-only-not-enrolled"
                 )
             )
+
+    let fromExecutionBinding (binding: LearningExecutionBinding) =
+        LearningExecutionBinding.validate binding
+        |> Result.bind (fun binding ->
+            if binding.Relation <> "original" then Ok None
+            else
+                let treatment =
+                    { OriginalItemId = binding.OriginalItemId
+                      Arm = if binding.TreatmentArm = "current" then LearningTreatmentArm.Current else LearningTreatmentArm.Focused
+                      AssignmentSha256 = binding.TreatmentAssignmentSha256
+                      ProposalSha256 = binding.TreatmentProposalSha256
+                      ContextManifestSha256 = binding.TreatmentContextManifestSha256
+                      OwnerPrincipalId = binding.TreatmentOwnerPrincipalId
+                      WorkflowRevision = binding.TreatmentWorkflowRevision
+                      Generation = binding.TreatmentGeneration
+                      AssignedAt = binding.TreatmentAssignedAt }
+                let configuration =
+                    { SubjectBindingSha256 = binding.SubjectBindingSha256
+                      ExperimentContractId = binding.ExperimentContractId
+                      PolicyRepository = binding.PolicyRepository
+                      PolicyRevision = binding.PolicyRevision
+                      PolicyPath = binding.PolicyPath
+                      PolicySha256 = binding.PolicySha256
+                      PolicyStatus = binding.PolicyStatus
+                      WorkClassId = binding.WorkClassId
+                      QualificationOnly = binding.QualificationOnly
+                      SnapshotId = binding.SnapshotId
+                      RubricVersion = binding.RubricVersion
+                      SnapshotDigest = binding.SnapshotDigest
+                      CapturedAt = binding.SnapshotCapturedAt
+                      RecipeId = binding.RecipeId
+                      RecipeDigest = binding.RecipeDigest
+                      ManifestId = binding.ManifestId
+                      ManifestDigest = binding.TreatmentContextManifestSha256
+                      ManifestVersion = binding.ManifestVersion }
+                prepare treatment configuration |> Result.map Some)
 
     let arm (prepared: PreparedLearningTelemetry) =
         match prepared.Treatment.Arm with

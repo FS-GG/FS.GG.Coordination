@@ -64,6 +64,10 @@ type ExecutorCommandV2 =
         ParentGeneration: Nullable<int64>
         [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
         TelemetryRelation: string
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        LearningOriginalItemId: string
+        [<property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingDefault)>]
+        LearningExecutionBindingBase64: string
     }
 
 [<CLIMutable>]
@@ -236,6 +240,7 @@ module ExecutorWire =
     let commandSchema = "fsgg.orchestration.executor-command/1"
     let commandSchemaV2 = "fsgg.orchestration.executor-command/2"
     let commandSchemaV3 = "fsgg.orchestration.executor-command/3"
+    let commandSchemaV4 = "fsgg.orchestration.executor-command/4"
     let receiptSchema = "fsgg.orchestration.executor-receipt/1"
     let contentSchema = "fsgg.orchestration.executor-content/1"
     let inputManifestSchema = "fsgg.orchestration.executor-input-manifest/1"
@@ -293,6 +298,11 @@ module ExecutorWire =
         |> Set.add "parentAttemptId"
         |> Set.add "parentGeneration"
         |> Set.add "telemetryRelation"
+
+    let private commandV4Properties =
+        commandV3Properties
+        |> Set.add "learningOriginalItemId"
+        |> Set.add "learningExecutionBindingBase64"
 
     let private receiptProperties =
         set
@@ -509,15 +519,31 @@ module ExecutorWire =
         let decoded =
             match closed<ExecutorCommandV2> commandV2Properties maximumControlBytes bytes with
             | Ok value -> Ok value
-            | Error _ -> closed<ExecutorCommandV2> commandV3Properties maximumControlBytes bytes
+            | Error _ ->
+                match closed<ExecutorCommandV2> commandV3Properties maximumControlBytes bytes with
+                | Ok value -> Ok value
+                | Error _ -> closed<ExecutorCommandV2> commandV4Properties maximumControlBytes bytes
 
         decoded
         |> Result.bind (fun value ->
-            if value.Schema <> commandSchemaV2 && value.Schema <> commandSchemaV3 then
+            if value.Schema <> commandSchemaV2 && value.Schema <> commandSchemaV3 && value.Schema <> commandSchemaV4 then
                 Error "executor-command-schema-refused"
             elif
                 (value.Schema = commandSchemaV2
                  && (value.ParentAttemptId.HasValue || value.ParentGeneration.HasValue || not (isNull value.TelemetryRelation)))
+                 || ((value.Schema = commandSchemaV2 || value.Schema = commandSchemaV3)
+                     && (not (isNull value.LearningOriginalItemId) || not (isNull value.LearningExecutionBindingBase64)))
+                 || (value.Schema = commandSchemaV4
+                     && (not (validText 512 value.LearningOriginalItemId)
+                         || String.IsNullOrWhiteSpace value.LearningExecutionBindingBase64
+                         || value.LearningExecutionBindingBase64.Length > 24576))
+                 || (value.Schema = commandSchemaV4
+                     && (value.ParentAttemptId.HasValue <> value.ParentGeneration.HasValue
+                         || (value.ParentAttemptId.HasValue
+                             && (value.ParentAttemptId.Value = Guid.Empty
+                                 || value.ParentGeneration.Value < 0L
+                                 || value.ParentGeneration.Value >= value.Generation
+                                 || not ((set [ "child"; "follow-up" ]).Contains value.TelemetryRelation)))))
                 || (value.Schema = commandSchemaV3
                     && (not value.ParentAttemptId.HasValue
                         || not value.ParentGeneration.HasValue

@@ -189,16 +189,26 @@ type PreparedLearningTreatment internal
         input: LearningTreatmentAssignmentInput,
         renderedInput: byte array,
         renderedInputSha256: string,
+        currentProposalSha256: string,
+        currentContextManifestSha256: string,
         recipeId: string,
-        manifestVersion: string
+        recipeDigest: string,
+        manifestVersion: string,
+        currentWorkflowRevision: WorkflowRevision,
+        currentGeneration: Generation
     ) =
     member _.ContractVersion = contractVersion
     member _.Disposition = disposition
     member _.Input = input
     member _.RenderedInput = Array.copy renderedInput
     member _.RenderedInputSha256 = renderedInputSha256
+    member _.CurrentProposalSha256 = currentProposalSha256
+    member _.CurrentContextManifestSha256 = currentContextManifestSha256
     member _.RecipeId = recipeId
+    member _.RecipeDigest = recipeDigest
     member _.ManifestVersion = manifestVersion
+    member _.CurrentWorkflowRevision = currentWorkflowRevision
+    member _.CurrentGeneration = currentGeneration
 
 type DurableLearningTreatment =
     {
@@ -1649,6 +1659,8 @@ type private LearningTreatmentRuntimeRequest =
         SourceObserverId: string
         SourceState: ObserverState
         Input: LearningTreatmentAssignmentInput
+        SourceWorkflowRevision: WorkflowRevision
+        SourceGeneration: Generation
         Command: ObserverCommand
         CommandId: CommandId
         PrincipalId: string
@@ -1701,8 +1713,8 @@ module ObserverRuntime =
                         request.Input.SourceObservationSha256,
                         StringComparison.OrdinalIgnoreCase
                     )
-                    && observation.WorkflowRevision = request.Input.ExpectedWorkflowRevision
-                    && observation.Generation = request.Input.ExpectedGeneration)
+                    && observation.WorkflowRevision = request.SourceWorkflowRevision
+                    && observation.Generation = request.SourceGeneration)
 
             if not sourceIdentityValid then
                 return LearningTreatmentSourceRefused "learning-treatment-source-observer-mismatch"
@@ -1770,6 +1782,8 @@ module ObserverRuntime =
                 SourceObserverId = request.SourceObserverId
                 SourceState = request.SourceState
                 Input = request.Input
+                SourceWorkflowRevision = request.Input.ExpectedWorkflowRevision
+                SourceGeneration = request.Input.ExpectedGeneration
                 Command = AssignLearningTreatment request.Input
                 CommandId = request.CommandId
                 PrincipalId = request.PrincipalId
@@ -1793,6 +1807,8 @@ module ObserverRuntime =
                 SourceObserverId = request.SourceObserverId
                 SourceState = request.SourceState
                 Input = input
+                SourceWorkflowRevision = request.PreparedTreatment.CurrentWorkflowRevision
+                SourceGeneration = request.PreparedTreatment.CurrentGeneration
                 Command = AssignPreparedLearningTreatment request.PreparedTreatment
                 CommandId = request.CommandId
                 PrincipalId = request.PrincipalId
