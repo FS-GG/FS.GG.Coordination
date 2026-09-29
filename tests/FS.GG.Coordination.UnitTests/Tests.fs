@@ -187,7 +187,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
 
     Assert.Equal(
-        "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895",
+        "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937",
         outputRoot.GetProperty("sourceSha256").GetString()
     )
 

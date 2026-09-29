@@ -90,7 +90,7 @@ if
 then
     fail "GCTQ-PREDECESSOR-QUINT" "accepted GS2-05.4 Quint identity changed"
 
-if sha256 quintPath <> "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895" then
+if sha256 quintPath <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937" then
     fail "GCTQ-QUINT" "canonical Quint source changed"
 
 if generatedIds <> requiredIds || independentIds <> requiredIds then
@@ -174,7 +174,7 @@ let generatedMutation =
             }
     | GitHubClaimTouchSetControl.QuintAndPrerequisite ->
         sha256 receiptPath = "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e"
-        && sha256 quintPath = "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+        && sha256 quintPath = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
 
 // Independent producer: distinct assertions over the public boundary, not a call to generatedMutation.
 let independentMutation =

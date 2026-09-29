@@ -36,7 +36,7 @@ let ``current Choreo manifest binds the qualified protocol while retaining exact
     let fixtureRoot = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo")
     let manifest = JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
     let source = manifest["source"].AsObject()
-    let expectedSourceSha = "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+    let expectedSourceSha = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
     let protocolBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md"))
 
     Assert.Equal("e265ac246e8eaa7637d87f15ea422a4b409e39b8", source["commit"].GetValue<string>())
