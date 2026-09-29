@@ -4744,6 +4744,252 @@ module LearningAdmissionTests {
     .expect(not(safety))
 }
 
+// LEARN-01.4 adds a separate operational-window authority ahead of the retained v1 treatment.
+// It is shared durable state: one exact window is bound before compilation, treatment and child
+// executions retain its original/arm identity, and unknown capability cannot create a launch.
+// The established LearningAdmissionModel remains unchanged so its v1 trace bytes keep their
+// historical meaning; this module supplies distinct operational witnesses and red controls.
+module LearningOperationalWindowModel {
+  type OperationalLearningState = {
+    enabled: bool,
+    readinessComplete: bool,
+    sharedAllocationUnassigned: bool,
+    authorityExact: bool,
+    windowDigest: int,
+    originalIdentity: int,
+    assignedArm: int,
+    assignmentReplayAccepted: bool,
+    assignmentConflictRejected: bool,
+    treatmentDigest: int,
+    treatmentArm: int,
+    childBound: bool,
+    childTreatmentDigest: int,
+    childWindowDigest: int,
+    childCurrentContext: int,
+    executionBound: bool,
+    capabilitySupported: bool,
+    capabilityFresh: bool,
+    capabilityExact: bool,
+    capabilityRejected: bool,
+    launchCount: int,
+  }
+
+  var operational: OperationalLearningState
+
+  action init = operational' = {
+    enabled: false,
+    readinessComplete: false,
+    sharedAllocationUnassigned: false,
+    authorityExact: false,
+    windowDigest: 0,
+    originalIdentity: 0,
+    assignedArm: 0,
+    assignmentReplayAccepted: false,
+    assignmentConflictRejected: false,
+    treatmentDigest: 0,
+    treatmentArm: 0,
+    childBound: false,
+    childTreatmentDigest: 0,
+    childWindowDigest: 0,
+    childCurrentContext: 0,
+    executionBound: false,
+    capabilitySupported: false,
+    capabilityFresh: false,
+    capabilityExact: false,
+    capabilityRejected: false,
+    launchCount: 0,
+  }
+
+  action enableWithIndependentReadiness = all {
+    not(operational.enabled),
+    operational.windowDigest == 0,
+    operational' = { ...operational,
+      enabled: true,
+      readinessComplete: true,
+      sharedAllocationUnassigned: true,
+      authorityExact: true },
+  }
+
+  action bindFrozenWindow = all {
+    operational.enabled,
+    operational.readinessComplete,
+    operational.sharedAllocationUnassigned,
+    operational.authorityExact,
+    operational.windowDigest == 0,
+    operational' = { ...operational,
+      windowDigest: 201,
+      originalIdentity: 1,
+      assignedArm: 2 },
+  }
+
+  action replayFrozenWindow = all {
+    operational.windowDigest == 201,
+    not(operational.assignmentReplayAccepted),
+    operational' = { ...operational, assignmentReplayAccepted: true },
+  }
+
+  action rejectChangedWindow = all {
+    operational.windowDigest != 0,
+    not(operational.assignmentConflictRejected),
+    operational' = { ...operational, assignmentConflictRejected: true },
+  }
+
+  action compileAndBindTreatment = all {
+    operational.windowDigest == 201,
+    operational.treatmentDigest == 0,
+    operational' = { ...operational,
+      treatmentDigest: 301,
+      treatmentArm: operational.assignedArm },
+  }
+
+  action bindChildWithCurrentContext = all {
+    operational.treatmentDigest == 301,
+    not(operational.childBound),
+    operational' = { ...operational,
+      childBound: true,
+      childTreatmentDigest: operational.treatmentDigest,
+      childWindowDigest: operational.windowDigest,
+      childCurrentContext: 401 },
+  }
+
+  action bindExecution = all {
+    operational.treatmentDigest == 301,
+    not(operational.executionBound),
+    operational' = { ...operational, executionBound: true },
+  }
+
+  action rejectUnknownCapability = all {
+    operational.executionBound,
+    not(operational.capabilitySupported),
+    operational.launchCount == 0,
+    not(operational.capabilityRejected),
+    operational' = { ...operational, capabilityRejected: true },
+  }
+
+  action observeExactSupportedCapability = all {
+    operational.executionBound,
+    not(operational.capabilitySupported),
+    operational' = { ...operational,
+      capabilitySupported: true,
+      capabilityFresh: true,
+      capabilityExact: true },
+  }
+
+  action launch = all {
+    operational.executionBound,
+    operational.windowDigest == 201,
+    operational.treatmentDigest == 301,
+    operational.treatmentArm == operational.assignedArm,
+    operational.capabilitySupported,
+    operational.capabilityFresh,
+    operational.capabilityExact,
+    operational.launchCount == 0,
+    operational' = { ...operational, launchCount: 1 },
+  }
+
+  action hold = operational' = operational
+
+  action step = any {
+    enableWithIndependentReadiness,
+    bindFrozenWindow,
+    replayFrozenWindow,
+    rejectChangedWindow,
+    compileAndBindTreatment,
+    bindChildWithCurrentContext,
+    bindExecution,
+    rejectUnknownCapability,
+    observeExactSupportedCapability,
+    launch,
+    hold,
+  }
+
+  val safety = and {
+    operational.treatmentDigest == 0 or and {
+      operational.windowDigest == 201,
+      operational.originalIdentity == 1,
+      operational.treatmentArm == operational.assignedArm,
+    },
+    not(operational.childBound) or and {
+      operational.childTreatmentDigest == operational.treatmentDigest,
+      operational.childWindowDigest == operational.windowDigest,
+      operational.childCurrentContext != 0,
+    },
+    operational.launchCount == 0 or and {
+      operational.executionBound,
+      operational.windowDigest == 201,
+      operational.treatmentDigest == 301,
+      operational.capabilitySupported,
+      operational.capabilityFresh,
+      operational.capabilityExact,
+    },
+    operational.launchCount <= 1,
+  }
+
+  action invalidTreatmentWithoutWindow = operational' = { ...operational,
+    treatmentDigest: 301, treatmentArm: 2 }
+  action invalidArmRedraw = operational' = { ...operational,
+    treatmentDigest: 301, treatmentArm: 1 }
+  action invalidChildWindowRedraw = operational' = { ...operational,
+    childBound: true, childTreatmentDigest: operational.treatmentDigest,
+    childWindowDigest: 202, childCurrentContext: 401 }
+  action invalidUnknownCapabilityLaunch = operational' = { ...operational,
+    executionBound: true, launchCount: 1 }
+}
+
+module LearningOperationalWindowTests {
+  import LearningOperationalWindowModel.*
+
+  run testOperationalRootLaunch = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(replayFrozenWindow)
+    .then(rejectChangedWindow)
+    .then(compileAndBindTreatment)
+    .then(bindExecution)
+    .then(observeExactSupportedCapability)
+    .then(launch)
+    .expect(safety and operational.launchCount == 1)
+
+  run testOperationalChildKeepsAssignment = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(bindChildWithCurrentContext)
+    .expect(safety and operational.childWindowDigest == operational.windowDigest)
+
+  run testUnknownCapabilityHasNoLaunch = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(bindExecution)
+    .then(rejectUnknownCapability)
+    .expect(safety and operational.capabilityRejected and operational.launchCount == 0)
+
+  run testTreatmentWithoutWindowFails = init
+    .then(invalidTreatmentWithoutWindow)
+    .expect(not(safety))
+
+  run testArmRedrawFails = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(invalidArmRedraw)
+    .expect(not(safety))
+
+  run testChildWindowRedrawFails = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(invalidChildWindowRedraw)
+    .expect(not(safety))
+
+  run testUnknownCapabilityLaunchFails = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(invalidUnknownCapabilityLaunch)
+    .expect(not(safety))
+}
+
 // GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
 // the actions and properties needed for one independently qualified closure. Quint flattening
 // therefore retains the used transitive closure instead of the all-actions integration root.

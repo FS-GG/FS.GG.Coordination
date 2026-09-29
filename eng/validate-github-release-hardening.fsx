@@ -345,7 +345,7 @@ else
         | ExactReleaseReplay -> GitHubReleaseHardeningQualification.verify report.Seal snapshot = Ok report
         | QuintReleaseUnchanged ->
             sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) =
-                "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+                "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
         | NoReleaseMutationSurface ->
             let surface =
                 File.ReadAllText(
@@ -472,9 +472,9 @@ else
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
 
-            sha256File protocolPath = "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+            sha256File protocolPath = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
             && alteredDigest
-               <> "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
+               <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
         | NoReleaseMutationSurface, "forbidden-http-client-surface" ->
             let forbidden =
                 [

@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Codex.Tests
 open System
 open System.IO
 open System.Text.Json
+open FS.GG.Coordination.Orchestration.Execution
 open FS.GG.Coordination.Orchestration.Execution.Codex
 open FS.GG.Coordination.Orchestration.Runner.Client
 open FS.GG.Coordination.Orchestration.Runner.Protocol
@@ -147,6 +148,91 @@ type LearningTelemetryFactsTests() =
         let childName, childBytes = TelemetryFactBatches.learningPreparation childContext prepared
         Assert.Equal(firstName, childName)
         Assert.Equal<byte>(firstBytes, childBytes)
+
+
+    [<Fact>]
+    member _.``operational projection uses durable window identity without relabeling qualification facts``() =
+        let request: LearningOperationalWindowRequest =
+            {
+                Enabled = true
+                WindowId = "learn-01.4-controlled-window"
+                SeedReferenceSha256 = digest '7'
+                Repository = LearningOperationalWindow.policyRepository
+                CalendarAdmissionBlock = "2026-10-01/2026-10-29"
+                OriginalItemId = treatment.OriginalItemId
+                AuthorityId = "controlled-operating-authority"
+                AuthorityRevision = "1"
+                AuthoritySha256 = digest '8'
+                OptedInAt = treatment.AssignedAt.AddMinutes -2.
+                EnrollmentOpensAt = treatment.AssignedAt.AddMinutes -1.
+                EnrollmentClosesAt = treatment.AssignedAt.AddDays 28.
+            }
+
+        let request =
+            [ 0..255 ]
+            |> List.map (fun value ->
+                { request with
+                    SeedReferenceSha256 = value.ToString("x2") |> String.replicate 32
+                })
+            |> List.find (fun value -> LearningOperationalWindow.deriveArm value = "focused")
+
+        let readiness: LearningOperationalReadinessEvidence =
+            {
+                Schema = LearningOperationalWindow.readinessSchema
+                WindowId = request.WindowId
+                Repository = request.Repository
+                WorkClassId = LearningOperationalWindow.workClassId
+                OriginalItemId = request.OriginalItemId
+                AcceptedPlanSha256 = digest '1'
+                CanonicalWorkItemSha256 = digest '2'
+                CoverageRosterSha256 = digest '3'
+                DispatchCensusSha256 = digest '4'
+                NativeDeliverySha256 = digest '5'
+                SharedCostRosterSha256 = digest '6'
+                ObservedAt = treatment.AssignedAt.AddMinutes -1.
+                ExpiresAt = treatment.AssignedAt.AddMinutes 5.
+                CompleteNativeUsage = true
+                UnassignedSharedAllocation = true
+                Provenance = "controlled-independent-readiness"
+            }
+
+        let window =
+            (LearningOperationalWindow.prepare treatment.AssignedAt request readiness
+             |> Result.defaultWith failwith)
+                .Binding
+
+        let prepared =
+            LearningTelemetryFacts.prepareOperational
+                window
+                treatment
+                { configuration with
+                    QualificationOnly = false
+                }
+            |> Result.defaultWith failwith
+
+        let _, bytes = TelemetryFactBatches.learningPreparation context prepared
+        use document = JsonDocument.Parse bytes
+        let assignment = document.RootElement.GetProperty("events")[2]
+        Assert.Equal(window.WindowId, assignment.GetProperty("windowId").GetString())
+        Assert.Equal(JsonValueKind.Null, assignment.GetProperty("deviation").ValueKind)
+
+        let qualification =
+            LearningTelemetryFacts.prepare treatment configuration
+            |> Result.defaultWith failwith
+
+        let _, qualificationBytes =
+            TelemetryFactBatches.learningPreparation context qualification
+
+        use qualificationDocument = JsonDocument.Parse qualificationBytes
+
+        let qualificationAssignment =
+            qualificationDocument.RootElement.GetProperty("events")[2]
+
+        Assert.Equal(
+            "qualification:learn-01.3:" + treatment.AssignmentSha256,
+            qualificationAssignment.GetProperty("windowId").GetString()
+        )
+
 
     [<Fact>]
     member _.``configuration cannot replace durable manifest identity``() =

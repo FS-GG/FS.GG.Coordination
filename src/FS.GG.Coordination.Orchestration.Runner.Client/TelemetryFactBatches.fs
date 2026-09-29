@@ -160,7 +160,7 @@ module TelemetryFactBatches =
 
         let assignment = event "learn-experiment-assignment" prepared.AssignmentIdentity learningContext
         assignment["revision"] <- treatment.Generation
-        assignment["windowId"] <- "qualification:learn-01.3:" + treatment.AssignmentSha256
+        assignment["windowId"] <- prepared.WindowId
         assignment["policyId"] <- configuration.ExperimentContractId
         assignment["arm"] <- LearningTelemetryFacts.arm prepared
         assignment["assignedAt"] <- treatment.AssignedAt.ToString("O")
