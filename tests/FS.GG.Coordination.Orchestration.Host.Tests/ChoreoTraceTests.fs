@@ -39,7 +39,7 @@ let ``current Choreo manifest binds the qualified protocol while retaining exact
     let expectedSourceSha = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
     let protocolBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md"))
 
-    Assert.Equal("e265ac246e8eaa7637d87f15ea422a4b409e39b8", source["commit"].GetValue<string>())
+    Assert.Equal("38820f22535eabedefc3aa2590a05ab7498cb5c6", source["commit"].GetValue<string>())
     Assert.Equal(expectedSourceSha, source["sha256"].GetValue<string>())
 
     let actualSourceSha =
