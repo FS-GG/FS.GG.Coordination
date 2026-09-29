@@ -12,6 +12,7 @@
     <Compile Include="RunnerWireRuntimeTests.fs" />
     <Compile Include="InstalledAdoptionVerificationTests.fs" />
     <Compile Include="HostTests.fs" />
+    <Compile Include="LearningRuntimeCorrespondenceTests.fs" />
     <Compile Include="ChoreoProductionReplayTests.fs" />
   </ItemGroup>
   <ItemGroup>
