@@ -51,34 +51,59 @@ module CodexLearningProviderCapability =
 
             let complete =
                 match root.TryGetProperty "nextCursor" with
-                | false, _ -> true
                 | true, value -> value.ValueKind = JsonValueKind.Null
+                | false, _ -> false
 
             match query.Requested.Model, query.Requested.Effort, root.TryGetProperty "data" with
             | _, _, _ when root.ValueKind <> JsonValueKind.Object -> fail "codex-model-list-invalid"
             | _, _, _ when not complete -> fail "codex-model-list-incomplete"
             | Some model, Some effort, (true, data) when data.ValueKind = JsonValueKind.Array ->
-                let matches =
-                    data.EnumerateArray()
-                    |> Seq.choose (fun item ->
+                let parsed = ResizeArray<string * Set<string>>()
+                let mutable invalid = false
+
+                for item in data.EnumerateArray() do
+                    if item.ValueKind <> JsonValueKind.Object then
+                        invalid <- true
+                    else
                         match item.TryGetProperty "model", item.TryGetProperty "supportedReasoningEfforts" with
                         | (true, modelValue), (true, efforts) when
                             modelValue.ValueKind = JsonValueKind.String
                             && efforts.ValueKind = JsonValueKind.Array
-                            && modelValue.GetString() = model
                             ->
-                            efforts.EnumerateArray()
-                            |> Seq.choose (fun option ->
-                                match option.TryGetProperty "reasoningEffort" with
-                                | true, value when value.ValueKind = JsonValueKind.String ->
-                                    value.GetString() |> Option.ofObj
-                                | _ -> None)
-                            |> Set.ofSeq
-                            |> Some
-                        | _ -> None)
+                            let modelValue = modelValue.GetString()
+                            let parsedEfforts = ResizeArray<string>()
+
+                            for option in efforts.EnumerateArray() do
+                                if option.ValueKind <> JsonValueKind.Object then
+                                    invalid <- true
+                                else
+                                    match option.TryGetProperty "reasoningEffort" with
+                                    | true, value when value.ValueKind = JsonValueKind.String ->
+                                        let value = value.GetString()
+
+                                        if String.IsNullOrWhiteSpace value then
+                                            invalid <- true
+                                        else
+                                            parsedEfforts.Add value
+                                    | _ -> invalid <- true
+
+                            if
+                                String.IsNullOrWhiteSpace modelValue
+                                || parsedEfforts.Count <> (parsedEfforts |> Set.ofSeq |> Set.count)
+                            then
+                                invalid <- true
+                            else
+                                parsed.Add(modelValue, parsedEfforts |> Set.ofSeq)
+                        | _ -> invalid <- true
+
+                let matches =
+                    parsed
+                    |> Seq.choose (fun (observedModel, efforts) ->
+                        if observedModel = model then Some efforts else None)
                     |> Seq.toList
 
                 match matches with
+                | _ when invalid -> fail "codex-model-list-invalid"
                 | [] -> unsupported observedAt query "requested-model-unsupported"
                 | [ efforts ] when efforts.Contains effort -> supported observedAt query "codex-app-server:model/list"
                 | [ _ ] -> unsupported observedAt query "requested-effort-unsupported"

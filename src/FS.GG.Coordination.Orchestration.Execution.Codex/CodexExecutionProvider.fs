@@ -66,6 +66,320 @@ module CodexExecutionProviderOptions =
             TurnObserver = None
         }
 
+module private CodexLearningConfiguration =
+    let private keys =
+        set [ "CODEX_HOME"; "HOME"; "XDG_CONFIG_HOME"; "XDG_DATA_HOME"; "XDG_CACHE_HOME" ]
+
+    let environment (options: CodexExecutionProviderOptions) =
+        options.EnvironmentAllowList
+        |> Seq.sort
+        |> Seq.choose (fun key ->
+            Environment.GetEnvironmentVariable key
+            |> Option.ofObj
+            |> Option.map (fun value -> key, value))
+        |> Seq.toArray
+
+    let digest (environment: (string * string) array) =
+        environment
+        |> Array.filter (fun (key, _) -> keys.Contains key)
+        |> Array.map (fun (key, value) -> key + "=" + value)
+        |> String.concat "\n"
+        |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    let provenance environment =
+        $"codex-app-server:model/list;config-sha256={digest environment}"
+
+/// Bounded native capability discovery over the pinned Codex app-server stdio protocol.
+/// The response is account scoped by app-server; provenance binds the non-secret local
+/// configuration boundary used to select that account without disclosing its values.
+type CodexAppServerLearningCapabilityDiscovery
+    (
+        options: CodexExecutionProviderOptions,
+        clock: TimeProvider
+    ) =
+    let maximumPages = 8
+    let pageSize = 100
+    let maximumCursorBytes = 512
+
+    let sha256File path =
+        try
+            if File.Exists path then
+                use stream = File.OpenRead path
+                Some(SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant())
+            else
+                None
+        with _ ->
+            None
+
+    let executableUnchanged (query: LearningSelectionQuery) =
+        query.Executable.Version = Some options.ExpectedVersion
+        && query.Executable.Sha256.IsSome
+        && sha256File query.Executable.Path = query.Executable.Sha256
+
+    let writeMessage (writer: StreamWriter) (value: string) =
+        task {
+            do! writer.WriteLineAsync(value)
+            do! writer.FlushAsync()
+        }
+
+    let readLineBounded
+        (stream: Stream)
+        (totalBytes: int ref)
+        (cancellationToken: CancellationToken)
+        =
+        task {
+            use line = new MemoryStream()
+            let one = Array.zeroCreate<byte> 1
+            let mutable complete = false
+            let mutable ended = false
+
+            while not complete do
+                let! count = stream.ReadAsync(one.AsMemory(), cancellationToken)
+
+                if count = 0 then
+                    complete <- true
+                    ended <- true
+                else
+                    totalBytes.Value <- totalBytes.Value + 1
+
+                    if totalBytes.Value > options.MaximumStreamBytes then
+                        raise (InvalidDataException "codex-model-list-bytes-exceeded")
+
+                    if one[0] = 10uy then
+                        complete <- true
+                    elif one[0] <> 13uy then
+                        line.WriteByte one[0]
+
+            if ended && line.Length = 0L then
+                return None
+            else
+                return Some(Encoding.UTF8.GetString(line.ToArray()))
+        }
+
+    let drainBounded (stream: Stream) maximumBytes (cancellationToken: CancellationToken) =
+        task {
+            let buffer = Array.zeroCreate<byte> 4096
+            let mutable observed = 0
+            let mutable complete = false
+
+            while not complete do
+                let! count = stream.ReadAsync(buffer.AsMemory(), cancellationToken)
+
+                if count = 0 then
+                    complete <- true
+                else
+                    observed <- observed + count
+
+                    if observed > maximumBytes then
+                        raise (InvalidDataException "codex-model-list-bytes-exceeded")
+        }
+
+    let response
+        (stream: Stream)
+        (totalBytes: int ref)
+        requestId
+        (cancellationToken: CancellationToken)
+        =
+        task {
+            let mutable result = None
+
+            while result.IsNone do
+                let! line = readLineBounded stream totalBytes cancellationToken
+
+                match line with
+                | None -> raise (EndOfStreamException "codex-app-server-response-incomplete")
+                | Some text ->
+                    use document = JsonDocument.Parse text
+                    let root = document.RootElement
+
+                    match root.TryGetProperty "id" with
+                    | false, _ -> () // Notifications are unrelated to this read-only request.
+                    | true, id when id.ValueKind = JsonValueKind.Number && id.GetInt32() = requestId ->
+                        match root.TryGetProperty "error", root.TryGetProperty "result" with
+                        | (false, _), (true, value) when value.ValueKind = JsonValueKind.Object ->
+                            result <- Some(value.Clone())
+                        | _ -> raise (InvalidDataException "codex-app-server-request-refused")
+                    | true, _ -> raise (InvalidDataException "codex-app-server-response-id-invalid")
+
+            return result.Value
+        }
+
+    let unknown query code environment =
+        { CodexLearningProviderCapability.unknown (clock.GetUtcNow()) query code with
+            Provenance = CodexLearningConfiguration.provenance environment
+        }
+
+    interface ICodexLearningCapabilityDiscovery with
+        member _.Discover(query, cancellationToken) =
+            task {
+                let environment = CodexLearningConfiguration.environment options
+
+                if options.MaximumStreamBytes < 1 || options.StartupTimeout <= TimeSpan.Zero then
+                    return unknown query "codex-model-list-bounds-invalid" environment
+                elif not (executableUnchanged query) then
+                    return unknown query "codex-model-list-executable-changed" environment
+                else
+                    use deadline = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
+                    deadline.CancelAfter options.StartupTimeout
+                    let token = deadline.Token
+
+                    let start =
+                        ProcessStartInfo(
+                            options.Executable,
+                            UseShellExecute = false,
+                            RedirectStandardInput = true,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            CreateNoWindow = true
+                        )
+
+                    start.ArgumentList.Add "app-server"
+                    start.ArgumentList.Add "--strict-config"
+                    start.ArgumentList.Add "--stdio"
+                    start.Environment.Clear()
+                    environment |> Array.iter (fun (key, value) -> start.Environment[key] <- value)
+
+                    use proc = new Process(StartInfo = start)
+
+                    let finish value =
+                        try
+                            if not proc.HasExited then
+                                proc.Kill(true)
+                        with _ ->
+                            ()
+
+                        value
+
+                    try
+                        if not (proc.Start()) then
+                            return unknown query "codex-model-list-transport-unavailable" environment
+                        else
+                            let stderrDrain = drainBounded proc.StandardError.BaseStream options.MaximumStreamBytes token
+                            use writer = proc.StandardInput
+                            let totalBytes = ref 0
+
+                            let readResponse requestId =
+                                task {
+                                    let pending =
+                                        response proc.StandardOutput.BaseStream totalBytes requestId token
+
+                                    let! winner =
+                                        Task.WhenAny([| pending :> Task; stderrDrain :> Task |])
+
+                                    if obj.ReferenceEquals(winner, stderrDrain) then
+                                        do! stderrDrain
+                                        return raise (EndOfStreamException "codex-app-server-stderr-closed")
+                                    else
+                                        return! pending
+                                }
+
+                            do!
+                                writeMessage
+                                    writer
+                                    "{\"method\":\"initialize\",\"id\":1,\"params\":{\"clientInfo\":{\"name\":\"fs_gg_coordination\",\"title\":\"FS.GG Coordination\",\"version\":\"1\"}}}"
+
+                            let! _ = readResponse 1
+                            do! writeMessage writer "{\"method\":\"initialized\",\"params\":{}}"
+
+                            let pages = ResizeArray<JsonElement>()
+                            let pageDigests = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+                            let cursors = Collections.Generic.HashSet<string>(StringComparer.Ordinal)
+                            let mutable cursor: string option = None
+                            let mutable finished = false
+                            let mutable failure: string option = None
+                            let mutable pageNumber = 0
+
+                            while not finished && failure.IsNone && pageNumber < maximumPages do
+                                pageNumber <- pageNumber + 1
+                                let requestId = pageNumber + 1
+
+                                let cursorProperty =
+                                    cursor
+                                    |> Option.map (fun value -> $",\"cursor\":{JsonSerializer.Serialize value}")
+                                    |> Option.defaultValue ""
+
+                                do!
+                                    writeMessage
+                                        writer
+                                        $"{{\"method\":\"model/list\",\"id\":{requestId},\"params\":{{\"limit\":{pageSize},\"includeHidden\":true{cursorProperty}}}}}"
+
+                                let! page = readResponse requestId
+                                let pageBytes = Encoding.UTF8.GetBytes(page.GetRawText())
+                                let pageDigest = Convert.ToHexString(SHA256.HashData pageBytes)
+
+                                if not (pageDigests.Add pageDigest) then
+                                    failure <- Some "codex-model-list-duplicate-page"
+                                else
+                                    match page.TryGetProperty "data", page.TryGetProperty "nextCursor" with
+                                    | (true, data), (true, next) when data.ValueKind = JsonValueKind.Array ->
+                                        data.EnumerateArray() |> Seq.iter (fun item -> pages.Add(item.Clone()))
+
+                                        match next.ValueKind with
+                                        | JsonValueKind.Null -> finished <- true
+                                        | JsonValueKind.String ->
+                                            let value = next.GetString()
+
+                                            if
+                                                String.IsNullOrWhiteSpace value
+                                                || Encoding.UTF8.GetByteCount value > maximumCursorBytes
+                                                || not (cursors.Add value)
+                                            then
+                                                failure <- Some "codex-model-list-duplicate-page"
+                                            else
+                                                cursor <- Some value
+                                        | _ -> failure <- Some "codex-model-list-invalid"
+                                    | _ -> failure <- Some "codex-model-list-invalid"
+
+                            if failure.IsNone && not finished then
+                                failure <- Some "codex-model-list-incomplete"
+
+                            let currentEnvironment = CodexLearningConfiguration.environment options
+
+                            match failure with
+                            | Some code -> return finish (unknown query code environment)
+                            | None when
+                                CodexLearningConfiguration.digest currentEnvironment
+                                <> CodexLearningConfiguration.digest environment
+                                ->
+                                return finish (unknown query "codex-model-list-config-changed" environment)
+                            | None when not (executableUnchanged query) ->
+                                return finish (unknown query "codex-model-list-executable-changed" environment)
+                            | None ->
+                                use output = new MemoryStream()
+                                use json = new Utf8JsonWriter(output)
+                                json.WriteStartObject()
+                                json.WritePropertyName "data"
+                                json.WriteStartArray()
+                                pages |> Seq.iter (fun item -> item.WriteTo json)
+                                json.WriteEndArray()
+                                json.WriteNull "nextCursor"
+                                json.WriteEndObject()
+                                json.Flush()
+
+                                let evidence =
+                                    CodexLearningProviderCapability.fromModelList
+                                        (clock.GetUtcNow())
+                                        query
+                                        (output.ToArray())
+
+                                return finish
+                                    { evidence with
+                                        Provenance = CodexLearningConfiguration.provenance environment
+                                    }
+                    with
+                    | :? OperationCanceledException when cancellationToken.IsCancellationRequested ->
+                        return finish (unknown query "codex-model-list-cancelled" environment)
+                    | :? OperationCanceledException
+                    | :? TimeoutException ->
+                        return finish (unknown query "codex-model-list-deadline-exceeded" environment)
+                    | :? InvalidDataException as error -> return finish (unknown query error.Message environment)
+                    | :? JsonException -> return finish (unknown query "codex-model-list-invalid" environment)
+                    | _ -> return finish (unknown query "codex-model-list-transport-unavailable" environment)
+            }
+
 type CodexCommand =
     {
         FileName: string
@@ -916,8 +1230,21 @@ type CodexExecutionProvider
                 let! query, evidence = learningCapability intent.Requested cancellationToken
 
                 match LearningSelectionEvidence.authorize (clock.GetUtcNow()) query evidence with
-                | Ok() -> return! (this :> IExecutionProvider).Launch(intent, cancellationToken)
                 | Error code -> return LaunchRefused code
+                | Ok() when executableIdentity query.Executable.Version <> query.Executable ->
+                    return LaunchRefused "learning-selection-executable-identity-changed"
+                | Ok() when
+                    evidence.Provenance.StartsWith(
+                        "codex-app-server:model/list;config-sha256=",
+                        StringComparison.Ordinal
+                    )
+                    && evidence.Provenance
+                       <> CodexLearningConfiguration.provenance (
+                           CodexLearningConfiguration.environment options
+                       )
+                    ->
+                    return LaunchRefused "learning-selection-config-boundary-changed"
+                | Ok() -> return! (this :> IExecutionProvider).Launch(intent, cancellationToken)
             }
 
     interface IExecutionProvider with
@@ -1070,7 +1397,18 @@ type CodexExecutionProvider
 [<RequireQualifiedAccess>]
 module CodexExecution =
     let provider options input candidateInspector clock =
-        CodexExecutionProvider(options, input, candidateInspector, clock) :> IExecutionProvider
+        let discovery =
+            CodexAppServerLearningCapabilityDiscovery(options, clock)
+            :> ICodexLearningCapabilityDiscovery
+
+        CodexExecutionProvider(
+            options,
+            input,
+            candidateInspector,
+            clock,
+            learningCapabilityDiscovery = discovery
+        )
+        :> IExecutionProvider
 
     let coordinator options input candidateInspector journal clock =
         ExecutionSessionCoordinator(provider options input candidateInspector clock, journal, clock)
