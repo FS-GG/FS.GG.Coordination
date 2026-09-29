@@ -156,16 +156,18 @@ module private RuntimeFixture =
             return bytes
         }
 
-    let fakeCodex root =
+    let fakeCodexVersion root version =
         let path = Path.Combine(root, "codex-fixture")
 
         File.WriteAllText(
             path,
-            "#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli 0.154.0'; exit 0; fi\nif [ \"$1\" = login ]; then echo 'Logged in using ChatGPT'; exit 0; fi\nexit 9\n"
+            $"#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli {version}'; exit 0; fi\nif [ \"$1\" = login ]; then echo 'Logged in using ChatGPT'; exit 0; fi\nexit 9\n"
         )
 
         File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
         path
+
+    let fakeCodex root = fakeCodexVersion root "0.154.0"
 
     let successfulCodex root digest candidateId =
         let path = Path.Combine(root, "codex-success")
@@ -247,7 +249,7 @@ exit 9
                 "net10.0/linux-x64/fsgg-coord-orchestration-runner"
             )
 
-    let startRunner repository workspaceRoot inputRoot stateRoot artifactRoot codex =
+    let startRunnerWithArguments repository workspaceRoot inputRoot stateRoot artifactRoot codex additionalArguments =
         let start =
             ProcessStartInfo(
                 runnerExecutable (),
@@ -277,9 +279,152 @@ exit 9
             ] do
             start.ArgumentList.Add argument
 
+        additionalArguments |> List.iter start.ArgumentList.Add
+
         Process.Start start
 
+    let startRunner repository workspaceRoot inputRoot stateRoot artifactRoot codex =
+        startRunnerWithArguments repository workspaceRoot inputRoot stateRoot artifactRoot codex []
+
+    let versionReadiness expectedVersion actualVersion =
+        task {
+            let repository, baseline = repo ()
+            let roots = Directory.CreateTempSubdirectory("executor-version-").FullName
+
+            let mk name =
+                Directory.CreateDirectory(Path.Combine(roots, name)).FullName
+
+            let workspaceRoot, inputRoot, stateRoot, artifactRoot =
+                mk "workspaces", mk "inputs", mk "state", mk "artifacts"
+
+            let prompt = Encoding.UTF8.GetBytes "bounded input"
+            let digest = sha prompt
+            let manifestBytes = ExecutorWire.encodeWorkspaceManifest (manifest baseline digest)
+
+            let inputManifest =
+                {
+                    Schema = ExecutorWire.inputManifestSchema
+                    InputDigest = digest
+                    MediaType = "text/plain; charset=utf-8"
+                    SizeBytes = int64 prompt.Length
+                    ChunkBytes = 4096
+                }
+
+            let content =
+                {
+                    Schema = ExecutorWire.contentSchema
+                    CommandId = Guid.NewGuid()
+                    InputDigest = digest
+                    Offset = 0L
+                    Final = true
+                    ContentBase64 = Convert.ToBase64String prompt
+                }
+
+            let command =
+                command (sha manifestBytes) digest baseline "readiness" null
+
+            let additionalArguments =
+                expectedVersion
+                |> Option.map (fun value -> [ "--expected-codex-version"; value ])
+                |> Option.defaultValue []
+
+            use child =
+                startRunnerWithArguments
+                    repository
+                    workspaceRoot
+                    inputRoot
+                    stateRoot
+                    artifactRoot
+                    (fakeCodexVersion roots actualVersion)
+                    additionalArguments
+
+            let stderr = child.StandardError.ReadToEndAsync()
+
+            do!
+                child.StandardInput.BaseStream.WriteAsync(
+                    frames
+                        [|
+                            manifestBytes
+                            ExecutorWire.encodeInputManifest inputManifest
+                            ExecutorWire.encodeContent content
+                            ExecutorWire.encodeCommandV2 command
+                        |]
+                )
+
+            child.StandardInput.Close()
+            let! responseFrame = readFrame child.StandardOutput.BaseStream
+            do! child.WaitForExitAsync()
+            Assert.True(child.ExitCode = 0, stderr.Result)
+            Assert.Equal("", stderr.Result)
+            return ExecutorWire.parseResponse responseFrame |> Result.defaultWith failwith
+        }
+
 type ExecutorRuntimeTests() =
+    [<Theory>]
+    [<InlineData("", "0.154.0", "authenticated")>]
+    [<InlineData("", "0.158.0", "unknown")>]
+    [<InlineData("0.158.0", "0.158.0", "authenticated")>]
+    [<InlineData("0.158.0", "0.159.0", "unknown")>]
+    member _.``actual executor stdio binds exact configured Codex version``(expected, actual, authentication) =
+        task {
+            let configured =
+                if String.IsNullOrEmpty expected then None else Some expected
+
+            let! response = RuntimeFixture.versionReadiness configured actual
+            Assert.Equal(authentication, response.AuthenticationState)
+
+            if authentication = "authenticated" then
+                Assert.Equal("codex-login-status:chatgpt-subscription", response.AuthenticationProvenance)
+            else
+                Assert.Equal("codex-version-mismatch", response.AuthenticationProvenance)
+        }
+
+    [<Fact>]
+    member _.``actual executor stdio refuses malformed empty and duplicate expected versions``() =
+        task {
+            let repository, _ = RuntimeFixture.repo ()
+            let roots = Directory.CreateTempSubdirectory("executor-version-options-").FullName
+
+            let mk name =
+                Directory.CreateDirectory(Path.Combine(roots, name)).FullName
+
+            let workspaceRoot, inputRoot, stateRoot, artifactRoot =
+                mk "workspaces", mk "inputs", mk "state", mk "artifacts"
+
+            let cases =
+                [
+                    [ "--expected-codex-version"; "" ], "executor-option-refused"
+                    [ "--expected-codex-version"; "codex-cli 0.158.0" ], "executor-option-refused"
+                    [ "--expected-codex-version"; "01.158.0" ], "executor-option-refused"
+                    [ "--expected-codex-version"; "0.158" ], "executor-option-refused"
+                    [ "--expected-codex-version"; "0.158.0\n" ], "executor-option-refused"
+                    [
+                        "--expected-codex-version"
+                        "0.158.0"
+                        "--expected-codex-version"
+                        "0.158.0"
+                    ],
+                    "duplicate-option"
+                ]
+
+            for arguments, expectedError in cases do
+                use child =
+                    RuntimeFixture.startRunnerWithArguments
+                        repository
+                        workspaceRoot
+                        inputRoot
+                        stateRoot
+                        artifactRoot
+                        (RuntimeFixture.fakeCodex roots)
+                        arguments
+
+                child.StandardInput.Close()
+                let! error = child.StandardError.ReadToEndAsync()
+                do! child.WaitForExitAsync()
+                Assert.Equal(2, child.ExitCode)
+                Assert.Contains(expectedError, error)
+        }
+
     [<Fact>]
     member _.``workspace accepts selected opaque repository binding and refuses blank``() =
         let repository, baseline = RuntimeFixture.repo ()

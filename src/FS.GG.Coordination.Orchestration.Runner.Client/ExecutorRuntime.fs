@@ -41,7 +41,13 @@ type private LaunchPersistence =
     | ExistingLaunch
     | ConflictingLaunch
 
-type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
+type ExecutorRuntime
+    (
+        options: ExecutorRuntimeOptions,
+        clock: TimeProvider,
+        ?expectedCodexVersion: string
+    ) =
+    let expectedCodexVersion = defaultArg expectedCodexVersion "codex-cli 0.154.0"
     let manifests = ConcurrentDictionary<string, ExecutorWorkspaceManifest>()
     let inputManifests = ConcurrentDictionary<string, ExecutorInputManifest>()
     let sessions = ConcurrentDictionary<string, Supervised>()
@@ -445,6 +451,7 @@ type ExecutorRuntime(options: ExecutorRuntimeOptions, clock: TimeProvider) =
                             TelemetryFactBatches.gap context gapId code |> target.Queue |> ignore))
 
                     { CodexExecutionProviderOptions.create options.CodexExecutable options.StateRoot with
+                        ExpectedVersion = expectedCodexVersion
                         MaximumStreamBytes = 1024 * 1024
                         TurnObserver =
                             Some(

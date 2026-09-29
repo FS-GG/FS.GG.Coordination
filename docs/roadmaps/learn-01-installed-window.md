@@ -69,6 +69,69 @@ W1–W3 landed together through [#887](https://github.com/FS-GG/FS.GG.Coordinati
 
 The Coordination integrator delivered the shared Host, Observer, execution-binding, runner, PostgreSQL, formal and candidate-workflow source through #887. The programme integrator remains the sole public projection writer. Main/SystemAdmin owns authenticated readiness and installation; selected receivers own adoption. No `.github`, SystemAdmin, SDD or Templates mutation follows automatically from the source result. A demonstrated receiver incompatibility returns a concrete producer/receiver request to the programme integrator.
 
+## Next source window: independent readiness and exact provider version
+
+The missing production readiness adapter is a source boundary as well as an
+installed boundary. Authentication does not supply independent policy opt-in,
+coverage, census or prospective shared-allocation evidence. Reuse the implemented
+protected native capture/export from #3940; its closed v1 export and existing
+post-assignment analysis remain authoritative within their scope.
+
+**LEARN-01.4-W4 — Existing-producer pre-admission assessment — route: routine.**
+This independently ready `.github` source slice uses the existing protected
+direct-process acquisition and analyzer to identify retained evidence and missing
+owner inputs for a selected original/window. Inputs are lookup selectors, never
+caller-authored readiness, hashes, counters, authority or plan attestations. Bind
+the selected records to a stable evidence epoch; unrelated telemetry or a fresh
+export timestamp must not invalidate the same assessment. Relevant record changes
+must invalidate it. Distinguish prospective native usage support and committed
+coverage from completed outcome counters: an unborn original cannot supply its
+future tokens, and an empty census cannot certify coverage. Missing independent
+authority, population/census or allocation records remain explicit gaps. Controlled
+acceptance exercises the existing acquisition path, custody/drift/import refusals,
+missing descendants and stable versus changed selected evidence. This preparation
+does not return an operational-ready snapshot or close `.4`.
+
+**LEARN-01.4-W5 — Exact executor version compatibility — route: routine.**
+The runner now exposes optional `--expected-codex-version <MAJOR.MINOR.PATCH>` for
+`executor-stdio`. An operator can explicitly select `0.158.0`; omission retains
+exact `codex-cli 0.154.0`. Canonical release versions only are accepted; empty,
+partial, prefixed, duplicate and trailing-newline arguments refuse. The configured
+exact identity flows through the existing production provider's authentication,
+capability and launch fences. There is no range, automatic installed-version trust
+or version-spoofing wrapper. Existing `ExecutorRuntime` callers retain the default
+through an optional constructor argument.
+
+Actual subprocess tests cover old defaults, the configured matching version,
+version mismatch and malformed options. The full executor suite passed 36 checks;
+the final absolute-anchor repair passed all five focused subprocess cases,
+including terminal-LF refusal. Existing executable/config drift controls passed
+with zero model starts. Native qualification and merged-state readback determine
+source delivery; these controlled results do not prove installed authentication,
+protected capability or a live experiment. Work-main's ordinary-account discovery
+and private service-account refusal are separate owner evidence.
+
+**Gate to LEARN-01.4-W6 — Genuine owner adapter and explicit production composition.**
+The policy/telemetry owners must supply real, independently retained window
+authority and prospective census/allocation contracts. The installed owner must
+identify the custody and capability qualification record for each selected route.
+Only then can Coordination connect a concrete `ILearningOperationalReadinessSource`
+to the actual Host command/configuration, retaining default-disabled behavior and
+the existing changed/expired/revoked-evidence pre-intent fences. A self-hashed JSON
+record or successful sudo is not this gate. Genuine installed inputs remain a
+later activation prerequisite; controlled adapter implementation need not wait
+for installation once its producer contract exists.
+
+W4 and W5 have disjoint owners and can proceed in parallel. Root integrates this
+owning plan and the Unified projection; Main/SystemAdmin owns actual installation
+and receiver verification. The earlier served candidate identities remain
+immutable evidence for their earlier source. Version or readiness source changes
+require newly built and served-qualified affected archives before adoption.
+These preparations preserve the frozen LEARN statistical contract, separate R5
+ten-original cutoff and all original repair/cost lineage. W4 has no workspace
+effect; W5 affects an installed runner only after explicit adoption. No provider,
+lifecycle, generated-template or experiment default changes.
+
 ## Later outline: publication, installation and experiment
 
 These are required outcomes, not yet executable installed checkboxes:

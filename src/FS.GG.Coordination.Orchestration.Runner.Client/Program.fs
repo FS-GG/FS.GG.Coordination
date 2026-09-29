@@ -5,6 +5,7 @@ open System.Net.Http
 open System.Net.Security
 open System.Runtime.InteropServices
 open System.Security.Cryptography.X509Certificates
+open System.Text.RegularExpressions
 open System.Threading
 open FS.GG.Coordination.Orchestration.Runner.Protocol
 open FS.GG.Coordination.Orchestration.Runner.Client
@@ -48,7 +49,7 @@ let private usage () =
         "usage: fsgg-coord-orchestration-runner post --endpoint https://orchestration.main.internal:18080/ --client-cert-file <owner-only-pem> --client-key-file <owner-only-pem> --ca-file <owner-only-pem> --path </v1/runner/...> --request-file <closed-json>"
 
     eprintfn
-        "   or: fsgg-coord-orchestration-runner executor-stdio --repository-root <git-repository> --workspace-root <fixed-root> --input-root <fixed-root> --state-root <fixed-root> --artifact-root <fixed-root> --codex-executable <path> --executor-binding <identity> [--telemetry-executable <path> --telemetry-config <path> --telemetry-credential-file <path> --telemetry-ca-file <path> --telemetry-outbox <path> --telemetry-binding-digest <sha256> --telemetry-repository <owner/repo>]"
+        "   or: fsgg-coord-orchestration-runner executor-stdio --repository-root <git-repository> --workspace-root <fixed-root> --input-root <fixed-root> --state-root <fixed-root> --artifact-root <fixed-root> --codex-executable <path> --executor-binding <identity> [--expected-codex-version <MAJOR.MINOR.PATCH>] [--telemetry-executable <path> --telemetry-config <path> --telemetry-credential-file <path> --telemetry-ca-file <path> --telemetry-outbox <path> --telemetry-binding-digest <sha256> --telemetry-repository <owner/repo>]"
 
     2
 
@@ -67,6 +68,16 @@ let private pairs (arguments: string array) =
                     else
                         Ok(Map.add pair[0] pair[1] values)))
             (Ok Map.empty)
+
+let private exactCodexVersion value =
+    if
+        String.IsNullOrWhiteSpace value
+        || value.Length > 64
+        || not (Regex.IsMatch(value, "\\A(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z"))
+    then
+        None
+    else
+        Some("codex-cli " + value)
 
 let private privateBytes maximumBytes (path: string) =
     try
@@ -253,12 +264,16 @@ let main arguments =
                     "--telemetry-binding-digest"
                     "--telemetry-repository"]
 
+            let optional = set["--expected-codex-version"]
+
             let providedTelemetry =
                 telemetry |> Set.filter (fun key -> Map.containsKey key values)
 
             if
                 required |> Set.exists (fun key -> not (Map.containsKey key values))
-                || values |> Map.exists (fun key _ -> not (required.Contains key || telemetry.Contains key))
+                || values
+                   |> Map.exists (fun key _ ->
+                       not (required.Contains key || optional.Contains key || telemetry.Contains key))
                 || (providedTelemetry.Count <> 0 && providedTelemetry <> telemetry)
             then
                 usage ()
@@ -278,6 +293,8 @@ let main arguments =
                         || values["--telemetry-binding-digest"]
                            |> Seq.exists (fun character ->
                                not (Char.IsAsciiDigit character || character >= 'a' && character <= 'f'))))
+                || (Map.containsKey "--expected-codex-version" values
+                    && exactCodexVersion values["--expected-codex-version"] |> Option.isNone)
             then
                 eprintfn "executor-option-refused"
                 2
@@ -312,7 +329,13 @@ let main arguments =
                                         }
                         }
 
-                    ExecutorRuntime(options, TimeProvider.System)
+                    let expectedCodexVersion =
+                        values
+                        |> Map.tryFind "--expected-codex-version"
+                        |> Option.bind exactCodexVersion
+                        |> Option.defaultValue "codex-cli 0.154.0"
+
+                    ExecutorRuntime(options, TimeProvider.System, expectedCodexVersion = expectedCodexVersion)
                         .Run(Console.OpenStandardInput(), Console.OpenStandardOutput(), CancellationToken.None)
                         .GetAwaiter()
                         .GetResult()
