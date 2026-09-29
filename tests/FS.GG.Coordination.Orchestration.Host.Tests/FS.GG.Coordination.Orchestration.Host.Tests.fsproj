@@ -11,6 +11,7 @@
     <Compile Include="RunnerWireTests.fs" />
     <Compile Include="RunnerWireRuntimeTests.fs" />
     <Compile Include="InstalledAdoptionVerificationTests.fs" />
+    <Compile Include="CompatibilityDiagnosticTests.fs" />
     <Compile Include="HostTests.fs" />
     <Compile Include="LearningRuntimeCorrespondenceTests.fs" />
     <Compile Include="ChoreoProductionReplayTests.fs" />

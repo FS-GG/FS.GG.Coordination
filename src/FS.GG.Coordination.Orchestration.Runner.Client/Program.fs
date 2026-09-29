@@ -51,6 +51,9 @@ let private usage () =
     eprintfn
         "   or: fsgg-coord-orchestration-runner executor-stdio --repository-root <git-repository> --workspace-root <fixed-root> --input-root <fixed-root> --state-root <fixed-root> --artifact-root <fixed-root> --codex-executable <path> --executor-binding <identity> [--expected-codex-version <MAJOR.MINOR.PATCH>] [--telemetry-executable <path> --telemetry-config <path> --telemetry-credential-file <path> --telemetry-ca-file <path> --telemetry-outbox <path> --telemetry-binding-digest <sha256> --telemetry-repository <owner/repo>]"
 
+    eprintfn
+        "   or: fsgg-coord-orchestration-runner diagnostic-stdio --provider-executable <absolute-path> --provider-sha256 <lowercase-sha256> --expected-codex-version <MAJOR.MINOR.PATCH> --timeout-seconds <1..30>"
+
     2
 
 let private pairs (arguments: string array) =
@@ -240,6 +243,64 @@ let main arguments =
         || RuntimeInformation.ProcessArchitecture <> Architecture.X64
     then
         usage ()
+    elif Array.tryHead arguments = Some "diagnostic-stdio" then
+        match pairs arguments[1..] with
+        | Error reason ->
+            eprintfn "%s" reason
+            2
+        | Ok values ->
+            let allowed =
+                set
+                    [
+                        "--provider-executable"
+                        "--provider-sha256"
+                        "--expected-codex-version"
+                        "--timeout-seconds"
+                    ]
+
+            let expected =
+                values
+                |> Map.tryFind "--expected-codex-version"
+                |> Option.bind exactCodexVersion
+
+            let timeout =
+                values
+                |> Map.tryFind "--timeout-seconds"
+                |> Option.bind (fun value ->
+                    match Int32.TryParse value with
+                    | true, parsed when parsed >= 1 && parsed <= 30 -> Some parsed
+                    | _ -> None)
+
+            let digest = values |> Map.tryFind "--provider-sha256"
+            let executable = values |> Map.tryFind "--provider-executable"
+
+            if
+                values.Count <> allowed.Count
+                || values |> Map.exists (fun key _ -> not (allowed.Contains key))
+                || expected.IsNone
+                || timeout.IsNone
+                || executable |> Option.exists Path.IsPathFullyQualified |> not
+                || digest
+                   |> Option.exists (fun value -> value.Length = 64 && (value |> Seq.forall Char.IsAsciiHexDigitLower))
+                   |> not
+            then
+                eprintfn "compatibility-diagnostic-option-refused"
+                2
+            else
+                match
+                    CompatibilityDiagnostic.run
+                        executable.Value
+                        digest.Value
+                        expected.Value["codex-cli ".Length ..]
+                        (TimeSpan.FromSeconds(float timeout.Value))
+                        (Console.OpenStandardInput())
+                        (Console.OpenStandardOutput())
+                    |> _.GetAwaiter().GetResult()
+                with
+                | Ok() -> 0
+                | Error reason ->
+                    eprintfn "%s" reason
+                    3
     elif Array.tryHead arguments = Some "executor-stdio" then
         match pairs arguments[1..] with
         | Error reason ->

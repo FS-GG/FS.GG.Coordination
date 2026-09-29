@@ -49,20 +49,7 @@ module CodexExecutionProviderOptions =
             StateRoot = stateRoot
             MaximumStreamBytes = 1024 * 1024
             StartupTimeout = TimeSpan.FromSeconds 15.
-            EnvironmentAllowList =
-                set
-                    [
-                        "HOME"
-                        "PATH"
-                        "LANG"
-                        "LC_ALL"
-                        "TERM"
-                        "TMPDIR"
-                        "CODEX_HOME"
-                        "XDG_CONFIG_HOME"
-                        "XDG_DATA_HOME"
-                        "XDG_CACHE_HOME"
-                    ]
+            EnvironmentAllowList = CodexReadinessProbe.environmentAllowList
             TurnObserver = None
         }
 
@@ -646,29 +633,18 @@ type CodexExecutionProvider
 
     let readiness cancellationToken =
         task {
-            try
-                let! versionExit, versionOut, versionError = probe [ "--version" ] cancellationToken
+            let! observed =
+                CodexReadinessProbe.observe
+                    {
+                        Executable = options.Executable
+                        ExpectedVersion = options.ExpectedVersion
+                        StartupTimeout = options.StartupTimeout
+                        EnvironmentAllowList = options.EnvironmentAllowList
+                    }
+                    clock
+                    cancellationToken
 
-                if
-                    versionExit <> 0
-                    || (versionOut + versionError).Trim() <> options.ExpectedVersion
-                then
-                    return AuthenticationUnknown "codex-version-mismatch"
-                else
-                    let! loginExit, stdout, stderr = probe [ "login"; "status" ] cancellationToken
-
-                    if
-                        loginExit = 0
-                        && (stdout + stderr).Contains("Logged in using ChatGPT", StringComparison.OrdinalIgnoreCase)
-                    then
-                        return Authenticated "codex-login-status:chatgpt-subscription"
-                    elif loginExit = 0 then
-                        return AuthenticationUnknown "codex-login-status-unrecognized-success"
-                    else
-                        return NotAuthenticated "codex-login-status-refused"
-            with
-            | :? OperationCanceledException -> return AuthenticationUnknown "codex-login-status-cancelled"
-            | _ -> return AuthenticationUnknown "codex-login-status-unavailable"
+            return observed.Authentication
         }
 
     let learningCapability requested cancellationToken =
