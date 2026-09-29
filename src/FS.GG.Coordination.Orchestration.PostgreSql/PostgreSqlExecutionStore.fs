@@ -167,15 +167,27 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
         (cancellationToken: CancellationToken)
         =
         task {
-            use command = new NpgsqlCommand("SELECT schema_version,migration_state,backup_identity::text,generation_fence,current_setting('transaction_read_only') FROM fsgg_orchestration.store_metadata WHERE singleton FOR SHARE", connection, transaction)
+            use command =
+                new NpgsqlCommand(
+                    "SELECT schema_version,migration_state,backup_identity::text,generation_fence,current_setting('transaction_read_only') FROM fsgg_orchestration.store_metadata WHERE singleton FOR SHARE",
+                    connection,
+                    transaction
+                )
+
             use! row = command.ExecuteReaderAsync cancellationToken
             let! found = row.ReadAsync cancellationToken
+
             let valid =
-                found && row.GetInt32(0) = options.RuntimeSchemaVersion && options.RuntimeSchemaVersion = 2
-                && row.GetString(1) = "ready" && row.GetString(2) = options.BackupIdentity
+                found
+                && row.GetInt32(0) = options.RuntimeSchemaVersion
+                && options.RuntimeSchemaVersion = 2
+                && row.GetString(1) = "ready"
+                && row.GetString(2) = options.BackupIdentity
                 && row.GetInt64(3) >= options.MinimumGenerationFence
                 && (not forWrite || row.GetString(4) = "off")
-            if not valid then return raise (InvalidOperationException "execution-store-fence-refused")
+
+            if not valid then
+                return raise (InvalidOperationException "execution-store-fence-refused")
         }
 
     let bindLearningExecution (binding: LearningExecutionBinding) cancellationToken =
@@ -185,9 +197,19 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
             | Ok binding ->
                 let payload = LearningExecutionBinding.canonicalBytes binding
                 use! connection = dataSource.OpenConnectionAsync cancellationToken
-                use! transaction = connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+
+                use! transaction =
+                    connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+
                 do! gateLearning connection transaction true cancellationToken
-                use command = new NpgsqlCommand("INSERT INTO fsgg_orchestration.learning_execution_binding(assignment_id,attempt_id,generation,binding_sha256,treatment_assignment_sha256,payload,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(assignment_id,attempt_id) DO NOTHING", connection, transaction)
+
+                use command =
+                    new NpgsqlCommand(
+                        "INSERT INTO fsgg_orchestration.learning_execution_binding(assignment_id,attempt_id,generation,binding_sha256,treatment_assignment_sha256,payload,created_at) VALUES($1,$2,$3,$4,$5,$6,$7) ON CONFLICT(assignment_id,attempt_id) DO NOTHING",
+                        connection,
+                        transaction
+                    )
+
                 add command binding.AssignmentId
                 add command binding.AttemptId
                 add command binding.Generation
@@ -196,41 +218,170 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                 add command payload
                 add command DateTimeOffset.UtcNow
                 let! changed = command.ExecuteNonQueryAsync cancellationToken
+
                 if changed = 1 then
                     do! transaction.CommitAsync cancellationToken
                     return Ok binding
                 else
-                    use existing = new NpgsqlCommand("SELECT generation,binding_sha256,treatment_assignment_sha256,payload FROM fsgg_orchestration.learning_execution_binding WHERE assignment_id=$1 AND attempt_id=$2 FOR UPDATE", connection, transaction)
+                    use existing =
+                        new NpgsqlCommand(
+                            "SELECT generation,binding_sha256,treatment_assignment_sha256,payload FROM fsgg_orchestration.learning_execution_binding WHERE assignment_id=$1 AND attempt_id=$2 FOR UPDATE",
+                            connection,
+                            transaction
+                        )
+
                     add existing binding.AssignmentId
                     add existing binding.AttemptId
                     use! row = existing.ExecuteReaderAsync cancellationToken
                     let! found = row.ReadAsync cancellationToken
+
                     let same =
-                        found && row.GetInt64(0) = binding.Generation && row.GetString(1) = binding.BindingSha256
+                        found
+                        && row.GetInt64(0) = binding.Generation
+                        && row.GetString(1) = binding.BindingSha256
                         && row.GetString(2) = binding.TreatmentAssignmentSha256
                         && (row.GetFieldValue<byte array>(3)).AsSpan().SequenceEqual(payload.AsSpan())
+
                     do! row.CloseAsync()
                     do! transaction.CommitAsync cancellationToken
-                    return if same then Ok binding else Error "learning-execution-binding-conflict"
+
+                    return
+                        if same then
+                            Ok binding
+                        else
+                            Error "learning-execution-binding-conflict"
+        }
+
+    let bindLearningOperationalWindow (binding: LearningOperationalWindowBinding) cancellationToken =
+        task {
+            match LearningOperationalWindow.validate binding with
+            | Error reason -> return Error reason
+            | Ok binding ->
+                let payload = LearningOperationalWindow.canonicalBytes binding
+                use! connection = dataSource.OpenConnectionAsync cancellationToken
+
+                use! transaction =
+                    connection.BeginTransactionAsync(IsolationLevel.Serializable, cancellationToken)
+
+                do! gateLearning connection transaction true cancellationToken
+
+                use command =
+                    new NpgsqlCommand(
+                        "INSERT INTO fsgg_orchestration.learning_operational_window(window_id,original_item_id,binding_sha256,assignment_input_sha256,payload,created_at) VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(window_id,original_item_id) DO NOTHING",
+                        connection,
+                        transaction
+                    )
+
+                add command binding.WindowId
+                add command binding.OriginalItemId
+                add command binding.BindingSha256
+                add command binding.AssignmentInputSha256
+                add command payload
+                add command DateTimeOffset.UtcNow
+                let! changed = command.ExecuteNonQueryAsync cancellationToken
+
+                if changed = 1 then
+                    do! transaction.CommitAsync cancellationToken
+                    return Ok binding
+                else
+                    use existing =
+                        new NpgsqlCommand(
+                            "SELECT binding_sha256,assignment_input_sha256,payload FROM fsgg_orchestration.learning_operational_window WHERE window_id=$1 AND original_item_id=$2 FOR UPDATE",
+                            connection,
+                            transaction
+                        )
+
+                    add existing binding.WindowId
+                    add existing binding.OriginalItemId
+                    use! row = existing.ExecuteReaderAsync cancellationToken
+                    let! found = row.ReadAsync cancellationToken
+
+                    let same =
+                        found
+                        && row.GetString(0) = binding.BindingSha256
+                        && row.GetString(1) = binding.AssignmentInputSha256
+                        && (row.GetFieldValue<byte array>(2)).AsSpan().SequenceEqual(payload.AsSpan())
+
+                    do! row.CloseAsync()
+                    do! transaction.CommitAsync cancellationToken
+
+                    return
+                        if same then
+                            Ok binding
+                        else
+                            Error "learning-operational-window-conflict"
+        }
+
+    let readLearningOperationalWindow windowId originalItemId cancellationToken =
+        task {
+            use! connection = dataSource.OpenConnectionAsync cancellationToken
+
+            use! transaction =
+                connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
+
+            do! gateLearning connection transaction false cancellationToken
+
+            use command =
+                new NpgsqlCommand(
+                    "SELECT payload,binding_sha256 FROM fsgg_orchestration.learning_operational_window WHERE window_id=$1 AND original_item_id=$2",
+                    connection,
+                    transaction
+                )
+
+            add command windowId
+            add command originalItemId
+            use! row = command.ExecuteReaderAsync cancellationToken
+            let! found = row.ReadAsync cancellationToken
+
+            if not found then
+                return Error "learning-operational-window-missing"
+            else
+                let payload = row.GetFieldValue<byte array>(0)
+                let expected = row.GetString(1)
+
+                return
+                    LearningOperationalWindow.decode payload
+                    |> Result.bind (fun value ->
+                        if value.BindingSha256 = expected then
+                            Ok value
+                        else
+                            Error "learning-operational-window-corrupt")
         }
 
     let readLearningExecution assignmentId attemptId cancellationToken =
         task {
             use! connection = dataSource.OpenConnectionAsync cancellationToken
-            use! transaction = connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
+
+            use! transaction =
+                connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
+
             do! gateLearning connection transaction false cancellationToken
-            use command = new NpgsqlCommand("SELECT payload,binding_sha256 FROM fsgg_orchestration.learning_execution_binding WHERE assignment_id=$1 AND attempt_id=$2", connection, transaction)
+
+            use command =
+                new NpgsqlCommand(
+                    "SELECT payload,binding_sha256 FROM fsgg_orchestration.learning_execution_binding WHERE assignment_id=$1 AND attempt_id=$2",
+                    connection,
+                    transaction
+                )
+
             add command assignmentId
             add command attemptId
             use! row = command.ExecuteReaderAsync cancellationToken
             let! found = row.ReadAsync cancellationToken
-            if not found then return Error "learning-execution-binding-missing"
+
+            if not found then
+                return Error "learning-execution-binding-missing"
             else
                 let payload = row.GetFieldValue<byte array>(0)
                 let expected = row.GetString(1)
+
                 return
                     LearningExecutionBinding.decode payload
-                    |> Result.bind (fun value -> if value.BindingSha256 = expected then Ok value else Error "learning-execution-binding-corrupt")
+                    |> Result.bind (fun value ->
+                        if value.BindingSha256 = expected then
+                            Ok value
+                        else
+                            Error "learning-execution-binding-corrupt")
         }
 
     let gate
@@ -1346,3 +1497,10 @@ ORDER BY c.created_at,c.command_id LIMIT $1
 
         member _.ReadLearningExecution(assignmentId, attemptId, cancellationToken) =
             readLearningExecution assignmentId attemptId cancellationToken
+
+    interface ILearningOperationalWindowStore with
+        member _.BindLearningOperationalWindow(binding, cancellationToken) =
+            bindLearningOperationalWindow binding cancellationToken
+
+        member _.ReadLearningOperationalWindow(windowId, originalItemId, cancellationToken) =
+            readLearningOperationalWindow windowId originalItemId cancellationToken

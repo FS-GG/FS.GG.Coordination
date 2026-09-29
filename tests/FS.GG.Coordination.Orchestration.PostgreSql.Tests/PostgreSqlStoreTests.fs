@@ -4106,7 +4106,7 @@ finally:
                   PolicyRepository = "FS-GG/.github"; PolicyRevision = "2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4"
                   PolicyPath = "policy/learn-01-current-focused-v1.json"; PolicySha256 = "91713679fd486459188f2144e75cc69b77720c7841b6e75cd5d4d35620ed4179"
                   PolicyStatus = "source-contract-not-enrolled"; WorkClassId = "github-routine-source-with-valid-plan-v1"
-                  RubricVersion = "1"; RecipeId = "unified-roadmap-focused-manifest-v1"; RecipeDigest = String.replicate 64 "9"; Arm = "focused"; QualificationOnly = true }
+                  RubricVersion = "1"; RecipeId = "unified-roadmap-focused-manifest-v1"; RecipeDigest = String.replicate 64 "9"; Arm = "focused"; QualificationOnly = true; OperationalWindow = None }
             let value = { value0 with BindingSha256 = LearningExecutionBinding.digest value0 }
             let firstStore = PostgreSqlExecutionStore(options) :> ILearningExecutionBindingStore
             let! first = firstStore.BindLearningExecution(value, cancellationToken)
@@ -4119,6 +4119,90 @@ finally:
             Assert.Equal(Error "learning-execution-binding-conflict", conflict)
             let restarted = PostgreSqlExecutionStore(options) :> ILearningExecutionBindingStore
             let! recovered = restarted.ReadLearningExecution(assignmentId, attemptId, cancellationToken)
+            Assert.Equal(Ok value, recovered)
+        }
+
+    member _.``learning operational window is durable before assignment idempotent and conflict fenced``() =
+        task {
+            let! source, identity = Fixture.reset ()
+            use source = source
+            do! PostgreSqlExecutionSchema.migrate source cancellationToken
+
+            let options =
+                { Fixture.options source identity 0L with
+                    RuntimeSchemaVersion = 2
+                }
+
+            let assignedAt = DateTimeOffset.UtcNow
+
+            let request: LearningOperationalWindowRequest =
+                {
+                    Enabled = true
+                    WindowId = "learn-01.4-postgresql-window"
+                    SeedReferenceSha256 = String.replicate 64 "7"
+                    Repository = LearningOperationalWindow.policyRepository
+                    CalendarAdmissionBlock = "2026-10-01/2026-10-29"
+                    OriginalItemId = "R_learn_window:1:I_learn_window:1"
+                    AuthorityId = "controlled-operating-authority"
+                    AuthorityRevision = "1"
+                    AuthoritySha256 = String.replicate 64 "a"
+                    OptedInAt = assignedAt.AddMinutes -2.
+                    EnrollmentOpensAt = assignedAt.AddMinutes -1.
+                    EnrollmentClosesAt = assignedAt.AddDays 28.
+                }
+
+            let evidence: LearningOperationalReadinessEvidence =
+                {
+                    Schema = LearningOperationalWindow.readinessSchema
+                    WindowId = request.WindowId
+                    Repository = request.Repository
+                    WorkClassId = LearningOperationalWindow.workClassId
+                    OriginalItemId = request.OriginalItemId
+                    AcceptedPlanSha256 = String.replicate 64 "1"
+                    CanonicalWorkItemSha256 = String.replicate 64 "2"
+                    CoverageRosterSha256 = String.replicate 64 "3"
+                    DispatchCensusSha256 = String.replicate 64 "4"
+                    NativeDeliverySha256 = String.replicate 64 "5"
+                    SharedCostRosterSha256 = String.replicate 64 "6"
+                    ObservedAt = assignedAt.AddMinutes -1.
+                    ExpiresAt = assignedAt.AddMinutes 5.
+                    CompleteNativeUsage = true
+                    UnassignedSharedAllocation = true
+                    Provenance = "controlled-postgresql-readiness"
+                }
+
+            let value =
+                (LearningOperationalWindow.prepare assignedAt request evidence
+                 |> Result.defaultWith failwith)
+                    .Binding
+
+            let firstStore =
+                PostgreSqlExecutionStore(options) :> ILearningOperationalWindowStore
+
+            let! first = firstStore.BindLearningOperationalWindow(value, cancellationToken)
+            let! duplicate = firstStore.BindLearningOperationalWindow(value, cancellationToken)
+            Assert.Equal(Ok value, first)
+            Assert.Equal(Ok value, duplicate)
+
+            let changed0 =
+                { value with
+                    BindingSha256 = ""
+                    AuthorityRevision = "2"
+                }
+
+            let changed =
+                { changed0 with
+                    BindingSha256 = LearningOperationalWindow.digest changed0
+                }
+
+            let! conflict = firstStore.BindLearningOperationalWindow(changed, cancellationToken)
+            Assert.Equal(Error "learning-operational-window-conflict", conflict)
+
+            let restarted = PostgreSqlExecutionStore(options) :> ILearningOperationalWindowStore
+
+            let! recovered =
+                restarted.ReadLearningOperationalWindow(value.WindowId, value.OriginalItemId, cancellationToken)
+
             Assert.Equal(Ok value, recovered)
         }
 

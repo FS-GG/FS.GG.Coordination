@@ -51,13 +51,15 @@ type LearningTelemetryConfiguration =
     }
 
 [<Sealed>]
-type PreparedLearningTelemetry internal
+type PreparedLearningTelemetry
+    internal
     (
         treatment: LearningTreatmentTelemetrySource,
         configuration: LearningTelemetryConfiguration,
         snapshotIdentity: string,
         manifestIdentity: string,
         assignmentIdentity: string,
+        windowId: string,
         deviation: string option
     ) =
     member _.Treatment = treatment
@@ -65,6 +67,7 @@ type PreparedLearningTelemetry internal
     member _.SnapshotIdentity = snapshotIdentity
     member _.ManifestIdentity = manifestIdentity
     member _.AssignmentIdentity = assignmentIdentity
+    member _.WindowId = windowId
     member _.Deviation = deviation
 
 [<RequireQualifiedAccess>]
@@ -82,7 +85,8 @@ module LearningTelemetryFacts =
     let PolicyPath = "policy/learn-01-current-focused-v1.json"
 
     [<Literal>]
-    let PolicySha256 = "91713679fd486459188f2144e75cc69b77720c7841b6e75cd5d4d35620ed4179"
+    let PolicySha256 =
+        "91713679fd486459188f2144e75cc69b77720c7841b6e75cd5d4d35620ed4179"
 
     [<Literal>]
     let PolicyStatus = "source-contract-not-enrolled"
@@ -98,41 +102,58 @@ module LearningTelemetryFacts =
         |> _.ToLowerInvariant()
 
     let private present limit (value: string) =
-        not (String.IsNullOrWhiteSpace value) && value = value.Trim() && value.Length <= limit
+        not (String.IsNullOrWhiteSpace value)
+        && value = value.Trim()
+        && value.Length <= limit
 
-    let private validDigest value = not (isNull value) && digestPattern.IsMatch value
+    let private validDigest value =
+        not (isNull value) && digestPattern.IsMatch value
 
     let private identity prefix originalItemId digest =
         prefix + "-" + sha256 (originalItemId + "\u001f" + digest)
 
-    let prepare (treatment: LearningTreatmentTelemetrySource) (configuration: LearningTelemetryConfiguration) =
+    let private prepareWithWindow
+        (operationalWindow: LearningOperationalWindowBinding option)
+        (treatment: LearningTreatmentTelemetrySource)
+        (configuration: LearningTelemetryConfiguration)
+        =
         let treatmentText =
-            [ treatment.OriginalItemId; treatment.OwnerPrincipalId; treatment.WorkflowRevision ]
+            [
+                treatment.OriginalItemId
+                treatment.OwnerPrincipalId
+                treatment.WorkflowRevision
+            ]
 
         let configurationText =
-            [ configuration.SnapshotId
-              configuration.RubricVersion
-              configuration.RecipeId
-              configuration.ManifestId
-              configuration.ManifestVersion
-              configuration.ExperimentContractId
-              configuration.PolicyRepository
-              configuration.PolicyRevision
-              configuration.PolicyPath
-              configuration.PolicyStatus
-              configuration.WorkClassId ]
+            [
+                configuration.SnapshotId
+                configuration.RubricVersion
+                configuration.RecipeId
+                configuration.ManifestId
+                configuration.ManifestVersion
+                configuration.ExperimentContractId
+                configuration.PolicyRepository
+                configuration.PolicyRevision
+                configuration.PolicyPath
+                configuration.PolicyStatus
+                configuration.WorkClassId
+            ]
 
         let treatmentDigests =
-            [ treatment.AssignmentSha256
-              treatment.ProposalSha256
-              treatment.ContextManifestSha256 ]
+            [
+                treatment.AssignmentSha256
+                treatment.ProposalSha256
+                treatment.ContextManifestSha256
+            ]
 
         let configurationDigests =
-            [ configuration.SnapshotDigest
-              configuration.RecipeDigest
-              configuration.ManifestDigest
-              configuration.SubjectBindingSha256
-              configuration.PolicySha256 ]
+            [
+                configuration.SnapshotDigest
+                configuration.RecipeDigest
+                configuration.ManifestDigest
+                configuration.SubjectBindingSha256
+                configuration.PolicySha256
+            ]
 
         if treatmentText @ configurationText |> List.exists (present 512 >> not) then
             Error "learning-telemetry-field-invalid"
@@ -141,8 +162,7 @@ module LearningTelemetryFacts =
         elif treatmentDigests @ configurationDigests |> List.exists (validDigest >> not) then
             Error "learning-telemetry-digest-invalid"
         elif
-            not configuration.QualificationOnly
-            || configuration.ExperimentContractId <> ExperimentContractId
+            configuration.ExperimentContractId <> ExperimentContractId
             || configuration.PolicyRepository <> PolicyRepository
             || configuration.PolicyRevision <> PolicyRevision
             || configuration.PolicyPath <> PolicyPath
@@ -151,56 +171,105 @@ module LearningTelemetryFacts =
             || configuration.WorkClassId <> WorkClassId
             || configuration.RubricVersion <> "1"
         then
-            Error "learning-telemetry-not-qualification-only"
+            Error "learning-telemetry-policy-refused"
         elif configuration.ManifestDigest <> treatment.ContextManifestSha256 then
             Error "learning-telemetry-manifest-mismatch"
         else
-            Ok(
+            let mode =
+                match configuration.QualificationOnly, operationalWindow with
+                | true, None ->
+                    Ok("qualification:learn-01.3:" + treatment.AssignmentSha256, Some "qualification-only-not-enrolled")
+                | false, Some operational ->
+                    LearningOperationalWindow.validate operational
+                    |> Result.bind (fun operational ->
+                        let treatmentArm =
+                            match treatment.Arm with
+                            | LearningTreatmentArm.Current -> "current"
+                            | LearningTreatmentArm.Focused -> "focused"
+
+                        if
+                            operational.OriginalItemId <> treatment.OriginalItemId
+                            || operational.Arm <> treatmentArm
+                            || operational.AssignedAt <> treatment.AssignedAt
+                            || operational.PolicyRepository <> configuration.PolicyRepository
+                            || operational.PolicyRevision <> configuration.PolicyRevision
+                            || operational.PolicyPath <> configuration.PolicyPath
+                            || operational.PolicySha256 <> configuration.PolicySha256
+                            || operational.PolicyStatus <> configuration.PolicyStatus
+                            || operational.WorkClassId <> configuration.WorkClassId
+                        then
+                            Error "learning-telemetry-operational-window-refused"
+                        else
+                            Ok(operational.WindowId, None))
+                | false, None -> Error "learning-telemetry-not-qualification-only"
+                | true, Some _ -> Error "learning-telemetry-mode-refused"
+
+            mode
+            |> Result.map (fun (windowId, deviation) ->
                 PreparedLearningTelemetry(
                     treatment,
                     configuration,
                     identity "learn-snapshot" treatment.OriginalItemId configuration.SnapshotDigest,
                     identity "learn-manifest" treatment.OriginalItemId configuration.ManifestDigest,
                     "learn-assignment-" + treatment.AssignmentSha256,
-                    Some "qualification-only-not-enrolled"
-                )
-            )
+                    windowId,
+                    deviation
+                ))
+
+    let prepare treatment configuration =
+        prepareWithWindow None treatment configuration
+
+    let prepareOperational operationalWindow treatment configuration =
+        prepareWithWindow (Some operationalWindow) treatment configuration
 
     let fromExecutionBinding (binding: LearningExecutionBinding) =
         LearningExecutionBinding.validate binding
         |> Result.bind (fun binding ->
-            if binding.Relation <> "original" then Ok None
+            if binding.Relation <> "original" then
+                Ok None
             else
                 let treatment =
-                    { OriginalItemId = binding.OriginalItemId
-                      Arm = if binding.TreatmentArm = "current" then LearningTreatmentArm.Current else LearningTreatmentArm.Focused
-                      AssignmentSha256 = binding.TreatmentAssignmentSha256
-                      ProposalSha256 = binding.TreatmentProposalSha256
-                      ContextManifestSha256 = binding.TreatmentContextManifestSha256
-                      OwnerPrincipalId = binding.TreatmentOwnerPrincipalId
-                      WorkflowRevision = binding.TreatmentWorkflowRevision
-                      Generation = binding.TreatmentGeneration
-                      AssignedAt = binding.TreatmentAssignedAt }
+                    {
+                        OriginalItemId = binding.OriginalItemId
+                        Arm =
+                            if binding.TreatmentArm = "current" then
+                                LearningTreatmentArm.Current
+                            else
+                                LearningTreatmentArm.Focused
+                        AssignmentSha256 = binding.TreatmentAssignmentSha256
+                        ProposalSha256 = binding.TreatmentProposalSha256
+                        ContextManifestSha256 = binding.TreatmentContextManifestSha256
+                        OwnerPrincipalId = binding.TreatmentOwnerPrincipalId
+                        WorkflowRevision = binding.TreatmentWorkflowRevision
+                        Generation = binding.TreatmentGeneration
+                        AssignedAt = binding.TreatmentAssignedAt
+                    }
+
                 let configuration =
-                    { SubjectBindingSha256 = binding.SubjectBindingSha256
-                      ExperimentContractId = binding.ExperimentContractId
-                      PolicyRepository = binding.PolicyRepository
-                      PolicyRevision = binding.PolicyRevision
-                      PolicyPath = binding.PolicyPath
-                      PolicySha256 = binding.PolicySha256
-                      PolicyStatus = binding.PolicyStatus
-                      WorkClassId = binding.WorkClassId
-                      QualificationOnly = binding.QualificationOnly
-                      SnapshotId = binding.SnapshotId
-                      RubricVersion = binding.RubricVersion
-                      SnapshotDigest = binding.SnapshotDigest
-                      CapturedAt = binding.SnapshotCapturedAt
-                      RecipeId = binding.RecipeId
-                      RecipeDigest = binding.RecipeDigest
-                      ManifestId = binding.ManifestId
-                      ManifestDigest = binding.TreatmentContextManifestSha256
-                      ManifestVersion = binding.ManifestVersion }
-                prepare treatment configuration |> Result.map Some)
+                    {
+                        SubjectBindingSha256 = binding.SubjectBindingSha256
+                        ExperimentContractId = binding.ExperimentContractId
+                        PolicyRepository = binding.PolicyRepository
+                        PolicyRevision = binding.PolicyRevision
+                        PolicyPath = binding.PolicyPath
+                        PolicySha256 = binding.PolicySha256
+                        PolicyStatus = binding.PolicyStatus
+                        WorkClassId = binding.WorkClassId
+                        QualificationOnly = binding.QualificationOnly
+                        SnapshotId = binding.SnapshotId
+                        RubricVersion = binding.RubricVersion
+                        SnapshotDigest = binding.SnapshotDigest
+                        CapturedAt = binding.SnapshotCapturedAt
+                        RecipeId = binding.RecipeId
+                        RecipeDigest = binding.RecipeDigest
+                        ManifestId = binding.ManifestId
+                        ManifestDigest = binding.TreatmentContextManifestSha256
+                        ManifestVersion = binding.ManifestVersion
+                    }
+
+                match binding.OperationalWindow with
+                | Some operational -> prepareOperational operational treatment configuration |> Result.map Some
+                | None -> prepare treatment configuration |> Result.map Some)
 
     let arm (prepared: PreparedLearningTelemetry) =
         match prepared.Treatment.Arm with

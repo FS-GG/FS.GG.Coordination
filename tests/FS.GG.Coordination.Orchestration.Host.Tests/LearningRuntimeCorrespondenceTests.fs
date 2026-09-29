@@ -362,6 +362,260 @@ type private ExactBindingStore() =
             | true, value -> Task.FromResult(Ok value)
             | _ -> Task.FromResult(Error "learning-execution-binding-missing")
 
+type private ExactOperationalWindowStore(initial: LearningOperationalWindowBinding option) =
+    let mutable value = initial
+    member _.Value = value
+
+    interface ILearningOperationalWindowStore with
+        member _.BindLearningOperationalWindow(binding, _) =
+            match LearningOperationalWindow.validate binding, value with
+            | Error reason, _ -> Task.FromResult(Error reason)
+            | Ok binding, None ->
+                value <- Some binding
+                Task.FromResult(Ok binding)
+            | Ok binding, Some prior when prior = binding -> Task.FromResult(Ok prior)
+            | Ok _, Some _ -> Task.FromResult(Error "learning-operational-window-conflict")
+
+        member _.ReadLearningOperationalWindow(windowId, originalItemId, _) =
+            match value with
+            | Some binding when binding.WindowId = windowId && binding.OriginalItemId = originalItemId ->
+                Task.FromResult(Ok binding)
+            | _ -> Task.FromResult(Error "learning-operational-window-missing")
+
+type private ExactLearningProvider(evidence: LearningSelectionEvidence) =
+    let mutable observations = 0
+    member _.Observations = observations
+
+    interface ILearningExecutionProvider with
+        member _.ObserveLearningSelection(requested, _) =
+            observations <- observations + 1
+            Task.FromResult { evidence with Requested = requested }
+
+        member _.LaunchLearning(_, _) =
+            Task.FromException<LaunchResult>(InvalidOperationException "Host admission must not launch the provider")
+
+let private operationalWindow
+    (assignedAt: DateTimeOffset)
+    (originalItemId: string)
+    (arm: LearningContextArm)
+    (admission: MainAdmissionPreparationRequest)
+    =
+    let armName =
+        match arm with
+        | Current -> "current"
+        | Focused -> "focused"
+
+    let request seed : LearningOperationalWindowRequest =
+        {
+            Enabled = true
+            WindowId = "learn-01.4-controlled-window"
+            SeedReferenceSha256 = seed
+            Repository = LearningOperationalWindow.policyRepository
+            CalendarAdmissionBlock = "2026-10-01/2026-10-29"
+            OriginalItemId = originalItemId
+            AuthorityId = "pilot-route"
+            AuthorityRevision = string admission.WorkflowRevision
+            AuthoritySha256 = admission.RouteEvidenceSha256
+            OptedInAt = assignedAt.AddMinutes -2.
+            EnrollmentOpensAt = assignedAt.AddMinutes -1.
+            EnrollmentClosesAt = assignedAt.AddDays 28.
+        }
+
+    let selected =
+        [ 0..255 ]
+        |> List.map (fun value -> request (value.ToString("x2") |> String.replicate 32))
+        |> List.find (fun candidate -> LearningOperationalWindow.deriveArm candidate = armName)
+
+    let evidence: LearningOperationalReadinessEvidence =
+        {
+            Schema = LearningOperationalWindow.readinessSchema
+            WindowId = selected.WindowId
+            Repository = selected.Repository
+            WorkClassId = LearningOperationalWindow.workClassId
+            OriginalItemId = originalItemId
+            AcceptedPlanSha256 = String.replicate 64 "1"
+            CanonicalWorkItemSha256 = String.replicate 64 "2"
+            CoverageRosterSha256 = String.replicate 64 "3"
+            DispatchCensusSha256 = String.replicate 64 "4"
+            NativeDeliverySha256 = String.replicate 64 "5"
+            SharedCostRosterSha256 = String.replicate 64 "6"
+            ObservedAt = assignedAt.AddMinutes -1.
+            ExpiresAt = assignedAt.AddMinutes 5.
+            CompleteNativeUsage = true
+            UnassignedSharedAllocation = true
+            Provenance = "controlled-independent-readiness"
+        }
+
+    LearningOperationalWindow.prepare assignedAt selected evidence
+    |> Result.defaultWith failwith
+
+[<Fact>]
+let ``operational admission requires a durable pre-assignment window before launch`` () =
+    task {
+        let prepared, treatment, subject, observerState = preparedRoot ()
+
+        let request, _, evidence = selectionFor prepared
+
+        let window =
+            operationalWindow treatment.AssignedAt treatment.OriginalItemId treatment.Arm request
+
+        let producerWindows = ExactOperationalWindowStore(Some window.Binding)
+
+        let run enabled stored =
+            task {
+                let journal = Fixture.MemoryJournal()
+                let executor = Fixture.MemoryExecutor(fun () -> journal.State)
+                let bindings = Fixture.MemoryLearningBindings(fun () -> executor.AttemptCount)
+                let windows = ExactOperationalWindowStore(stored)
+                let provider = ExactLearningProvider(evidence)
+
+                let options =
+                    { LearningOperationalAdmissionOptions.disabled with
+                        Enabled = enabled
+                    }
+
+                let! result =
+                    LearningMainAdmission.prepareOperationalWithProvider
+                        options
+                        provider
+                        (Fixture.FixedClock())
+                        (Fixture.MemoryObserverLearning(observerState))
+                        journal
+                        executor
+                        executor
+                        bindings
+                        windows
+                        Fixture.permit.SubjectId
+                        "pilot-route"
+                        request
+                        prepared
+                        treatment
+                        subject
+                        window
+                        CancellationToken.None
+
+                return result, executor.AttemptCount, executor.Writes, bindings, provider.Observations
+            }
+
+        let! accepted, attempts, _, bindings, observations = run true producerWindows.Value
+        let admitted = accepted |> Result.defaultWith failwith
+        Assert.True(bindings.BeforeIntent)
+        Assert.Equal(1, attempts)
+        Assert.Equal(1, observations)
+        Assert.Equal(LearningExecutionBinding.operationalSchema, admitted.Binding.Schema)
+        Assert.False(admitted.Binding.QualificationOnly)
+        Assert.Equal(Some window.Binding, admitted.Binding.OperationalWindow)
+
+        Assert.Equal(
+            (match treatment.Arm with
+             | Current -> "current"
+             | Focused -> "focused"),
+            admitted.Binding.Arm
+        )
+
+        Assert.Equal(
+            Ok admitted.Binding,
+            LearningExecutionBinding.decode (LearningExecutionBinding.canonicalBytes admitted.Binding)
+        )
+
+        for relation in [ Descendant prepared.Input.ItemId; Retry prepared.Input.ItemId ] do
+            let inherited, sourceState, identity =
+                preparedInherited relation treatment
+                |> Result.defaultWith (sprintf "%A" >> failwith)
+
+            let childSubject =
+                {
+                    ItemId = inherited.Assignment.ItemId
+                    OriginalItemId = inherited.Assignment.OriginalItemId
+                    Relation = inherited.Assignment.Relation
+                    AssignmentSha256 = treatment.AssignmentSha256
+                    OwnerPrincipalId = treatment.OwnerPrincipalId
+                    BoundAt = Fixture.now
+                }
+
+            let durableState =
+                { sourceState with
+                    LearningTreatments = Map.ofList [ treatment.OriginalItemId, treatment ]
+                    LearningTreatmentBindings = Map.ofList [ childSubject.ItemId, childSubject ]
+                }
+
+            let childRequest0, _, childEvidence = selectionFor inherited.PreparedTreatment
+
+            let childRequest =
+                { childRequest0 with
+                    WorkflowRevision = Id.revisionValue inherited.PreparedTreatment.CurrentWorkflowRevision
+                }
+
+            let childJournal = Fixture.MemoryJournal()
+            let childExecutor = Fixture.MemoryExecutor(fun () -> childJournal.State)
+
+            let childBindings =
+                Fixture.MemoryLearningBindings(fun () -> childExecutor.AttemptCount)
+
+            let childProvider = ExactLearningProvider(childEvidence)
+
+            let! childResult =
+                LearningMainAdmission.prepareOperationalWithProvider
+                    { LearningOperationalAdmissionOptions.disabled with
+                        Enabled = true
+                    }
+                    childProvider
+                    (Fixture.FixedClock())
+                    (Fixture.MemoryObserverLearning(durableState))
+                    childJournal
+                    childExecutor
+                    childExecutor
+                    childBindings
+                    producerWindows
+                    identity
+                    "pilot-route"
+                    childRequest
+                    inherited.PreparedTreatment
+                    treatment
+                    childSubject
+                    window
+                    CancellationToken.None
+
+            let childBinding = (childResult |> Result.defaultWith failwith).Binding
+            Assert.Equal(Some window.Binding, childBinding.OperationalWindow)
+            Assert.Equal(treatment.AssignmentSha256, childBinding.TreatmentAssignmentSha256)
+            Assert.Equal(treatment.ContextManifestSha256, childBinding.TreatmentContextManifestSha256)
+            Assert.Equal(inherited.PreparedTreatment.CurrentContextManifestSha256, childBinding.ContextManifestSha256)
+            Assert.NotEqual<string>(childBinding.TreatmentContextManifestSha256, childBinding.ContextManifestSha256)
+            Assert.Equal(admitted.Binding.MaximumAttempts, childBinding.MaximumAttempts)
+            Assert.Equal(admitted.Binding.MaximumRuntimeSeconds, childBinding.MaximumRuntimeSeconds)
+            Assert.Equal(1, childExecutor.AttemptCount)
+
+        let! absent, absentAttempts, absentWrites, _, _ = run true None
+        Assert.Equal(Error "learning-main-admission-operational-window-unavailable", absent)
+        Assert.Equal(0, absentAttempts)
+        Assert.Equal(0, absentWrites)
+
+        let changed0 =
+            { window.Binding with
+                BindingSha256 = ""
+                SeedReferenceSha256 = String.replicate 64 "f"
+            }
+
+        let changed =
+            { changed0 with
+                BindingSha256 = LearningOperationalWindow.digest changed0
+            }
+
+        let! changedResult, changedAttempts, changedWrites, _, _ = run true (Some changed)
+        Assert.Equal(Error "learning-main-admission-operational-window-not-durable", changedResult)
+        Assert.Equal(0, changedAttempts)
+        Assert.Equal(0, changedWrites)
+
+        let! disabled, disabledAttempts, disabledWrites, _, disabledObservations =
+            run false (Some window.Binding)
+
+        Assert.Equal(Error "learning-main-admission-operational-disabled", disabled)
+        Assert.Equal(0, disabledAttempts)
+        Assert.Equal(0, disabledWrites)
+        Assert.Equal(0, disabledObservations)
+    }
+
 [<Fact>]
 let ``valid root admission corresponds to root and identical-context child oracle traces`` () =
     task {

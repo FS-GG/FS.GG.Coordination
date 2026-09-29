@@ -88,6 +88,17 @@ CREATE TABLE IF NOT EXISTS fsgg_orchestration.learning_execution_binding (
     UNIQUE (binding_sha256)
 );
 
+CREATE TABLE IF NOT EXISTS fsgg_orchestration.learning_operational_window (
+    window_id text NOT NULL CHECK (length(window_id) BETWEEN 1 AND 512),
+    original_item_id text NOT NULL CHECK (length(original_item_id) BETWEEN 1 AND 512),
+    binding_sha256 text NOT NULL CHECK (binding_sha256 ~ '^[0-9a-f]{64}$'),
+    assignment_input_sha256 text NOT NULL CHECK (assignment_input_sha256 ~ '^[0-9a-f]{64}$'),
+    payload bytea NOT NULL CHECK (octet_length(payload) <= 32768),
+    created_at timestamptz NOT NULL,
+    PRIMARY KEY (window_id,original_item_id),
+    UNIQUE (binding_sha256)
+);
+
 CREATE TABLE IF NOT EXISTS fsgg_orchestration.subscription_reservation (
     reservation_id uuid PRIMARY KEY,
     assignment_id uuid NOT NULL UNIQUE,
