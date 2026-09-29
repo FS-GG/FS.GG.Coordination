@@ -27,6 +27,7 @@
     <Compile Include="MainRouteAdmission.fs" />
     <Compile Include="MainTerminalEvidence.fs" />
     <Compile Include="MainAdmissionPreparer.fs" />
+    <Compile Include="LearningMainAdmission.fs" />
     <Compile Include="InstalledAdoptionVerification.fs" />
     <Compile Include="MainRouteWorkflow.fs" />
     <Compile Include="MainProductionCallbacks.fs" />
@@ -39,6 +40,7 @@
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Pilot\FS.GG.Coordination.Orchestration.Pilot.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.PostgreSql\FS.GG.Coordination.Orchestration.PostgreSql.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Observer\FS.GG.Coordination.Orchestration.Observer.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Runner.Protocol\FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" />
   </ItemGroup>
 </Project>

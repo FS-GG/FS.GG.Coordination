@@ -288,6 +288,8 @@ let ``real keep proposal and source bytes become a replayable assignment without
     Assert.False(prepared.Assignment.DirectSmallEligible)
     Assert.Equal(value.Proposal.CanonicalSha256, prepared.Assignment.ProposalSha256)
     Assert.Equal(value.Proposal.ContextManifest.Value.CanonicalSha256, prepared.Assignment.ContextManifestSha256)
+    Assert.Equal(sha256 prepared.PreparedTreatment.RenderedInput, prepared.PreparedTreatment.RenderedInputSha256)
+    Assert.Contains("docs/roadmaps/learn-01-context-shadow.md", System.Text.Encoding.UTF8.GetString prepared.PreparedTreatment.RenderedInput)
     Assert.Empty(value.SourceState.Attempts)
     Assert.Equal(0L, value.SourceState.Reserved.Tokens)
     Assert.Equal(0L, value.SourceState.Used.Tokens)

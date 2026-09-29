@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.Orchestration.Observer
 
 open System
 open System.Security.Cryptography
+open System.Text
 open FS.GG.Coordination.Core.Orchestration
 
 type RetrievedLearningSource =
@@ -47,6 +48,9 @@ type LearningAssignmentPreparationRefusal =
     | SourceRevisionMismatch of repository: string * path: string * revision: string
     | RetrievedSourceSetMismatch
     | RetrievedSourceContentMismatch of repository: string * path: string * revision: string
+    | RetrievedSourceSizeMismatch of repository: string * path: string
+    | RetrievedSourceTextInvalid of repository: string * path: string
+    | RenderedInputOversized of bytes: int
 
 [<RequireQualifiedAccess>]
 module LearningAssignmentAdapter =
@@ -165,6 +169,52 @@ module LearningAssignmentAdapter =
                 | Some refusal -> Error refusal
                 | None -> Ok()
 
+    let private renderInput (manifest: LearningContextManifest) (retrieved: RetrievedLearningSource list) =
+        let estimated =
+            manifest.MandatoryReferences @ manifest.OptionalReferences
+            |> List.map (fun reference -> sourceKey reference.Source, reference.EstimatedBytes)
+            |> Map.ofList
+
+        let sizeMismatch =
+            retrieved
+            |> List.tryFind (fun value ->
+                estimated
+                |> Map.tryFind (sourceKey value.Source)
+                |> Option.exists (fun expected -> expected <> value.Content.LongLength))
+
+        match sizeMismatch with
+        | Some value -> Error(RetrievedSourceSizeMismatch(value.Source.Repository, value.Source.Path))
+        | None ->
+            try
+                let strictUtf8 = UTF8Encoding(false, true)
+                let builder = StringBuilder()
+                builder.AppendLine("fsgg.learning.rendered-input/1") |> ignore
+                builder.AppendLine($"item={manifest.ItemId}") |> ignore
+                builder.AppendLine($"original={manifest.OriginalItemId}") |> ignore
+                builder.AppendLine($"manifest={manifest.CanonicalSha256}") |> ignore
+
+                retrieved
+                |> List.sortBy (fun value -> sourceKey value.Source)
+                |> List.iter (fun value ->
+                    builder.AppendLine("--- source ---") |> ignore
+                    builder.AppendLine($"repository={value.Source.Repository}") |> ignore
+                    builder.AppendLine($"path={value.Source.Path}") |> ignore
+                    builder.AppendLine($"revision={value.Source.Revision}") |> ignore
+                    builder.AppendLine($"sha256={value.Source.Sha256.ToLowerInvariant()}") |> ignore
+                    builder.AppendLine(strictUtf8.GetString value.Content) |> ignore)
+
+                let bytes = strictUtf8.GetBytes(builder.ToString())
+                if bytes.Length > 1024 * 1024 then Error(RenderedInputOversized bytes.Length) else Ok bytes
+            with :? DecoderFallbackException ->
+                let invalid =
+                    retrieved
+                    |> List.find (fun value ->
+                        try
+                            UTF8Encoding(false, true).GetString value.Content |> ignore
+                            false
+                        with :? DecoderFallbackException -> true)
+                Error(RetrievedSourceTextInvalid(invalid.Source.Repository, invalid.Source.Path))
+
     let prepare (request: LearningAssignmentPreparationRequest) =
         LearningProposal.propose request.ProposalRequest
         |> Result.mapError ProposalRefused
@@ -205,8 +255,9 @@ module LearningAssignmentAdapter =
                                 then
                                     Error AuthoritativeObligationMismatch
                                 else
-                                    validateSources observation.SourceRevision manifest request.RetrievedSources)
-                            |> Result.map (fun () ->
+                                    validateSources observation.SourceRevision manifest request.RetrievedSources
+                                    |> Result.bind (fun () -> renderInput manifest request.RetrievedSources))
+                            |> Result.map (fun renderedInput ->
                                 let sourceObserverId =
                                     ObserverJournal.observerId request.SourceState.SessionId.Value
 
@@ -235,5 +286,13 @@ module LearningAssignmentAdapter =
                                     ContextManifest = manifest
                                     Assignment = assignment
                                     PreparedTreatment =
-                                        PreparedLearningTreatment(ContractVersion, disposition, assignment)
+                                        PreparedLearningTreatment(
+                                            ContractVersion,
+                                            disposition,
+                                            assignment,
+                                            renderedInput,
+                                            sha256 renderedInput,
+                                            manifest.Recipe.RecipeId,
+                                            manifest.Recipe.ManifestVersion
+                                        )
                                 })))

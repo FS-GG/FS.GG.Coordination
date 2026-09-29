@@ -1,6 +1,6 @@
 # LEARN-01.3 — Existing executor and observation source integration
 
-Status: accepted source window in implementation, 2026-09-29. Owner: `FS-GG/FS.GG.Coordination`; feature/original lineage remains **LEARN-01 / LEARN-01.3**. Stages: E0 source qualification and selected E1 context support. Route: routine. Durable source path: `docs/roadmaps/learn-01-executor-observation.md` in Coordination. J1 and J2 are joined locally; J3 correspondence and final native qualification remain required before source acceptance.
+Status: accepted source window in implementation, 2026-09-29. Owner: `FS-GG/FS.GG.Coordination`; feature/original lineage remains **LEARN-01 / LEARN-01.3**. Stages: E0 source qualification and selected E1 context support. Route: routine. Durable source path: `docs/roadmaps/learn-01-executor-observation.md` in Coordination. J1/J2, the J3 model checkpoint and the qualification-only J5 producer are joined locally. J3 joined-source reconciliation, J4 runner propagation, J6 production PostgreSQL/correspondence qualification, protected delivery and installed support remain open.
 
 Backlinks: [Unified §9.8](https://github.com/FS-GG/.github/blob/main/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index), [original LEARN-01 design and .3 acceptance](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md), [delivered context/proposal window](learn-01-context-shadow.md), [O0–O3 owner](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-09-190726-standalone-telemetry-host-and-orchestration.md).
 
@@ -36,12 +36,12 @@ Provider readiness currently establishes version/authentication/resume only. `Co
 
 ## Milestones
 
-- [ ] **LEARN-01.3-J1 — Real proposal-to-treatment interoperability — route: routine.**
+- [x] **LEARN-01.3-J1 — Real proposal-to-treatment interoperability — route: routine.**
   Depends on: delivered #882/#885 and the parent's merged Unified §0 closure projection before implementation starts.
   Scope: the existing Observer learning boundary and journal codec, with minimal PostgreSQL compatibility changes only if the versioned binding requires them. Add the explicit planning disposition and trusted adapter from validated proposal/context to assignment input; bind the selected contract and canonical root/member identity. Reuse the O1 bounded planner for create/investigate/decompose preparation, without giving the shadow compiler dispatch capability. The baseline keep path must not launch or budget a planner.
   Acceptance: an actual `LearningProposal.propose Keep` and actual `LearningContext.compile` result, not fabricated hashes, survives assignment append/recovery with no planner. Changed plan content with unchanged supplied digest, missing mandatory obligation, stale source head and wrong canonical WorkItem refuse. Planned and direct-small profiles remain distinguishable; fake direct-small, unbounded investigation and overlapping decomposition refuse. Existing v1 assignment bytes still replay identically; retries/children inherit their original treatment and cannot introduce a second owner. Add the affected formal contract/correspondence from J3 before accepting changed state semantics.
 
-- [ ] **LEARN-01.3-J2 — Provider capability and profile provenance — route: routine.**
+- [x] **LEARN-01.3-J2 — Provider capability and profile provenance — route: routine.**
   Depends on: delivered executor/provider source; independent of J1 implementation.
   Scope: a narrow selection-evidence contract in the existing Execution/Codex assemblies, the concrete supported provider read boundary where available, and native-frame projection. Keep common execution behavior backward-compatible; learning admission explicitly consumes this evidence. Pin executable/adapter identity and capability freshness; do not invent model support from CLI flags.
   Acceptance: controlled executable/transport records show exact supported selection, unsupported model, unsupported effort, unavailable/stale discovery and changed executable. Unsupported/unknown learning selection has zero launch calls. Native observed mismatch is distinguishable from local selection; absent fields remain absent. Exercise exact existing command construction and provider observer paths. Record the real pinned provider capability that remains unknown when no native source is available; that limitation cannot be marked delivered as installed support.

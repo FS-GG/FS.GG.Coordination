@@ -4079,6 +4079,45 @@ finally:
             do! actorSystem.Terminate()
         }
 
+    [<Fact>]
+    member _.``learning execution binding is restart durable idempotent and conflict fenced``() =
+        task {
+            let! source, identity = Fixture.reset ()
+            use source = source
+            do! PostgreSqlExecutionSchema.migrate source cancellationToken
+            let options = { Fixture.options source identity 0L with RuntimeSchemaVersion = 2 }
+            let assignmentId = Guid.NewGuid()
+            let attemptId = Guid.NewGuid()
+            let now = DateTimeOffset.UtcNow
+            let value0 =
+                { Schema = LearningExecutionBinding.schema; BindingSha256 = ""
+                  TreatmentAssignmentSha256 = String.replicate 64 "a"; SubjectBindingSha256 = String.replicate 64 "b"
+                  ItemId = "I-child"; OriginalItemId = "I-root"; Relation = "descendant"; ParentItemId = Some "I-root"
+                  AssignmentId = assignmentId; AttemptId = attemptId; Generation = 3L
+                  ProposalSha256 = String.replicate 64 "c"; ContextManifestSha256 = String.replicate 64 "d"
+                  RenderedInputSha256 = String.replicate 64 "e"; Requested = { Model = Some "gpt-5.6-sol"; Effort = Some "medium" }
+                  Deadline = now.AddMinutes 30.; MaximumRuntimeSeconds = 1800L; MaximumAttempts = 1
+                  SnapshotId = "snapshot-1"; SnapshotDigest = String.replicate 64 "f"; SnapshotCapturedAt = now
+                  ManifestId = "context-manifest-1"; ManifestVersion = "1"; ExperimentContractId = "learn-01-current-focused-v1"
+                  PolicyRepository = "FS-GG/.github"; PolicyRevision = "2e553e41e58ee2f5e27aedcffc7403ce50e7cdd4"
+                  PolicyPath = "policy/learn-01-current-focused-v1.json"; PolicySha256 = "91713679fd486459188f2144e75cc69b77720c7841b6e75cd5d4d35620ed4179"
+                  PolicyStatus = "source-contract-not-enrolled"; WorkClassId = "github-routine-source-with-valid-plan-v1"
+                  RubricVersion = "1"; RecipeId = "unified-roadmap-focused-manifest-v1"; Arm = "focused"; QualificationOnly = true }
+            let value = { value0 with BindingSha256 = LearningExecutionBinding.digest value0 }
+            let firstStore = PostgreSqlExecutionStore(options) :> ILearningExecutionBindingStore
+            let! first = firstStore.BindLearningExecution(value, cancellationToken)
+            let! duplicate = firstStore.BindLearningExecution(value, cancellationToken)
+            Assert.Equal(Ok value, first)
+            Assert.Equal(Ok value, duplicate)
+            let changed0 = { value with RecipeId = "changed"; BindingSha256 = "" }
+            let changed = { changed0 with BindingSha256 = LearningExecutionBinding.digest changed0 }
+            let! conflict = firstStore.BindLearningExecution(changed, cancellationToken)
+            Assert.Equal(Error "learning-execution-binding-conflict", conflict)
+            let restarted = PostgreSqlExecutionStore(options) :> ILearningExecutionBindingStore
+            let! recovered = restarted.ReadLearningExecution(assignmentId, attemptId, cancellationToken)
+            Assert.Equal(Ok value, recovered)
+        }
+
     [<Theory>]
     [<InlineData("happy-path")>]
     [<InlineData("lost-applied")>]

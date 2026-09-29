@@ -186,11 +186,19 @@ type PreparedLearningTreatment internal
     (
         contractVersion: string,
         disposition: LearningPlanningDisposition,
-        input: LearningTreatmentAssignmentInput
+        input: LearningTreatmentAssignmentInput,
+        renderedInput: byte array,
+        renderedInputSha256: string,
+        recipeId: string,
+        manifestVersion: string
     ) =
     member _.ContractVersion = contractVersion
     member _.Disposition = disposition
     member _.Input = input
+    member _.RenderedInput = Array.copy renderedInput
+    member _.RenderedInputSha256 = renderedInputSha256
+    member _.RecipeId = recipeId
+    member _.ManifestVersion = manifestVersion
 
 type DurableLearningTreatment =
     {
