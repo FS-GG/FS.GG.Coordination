@@ -1,6 +1,6 @@
 # LEARN-01.4 — Installed fixed-context window preparation
 
-Status: W1–W3 source preparation delivered and exact served candidates qualified, 2026-09-29; **LEARN-01.4 remains open**. Feature/original/item: **LEARN-01 / LEARN-01.4 / LEARN-01.4**. Implementation attempt: `learn-installed-window-integration-20260929`; accepted planning attempt: `learn-installed-window-plan-20260929`; parent: `unified-finish-20260928`. Stage: E0 controlled comparison with selected E1 context support. Route: routine. [#887](https://github.com/FS-GG/FS.GG.Coordination/pull/887) merged the disabled source path as `c6e378e1d00e49eda5ee372bc50cd294460be04a`, tree `344a4bd42b2938ce5cc062246bd36bdac7637e53`. Native PostgreSQL 18.6, canonical formal and coherent CI passed on qualified head `6558949469f7a58872201f67a3a2f231a254339e`; exact-main Host and runner candidates then passed served-byte qualification. No release promotion, installation, enrollment or live experiment action has occurred; installed provider support, native capture completeness and usage remain unknown.
+Status: W1–W3 source preparation and W8's selected technical window are delivered and qualified, 2026-09-29; **LEARN-01.4 remains open**. Feature/original/item: **LEARN-01 / LEARN-01.4 / LEARN-01.4**. Implementation attempt: `learn-installed-window-integration-20260929`; accepted planning attempt: `learn-installed-window-plan-20260929`; parent: `unified-finish-20260928`. Stage: E0 controlled comparison with selected E1 context support. Route: routine. [#887](https://github.com/FS-GG/FS.GG.Coordination/pull/887) merged the disabled source path as `c6e378e1d00e49eda5ee372bc50cd294460be04a`, tree `344a4bd42b2938ce5cc062246bd36bdac7637e53`. Native PostgreSQL 18.6, canonical formal and coherent CI passed on qualified head `6558949469f7a58872201f67a3a2f231a254339e`; exact-main Host and runner candidates then passed served-byte qualification. No release promotion, installation, enrollment or live experiment action has occurred; installed provider support, native capture completeness and usage remain unknown.
 
 Durable home: `FS-GG.Coordination/docs/roadmaps/learn-01-installed-window.md`, landed with [#887](https://github.com/FS-GG/FS.GG.Coordination/pull/887). Coordination owns the delivered source path; `.github` retains policy/analysis and telemetry authority; SystemAdmin owns Main installation; selected receivers own adoption. Backlink: [Unified §9.8](https://github.com/FS-GG/.github/blob/71973603810563def3af098f93f33740dae83b97/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index). Preserve the [accepted LEARN design](https://github.com/FS-GG/.github/blob/71973603810563def3af098f93f33740dae83b97/docs/roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) and existing `.3` source plan.
 
@@ -154,6 +154,18 @@ mandatory. Both newly affected Host and runner archives must then be served and
 freshly qualified as a pair before any receiver diagnostic is selected; the
 forwarding-only Host5fe and runner424 do not qualify W8.
 
+[#891](https://github.com/FS-GG/FS.GG.Coordination/pull/891) delivered W8 at
+protected `c6fff6590055672174037b313642ade1502b71c4`, tree
+`4034a5a8adbbeebdbceb5e400df5a810b4697fb5`, from equal tested candidate
+`ef7185ba80510833176a505ea2a169b2ad49c8ce`. Fresh Host and runner workflows
+qualified the affected archives as a pair, and the downloaded apphosts passed
+the four-case controlled served receiver. The immutable identities and bounded
+claim are recorded in the [W8 served-diagnostic evidence](evidence/learn-01.4-w8-served-diagnostic.md).
+This completes the selected W8 technical window under the user amendment in
+[#3971](https://github.com/FS-GG/.github/pull/3971). It does not close `.4` or
+complete W6, permanent publication, installation, authenticated owner readiness,
+collector custody, experiment enrollment or economic evidence.
+
 Full V2 acceptance follows the user's [2026-09-29 amendment](https://github.com/FS-GG/.github/blob/fc4c2145d9caae5c8e5003e4fb6c2a91a4118afa/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#full-v2-acceptance-amendment--2026-09-29).
 Bounded source/artifact/diagnostic qualification remains required. Genuine W6
 composition, installed collector custody, owner inputs and experiment enrollment
@@ -234,6 +246,7 @@ operation.
 
 §9.9 impact: W8 adds an opt-in diagnostic command to the Host/runner artifacts.
 Fresh workspace creation and default `executor-stdio` behavior do not change.
-A receiver must select the newly qualified paired artifacts explicitly; old-runner
-upgrade is separate and fails closed until those bytes are adopted. No scaffold,
-installer, provider account, collector credential or service is changed here.
+A receiver must select the [newly qualified paired artifacts](evidence/learn-01.4-w8-served-diagnostic.md)
+explicitly; old-runner upgrade is separate and fails closed until those bytes are
+adopted. No scaffold, installer, provider account, collector credential or service
+is changed here.
