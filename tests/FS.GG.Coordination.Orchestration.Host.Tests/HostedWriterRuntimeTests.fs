@@ -6,6 +6,7 @@ open System.IO
 open System.Diagnostics
 open System.Net
 open System.Net.Http
+open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Threading
@@ -1088,6 +1089,7 @@ let private localRunnerFixture (mode: string) =
         StateRoot = Path.Combine(root, "state")
         ArtifactRoot = Path.Combine(root, "artifacts")
         CodexExecutable = "/bin/false"
+        ExpectedCodexVersion = None
         ExecutorBinding = "fixture-executor"
         Telemetry = None
     }
@@ -1146,6 +1148,225 @@ let ``local executor forwards exact telemetry binding arguments`` () =
         Assert.Equal(telemetry.Outbox, args.GetProperty("--telemetry-outbox").GetString())
         Assert.Equal(telemetry.BindingDigest, args.GetProperty("--telemetry-binding-digest").GetString())
         Assert.Equal(telemetry.Repository, args.GetProperty("--telemetry-repository").GetString())
+    }
+
+[<Fact>]
+let ``local executor forwards configured expected Codex version and omits its default`` () =
+    task {
+        let defaultRoot, _, defaultConfiguration = localRunnerFixture "ok"
+        use defaultTransport = new LocalExecutorTransport(defaultConfiguration)
+
+        let! defaultResult =
+            (defaultTransport :> IAuthenticatedExecutorTransport)
+                .Exchange([ ExecutorWire.encodeCommandV2 (Fixture.executorCommand (Guid.NewGuid())) ], CancellationToken.None)
+
+        Assert.True(Result.isOk defaultResult)
+        use defaultDocument = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(defaultRoot, "state/args.json")))
+        Assert.False(defaultDocument.RootElement.TryGetProperty("--expected-codex-version") |> fst)
+
+        let configuredRoot, _, configured = localRunnerFixture "ok"
+
+        use configuredTransport =
+            new LocalExecutorTransport(
+                { configured with
+                    ExpectedCodexVersion = Some "0.158.0"
+                }
+            )
+
+        let! configuredResult =
+            (configuredTransport :> IAuthenticatedExecutorTransport)
+                .Exchange([ ExecutorWire.encodeCommandV2 (Fixture.executorCommand (Guid.NewGuid())) ], CancellationToken.None)
+
+        Assert.True(Result.isOk configuredResult)
+
+        use configuredDocument =
+            JsonDocument.Parse(File.ReadAllBytes(Path.Combine(configuredRoot, "state/args.json")))
+
+        Assert.Equal(
+            "0.158.0",
+            configuredDocument.RootElement.GetProperty("--expected-codex-version").GetString()
+        )
+
+        Assert.Throws<ArgumentException>(fun () ->
+            new LocalExecutorTransport(
+                { configured with
+                    ExpectedCodexVersion = Some "0.158.0\n"
+                }
+            )
+            |> ignore)
+        |> ignore
+    }
+
+let private sourceRoot =
+    let rec find (directory: DirectoryInfo) =
+        if File.Exists(Path.Combine(directory.FullName, "FS.GG.Coordination.sln")) then
+            directory.FullName
+        elif isNull directory.Parent then
+            failwith "repository root not found"
+        else
+            find directory.Parent
+
+    find (DirectoryInfo(AppContext.BaseDirectory))
+
+let private runProcess workingDirectory (arguments: string list) =
+    let start =
+        ProcessStartInfo(
+            arguments.Head,
+            WorkingDirectory = workingDirectory,
+            UseShellExecute = false,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        )
+
+    arguments.Tail |> List.iter start.ArgumentList.Add
+    use child = Process.Start start
+    let output = child.StandardOutput.ReadToEnd()
+    let error = child.StandardError.ReadToEnd()
+    child.WaitForExit()
+    Assert.True(child.ExitCode = 0, error)
+    output.Trim()
+
+let private runnerExecutable () =
+    let configuration =
+        if AppContext.BaseDirectory.Contains("/Release/") then "Release" else "Debug"
+
+    Path.Combine(
+        sourceRoot,
+        "src/FS.GG.Coordination.Orchestration.Runner.Client/bin",
+        configuration,
+        "net10.0/linux-x64/fsgg-coord-orchestration-runner"
+    )
+
+let private hostVersionReadiness expectedVersion actualVersion =
+    task {
+        let root = Directory.CreateTempSubdirectory("host-executor-version-").FullName
+        let repository = Directory.CreateDirectory(Path.Combine(root, "repository")).FullName
+        runProcess repository [ "git"; "init"; "--initial-branch=main" ] |> ignore
+        runProcess repository [ "git"; "config"; "user.name"; "Fixture" ] |> ignore
+        runProcess repository [ "git"; "config"; "user.email"; "fixture@example.invalid" ] |> ignore
+        Directory.CreateDirectory(Path.Combine(repository, "docs")) |> ignore
+        File.WriteAllText(Path.Combine(repository, "docs/item.md"), "base\n")
+        runProcess repository [ "git"; "add"; "." ] |> ignore
+        runProcess repository [ "git"; "commit"; "-m"; "base" ] |> ignore
+        let baseline = runProcess repository [ "git"; "rev-parse"; "HEAD" ]
+
+        let mk name = Directory.CreateDirectory(Path.Combine(root, name)).FullName
+        let workspaceRoot, inputRoot, stateRoot, artifactRoot =
+            mk "workspaces", mk "inputs", mk "state", mk "artifacts"
+
+        let codex = Path.Combine(root, "codex")
+
+        File.WriteAllText(
+            codex,
+            $"#!/bin/sh\nif [ \"$1\" = --version ]; then echo 'codex-cli {actualVersion}'; exit 0; fi\nif [ \"$1\" = login ]; then echo 'Logged in using ChatGPT'; exit 0; fi\nexit 9\n"
+        )
+
+        File.SetUnixFileMode(codex, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+        let prompt = Encoding.UTF8.GetBytes "bounded input"
+        let digest = SHA256.HashData prompt |> Convert.ToHexString |> _.ToLowerInvariant()
+
+        let manifest =
+            {
+                Schema = ExecutorWire.workspaceManifestSchema
+                Workspace = "pilot"
+                RepositoryBinding = "selected-repository"
+                BaselineObjectId = baseline
+                AllowedPaths = [| "docs/**" |]
+                Validations = [| "git-diff-check" |]
+                InputDigest = digest
+            }
+
+        let manifestBytes = ExecutorWire.encodeWorkspaceManifest manifest
+        let manifestDigest = SHA256.HashData manifestBytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+        let inputManifest =
+            {
+                Schema = ExecutorWire.inputManifestSchema
+                InputDigest = digest
+                MediaType = "text/plain; charset=utf-8"
+                SizeBytes = int64 prompt.Length
+                ChunkBytes = 4096
+            }
+
+        let content =
+            {
+                Schema = ExecutorWire.contentSchema
+                CommandId = Guid.NewGuid()
+                InputDigest = digest
+                Offset = 0L
+                Final = true
+                ContentBase64 = Convert.ToBase64String prompt
+            }
+
+        let now = DateTimeOffset.UtcNow
+
+        let unsigned =
+            { Fixture.executorCommand (Guid.NewGuid()) with
+                BodySha256 = ""
+                Kind = "readiness"
+                WorkspaceManifestSha256 = manifestDigest
+                InputDigest = digest
+                RecordedAt = now
+                Deadline = now.AddMinutes 5.
+            }
+
+        let command =
+            { unsigned with
+                BodySha256 = ExecutorWire.commandV2Digest unsigned
+            }
+
+        let configuration =
+            {
+                RunnerExecutable = runnerExecutable ()
+                RepositoryRoot = repository
+                WorkspaceRoot = workspaceRoot
+                InputRoot = inputRoot
+                StateRoot = stateRoot
+                ArtifactRoot = artifactRoot
+                CodexExecutable = codex
+                ExpectedCodexVersion = expectedVersion
+                ExecutorBinding = "executor-1"
+                Telemetry = None
+            }
+
+        use transport = new LocalExecutorTransport(configuration)
+
+        let! result =
+            (transport :> IAuthenticatedExecutorTransport)
+                .Exchange(
+                    [
+                        manifestBytes
+                        ExecutorWire.encodeInputManifest inputManifest
+                        ExecutorWire.encodeContent content
+                        ExecutorWire.encodeCommandV2 command
+                    ],
+                    CancellationToken.None
+                )
+
+        return
+            result
+            |> Result.defaultWith failwith
+            |> _.Frames
+            |> List.choose (ExecutorWire.parseResponse >> Result.toOption)
+            |> List.exactlyOne
+    }
+
+[<Theory>]
+[<InlineData("", "0.154.0", "authenticated")>]
+[<InlineData("", "0.158.0", "unknown")>]
+[<InlineData("0.158.0", "0.158.0", "authenticated")>]
+[<InlineData("0.158.0", "0.159.0", "unknown")>]
+let ``Host local transport binds expected version through the production child`` expected actual authentication =
+    task {
+        let configured = if String.IsNullOrEmpty expected then None else Some expected
+        let! response = hostVersionReadiness configured actual
+        Assert.Equal(authentication, response.AuthenticationState)
+
+        if authentication = "authenticated" then
+            Assert.Equal("codex-login-status:chatgpt-subscription", response.AuthenticationProvenance)
+        else
+            Assert.Equal("codex-version-mismatch", response.AuthenticationProvenance)
     }
 
 [<Fact>]

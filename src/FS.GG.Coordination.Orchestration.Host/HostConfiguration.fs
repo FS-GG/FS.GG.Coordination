@@ -4,6 +4,7 @@ open System
 open System.IO
 open System.Net
 open System.Runtime.InteropServices
+open System.Text.RegularExpressions
 open Microsoft.Win32.SafeHandles
 open FS.GG.Coordination.Core.Orchestration
 
@@ -16,6 +17,7 @@ type LocalExecutorConfiguration =
         StateRoot: string
         ArtifactRoot: string
         CodexExecutable: string
+        ExpectedCodexVersion: string option
         ExecutorBinding: string
         Telemetry: LocalTelemetryConfiguration option
     }
@@ -137,6 +139,24 @@ module HostConfiguration =
         |> Array.tryFindIndex ((=) name)
         |> Option.bind (fun index -> Array.tryItem (index + 1) arguments)
         |> Option.filter (String.IsNullOrWhiteSpace >> not)
+
+    let internal canonicalCodexVersion value =
+        if
+            String.IsNullOrWhiteSpace value
+            || value.Length > 64
+            || not (Regex.IsMatch(value, "\\A(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\.(0|[1-9][0-9]*)\\z"))
+        then
+            None
+        else
+            Some value
+
+    let private expectedCodexVersion (arguments: string array) =
+        match arguments |> Array.tryFindIndex ((=) "--expected-codex-version") with
+        | None -> Ok None
+        | Some index ->
+            match arguments |> Array.tryItem (index + 1) |> Option.bind canonicalCodexVersion with
+            | Some version -> Ok(Some version)
+            | None -> Error "local-executor-expected-codex-version-refused"
 
     let private validateArguments allowed (arguments: string array) =
         if arguments.Length % 2 <> 0 then
@@ -295,6 +315,7 @@ module HostConfiguration =
                             "--runner-state-root"
                             "--runner-artifact-root"
                             "--codex-executable"
+                            "--expected-codex-version"
                             "--executor-binding"
                             "--telemetry-executable"
                             "--telemetry-config"
@@ -402,6 +423,8 @@ module HostConfiguration =
                 ]
                 |> List.map (fun name -> name, optionalValue name arguments)
 
+            let! selectedExpectedCodexVersion = expectedCodexVersion arguments
+
             let! telemetry =
                 if telemetryValues |> List.forall (fun (_, value) -> value.IsNone) then
                     Ok None
@@ -442,6 +465,8 @@ module HostConfiguration =
                     localValues |> List.forall (fun (_, value) -> value.IsSome)
                 with
                 | None, true, _ when telemetry.IsSome -> Error "local-telemetry-requires-local-executor"
+                | None, true, _ when selectedExpectedCodexVersion.IsSome ->
+                    Error "expected-codex-version-requires-local-executor"
                 | None, true, _ -> Ok None
                 | Some github, _, true ->
                     let get name =
@@ -475,6 +500,7 @@ module HostConfiguration =
                                     StateRoot = get "--runner-state-root"
                                     ArtifactRoot = get "--runner-artifact-root"
                                     CodexExecutable = get "--codex-executable"
+                                    ExpectedCodexVersion = selectedExpectedCodexVersion
                                     ExecutorBinding = get "--executor-binding"
                                     Telemetry = telemetry
                                 }

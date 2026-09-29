@@ -3392,6 +3392,7 @@ finally:
                     StateRoot = stateRoot
                     ArtifactRoot = artifactRoot
                     CodexExecutable = codex
+                    ExpectedCodexVersion = None
                     ExecutorBinding = "fixture-executor"
                     Telemetry = None
                 }
