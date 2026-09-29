@@ -4303,10 +4303,17 @@ module LearningAdmissionModel {
     plannerPresent: bool,
     contextPresent: bool,
     rootManifest: int,
+    rootBindingIdentity: int,
     childBound: bool,
     childManifest: int,
+    childBindingIdentity: int,
+    childParentIdentity: int,
+    childTreatmentDigest: int,
     executionBound: bool,
+    executionBindingIdentity: int,
+    executionSubjectIdentity: int,
     executionTreatmentDigest: int,
+    executionReplayAccepted: bool,
     capabilityStatus: int,
     capabilityFresh: bool,
     capabilityExact: bool,
@@ -4339,10 +4346,17 @@ module LearningAdmissionModel {
     plannerPresent: false,
     contextPresent: false,
     rootManifest: 0,
+    rootBindingIdentity: 0,
     childBound: false,
     childManifest: 0,
+    childBindingIdentity: 0,
+    childParentIdentity: 0,
+    childTreatmentDigest: 0,
     executionBound: false,
+    executionBindingIdentity: 0,
+    executionSubjectIdentity: 0,
     executionTreatmentDigest: 0,
+    executionReplayAccepted: false,
     capabilityStatus: 0,
     capabilityFresh: false,
     capabilityExact: false,
@@ -4382,6 +4396,7 @@ module LearningAdmissionModel {
       plannerPresent: false,
       contextPresent: true,
       rootManifest: 11,
+      rootBindingIdentity: 1,
       responseLost: true },
   }
 
@@ -4396,7 +4411,8 @@ module LearningAdmissionModel {
       disposition: 2,
       plannerPresent: true,
       contextPresent: true,
-      rootManifest: 12 },
+      rootManifest: 12,
+      rootBindingIdentity: 1 },
   }
   action prepareDirectSmall = all {
     learning.treatmentDigest == 0,
@@ -4407,7 +4423,8 @@ module LearningAdmissionModel {
       disposition: 3,
       plannerPresent: false,
       contextPresent: true,
-      rootManifest: 13 },
+      rootManifest: 13,
+      rootBindingIdentity: 1 },
   }
 
   action restartAfterTreatment = all {
@@ -4437,19 +4454,41 @@ module LearningAdmissionModel {
     learning' = { ...learning, shadowAttempted: true },
   }
 
-  // A descendant inherits the immutable treatment but owns a distinct manifest. The execution
-  // binding references both; it never embeds or rewrites its own digest.
+  // Root and descendant bindings have distinct identities and both reference the immutable
+  // treatment. A descendant may reuse byte-identical compiled context. Execution binds either
+  // subject through another distinct identity; context content is not used as an acyclicity key.
   action bindChild = all {
     learning.treatmentDigest != 0,
     not(learning.childBound),
-    learning' = { ...learning, childBound: true, childManifest: learning.rootManifest + 1 },
+    learning' = { ...learning,
+      childBound: true,
+      childManifest: learning.rootManifest,
+      childBindingIdentity: 2,
+      childParentIdentity: learning.rootBindingIdentity,
+      childTreatmentDigest: learning.treatmentDigest },
   }
-  action bindExecution = all {
+  action bindRootExecution = all {
+    learning.contextPresent,
+    not(learning.executionBound),
+    learning' = { ...learning,
+      executionBound: true,
+      executionBindingIdentity: 3,
+      executionSubjectIdentity: learning.rootBindingIdentity,
+      executionTreatmentDigest: learning.treatmentDigest },
+  }
+  action replayExecutionBinding = all {
+    learning.executionBound,
+    not(learning.executionReplayAccepted),
+    learning' = { ...learning, executionReplayAccepted: true },
+  }
+  action bindChildExecution = all {
     learning.childBound,
     learning.contextPresent,
     not(learning.executionBound),
     learning' = { ...learning,
       executionBound: true,
+      executionBindingIdentity: 4,
+      executionSubjectIdentity: learning.childBindingIdentity,
       executionTreatmentDigest: learning.treatmentDigest },
   }
 
@@ -4527,7 +4566,9 @@ module LearningAdmissionModel {
     rejectStaleGeneration,
     attemptShadowEffect,
     bindChild,
-    bindExecution,
+    bindRootExecution,
+    bindChildExecution,
+    replayExecutionBinding,
     rejectUnknownCapability,
     rejectStaleCapability,
     rejectUnsupportedCapability,
@@ -4546,12 +4587,31 @@ module LearningAdmissionModel {
     and { learning.preparationVersion == 1, learning.disposition == 3, not(learning.plannerPresent), learning.contextPresent },
   }
   val treatmentAndBindingAreAcyclic = and {
+    learning.treatmentDigest == 0 or learning.rootBindingIdentity != 0,
     not(learning.childBound) or and {
       learning.treatmentDigest != 0,
-      learning.childManifest != learning.rootManifest,
+      learning.childBindingIdentity != 0,
+      learning.childBindingIdentity != learning.rootBindingIdentity,
+      learning.childParentIdentity == learning.rootBindingIdentity,
+      learning.childParentIdentity != learning.childBindingIdentity,
+      learning.childTreatmentDigest == learning.treatmentDigest,
     },
     not(learning.executionBound) or and {
-      learning.childBound,
+      learning.executionBindingIdentity != 0,
+      learning.executionBindingIdentity != learning.executionSubjectIdentity,
+      learning.executionBindingIdentity != learning.rootBindingIdentity,
+      learning.executionBindingIdentity != learning.childBindingIdentity,
+      or {
+        and {
+          learning.executionSubjectIdentity == learning.rootBindingIdentity,
+          learning.executionBindingIdentity == 3,
+        },
+        and {
+          learning.childBound,
+          learning.executionSubjectIdentity == learning.childBindingIdentity,
+          learning.executionBindingIdentity == 4,
+        },
+      },
       learning.executionTreatmentDigest == learning.treatmentDigest,
     },
   }
@@ -4580,6 +4640,7 @@ module LearningAdmissionModel {
     learning.staleRejected,
     learning.shadowAttempted,
     learning.childBound,
+    learning.executionReplayAccepted,
     learning.capabilityRejected,
     learning.capacityRejected,
     learning.outcomeUnknown,
@@ -4592,7 +4653,15 @@ module LearningAdmissionModel {
   action invalidLaunchWithoutTreatment = learning' = { ...learning,
     launchIntent: true, launchCount: 1, activeCount: 1, budgetRemaining: 0 }
   action invalidExecutionRebind = learning' = { ...learning,
-    executionBound: true, executionTreatmentDigest: learning.treatmentDigest + 1 }
+    executionBound: true, executionBindingIdentity: 3,
+    executionSubjectIdentity: learning.rootBindingIdentity,
+    executionTreatmentDigest: learning.treatmentDigest + 1 }
+  action invalidExecutionSelfBinding = learning' = { ...learning,
+    executionBound: true, executionBindingIdentity: learning.rootBindingIdentity,
+    executionSubjectIdentity: learning.rootBindingIdentity,
+    executionTreatmentDigest: learning.treatmentDigest }
+  action invalidChangedExecutionDuplicate = learning' = { ...learning,
+    executionBindingIdentity: 5 }
   action invalidRawReuseValidPlan = learning' = { ...learning,
     treatmentDigest: 104, treatmentOwner: 1, preparationVersion: 0, disposition: 1,
     plannerPresent: false, contextPresent: true, rootManifest: 14 }
@@ -4610,7 +4679,8 @@ module LearningAdmissionTests {
     .then(rejectStaleGeneration)
     .then(attemptShadowEffect)
     .then(bindChild)
-    .then(bindExecution)
+    .then(bindChildExecution)
+    .then(replayExecutionBinding)
     .then(rejectUnknownCapability)
     .then(rejectStaleCapability)
     .then(observeExactSupportedCapability)
@@ -4632,7 +4702,7 @@ module LearningAdmissionTests {
     .then(rejectMissingContext)
     .then(prepareKeepWithLostResponse)
     .then(bindChild)
-    .then(bindExecution)
+    .then(bindChildExecution)
     .then(rejectUnsupportedCapability)
     .expect(safety and learning.capabilityRejected and learning.launchCount == 0)
 
@@ -4645,6 +4715,28 @@ module LearningAdmissionTests {
     .then(prepareKeepWithLostResponse)
     .then(bindChild)
     .then(invalidExecutionRebind)
+    .expect(not(safety))
+
+  run testRootExecutionIsValid = init
+    .then(preparePlanned)
+    .then(bindRootExecution)
+    .expect(safety and learning.executionSubjectIdentity == learning.rootBindingIdentity and not(learning.childBound))
+
+  run testIdenticalContextChildIsValid = init
+    .then(prepareDirectSmall)
+    .then(bindChild)
+    .then(bindChildExecution)
+    .expect(safety and learning.childManifest == learning.rootManifest and learning.childBindingIdentity != learning.rootBindingIdentity)
+
+  run testExecutionSelfBindingMutationFails = init
+    .then(preparePlanned)
+    .then(invalidExecutionSelfBinding)
+    .expect(not(safety))
+
+  run testChangedExecutionDuplicateMutationFails = init
+    .then(preparePlanned)
+    .then(bindRootExecution)
+    .then(invalidChangedExecutionDuplicate)
     .expect(not(safety))
 
   run testRawReuseValidPlanMutationFails = init

@@ -4,38 +4,58 @@
   "quintSha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
   "traces": [
     {
+      "file": "testChangedExecutionDuplicateMutationFails.itf.json",
+      "sha256": "3dc49b109e51b587bf7a739f8467cdd817ec87bda067aa6787b00c74d5d3265b",
+      "states": 4
+    },
+    {
       "file": "testDirectSmallDisposition.itf.json",
-      "sha256": "1bc3615c783993388632ddfeb9dba6b48f1fe5f23ead1103dcefb67119566d3e",
+      "sha256": "e4b1f4b45ad177d5ee7d7f5648fcc8c87d9feea4ecdc09a445a883a0bcb908b1",
       "states": 2
     },
     {
+      "file": "testExecutionSelfBindingMutationFails.itf.json",
+      "sha256": "98f87a8e758c6d3b61375d06a80eaa4c80c1cdb51c8d4f5bfe67fbd32c4c3457",
+      "states": 3
+    },
+    {
       "file": "testExecutionTreatmentMutationFails.itf.json",
-      "sha256": "be7518447e14f3451415c0757ed774327e3ec116bad1198d00e5e5705adbaeb0",
+      "sha256": "30c6d34f84b1821ce0b08408f6a620f3b2bcf372217e8f6d08edc48d98cd537c",
       "states": 5
     },
     {
+      "file": "testIdenticalContextChildIsValid.itf.json",
+      "sha256": "f23b372caf63eb53b60d7793e7308eb3634191dc37bd52e604ea56e5a506c05d",
+      "states": 4
+    },
+    {
       "file": "testKeepLostResponseRestartUnknown.itf.json",
-      "sha256": "c6cf88a2fcfa86d1e0ae86a72458539ec324550bcd172b12bf00e3c44bb096a0",
-      "states": 17
+      "sha256": "5afbe84c764b72751e13d18d0d055858caaabd1d490118ff0d67230e002deace",
+      "states": 18
     },
     {
       "file": "testLaunchWithoutTreatmentMutationFails.itf.json",
-      "sha256": "d4da28d771a1b481add61f215cae26533d56a64184143229df732f930e3eda78",
+      "sha256": "5ebaf33201b98cf644f53a7a25286a9117add3e951fb416f08a8f9856780bfce",
       "states": 2
     },
     {
       "file": "testPlannedDisposition.itf.json",
-      "sha256": "595e8e8444ccc7884cbdc5dbfa8a3a147f8d101128f573e2490f6dd353aa1c56",
+      "sha256": "90cc50a7d484e907ad5d63d9920de251d7e724b084b483f4cae559f9f1104eaf",
       "states": 2
     },
     {
       "file": "testRawReuseValidPlanMutationFails.itf.json",
-      "sha256": "07773d9d51f89a10323325f5f7b94bc6c02676a9cbcfc7b76579d189b6f20343",
+      "sha256": "414432f6c1f3daa68adeba8819520c5b73ab8df8c3bc92d946e27ca69fc5d993",
       "states": 2
     },
     {
+      "file": "testRootExecutionIsValid.itf.json",
+      "sha256": "eaf9319de0ecc8924d6204a789fe58d3b13292a811bf34d2e60412faeae08428",
+      "states": 3
+    },
+    {
       "file": "testUnsupportedCapabilityNoLaunch.itf.json",
-      "sha256": "b5d0bbe2da668068a0bdb6c48985f5cd96d64d0b017e1bd2a4873bfcd929658e",
+      "sha256": "29729877c25736826d5e51369c81c441bfff5142a9c6c3dd4281c3ce9c57b588",
       "states": 6
     }
   ]

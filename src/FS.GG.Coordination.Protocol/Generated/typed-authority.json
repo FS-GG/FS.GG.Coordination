@@ -8,57 +8,57 @@
   "artifacts": [
     {
       "id": "bindings",
-      "path": "readiness/learn-01-3-j3-final/quint/bindings.fs",
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/bindings.fs",
       "sha256": "5ecb61d090769df1b71a48933e62acb3ae984675eaa4ce318f4be7ea98cd9b94"
     },
     {
       "id": "compilation-receipt",
-      "path": "readiness/learn-01-3-j3-final/quint/receipt.json",
-      "sha256": "3c8014d181332a4aca07dde067f3e6466e2690d6662564d50e4cfc1ecb3bd18c"
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/receipt.json",
+      "sha256": "68a65e279cbbdb6c496938fdb0e480d712c93fe0f81e6327b07a971a1e913d8d"
     },
     {
       "id": "compiled-contract",
-      "path": "readiness/learn-01-3-j3-final/quint/contract.json",
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/contract.json",
       "sha256": "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
     },
     {
       "id": "fence-manifest",
-      "path": "readiness/learn-01-3-j3-final/quint/fences.json",
-      "sha256": "9085d299e026b491e1ce95961c50d69f90ceb5b90438ee68c7fcdb54d0cfd574"
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/fences.json",
+      "sha256": "a852a5ca6b53362af1ad37c50d7c711e04947effffef0220f3a84a23eda162f5"
     },
     {
       "id": "generated-modules",
-      "path": "readiness/learn-01-3-j3-final/quint/protocol.qnt",
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/protocol.qnt",
       "sha256": "34c45dc51d9a56479e139d21866f45447eddd2a1d17e15fb240f405d807a8e15"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "37387cc27c11f8b87773332c2d8b437bd32b3fda66c2b59e9265b5e00ab2c9a1"
+      "sha256": "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
     },
     {
       "id": "profile-bindings",
-      "path": "readiness/learn-01-3-j3-final/quint/profile-bindings.json",
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/profile-bindings.json",
       "sha256": "5b0b9153de8b8bee36d8b20100aaa77e5bbda86d77d98b574f978b34c88a2e1f"
     },
     {
       "id": "sandbox-contract",
-      "path": "readiness/learn-01-3-j3-final/quint/sandbox-contract.json",
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/sandbox-contract.json",
       "sha256": "2bf8ff26ddb488444c59daa77515b183008c352213e48ac6e36e15e0bc08c122"
     },
     {
       "id": "source-map",
-      "path": "readiness/learn-01-3-j3-final/quint/source-map.json",
-      "sha256": "80b705cee55f6430442eaf465f99bde4e72fccc457665953a46c22dd9d6b6063"
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/source-map.json",
+      "sha256": "2a15252e83010c700de8a5d89a1586b61d523895357f2cd0873abdf75e938592"
     },
     {
       "id": "typed-effect",
-      "path": "readiness/learn-01-3-j3-final/quint/typed-effect.json",
+      "path": "readiness/66-gs2-02-11-deterministic-identity/quint/typed-effect.json",
       "sha256": "0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715"
     }
   ],
-  "authoringAgent": "swift-6cb1",
-  "authoringSession": "learn-canonical-model-20260929-final",
+  "authoringAgent": "swift-5db0",
+  "authoringSession": "gs2-02-11-profile2-r1",
   "rollbackManifestPath": null,
   "rollbackManifestSha256": null
 }

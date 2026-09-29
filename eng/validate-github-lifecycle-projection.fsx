@@ -83,9 +83,12 @@ then
     fail "GLPQ-PREDECESSOR-DIGEST" "accepted GS2-05.6 receipt mismatch"
 
 if
-    sha256 quintPath
-    <> corpus.RootElement.GetProperty("quintSourceSha256").GetString()
+    corpus.RootElement.GetProperty("quintSourceSha256").GetString()
+    <> "7d6755e0e723796eb30486451cb3610e6a74874f26055a3c382986ce525d3218"
 then
+    fail "GLPQ-PREDECESSOR-QUINT" "accepted GS2-05.6 Quint identity changed"
+
+if sha256 quintPath <> "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895" then
     fail "GLPQ-QUINT" "canonical Quint source changed"
 
 if generatedIds <> requiredIds || independentIds <> requiredIds then
@@ -130,7 +133,7 @@ let generatedMutation =
             8
     | GitHubLifecycleProjectionControl.QuintAndPrerequisite ->
         receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.6"
-        && sha256 quintPath = "f0ef41ce606977a1ee13962f65318b8c45e1d74a6d81ceccd532178039e581cb"
+        && sha256 quintPath = "626627854cea6c2df8f88e7f4ec0def7f3014cc8ebd4257b07128ca9418c5895"
 
 let independentMutation =
     function

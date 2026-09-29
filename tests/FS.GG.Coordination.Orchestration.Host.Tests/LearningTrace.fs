@@ -15,10 +15,17 @@ type LearningTraceSnapshot =
         PlannerPresent: bool
         ContextPresent: bool
         RootManifest: int
+        RootBindingIdentity: int
         ChildBound: bool
         ChildManifest: int
+        ChildBindingIdentity: int
+        ChildParentIdentity: int
+        ChildTreatmentDigest: int
         ExecutionBound: bool
+        ExecutionBindingIdentity: int
+        ExecutionSubjectIdentity: int
         ExecutionTreatmentDigest: int
+        ExecutionReplayAccepted: bool
         CapabilityStatus: int
         CapabilityFresh: bool
         CapabilityExact: bool
@@ -75,10 +82,17 @@ module LearningTrace =
             PlannerPresent = boolean value "plannerPresent"
             ContextPresent = boolean value "contextPresent"
             RootManifest = integer value "rootManifest"
+            RootBindingIdentity = integer value "rootBindingIdentity"
             ChildBound = boolean value "childBound"
             ChildManifest = integer value "childManifest"
+            ChildBindingIdentity = integer value "childBindingIdentity"
+            ChildParentIdentity = integer value "childParentIdentity"
+            ChildTreatmentDigest = integer value "childTreatmentDigest"
             ExecutionBound = boolean value "executionBound"
+            ExecutionBindingIdentity = integer value "executionBindingIdentity"
+            ExecutionSubjectIdentity = integer value "executionSubjectIdentity"
             ExecutionTreatmentDigest = integer value "executionTreatmentDigest"
+            ExecutionReplayAccepted = boolean value "executionReplayAccepted"
             CapabilityStatus = integer value "capabilityStatus"
             CapabilityFresh = boolean value "capabilityFresh"
             CapabilityExact = boolean value "capabilityExact"
@@ -119,17 +133,35 @@ module LearningTrace =
 
                 if not validDisposition then
                     "disposition"
+            if snapshot.TreatmentDigest <> 0 && snapshot.RootBindingIdentity = 0 then
+                "root-binding"
             if
                 snapshot.ChildBound
-                && (snapshot.TreatmentDigest = 0 || snapshot.ChildManifest = snapshot.RootManifest)
+                && (snapshot.TreatmentDigest = 0
+                    || snapshot.ChildBindingIdentity = 0
+                    || snapshot.ChildBindingIdentity = snapshot.RootBindingIdentity
+                    || snapshot.ChildParentIdentity <> snapshot.RootBindingIdentity
+                    || snapshot.ChildParentIdentity = snapshot.ChildBindingIdentity
+                    || snapshot.ChildTreatmentDigest <> snapshot.TreatmentDigest)
             then
                 "child-binding"
-            if
-                snapshot.ExecutionBound
-                && (not snapshot.ChildBound
-                    || snapshot.ExecutionTreatmentDigest <> snapshot.TreatmentDigest)
-            then
-                "execution-binding"
+            if snapshot.ExecutionBound then
+                let subjectValid =
+                    (snapshot.ExecutionSubjectIdentity = snapshot.RootBindingIdentity
+                     && snapshot.ExecutionBindingIdentity = 3)
+                    || (snapshot.ChildBound
+                        && snapshot.ExecutionSubjectIdentity = snapshot.ChildBindingIdentity
+                        && snapshot.ExecutionBindingIdentity = 4)
+
+                if
+                    snapshot.ExecutionBindingIdentity = 0
+                    || snapshot.ExecutionBindingIdentity = snapshot.ExecutionSubjectIdentity
+                    || snapshot.ExecutionBindingIdentity = snapshot.RootBindingIdentity
+                    || snapshot.ExecutionBindingIdentity = snapshot.ChildBindingIdentity
+                    || not subjectValid
+                    || snapshot.ExecutionTreatmentDigest <> snapshot.TreatmentDigest
+                then
+                    "execution-binding"
             if
                 snapshot.LaunchCount > 0
                 && (not snapshot.ExecutionBound
