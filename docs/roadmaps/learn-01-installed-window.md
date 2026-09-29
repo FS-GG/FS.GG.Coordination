@@ -122,6 +122,8 @@ authentication, protected capability or a live experiment. Work-main's
 ordinary-account discovery and private service-account refusal are separate owner
 evidence.
 
+The preceding direct-runner source is delivered in [#889](https://github.com/FS-GG/FS.GG.Coordination/pull/889) at protected `424f0c7bcba19e512ac425c2f64a56d53bae8d43`. Its [newly served candidate](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/36558581557) passed independent downloaded-byte verification. On the [replacement work-main channel](https://github.com/FS-GG/.github/blob/mailbox/work-main-unified-20260929/MAILBOX.md), work-main reported an actual ordinary Home native-ELF readiness-only result at11:00:49Z: authenticated subscription provenance, ready lifecycle, exact command correlation and no provider/model session. This is direct-runner receiver qualification only. This Host forwarding change still needs its own protected source, newly qualified affected Host bytes and separate integrated adoption; neither result supplies protected collector custody or operational experiment authority.
+
 **Gate to LEARN-01.4-W6 — Genuine owner adapter and explicit production composition.**
 The policy/telemetry owners must supply real, independently retained window
 authority and prospective census/allocation contracts. The installed owner must
