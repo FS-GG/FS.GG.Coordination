@@ -1,0 +1,514 @@
+module FS.GG.Coordination.Orchestration.Host.Tests.LearningRuntimeCorrespondenceTests
+
+open System
+open System.Collections.Generic
+open System.IO
+open System.Security.Cryptography
+open System.Text
+open System.Threading
+open System.Threading.Tasks
+open Xunit
+open FS.GG.Coordination.Core.Orchestration
+open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Host
+open FS.GG.Coordination.Orchestration.Observer
+open FS.GG.Coordination.Orchestration.Host.Tests.HostTests
+
+let private sha256 (bytes: byte array) =
+    SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+let private trace id =
+    LearningTrace.loadAll () |> List.find (fun value -> value.Id = id)
+
+let private preparedRoot () =
+    let repoRoot =
+        let rec find (directory: DirectoryInfo) =
+            if File.Exists(Path.Combine(directory.FullName, "docs/roadmaps/learn-01-context-shadow.md")) then
+                directory.FullName
+            elif isNull directory.Parent then
+                failwith "repository root missing"
+            else
+                find directory.Parent
+
+        find (DirectoryInfo(Directory.GetCurrentDirectory()))
+
+    let source path =
+        let bytes = File.ReadAllBytes(Path.Combine(repoRoot, path))
+        { Repository = "FS-GG/FS.GG.Coordination"
+          Path = path
+          Revision = "39cb47312586a8e5a0b949c89cfce4bcb4a1955c"
+          Sha256 = sha256 bytes }, bytes
+
+    let planSource, planBytes = source "docs/roadmaps/learn-01-context-shadow.md"
+    let instructionSource, instructionBytes = source "AGENTS.md"
+    let itemId = WorkItemIdentity.persistenceId Fixture.permit.SubjectId
+    let obligation = "preserve-original-treatment"
+    let plan =
+        { PlanId = "learn-01.3-executor-observation"
+          PlanSha256 = planSource.Sha256
+          Source = planSource
+          WorkClassId = LearningContext.WorkClassId
+          ContractId = LearningContext.ContractId
+          ContractRevision = planSource.Revision
+          AuthoritativeObligations = [ obligation ]
+          State = Reusable }
+    let instruction =
+        { ReferenceId = "repository-guidance"
+          Source = instructionSource
+          Class = Mandatory
+          Obligations = [ obligation ]
+          EstimatedBytes = instructionBytes.LongLength
+          SelectedForFocused = true
+          Trust = GoverningInstruction
+          ClaimsInstructionAuthority = false
+          RetrievalMethod = "exact-repository-bytes"
+          InclusionReason = "governing instruction" }
+    let context =
+        { ItemId = itemId
+          OriginalItemId = itemId
+          Relation = Original
+          Treatment =
+            { OriginalItemId = itemId
+              Arm = Focused
+              ShadowBindingSha256 = String.replicate 64 "3" }
+          InheritedTreatment = None
+          Plan = Some plan
+          ExpectedPlanId = plan.PlanId
+          ExpectedPlanSha256 = plan.PlanSha256
+          ExpectedPlanSource = plan.Source
+          ExpectedContractRevision = plan.ContractRevision
+          RequiredMandatoryReferenceIds = [ instruction.ReferenceId ]
+          RequiredAuthoritativeObligations = [ obligation ]
+          References = [ instruction ]
+          Capacity =
+            { MaximumReferences = 4
+              MaximumEstimatedBytes = planBytes.LongLength + instructionBytes.LongLength + 1024L
+              MaximumConcurrentPreviews = 1
+              ActivePreviews = 0
+              ReservedPreviews = 0 }
+          SyntheticShadowOnly = true }
+    let proposalRequest =
+        { ProposalId = "learn-j6-root"
+          ItemId = itemId
+          OriginalItemId = itemId
+          Action = Keep
+          ContextRequest = Some context
+          InvestigationQuestions = []
+          Slices = []
+          IntegrationContract = None
+          DirectSmallRequested = false
+          DirectSmallEvidence = None
+          SyntheticShadowOnly = true }
+    let proposal = LearningProposal.propose proposalRequest |> Result.defaultWith (sprintf "%A" >> failwith)
+    let session = Id.session(Guid.Parse "73f44a9b-4ab9-4198-aecb-622a157e0131")
+    let budget: PlanningBudget =
+        { TokenLimit = 100L
+          RuntimeSecondsLimit = 60L
+          CostMicrosLimit = 1000L
+          Deadline = Fixture.now.AddHours 1. }
+    let command (state: ObserverState) value =
+        { CommandId = Id.command(Guid.NewGuid())
+          ExpectedSequence = state.Sequence
+          PrincipalId = "pilot-route"
+          IssuedAt = Fixture.now.AddMinutes -1.
+          ExpiresAt = Fixture.now.AddMinutes 1.
+          Command = value }
+    let apply state value =
+        let decision = Observer.decide Fixture.now state (command state value)
+        Assert.Equal(ObserverAccepted, decision.Receipt.Disposition)
+        decision.Events |> List.fold Observer.evolve state
+    let projectId = Id.project(Guid.Parse "c909b750-f353-450a-9d01-2a272311932b")
+    let opened = apply Observer.initial (OpenSession(session, projectId, budget))
+    let observation0 =
+        { ProjectId = projectId
+          SourceRevision = planSource.Revision
+          WorkflowRevision = Id.revision 7L
+          Generation = Id.generation 1L
+          ObservationSha256 = String.replicate 64 "0"
+          Provenance =
+            { Provider = "github-graphql"
+              QuerySha256 = String.replicate 64 "1"
+              EvidenceSha256 = String.replicate 64 "2"
+              CapturedAt = Fixture.now.AddMinutes -2. }
+          WorkItems =
+            [ { Identity = Fixture.permit.SubjectId
+                MembershipItemId = "PVTI_learning"
+                Archived = false } ]
+          NonWorkItemCount = 0 }
+    let observation = { observation0 with ObservationSha256 = Observer.observationSha256 observation0 }
+    let observed = apply opened (RecordProjectObservation observation)
+    let prepared =
+        LearningAssignmentAdapter.prepare
+            { ProposalRequest = proposalRequest
+              AcceptedProposal = proposal
+              SourceState = observed
+              ExpectedContractId = LearningContext.ContractId
+              ExpectedContractRevision = plan.ContractRevision
+              ExpectedAuthoritativeObligations = [ obligation ]
+              InheritedDurableTreatment = None
+              RetrievedSources =
+                [ { Source = planSource; Content = planBytes }
+                  { Source = instructionSource; Content = instructionBytes } ]
+              AssignedAt = Fixture.now.AddSeconds -1. }
+        |> Result.defaultWith (sprintf "%A" >> failwith)
+    let input = prepared.Assignment
+    let treatment =
+        { SourceObserverId = input.SourceObserverId
+          SourceSequence = input.SourceSequence
+          SourceObservationSha256 = input.SourceObservationSha256
+          OriginalItemId = input.OriginalItemId
+          Arm = input.Arm
+          ProposalSha256 = input.ProposalSha256
+          ContextManifestSha256 = input.ContextManifestSha256
+          Planner = input.Planner
+          Worker = input.Worker
+          DirectSmallEligible = input.DirectSmallEligible
+          WorkflowRevision = input.ExpectedWorkflowRevision
+          Generation = input.ExpectedGeneration
+          OwnerPrincipalId = "pilot-route"
+          AssignmentSha256 = Observer.learningTreatmentSha256 "pilot-route" input
+          AssignedAt = input.AssignedAt }
+    let binding =
+        { ItemId = itemId
+          OriginalItemId = itemId
+          Relation = Original
+          AssignmentSha256 = treatment.AssignmentSha256
+          OwnerPrincipalId = treatment.OwnerPrincipalId
+          BoundAt = Fixture.now }
+    let durableState =
+        { observed with
+            LearningTreatments = Map.ofList [ itemId, treatment ]
+            LearningTreatmentBindings = Map.ofList [ itemId, binding ] }
+
+    prepared.PreparedTreatment, treatment, binding, durableState
+
+let private preparedInherited relation (treatment: DurableLearningTreatment) =
+    let original = Fixture.permit.SubjectId
+    let child =
+        match relation with
+        | Descendant _ -> WorkItemIdentity.create "R_learning_child" 1L "I_learning_child" 1L
+        | Retry _ -> WorkItemIdentity.create "R_learning_retry" 1L "I_learning_retry" 1L
+        | Original -> invalidArg (nameof relation) "inherited scenario requires child or retry"
+    let originalId = WorkItemIdentity.persistenceId original
+    let childId = WorkItemIdentity.persistenceId child
+    let revision = "39cb47312586a8e5a0b949c89cfce4bcb4a1955c"
+    let planBytes = Encoding.UTF8.GetBytes "canonical reusable learning plan"
+    let instructionBytes = Encoding.UTF8.GetBytes "canonical repository instruction"
+    let planSource =
+        { Repository = "FS-GG/FS.GG.Coordination"
+          Path = "docs/roadmaps/learn-01-context-shadow.md"
+          Revision = revision
+          Sha256 = sha256 planBytes }
+    let instructionSource =
+        { Repository = "FS-GG/FS.GG.Coordination"
+          Path = "AGENTS.md"
+          Revision = revision
+          Sha256 = sha256 instructionBytes }
+    let obligation = "preserve-original-treatment"
+    let plan =
+        { PlanId = "learn-01.3-executor-observation"
+          PlanSha256 = planSource.Sha256
+          Source = planSource
+          WorkClassId = LearningContext.WorkClassId
+          ContractId = LearningContext.ContractId
+          ContractRevision = revision
+          AuthoritativeObligations = [ obligation ]
+          State = Reusable }
+    let instruction =
+        { ReferenceId = "repository-guidance"
+          Source = instructionSource
+          Class = Mandatory
+          Obligations = [ obligation ]
+          EstimatedBytes = instructionBytes.LongLength
+          SelectedForFocused = true
+          Trust = GoverningInstruction
+          ClaimsInstructionAuthority = false
+          RetrievalMethod = "exact-repository-bytes"
+          InclusionReason = "governing instruction" }
+    let synthetic =
+        { OriginalItemId = originalId
+          Arm = treatment.Arm
+          ShadowBindingSha256 = String.replicate 64 "3" }
+    let context =
+        { ItemId = childId
+          OriginalItemId = originalId
+          Relation = relation
+          Treatment = synthetic
+          InheritedTreatment = Some synthetic
+          Plan = Some plan
+          ExpectedPlanId = plan.PlanId
+          ExpectedPlanSha256 = plan.PlanSha256
+          ExpectedPlanSource = plan.Source
+          ExpectedContractRevision = revision
+          RequiredMandatoryReferenceIds = [ instruction.ReferenceId ]
+          RequiredAuthoritativeObligations = [ obligation ]
+          References = [ instruction ]
+          Capacity =
+            { MaximumReferences = 4
+              MaximumEstimatedBytes = 4096L
+              MaximumConcurrentPreviews = 1
+              ActivePreviews = 0
+              ReservedPreviews = 0 }
+          SyntheticShadowOnly = true }
+    let proposalRequest =
+        { ProposalId = "learn-j6-inherited"
+          ItemId = childId
+          OriginalItemId = originalId
+          Action = Keep
+          ContextRequest = Some context
+          InvestigationQuestions = []
+          Slices = []
+          IntegrationContract = None
+          DirectSmallRequested = false
+          DirectSmallEvidence = None
+          SyntheticShadowOnly = true }
+    let proposal = LearningProposal.propose proposalRequest |> Result.defaultWith (sprintf "%A" >> failwith)
+    let session = Id.session(Guid.Parse "83f44a9b-4ab9-4198-aecb-622a157e0131")
+    let budget: PlanningBudget =
+        { TokenLimit = 100L
+          RuntimeSecondsLimit = 60L
+          CostMicrosLimit = 1000L
+          Deadline = Fixture.now.AddHours 1. }
+    let command (state: ObserverState) value =
+        { CommandId = Id.command(Guid.NewGuid())
+          ExpectedSequence = state.Sequence
+          PrincipalId = "pilot-route"
+          IssuedAt = Fixture.now.AddMinutes -1.
+          ExpiresAt = Fixture.now.AddMinutes 1.
+          Command = value }
+    let apply state value =
+        let decision = Observer.decide Fixture.now state (command state value)
+        Assert.Equal(ObserverAccepted, decision.Receipt.Disposition)
+        decision.Events |> List.fold Observer.evolve state
+    let projectId = Id.project(Guid.Parse "d909b750-f353-450a-9d01-2a272311932b")
+    let opened = apply Observer.initial (OpenSession(session, projectId, budget))
+    let observation0 =
+        { ProjectId = projectId
+          SourceRevision = revision
+          WorkflowRevision = Id.revision 8L
+          Generation = Id.generation 2L
+          ObservationSha256 = String.replicate 64 "0"
+          Provenance =
+            { Provider = "github-graphql"
+              QuerySha256 = String.replicate 64 "1"
+              EvidenceSha256 = String.replicate 64 "2"
+              CapturedAt = Fixture.now }
+          WorkItems =
+            [ { Identity = original; MembershipItemId = "PVTI_original"; Archived = false }
+              { Identity = child; MembershipItemId = "PVTI_child"; Archived = false } ]
+          NonWorkItemCount = 0 }
+    let observation = { observation0 with ObservationSha256 = Observer.observationSha256 observation0 }
+    let observed = apply opened (RecordProjectObservation observation)
+
+    LearningAssignmentAdapter.prepare
+        { ProposalRequest = proposalRequest
+          AcceptedProposal = proposal
+          SourceState = observed
+          ExpectedContractId = LearningContext.ContractId
+          ExpectedContractRevision = revision
+          ExpectedAuthoritativeObligations = [ obligation ]
+          InheritedDurableTreatment = Some treatment
+          RetrievedSources =
+            [ { Source = planSource; Content = planBytes }
+              { Source = instructionSource; Content = instructionBytes } ]
+          AssignedAt = Fixture.now }
+
+let private selectionFor (prepared: PreparedLearningTreatment) =
+    let request =
+        { Fixture.preparationRequest () with
+            RequestedModel = prepared.Input.Worker.Model
+            RequestedEffort = prepared.Input.Worker.Effort
+            InputMediaType = "text/plain; charset=utf-8" }
+    let provider = { Provider = "codex"; AdapterVersion = "qualification" }
+    let executable =
+        { Path = "/controlled/codex"
+          Version = Some "0.158.0"
+          Sha256 = Some(String.replicate 64 "e") }
+    let query =
+        { Provider = provider
+          Executable = executable
+          Requested = { Model = Some request.RequestedModel; Effort = Some request.RequestedEffort }
+          MaximumAge = TimeSpan.FromMinutes 5. }
+    let evidence =
+        { Schema = LearningSelectionEvidence.schema
+          Provider = provider
+          Executable = executable
+          Requested = query.Requested
+          Status = LearningCapabilityStatus.Supported
+          Provenance = "controlled-qualification-record"
+          ObservedAt = Fixture.now.AddSeconds -1.
+          ExpiresAt = Fixture.now.AddMinutes 1. }
+
+    request, query, evidence
+
+type private ExactBindingStore() =
+    let values = Dictionary<Guid * Guid, LearningExecutionBinding>()
+    member _.Count = values.Count
+
+    interface ILearningExecutionBindingStore with
+        member _.BindLearningExecution(value, _) =
+            match LearningExecutionBinding.validate value with
+            | Error reason -> Task.FromResult(Error reason)
+            | Ok value ->
+                let key = value.AssignmentId, value.AttemptId
+                match values.TryGetValue key with
+                | false, _ -> values.Add(key, value); Task.FromResult(Ok value)
+                | true, prior when prior = value -> Task.FromResult(Ok prior)
+                | true, _ -> Task.FromResult(Error "learning-execution-binding-conflict")
+
+        member _.ReadLearningExecution(assignmentId, attemptId, _) =
+            match values.TryGetValue((assignmentId, attemptId)) with
+            | true, value -> Task.FromResult(Ok value)
+            | _ -> Task.FromResult(Error "learning-execution-binding-missing")
+
+[<Fact>]
+let ``valid root admission corresponds to root and identical-context child oracle traces`` () =
+    task {
+        let rootOracle = trace "testRootExecutionIsValid"
+        let childOracle = trace "testIdenticalContextChildIsValid"
+        Assert.Equal(None, LearningTrace.firstDivergence rootOracle)
+        Assert.Equal(None, LearningTrace.firstDivergence childOracle)
+        let childTerminal = childOracle.States |> List.last
+        Assert.Equal(childTerminal.RootManifest, childTerminal.ChildManifest)
+        Assert.NotEqual(childTerminal.RootBindingIdentity, childTerminal.ChildBindingIdentity)
+
+        let prepared, treatment, subject, observerState = preparedRoot ()
+        let request, query, evidence = selectionFor prepared
+        let journal = Fixture.MemoryJournal()
+        let executor = Fixture.MemoryExecutor(fun () -> journal.State)
+        let bindings = Fixture.MemoryLearningBindings(fun () -> executor.AttemptCount)
+        let observer = Fixture.MemoryObserverLearning(observerState)
+        let! result =
+            LearningMainAdmission.prepare (Fixture.FixedClock()) observer journal executor executor bindings
+                Fixture.permit.SubjectId "pilot-route" request prepared treatment subject query evidence CancellationToken.None
+        let accepted = result |> Result.defaultWith failwith
+        Assert.True(bindings.BeforeIntent)
+        Assert.Equal(1, executor.AttemptCount)
+        Assert.Equal(prepared.CurrentContextManifestSha256, accepted.Binding.ContextManifestSha256)
+
+        let childPrepared =
+            preparedInherited (Descendant prepared.Input.ItemId) treatment
+            |> Result.defaultWith (sprintf "%A" >> failwith)
+        let retryPrepared =
+            preparedInherited (Retry prepared.Input.ItemId) treatment
+            |> Result.defaultWith (sprintf "%A" >> failwith)
+        for inherited in [ childPrepared; retryPrepared ] do
+            Assert.Equal(prepared.Input.OriginalItemId, inherited.Assignment.OriginalItemId)
+            Assert.Equal(treatment.ProposalSha256, inherited.Assignment.ProposalSha256)
+            Assert.Equal(treatment.ContextManifestSha256, inherited.Assignment.ContextManifestSha256)
+            Assert.Equal(treatment.AssignedAt, inherited.Assignment.AssignedAt)
+            Assert.NotEqual<string>(prepared.CurrentContextManifestSha256, inherited.PreparedTreatment.CurrentContextManifestSha256)
+
+        let child0 =
+            { accepted.Binding with
+                BindingSha256 = ""
+                SubjectBindingSha256 = accepted.Binding.BindingSha256
+                ItemId = "I_learning_child"
+                Relation = "descendant"
+                ParentItemId = Some accepted.Binding.ItemId
+                AssignmentId = Guid.Parse "81000000-0000-4000-8000-000000000001"
+                AttemptId = Guid.Parse "81000000-0000-4000-8000-000000000002"
+                ProposalSha256 = childPrepared.PreparedTreatment.CurrentProposalSha256
+                ContextManifestSha256 = childPrepared.PreparedTreatment.CurrentContextManifestSha256
+                RenderedInputSha256 = childPrepared.PreparedTreatment.RenderedInputSha256
+                ManifestId = $"context:{childPrepared.PreparedTreatment.CurrentContextManifestSha256}" }
+        let child = { child0 with BindingSha256 = LearningExecutionBinding.digest child0 }
+        Assert.Equal(Ok child, LearningExecutionBinding.validate child)
+        Assert.Equal(accepted.Binding.TreatmentContextManifestSha256, child.TreatmentContextManifestSha256)
+        Assert.NotEqual<string>(accepted.Binding.ContextManifestSha256, child.ContextManifestSha256)
+        Assert.NotEqual<string>(accepted.Binding.BindingSha256, child.BindingSha256)
+    }
+
+[<Fact>]
+let ``binding replay is idempotent while changed treatment and self reference are refused`` () =
+    task {
+        Assert.Equal(Some 3, LearningTrace.firstDivergence (trace "testChangedExecutionDuplicateMutationFails"))
+        Assert.Equal(Some 4, LearningTrace.firstDivergence (trace "testExecutionTreatmentMutationFails"))
+        Assert.Equal(Some 2, LearningTrace.firstDivergence (trace "testExecutionSelfBindingMutationFails"))
+
+        let prepared, treatment, subject, observerState = preparedRoot ()
+        let request, query, evidence = selectionFor prepared
+        let journal = Fixture.MemoryJournal()
+        let executor = Fixture.MemoryExecutor(fun () -> journal.State)
+        let bindings = Fixture.MemoryLearningBindings(fun () -> executor.AttemptCount)
+        let! accepted =
+            LearningMainAdmission.prepare (Fixture.FixedClock()) (Fixture.MemoryObserverLearning(observerState)) journal
+                executor executor bindings Fixture.permit.SubjectId "pilot-route" request prepared treatment subject query evidence
+                CancellationToken.None
+        let root = (accepted |> Result.defaultWith failwith).Binding
+        let store = ExactBindingStore()
+        let! first = (store :> ILearningExecutionBindingStore).BindLearningExecution(root, CancellationToken.None)
+        let! replay = (store :> ILearningExecutionBindingStore).BindLearningExecution(root, CancellationToken.None)
+        Assert.Equal(first, replay)
+        Assert.Equal(1, store.Count)
+
+        let changed0 = { root with BindingSha256 = ""; TreatmentAssignmentSha256 = String.replicate 64 "f" }
+        let changed = { changed0 with BindingSha256 = LearningExecutionBinding.digest changed0 }
+        let! conflict = (store :> ILearningExecutionBindingStore).BindLearningExecution(changed, CancellationToken.None)
+        Assert.Equal(Error "learning-execution-binding-conflict", conflict)
+        Assert.Equal(1, store.Count)
+
+        let selfReference = { root with SubjectBindingSha256 = root.BindingSha256 }
+        Assert.Equal(Error "learning-execution-binding-digest-refused", LearningExecutionBinding.validate selfReference)
+    }
+
+[<Fact>]
+let ``durability authority and capability refusals create no launch intent`` () =
+    task {
+        let unsupportedOracle = trace "testUnsupportedCapabilityNoLaunch"
+        Assert.Equal(None, LearningTrace.firstDivergence unsupportedOracle)
+        Assert.Equal(0, (unsupportedOracle.States |> List.last).LaunchCount)
+
+        let prepared, treatment, subject, observerState = preparedRoot ()
+        let request, query, evidence = selectionFor prepared
+        let run observer durable evidence =
+            task {
+                let journal = Fixture.MemoryJournal()
+                let executor = Fixture.MemoryExecutor(fun () -> journal.State)
+                let bindings = Fixture.MemoryLearningBindings(fun () -> executor.AttemptCount)
+                let! result =
+                    LearningMainAdmission.prepare (Fixture.FixedClock()) observer journal executor executor bindings
+                        Fixture.permit.SubjectId "pilot-route" request prepared durable subject query evidence CancellationToken.None
+                return result, executor.AttemptCount, executor.Writes
+            }
+
+        let! absent, absentAttempts, absentWrites =
+            run (Fixture.MemoryObserverLearning(Observer.initial)) treatment evidence
+        Assert.Equal(Error "learning-main-admission-treatment-not-durable", absent)
+        Assert.Equal(0, absentAttempts)
+        Assert.Equal(0, absentWrites)
+
+        let staleTreatment = { treatment with Generation = Id.generation 2L }
+        let staleState =
+            { observerState with
+                LearningTreatments = Map.ofList [ treatment.OriginalItemId, staleTreatment ] }
+        let! stale, staleAttempts, staleWrites =
+            run (Fixture.MemoryObserverLearning(staleState)) staleTreatment evidence
+        Assert.Equal(Error "learning-main-admission-treatment-not-durable", stale)
+        Assert.Equal(0, staleAttempts)
+        Assert.Equal(0, staleWrites)
+
+        for changed in
+            [ { treatment with OriginalItemId = "I_wrong_original" }
+              { treatment with Arm = Current } ] do
+            let changedState =
+                { observerState with
+                    LearningTreatments = Map.ofList [ prepared.Input.OriginalItemId, changed ] }
+            let! refused, attempts, writes =
+                run (Fixture.MemoryObserverLearning(changedState)) changed evidence
+            Assert.Equal(Error "learning-main-admission-treatment-not-durable", refused)
+            Assert.Equal(0, attempts)
+            Assert.Equal(0, writes)
+
+        match preparedInherited (Descendant "I_missing_parent") treatment with
+        | Error(CanonicalWorkItemMissing "I_missing_parent") -> ()
+        | value -> failwith $"missing parent was not refused: {value}"
+
+        let unsupportedEvidence =
+            { evidence with Status = LearningCapabilityStatus.Unsupported "model-effort-unavailable" }
+        let! unsupported, unsupportedAttempts, unsupportedWrites =
+            run (Fixture.MemoryObserverLearning(observerState)) treatment unsupportedEvidence
+        Assert.Equal(Error "learning-selection-unsupported:model-effort-unavailable", unsupported)
+        Assert.Equal(0, unsupportedAttempts)
+        Assert.Equal(0, unsupportedWrites)
+    }
