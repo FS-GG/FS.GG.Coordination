@@ -29,12 +29,16 @@ type AgentFrameworkWorkflowResult =
         DeliveryClaimed: bool
     }
 
-type CandidateSourceExecutor() =
+type AgentFrameworkWorkflowStart =
+    | Fresh
+    | ResumeFromFrameworkCheckpoint of checkpointId: string
+
+type internal CandidateSourceExecutor() =
     inherit Executor<AgentFrameworkCandidateWorkItem, AgentFrameworkCandidateWorkItem>("candidate-source")
 
     override _.HandleAsync(input, _, _) = ValueTask<AgentFrameworkCandidateWorkItem>(input)
 
-type CandidateInspectionExecutor(?hold: AgentFrameworkCandidateWorkItem -> CancellationToken -> Task) =
+type internal CandidateInspectionExecutor(?hold: AgentFrameworkCandidateWorkItem -> CancellationToken -> Task) =
     inherit Executor<AgentFrameworkCandidateWorkItem, AgentFrameworkBranchResult>("candidate-inspection")
 
     let hold = defaultArg hold (fun _ _ -> Task.CompletedTask)
@@ -58,7 +62,7 @@ type CandidateInspectionExecutor(?hold: AgentFrameworkCandidateWorkItem -> Cance
             }
         )
 
-type DeterministicVerificationExecutor() =
+type internal DeterministicVerificationExecutor() =
     inherit Executor<AgentFrameworkCandidateWorkItem, AgentFrameworkBranchResult>("deterministic-verification")
 
     override _.HandleAsync(input, _, _) =
@@ -77,7 +81,7 @@ type DeterministicVerificationExecutor() =
             }
         )
 
-type CandidateJoinExecutor(candidate: AgentFrameworkCandidateWorkItem) =
+type internal CandidateJoinExecutor(candidate: AgentFrameworkCandidateWorkItem) =
     inherit Executor<AgentFrameworkBranchResult, AgentFrameworkWorkflowResult option>("candidate-join")
 
     let gate = obj()
@@ -111,7 +115,7 @@ type CandidateJoinExecutor(candidate: AgentFrameworkCandidateWorkItem) =
 
 [<RequireQualifiedAccess>]
 module AgentFrameworkWorkflow =
-    let build candidate hold =
+    let private build candidate hold =
         let source = CandidateSourceExecutor()
         let inspection = CandidateInspectionExecutor(hold)
         let verification = DeterministicVerificationExecutor()
@@ -127,3 +131,28 @@ module AgentFrameworkWorkflow =
             .AddFanInBarrierEdge([ inspectionBinding; verificationBinding ], joinBinding)
             .WithOutputFrom(joinBinding)
             .Build()
+
+    /// Starts only a fresh in-process trial. The join keeps process-local state,
+    /// so an Agent Framework checkpoint cannot establish durable execution or
+    /// provider-effect ownership and is refused before an executor runs.
+    let start request candidate hold cancellationToken =
+        task {
+            match request with
+            | ResumeFromFrameworkCheckpoint checkpointId when String.IsNullOrWhiteSpace checkpointId ->
+                return Error "agent-framework-workflow-checkpoint-identity-invalid"
+            | ResumeFromFrameworkCheckpoint _ ->
+                return Error "agent-framework-workflow-checkpoint-replay-unsupported"
+            | Fresh ->
+                let workflow = build candidate hold
+
+                let! stream =
+                    InProcessExecution.RunStreamingAsync<AgentFrameworkCandidateWorkItem>(
+                        workflow,
+                        candidate,
+                        null,
+                        cancellationToken
+                    )
+                    |> _.AsTask()
+
+                return Ok stream
+        }

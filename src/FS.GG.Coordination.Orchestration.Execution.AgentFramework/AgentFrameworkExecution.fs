@@ -231,11 +231,36 @@ type BoundExecutionAgent(coordinator: ExecutionSessionCoordinator, binding: Boun
                 if Interlocked.CompareExchange(&invoked, 1, 0) <> 0 then
                     return raise (InvalidOperationException "agent-framework-duplicate-invocation-refused")
                 else
-                    let! result = coordinator.Launch(binding.Intent, cancellationToken)
+                    let! result =
+                        task {
+                            try
+                                return! coordinator.Launch(binding.Intent, cancellationToken)
+                            with
+                            | :? OperationCanceledException as exceptionValue
+                                when cancellationToken.IsCancellationRequested ->
+                                return raise exceptionValue
+                            | exceptionValue ->
+                                return
+                                    raise (
+                                        InvalidOperationException(
+                                            "agent-framework-execution-effect-unknown",
+                                            exceptionValue
+                                        )
+                                    )
+                        }
 
-                    match AgentFrameworkExecutionProjection.ofCoordinationResult result with
-                    | Error reason -> return raise (InvalidOperationException reason)
-                    | Ok projection -> return projection
+                    match result with
+                    | SessionNeedsReconciliation reason ->
+                        return
+                            raise (
+                                InvalidOperationException(
+                                    $"agent-framework-execution-effect-unknown:{reason}"
+                                )
+                            )
+                    | _ ->
+                        match AgentFrameworkExecutionProjection.ofCoordinationResult result with
+                        | Error reason -> return raise (InvalidOperationException reason)
+                        | Ok projection -> return projection
         }
 
     override _.IdCore = binding.Profile.AgentId

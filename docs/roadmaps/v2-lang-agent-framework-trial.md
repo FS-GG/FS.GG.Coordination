@@ -1,14 +1,16 @@
 # V2-LANG-01.4 — bounded Microsoft Agent Framework trial
 
-**Part:** V2-LANG-01, milestone .4, windows A–D. This branch contains only the first source window,
-A–B. The accepted programme plan remains
+**Part:** V2-LANG-01, milestone .4, windows A–D. Protected Coordination main contains A–B through
+PR #898 at `2ecab6c3473b085a720f7ffcf34362cba67c346d`. This successor prepares C–D. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** A–B source and focused local tests are prepared from protected Coordination main
-`125a6ba3ac019b4c4f6be57db04b958555f73409`. Merge, C recovery semantics, D decision evidence,
-publication, installation and adoption remain pending. V2-LANG-01.4 is open.
+**Status:** A–B are delivered on protected Coordination main. C recovery semantics and the D rejection
+disposition are prepared locally from that protected base. C–D protected delivery and readback remain pending,
+so V2-LANG-01.4 is open. Publication, installation and operating activation are rejected by the D disposition.
 
-**Telemetry:** not configured for this dispatch. No usage or bureaucracy percentage is inferred.
+**Telemetry:** attempts `v2-lang-framework-disposition-20260930` and
+`v2-lang-framework-measurement-evidence-20260930` are not configured. No usage or bureaucracy percentage is
+inferred.
 
 ## Trial boundary
 
@@ -47,6 +49,29 @@ item while a separately built and executed graph completes another work item, th
 branch. This proves independence between those in-process trial executions; it does not establish durable
 recovery, distributed scheduling or production concurrency.
 
+## Recovery and adverse lifecycle disposition
+
+Durable execution recovery remains owned by `ExecutionSessionCoordinator` and its journal. If cancellation,
+a provider exception or an ambiguous provider response occurs after `LaunchAttemptRecorded`, a fresh facade
+may bind the same exact intent to a coordinator over that journal. Before the original deadline, the
+coordinator reconciles the existing provider attempt and never launches another attempt. A framework session
+is not recovery evidence, and the facade still permits only one invocation per instance.
+
+The 1.22.0 framework checkpoint path is refused for this trial. The graph's barrier join retains process-local
+branch state, and a framework checkpoint does not bind that state to the durable execution journal or prove
+provider-effect ownership. `AgentFrameworkWorkflow.start` therefore accepts only `Fresh`; a nonempty checkpoint
+identity returns `agent-framework-workflow-checkpoint-replay-unsupported`, a malformed identity refuses, and no
+executor runs. `AIAgent` session serialization and deserialization also remain explicitly unsupported. This is
+a fail-closed disposition, not a durable replay implementation.
+
+Cancellation reaches the coordinator/provider token. The test cancels only after the durable launch-attempt
+event and provider entry, then recovers through a new coordinator/facade by reconciliation with one total
+provider launch. A request at its exact deadline refuses before any journal or provider effect. Non-cancellation
+exceptions crossing the coordinator call are reported as `agent-framework-execution-effect-unknown`; ambiguous
+and still-unknown reconciliation results use the same classification and emit no projection. A later conclusive
+reconciliation can return the candidate, still with `deliveryClaimed=false` and no additional launch. A workflow
+branch exception is surfaced as the SDK's `WorkflowErrorEvent`; no workflow output or delivery claim is emitted.
+
 ## A–D windows
 
 - [x] **A — exact SDK and execution-facade source trial.** Pin and call the real 1.22.0 abstractions,
@@ -55,12 +80,66 @@ recovery, distributed scheduling or production concurrency.
 - [x] **B — fixed graph and bounded parallelism source trial.** Run the candidate, parallel inspection
   and deterministic verification, and barrier join through the real workflow runtime. Prove that a held
   branch does not block a separate execution work item and that graph completion never claims delivery.
-- [ ] **C — recovery and adverse lifecycle trial.** Define and test checkpoint/recovery ownership,
+- [x] **C — recovery and adverse lifecycle trial.** Define and test checkpoint/recovery ownership,
   cancellation propagation, deadline behavior, framework exceptions and unknown effects against the
-  durable coordinator. No recovery, cancellation or unknown-effect claim follows from A–B.
-- [ ] **D — measured disposition.** Measure the trial against the existing supported baseline and record
-  adopt, defer or reject. Include dependency/runtime cost, failure behavior, maintenance surface and an
-  actual unmet need. A–B alone makes no adoption decision.
+  durable coordinator. Framework checkpoint replay is unsupported; exact durable coordinator reconciliation
+  is the only admitted recovery path in this source trial.
+- [x] **D — measured disposition prepared: reject production adoption.** The direct neutral coordinator
+  remains the supported path. The trial adds runtime, dependency and maintenance cost, cannot use framework
+  checkpoints for durable replay, and demonstrates no unmet product need that requires the facade or graph.
+  The milestone remains open until this C–D result is delivered to and read back from protected main.
+
+## D measurement and disposition
+
+The bounded runtime comparison used Release builds on Linux x64, .NET SDK 10.0.400/runtime 10.0.12 and an
+AMD Ryzen 9 7900. Each scenario ran in five fresh processes after 25 warm-up operations. The table reports
+the median process result. Direct and facade success used 5,000 measured work items per process; recovery used
+2,000; workflow used 500. Every operation constructed a fresh in-memory journal and deterministic provider
+fixture returning the same candidate and usage. Allocation is the change in `GC.GetTotalAllocatedBytes(true)`
+across the measured loop. These are local framework overhead measurements, not provider latency, capacity,
+token usage or operating-cost evidence.
+
+The checkout-relative [measurement runner](evidence/v2-lang-agent-framework-trial/measure.sh) creates its
+unregistered helper project under a temporary directory and deletes it after the run. It adds no solution,
+package or workflow registration. From the checkout root, reproduce the five-process aggregates with:
+
+```console
+docs/roadmaps/evidence/v2-lang-agent-framework-trial/measure.sh > /tmp/agent-framework-results.jsonl
+```
+
+The retained [raw process aggregates](evidence/v2-lang-agent-framework-trial/results-20260930.jsonl) bind the
+reported figures to source head `9fa7d8ea45625e5e0a8cf14dab7cca7d88f0eece`, tree
+`da7c0e9d101b3c1594026a124854e5701e9f53b2`, SDK/runtime and host identity. The runner emits the current source
+head, tree and measurement-helper SHA-256 so a later reproduction cannot be mistaken for the original observation.
+
+| Scenario | Median time/work item | Allocated bytes/work item | Compared with direct path |
+| --- | ---: | ---: | --- |
+| Neutral `ExecutionSessionCoordinator.Launch` | 6.63 µs | 4,616 | supported baseline |
+| `BoundExecutionAgent.RunAsync` over the same coordinator | 16.79 µs | 10,352 | +10.16 µs and +5,736 bytes; 2.53× time |
+| Additional fixed framework workflow | 210.94 µs | 108,749 | added after the execution projection |
+| Direct ambiguous launch plus durable reconciliation | 9.95 µs | 5,440 | recovery baseline; one launch, one reconciliation |
+| Two facade instances around that recovery | 35.76 µs | 16,608 | +25.81 µs and +11,168 bytes; 3.60× time |
+
+The workflow result confirms the bounded fan-out/barrier behavior but contributes no execution authority,
+durable scheduling or delivery capability. Combining the facade and fixed workflow would add their costs;
+the provider call would normally dominate absolute elapsed time, but it does not remove the allocation,
+dependency or ownership surface.
+
+The runtime trial and registered checks comprise 464 physical source lines and 685 physical test lines across
+four F# files, with 13 focused tests, two direct SDK pins and a separate package lock. The unregistered evidence
+helper is retained separately from that runtime/test count. Against the existing Codex adapter,
+the restored graph adds 18 package identities and 5,345,168 bytes of selected runtime assemblies. Adverse
+lifecycle behavior still depends on the existing journal/coordinator for effect ownership and reconciliation;
+the framework adds exception translation and fresh facade construction while its session and workflow
+checkpoint replay remain fail-closed.
+
+No current product requirement needs an `AIAgent` identity, framework message/session portability, or this
+in-process two-branch graph. The neutral coordinator already performs the one authoritative launch and durable
+reconciliation, and the two local candidate checks do not require a workflow runtime. The disposition is
+therefore **reject production adoption** of Microsoft Agent Framework 1.22.0 for this path: do not publish,
+install, activate or place it in generated workspaces. The optional source trial remains repository evidence.
+A future trial requires a concrete unmet need and must remeasure the then-current SDK; this result does not
+claim that later SDK versions have the same limits.
 
 ## Upstream identity and measured package footprint
 
@@ -89,7 +168,8 @@ A deliberate local fault changed the graph's false delivery assertion to expect 
 observed the named test failure and exited 1; the fault was then reverted and all six focused tests passed.
 After registration in the owning UnitTests project, the focused native gate observed that same named
 workflow test fail with exit 1 under the deliberate false delivery assertion. The assertion was restored,
-and the registered AgentFramework filter passed 6/6. No economic savings claim is made without measurement.
+and the registered AgentFramework filter passed 6/6. Window C extends that registered filter to 13 tests.
+No economic savings claim is made without measurement.
 
 Focused evidence covers:
 
@@ -97,13 +177,18 @@ Focused evidence covers:
 - baseline/adapter equality for candidate identity, head/tree and usage;
 - wrong input/session/options/profile limits and duplicate invocation with no extra provider launch;
 - the real fixed workflow graph, barrier join and explicit false delivery claim; and
-- an independently completing work item while another graph branch is held.
+- an independently completing work item while another graph branch is held;
+- framework session and workflow checkpoint replay refusal before execution;
+- cancellation after durable attempt followed by reconciliation with no second launch;
+- provider exception and ambiguous-effect classification with conclusive later reconciliation;
+- exact-deadline refusal before provider effect; and
+- workflow exception emission with no workflow output.
 
 ## Unified section 9.9 workspace impact
 
-There is no generated-workspace change in A–B. No SDD, Spec Kit, typed-SDD, none or product-language
+There is no generated-workspace change in A–D. No SDD, Spec Kit, typed-SDD, none or product-language
 family changes fresh creation, retained behavior, defaults or enabled runtime behavior. The source is an
-unregistered optional assembly and establishes no installed capability. A later effective change would
+optional build/test assembly and establishes no installed capability. A later effective change would
 require an exact Coordination artifact publication, explicit receiver selection, clean-creation proof and
-separate retained-upgrade handling. C and D remain prerequisites to any adopt decision. Source merge,
-installed availability and operating activation remain separate facts.
+separate retained-upgrade handling. D rejects that adoption step for this trial. Source merge, installed
+availability and operating activation remain separate facts.
