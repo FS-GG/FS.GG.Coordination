@@ -572,3 +572,135 @@ type PortableWorkspaceExecutorTests() =
                 Assert.True(receipt.TerminationObserved)
             | other -> failwithf "expected observed cancellation receipt, got %A" other
         }
+
+    [<Fact>]
+    member _.``component operation cannot borrow a sibling toolchain``() =
+        task {
+            let frontend =
+                fixtureComponent
+                    "frontend"
+                    "typescript"
+                    "composed/frontend"
+                    "node"
+                    "24.8.0"
+                    "frontend-build"
+                    "frontend-test"
+
+            let backend =
+                fixtureComponent "backend" "python" "composed/backend" "cpython" "3.14.0" "backend-build" "backend-test"
+
+            let selectedProfile = profile "fs-gg/component-toolchain" [ frontend; backend ]
+
+            let fake =
+                FakeRunner(fun _ -> failwith "a mismatched component toolchain must refuse before launch")
+
+            let borrowed =
+                operation
+                    "frontend-build"
+                    "build"
+                    (Some "frontend")
+                    "composed/frontend"
+                    [ "cpython", "3.14.0" ]
+                    "node"
+                    [ "build.mjs" ]
+                    "frontend-build-v1"
+
+            let policy =
+                {
+                    WorkspaceRoot = root ()
+                    WorkspaceScope = selectedProfile.WorkspaceScope
+                    SourceRevision = sourceRevision
+                    QualifiedImage = image
+                    MaximumRuntimeSeconds = 30UL
+                    MaximumOutputBytes = 131072UL
+                    Operations = [ borrowed ]
+                }
+
+            let executor = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
+
+            let selectedCommand =
+                command selectedProfile (Guid.Parse "40000000-0000-0000-0000-000000000001") "build" (Some "frontend")
+
+            let! outcome =
+                executor.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    selectedCommand,
+                    CancellationToken.None
+                )
+
+            Assert.Equal(Refused "portable-executor-toolchain-refused", outcome)
+            Assert.Equal(0, fake.Calls)
+        }
+
+    [<Fact>]
+    member _.``maximum runtime arithmetic saturates and a deadline crossed before launch refuses``() =
+        task {
+            let selectedProfile =
+                { profile
+                      "fs-gg/runtime-bound"
+                      [
+                          fixtureComponent "app" "python" "python" "cpython" "3.14.0" "python-build" "python-test"
+                      ] with
+                    MaximumRuntimeSeconds = UInt64.MaxValue
+                }
+
+            let fake =
+                FakeRunner(fun _ ->
+                    {
+                        ExitCode = Some 0
+                        StandardOutput = Array.empty
+                        StandardError = Array.empty
+                        CancellationRequested = false
+                        TerminationObserved = true
+                        Interrupted = false
+                        OutputLimitExceeded = false
+                    })
+
+            let reviewed =
+                operation
+                    "python-build"
+                    "build"
+                    (Some "app")
+                    "python"
+                    [ "cpython", "3.14.0" ]
+                    "python3"
+                    [ "build.py" ]
+                    "python-build-v1"
+
+            let policy =
+                {
+                    WorkspaceRoot = root ()
+                    WorkspaceScope = selectedProfile.WorkspaceScope
+                    SourceRevision = sourceRevision
+                    QualifiedImage = image
+                    MaximumRuntimeSeconds = UInt64.MaxValue
+                    MaximumOutputBytes = 131072UL
+                    Operations = [ reviewed ]
+                }
+
+            let deadline = now.AddMinutes(1.0)
+            let mutable calls = 0
+
+            let tickingClock () =
+                calls <- calls + 1
+                if calls = 1 then now else deadline
+
+            let executor = PortableWorkspaceExecutor.Executor(policy, fake, tickingClock)
+
+            let selectedCommand =
+                { command selectedProfile (Guid.Parse "40000000-0000-0000-0000-000000000002") "build" (Some "app") with
+                    Deadline = deadline
+                }
+
+            let! outcome =
+                executor.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    selectedCommand,
+                    CancellationToken.None
+                )
+
+            Assert.Equal(Refused "portable-executor-deadline-refused", outcome)
+            Assert.Equal(0, fake.Calls)
+        }

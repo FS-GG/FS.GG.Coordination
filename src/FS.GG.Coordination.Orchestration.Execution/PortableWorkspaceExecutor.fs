@@ -150,13 +150,34 @@ module PortableWorkspaceExecutor =
         }
 
     let private toolchainsMatch (profile: PortableWorkspaceProfile) (operation: PortableReviewedOperation) =
-        let declared =
+        match operation.ComponentId with
+        | Some componentId ->
             profile.Components
-            |> List.map (fun part -> part.Toolchain.Id, part.Toolchain.Version)
-            |> Set.ofList
+            |> List.tryFind (fun part -> part.Id = componentId)
+            |> Option.exists (fun part -> operation.RequiredToolchains = [ part.Toolchain.Id, part.Toolchain.Version ])
+        | None ->
+            let declared =
+                profile.Components
+                |> List.map (fun part -> part.Toolchain.Id, part.Toolchain.Version)
+                |> Set.ofList
 
-        operation.RequiredToolchains
-        |> List.forall (fun required -> Set.contains required declared)
+            operation.RequiredToolchains |> Set.ofList = declared
+
+    let private runtimeDeadline
+        (now: DateTimeOffset)
+        (requestedDeadline: DateTimeOffset)
+        (maximumRuntimeSeconds: uint64)
+        =
+        let availableTicks = DateTimeOffset.MaxValue.UtcTicks - now.UtcTicks
+        let maximumSafeSeconds = uint64 availableTicks / uint64 TimeSpan.TicksPerSecond
+
+        let bounded =
+            if maximumRuntimeSeconds >= maximumSafeSeconds then
+                DateTimeOffset.MaxValue
+            else
+                now.AddTicks(int64 maximumRuntimeSeconds * TimeSpan.TicksPerSecond)
+
+        min requestedDeadline bounded
 
     let private fullWorkingDirectory root relative =
         try
@@ -260,127 +281,139 @@ module PortableWorkspaceExecutor =
                     match disposition with
                     | UsePortableOutcome outcome -> return outcome
                     | LaunchPortableOperation ->
-                        let request: PortableProcessRequest =
-                            {
-                                Executable = operation.Executable
-                                Arguments = operation.Arguments
-                                WorkingDirectory = workingDirectory
-                                Deadline =
-                                    min prepared.Deadline ((clock ()).AddSeconds(float prepared.MaximumRuntimeSeconds))
-                                MaximumOutputBytes = prepared.MaximumOutputBytes
-                            }
+                        let launchObservedAt = clock ()
 
-                        let! observed =
-                            task {
-                                try
-                                    return! runner.RunAsync(request, cancellationToken)
-                                with _ ->
-                                    return
-                                        {
-                                            ExitCode = None
-                                            StandardOutput = Array.empty
-                                            StandardError = Array.empty
-                                            CancellationRequested = cancellationToken.IsCancellationRequested
-                                            TerminationObserved = false
-                                            Interrupted = true
-                                            OutputLimitExceeded = false
-                                        }
-                            }
+                        if
+                            cancellationToken.IsCancellationRequested
+                            || prepared.Deadline <= launchObservedAt
+                        then
+                            lock gate (fun () -> journal.Remove prepared.IdempotencyId |> ignore)
+                            return Refused "portable-executor-deadline-refused"
+                        else
+                            let request: PortableProcessRequest =
+                                {
+                                    Executable = operation.Executable
+                                    Arguments = operation.Arguments
+                                    WorkingDirectory = workingDirectory
+                                    Deadline =
+                                        runtimeDeadline
+                                            launchObservedAt
+                                            prepared.Deadline
+                                            prepared.MaximumRuntimeSeconds
+                                    MaximumOutputBytes = prepared.MaximumOutputBytes
+                                }
 
-                        let completedAt = clock ()
+                            let! observed =
+                                task {
+                                    try
+                                        return! runner.RunAsync(request, cancellationToken)
+                                    with _ ->
+                                        return
+                                            {
+                                                ExitCode = None
+                                                StandardOutput = Array.empty
+                                                StandardError = Array.empty
+                                                CancellationRequested = cancellationToken.IsCancellationRequested
+                                                TerminationObserved = false
+                                                Interrupted = true
+                                                OutputLimitExceeded = false
+                                            }
+                                }
 
-                        let outputBytes =
-                            uint64 observed.StandardOutput.LongLength
-                            + uint64 observed.StandardError.LongLength
+                            let completedAt = clock ()
 
-                        let digestOfOutput = outputDigest observed.StandardOutput observed.StandardError
+                            let outputBytes =
+                                uint64 observed.StandardOutput.LongLength
+                                + uint64 observed.StandardError.LongLength
 
-                        let workspaceResult =
-                            if observed.OutputLimitExceeded || outputBytes > prepared.MaximumOutputBytes then
-                                result
-                                    completedAt
-                                    prepared
-                                    (EvidenceUnknown "output-limit-exceeded-before-complete-readback")
-                                    (EvidenceMissing "no-verified-artifact-observed")
-                                    (error
-                                        "execution-output-limit"
-                                        "The fixed operation exceeded its reviewed output limit."
-                                        false
-                                        [ "verification", operation.VerificationIdentity ])
-                            elif observed.Interrupted || not observed.TerminationObserved then
-                                result
-                                    completedAt
-                                    prepared
-                                    (EvidenceUnknown "process-termination-not-observed")
-                                    (EvidenceUnknown "artifact-state-requires-reconciliation")
-                                    (error
-                                        "execution-outcome-unknown"
-                                        "The fixed operation was interrupted before termination was observed."
-                                        true
-                                        [ "verification", operation.VerificationIdentity ])
-                            elif observed.CancellationRequested then
-                                result
-                                    completedAt
-                                    prepared
-                                    (observed.ExitCode
-                                     |> Option.map EvidenceKnown
-                                     |> Option.defaultValue (EvidenceMissing "process-exit-code-unavailable"))
-                                    (EvidenceMissing "cancelled-before-verification")
-                                    (error
-                                        "execution-cancelled"
-                                        "Cancellation was requested and process termination was observed."
-                                        false
-                                        [ "verification", operation.VerificationIdentity ])
-                            else
-                                match observed.ExitCode with
-                                | Some 0 ->
+                            let digestOfOutput = outputDigest observed.StandardOutput observed.StandardError
+
+                            let workspaceResult =
+                                if observed.Interrupted || not observed.TerminationObserved then
                                     result
                                         completedAt
                                         prepared
-                                        (EvidenceKnown 0)
-                                        (EvidenceKnown operation.VerificationIdentity)
-                                        None
-                                | Some exitCode ->
-                                    result
-                                        completedAt
-                                        prepared
-                                        (EvidenceKnown exitCode)
-                                        (EvidenceMissing "operation-failed-before-verification")
-                                        (error
-                                            "execution-failed"
-                                            "The fixed operation returned a non-zero exit code."
-                                            false
-                                            [ "verification", operation.VerificationIdentity ])
-                                | None ->
-                                    result
-                                        completedAt
-                                        prepared
-                                        (EvidenceUnknown "process-exit-code-unavailable")
+                                        (EvidenceUnknown "process-termination-not-observed")
                                         (EvidenceUnknown "artifact-state-requires-reconciliation")
                                         (error
                                             "execution-outcome-unknown"
-                                            "The fixed operation outcome could not be established."
+                                            "The fixed operation was interrupted before termination was observed."
                                             true
                                             [ "verification", operation.VerificationIdentity ])
+                                elif observed.OutputLimitExceeded || outputBytes > prepared.MaximumOutputBytes then
+                                    result
+                                        completedAt
+                                        prepared
+                                        (EvidenceUnknown "output-limit-exceeded-before-complete-readback")
+                                        (EvidenceMissing "no-verified-artifact-observed")
+                                        (error
+                                            "execution-output-limit"
+                                            "The fixed operation exceeded its reviewed output limit."
+                                            false
+                                            [ "verification", operation.VerificationIdentity ])
+                                elif observed.CancellationRequested then
+                                    result
+                                        completedAt
+                                        prepared
+                                        (observed.ExitCode
+                                         |> Option.map EvidenceKnown
+                                         |> Option.defaultValue (EvidenceMissing "process-exit-code-unavailable"))
+                                        (EvidenceMissing "cancelled-before-verification")
+                                        (error
+                                            "execution-cancelled"
+                                            "Cancellation was requested and process termination was observed."
+                                            false
+                                            [ "verification", operation.VerificationIdentity ])
+                                else
+                                    match observed.ExitCode with
+                                    | Some 0 ->
+                                        result
+                                            completedAt
+                                            prepared
+                                            (EvidenceKnown 0)
+                                            (EvidenceKnown operation.VerificationIdentity)
+                                            None
+                                    | Some exitCode ->
+                                        result
+                                            completedAt
+                                            prepared
+                                            (EvidenceKnown exitCode)
+                                            (EvidenceMissing "operation-failed-before-verification")
+                                            (error
+                                                "execution-failed"
+                                                "The fixed operation returned a non-zero exit code."
+                                                false
+                                                [ "verification", operation.VerificationIdentity ])
+                                    | None ->
+                                        result
+                                            completedAt
+                                            prepared
+                                            (EvidenceUnknown "process-exit-code-unavailable")
+                                            (EvidenceUnknown "artifact-state-requires-reconciliation")
+                                            (error
+                                                "execution-outcome-unknown"
+                                                "The fixed operation outcome could not be established."
+                                                true
+                                                [ "verification", operation.VerificationIdentity ])
 
-                        let receipt =
-                            {
-                                Result = workspaceResult
-                                WorkspaceScope = prepared.WorkspaceScope
-                                SourceRevision = prepared.SourceRevision
-                                QualifiedImage = prepared.QualifiedImage
-                                OperationIdentity = prepared.OperationIdentity
-                                EntryPoint = prepared.EntryPoint
-                                WorkingDirectory = prepared.WorkingDirectory
-                                VerificationIdentity = operation.VerificationIdentity
-                                OutputSha256 = digestOfOutput
-                                OutputBytes = outputBytes
-                                CancellationRequested = observed.CancellationRequested
-                                TerminationObserved = observed.TerminationObserved
-                            }
+                            let receipt =
+                                {
+                                    Result = workspaceResult
+                                    WorkspaceScope = prepared.WorkspaceScope
+                                    SourceRevision = prepared.SourceRevision
+                                    QualifiedImage = prepared.QualifiedImage
+                                    OperationIdentity = prepared.OperationIdentity
+                                    EntryPoint = prepared.EntryPoint
+                                    WorkingDirectory = prepared.WorkingDirectory
+                                    VerificationIdentity = operation.VerificationIdentity
+                                    OutputSha256 = digestOfOutput
+                                    OutputBytes = outputBytes
+                                    CancellationRequested = observed.CancellationRequested
+                                    TerminationObserved = observed.TerminationObserved
+                                }
 
-                        lock gate (fun () -> journal[prepared.IdempotencyId] <- PortableSettled(digest, receipt))
-                        return Completed receipt
+                            lock gate (fun () -> journal[prepared.IdempotencyId] <- PortableSettled(digest, receipt))
+                            return Completed receipt
             }
 
         member _.Reconcile(idempotencyId: string, observation: PortableReconciliationObservation) =
