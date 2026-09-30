@@ -108,6 +108,7 @@ let private vulnerabilityJson projectCount vulnerable =
             "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj"
             "src/FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj"
             "src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj"
+            "src/FS.GG.Coordination.Orchestration.Execution.AgentFramework/FS.GG.Coordination.Orchestration.Execution.AgentFramework.fsproj"
             "src/FS.GG.Coordination.Orchestration.Host/FS.GG.Coordination.Orchestration.Host.fsproj"
             "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
             "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
@@ -1434,14 +1435,14 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 24 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 25 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
-[<InlineData(24, true, "vulnerable-package")>]
+[<InlineData(25, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error =
         validateVulnerability (vulnerabilityJson projectCount vulnerable)
@@ -1486,7 +1487,7 @@ let ``incomplete vulnerability parameters are rejected`` () =
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
     let report =
-        (vulnerabilityJson 24 false)
+        (vulnerabilityJson 25 false)
             .Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
 
     let exitCode, _, error = validateVulnerability report
