@@ -15,6 +15,7 @@ import zipfile
 
 REFERENCE = '#r "../src/FS.GG.Coordination.Orchestration.Execution/bin/Debug/net10.0/FS.GG.Coordination.Orchestration.Execution.dll"'
 EXECUTION_DLL = "FS.GG.Coordination.Orchestration.Execution.dll"
+REQUIRED_FSI_REFERENCES = ("Akka.dll", EXECUTION_DLL)
 
 
 def sha256(path: Path) -> str:
@@ -29,7 +30,7 @@ def canonical(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
 
 
-def prepare(package: Path, expected_package_sha256: str, script: Path, work: Path) -> dict[str, str]:
+def prepare(package: Path, expected_package_sha256: str, script: Path, work: Path) -> dict[str, object]:
     if not package.is_file() or not script.is_file():
         raise ValueError("package and qualification script must exist")
     if len(expected_package_sha256) != 64 or any(value not in "0123456789abcdef" for value in expected_package_sha256):
@@ -59,11 +60,15 @@ def prepare(package: Path, expected_package_sha256: str, script: Path, work: Pat
     execution = [item for item in extracted if item[1].name == EXECUTION_DLL]
     if len(execution) != 1:
         raise ValueError("package must contain exactly one Execution assembly")
+    by_name = {item[1].name: item for item in extracted}
+    missing = [name for name in REQUIRED_FSI_REFERENCES if name not in by_name]
+    if missing:
+        raise ValueError(f"package lacks required FSI reference: {', '.join(missing)}")
     source = script.read_text(encoding="utf-8-sig")
     if source.count(REFERENCE) != 1 or not source.startswith(REFERENCE + "\n"):
         raise ValueError("qualification script package reference changed")
-    assembly = execution[0][1].resolve()
-    replacement = f'#r @"{str(assembly).replace(chr(34), chr(34) * 2)}"'
+    reference_items = [by_name[name] for name in REQUIRED_FSI_REFERENCES]
+    replacement = "\n".join(f'#r @"{str(item[1].resolve()).replace(chr(34), chr(34) * 2)}"' for item in reference_items)
     rewritten = replacement + source[len(REFERENCE):]
     rewritten_path = work / "packaged-portable-workspace-qualification.fsx"
     rewritten_path.write_text(rewritten, encoding="utf-8", newline="\n")
@@ -74,6 +79,10 @@ def prepare(package: Path, expected_package_sha256: str, script: Path, work: Pat
         "rewrittenScriptSha256": sha256(rewritten_path),
         "executionAssemblyEntry": execution[0][0],
         "executionAssemblySha256": execution[0][2],
+        "fsiReferences": [
+            {"entry": item[0], "sha256": item[2]}
+            for item in reference_items
+        ],
         "assemblyCount": str(len(extracted)),
         "rewrittenScript": str(rewritten_path),
     }
