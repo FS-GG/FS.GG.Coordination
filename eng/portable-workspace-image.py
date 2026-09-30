@@ -291,10 +291,10 @@ def qualify(args: argparse.Namespace, source: Path, state: Path, image_reference
     fixture = "tests/portable-workspace/image/fixture"
     operations = [
         ("versions", "/source", "/usr/local/bin/python3", ["-c", "import subprocess,sys; assert sys.version_info[:3] == (3,14,0); subprocess.run(['/usr/local/bin/node','--version'],check=True); subprocess.run(['/opt/typescript/bin/tsc','--version'],check=True)"]),
-        ("python-build", f"/source/{fixture}/python", "/usr/local/bin/python3", ["-m", "py_compile", "app.py"]),
+        ("python-build", f"/source/{fixture}/python", "/usr/local/bin/python3", ["build.py"]),
         ("python-test", f"/source/{fixture}/python", "/usr/local/bin/python3", ["test.py"]),
         ("frontend-build", f"/source/{fixture}/composed/frontend", "/opt/typescript/bin/tsc", ["--project", "tsconfig.json", "--outDir", "/output/frontend"]),
-        ("backend-build", f"/source/{fixture}/composed/backend", "/usr/local/bin/python3", ["-m", "py_compile", "service.py"]),
+        ("backend-build", f"/source/{fixture}/composed/backend", "/usr/local/bin/python3", ["build.py"]),
         ("backend-test", f"/source/{fixture}/composed/backend", "/usr/local/bin/python3", ["test.py"]),
         ("composed-journey", f"/source/{fixture}/composed/product", "/usr/local/bin/python3", ["journey.py", "/output/frontend/app.js", "/usr/local/bin/node"]),
     ]

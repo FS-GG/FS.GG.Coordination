@@ -33,6 +33,9 @@ try:
         [absolute_node, built_javascript, f"http://127.0.0.1:{port}/message"],
         check=True,
     )
+    pathlib.Path("/output/composed-journey.json").write_bytes(
+        b'{"outcome":"passed","verification":"composed-journey-v1"}\n'
+    )
 finally:
     server.terminate()
     server.wait(timeout=5)
