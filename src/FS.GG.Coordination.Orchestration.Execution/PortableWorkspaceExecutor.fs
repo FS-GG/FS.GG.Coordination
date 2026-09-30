@@ -20,6 +20,24 @@ type PortableReviewedOperation =
         Executable: string
         Arguments: string list
         VerificationIdentity: string
+        VerificationPath: string
+        VerificationSha256: string
+        RecipeSha256: string
+    }
+
+type PortableRuntimePolicy =
+    {
+        GitExecutable: string
+        TarExecutable: string
+        PodmanExecutable: string
+        PodmanGlobalArguments: string list
+        StateRoot: string
+        ContainerPath: string
+        ContainerUser: string
+        HostEnvironment: Map<string, string>
+        ContainerEnvironment: Map<string, string>
+        MaximumSnapshotBytes: uint64
+        TerminationGrace: TimeSpan
     }
 
 type PortableExecutorPolicy =
@@ -31,6 +49,7 @@ type PortableExecutorPolicy =
         MaximumRuntimeSeconds: uint64
         MaximumOutputBytes: uint64
         Operations: PortableReviewedOperation list
+        Runtime: PortableRuntimePolicy
     }
 
 type PortableProcessRequest =
@@ -40,6 +59,16 @@ type PortableProcessRequest =
         WorkingDirectory: string
         Deadline: DateTimeOffset
         MaximumOutputBytes: uint64
+        WorkspaceScope: string
+        SourceRepository: string
+        SourceRevision: string
+        QualifiedImage: string
+        ContainerName: string
+        ContainerPath: string
+        ContainerEnvironment: Map<string, string>
+        VerificationPath: string
+        VerificationSha256: string
+        RecipeSha256: string
     }
 
 type PortableProcessObservation =
@@ -51,10 +80,19 @@ type PortableProcessObservation =
         TerminationObserved: bool
         Interrupted: bool
         OutputLimitExceeded: bool
+        OutputComplete: bool
+        SourceTree: string option
+        SnapshotSha256: string option
+        RuntimeIdentity: string option
+        ContainerIdentity: string option
+        VerificationObserved: bool
     }
 
 type IPortableProcessRunner =
     abstract RunAsync:
+        request: PortableProcessRequest * cancellationToken: CancellationToken -> Task<PortableProcessObservation>
+
+    abstract RecoverAsync:
         request: PortableProcessRequest * cancellationToken: CancellationToken -> Task<PortableProcessObservation>
 
 type PortableExecutionReceipt =
@@ -67,6 +105,12 @@ type PortableExecutionReceipt =
         EntryPoint: string
         WorkingDirectory: string
         VerificationIdentity: string
+        VerificationSha256: string
+        RecipeSha256: string
+        SourceTree: string option
+        SnapshotSha256: string option
+        RuntimeIdentity: string option
+        ContainerIdentity: string option
         OutputSha256: string
         OutputBytes: uint64
         CancellationRequested: bool
@@ -91,7 +135,7 @@ type PortableReconciliationObservation =
     }
 
 type private PortableJournalEntry =
-    | PortableRunning of commandId: Guid * bindingDigest: string
+    | PortableRunning of commandId: Guid * bindingDigest: string * containerName: string
     | PortableSettled of bindingDigest: string * receipt: PortableExecutionReceipt
 
 type private PortableLaunchDisposition =
@@ -103,31 +147,282 @@ module PortableWorkspaceExecutor =
     let private sha256 (bytes: byte array) =
         bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
-    let private bindingDigest (prepared: PreparedWorkspaceOperation) =
-        String.concat
-            "\n"
-            [
-                prepared.CommandId.ToString("D")
-                prepared.WorkspaceScope
-                prepared.ProfileId
-                string prepared.ProfileRevision
-                prepared.SourceRevision
-                prepared.QualifiedImage
-                string prepared.WorkflowRevision
-                string prepared.FenceGeneration
-                defaultArg prepared.ComponentId ""
-                prepared.OperationIdentity
-                prepared.WorkingDirectory
-                prepared.EntryPoint
-                prepared.Deadline.ToString("O")
-                string prepared.MaximumRuntimeSeconds
-                string prepared.MaximumOutputBytes
-            ]
+    let private validSha256 (value: string) =
+        value.Length = 64
+        && value
+           |> Seq.forall (fun character ->
+               (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f'))
+
+    let private absolutePath (value: string) =
+        not (String.IsNullOrWhiteSpace value)
+        && Path.IsPathFullyQualified value
+        && not (value.Split(Path.DirectorySeparatorChar) |> Array.contains "..")
+
+    let private relativeOutputPath (value: string) =
+        not (String.IsNullOrWhiteSpace value)
+        && not (Path.IsPathRooted value)
+        && not (value.Contains '\\')
+        && value.Split('/')
+           |> Array.forall (fun segment -> segment <> "" && segment <> "." && segment <> "..")
+
+    let private runtimePolicyValid (runtime: PortableRuntimePolicy) =
+        let allowedEnvironment =
+            set
+                [
+                    "HOME"
+                    "PATH"
+                    "LANG"
+                    "LC_ALL"
+                    "CONTAINERS_CONF"
+                    "CONTAINERS_STORAGE_CONF"
+                    "PYTHONDONTWRITEBYTECODE"
+                    "PYTHONPYCACHEPREFIX"
+                ]
+
+        let hostKeys = runtime.HostEnvironment |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+
+        let containerKeys =
+            runtime.ContainerEnvironment |> Map.toSeq |> Seq.map fst |> Set.ofSeq
+
+        let containerPathValid =
+            runtime.ContainerPath.Split(':') |> Array.forall absolutePath
+
+        let containerUserValid =
+            match runtime.ContainerUser.Split(':') with
+            | [| user; group |] ->
+                user <> "0"
+                && group <> "0"
+                && user |> Seq.forall Char.IsAsciiDigit
+                && group |> Seq.forall Char.IsAsciiDigit
+            | _ -> false
+
+        let podmanArgumentsValid =
+            match runtime.PodmanGlobalArguments with
+            | [] -> true
+            | [ "--storage-driver=vfs"; "--root"; root; "--runroot"; runRoot ] ->
+                absolutePath root && absolutePath runRoot && root <> runRoot
+            | _ -> false
+
+        absolutePath runtime.GitExecutable
+        && absolutePath runtime.TarExecutable
+        && absolutePath runtime.PodmanExecutable
+        && absolutePath runtime.StateRoot
+        && containerPathValid
+        && containerUserValid
+        && podmanArgumentsValid
+        && runtime.MaximumSnapshotBytes > 0UL
+        && runtime.TerminationGrace > TimeSpan.Zero
+        && runtime.TerminationGrace <= TimeSpan.FromSeconds 30.0
+        && runtime.ContainerEnvironment.ContainsKey "HOME"
+        && runtime.ContainerEnvironment.ContainsKey "PATH"
+        && runtime.ContainerEnvironment["PATH"] = runtime.ContainerPath
+        && runtime.HostEnvironment.ContainsKey "HOME"
+        && runtime.HostEnvironment.ContainsKey "PATH"
+        && Set.isSubset hostKeys allowedEnvironment
+        && Set.isSubset containerKeys allowedEnvironment
+
+    let private bindingDigest
+        (profile: PortableWorkspaceProfile)
+        (command: PortableWorkspaceCommand)
+        (operation: PortableReviewedOperation)
+        =
+        let profileDigest =
+            PortableWorkspaceContract.profileBytes profile
+            |> Result.map sha256
+            |> Result.defaultWith invalidOp
+
+        let commandDigest =
+            PortableWorkspaceContract.commandBytes command
+            |> Result.map sha256
+            |> Result.defaultWith invalidOp
+
+        String.concat "\n" [ profileDigest; commandDigest; operation.RecipeSha256 ]
         |> Encoding.UTF8.GetBytes
         |> sha256
 
     let private outputDigest (stdout: byte array) (stderr: byte array) =
         Array.concat [ stdout; [| byte '\n' |]; stderr ] |> sha256
+
+    let private writeOptionalString (writer: BinaryWriter) (value: string option) =
+        match value with
+        | Some text ->
+            writer.Write true
+            writer.Write text
+        | None -> writer.Write false
+
+    let private readOptionalString (reader: BinaryReader) =
+        if reader.ReadBoolean() then
+            Some(reader.ReadString())
+        else
+            None
+
+    let private writeReceipt (writer: BinaryWriter) (receipt: PortableExecutionReceipt) =
+        let resultBytes =
+            PortableWorkspaceContract.resultBytes receipt.Result
+            |> Result.defaultWith (fun reason -> invalidOp reason)
+
+        writer.Write(Convert.ToBase64String resultBytes)
+        writer.Write receipt.WorkspaceScope
+        writer.Write receipt.SourceRevision
+        writer.Write receipt.QualifiedImage
+        writer.Write receipt.OperationIdentity
+        writer.Write receipt.EntryPoint
+        writer.Write receipt.WorkingDirectory
+        writer.Write receipt.VerificationIdentity
+        writer.Write receipt.VerificationSha256
+        writer.Write receipt.RecipeSha256
+        writeOptionalString writer receipt.SourceTree
+        writeOptionalString writer receipt.SnapshotSha256
+        writeOptionalString writer receipt.RuntimeIdentity
+        writeOptionalString writer receipt.ContainerIdentity
+        writer.Write receipt.OutputSha256
+        writer.Write receipt.OutputBytes
+        writer.Write receipt.CancellationRequested
+        writer.Write receipt.TerminationObserved
+
+    let private readReceipt (reader: BinaryReader) =
+        let result =
+            reader.ReadString()
+            |> Convert.FromBase64String
+            |> PortableWorkspaceContract.parseResult
+            |> Result.defaultWith (fun reason -> invalidOp reason)
+
+        {
+            Result = result
+            WorkspaceScope = reader.ReadString()
+            SourceRevision = reader.ReadString()
+            QualifiedImage = reader.ReadString()
+            OperationIdentity = reader.ReadString()
+            EntryPoint = reader.ReadString()
+            WorkingDirectory = reader.ReadString()
+            VerificationIdentity = reader.ReadString()
+            VerificationSha256 = reader.ReadString()
+            RecipeSha256 = reader.ReadString()
+            SourceTree = readOptionalString reader
+            SnapshotSha256 = readOptionalString reader
+            RuntimeIdentity = readOptionalString reader
+            ContainerIdentity = readOptionalString reader
+            OutputSha256 = reader.ReadString()
+            OutputBytes = reader.ReadUInt64()
+            CancellationRequested = reader.ReadBoolean()
+            TerminationObserved = reader.ReadBoolean()
+        }
+
+    type private DurableJournal(stateRoot: string) =
+        let journalRoot = Path.Combine(stateRoot, "journal-v1")
+
+        let ensureRoot () =
+            Directory.CreateDirectory journalRoot |> ignore
+
+            if File.GetAttributes(journalRoot) &&& FileAttributes.ReparsePoint = FileAttributes.ReparsePoint then
+                invalidOp "portable-journal-root-refused"
+
+            if not (OperatingSystem.IsWindows()) then
+                File.SetUnixFileMode(
+                    journalRoot,
+                    UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                )
+
+        let keyPath workspaceScope idempotencyId =
+            let key = Encoding.UTF8.GetBytes(workspaceScope + "\n" + idempotencyId) |> sha256
+            Path.Combine(journalRoot, key + ".bin"), Path.Combine(journalRoot, key + ".lock")
+
+        let read path =
+            if not (File.Exists path) then
+                None
+            else
+                let info = FileInfo path
+
+                if
+                    info.Length <= 0L
+                    || info.Length > int64 PortableWorkspaceContract.maximumDocumentBytes * 4L
+                then
+                    invalidOp "portable-journal-size-refused"
+
+                use stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read)
+                use reader = new BinaryReader(stream, Encoding.UTF8, false)
+
+                if reader.ReadString() <> "fsgg.portable-execution-journal/1" then
+                    invalidOp "portable-journal-schema-refused"
+
+                let entry =
+                    match reader.ReadByte() with
+                    | 1uy ->
+                        PortableRunning(
+                            Guid.ParseExact(reader.ReadString(), "D"),
+                            reader.ReadString(),
+                            reader.ReadString()
+                        )
+                    | 2uy -> PortableSettled(reader.ReadString(), readReceipt reader)
+                    | _ -> invalidOp "portable-journal-state-refused"
+
+                if stream.Position <> stream.Length then
+                    invalidOp "portable-journal-trailing-bytes-refused"
+
+                Some entry
+
+        let write path entry =
+            let temporary = path + "." + Guid.NewGuid().ToString("N") + ".tmp"
+
+            try
+                use stream =
+                    new FileStream(temporary, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+
+                use writer = new BinaryWriter(stream, Encoding.UTF8, true)
+                writer.Write "fsgg.portable-execution-journal/1"
+
+                match entry with
+                | PortableRunning(commandId, binding, containerName) ->
+                    writer.Write 1uy
+                    writer.Write(commandId.ToString("D"))
+                    writer.Write binding
+                    writer.Write containerName
+                | PortableSettled(binding, receipt) ->
+                    writer.Write 2uy
+                    writer.Write binding
+                    writeReceipt writer receipt
+
+                writer.Flush()
+                stream.Flush true
+                File.Move(temporary, path, true)
+            finally
+                if File.Exists temporary then
+                    File.Delete temporary
+
+        let locked workspaceScope idempotencyId action =
+            try
+                ensureRoot ()
+                let path, lockPath = keyPath workspaceScope idempotencyId
+
+                use lockStream =
+                    new FileStream(lockPath, FileMode.OpenOrCreate, FileAccess.ReadWrite, FileShare.None)
+
+                Ok(action path)
+            with
+            | :? IOException
+            | :? UnauthorizedAccessException
+            | :? InvalidDataException
+            | :? InvalidOperationException
+            | :? FormatException -> Error "portable-journal-unavailable"
+
+        member _.Read(workspaceScope, idempotencyId) =
+            locked workspaceScope idempotencyId read
+
+        member _.Reserve(workspaceScope, idempotencyId, commandId, binding, containerName) =
+            locked workspaceScope idempotencyId (fun path ->
+                match read path with
+                | Some existing -> Choice1Of2 existing
+                | None ->
+                    write path (PortableRunning(commandId, binding, containerName))
+                    Choice2Of2())
+
+        member _.Settle(workspaceScope, idempotencyId, binding, receipt) =
+            locked workspaceScope idempotencyId (fun path ->
+                match read path with
+                | Some(PortableRunning(_, existing, _)) when existing = binding ->
+                    write path (PortableSettled(binding, receipt))
+                    true
+                | _ -> false)
 
     let private error code message retryable details =
         Some
@@ -179,79 +474,262 @@ module PortableWorkspaceExecutor =
 
         min requestedDeadline bounded
 
-    let private fullWorkingDirectory root relative =
-        try
-            let canonicalRoot = Path.GetFullPath root
-            let candidate = Path.GetFullPath(Path.Combine(canonicalRoot, relative))
+    let private deadlineAfter (now: DateTimeOffset) (duration: TimeSpan) =
+        let availableTicks = DateTimeOffset.MaxValue.UtcTicks - now.UtcTicks
 
-            let prefix =
-                canonicalRoot.TrimEnd(Path.DirectorySeparatorChar)
-                + string Path.DirectorySeparatorChar
-
-            let containsLink =
-                relative.Split('/')
-                |> Array.scan (fun parent segment -> Path.Combine(parent, segment)) canonicalRoot
-                |> Array.exists (fun path ->
-                    File.GetAttributes(path) &&& FileAttributes.ReparsePoint = FileAttributes.ReparsePoint)
-
-            if
-                candidate.StartsWith(prefix, StringComparison.Ordinal)
-                && Directory.Exists candidate
-                && not containsLink
-            then
-                Ok candidate
-            else
-                Error "portable-working-directory-refused"
-        with
-        | :? ArgumentException
-        | :? IOException
-        | :? UnauthorizedAccessException
-        | :? NotSupportedException -> Error "portable-working-directory-refused"
+        if duration.Ticks >= availableTicks then
+            DateTimeOffset.MaxValue
+        else
+            now.AddTicks duration.Ticks
 
     type Executor(policy: PortableExecutorPolicy, runner: IPortableProcessRunner, ?clock: unit -> DateTimeOffset) =
         let clock = defaultArg clock (fun () -> DateTimeOffset.UtcNow)
-        let journal = Dictionary<string, PortableJournalEntry>(StringComparer.Ordinal)
-        let gate = obj ()
+        let journal = DurableJournal policy.Runtime.StateRoot
+
+        let selectReviewedOperation (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) =
+            PortableWorkspaceContract.validateProfile profile
+            |> Result.bind (fun _ -> PortableWorkspaceContract.validateCommand command)
+            |> Result.bind (fun _ ->
+                if
+                    command.WorkspaceScope <> profile.WorkspaceScope
+                    || command.WorkspaceScope <> policy.WorkspaceScope
+                then
+                    Error "portable-workspace-scope-refused"
+                elif
+                    command.ProfileId <> profile.ProfileId
+                    || command.ProfileRevision <> profile.Revision
+                    || command.SourceRevision <> profile.SourceRevision
+                    || command.SourceRevision <> policy.SourceRevision
+                then
+                    Error "portable-executor-source-binding-refused"
+                elif profile.QualifiedImage <> policy.QualifiedImage then
+                    Error "portable-executor-image-binding-refused"
+                elif
+                    profile.MaximumRuntimeSeconds > policy.MaximumRuntimeSeconds
+                    || profile.MaximumOutputBytes > policy.MaximumOutputBytes
+                then
+                    Error "portable-executor-limit-refused"
+                else
+                    let selected =
+                        match command.ComponentId with
+                        | Some componentId ->
+                            profile.Components
+                            |> List.tryFind (fun part -> part.Id = componentId)
+                            |> Option.bind (fun part ->
+                                match command.Operation with
+                                | "build" -> Some(part.WorkingDirectory, part.EntryPoints.Build)
+                                | "test" -> Some(part.WorkingDirectory, part.EntryPoints.Test)
+                                | "lint" ->
+                                    part.EntryPoints.Lint |> Option.map (fun value -> part.WorkingDirectory, value)
+                                | "artifact" ->
+                                    part.EntryPoints.Artifact
+                                    |> Option.map (fun value -> part.WorkingDirectory, value)
+                                | _ -> None)
+                        | None ->
+                            match command.Operation with
+                            | "build" -> Some("product", profile.ProductBuild)
+                            | "test" -> Some("product", profile.ProductTest)
+                            | "journey" -> Some("product", profile.ProductJourney)
+                            | _ -> None
+
+                    match selected with
+                    | None -> Error "portable-executor-operation-refused"
+                    | Some(workingDirectory, entryPoint) ->
+                        policy.Operations
+                        |> List.tryFind (fun operation ->
+                            operation.EntryPoint = entryPoint
+                            && operation.OperationIdentity = command.Operation
+                            && operation.ComponentId = command.ComponentId
+                            && operation.WorkingDirectory = workingDirectory)
+                        |> function
+                            | None -> Error "portable-executor-operation-refused"
+                            | Some operation when operation.QualifiedImage <> profile.QualifiedImage ->
+                                Error "portable-executor-image-binding-refused"
+                            | Some operation when not (toolchainsMatch profile operation) ->
+                                Error "portable-executor-toolchain-refused"
+                            | Some operation when
+                                String.IsNullOrWhiteSpace operation.VerificationIdentity
+                                || not (absolutePath operation.Executable)
+                                || not (relativeOutputPath operation.VerificationPath)
+                                || not (validSha256 operation.VerificationSha256)
+                                || not (validSha256 operation.RecipeSha256)
+                                || not (runtimePolicyValid policy.Runtime)
+                                ->
+                                Error "portable-executor-verification-refused"
+                            | Some operation -> Ok operation)
 
         let refuseBeforeLaunch
             (authority: PortableWorkspaceAuthority)
             (profile: PortableWorkspaceProfile)
             (command: PortableWorkspaceCommand)
             =
-            PortableWorkspaceAdapter.prepare (clock ()) authority profile command
-            |> Result.bind (fun prepared ->
-                if
-                    prepared.WorkspaceScope <> policy.WorkspaceScope
-                    || prepared.SourceRevision <> policy.SourceRevision
-                then
-                    Error "portable-executor-source-binding-refused"
-                elif prepared.QualifiedImage <> policy.QualifiedImage then
-                    Error "portable-executor-image-binding-refused"
+            selectReviewedOperation profile command
+            |> Result.bind (fun operation ->
+                PortableWorkspaceAdapter.prepare (clock ()) authority profile command
+                |> Result.map (fun prepared -> prepared, operation, operation.WorkingDirectory))
+
+        let receiptFromObservation
+            (prepared: PreparedWorkspaceOperation)
+            (operation: PortableReviewedOperation)
+            (observed: PortableProcessObservation)
+            =
+            let completedAt = clock ()
+
+            let outputBytes =
+                uint64 observed.StandardOutput.LongLength
+                + uint64 observed.StandardError.LongLength
+
+            let workspaceResult =
+                if observed.Interrupted || not observed.TerminationObserved then
+                    result
+                        completedAt
+                        prepared
+                        (EvidenceUnknown "process-termination-not-observed")
+                        (EvidenceUnknown "artifact-state-requires-reconciliation")
+                        (error
+                            "execution-outcome-unknown"
+                            "The fixed operation was interrupted before termination was observed."
+                            true
+                            [ "verification", operation.VerificationIdentity ])
                 elif
-                    prepared.MaximumRuntimeSeconds > policy.MaximumRuntimeSeconds
-                    || prepared.MaximumOutputBytes > policy.MaximumOutputBytes
+                    observed.OutputLimitExceeded
+                    || not observed.OutputComplete
+                    || outputBytes > prepared.MaximumOutputBytes
                 then
-                    Error "portable-executor-limit-refused"
+                    result
+                        completedAt
+                        prepared
+                        (EvidenceUnknown "output-limit-exceeded-before-complete-readback")
+                        (EvidenceMissing "no-verified-artifact-observed")
+                        (error
+                            "execution-output-limit"
+                            "The fixed operation exceeded its reviewed output limit."
+                            false
+                            [ "verification", operation.VerificationIdentity ])
+                elif observed.CancellationRequested then
+                    result
+                        completedAt
+                        prepared
+                        (observed.ExitCode
+                         |> Option.map EvidenceKnown
+                         |> Option.defaultValue (EvidenceMissing "process-exit-code-unavailable"))
+                        (EvidenceMissing "cancelled-before-verification")
+                        (error
+                            "execution-cancelled"
+                            "Cancellation was requested and process termination was observed."
+                            false
+                            [ "verification", operation.VerificationIdentity ])
                 else
-                    match
-                        policy.Operations
-                        |> List.tryFind (fun operation ->
-                            operation.EntryPoint = prepared.EntryPoint
-                            && operation.OperationIdentity = prepared.OperationIdentity
-                            && operation.ComponentId = prepared.ComponentId
-                            && operation.WorkingDirectory = prepared.WorkingDirectory)
-                    with
-                    | None -> Error "portable-executor-operation-refused"
-                    | Some(operation: PortableReviewedOperation) ->
-                        if operation.QualifiedImage <> prepared.QualifiedImage then
-                            Error "portable-executor-image-binding-refused"
-                        elif not (toolchainsMatch profile operation) then
-                            Error "portable-executor-toolchain-refused"
-                        elif String.IsNullOrWhiteSpace operation.VerificationIdentity then
-                            Error "portable-executor-verification-refused"
-                        else
-                            fullWorkingDirectory policy.WorkspaceRoot operation.WorkingDirectory
-                            |> Result.map (fun workingDirectory -> prepared, operation, workingDirectory))
+                    match observed.ExitCode with
+                    | Some 0 when observed.VerificationObserved ->
+                        result
+                            completedAt
+                            prepared
+                            (EvidenceKnown 0)
+                            (EvidenceKnown operation.VerificationIdentity)
+                            None
+                    | Some 0 ->
+                        result
+                            completedAt
+                            prepared
+                            (EvidenceKnown 0)
+                            (EvidenceMissing "reviewed-verification-not-observed")
+                            (error
+                                "execution-verification-missing"
+                                "The operation exited successfully without its reviewed verification output."
+                                false
+                                [ "verification", operation.VerificationIdentity ])
+                    | Some exitCode ->
+                        result
+                            completedAt
+                            prepared
+                            (EvidenceKnown exitCode)
+                            (EvidenceMissing "operation-failed-before-verification")
+                            (error
+                                "execution-failed"
+                                "The fixed operation returned a non-zero exit code."
+                                false
+                                [ "verification", operation.VerificationIdentity ])
+                    | None ->
+                        result
+                            completedAt
+                            prepared
+                            (EvidenceUnknown "process-exit-code-unavailable")
+                            (EvidenceUnknown "artifact-state-requires-reconciliation")
+                            (error
+                                "execution-outcome-unknown"
+                                "The fixed operation outcome could not be established."
+                                true
+                                [ "verification", operation.VerificationIdentity ])
+
+            {
+                Result = workspaceResult
+                WorkspaceScope = prepared.WorkspaceScope
+                SourceRevision = prepared.SourceRevision
+                QualifiedImage = prepared.QualifiedImage
+                OperationIdentity = prepared.OperationIdentity
+                EntryPoint = prepared.EntryPoint
+                WorkingDirectory = prepared.WorkingDirectory
+                VerificationIdentity = operation.VerificationIdentity
+                VerificationSha256 = operation.VerificationSha256
+                RecipeSha256 = operation.RecipeSha256
+                SourceTree = observed.SourceTree
+                SnapshotSha256 = observed.SnapshotSha256
+                RuntimeIdentity = observed.RuntimeIdentity
+                ContainerIdentity = observed.ContainerIdentity
+                OutputSha256 = outputDigest observed.StandardOutput observed.StandardError
+                OutputBytes = outputBytes
+                CancellationRequested = observed.CancellationRequested
+                TerminationObserved = observed.TerminationObserved
+            }
+
+        let preparedForRecovery
+            (profile: PortableWorkspaceProfile)
+            (command: PortableWorkspaceCommand)
+            (operation: PortableReviewedOperation)
+            =
+            {
+                CommandId = command.CommandId
+                IdempotencyId = command.IdempotencyId
+                WorkspaceScope = command.WorkspaceScope
+                ProfileId = command.ProfileId
+                ProfileRevision = command.ProfileRevision
+                SourceRevision = command.SourceRevision
+                QualifiedImage = profile.QualifiedImage
+                WorkflowRevision = command.ExpectedWorkflowRevision
+                FenceGeneration = command.FenceGeneration
+                ComponentId = command.ComponentId
+                OperationIdentity = command.Operation
+                WorkingDirectory = operation.WorkingDirectory
+                EntryPoint = operation.EntryPoint
+                Deadline = command.Deadline
+                MaximumRuntimeSeconds = profile.MaximumRuntimeSeconds
+                MaximumOutputBytes = profile.MaximumOutputBytes
+            }
+
+        let requestFor
+            (prepared: PreparedWorkspaceOperation)
+            (operation: PortableReviewedOperation)
+            containerName
+            deadline
+            =
+            {
+                Executable = operation.Executable
+                Arguments = operation.Arguments
+                WorkingDirectory = operation.WorkingDirectory
+                Deadline = deadline
+                MaximumOutputBytes = prepared.MaximumOutputBytes
+                WorkspaceScope = prepared.WorkspaceScope
+                SourceRepository = policy.WorkspaceRoot
+                SourceRevision = prepared.SourceRevision
+                QualifiedImage = prepared.QualifiedImage
+                ContainerName = containerName
+                ContainerPath = policy.Runtime.ContainerPath
+                ContainerEnvironment = policy.Runtime.ContainerEnvironment
+                VerificationPath = operation.VerificationPath
+                VerificationSha256 = operation.VerificationSha256
+                RecipeSha256 = operation.RecipeSha256
+            }
 
         member _.ExecuteAsync
             (
@@ -261,335 +739,167 @@ module PortableWorkspaceExecutor =
                 cancellationToken: CancellationToken
             ) =
             task {
-                match refuseBeforeLaunch authority profile command with
-                | Error reason -> return Refused reason
-                | Ok(prepared, operation, workingDirectory) ->
-                    let digest = bindingDigest prepared
+                let prior =
+                    selectReviewedOperation profile command
+                    |> Result.bind (fun operation ->
+                        let digest = bindingDigest profile command operation
 
-                    let disposition =
-                        lock gate (fun () ->
-                            match journal.TryGetValue prepared.IdempotencyId with
-                            | true, PortableRunning(commandId, existingDigest) when existingDigest = digest ->
-                                UsePortableOutcome(PendingDuplicate commandId)
-                            | true, PortableSettled(existingDigest, receipt) when existingDigest = digest ->
-                                UsePortableOutcome(Duplicate receipt)
-                            | true, _ -> UsePortableOutcome(Refused "portable-executor-idempotency-conflict")
-                            | false, _ ->
-                                journal.Add(prepared.IdempotencyId, PortableRunning(prepared.CommandId, digest))
-                                LaunchPortableOperation)
+                        journal.Read(command.WorkspaceScope, command.IdempotencyId)
+                        |> Result.map (function
+                            | Some(PortableRunning(commandId, existingDigest, _)) when existingDigest = digest ->
+                                Some(PendingDuplicate commandId)
+                            | Some(PortableSettled(existingDigest, receipt)) when existingDigest = digest ->
+                                Some(Duplicate receipt)
+                            | Some _ -> Some(Refused "portable-executor-idempotency-conflict")
+                            | None -> None))
 
-                    match disposition with
-                    | UsePortableOutcome outcome -> return outcome
-                    | LaunchPortableOperation ->
-                        let launchObservedAt = clock ()
+                let preparation =
+                    match prior with
+                    | Error reason -> Error(Refused reason)
+                    | Ok(Some outcome) -> Error outcome
+                    | Ok None ->
+                        refuseBeforeLaunch authority profile command
+                        |> Result.mapError Refused
+                        |> Result.bind (fun (prepared, operation, workingDirectory) ->
+                            let digest = bindingDigest profile command operation
+                            let containerName = "fsgg-portable-" + digest[..23]
+                            let launchObservedAt = clock ()
 
-                        if
-                            cancellationToken.IsCancellationRequested
-                            || prepared.Deadline <= launchObservedAt
-                        then
-                            lock gate (fun () -> journal.Remove prepared.IdempotencyId |> ignore)
-                            return Refused "portable-executor-deadline-refused"
-                        else
-                            let request: PortableProcessRequest =
-                                {
-                                    Executable = operation.Executable
-                                    Arguments = operation.Arguments
-                                    WorkingDirectory = workingDirectory
-                                    Deadline =
-                                        runtimeDeadline
-                                            launchObservedAt
-                                            prepared.Deadline
-                                            prepared.MaximumRuntimeSeconds
-                                    MaximumOutputBytes = prepared.MaximumOutputBytes
-                                }
+                            if
+                                cancellationToken.IsCancellationRequested
+                                || prepared.Deadline <= launchObservedAt
+                            then
+                                Error(Refused "portable-executor-deadline-refused")
+                            else
+                                match
+                                    journal.Reserve(
+                                        prepared.WorkspaceScope,
+                                        prepared.IdempotencyId,
+                                        prepared.CommandId,
+                                        digest,
+                                        containerName
+                                    )
+                                with
+                                | Error _ -> Error(Refused "portable-journal-unavailable")
+                                | Ok(Choice1Of2(PortableRunning(commandId, existingDigest, _))) when
+                                    existingDigest = digest
+                                    ->
+                                    Error(PendingDuplicate commandId)
+                                | Ok(Choice1Of2(PortableSettled(existingDigest, receipt))) when existingDigest = digest ->
+                                    Error(Duplicate receipt)
+                                | Ok(Choice1Of2 _) -> Error(Refused "portable-executor-idempotency-conflict")
+                                | Ok(Choice2Of2()) ->
+                                    Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt))
 
-                            let! observed =
-                                task {
-                                    try
-                                        return! runner.RunAsync(request, cancellationToken)
-                                    with _ ->
-                                        return
-                                            {
-                                                ExitCode = None
-                                                StandardOutput = Array.empty
-                                                StandardError = Array.empty
-                                                CancellationRequested = cancellationToken.IsCancellationRequested
-                                                TerminationObserved = false
-                                                Interrupted = true
-                                                OutputLimitExceeded = false
-                                            }
-                                }
+                match preparation with
+                | Error outcome -> return outcome
+                | Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt) ->
+                    let request: PortableProcessRequest =
+                        {
+                            Executable = operation.Executable
+                            Arguments = operation.Arguments
+                            WorkingDirectory = workingDirectory
+                            Deadline = runtimeDeadline launchObservedAt prepared.Deadline prepared.MaximumRuntimeSeconds
+                            MaximumOutputBytes = prepared.MaximumOutputBytes
+                            WorkspaceScope = prepared.WorkspaceScope
+                            SourceRepository = policy.WorkspaceRoot
+                            SourceRevision = prepared.SourceRevision
+                            QualifiedImage = prepared.QualifiedImage
+                            ContainerName = containerName
+                            ContainerPath = policy.Runtime.ContainerPath
+                            ContainerEnvironment = policy.Runtime.ContainerEnvironment
+                            VerificationPath = operation.VerificationPath
+                            VerificationSha256 = operation.VerificationSha256
+                            RecipeSha256 = operation.RecipeSha256
+                        }
 
-                            let completedAt = clock ()
+                    let! observed =
+                        task {
+                            try
+                                return! runner.RunAsync(request, cancellationToken)
+                            with _ ->
+                                return
+                                    {
+                                        ExitCode = None
+                                        StandardOutput = Array.empty
+                                        StandardError = Array.empty
+                                        CancellationRequested = cancellationToken.IsCancellationRequested
+                                        TerminationObserved = false
+                                        Interrupted = true
+                                        OutputLimitExceeded = false
+                                        OutputComplete = false
+                                        SourceTree = None
+                                        SnapshotSha256 = None
+                                        RuntimeIdentity = None
+                                        ContainerIdentity = None
+                                        VerificationObserved = false
+                                    }
+                        }
 
-                            let outputBytes =
-                                uint64 observed.StandardOutput.LongLength
-                                + uint64 observed.StandardError.LongLength
+                    let receipt = receiptFromObservation prepared operation observed
 
-                            let digestOfOutput = outputDigest observed.StandardOutput observed.StandardError
-
-                            let workspaceResult =
-                                if observed.Interrupted || not observed.TerminationObserved then
-                                    result
-                                        completedAt
-                                        prepared
-                                        (EvidenceUnknown "process-termination-not-observed")
-                                        (EvidenceUnknown "artifact-state-requires-reconciliation")
-                                        (error
-                                            "execution-outcome-unknown"
-                                            "The fixed operation was interrupted before termination was observed."
-                                            true
-                                            [ "verification", operation.VerificationIdentity ])
-                                elif observed.OutputLimitExceeded || outputBytes > prepared.MaximumOutputBytes then
-                                    result
-                                        completedAt
-                                        prepared
-                                        (EvidenceUnknown "output-limit-exceeded-before-complete-readback")
-                                        (EvidenceMissing "no-verified-artifact-observed")
-                                        (error
-                                            "execution-output-limit"
-                                            "The fixed operation exceeded its reviewed output limit."
-                                            false
-                                            [ "verification", operation.VerificationIdentity ])
-                                elif observed.CancellationRequested then
-                                    result
-                                        completedAt
-                                        prepared
-                                        (observed.ExitCode
-                                         |> Option.map EvidenceKnown
-                                         |> Option.defaultValue (EvidenceMissing "process-exit-code-unavailable"))
-                                        (EvidenceMissing "cancelled-before-verification")
-                                        (error
-                                            "execution-cancelled"
-                                            "Cancellation was requested and process termination was observed."
-                                            false
-                                            [ "verification", operation.VerificationIdentity ])
-                                else
-                                    match observed.ExitCode with
-                                    | Some 0 ->
-                                        result
-                                            completedAt
-                                            prepared
-                                            (EvidenceKnown 0)
-                                            (EvidenceKnown operation.VerificationIdentity)
-                                            None
-                                    | Some exitCode ->
-                                        result
-                                            completedAt
-                                            prepared
-                                            (EvidenceKnown exitCode)
-                                            (EvidenceMissing "operation-failed-before-verification")
-                                            (error
-                                                "execution-failed"
-                                                "The fixed operation returned a non-zero exit code."
-                                                false
-                                                [ "verification", operation.VerificationIdentity ])
-                                    | None ->
-                                        result
-                                            completedAt
-                                            prepared
-                                            (EvidenceUnknown "process-exit-code-unavailable")
-                                            (EvidenceUnknown "artifact-state-requires-reconciliation")
-                                            (error
-                                                "execution-outcome-unknown"
-                                                "The fixed operation outcome could not be established."
-                                                true
-                                                [ "verification", operation.VerificationIdentity ])
-
-                            let receipt =
-                                {
-                                    Result = workspaceResult
-                                    WorkspaceScope = prepared.WorkspaceScope
-                                    SourceRevision = prepared.SourceRevision
-                                    QualifiedImage = prepared.QualifiedImage
-                                    OperationIdentity = prepared.OperationIdentity
-                                    EntryPoint = prepared.EntryPoint
-                                    WorkingDirectory = prepared.WorkingDirectory
-                                    VerificationIdentity = operation.VerificationIdentity
-                                    OutputSha256 = digestOfOutput
-                                    OutputBytes = outputBytes
-                                    CancellationRequested = observed.CancellationRequested
-                                    TerminationObserved = observed.TerminationObserved
-                                }
-
-                            lock gate (fun () -> journal[prepared.IdempotencyId] <- PortableSettled(digest, receipt))
-                            return Completed receipt
+                    if not observed.TerminationObserved then
+                        return Completed receipt
+                    else
+                        match journal.Settle(prepared.WorkspaceScope, prepared.IdempotencyId, digest, receipt) with
+                        | Ok true -> return Completed receipt
+                        | _ -> return Refused "portable-journal-settlement-refused"
             }
 
-        member _.Reconcile(idempotencyId: string, observation: PortableReconciliationObservation) =
-            lock gate (fun () ->
-                match journal.TryGetValue idempotencyId with
-                | true, PortableSettled(binding, receipt) when receipt.Result.CommandId = observation.CommandId ->
-                    if
-                        receipt.SourceRevision <> observation.SourceRevision
-                        || receipt.QualifiedImage <> observation.QualifiedImage
-                        || receipt.VerificationIdentity <> observation.VerificationIdentity
-                    then
-                        Refused "portable-reconciliation-binding-refused"
-                    elif not observation.TerminationObserved then
-                        Duplicate receipt
-                    elif
-                        receipt.Result.Error
-                        |> Option.exists (fun observed -> observed.Code <> "execution-outcome-unknown")
-                    then
-                        Duplicate receipt
-                    else
-                        let reconciledResult =
-                            { receipt.Result with
-                                CompletedAt = observation.ObservedAt
-                                ExitCode =
-                                    observation.ExitCode
-                                    |> Option.map EvidenceKnown
-                                    |> Option.defaultValue (EvidenceMissing "process-exit-code-unavailable")
-                                ArtifactReference =
-                                    match observation.ExitCode with
-                                    | Some 0 -> EvidenceKnown receipt.VerificationIdentity
-                                    | _ -> EvidenceMissing "operation-failed-before-verification"
-                                Error =
-                                    match observation.ExitCode with
-                                    | Some 0 -> None
-                                    | Some _ ->
-                                        error
-                                            "execution-failed"
-                                            "The reconciled fixed operation returned a non-zero exit code."
-                                            false
-                                            [ "verification", receipt.VerificationIdentity ]
-                                    | None ->
-                                        error
-                                            "execution-outcome-unknown"
-                                            "Termination was observed without an exit code."
-                                            true
-                                            [ "verification", receipt.VerificationIdentity ]
-                            }
+        member _.RecoverAsync
+            (profile: PortableWorkspaceProfile, command: PortableWorkspaceCommand, cancellationToken: CancellationToken)
+            =
+            task {
+                match selectReviewedOperation profile command with
+                | Error reason -> return Refused reason
+                | Ok operation ->
+                    let digest = bindingDigest profile command operation
 
-                        let reconciled =
-                            { receipt with
-                                Result = reconciledResult
-                                TerminationObserved = true
-                            }
+                    match journal.Read(command.WorkspaceScope, command.IdempotencyId) with
+                    | Error _ -> return Refused "portable-journal-unavailable"
+                    | Ok(Some(PortableSettled(existing, receipt))) when existing = digest -> return Duplicate receipt
+                    | Ok(Some(PortableRunning(_, existing, containerName))) when existing = digest ->
+                        let prepared = preparedForRecovery profile command operation
+                        let observedAt = clock ()
 
-                        journal[idempotencyId] <- PortableSettled(binding, reconciled)
-                        Completed reconciled
-                | true, PortableSettled(_, _) -> Refused "portable-reconciliation-command-refused"
-                | true, PortableRunning _ -> Refused "portable-reconciliation-running-refused"
-                | false, _ -> Refused "portable-reconciliation-unknown-refused")
+                        let request =
+                            requestFor
+                                prepared
+                                operation
+                                containerName
+                                (deadlineAfter observedAt policy.Runtime.TerminationGrace)
 
-    type SystemProcessRunner() =
-        interface IPortableProcessRunner with
-            member _.RunAsync(request, cancellationToken) =
-                task {
-                    use child = new Process()
-
-                    child.StartInfo <-
-                        ProcessStartInfo(
-                            request.Executable,
-                            WorkingDirectory = request.WorkingDirectory,
-                            RedirectStandardOutput = true,
-                            RedirectStandardError = true,
-                            UseShellExecute = false
-                        )
-
-                    for argument in request.Arguments do
-                        child.StartInfo.ArgumentList.Add argument
-
-                    if not (child.Start()) then
-                        return
-                            {
-                                ExitCode = None
-                                StandardOutput = Array.empty
-                                StandardError = Array.empty
-                                CancellationRequested = false
-                                TerminationObserved = false
-                                Interrupted = true
-                                OutputLimitExceeded = false
-                            }
-                    else
-                        use deadline = new CancellationTokenSource()
-                        let remaining = request.Deadline - DateTimeOffset.UtcNow
-
-                        deadline.CancelAfter(
-                            if remaining <= TimeSpan.Zero then
-                                TimeSpan.Zero
-                            else
-                                remaining
-                        )
-
-                        use combined =
-                            CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, deadline.Token)
-
-                        let outputGate = obj ()
-                        let mutable capturedBytes = 0UL
-                        let mutable outputLimitExceeded = false
-
-                        let readBounded (source: Stream) =
+                        let! observed =
                             task {
-                                use captured = new MemoryStream()
-                                let buffer = Array.zeroCreate<byte> 4096
-                                let mutable reading = true
-
-                                while reading do
-                                    let! count = source.ReadAsync(buffer.AsMemory(0, buffer.Length))
-
-                                    if count = 0 then
-                                        reading <- false
-                                    else
-                                        let allowed =
-                                            lock outputGate (fun () ->
-                                                let remaining =
-                                                    if capturedBytes >= request.MaximumOutputBytes then
-                                                        0
-                                                    else
-                                                        int (
-                                                            min
-                                                                (uint64 count)
-                                                                (request.MaximumOutputBytes - capturedBytes)
-                                                        )
-
-                                                capturedBytes <- capturedBytes + uint64 remaining
-
-                                                if remaining < count then
-                                                    outputLimitExceeded <- true
-
-                                                remaining)
-
-                                        if allowed > 0 then
-                                            captured.Write(buffer, 0, allowed)
-
-                                        if outputLimitExceeded && not child.HasExited then
-                                            try
-                                                child.Kill(true)
-                                            with _ ->
-                                                ()
-
-                                return captured.ToArray()
+                                try
+                                    return! runner.RecoverAsync(request, cancellationToken)
+                                with _ ->
+                                    return
+                                        {
+                                            ExitCode = None
+                                            StandardOutput = Array.empty
+                                            StandardError = Array.empty
+                                            CancellationRequested = cancellationToken.IsCancellationRequested
+                                            TerminationObserved = false
+                                            Interrupted = true
+                                            OutputLimitExceeded = false
+                                            OutputComplete = false
+                                            SourceTree = None
+                                            SnapshotSha256 = None
+                                            RuntimeIdentity = None
+                                            ContainerIdentity = Some containerName
+                                            VerificationObserved = false
+                                        }
                             }
 
-                        let stdout = readBounded child.StandardOutput.BaseStream
-                        let stderr = readBounded child.StandardError.BaseStream
-                        let mutable cancelled = false
+                        if not observed.TerminationObserved then
+                            return PendingDuplicate command.CommandId
+                        else
+                            let receipt = receiptFromObservation prepared operation observed
 
-                        try
-                            do! child.WaitForExitAsync(combined.Token)
-                        with :? OperationCanceledException ->
-                            cancelled <- true
-
-                            try
-                                child.Kill(true)
-                                do! child.WaitForExitAsync()
-                            with _ ->
-                                ()
-
-                        let! outputBytes = stdout
-                        let! errorBytes = stderr
-
-                        return
-                            {
-                                ExitCode = if child.HasExited then Some child.ExitCode else None
-                                StandardOutput = outputBytes
-                                StandardError = errorBytes
-                                CancellationRequested = cancelled
-                                TerminationObserved = child.HasExited
-                                Interrupted = not child.HasExited
-                                OutputLimitExceeded = outputLimitExceeded
-                            }
-                }
+                            match journal.Settle(command.WorkspaceScope, command.IdempotencyId, digest, receipt) with
+                            | Ok true -> return Completed receipt
+                            | _ -> return Refused "portable-journal-settlement-refused"
+                    | Ok(Some _) -> return Refused "portable-executor-idempotency-conflict"
+                    | Ok None -> return Refused "portable-reconciliation-unknown-refused"
+            }

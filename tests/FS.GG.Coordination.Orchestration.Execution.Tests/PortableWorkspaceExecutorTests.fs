@@ -2,6 +2,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Tests
 
 open System
 open System.IO
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
@@ -17,6 +18,8 @@ type private FakeRunner(run: PortableProcessRequest -> PortableProcessObservatio
             calls <- calls + 1
             Task.FromResult(run request)
 
+        member _.RecoverAsync(request, _) = Task.FromResult(run request)
+
 type private IsolatedFixture(root: string) =
     member _.Root = root
 
@@ -30,6 +33,12 @@ module private PortableExecutorFixtures =
 
     let image =
         "ghcr.io/fs-gg/polyglot@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+
+    let verificationSha256 =
+        "123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef0"
+
+    let recipeSha256 =
+        "23456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef01"
 
     let now = DateTimeOffset(2026, 9, 30, 12, 0, 0, TimeSpan.Zero)
 
@@ -95,9 +104,44 @@ module private PortableExecutorFixtures =
             WorkingDirectory = directory
             QualifiedImage = image
             RequiredToolchains = tools
-            Executable = executable
+            Executable = "/usr/local/bin/" + executable
             Arguments = arguments
             VerificationIdentity = verification
+            VerificationPath = verification + ".json"
+            VerificationSha256 = verificationSha256
+            RecipeSha256 = recipeSha256
+        }
+
+    let runtimePolicy () =
+        {
+            GitExecutable = "/usr/bin/git"
+            TarExecutable = "/usr/bin/tar"
+            PodmanExecutable = "/usr/bin/podman"
+            PodmanGlobalArguments = []
+            StateRoot = Path.Combine(Path.GetTempPath(), "fsgg-portable-state-" + Guid.NewGuid().ToString("N"))
+            ContainerPath = "/usr/local/bin:/usr/bin:/bin"
+            ContainerUser = "32768:32768"
+            HostEnvironment = Map [ "HOME", "/tmp"; "PATH", "/usr/local/bin:/usr/bin:/bin"; "LANG", "C.UTF-8" ]
+            ContainerEnvironment = Map [ "HOME", "/tmp"; "PATH", "/usr/local/bin:/usr/bin:/bin" ]
+            MaximumSnapshotBytes = 16UL * 1024UL * 1024UL
+            TerminationGrace = TimeSpan.FromSeconds 5.0
+        }
+
+    let successfulObservation =
+        {
+            ExitCode = Some 0
+            StandardOutput = Array.empty
+            StandardError = Array.empty
+            CancellationRequested = false
+            TerminationObserved = true
+            Interrupted = false
+            OutputLimitExceeded = false
+            OutputComplete = true
+            SourceTree = Some verificationSha256
+            SnapshotSha256 = Some verificationSha256
+            RuntimeIdentity = Some "podman-test"
+            ContainerIdentity = Some "container-test"
+            VerificationObserved = true
         }
 
     let rec fixtureRoot (directory: DirectoryInfo) =
@@ -113,6 +157,16 @@ module private PortableExecutorFixtures =
 
     let root () =
         fixtureRoot (DirectoryInfo AppContext.BaseDirectory)
+
+    let rec repositoryRoot (directory: DirectoryInfo) =
+        let marker = Path.Combine(directory.FullName, ".git")
+
+        if Directory.Exists marker || File.Exists marker then
+            directory.FullName
+        elif isNull directory.Parent then
+            failwith "repository root was not found"
+        else
+            repositoryRoot directory.Parent
 
     let isolatedCopy () =
         let source = root ()
@@ -141,7 +195,7 @@ open PortableExecutorFixtures
 
 type PortableWorkspaceExecutorTests() =
     [<Fact>]
-    member _.``fixed executor runs real Python build and test``() =
+    member _.``source binding selects fixed Python build and test operations``() =
         task {
             use fixture = isolatedCopy ()
             let workspace = fixture.Root
@@ -175,6 +229,8 @@ type PortableWorkspaceExecutorTests() =
                         "python-greeting-v1"
                 ]
 
+            let runtime = runtimePolicy ()
+
             let policy =
                 {
                     WorkspaceRoot = workspace
@@ -184,14 +240,18 @@ type PortableWorkspaceExecutorTests() =
                     MaximumRuntimeSeconds = 30UL
                     MaximumOutputBytes = 131072UL
                     Operations = operations
+                    Runtime = runtime
                 }
 
-            let executor =
-                PortableWorkspaceExecutor.Executor(
-                    policy,
-                    PortableWorkspaceExecutor.SystemProcessRunner(),
-                    (fun () -> liveNow)
-                )
+            let fake =
+                FakeRunner(fun request ->
+                    Assert.True(Path.IsPathFullyQualified request.Executable)
+                    Assert.Equal(selectedProfile.SourceRevision, request.SourceRevision)
+                    Assert.Equal(selectedProfile.QualifiedImage, request.QualifiedImage)
+                    Assert.Equal(recipeSha256, request.RecipeSha256)
+                    successfulObservation)
+
+            let executor = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> liveNow))
 
             for index, operationName in [ 1, "build"; 2, "test" ] do
                 let command =
@@ -221,7 +281,7 @@ type PortableWorkspaceExecutorTests() =
         }
 
     [<Fact>]
-    member _.``fixed executor runs component checks and frontend to backend journey``() =
+    member _.``source binding selects component checks and frontend to backend journey``() =
         task {
             use fixture = isolatedCopy ()
             let workspace = Path.Combine(fixture.Root, "composed")
@@ -295,14 +355,18 @@ type PortableWorkspaceExecutorTests() =
                     MaximumRuntimeSeconds = 30UL
                     MaximumOutputBytes = 131072UL
                     Operations = operations
+                    Runtime = runtimePolicy ()
                 }
 
-            let executor =
-                PortableWorkspaceExecutor.Executor(
-                    policy,
-                    PortableWorkspaceExecutor.SystemProcessRunner(),
-                    (fun () -> liveNow)
-                )
+            let fake =
+                FakeRunner(fun request ->
+                    Assert.True(Path.IsPathFullyQualified request.Executable)
+                    Assert.Equal(selectedProfile.SourceRevision, request.SourceRevision)
+                    Assert.Equal(selectedProfile.QualifiedImage, request.QualifiedImage)
+                    Assert.Equal(recipeSha256, request.RecipeSha256)
+                    successfulObservation)
+
+            let executor = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> liveNow))
 
             let cases =
                 [
@@ -360,6 +424,12 @@ type PortableWorkspaceExecutorTests() =
                         TerminationObserved = true
                         Interrupted = false
                         OutputLimitExceeded = false
+                        OutputComplete = true
+                        SourceTree = Some verificationSha256
+                        SnapshotSha256 = Some verificationSha256
+                        RuntimeIdentity = Some "podman-test"
+                        ContainerIdentity = Some "container-test"
+                        VerificationObserved = true
                     })
 
             let reviewed =
@@ -373,6 +443,8 @@ type PortableWorkspaceExecutorTests() =
                     [ "build.py" ]
                     "python-bytecode-v1"
 
+            let runtime = runtimePolicy ()
+
             let policy =
                 {
                     WorkspaceRoot = root ()
@@ -382,6 +454,7 @@ type PortableWorkspaceExecutorTests() =
                     MaximumRuntimeSeconds = 30UL
                     MaximumOutputBytes = 131072UL
                     Operations = [ reviewed ]
+                    Runtime = runtime
                 }
 
             let executor = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
@@ -413,9 +486,61 @@ type PortableWorkspaceExecutorTests() =
 
             Assert.Equal(1, fake.Calls)
 
+            let! duplicateAfterAuthorityMoved =
+                executor.ExecuteAsync(
+                    { authority selectedProfile.WorkspaceScope with
+                        FenceGeneration = 99UL
+                    },
+                    selectedProfile,
+                    valid,
+                    CancellationToken.None
+                )
+
+            Assert.True(
+                match duplicateAfterAuthorityMoved with
+                | Duplicate _ -> true
+                | _ -> false
+            )
+
+            let expiredExecutor =
+                PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> valid.Deadline.AddMinutes(1.0)))
+
+            let! duplicateAfterExpiry =
+                expiredExecutor.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    valid,
+                    CancellationToken.None
+                )
+
+            Assert.True(
+                match duplicateAfterExpiry with
+                | Duplicate _ -> true
+                | _ -> false
+            )
+
+            let changedBinding =
+                { valid with
+                    CommandId = Guid.Parse "20000000-0000-0000-0000-000000000099"
+                }
+
+            let! conflict =
+                executor.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    changedBinding,
+                    CancellationToken.None
+                )
+
+            Assert.Equal(Refused "portable-executor-idempotency-conflict", conflict)
+
             let adverse =
                 [
-                    authority "fs-gg/foreign", selectedProfile, valid
+                    authority "fs-gg/foreign",
+                    selectedProfile,
+                    { valid with
+                        IdempotencyId = "foreign-new"
+                    }
                     authority selectedProfile.WorkspaceScope,
                     selectedProfile,
                     { valid with
@@ -453,6 +578,23 @@ type PortableWorkspaceExecutorTests() =
                 )
 
             Assert.Equal(1, fake.Calls)
+
+            let journalPath =
+                Directory.GetFiles(Path.Combine(runtime.StateRoot, "journal-v1"), "*.bin")
+                |> Array.exactlyOne
+
+            File.WriteAllText(journalPath, "corrupt")
+
+            let! corrupted =
+                executor.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    valid,
+                    CancellationToken.None
+                )
+
+            Assert.Equal(Refused "portable-journal-unavailable", corrupted)
+            Assert.Equal(1, fake.Calls)
         }
 
     [<Fact>]
@@ -477,7 +619,13 @@ type PortableWorkspaceExecutorTests() =
                             CancellationRequested = true
                             TerminationObserved = false
                             Interrupted = true
-                            OutputLimitExceeded = false
+                            OutputLimitExceeded = true
+                            OutputComplete = false
+                            SourceTree = Some verificationSha256
+                            SnapshotSha256 = Some verificationSha256
+                            RuntimeIdentity = Some "podman-test"
+                            ContainerIdentity = Some "container-test"
+                            VerificationObserved = false
                         }
                     else
                         {
@@ -488,6 +636,12 @@ type PortableWorkspaceExecutorTests() =
                             TerminationObserved = true
                             Interrupted = false
                             OutputLimitExceeded = false
+                            OutputComplete = true
+                            SourceTree = Some verificationSha256
+                            SnapshotSha256 = Some verificationSha256
+                            RuntimeIdentity = Some "podman-test"
+                            ContainerIdentity = Some "container-test"
+                            VerificationObserved = false
                         })
 
             let reviewed =
@@ -510,6 +664,7 @@ type PortableWorkspaceExecutorTests() =
                     MaximumRuntimeSeconds = 30UL
                     MaximumOutputBytes = 131072UL
                     Operations = [ reviewed ]
+                    Runtime = runtimePolicy ()
                 }
 
             let executor = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
@@ -532,27 +687,43 @@ type PortableWorkspaceExecutorTests() =
                 Assert.False(receipt.TerminationObserved)
             | other -> failwithf "expected unknown interrupted receipt, got %A" other
 
-            let reconciled =
-                executor.Reconcile(
-                    unknownCommand.IdempotencyId,
-                    {
-                        CommandId = unknownCommand.CommandId
-                        SourceRevision = sourceRevision
-                        QualifiedImage = image
-                        VerificationIdentity = "python-bytecode-v1"
-                        ObservedAt = now.AddMinutes(1.0)
-                        ExitCode = Some 0
-                        TerminationObserved = true
-                    }
+            let restarted = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
+
+            let! pending =
+                restarted.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    unknownCommand,
+                    CancellationToken.None
+                )
+
+            Assert.Equal(PendingDuplicate unknownCommand.CommandId, pending)
+
+            interrupted <- false
+
+
+            let! reconciled =
+                restarted.RecoverAsync(selectedProfile, unknownCommand, CancellationToken.None)
+
+            match reconciled with
+            | Completed receipt ->
+                Assert.Equal(EvidenceKnown 137, receipt.Result.ExitCode)
+                Assert.True(receipt.TerminationObserved)
+            | other -> failwithf "expected recovered termination receipt, got %A" other
+
+            let! recoveredDuplicate =
+                restarted.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    unknownCommand,
+                    CancellationToken.None
                 )
 
             Assert.True(
-                match reconciled with
-                | Completed receipt -> receipt.Result.ExitCode = EvidenceKnown 0
+                match recoveredDuplicate with
+                | Duplicate receipt -> receipt.Result.ExitCode = EvidenceKnown 137
                 | _ -> false
             )
-
-            interrupted <- false
 
             let cancelledCommand =
                 command selectedProfile (Guid.Parse "30000000-0000-0000-0000-000000000002") "build" (Some "app")
@@ -614,6 +785,7 @@ type PortableWorkspaceExecutorTests() =
                     MaximumRuntimeSeconds = 30UL
                     MaximumOutputBytes = 131072UL
                     Operations = [ borrowed ]
+                    Runtime = runtimePolicy ()
                 }
 
             let executor = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
@@ -655,6 +827,12 @@ type PortableWorkspaceExecutorTests() =
                         TerminationObserved = true
                         Interrupted = false
                         OutputLimitExceeded = false
+                        OutputComplete = true
+                        SourceTree = Some verificationSha256
+                        SnapshotSha256 = Some verificationSha256
+                        RuntimeIdentity = Some "podman-test"
+                        ContainerIdentity = Some "container-test"
+                        VerificationObserved = true
                     })
 
             let reviewed =
@@ -677,6 +855,7 @@ type PortableWorkspaceExecutorTests() =
                     MaximumRuntimeSeconds = UInt64.MaxValue
                     MaximumOutputBytes = 131072UL
                     Operations = [ reviewed ]
+                    Runtime = runtimePolicy ()
                 }
 
             let deadline = now.AddMinutes(1.0)
@@ -703,4 +882,218 @@ type PortableWorkspaceExecutorTests() =
 
             Assert.Equal(Refused "portable-executor-deadline-refused", outcome)
             Assert.Equal(0, fake.Calls)
+        }
+
+    [<Fact>]
+    member _.``podman runner snapshots Git objects and emits only the fixed isolated create shape``() =
+        task {
+            let repository = repositoryRoot (DirectoryInfo AppContext.BaseDirectory)
+
+            let temporary =
+                Path.Combine(Path.GetTempPath(), "fsgg-podman-runner-" + Guid.NewGuid().ToString("N"))
+
+            Directory.CreateDirectory temporary |> ignore
+
+            try
+                let script = Path.Combine(temporary, "podman-shim.py")
+
+                File.WriteAllText(
+                    script,
+                    """#!/usr/bin/python3
+import json, os, pathlib, sys
+pathlib.Path("host-env.json").write_text(json.dumps(dict(os.environ)))
+if any(name in os.environ for name in ("NODE_OPTIONS", "PYTHONPATH", "LD_PRELOAD", "HTTP_PROXY", "HTTPS_PROXY")):
+    raise SystemExit(91)
+args = sys.argv[1:]
+if args[:2] == ["version", "--format"]:
+    print("6.1.2")
+elif args[:2] == ["image", "inspect"]:
+    print("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|sha256:image-id|[\"HOME=/tmp\",\"PATH=/usr/local/bin:/usr/bin:/bin\"]|null|null|null")
+elif args[:2] == ["unshare", "chown"]:
+    pass
+elif args and args[0] == "create":
+    pathlib.Path("create-args.json").write_text(json.dumps(args))
+    volumes = [args[index + 1] for index, value in enumerate(args) if value == "--volume"]
+    output = pathlib.Path([value for value in volumes if value.endswith(":/output:rw")][0].split(":/output:rw")[0])
+    output.joinpath("verified.txt").write_bytes(b"verified")
+    print("container-id")
+elif args[:2] == ["container", "inspect"] and ".Image" in args[-2]:
+    print("sha256:image-id|container-id")
+elif args and args[0] == "start":
+    print("isolated-operation-output")
+elif args[:2] == ["container", "inspect"] and ".State.Status" in args[-2]:
+    print("exited|0")
+elif args and args[0] in ("stop", "kill"):
+    pass
+else:
+    print("unexpected:" + repr(args), file=sys.stderr)
+    raise SystemExit(92)
+"""
+                )
+
+                if not (OperatingSystem.IsWindows()) then
+                    File.SetUnixFileMode(
+                        script,
+                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                    )
+
+                let stateRoot = Path.Combine(temporary, "state")
+
+                let head =
+                    let start =
+                        Diagnostics.ProcessStartInfo(
+                            "/usr/bin/git",
+                            WorkingDirectory = repository,
+                            RedirectStandardOutput = true,
+                            UseShellExecute = false
+                        )
+
+                    start.ArgumentList.Add "rev-parse"
+                    start.ArgumentList.Add "HEAD"
+                    use child = Diagnostics.Process.Start start
+                    let value = child.StandardOutput.ReadToEnd().Trim()
+                    child.WaitForExit()
+                    value
+
+                let runtime =
+                    { runtimePolicy () with
+                        PodmanExecutable = script
+                        StateRoot = stateRoot
+                        MaximumSnapshotBytes = 512UL * 1024UL * 1024UL
+                    }
+
+                let expectedVerification =
+                    Encoding.UTF8.GetBytes "verified"
+                    |> Security.Cryptography.SHA256.HashData
+                    |> Convert.ToHexString
+                    |> _.ToLowerInvariant()
+
+                let request =
+                    {
+                        Executable = "/usr/local/bin/python3"
+                        Arguments = [ "test.py" ]
+                        WorkingDirectory = "tests/portable-workspace/executor/python"
+                        Deadline = DateTimeOffset.UtcNow.AddMinutes 2.0
+                        MaximumOutputBytes = 1024UL * 1024UL
+                        WorkspaceScope = "fs-gg/podman-shape"
+                        SourceRepository = repository
+                        SourceRevision = head
+                        QualifiedImage = image
+                        ContainerName = "fsgg-portable-shape-test"
+                        ContainerPath = runtime.ContainerPath
+                        ContainerEnvironment = runtime.ContainerEnvironment
+                        VerificationPath = "verified.txt"
+                        VerificationSha256 = expectedVerification
+                        RecipeSha256 = recipeSha256
+                    }
+
+                try
+                    let runner = PortableWorkspacePodmanRunner runtime :> IPortableProcessRunner
+                    let! observed = runner.RunAsync(request, CancellationToken.None)
+                    Assert.True(observed.TerminationObserved)
+                    Assert.True(observed.VerificationObserved)
+                    Assert.True(observed.SourceTree.IsSome)
+                    Assert.True(observed.SnapshotSha256.IsSome)
+
+                    let createArguments = File.ReadAllText(Path.Combine(stateRoot, "create-args.json"))
+
+                    Assert.Contains("--pull=never", createArguments)
+                    Assert.Contains("--read-only", createArguments)
+                    Assert.Contains("--network=none", createArguments)
+                    Assert.Contains("--cap-drop=all", createArguments)
+                    Assert.DoesNotContain("--pid=host", createArguments)
+                    Assert.DoesNotContain("--uts=host", createArguments)
+                    Assert.DoesNotContain("--userns", createArguments)
+                    Assert.DoesNotContain("NODE_OPTIONS", createArguments)
+
+                    let hostEnvironment = File.ReadAllText(Path.Combine(stateRoot, "host-env.json"))
+                    Assert.DoesNotContain("NODE_OPTIONS", hostEnvironment)
+                    Assert.DoesNotContain("PYTHONPATH", hostEnvironment)
+                    Assert.DoesNotContain("HTTP_PROXY", hostEnvironment)
+                finally
+                    ()
+            finally
+                if Directory.Exists temporary then
+                    Directory.Delete(temporary, true)
+        }
+
+    [<Fact>]
+    member _.``podman runner refuses a Git tree containing a symbolic link before runtime launch``() =
+        task {
+            if not (OperatingSystem.IsWindows()) then
+                let temporary =
+                    Path.Combine(Path.GetTempPath(), "fsgg-portable-link-" + Guid.NewGuid().ToString("N"))
+
+                let repository = Path.Combine(temporary, "repository")
+                Directory.CreateDirectory repository |> ignore
+
+                let runGit arguments =
+                    let start =
+                        Diagnostics.ProcessStartInfo(
+                            "/usr/bin/git",
+                            WorkingDirectory = repository,
+                            RedirectStandardOutput = true,
+                            RedirectStandardError = true,
+                            UseShellExecute = false
+                        )
+
+                    for argument in arguments do
+                        start.ArgumentList.Add argument
+
+                    use child = Diagnostics.Process.Start start
+                    let output = child.StandardOutput.ReadToEnd().Trim()
+                    let error = child.StandardError.ReadToEnd()
+                    child.WaitForExit()
+
+                    if child.ExitCode <> 0 then
+                        failwithf "git failed: %s" error
+
+                    output
+
+                try
+                    runGit [ "init"; "--quiet" ] |> ignore
+                    runGit [ "config"; "user.email"; "portable@example.invalid" ] |> ignore
+                    runGit [ "config"; "user.name"; "Portable Test" ] |> ignore
+                    File.WriteAllText(Path.Combine(repository, "app.py"), "print('fixed')\n")
+
+                    File.CreateSymbolicLink(Path.Combine(repository, "unreviewed.py"), "/etc/passwd")
+                    |> ignore
+
+                    runGit [ "add"; "--all" ] |> ignore
+                    runGit [ "commit"; "--quiet"; "-m"; "fixture" ] |> ignore
+                    let head = runGit [ "rev-parse"; "HEAD" ]
+
+                    let runtime =
+                        { runtimePolicy () with
+                            PodmanExecutable = "/usr/bin/false"
+                            StateRoot = Path.Combine(temporary, "state")
+                        }
+
+                    let request =
+                        {
+                            Executable = "/usr/local/bin/python3"
+                            Arguments = [ "app.py" ]
+                            WorkingDirectory = "."
+                            Deadline = DateTimeOffset.UtcNow.AddMinutes 1.0
+                            MaximumOutputBytes = 65536UL
+                            WorkspaceScope = "fs-gg/link-refusal"
+                            SourceRepository = repository
+                            SourceRevision = head
+                            QualifiedImage = image
+                            ContainerName = "fsgg-portable-link-refusal"
+                            ContainerPath = runtime.ContainerPath
+                            ContainerEnvironment = runtime.ContainerEnvironment
+                            VerificationPath = "verified.txt"
+                            VerificationSha256 = verificationSha256
+                            RecipeSha256 = recipeSha256
+                        }
+
+                    let runner = PortableWorkspacePodmanRunner runtime :> IPortableProcessRunner
+                    let! observed = runner.RunAsync(request, CancellationToken.None)
+
+                    Assert.False(observed.TerminationObserved)
+                    Assert.Contains("portable-source-tree-refused", Encoding.UTF8.GetString observed.StandardError)
+                finally
+                    if Directory.Exists temporary then
+                        Directory.Delete(temporary, true)
         }
