@@ -129,11 +129,14 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
             "test \"$(/usr/local/bin/node --version)\" = \"v24.8.0\"; "
             "test \"$(/opt/typescript/bin/tsc --version)\" = \"Version 5.9.2\""
         )
-        created = run(prefix + ["create", "--name", container, "--pid=host", "--uts=host", "--entrypoint=/bin/sh", base, "-c", install])
+        created = run(prefix + ["create", "--name", container, "--network=none", "--pid=host", "--uts=host", "--entrypoint=/bin/sh", base, "-c", install])
         try:
             run(prefix + ["cp", str(cache / inputs["node"]["archive"]), f"{container}:/tmp/node.tar.xz"])
             run(prefix + ["cp", str(cache / inputs["typescript"]["archive"]), f"{container}:/tmp/typescript.tgz"])
-            started = run(prefix + ["start", "--attach", container])
+            try:
+                started = run(prefix + ["start", "--attach", container])
+            except subprocess.CalledProcessError as error:
+                raise RuntimeError(f"Podman preparation container failed: {error.stderr.strip()}") from error
             committed = run(
                 prefix
                 + [
