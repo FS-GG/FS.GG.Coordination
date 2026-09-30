@@ -27,9 +27,9 @@ jobs:
     timeout-minutes: 20
     env:
       BASE_IMAGE: docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056
-      PODMAN_ROOT: ${{ runner.temp }}/portable-workspace-podman-root
-      PODMAN_RUNROOT: ${{ runner.temp }}/portable-workspace-podman-runroot
-      QUALIFICATION_STATE: ${{ runner.temp }}/portable-workspace-image-${{ github.run_id }}-${{ github.run_attempt }}
+      PODMAN_ROOT: /tmp/portable-workspace-podman-${{ github.run_id }}-${{ github.run_attempt }}/root
+      PODMAN_RUNROOT: /tmp/portable-workspace-podman-${{ github.run_id }}-${{ github.run_attempt }}/runroot
+      QUALIFICATION_STATE: /tmp/portable-workspace-image-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out the exact candidate without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
