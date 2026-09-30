@@ -346,6 +346,7 @@
         "dependencies": {
           "FS.GG.Coordination.Core": "[1.0.0, )",
           "FS.GG.Coordination.GitHub": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Execution": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Observer": "[1.0.0, )",
           "FS.GG.Coordination.Protocol": "[1.0.0, )",
           "FS.GG.Coordination.Qualification.Contracts": "[1.0.0, )",
