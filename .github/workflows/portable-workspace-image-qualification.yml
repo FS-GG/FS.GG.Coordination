@@ -45,6 +45,7 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
           command -v podman
+          install -d -m 0700 "$QUALIFICATION_STATE"
           python3 eng/portable-workspace-image.py preflight \
             --source "$GITHUB_WORKSPACE" \
             --expected-source-revision "$GITHUB_SHA" \
