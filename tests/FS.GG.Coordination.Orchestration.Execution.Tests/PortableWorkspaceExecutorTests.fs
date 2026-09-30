@@ -153,6 +153,7 @@ module private PortableExecutorFixtures =
             VerificationObserved = true
             VerificationOutput = Some Array.empty
             VerificationCustodyLimitExceeded = false
+            Refusal = None
         }
 
     let rec fixtureRoot (directory: DirectoryInfo) =
@@ -444,6 +445,7 @@ type PortableWorkspaceExecutorTests() =
                         VerificationObserved = true
                         VerificationOutput = Some Array.empty
                         VerificationCustodyLimitExceeded = false
+                        Refusal = None
                     })
 
             let reviewed =
@@ -643,6 +645,7 @@ type PortableWorkspaceExecutorTests() =
                             VerificationObserved = false
                             VerificationOutput = None
                             VerificationCustodyLimitExceeded = false
+                            Refusal = None
                         }
                     else
                         {
@@ -662,6 +665,7 @@ type PortableWorkspaceExecutorTests() =
                             VerificationObserved = false
                             VerificationOutput = None
                             VerificationCustodyLimitExceeded = false
+                            Refusal = None
                         })
 
             let reviewed =
@@ -775,15 +779,16 @@ type PortableWorkspaceExecutorTests() =
                     ]
 
             let mutable cleanupAllowed = false
+            let helperStderr = "image not known in the selected store\n" + String.replicate 5000 "x"
 
             let fake =
                 FakeRunner(
                     (fun _ ->
                         {
                             ExecutionStarted = false
-                            ExitCode = None
+                            ExitCode = Some 125
                             StandardOutput = Array.empty
-                            StandardError = Encoding.UTF8.GetBytes "portable-image-inspect-refused"
+                            StandardError = Encoding.UTF8.GetBytes helperStderr
                             CancellationRequested = false
                             TerminationObserved = false
                             Interrupted = true
@@ -796,6 +801,12 @@ type PortableWorkspaceExecutorTests() =
                             VerificationObserved = false
                             VerificationOutput = None
                             VerificationCustodyLimitExceeded = false
+                            Refusal =
+                                Some
+                                    {
+                                        Stage = PortableProcessRefusalStage.ImageInspection
+                                        Reason = "portable-image-inspect-refused"
+                                    }
                         }),
                     cleanup = (fun _ -> cleanupAllowed)
                 )
@@ -842,6 +853,12 @@ type PortableWorkspaceExecutorTests() =
                 Assert.False(receipt.ExecutionStarted)
                 Assert.False(receipt.CleanupCompleted)
                 Assert.Equal("execution-refused-before-start", receipt.Result.Error.Value.Code)
+                Assert.Equal("ImageInspection", receipt.Result.Error.Value.Details["refusalStage"])
+                Assert.Equal("portable-image-inspect-refused", receipt.Result.Error.Value.Details["refusalReason"])
+                Assert.Equal("125", receipt.Result.Error.Value.Details["helperExitCode"])
+                Assert.StartsWith("image not known in the selected store", receipt.Result.Error.Value.Details["helperStderr"])
+                Assert.Equal(512, Encoding.UTF8.GetByteCount receipt.Result.Error.Value.Details["helperStderr"])
+                Assert.Equal("True", receipt.Result.Error.Value.Details["helperStderrTruncated"])
             | other -> failwithf "expected durable pre-start refusal, got %A" other
 
             cleanupAllowed <- true
@@ -864,6 +881,8 @@ type PortableWorkspaceExecutorTests() =
                 Assert.False(receipt.ExecutionStarted)
                 Assert.True(receipt.CleanupCompleted)
                 Assert.Equal("execution-refused-before-start", receipt.Result.Error.Value.Code)
+                Assert.Equal("ImageInspection", receipt.Result.Error.Value.Details["refusalStage"])
+                Assert.Equal("True", receipt.Result.Error.Value.Details["helperStderrTruncated"])
             | other -> failwithf "expected reconstructed duplicate refusal, got %A" other
 
             Assert.Equal(1, fake.Calls)
@@ -956,6 +975,7 @@ type PortableWorkspaceExecutorTests() =
                             VerificationObserved = false
                             VerificationOutput = None
                             VerificationCustodyLimitExceeded = true
+                            Refusal = None
                         })
 
             let reviewed =
@@ -1092,6 +1112,7 @@ type PortableWorkspaceExecutorTests() =
                         VerificationObserved = true
                         VerificationOutput = Some Array.empty
                         VerificationCustodyLimitExceeded = false
+                        Refusal = None
                     })
 
             let reviewed =
@@ -1168,7 +1189,16 @@ if args[:2] == ["version", "--format"]:
     print("6.1.2")
 elif args[:2] == ["image", "inspect"]:
     user = "65534:65534" if pathlib.Path(sys.argv[0]).name.startswith("bad-user") else "32768:32768"
-    print("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|sha256:image-id|[\"HOME=/tmp\",\"PATH=/usr/local/bin:/usr/bin:/bin\"]|null|null|null|" + user)
+    image_id = "0123456789abcdef" * 4
+    if pathlib.Path(sys.argv[0]).name.startswith("invalid-uppercase"):
+        image_id = image_id.upper()
+    elif pathlib.Path(sys.argv[0]).name.startswith("invalid-short"):
+        image_id = image_id[:-1]
+    elif pathlib.Path(sys.argv[0]).name.startswith("invalid-nonhex"):
+        image_id = "g" * 64
+    elif not pathlib.Path(sys.argv[0]).name.startswith("raw-id"):
+        image_id = "sha256:" + image_id
+    print("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|" + image_id + "|[\"HOME=/tmp\",\"PATH=/usr/local/bin:/usr/bin:/bin\"]|null|null|null|" + user)
 elif args[:2] == ["unshare", "chown"]:
     pass
 elif args and args[0] == "create":
@@ -1178,7 +1208,7 @@ elif args and args[0] == "create":
     output.joinpath("verified.txt").write_bytes(b"verified")
     print("container-id")
 elif args[:2] == ["container", "inspect"] and ".Image" in args[-2]:
-    print("sha256:image-id|container-id|32768:32768")
+    print("sha256:" + "0123456789abcdef" * 4 + "|container-id|32768:32768")
 elif args and args[0] == "start":
     print("isolated-operation-output")
 elif args[:2] == ["container", "inspect"] and ".State.Status" in args[-2]:
@@ -1280,6 +1310,61 @@ else:
 
                     Assert.False(Directory.Exists(Path.Combine(stateRoot, "executions", request.ContainerName)))
 
+                    let rawIdScript = Path.Combine(temporary, "raw-id-podman-shim.py")
+                    File.Copy(script, rawIdScript)
+
+                    File.SetUnixFileMode(
+                        rawIdScript,
+                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                    )
+
+                    let rawIdRuntime =
+                        { runtime with
+                            PodmanExecutable = rawIdScript
+                            StateRoot = Path.Combine(temporary, "raw-id-state")
+                        }
+
+                    let rawIdRequest =
+                        { request with
+                            ContainerName = "fsgg-portable-raw-id-test"
+                        }
+
+                    let rawIdRunner = PortableWorkspacePodmanRunner rawIdRuntime :> IPortableProcessRunner
+                    let! rawIdObserved = rawIdRunner.RunAsync(rawIdRequest, CancellationToken.None)
+                    Assert.True(rawIdObserved.TerminationObserved)
+                    Assert.True(rawIdObserved.VerificationObserved)
+
+                    for invalidId in [ "invalid-uppercase"; "invalid-short"; "invalid-nonhex" ] do
+                        let invalidIdScript = Path.Combine(temporary, invalidId + "-podman-shim.py")
+                        File.Copy(script, invalidIdScript)
+
+                        File.SetUnixFileMode(
+                            invalidIdScript,
+                            UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                        )
+
+                        let invalidIdStateRoot = Path.Combine(temporary, invalidId + "-state")
+
+                        let invalidIdRuntime =
+                            { runtime with
+                                PodmanExecutable = invalidIdScript
+                                StateRoot = invalidIdStateRoot
+                            }
+
+                        let invalidIdRequest =
+                            { request with
+                                ContainerName = "fsgg-portable-" + invalidId + "-test"
+                            }
+
+                        let invalidIdRunner =
+                            PortableWorkspacePodmanRunner invalidIdRuntime :> IPortableProcessRunner
+
+                        let! invalidIdObserved = invalidIdRunner.RunAsync(invalidIdRequest, CancellationToken.None)
+                        Assert.False(invalidIdObserved.ExecutionStarted)
+                        Assert.Equal(PortableProcessRefusalStage.ImageIdentity, invalidIdObserved.Refusal.Value.Stage)
+                        Assert.Equal("portable-image-identity-refused", invalidIdObserved.Refusal.Value.Reason)
+                        Assert.False(File.Exists(Path.Combine(invalidIdStateRoot, "create-args.json")))
+
                     let badUserScript = Path.Combine(temporary, "bad-user-podman-shim.py")
                     File.Copy(script, badUserScript)
 
@@ -1304,11 +1389,8 @@ else:
                     let badRunner = PortableWorkspacePodmanRunner badRuntime :> IPortableProcessRunner
                     let! refusedUser = badRunner.RunAsync(badRequest, CancellationToken.None)
                     Assert.False(refusedUser.ExecutionStarted)
-
-                    Assert.Contains(
-                        "portable-image-identity-refused",
-                        Encoding.UTF8.GetString refusedUser.StandardError
-                    )
+                    Assert.Equal(PortableProcessRefusalStage.ImageIdentity, refusedUser.Refusal.Value.Stage)
+                    Assert.Equal("portable-image-identity-refused", refusedUser.Refusal.Value.Reason)
 
                     Assert.False(File.Exists(Path.Combine(badStateRoot, "create-args.json")))
 
@@ -1396,7 +1478,8 @@ else:
                     let! observed = runner.RunAsync(request, CancellationToken.None)
 
                     Assert.False(observed.TerminationObserved)
-                    Assert.Contains("portable-source-tree-refused", Encoding.UTF8.GetString observed.StandardError)
+                    Assert.Equal(PortableProcessRefusalStage.SourceSnapshot, observed.Refusal.Value.Stage)
+                    Assert.Equal("portable-source-tree-refused", observed.Refusal.Value.Reason)
                 finally
                     if Directory.Exists temporary then
                         Directory.Delete(temporary, true)

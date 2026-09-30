@@ -71,6 +71,22 @@ type PortableProcessRequest =
         RecipeSha256: string
     }
 
+[<RequireQualifiedAccess>]
+type PortableProcessRefusalStage =
+    | SourceSnapshot
+    | RuntimeVersion
+    | ImageInspection
+    | ImageIdentity
+    | OutputOwnership
+    | ContainerCreation
+    | ContainerInspection
+
+type PortableProcessRefusal =
+    {
+        Stage: PortableProcessRefusalStage
+        Reason: string
+    }
+
 type PortableProcessObservation =
     {
         ExecutionStarted: bool
@@ -89,6 +105,7 @@ type PortableProcessObservation =
         VerificationObserved: bool
         VerificationOutput: byte array option
         VerificationCustodyLimitExceeded: bool
+        Refusal: PortableProcessRefusal option
     }
 
 type IPortableProcessRunner =
@@ -623,6 +640,27 @@ module PortableWorkspaceExecutor =
                 uint64 observed.StandardOutput.LongLength
                 + uint64 observed.StandardError.LongLength
 
+            let refusalDetails =
+                match observed.Refusal with
+                | None -> [ "verification", operation.VerificationIdentity ]
+                | Some refusal ->
+                    let maximumDiagnosticBytes = 512
+                    let diagnosticBytes = observed.StandardError |> Array.truncate maximumDiagnosticBytes
+                    let diagnostic = Encoding.UTF8.GetString(diagnosticBytes).Trim()
+
+                    [
+                        "verification", operation.VerificationIdentity
+                        "refusalStage", string refusal.Stage
+                        "refusalReason", refusal.Reason
+                        "helperExitCode", observed.ExitCode |> Option.map string |> Option.defaultValue "unavailable"
+                        "helperStderrSha256", sha256 observed.StandardError
+                        "helperStderrTruncated", string (observed.StandardError.Length > maximumDiagnosticBytes)
+                    ]
+                    @ if String.IsNullOrWhiteSpace diagnostic then
+                          []
+                      else
+                          [ "helperStderr", diagnostic ]
+
             let workspaceResult =
                 if not observed.ExecutionStarted then
                     result
@@ -634,7 +672,7 @@ module PortableWorkspaceExecutor =
                             "execution-refused-before-start"
                             "The fixed operation was refused before execution started."
                             false
-                            [ "verification", operation.VerificationIdentity ])
+                            refusalDetails)
                 elif observed.Interrupted || not observed.TerminationObserved then
                     result
                         completedAt
@@ -958,6 +996,7 @@ module PortableWorkspaceExecutor =
                                         VerificationObserved = false
                                         VerificationOutput = None
                                         VerificationCustodyLimitExceeded = false
+                                        Refusal = None
                                     }
                         }
 
@@ -1025,6 +1064,7 @@ module PortableWorkspaceExecutor =
                                             VerificationObserved = false
                                             VerificationOutput = None
                                             VerificationCustodyLimitExceeded = false
+                                            Refusal = None
                                         }
                             }
 

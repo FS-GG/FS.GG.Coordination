@@ -223,6 +223,21 @@ module private PortablePodmanRuntime =
         else
             Error reason
 
+    let canonicalImageId (value: string) =
+        let digest =
+            if value.StartsWith("sha256:", StringComparison.Ordinal) then
+                value[7..]
+            else
+                value
+
+        if
+            digest.Length = 64
+            && digest |> Seq.forall (fun character -> Char.IsAsciiHexDigit character && not (Char.IsUpper character))
+        then
+            Some digest
+        else
+            None
+
     let safeStateRoot runtime =
         try
             Directory.CreateDirectory runtime.StateRoot |> ignore
@@ -528,16 +543,34 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
     interface IPortableProcessRunner with
         member _.RunAsync(request, cancellationToken) =
             task {
-                let unknown stdout stderr cancelled sourceTree snapshot runtimeIdentity containerIdentity =
+                let unknown
+                    (stage: PortableProcessRefusalStage)
+                    reason
+                    (helper: PortableToolObservation option)
+                    cancelled
+                    sourceTree
+                    snapshot
+                    runtimeIdentity
+                    containerIdentity
+                    =
+                    let stdout, stderr, exitCode, outputLimitExceeded =
+                        match helper with
+                        | Some observation ->
+                            observation.StandardOutput,
+                            observation.StandardError,
+                            observation.ExitCode,
+                            observation.OutputLimitExceeded
+                        | None -> Array.empty, Array.empty, None, false
+
                     {
                         ExecutionStarted = false
-                        ExitCode = None
+                        ExitCode = exitCode
                         StandardOutput = stdout
                         StandardError = stderr
                         CancellationRequested = cancelled
                         TerminationObserved = false
                         Interrupted = true
-                        OutputLimitExceeded = false
+                        OutputLimitExceeded = outputLimitExceeded
                         OutputComplete = false
                         SourceTree = sourceTree
                         SnapshotSha256 = snapshot
@@ -546,14 +579,16 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         VerificationObserved = false
                         VerificationOutput = None
                         VerificationCustodyLimitExceeded = false
+                        Refusal = Some { Stage = stage; Reason = reason }
                     }
 
                 match! PortablePodmanRuntime.prepareSnapshot runtime request cancellationToken with
                 | Error reason ->
                     return
                         unknown
-                            Array.empty
-                            (Encoding.UTF8.GetBytes reason)
+                            PortableProcessRefusalStage.SourceSnapshot
+                            reason
+                            None
                             cancellationToken.IsCancellationRequested
                             None
                             None
@@ -592,6 +627,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                             imageParts.Length <> 7
                             || imageParts[0]
                                <> "sha256:" + PortablePodmanRuntime.imageDigest request.QualifiedImage
+                            || (PortablePodmanRuntime.canonicalImageId imageParts[1] |> Option.isNone)
                             || not (PortablePodmanRuntime.cleanImageEnvironment imageParts[2])
                             || not (PortablePodmanRuntime.emptyImageSetting imageParts[3])
                             || not (PortablePodmanRuntime.emptyImageSetting imageParts[4])
@@ -600,8 +636,9 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         then
                             return
                                 unknown
-                                    imageResult.StandardOutput
-                                    (Encoding.UTF8.GetBytes "portable-image-identity-refused")
+                                    PortableProcessRefusalStage.ImageIdentity
+                                    "portable-image-identity-refused"
+                                    (Some imageResult)
                                     false
                                     (Some sourceTree)
                                     (Some snapshotDigest)
@@ -654,22 +691,21 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                 if ownership.ExitCode = Some 0 && ownership.OutputComplete then
                                     PortablePodmanRuntime.runPodman runtime request createArguments cancellationToken
                                 else
-                                    Task.FromResult
-                                        {
-                                            ExitCode = None
-                                            StandardOutput = ownership.StandardOutput
-                                            StandardError = Encoding.UTF8.GetBytes "portable-output-ownership-refused"
-                                            TimedOut = ownership.TimedOut
-                                            OutputLimitExceeded = ownership.OutputLimitExceeded
-                                            OutputComplete = false
-                                        }
+                                    Task.FromResult ownership
 
-                            match PortablePodmanRuntime.requireSuccess "portable-container-create-refused" created with
+                            let createStage, createReason =
+                                if ownership.ExitCode = Some 0 && ownership.OutputComplete then
+                                    PortableProcessRefusalStage.ContainerCreation, "portable-container-create-refused"
+                                else
+                                    PortableProcessRefusalStage.OutputOwnership, "portable-output-ownership-refused"
+
+                            match PortablePodmanRuntime.requireSuccess createReason created with
                             | Error reason ->
                                 return
                                     unknown
-                                        created.StandardOutput
-                                        (Array.concat [ created.StandardError; Encoding.UTF8.GetBytes reason ])
+                                        createStage
+                                        reason
+                                        (Some created)
                                         cancellationToken.IsCancellationRequested
                                         (Some sourceTree)
                                         (Some snapshotDigest)
@@ -692,16 +728,38 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                 let containerParts =
                                     PortablePodmanRuntime.text container |> fun value -> value.Split('|', 3)
 
-                                if
-                                    container.ExitCode <> Some 0
-                                    || containerParts.Length <> 3
-                                    || containerParts[0] <> imageId
+                                let containerImageMatches =
+                                    match
+                                        PortablePodmanRuntime.canonicalImageId imageId,
+                                        if containerParts.Length = 3 then
+                                            PortablePodmanRuntime.canonicalImageId containerParts[0]
+                                        else
+                                            None
+                                    with
+                                    | Some expected, Some actual -> expected = actual
+                                    | _ -> false
+
+                                if container.ExitCode <> Some 0 || not container.OutputComplete then
+                                    return
+                                        unknown
+                                            PortableProcessRefusalStage.ContainerInspection
+                                            "portable-container-inspect-refused"
+                                            (Some container)
+                                            cancellationToken.IsCancellationRequested
+                                            (Some sourceTree)
+                                            (Some snapshotDigest)
+                                            (Some runtimeIdentity)
+                                            None
+                                elif
+                                    containerParts.Length <> 3
+                                    || not containerImageMatches
                                     || containerParts[2] <> runtime.ContainerUser
                                 then
                                     return
                                         unknown
-                                            container.StandardOutput
-                                            (Encoding.UTF8.GetBytes "portable-container-image-refused")
+                                            PortableProcessRefusalStage.ContainerInspection
+                                            "portable-container-image-refused"
+                                            (Some container)
                                             false
                                             (Some sourceTree)
                                             (Some snapshotDigest)
@@ -808,12 +866,25 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             VerificationObserved = verificationOutput.IsSome
                                             VerificationOutput = verificationOutput
                                             VerificationCustodyLimitExceeded = verificationCustodyLimitExceeded
+                                            Refusal = None
                                         }
-                    | _ ->
+                    | Error reason, _ ->
                         return
                             unknown
-                                image.StandardOutput
-                                image.StandardError
+                                PortableProcessRefusalStage.RuntimeVersion
+                                reason
+                                (Some version)
+                                cancellationToken.IsCancellationRequested
+                                (Some sourceTree)
+                                (Some snapshotDigest)
+                                None
+                                None
+                    | _, Error reason ->
+                        return
+                            unknown
+                                PortableProcessRefusalStage.ImageInspection
+                                reason
+                                (Some image)
                                 cancellationToken.IsCancellationRequested
                                 (Some sourceTree)
                                 (Some snapshotDigest)
@@ -841,6 +912,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         VerificationObserved = false
                         VerificationOutput = None
                         VerificationCustodyLimitExceeded = false
+                        Refusal = None
                     }
 
                 match PortablePodmanRuntime.safeStateRoot runtime with
@@ -963,6 +1035,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             VerificationObserved = verificationOutput.IsSome
                                             VerificationOutput = verificationOutput
                                             VerificationCustodyLimitExceeded = verificationCustodyLimitExceeded
+                                            Refusal = None
                                         }
                         | _ -> return unknown (Some sourceTree) (Some snapshotDigest) None (Some request.ContainerName)
             }

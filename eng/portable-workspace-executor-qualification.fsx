@@ -107,6 +107,59 @@ let run executable arguments workingDirectory environment =
 
     stdout.Trim()
 
+let boundedDiagnostic (value: string) =
+    let bytes = Encoding.UTF8.GetBytes value
+    let maximumBytes = 4096
+    let retained = bytes |> Array.truncate maximumBytes
+    Encoding.UTF8.GetString retained, sha256 bytes, bytes.Length > maximumBytes
+
+let probe executable arguments workingDirectory environment =
+    use child = new Process()
+
+    child.StartInfo <-
+        ProcessStartInfo(
+            executable,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false
+        )
+
+    child.StartInfo.Environment.Clear()
+
+    for name, value in environment do
+        child.StartInfo.Environment.Add(name, value)
+
+    for argument in arguments do
+        child.StartInfo.ArgumentList.Add argument
+
+    let record = JsonObject()
+    record["name"] <- String.concat " " arguments
+
+    if not (child.Start()) then
+        record["started"] <- false
+    else
+        record["started"] <- true
+        let stdout = child.StandardOutput.ReadToEndAsync()
+        let stderr = child.StandardError.ReadToEndAsync()
+        let exited = child.WaitForExit(30000)
+
+        if not exited then
+            child.Kill true
+
+        let stdoutText, stdoutSha256, stdoutTruncated = boundedDiagnostic (stdout.GetAwaiter().GetResult())
+        let stderrText, stderrSha256, stderrTruncated = boundedDiagnostic (stderr.GetAwaiter().GetResult())
+        record["timedOut"] <- not exited
+        record["exitCode"] <- if exited then child.ExitCode else -1
+        record["stdout"] <- stdoutText
+        record["stdoutSha256"] <- stdoutSha256
+        record["stdoutTruncated"] <- stdoutTruncated
+        record["stderr"] <- stderrText
+        record["stderrSha256"] <- stderrSha256
+        record["stderrTruncated"] <- stderrTruncated
+
+    record
+
 let fixtureRepository = Path.Combine(stateRoot, "fixture-repository")
 
 if Directory.Exists fixtureRepository then
@@ -303,6 +356,19 @@ let policy =
         Runtime = runtime
     }
 
+let runtimeProbes = JsonArray()
+let probeEnvironment = runtime.HostEnvironment |> Map.toList
+Directory.CreateDirectory runtime.StateRoot |> ignore
+
+for arguments in
+    [
+        runtime.PodmanGlobalArguments @ [ "version"; "--format"; "{{.Client.Version}}" ]
+        runtime.PodmanGlobalArguments
+        @ [ "image"; "inspect"; "--format"; "{{.Digest}}|{{.Id}}|{{.Config.User}}"; imageReference ]
+        runtime.PodmanGlobalArguments @ [ "unshare"; "/usr/bin/true" ]
+    ] do
+    runtimeProbes.Add(probe podman arguments runtime.StateRoot probeEnvironment)
+
 let now () =
     let value = DateTimeOffset.UtcNow
     DateTimeOffset(value.Ticks - value.Ticks % 10L, TimeSpan.Zero)
@@ -385,6 +451,9 @@ for index, (name, operation, componentId) in List.indexed cases do
         unknown <- unknown + 1
         record["outcome"] <- "unknown"
         record["error"] <- receipt.Result.Error.Value.Code
+
+        for KeyValue(name, value) in receipt.Result.Error.Value.Details do
+            record[name] <- value
     | other ->
         failed <- failed + 1
         record["outcome"] <- "failed"
@@ -634,6 +703,7 @@ evidence["sourceRevision"] <- sourceRevision
 evidence["imageReference"] <- imageReference
 evidence["imageId"] <- imageId
 evidence["manifestSha256"] <- recipeSha256
+evidence["runtimeProbes"] <- runtimeProbes
 evidence["operations"] <- results
 evidence["passed"] <- passed
 evidence["unknown"] <- unknown
