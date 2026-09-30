@@ -160,6 +160,17 @@
     },
     {
       "kind": "workflow",
+      "path": ".github/workflows/v2-host-fixed-qualification.yml",
+      "sha256": "721818405889f5205fb2abf5a236e9592e52eb6927873ea0ab94be73023c962a",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
+    },
+    {
+      "kind": "workflow",
       "path": ".github/workflows/v2-ci-ordinary-settlement.yml",
       "sha256": "f60ec3d1be999b1fc9c5ba92a400cc73d3fcebafb1ad704ed068080185fe8d1c",
       "externalReferences": [
