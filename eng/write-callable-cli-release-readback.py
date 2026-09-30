@@ -1,0 +1,93 @@
+#!/usr/bin/env python3
+"""Build and optionally bind the exact callable CLI release readback receipt."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from pathlib import Path
+import sys
+
+
+def refuse(message: str) -> None:
+    print(f"CALLABLE_CLI_RELEASE_READBACK_REFUSED {message}", file=sys.stderr)
+    raise SystemExit(2)
+
+
+def sha(value: str, size: int) -> str:
+    if len(value) != size or any(character not in "0123456789abcdef" for character in value):
+        refuse(f"identity must be lowercase hexadecimal with length {size}")
+    return value
+
+
+def feed(path: Path, name: str, package_sha256: str) -> dict[str, object]:
+    if not path.is_file():
+        refuse(f"verified {name} feed result is absent")
+    try:
+        value = json.loads(path.read_bytes())
+    except (OSError, json.JSONDecodeError):
+        refuse(f"verified {name} feed result is invalid")
+    expected_keys = {"feed", "candidateSha256", "servedArchiveSha256", "payloadMatch"}
+    if not isinstance(value, dict) or set(value) != expected_keys:
+        refuse(f"verified {name} feed result shape changed")
+    if value["feed"] != name or value["candidateSha256"] != package_sha256 or value["payloadMatch"] is not True:
+        refuse(f"verified {name} feed result identity changed")
+    sha(value["servedArchiveSha256"], 64)
+    return value
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--source", required=True)
+    parser.add_argument("--tree", required=True)
+    parser.add_argument("--merge", required=True)
+    parser.add_argument("--package-id", required=True)
+    parser.add_argument("--version", required=True)
+    parser.add_argument("--package-sha256", required=True)
+    parser.add_argument("--bundle-sha256", required=True)
+    parser.add_argument("--image-sha256", required=True)
+    parser.add_argument("--manifest-sha256", required=True)
+    parser.add_argument("--github-feed", required=True, type=Path)
+    parser.add_argument("--nuget-feed", required=True, type=Path)
+    parser.add_argument("--output", required=True, type=Path)
+    parser.add_argument("--existing", type=Path)
+    args = parser.parse_args()
+
+    sha(args.source, 40)
+    sha(args.tree, 40)
+    sha(args.merge, 40)
+    for value in (args.package_sha256, args.bundle_sha256, args.image_sha256, args.manifest_sha256):
+        sha(value, 64)
+    if args.package_id != "FS.GG.Coordination.Cli" or args.version != "0.2.0":
+        refuse("package identity changed")
+    value = {
+        "schema": "fsgg.coordination.callable-cli-release-readback/2",
+        "source": args.source,
+        "sourceTree": args.tree,
+        "protectedMerge": args.merge,
+        "packageId": args.package_id,
+        "version": args.version,
+        "packageSha256": args.package_sha256,
+        "portableAssets": {
+            "bundleSha256": args.bundle_sha256,
+            "imageArchiveSha256": args.image_sha256,
+            "manifestSha256": args.manifest_sha256,
+        },
+        "feeds": {
+            "githubPackages": feed(args.github_feed, "github-packages", args.package_sha256),
+            "nugetOrg": feed(args.nuget_feed, "nuget-org", args.package_sha256),
+        },
+    }
+    expected = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+    if args.existing is not None:
+        if not args.existing.is_file():
+            refuse("existing release readback is absent")
+        if args.existing.read_bytes() != expected:
+            refuse("existing release readback differs from the complete expected receipt")
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_bytes(expected)
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

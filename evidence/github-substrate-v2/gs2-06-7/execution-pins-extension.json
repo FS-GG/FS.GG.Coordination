@@ -85,7 +85,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-prepare.yml",
-      "sha256": "f5fa33ff6433a3c91cb0bb8c2ea7049edfb6a3ab7ca90e33a0dd2c948bbede7b",
+      "sha256": "c459b27cfd57e8ef80ee02e5e9e5d168e766c08786085c61480d8f5c450887c5",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
@@ -96,7 +96,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-publish.yml",
-      "sha256": "83f222a97f1e5921267e9c9ee401129134cbe80fbd1b3b6d25fb715f513ced07",
+      "sha256": "35b218761ba8cc2c295258341a3bb41a929231db8a3bf43485b0f3b81a478dd4",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",

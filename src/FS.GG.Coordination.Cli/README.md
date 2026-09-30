@@ -4,6 +4,12 @@
 plans by default; advancement remains guarded by the authoritative epoch, exact sealed plan, protected journal,
 and explicit receiver/provider selection. Installing this package does not enable a production writer.
 
+Version 0.2.0 also packages the portable workspace v1 schemas, examples, command surface and the
+`FS.GG.Coordination.Orchestration.Execution` assembly. `workspace-contract` can export and validate the frozen
+contract bytes or prepare one previously reviewed fixed operation. Preparation remains read-only: it supplies
+no execution authority, starts no process and does not select an image or receiver. The executor assembly is a
+tool payload dependency of this CLI; it remains nonpackable and is not a separate product package.
+
 `fsgg-coordination ordinary-settlement execute` is the non-interactive post-merge settlement entry point.
 It accepts no plan, token, or arbitrary operation arguments. The installed provider reruns the protected
 source observer using `GH_TOKEN`, reads the receipt path from `FSGG_V2_PREFLIGHT_RECEIPT`, and accepts only

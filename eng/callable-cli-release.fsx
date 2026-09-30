@@ -30,6 +30,26 @@ let capture workingDirectory command arguments =
     require (proc.ExitCode = 0) $"command failed: {command} {invocation}"
     output
 
+let captureBytes workingDirectory command arguments =
+    let start = ProcessStartInfo(command, WorkingDirectory = workingDirectory, UseShellExecute = false, RedirectStandardOutput = true)
+    for argument in arguments do start.ArgumentList.Add argument
+    use proc = Process.Start start
+    use output = new MemoryStream()
+    proc.StandardOutput.BaseStream.CopyTo output
+    proc.WaitForExit()
+    let invocation = String.concat " " arguments
+    require (proc.ExitCode = 0) $"command failed: {command} {invocation}"
+    output.ToArray()
+
+let runForExit workingDirectory command arguments =
+    let start = ProcessStartInfo(command, WorkingDirectory = workingDirectory, UseShellExecute = false, RedirectStandardOutput = true, RedirectStandardError = true)
+    for argument in arguments do start.ArgumentList.Add argument
+    use proc = Process.Start start
+    proc.StandardOutput.ReadToEnd() |> ignore
+    proc.StandardError.ReadToEnd() |> ignore
+    proc.WaitForExit()
+    proc.ExitCode
+
 let canonicalize packagePath =
     let entries =
         use archive = ZipFile.OpenRead packagePath
@@ -108,8 +128,8 @@ let verify () =
 match command with
 | "prepare" ->
     require
-        (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7" ]))
-        "only reviewed callable CLI versions 0.1.1 through 0.1.7 may be prepared"
+        (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0" ]))
+        "only reviewed callable CLI versions 0.1.1 through 0.1.7 and 0.2.0 may be prepared"
     require (projectPackageVersion () = version) "requested version does not equal the callable CLI PackageVersion"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" [ "rev-parse"; "HEAD" ] = source) "source does not equal HEAD"
@@ -134,6 +154,12 @@ match command with
         let secondPackage = pack second
         require (File.ReadAllBytes(firstPackage).AsSpan().SequenceEqual(File.ReadAllBytes(secondPackage).AsSpan())) "candidate bytes differ across independent output roots"
         File.Copy(firstPackage, packagePath)
+        use package = ZipFile.OpenRead packagePath
+        let executionAssemblies =
+            package.Entries
+            |> Seq.filter (fun entry -> entry.FullName.EndsWith("/FS.GG.Coordination.Orchestration.Execution.dll", StringComparison.Ordinal))
+            |> Seq.length
+        require (executionAssemblies = 1) "candidate package must contain exactly one Execution assembly"
         let manifest = JsonObject()
         manifest.Add("packageId", packageId)
         manifest.Add("packageSha256", sha256 packagePath)
@@ -157,7 +183,17 @@ match command with
         let config = Path.Combine(scratch, "NuGet.Config")
         File.WriteAllText(config, $"<?xml version=\"1.0\" encoding=\"utf-8\"?><configuration><packageSources><clear/><add key=\"candidate\" value=\"{output}\"/></packageSources></configuration>")
         run repo "dotnet" [ "tool"; "install"; packageId; "--version"; version; "--tool-path"; installRoot; "--configfile"; config; "--no-cache" ]
-        run scratch (Path.Combine(installRoot, "fsgg-coordination")) []
+        let installed = Path.Combine(installRoot, "fsgg-coordination")
+        run scratch installed []
+        for name in [ "toolchain-profile"; "command"; "result" ] do
+            let expected = File.ReadAllBytes(Path.Combine(repo, "contracts", "portable-workspace", "v1", name + ".schema.json"))
+            let actual = captureBytes scratch installed [ "workspace-contract"; "schema"; "export"; name ]
+            require (actual.AsSpan().SequenceEqual(expected)) $"installed schema export changed: {name}"
+        let malformed = Path.Combine(scratch, "malformed-portable-command.json")
+        File.WriteAllText(malformed, "{}\n", UTF8Encoding(false))
+        require
+            (runForExit scratch installed [ "workspace-contract"; "validate"; "--schema"; "fsgg.workspace.command/1"; "--file"; malformed ] = 3)
+            "installed CLI did not refuse a malformed portable contract"
         printfn "CALLABLE_CLI_RELEASE_PREPARED source=%s package=%s sha256=%s" source packageName (sha256 packagePath)
     finally
         if Directory.Exists scratch then Directory.Delete(scratch, true)
