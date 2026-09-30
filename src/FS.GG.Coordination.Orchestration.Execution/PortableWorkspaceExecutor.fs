@@ -73,6 +73,7 @@ type PortableProcessRequest =
 
 type PortableProcessObservation =
     {
+        ExecutionStarted: bool
         ExitCode: int option
         StandardOutput: byte array
         StandardError: byte array
@@ -86,6 +87,7 @@ type PortableProcessObservation =
         RuntimeIdentity: string option
         ContainerIdentity: string option
         VerificationObserved: bool
+        VerificationOutput: byte array option
     }
 
 type IPortableProcessRunner =
@@ -94,6 +96,8 @@ type IPortableProcessRunner =
 
     abstract RecoverAsync:
         request: PortableProcessRequest * cancellationToken: CancellationToken -> Task<PortableProcessObservation>
+
+    abstract CleanupAsync: request: PortableProcessRequest * cancellationToken: CancellationToken -> Task<bool>
 
 type PortableExecutionReceipt =
     {
@@ -111,8 +115,11 @@ type PortableExecutionReceipt =
         SnapshotSha256: string option
         RuntimeIdentity: string option
         ContainerIdentity: string option
+        VerificationOutput: byte array option
         OutputSha256: string
         OutputBytes: uint64
+        ExecutionStarted: bool
+        CleanupCompleted: bool
         CancellationRequested: bool
         TerminationObserved: bool
     }
@@ -256,6 +263,28 @@ module PortableWorkspaceExecutor =
         else
             None
 
+    let private writeOptionalBytes (writer: BinaryWriter) (value: byte array option) =
+        match value with
+        | Some bytes ->
+            writer.Write bytes.Length
+            writer.Write bytes
+        | None -> writer.Write -1
+
+    let private readOptionalBytes (reader: BinaryReader) =
+        let length = reader.ReadInt32()
+
+        if length < 0 then
+            None
+        elif length > PortableWorkspaceContract.maximumDocumentBytes * 4 then
+            invalidOp "portable-journal-verification-size-refused"
+        else
+            let bytes = reader.ReadBytes length
+
+            if bytes.Length <> length then
+                invalidOp "portable-journal-verification-truncated"
+
+            Some bytes
+
     let private writeReceipt (writer: BinaryWriter) (receipt: PortableExecutionReceipt) =
         let resultBytes =
             PortableWorkspaceContract.resultBytes receipt.Result
@@ -275,8 +304,11 @@ module PortableWorkspaceExecutor =
         writeOptionalString writer receipt.SnapshotSha256
         writeOptionalString writer receipt.RuntimeIdentity
         writeOptionalString writer receipt.ContainerIdentity
+        writeOptionalBytes writer receipt.VerificationOutput
         writer.Write receipt.OutputSha256
         writer.Write receipt.OutputBytes
+        writer.Write receipt.ExecutionStarted
+        writer.Write receipt.CleanupCompleted
         writer.Write receipt.CancellationRequested
         writer.Write receipt.TerminationObserved
 
@@ -302,8 +334,11 @@ module PortableWorkspaceExecutor =
             SnapshotSha256 = readOptionalString reader
             RuntimeIdentity = readOptionalString reader
             ContainerIdentity = readOptionalString reader
+            VerificationOutput = readOptionalBytes reader
             OutputSha256 = reader.ReadString()
             OutputBytes = reader.ReadUInt64()
+            ExecutionStarted = reader.ReadBoolean()
+            CleanupCompleted = reader.ReadBoolean()
             CancellationRequested = reader.ReadBoolean()
             TerminationObserved = reader.ReadBoolean()
         }
@@ -420,6 +455,14 @@ module PortableWorkspaceExecutor =
             locked workspaceScope idempotencyId (fun path ->
                 match read path with
                 | Some(PortableRunning(_, existing, _)) when existing = binding ->
+                    write path (PortableSettled(binding, receipt))
+                    true
+                | _ -> false)
+
+        member _.UpdateSettled(workspaceScope, idempotencyId, binding, receipt) =
+            locked workspaceScope idempotencyId (fun path ->
+                match read path with
+                | Some(PortableSettled(existing, _)) when existing = binding ->
                     write path (PortableSettled(binding, receipt))
                     true
                 | _ -> false)
@@ -580,7 +623,18 @@ module PortableWorkspaceExecutor =
                 + uint64 observed.StandardError.LongLength
 
             let workspaceResult =
-                if observed.Interrupted || not observed.TerminationObserved then
+                if not observed.ExecutionStarted then
+                    result
+                        completedAt
+                        prepared
+                        (EvidenceMissing "execution-not-started")
+                        (EvidenceMissing "artifact-not-created")
+                        (error
+                            "execution-refused-before-start"
+                            "The fixed operation was refused before execution started."
+                            false
+                            [ "verification", operation.VerificationIdentity ])
+                elif observed.Interrupted || not observed.TerminationObserved then
                     result
                         completedAt
                         prepared
@@ -677,8 +731,11 @@ module PortableWorkspaceExecutor =
                 SnapshotSha256 = observed.SnapshotSha256
                 RuntimeIdentity = observed.RuntimeIdentity
                 ContainerIdentity = observed.ContainerIdentity
+                VerificationOutput = observed.VerificationOutput
                 OutputSha256 = outputDigest observed.StandardOutput observed.StandardError
                 OutputBytes = outputBytes
+                ExecutionStarted = observed.ExecutionStarted
+                CleanupCompleted = false
                 CancellationRequested = observed.CancellationRequested
                 TerminationObserved = observed.TerminationObserved
             }
@@ -729,6 +786,47 @@ module PortableWorkspaceExecutor =
                 VerificationPath = operation.VerificationPath
                 VerificationSha256 = operation.VerificationSha256
                 RecipeSha256 = operation.RecipeSha256
+            }
+
+        let cleanupReceipt
+            (profile: PortableWorkspaceProfile)
+            (command: PortableWorkspaceCommand)
+            (operation: PortableReviewedOperation)
+            (digest: string)
+            (receipt: PortableExecutionReceipt)
+            (cancellationToken: CancellationToken)
+            =
+            task {
+                if receipt.CleanupCompleted then
+                    return receipt
+                else
+                    let observedAt = clock ()
+                    let prepared = preparedForRecovery profile command operation
+                    let containerName = "fsgg-portable-" + digest[..23]
+
+                    let request =
+                        requestFor
+                            prepared
+                            operation
+                            containerName
+                            (deadlineAfter observedAt policy.Runtime.TerminationGrace)
+
+                    let! cleaned =
+                        task {
+                            try
+                                return! runner.CleanupAsync(request, cancellationToken)
+                            with _ ->
+                                return false
+                        }
+
+                    if not cleaned then
+                        return receipt
+                    else
+                        let updated = { receipt with CleanupCompleted = true }
+
+                        match journal.UpdateSettled(command.WorkspaceScope, command.IdempotencyId, digest, updated) with
+                        | Ok true -> return updated
+                        | _ -> return receipt
             }
 
         member _.ExecuteAsync
@@ -792,6 +890,16 @@ module PortableWorkspaceExecutor =
                                     Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt))
 
                 match preparation with
+                | Error(Duplicate receipt) when not receipt.CleanupCompleted ->
+                    match selectReviewedOperation profile command with
+                    | Error reason -> return Refused reason
+                    | Ok operation ->
+                        let digest = bindingDigest profile command operation
+
+                        let! updated =
+                            cleanupReceipt profile command operation digest receipt cancellationToken
+
+                        return Duplicate updated
                 | Error outcome -> return outcome
                 | Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt) ->
                     let request: PortableProcessRequest =
@@ -820,6 +928,7 @@ module PortableWorkspaceExecutor =
                             with _ ->
                                 return
                                     {
+                                        ExecutionStarted = true
                                         ExitCode = None
                                         StandardOutput = Array.empty
                                         StandardError = Array.empty
@@ -833,16 +942,21 @@ module PortableWorkspaceExecutor =
                                         RuntimeIdentity = None
                                         ContainerIdentity = None
                                         VerificationObserved = false
+                                        VerificationOutput = None
                                     }
                         }
 
                     let receipt = receiptFromObservation prepared operation observed
 
-                    if not observed.TerminationObserved then
+                    if observed.ExecutionStarted && not observed.TerminationObserved then
                         return Completed receipt
                     else
                         match journal.Settle(prepared.WorkspaceScope, prepared.IdempotencyId, digest, receipt) with
-                        | Ok true -> return Completed receipt
+                        | Ok true ->
+                            let! updated =
+                                cleanupReceipt profile command operation digest receipt cancellationToken
+
+                            return Completed updated
                         | _ -> return Refused "portable-journal-settlement-refused"
             }
 
@@ -857,7 +971,11 @@ module PortableWorkspaceExecutor =
 
                     match journal.Read(command.WorkspaceScope, command.IdempotencyId) with
                     | Error _ -> return Refused "portable-journal-unavailable"
-                    | Ok(Some(PortableSettled(existing, receipt))) when existing = digest -> return Duplicate receipt
+                    | Ok(Some(PortableSettled(existing, receipt))) when existing = digest ->
+                        let! updated =
+                            cleanupReceipt profile command operation digest receipt cancellationToken
+
+                        return Duplicate updated
                     | Ok(Some(PortableRunning(_, existing, containerName))) when existing = digest ->
                         let prepared = preparedForRecovery profile command operation
                         let observedAt = clock ()
@@ -876,6 +994,7 @@ module PortableWorkspaceExecutor =
                                 with _ ->
                                     return
                                         {
+                                            ExecutionStarted = true
                                             ExitCode = None
                                             StandardOutput = Array.empty
                                             StandardError = Array.empty
@@ -889,6 +1008,7 @@ module PortableWorkspaceExecutor =
                                             RuntimeIdentity = None
                                             ContainerIdentity = Some containerName
                                             VerificationObserved = false
+                                            VerificationOutput = None
                                         }
                             }
 
@@ -898,7 +1018,11 @@ module PortableWorkspaceExecutor =
                             let receipt = receiptFromObservation prepared operation observed
 
                             match journal.Settle(command.WorkspaceScope, command.IdempotencyId, digest, receipt) with
-                            | Ok true -> return Completed receipt
+                            | Ok true ->
+                                let! updated =
+                                    cleanupReceipt profile command operation digest receipt cancellationToken
+
+                                return Completed updated
                             | _ -> return Refused "portable-journal-settlement-refused"
                     | Ok(Some _) -> return Refused "portable-executor-idempotency-conflict"
                     | Ok None -> return Refused "portable-reconciliation-unknown-refused"

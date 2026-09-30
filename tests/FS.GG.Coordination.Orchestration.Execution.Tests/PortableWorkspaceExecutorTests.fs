@@ -8,10 +8,14 @@ open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
 open Xunit
 
-type private FakeRunner(run: PortableProcessRequest -> PortableProcessObservation) =
+type private FakeRunner
+    (run: PortableProcessRequest -> PortableProcessObservation, ?cleanup: PortableProcessRequest -> bool) =
     let mutable calls = 0
+    let mutable cleanupCalls = 0
+    let cleanup = defaultArg cleanup (fun _ -> true)
 
     member _.Calls = calls
+    member _.CleanupCalls = cleanupCalls
 
     interface IPortableProcessRunner with
         member _.RunAsync(request, _) =
@@ -19,6 +23,10 @@ type private FakeRunner(run: PortableProcessRequest -> PortableProcessObservatio
             Task.FromResult(run request)
 
         member _.RecoverAsync(request, _) = Task.FromResult(run request)
+
+        member _.CleanupAsync(request, _) =
+            cleanupCalls <- cleanupCalls + 1
+            Task.FromResult(cleanup request)
 
 type private IsolatedFixture(root: string) =
     member _.Root = root
@@ -129,6 +137,7 @@ module private PortableExecutorFixtures =
 
     let successfulObservation =
         {
+            ExecutionStarted = true
             ExitCode = Some 0
             StandardOutput = Array.empty
             StandardError = Array.empty
@@ -142,6 +151,7 @@ module private PortableExecutorFixtures =
             RuntimeIdentity = Some "podman-test"
             ContainerIdentity = Some "container-test"
             VerificationObserved = true
+            VerificationOutput = Some Array.empty
         }
 
     let rec fixtureRoot (directory: DirectoryInfo) =
@@ -417,6 +427,7 @@ type PortableWorkspaceExecutorTests() =
             let fake =
                 FakeRunner(fun _ ->
                     {
+                        ExecutionStarted = true
                         ExitCode = Some 0
                         StandardOutput = [| 1uy |]
                         StandardError = Array.empty
@@ -430,6 +441,7 @@ type PortableWorkspaceExecutorTests() =
                         RuntimeIdentity = Some "podman-test"
                         ContainerIdentity = Some "container-test"
                         VerificationObserved = true
+                        VerificationOutput = Some Array.empty
                     })
 
             let reviewed =
@@ -613,6 +625,7 @@ type PortableWorkspaceExecutorTests() =
                 FakeRunner(fun _ ->
                     if interrupted then
                         {
+                            ExecutionStarted = true
                             ExitCode = None
                             StandardOutput = Array.empty
                             StandardError = Array.empty
@@ -626,9 +639,11 @@ type PortableWorkspaceExecutorTests() =
                             RuntimeIdentity = Some "podman-test"
                             ContainerIdentity = Some "container-test"
                             VerificationObserved = false
+                            VerificationOutput = None
                         }
                     else
                         {
+                            ExecutionStarted = true
                             ExitCode = Some 137
                             StandardOutput = Array.empty
                             StandardError = Array.empty
@@ -642,6 +657,7 @@ type PortableWorkspaceExecutorTests() =
                             RuntimeIdentity = Some "podman-test"
                             ContainerIdentity = Some "container-test"
                             VerificationObserved = false
+                            VerificationOutput = None
                         })
 
             let reviewed =
@@ -745,6 +761,111 @@ type PortableWorkspaceExecutorTests() =
         }
 
     [<Fact>]
+    member _.``proven pre-start refusal settles and remains duplicate after reconstruction``() =
+        task {
+            let selectedProfile =
+                profile
+                    "fs-gg/prestart-refusal"
+                    [
+                        fixtureComponent "app" "python" "python" "cpython" "3.14.0" "python-build" "python-test"
+                    ]
+
+            let mutable cleanupAllowed = false
+
+            let fake =
+                FakeRunner(
+                    (fun _ ->
+                        {
+                            ExecutionStarted = false
+                            ExitCode = None
+                            StandardOutput = Array.empty
+                            StandardError = Encoding.UTF8.GetBytes "portable-image-inspect-refused"
+                            CancellationRequested = false
+                            TerminationObserved = false
+                            Interrupted = true
+                            OutputLimitExceeded = false
+                            OutputComplete = true
+                            SourceTree = Some verificationSha256
+                            SnapshotSha256 = Some verificationSha256
+                            RuntimeIdentity = Some "podman-test"
+                            ContainerIdentity = None
+                            VerificationObserved = false
+                            VerificationOutput = None
+                        }),
+                    cleanup = (fun _ -> cleanupAllowed)
+                )
+
+            let reviewed =
+                operation
+                    "python-build"
+                    "build"
+                    (Some "app")
+                    "python"
+                    [ "cpython", "3.14.0" ]
+                    "python3"
+                    [ "build.py" ]
+                    "python-build-v1"
+
+            let policy =
+                {
+                    WorkspaceRoot = root ()
+                    WorkspaceScope = selectedProfile.WorkspaceScope
+                    SourceRevision = sourceRevision
+                    QualifiedImage = image
+                    MaximumRuntimeSeconds = 30UL
+                    MaximumOutputBytes = 131072UL
+                    Operations = [ reviewed ]
+                    Runtime = runtimePolicy ()
+                }
+
+            let selectedCommand =
+                command selectedProfile (Guid.Parse "35000000-0000-0000-0000-000000000001") "build" (Some "app")
+
+            let firstExecutor =
+                PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
+
+            let! first =
+                firstExecutor.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    selectedCommand,
+                    CancellationToken.None
+                )
+
+            match first with
+            | Completed receipt ->
+                Assert.False(receipt.ExecutionStarted)
+                Assert.False(receipt.CleanupCompleted)
+                Assert.Equal("execution-refused-before-start", receipt.Result.Error.Value.Code)
+            | other -> failwithf "expected durable pre-start refusal, got %A" other
+
+            cleanupAllowed <- true
+
+            let restarted =
+                PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> selectedCommand.Deadline.AddHours 1.0))
+
+            let! duplicate =
+                restarted.ExecuteAsync(
+                    { authority selectedProfile.WorkspaceScope with
+                        FenceGeneration = UInt64.MaxValue
+                    },
+                    selectedProfile,
+                    selectedCommand,
+                    CancellationToken.None
+                )
+
+            match duplicate with
+            | Duplicate receipt ->
+                Assert.False(receipt.ExecutionStarted)
+                Assert.True(receipt.CleanupCompleted)
+                Assert.Equal("execution-refused-before-start", receipt.Result.Error.Value.Code)
+            | other -> failwithf "expected reconstructed duplicate refusal, got %A" other
+
+            Assert.Equal(1, fake.Calls)
+            Assert.Equal(2, fake.CleanupCalls)
+        }
+
+    [<Fact>]
     member _.``component operation cannot borrow a sibling toolchain``() =
         task {
             let frontend =
@@ -820,6 +941,7 @@ type PortableWorkspaceExecutorTests() =
             let fake =
                 FakeRunner(fun _ ->
                     {
+                        ExecutionStarted = true
                         ExitCode = Some 0
                         StandardOutput = Array.empty
                         StandardError = Array.empty
@@ -833,6 +955,7 @@ type PortableWorkspaceExecutorTests() =
                         RuntimeIdentity = Some "podman-test"
                         ContainerIdentity = Some "container-test"
                         VerificationObserved = true
+                        VerificationOutput = Some Array.empty
                     })
 
             let reviewed =
@@ -908,7 +1031,8 @@ args = sys.argv[1:]
 if args[:2] == ["version", "--format"]:
     print("6.1.2")
 elif args[:2] == ["image", "inspect"]:
-    print("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|sha256:image-id|[\"HOME=/tmp\",\"PATH=/usr/local/bin:/usr/bin:/bin\"]|null|null|null")
+    user = "65534:65534" if pathlib.Path(sys.argv[0]).name.startswith("bad-user") else "32768:32768"
+    print("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|sha256:image-id|[\"HOME=/tmp\",\"PATH=/usr/local/bin:/usr/bin:/bin\"]|null|null|null|" + user)
 elif args[:2] == ["unshare", "chown"]:
     pass
 elif args and args[0] == "create":
@@ -918,12 +1042,14 @@ elif args and args[0] == "create":
     output.joinpath("verified.txt").write_bytes(b"verified")
     print("container-id")
 elif args[:2] == ["container", "inspect"] and ".Image" in args[-2]:
-    print("sha256:image-id|container-id")
+    print("sha256:image-id|container-id|32768:32768")
 elif args and args[0] == "start":
     print("isolated-operation-output")
 elif args[:2] == ["container", "inspect"] and ".State.Status" in args[-2]:
     print("exited|0")
 elif args and args[0] in ("stop", "kill"):
+    pass
+elif args[:2] == ["container", "rm"]:
     pass
 else:
     print("unexpected:" + repr(args), file=sys.stderr)
@@ -1001,6 +1127,8 @@ else:
                     Assert.Contains("--read-only", createArguments)
                     Assert.Contains("--network=none", createArguments)
                     Assert.Contains("--cap-drop=all", createArguments)
+                    Assert.Contains("--user", createArguments)
+                    Assert.Contains("32768:32768", createArguments)
                     Assert.DoesNotContain("--pid=host", createArguments)
                     Assert.DoesNotContain("--uts=host", createArguments)
                     Assert.DoesNotContain("--userns", createArguments)
@@ -1010,6 +1138,46 @@ else:
                     Assert.DoesNotContain("NODE_OPTIONS", hostEnvironment)
                     Assert.DoesNotContain("PYTHONPATH", hostEnvironment)
                     Assert.DoesNotContain("HTTP_PROXY", hostEnvironment)
+
+                    let! cleaned = runner.CleanupAsync(request, CancellationToken.None)
+                    Assert.True(cleaned)
+
+                    Assert.False(Directory.Exists(Path.Combine(stateRoot, "executions", request.ContainerName)))
+
+                    let badUserScript = Path.Combine(temporary, "bad-user-podman-shim.py")
+                    File.Copy(script, badUserScript)
+
+                    File.SetUnixFileMode(
+                        badUserScript,
+                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                    )
+
+                    let badStateRoot = Path.Combine(temporary, "bad-user-state")
+
+                    let badRuntime =
+                        { runtime with
+                            PodmanExecutable = badUserScript
+                            StateRoot = badStateRoot
+                        }
+
+                    let badRequest =
+                        { request with
+                            ContainerName = "fsgg-portable-bad-user-test"
+                        }
+
+                    let badRunner = PortableWorkspacePodmanRunner badRuntime :> IPortableProcessRunner
+                    let! refusedUser = badRunner.RunAsync(badRequest, CancellationToken.None)
+                    Assert.False(refusedUser.ExecutionStarted)
+
+                    Assert.Contains(
+                        "portable-image-identity-refused",
+                        Encoding.UTF8.GetString refusedUser.StandardError
+                    )
+
+                    Assert.False(File.Exists(Path.Combine(badStateRoot, "create-args.json")))
+
+                    let! badCleaned = badRunner.CleanupAsync(badRequest, CancellationToken.None)
+                    Assert.True(badCleaned)
                 finally
                     ()
             finally

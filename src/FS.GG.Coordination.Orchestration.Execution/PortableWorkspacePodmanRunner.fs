@@ -475,7 +475,7 @@ module private PortablePodmanRuntime =
         | :? IOException
         | :? UnauthorizedAccessException -> Error "portable-recovery-state-refused"
 
-    let verificationObserved outputRoot (request: PortableProcessRequest) =
+    let verificationOutput outputRoot (request: PortableProcessRequest) =
         try
             let outputRoot = Path.GetFullPath outputRoot
 
@@ -500,14 +500,23 @@ module private PortablePodmanRuntime =
                     && File.GetAttributes(current) &&& FileAttributes.ReparsePoint
                        <> FileAttributes.ReparsePoint)
 
-            verificationFile.StartsWith(outputPrefix, StringComparison.Ordinal)
-            && noLinks
-            && File.Exists verificationFile
-            && uint64 (FileInfo(verificationFile).Length) <= request.MaximumOutputBytes
-            && sha256 (File.ReadAllBytes verificationFile) = request.VerificationSha256
+            if
+                verificationFile.StartsWith(outputPrefix, StringComparison.Ordinal)
+                && noLinks
+                && File.Exists verificationFile
+                && uint64 (FileInfo(verificationFile).Length) <= request.MaximumOutputBytes
+            then
+                let bytes = File.ReadAllBytes verificationFile
+
+                if sha256 bytes = request.VerificationSha256 then
+                    Some bytes
+                else
+                    None
+            else
+                None
         with
         | :? IOException
-        | :? UnauthorizedAccessException -> false
+        | :? UnauthorizedAccessException -> None
 
 type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
     interface IPortableProcessRunner with
@@ -515,6 +524,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
             task {
                 let unknown stdout stderr cancelled sourceTree snapshot runtimeIdentity containerIdentity =
                     {
+                        ExecutionStarted = false
                         ExitCode = None
                         StandardOutput = stdout
                         StandardError = stderr
@@ -528,6 +538,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         RuntimeIdentity = runtimeIdentity
                         ContainerIdentity = containerIdentity
                         VerificationObserved = false
+                        VerificationOutput = None
                     }
 
                 match! PortablePodmanRuntime.prepareSnapshot runtime request cancellationToken with
@@ -557,7 +568,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                 "image"
                                 "inspect"
                                 "--format"
-                                "{{.Digest}}|{{.Id}}|{{json .Config.Env}}|{{json .Config.Entrypoint}}|{{json .Config.Cmd}}|{{json .Config.Volumes}}"
+                                "{{.Digest}}|{{.Id}}|{{json .Config.Env}}|{{json .Config.Entrypoint}}|{{json .Config.Cmd}}|{{json .Config.Volumes}}|{{.Config.User}}"
                                 request.QualifiedImage
                             ]
                             cancellationToken
@@ -568,16 +579,17 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                     with
                     | Ok versionResult, Ok imageResult ->
                         let imageParts =
-                            PortablePodmanRuntime.text imageResult |> fun value -> value.Split('|', 6)
+                            PortablePodmanRuntime.text imageResult |> fun value -> value.Split('|', 7)
 
                         if
-                            imageParts.Length <> 6
+                            imageParts.Length <> 7
                             || imageParts[0]
                                <> "sha256:" + PortablePodmanRuntime.imageDigest request.QualifiedImage
                             || not (PortablePodmanRuntime.cleanImageEnvironment imageParts[2])
                             || not (PortablePodmanRuntime.emptyImageSetting imageParts[3])
                             || not (PortablePodmanRuntime.emptyImageSetting imageParts[4])
                             || not (PortablePodmanRuntime.emptyImageSetting imageParts[5])
+                            || imageParts[6] <> runtime.ContainerUser
                         then
                             return
                                 unknown
@@ -614,6 +626,8 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                     "--network=none"
                                     "--cap-drop=all"
                                     "--security-opt=no-new-privileges"
+                                    "--user"
+                                    runtime.ContainerUser
                                     "--volume"
                                     snapshotRoot + ":/source:ro"
                                     "--volume"
@@ -663,18 +677,19 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             "container"
                                             "inspect"
                                             "--format"
-                                            "{{.Image}}|{{.Id}}"
+                                            "{{.Image}}|{{.Id}}|{{.Config.User}}"
                                             request.ContainerName
                                         ]
                                         cancellationToken
 
                                 let containerParts =
-                                    PortablePodmanRuntime.text container |> fun value -> value.Split('|', 2)
+                                    PortablePodmanRuntime.text container |> fun value -> value.Split('|', 3)
 
                                 if
                                     container.ExitCode <> Some 0
-                                    || containerParts.Length <> 2
+                                    || containerParts.Length <> 3
                                     || containerParts[0] <> imageId
+                                    || containerParts[2] <> runtime.ContainerUser
                                 then
                                     return
                                         unknown
@@ -761,12 +776,15 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                         && stateParts[0] = "exited"
                                         && Int32.TryParse(stateParts[1], &observedExit)
 
-                                    let verificationObserved =
-                                        terminationObserved
-                                        && PortablePodmanRuntime.verificationObserved outputRoot request
+                                    let verificationOutput =
+                                        if terminationObserved then
+                                            PortablePodmanRuntime.verificationOutput outputRoot request
+                                        else
+                                            None
 
                                     return
                                         {
+                                            ExecutionStarted = true
                                             ExitCode = if terminationObserved then Some observedExit else None
                                             StandardOutput = started.StandardOutput
                                             StandardError = started.StandardError
@@ -780,7 +798,8 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             SnapshotSha256 = Some snapshotDigest
                                             RuntimeIdentity = Some runtimeIdentity
                                             ContainerIdentity = Some containerIdentity
-                                            VerificationObserved = verificationObserved
+                                            VerificationObserved = verificationOutput.IsSome
+                                            VerificationOutput = verificationOutput
                                         }
                     | _ ->
                         return
@@ -798,6 +817,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
             task {
                 let unknown sourceTree snapshot runtimeIdentity containerIdentity =
                     {
+                        ExecutionStarted = true
                         ExitCode = None
                         StandardOutput = Array.empty
                         StandardError = Array.empty
@@ -811,6 +831,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         RuntimeIdentity = runtimeIdentity
                         ContainerIdentity = containerIdentity
                         VerificationObserved = false
+                        VerificationOutput = None
                     }
 
                 match PortablePodmanRuntime.safeStateRoot runtime with
@@ -834,7 +855,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                     "image"
                                     "inspect"
                                     "--format"
-                                    "{{.Digest}}|{{.Id}}|{{json .Config.Env}}|{{json .Config.Entrypoint}}|{{json .Config.Cmd}}|{{json .Config.Volumes}}"
+                                    "{{.Digest}}|{{.Id}}|{{json .Config.Env}}|{{json .Config.Entrypoint}}|{{json .Config.Cmd}}|{{json .Config.Volumes}}|{{.Config.User}}"
                                     request.QualifiedImage
                                 ]
                                 cancellationToken
@@ -845,15 +866,16 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         with
                         | Ok versionResult, Ok imageResult ->
                             let imageParts =
-                                PortablePodmanRuntime.text imageResult |> fun value -> value.Split('|', 6)
+                                PortablePodmanRuntime.text imageResult |> fun value -> value.Split('|', 7)
 
                             let imageValid =
-                                imageParts.Length = 6
+                                imageParts.Length = 7
                                 && imageParts[0] = "sha256:" + PortablePodmanRuntime.imageDigest request.QualifiedImage
                                 && PortablePodmanRuntime.cleanImageEnvironment imageParts[2]
                                 && PortablePodmanRuntime.emptyImageSetting imageParts[3]
                                 && PortablePodmanRuntime.emptyImageSetting imageParts[4]
                                 && PortablePodmanRuntime.emptyImageSetting imageParts[5]
+                                && imageParts[6] = runtime.ContainerUser
 
                             let runtimeIdentity =
                                 Some(PortablePodmanRuntime.sha256 versionResult.StandardOutput)
@@ -874,23 +896,24 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             "container"
                                             "inspect"
                                             "--format"
-                                            "{{.Image}}|{{.Id}}|{{.State.Status}}|{{.State.ExitCode}}"
+                                            "{{.Image}}|{{.Id}}|{{.State.Status}}|{{.State.ExitCode}}|{{.Config.User}}"
                                             request.ContainerName
                                         ]
                                         cancellationToken
 
                                 let stateParts =
-                                    PortablePodmanRuntime.text state |> fun value -> value.Split('|', 4)
+                                    PortablePodmanRuntime.text state |> fun value -> value.Split('|', 5)
 
                                 let mutable observedExit = 0
 
                                 let terminated =
                                     state.ExitCode = Some 0
                                     && state.OutputComplete
-                                    && stateParts.Length = 4
+                                    && stateParts.Length = 5
                                     && stateParts[0] = imageParts[1]
                                     && stateParts[2] = "exited"
                                     && Int32.TryParse(stateParts[3], &observedExit)
+                                    && stateParts[4] = runtime.ContainerUser
 
                                 if not terminated then
                                     return
@@ -910,11 +933,11 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             [ "logs"; request.ContainerName ]
                                             cancellationToken
 
-                                    let verificationObserved =
-                                        PortablePodmanRuntime.verificationObserved outputRoot request
+                                    let verificationOutput = PortablePodmanRuntime.verificationOutput outputRoot request
 
                                     return
                                         {
+                                            ExecutionStarted = true
                                             ExitCode = Some observedExit
                                             StandardOutput = logs.StandardOutput
                                             StandardError = logs.StandardError
@@ -927,7 +950,48 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             SnapshotSha256 = Some snapshotDigest
                                             RuntimeIdentity = runtimeIdentity
                                             ContainerIdentity = Some stateParts[1]
-                                            VerificationObserved = verificationObserved
+                                            VerificationObserved = verificationOutput.IsSome
+                                            VerificationOutput = verificationOutput
                                         }
                         | _ -> return unknown (Some sourceTree) (Some snapshotDigest) None (Some request.ContainerName)
+            }
+
+        member _.CleanupAsync(request, cancellationToken) =
+            task {
+                try
+                    let! removed =
+                        PortablePodmanRuntime.runPodman
+                            runtime
+                            request
+                            [ "container"; "rm"; "--force"; request.ContainerName ]
+                            cancellationToken
+
+                    let! absent =
+                        if removed.ExitCode = Some 0 && removed.OutputComplete then
+                            Task.FromResult true
+                        else
+                            task {
+                                let! exists =
+                                    PortablePodmanRuntime.runPodman
+                                        runtime
+                                        request
+                                        [ "container"; "exists"; request.ContainerName ]
+                                        cancellationToken
+
+                                return exists.ExitCode = Some 1 && exists.OutputComplete
+                            }
+
+                    if not absent then
+                        return false
+                    else
+                        let executionRoot =
+                            Path.Combine(runtime.StateRoot, "executions", request.ContainerName)
+
+                        if Directory.Exists executionRoot then
+                            Directory.Delete(executionRoot, true)
+
+                        return not (Directory.Exists executionRoot) && not (File.Exists executionRoot)
+                with
+                | :? IOException
+                | :? UnauthorizedAccessException -> return false
             }
