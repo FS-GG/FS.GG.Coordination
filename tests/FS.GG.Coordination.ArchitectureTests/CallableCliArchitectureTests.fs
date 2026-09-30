@@ -99,6 +99,7 @@ let ``portable release preparation binds explicit package image and qualificatio
     Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_release_helper.py")))
     Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_packaged_qualification.py")))
     Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_artifact_layout.py")))
+    Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_release_readback.py")))
     let packaged = read "eng/run-packaged-portable-workspace-qualification.py"
     for expected in [ "package digest changed"; "qualification script package reference changed"; "DOTNET_PROCESSOR_COUNT\": \"4\""; "publicationAuthorized\": False" ] do
         Assert.Contains(expected, packaged, StringComparison.Ordinal)
@@ -139,6 +140,10 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
             "Observe nuget.org and validate recoverable ordering before either effect"
             "Create immutable tag and GitHub release only after both feeds settle"
             "Observe release assets and refuse collisions before any package effect"
+            "Bind an existing complete release receipt before either package effect"
+            "write-callable-cli-release-readback.py"
+            "readback_present=true"
+            "GITHUB_PRESENT: ${{ steps.org.outputs.present }}"
             "GitHub release observation is unknown"
             "Accept: application/octet-stream"
             "if: always()"
@@ -150,7 +155,9 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     let githubPush = workflow.IndexOf("nuget.pkg.github.com/FS-GG/index.json", StringComparison.Ordinal)
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
     let releaseCollision = workflow.IndexOf("Observe release assets and refuse collisions before any package effect", StringComparison.Ordinal)
+    let receiptCollision = workflow.IndexOf("Bind an existing complete release receipt before either package effect", StringComparison.Ordinal)
     Assert.True(releaseCollision >= 0 && releaseCollision < githubPush)
+    Assert.True(receiptCollision > releaseCollision && receiptCollision < githubPush)
     Assert.True(githubPush >= 0 && publicPush > githubPush)
 
     let operation = read "eng/callable-cli-release-operation-017.json"

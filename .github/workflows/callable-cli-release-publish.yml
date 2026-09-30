@@ -195,14 +195,13 @@ jobs:
           mapfile -t readbacks < <(jq -r '.assets[] | select(.name == "release-readback.json") | .id' "$release_json")
           test "${#readbacks[@]}" -le 1
           if (( ${#readbacks[@]} == 1 )); then
+            echo 'readback_present=true' >> "$GITHUB_OUTPUT"
             curl --fail --silent --show-error --location \
               --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/octet-stream' \
               --output "$READBACK_OUTPUT/release-preflight/release-readback.json" \
               "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/${readbacks[0]}"
-            jq -e --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg merge "$EXPECTED_MERGE" \
-              --arg package "$EXPECTED_SHA256" --arg bundle "$EXPECTED_BUNDLE_SHA256" --arg image "$EXPECTED_IMAGE_SHA256" --arg manifest "$EXPECTED_PORTABLE_MANIFEST_SHA256" \
-              '.source == $source and .sourceTree == $tree and .protectedMerge == $merge and .packageSha256 == $package and .portableAssets.bundleSha256 == $bundle and .portableAssets.imageArchiveSha256 == $image and .portableAssets.manifestSha256 == $manifest' \
-              "$READBACK_OUTPUT/release-preflight/release-readback.json" >/dev/null
+          else
+            echo 'readback_present=false' >> "$GITHUB_OUTPUT"
           fi
 
       - name: Retain exact candidate before any external effect
@@ -259,8 +258,8 @@ jobs:
           url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
           status="$(curl --silent --location --output "$READBACK_OUTPUT/github/$PACKAGE_FILE" --write-out '%{http_code}' --user "${GITHUB_ACTOR}:${GH_TOKEN}" "$url")"
           case "$status" in
-            404) rm -f "$READBACK_OUTPUT/github/$PACKAGE_FILE"; echo 'push=true' >> "$GITHUB_OUTPUT" ;;
-            200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages ;;
+            404) rm -f "$READBACK_OUTPUT/github/$PACKAGE_FILE"; echo 'push=true' >> "$GITHUB_OUTPUT"; echo 'present=false' >> "$GITHUB_OUTPUT" ;;
+            200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages > "$READBACK_OUTPUT/github.json"; echo 'present=true' >> "$GITHUB_OUTPUT" ;;
             *) echo "::error::GitHub Packages observation is unknown (HTTP $status)"; exit 1 ;;
           esac
 
@@ -273,14 +272,32 @@ jobs:
           url="https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
           status="$(curl --silent --location --output "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" --write-out '%{http_code}' "$url")"
           case "$status" in
-            404) rm -f "$READBACK_OUTPUT/nuget/$PACKAGE_FILE"; echo 'push=true' >> "$GITHUB_OUTPUT" ;;
-            200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org ;;
+            404) rm -f "$READBACK_OUTPUT/nuget/$PACKAGE_FILE"; echo 'push=true' >> "$GITHUB_OUTPUT"; echo 'present=false' >> "$GITHUB_OUTPUT" ;;
+            200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org > "$READBACK_OUTPUT/nuget.json"; echo 'present=true' >> "$GITHUB_OUTPUT" ;;
             *) echo "::error::nuget.org observation is unknown (HTTP $status)"; exit 1 ;;
           esac
           if test "${{ steps.org.outputs.push }}" = true && test "$status" = 200; then
             echo "::error::nuget.org is populated while the required first GitHub Packages effect is absent"
             exit 1
           fi
+
+      - name: Bind an existing complete release receipt before either package effect
+        if: steps.release.outputs.readback_present == 'true'
+        shell: bash
+        env:
+          GITHUB_PRESENT: ${{ steps.org.outputs.present }}
+          NUGET_PRESENT: ${{ steps.public.outputs.present }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_PRESENT" = true
+          test "$NUGET_PRESENT" = true
+          python3 eng/write-callable-cli-release-readback.py \
+            --source "$EXPECTED_SOURCE" --tree "$EXPECTED_TREE" --merge "$EXPECTED_MERGE" \
+            --package-id "$PACKAGE_ID" --version "$PACKAGE_VERSION" --package-sha256 "$EXPECTED_SHA256" \
+            --bundle-sha256 "$EXPECTED_BUNDLE_SHA256" --image-sha256 "$EXPECTED_IMAGE_SHA256" --manifest-sha256 "$EXPECTED_PORTABLE_MANIFEST_SHA256" \
+            --github-feed "$READBACK_OUTPUT/github.json" --nuget-feed "$READBACK_OUTPUT/nuget.json" \
+            --existing "$READBACK_OUTPUT/release-preflight/release-readback.json" \
+            --output "$READBACK_OUTPUT/release-preflight/expected-release-readback.json"
 
       - name: Prove Trusted Publishing authorization before the first package effect
         if: steps.public.outputs.push == 'true'
@@ -348,7 +365,12 @@ jobs:
           set -euo pipefail
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages > "$READBACK_OUTPUT/github.json"
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org > "$READBACK_OUTPUT/nuget.json"
-          jq -n --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg merge "$EXPECTED_MERGE"             --arg package "$PACKAGE_ID" --arg version "$PACKAGE_VERSION" --arg digest "$EXPECTED_SHA256"             --arg bundle "$EXPECTED_BUNDLE_SHA256" --arg image "$EXPECTED_IMAGE_SHA256" --arg manifest "$EXPECTED_PORTABLE_MANIFEST_SHA256"             --slurpfile github "$READBACK_OUTPUT/github.json" --slurpfile nuget "$READBACK_OUTPUT/nuget.json"             '{schema:"fsgg.coordination.callable-cli-release-readback/2",source:$source,sourceTree:$tree,protectedMerge:$merge,packageId:$package,version:$version,packageSha256:$digest,portableAssets:{bundleSha256:$bundle,imageArchiveSha256:$image,manifestSha256:$manifest},feeds:{githubPackages:$github[0],nugetOrg:$nuget[0]}}'             > "$READBACK_OUTPUT/release-readback.json"
+          python3 eng/write-callable-cli-release-readback.py \
+            --source "$EXPECTED_SOURCE" --tree "$EXPECTED_TREE" --merge "$EXPECTED_MERGE" \
+            --package-id "$PACKAGE_ID" --version "$PACKAGE_VERSION" --package-sha256 "$EXPECTED_SHA256" \
+            --bundle-sha256 "$EXPECTED_BUNDLE_SHA256" --image-sha256 "$EXPECTED_IMAGE_SHA256" --manifest-sha256 "$EXPECTED_PORTABLE_MANIFEST_SHA256" \
+            --github-feed "$READBACK_OUTPUT/github.json" --nuget-feed "$READBACK_OUTPUT/nuget.json" \
+            --output "$READBACK_OUTPUT/release-readback.json"
 
       - name: Create immutable tag and GitHub release only after both feeds settle
         shell: bash
