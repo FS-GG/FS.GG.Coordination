@@ -8,6 +8,7 @@
     <Compile Include="LearningTraceTests.fs" />
     <Compile Include="HostedWriterQuintReplayTests.fs" />
     <Compile Include="HostedWriterRuntimeTests.fs" />
+    <Compile Include="AguiReadOnlyProjectionTests.fs" />
     <Compile Include="RunnerWireTests.fs" />
     <Compile Include="RunnerWireRuntimeTests.fs" />
     <Compile Include="InstalledAdoptionVerificationTests.fs" />
@@ -35,6 +36,9 @@
              CopyToOutputDirectory="PreserveNewest" />
     <Content Include="Fixtures\Learning\**\*"
              Link="Fixtures\Learning\%(RecursiveDir)%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Fixtures\Agui\python-sse-client.py"
+             Link="Fixtures\Agui\python-sse-client.py"
              CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 </Project>

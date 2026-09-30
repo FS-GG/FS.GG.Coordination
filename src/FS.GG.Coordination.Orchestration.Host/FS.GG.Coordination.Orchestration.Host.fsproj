@@ -20,6 +20,7 @@
     <Compile Include="FixedQualificationOperation.fs" />
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
+    <Compile Include="AguiReadOnlyProjection.fs" />
     <Compile Include="RemoteExecutorProvider.fs" />
     <Compile Include="LocalExecutorTransport.fs" />
     <Compile Include="HostExecutorRelay.fs" />
@@ -37,6 +38,10 @@
     <Compile Include="RunnerWireRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
     <Compile Include="Program.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="AGUI.Abstractions" />
+    <PackageReference Include="AGUI.Formatting" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FS.GG.Coordination.Core\FS.GG.Coordination.Core.fsproj" />
