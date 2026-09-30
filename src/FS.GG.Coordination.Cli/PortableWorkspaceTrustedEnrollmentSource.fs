@@ -417,6 +417,28 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
                         Error "portable-trusted-receiver-git-refused"
         with _ -> Error "portable-trusted-receiver-git-refused"
 
+    let worktreeInventory root =
+        try
+            let root = Path.GetFullPath root
+            let collected = ResizeArray<string>()
+            let mutable refused = false
+            let rec walk (directory: DirectoryInfo) =
+                for entry in directory.EnumerateFileSystemInfos() do
+                    if directory.FullName = root && entry.Name = ".git" then
+                        if not (entry :? DirectoryInfo) || not (isNull entry.LinkTarget) then refused <- true
+                    elif not (isNull entry.LinkTarget) then
+                        refused <- true
+                    elif entry.Attributes &&& FileAttributes.Directory = FileAttributes.Directory then
+                        walk (DirectoryInfo entry.FullName)
+                    elif entry :? FileInfo then
+                        collected.Add(Path.GetRelativePath(root, entry.FullName).Replace('\\', '/'))
+                    else
+                        refused <- true
+            walk (DirectoryInfo root)
+            if refused then Error "portable-trusted-receiver-layout-refused"
+            else Ok(collected |> Seq.sortWith (fun left right -> StringComparer.Ordinal.Compare(left, right)) |> Seq.toList)
+        with _ -> Error "portable-trusted-receiver-layout-refused"
+
     let validate (grant: PortableWorkspacePythonHelloGrant) =
         let fixedPaths = grant.Git.Path = "/usr/bin/git" && grant.Tar.Path = "/usr/bin/tar" && grant.Podman.Path = "/usr/bin/podman"
         if not fixedPaths then Error "portable-trusted-executable-path-refused"
@@ -445,24 +467,28 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
                     (Ok()))
             |> Result.bind (fun () -> runGit grant.Git.Path grant.WorkspaceRoot [ "rev-parse"; "HEAD" ] |> Result.bind (fun value -> if value.Trim() = grant.ReceiverCommit then Ok() else Error "portable-trusted-receiver-commit-refused"))
             |> Result.bind (fun () -> runGit grant.Git.Path grant.WorkspaceRoot [ "rev-parse"; "HEAD^{tree}" ] |> Result.bind (fun value -> if value.Trim() = grant.ReceiverTree then Ok() else Error "portable-trusted-receiver-tree-refused"))
-            |> Result.bind (fun () -> runGit grant.Git.Path grant.WorkspaceRoot [ "status"; "--porcelain=v1"; "-z" ] |> Result.bind (fun value -> if value.Length = 0 then Ok() else Error "portable-trusted-receiver-dirty-refused"))
             |> Result.bind (fun () ->
                 runGit grant.Git.Path grant.WorkspaceRoot [ "ls-files"; "-z" ]
                 |> Result.bind (fun listed ->
-                    let actualPaths = listed.Split('\000', StringSplitOptions.RemoveEmptyEntries) |> Array.toList
-                    let expectedPaths = grant.ProjectedPayload |> List.map _.Path
+                    let compare left right = StringComparer.Ordinal.Compare(left, right)
+                    let actualPaths = listed.Split('\000', StringSplitOptions.RemoveEmptyEntries) |> Array.sortWith compare |> Array.toList
+                    let expectedPaths = grant.ProjectedPayload |> List.map _.Path |> List.sortWith compare
                     if actualPaths <> expectedPaths then Error "portable-trusted-receiver-inventory-refused"
                     else
-                        grant.ProjectedPayload
-                        |> List.fold (fun state item ->
-                            state |> Result.bind (fun () ->
-                                let full = Path.GetFullPath(item.Path, grant.WorkspaceRoot)
-                                let root = Path.GetFullPath(grant.WorkspaceRoot) + string Path.DirectorySeparatorChar
-                                let info = FileInfo full
-                                if not (full.StartsWith(root, StringComparison.Ordinal)) || not info.Exists || not (isNull info.LinkTarget) then
-                                    Error "portable-trusted-receiver-payload-refused"
-                                else
-                                    digestFile full |> Result.bind (fun actual -> if actual = item.Sha256 then Ok() else Error "portable-trusted-receiver-payload-refused"))) (Ok())))
+                        worktreeInventory grant.WorkspaceRoot
+                        |> Result.bind (fun worktreePaths ->
+                            if worktreePaths <> expectedPaths then Error "portable-trusted-receiver-dirty-refused"
+                            else
+                                grant.ProjectedPayload
+                                |> List.fold (fun state item ->
+                                    state |> Result.bind (fun () ->
+                                        let full = Path.GetFullPath(item.Path, grant.WorkspaceRoot)
+                                        let root = Path.GetFullPath(grant.WorkspaceRoot) + string Path.DirectorySeparatorChar
+                                        let info = FileInfo full
+                                        if not (full.StartsWith(root, StringComparison.Ordinal)) || not info.Exists || not (isNull info.LinkTarget) then
+                                            Error "portable-trusted-receiver-payload-refused"
+                                        else
+                                            digestFile full |> Result.bind (fun actual -> if actual = item.Sha256 then Ok() else Error "portable-trusted-receiver-dirty-refused"))) (Ok()))))
 
     interface IPortableWorkspaceTrustedReceiverInspector with
         member _.Validate grant = validate grant

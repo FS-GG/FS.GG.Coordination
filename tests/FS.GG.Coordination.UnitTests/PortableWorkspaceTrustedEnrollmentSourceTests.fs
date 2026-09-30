@@ -215,10 +215,11 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
         let receiver = Path.Combine(temporary.Path, "receiver")
         Directory.CreateDirectory(Path.Combine(receiver, "python")) |> ignore
         File.WriteAllText(Path.Combine(receiver, "python", "test.py"), "print('ok')\n")
+        File.WriteAllText(Path.Combine(receiver, ".gitattributes"), "python/test.py filter=hostile\n")
         Fixture.git receiver [ "init"; "-q" ] |> ignore
         Fixture.git receiver [ "config"; "user.email"; "source-test@example.invalid" ] |> ignore
         Fixture.git receiver [ "config"; "user.name"; "source-test" ] |> ignore
-        Fixture.git receiver [ "add"; "python/test.py" ] |> ignore
+        Fixture.git receiver [ "add"; ".gitattributes"; "python/test.py" ] |> ignore
         Fixture.git receiver [ "commit"; "-q"; "-m"; "fixture" ] |> ignore
         let commit = Fixture.git receiver [ "rev-parse"; "HEAD" ]
         let tree = Fixture.git receiver [ "rev-parse"; "HEAD^{tree}" ]
@@ -232,7 +233,9 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
                 CliPayloadSha256 = Fixture.fileSha entry.Location; ProviderVersion = "0.1.0"
                 ProviderPackageSha256 = Fixture.sha; ProducerSourceRevision = Fixture.commit
                 WorkspaceRoot = receiver; ReceiverCommit = commit; ReceiverTree = tree
-                ProjectedPayload = [ { Path = "python/test.py"; Sha256 = Fixture.fileSha(Path.Combine(receiver, "python", "test.py")) } ]
+                ProjectedPayload =
+                    [ { Path = ".gitattributes"; Sha256 = Fixture.fileSha(Path.Combine(receiver, ".gitattributes")) }
+                      { Path = "python/test.py"; Sha256 = Fixture.fileSha(Path.Combine(receiver, "python", "test.py")) } ]
                 ProfileSha256 = Fixture.sha; WorkspaceScope = Fixture.scope; WorkflowRevision = 1UL; FenceGeneration = 1UL
                 ObservedAt = DateTimeOffset.UtcNow; JournalStateRoot = Path.Combine(temporary.Path, "state")
                 Git = { Path = "/usr/bin/git"; Sha256 = Fixture.fileSha "/usr/bin/git" }
@@ -245,14 +248,16 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
         Assert.Equal(Ok(), inspector.Validate grant)
 
         let marker = Path.Combine(temporary.Path, "hostile-git-executed")
-        let helper = Path.Combine(temporary.Path, "slow-oversized-fsmonitor")
-        File.WriteAllText(helper, $"#!/bin/sh\ntouch '%s{marker}'\ndd if=/dev/zero bs=1048576 count=8 2>/dev/null\nsleep 30\n")
-        File.SetUnixFileMode(helper, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
-        Fixture.git receiver [ "config"; "core.fsmonitor"; helper ] |> ignore
+        let fsmonitor = Path.Combine(temporary.Path, "slow-oversized-git-helper")
+        File.WriteAllText(fsmonitor, $"#!/bin/sh\ntouch '%s{marker}'\ndd if=/dev/zero bs=1048576 count=8 2>/dev/null\nsleep 30\n")
+        File.SetUnixFileMode(fsmonitor, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+        Fixture.git receiver [ "config"; "core.fsmonitor"; fsmonitor ] |> ignore
+        Fixture.git receiver [ "config"; "filter.hostile.clean"; fsmonitor ] |> ignore
+        File.SetLastWriteTimeUtc(Path.Combine(receiver, "python", "test.py"), DateTime.UtcNow.AddMinutes 1.0)
         let oldGitDir = Environment.GetEnvironmentVariable "GIT_DIR"
         let oldGitConfig = Environment.GetEnvironmentVariable "GIT_CONFIG_GLOBAL"
         let hostileGlobal = Path.Combine(temporary.Path, "hostile.gitconfig")
-        File.WriteAllText(hostileGlobal, $"[core]\n\tfsmonitor = %s{helper}\n")
+        File.WriteAllText(hostileGlobal, $"[core]\n\tfsmonitor = %s{fsmonitor}\n[filter \"hostile\"]\n\tclean = %s{fsmonitor}\n")
         try
             Environment.SetEnvironmentVariable("GIT_DIR", Path.Combine(temporary.Path, "redirected.git"))
             Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", hostileGlobal)
