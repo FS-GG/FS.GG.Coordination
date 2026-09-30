@@ -1,0 +1,107 @@
+name: Portable workspace image qualification
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/portable-workspace-image-qualification.yml
+      - eng/portable-workspace-image.py
+      - tests/portable-workspace/image/**
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/portable-workspace-image-qualification.yml
+      - eng/portable-workspace-image.py
+      - tests/portable-workspace/image/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: portable-workspace-image-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  strict-rootless-qualification:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      BASE_IMAGE: docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056
+      PODMAN_ROOT: ${{ runner.temp }}/portable-workspace-podman-root
+      PODMAN_RUNROOT: ${{ runner.temp }}/portable-workspace-podman-runroot
+      QUALIFICATION_STATE: ${{ runner.temp }}/portable-workspace-image-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Run the static source, recipe, and rootless capability preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          command -v podman
+          python3 eng/portable-workspace-image.py preflight \
+            --source "$GITHUB_WORKSPACE" \
+            --expected-source-revision "$GITHUB_SHA" \
+            --state-dir "$QUALIFICATION_STATE" \
+            --root "$PODMAN_ROOT" \
+            --runroot "$PODMAN_RUNROOT" \
+            > "$RUNNER_TEMP/portable-workspace-preflight-result.json"
+
+      - name: Pull only the approved base digest
+        shell: bash
+        run: |
+          set -euo pipefail
+          podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+            pull --platform linux/amd64 "$BASE_IMAGE"
+
+      - name: Build and run the strict rootless qualification
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 eng/portable-workspace-image.py qualify \
+            --source "$GITHUB_WORKSPACE" \
+            --expected-source-revision "$GITHUB_SHA" \
+            --state-dir "$QUALIFICATION_STATE" \
+            --root "$PODMAN_ROOT" \
+            --runroot "$PODMAN_RUNROOT" \
+            > "$QUALIFICATION_STATE/qualification-result.json"
+          test "$(stat --format=%s "$QUALIFICATION_STATE/candidate.oci.tar")" -le 268435456
+
+      - name: Remove only qualification containers
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t containers < <(
+            podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+              container ps --all --quiet --filter label=fsgg.portable-workspace.qualification=true
+          )
+          if (( ${#containers[@]} > 0 )); then
+            podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+              container rm --force "${containers[@]}"
+          fi
+          test -z "$(podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+            container ps --all --quiet --filter label=fsgg.portable-workspace.qualification=true)"
+
+      - name: Retain the bounded candidate and qualification evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: portable-workspace-image-${{ github.sha }}-${{ github.run_attempt }}
+          path: |
+            ${{ env.QUALIFICATION_STATE }}/candidate.oci.tar
+            ${{ env.QUALIFICATION_STATE }}/manifests/*.json
+            ${{ env.QUALIFICATION_STATE }}/preflight.json
+            ${{ env.QUALIFICATION_STATE }}/qualification-result.json
+            ${{ env.QUALIFICATION_STATE }}/runs/*/journal.jsonl
+            ${{ env.QUALIFICATION_STATE }}/runs/*/output/**
+            ${{ runner.temp }}/portable-workspace-preflight-result.json
+          if-no-files-found: warn
+          retention-days: 14
+          compression-level: 0
