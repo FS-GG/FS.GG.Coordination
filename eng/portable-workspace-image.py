@@ -120,18 +120,18 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
         base = inputs["base"]["name"].split(":", 1)[0] + "@" + inputs["base"]["ociDigest"]
         install = (
             "set -eu; "
-            "tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; "
+            "tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1; "
             "mkdir -p /opt/typescript; "
             "tar -xzf /tmp/typescript.tgz -C /opt/typescript --strip-components=1; "
             "chmod 0555 /opt/typescript/bin/tsc /opt/typescript/bin/tsserver; "
-            "rm /tmp/node.tar.xz /tmp/typescript.tgz; "
+            "rm /tmp/node.tar.gz /tmp/typescript.tgz; "
             "test \"$(/usr/local/bin/python3 --version)\" = \"Python 3.14.0\"; "
             "test \"$(/usr/local/bin/node --version)\" = \"v24.8.0\"; "
             "test \"$(/opt/typescript/bin/tsc --version)\" = \"Version 5.9.2\""
         )
         created = run(prefix + ["create", "--name", container, "--network=none", "--pid=host", "--uts=host", "--entrypoint=/bin/sh", base, "-c", install])
         try:
-            run(prefix + ["cp", str(cache / inputs["node"]["archive"]), f"{container}:/tmp/node.tar.xz"])
+            run(prefix + ["cp", str(cache / inputs["node"]["archive"]), f"{container}:/tmp/node.tar.gz"])
             run(prefix + ["cp", str(cache / inputs["typescript"]["archive"]), f"{container}:/tmp/typescript.tgz"])
             try:
                 started = run(prefix + ["start", "--attach", container])

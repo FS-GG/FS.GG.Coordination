@@ -7,11 +7,11 @@
     "source": "https://github.com/docker-library/python/tree/master/3.14/slim-bookworm"
   },
   "node": {
-    "archive": "node-v24.8.0-linux-x64.tar.xz",
+    "archive": "node-v24.8.0-linux-x64.tar.gz",
     "license": "MIT",
-    "sha256": "2598641d188b41793930917f1a99a81c9615856b4205d408a44ab676c1acbb3d",
+    "sha256": "daf68404b478b4c3616666580d02500a24148c0f439e4d0134d65ce70e90e655",
     "source": "https://github.com/nodejs/node/tree/v24.8.0",
-    "url": "https://nodejs.org/dist/v24.8.0/node-v24.8.0-linux-x64.tar.xz",
+    "url": "https://nodejs.org/dist/v24.8.0/node-v24.8.0-linux-x64.tar.gz",
     "version": "24.8.0"
   },
   "os": "linux",
