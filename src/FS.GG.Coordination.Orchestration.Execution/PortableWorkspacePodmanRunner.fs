@@ -169,9 +169,9 @@ module private PortablePodmanRuntime =
                         ()
 
                 let reads = Task.WhenAll(stdout, stderr)
-                let! drained = Task.WhenAny(reads, Task.Delay(runtime.TerminationGrace))
+                let! _ = Task.WhenAny(reads :> Task, Task.Delay(runtime.TerminationGrace))
 
-                if not (Object.ReferenceEquals(drained, reads)) then
+                if not reads.IsCompleted then
                     readCancellation.Cancel()
 
                     try

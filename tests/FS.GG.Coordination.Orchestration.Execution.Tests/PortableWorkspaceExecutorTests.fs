@@ -1411,6 +1411,7 @@ else:
                     Assert.Equal(Some 128, missingCommitObserved.ExitCode)
                     Assert.Equal(PortableProcessRefusalStage.SourceSnapshot, missingCommitObserved.Refusal.Value.Stage)
                     Assert.Equal("portable-source-commit-refused", missingCommitObserved.Refusal.Value.Reason)
+                    Assert.True(missingCommitObserved.Refusal.Value.HelperOutputComplete)
                     Assert.NotEmpty(missingCommitObserved.StandardError)
                     Assert.False(File.Exists(Path.Combine(missingCommitStateRoot, "create-args.json")))
 
@@ -1524,11 +1525,19 @@ else:
                         }
 
                     let runner = PortableWorkspacePodmanRunner runtime :> IPortableProcessRunner
-                    let! observed = runner.RunAsync(request, CancellationToken.None)
 
-                    Assert.False(observed.TerminationObserved)
-                    Assert.Equal(PortableProcessRefusalStage.SourceSnapshot, observed.Refusal.Value.Stage)
-                    Assert.Equal("portable-source-tree-refused", observed.Refusal.Value.Reason)
+                    for index in 1..32 do
+                        let selected =
+                            { request with
+                                ContainerName = $"fsgg-portable-link-refusal-{index:D2}"
+                            }
+
+                        let! observed = runner.RunAsync(selected, CancellationToken.None)
+
+                        Assert.False(observed.TerminationObserved)
+                        Assert.Equal(PortableProcessRefusalStage.SourceSnapshot, observed.Refusal.Value.Stage)
+                        Assert.Equal("portable-source-tree-refused", observed.Refusal.Value.Reason)
+                        Assert.True(observed.Refusal.Value.HelperOutputComplete)
                 finally
                     if Directory.Exists temporary then
                         Directory.Delete(temporary, true)
