@@ -115,20 +115,62 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
         shutil.copyfile(cache / archive, context / archive)
 
     prefix = podman_prefix(args)
-    build = run(
-        prefix
-        + [
-            "build",
-            "--pull=never",
-            "--platform=linux/amd64",
-            "--format=oci",
-            "--tag",
-            IMAGE_NAME,
-            "--file",
-            str(context / "Containerfile"),
-            str(context),
-        ]
-    )
+    if args.nested_host_namespace_workaround:
+        container = f"fsgg-portable-preparation-{uuid.uuid4().hex[:12]}"
+        base = inputs["base"]["name"].split(":", 1)[0] + "@" + inputs["base"]["ociDigest"]
+        install = (
+            "set -eu; "
+            "tar -xJf /tmp/node.tar.xz -C /usr/local --strip-components=1; "
+            "mkdir -p /opt/typescript; "
+            "tar -xzf /tmp/typescript.tgz -C /opt/typescript --strip-components=1; "
+            "chmod 0555 /opt/typescript/bin/tsc /opt/typescript/bin/tsserver; "
+            "rm /tmp/node.tar.xz /tmp/typescript.tgz; "
+            "test \"$(/usr/local/bin/python3 --version)\" = \"Python 3.14.0\"; "
+            "test \"$(/usr/local/bin/node --version)\" = \"v24.8.0\"; "
+            "test \"$(/opt/typescript/bin/tsc --version)\" = \"Version 5.9.2\""
+        )
+        created = run(prefix + ["create", "--name", container, "--pid=host", "--uts=host", "--entrypoint=/bin/sh", base, "-c", install])
+        try:
+            run(prefix + ["cp", str(cache / inputs["node"]["archive"]), f"{container}:/tmp/node.tar.xz"])
+            run(prefix + ["cp", str(cache / inputs["typescript"]["archive"]), f"{container}:/tmp/typescript.tgz"])
+            started = run(prefix + ["start", "--attach", container])
+            committed = run(
+                prefix
+                + [
+                    "commit",
+                    "--format=oci",
+                    "--change=USER 65532:65532",
+                    "--change=WORKDIR /source",
+                    "--change=ENTRYPOINT []",
+                    "--change=CMD []",
+                    "--change=LABEL org.opencontainers.image.title=FS.GG-portable-workspace-qualification-toolchain",
+                    "--change=LABEL org.opencontainers.image.licenses=PSF-2.0-AND-MIT-AND-Apache-2.0",
+                    container,
+                    IMAGE_NAME,
+                ]
+            )
+            build_output = created.stdout + started.stdout + committed.stdout
+        finally:
+            run(prefix + ["container", "rm", container], check=False)
+    else:
+        try:
+            built = run(
+                prefix
+                + [
+                    "build",
+                    "--pull=never",
+                    "--platform=linux/amd64",
+                    "--format=oci",
+                    "--tag",
+                    IMAGE_NAME,
+                    "--file",
+                    str(context / "Containerfile"),
+                    str(context),
+                ]
+            )
+        except subprocess.CalledProcessError as error:
+            raise RuntimeError(f"Podman image build failed: {error.stderr.strip()}") from error
+        build_output = built.stdout
     image = inspect_image(prefix, IMAGE_NAME)
     verify_image(image)
     digest = image.get("Digest")
@@ -155,7 +197,8 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
             "user": image["Config"]["User"],
         },
         "inputs": inputs,
-        "buildStdoutSha256": hashlib.sha256(build.stdout.encode()).hexdigest(),
+        "buildStdoutSha256": hashlib.sha256(build_output.encode()).hexdigest(),
+        "nestedHostNamespaceWorkaround": args.nested_host_namespace_workaround,
         "podman": run(prefix + ["version", "--format", "{{.Client.Version}}"]).stdout.strip(),
     }
     payload = canonical_bytes(manifest)
@@ -207,10 +250,11 @@ def qualify(args: argparse.Namespace, source: Path, state: Path, image_reference
         ("backend-test", f"/source/{fixture}/composed/backend", "/usr/local/bin/python3", ["test.py"]),
         ("composed-journey", f"/source/{fixture}/composed/product", "/usr/local/bin/python3", ["journey.py", "/output/frontend/app.js", "/usr/local/bin/node"]),
     ]
-    append_journal(journal, {"event": "run-start", "runId": run_id, "sourceRevision": revision, "sourceTree": tree, "fixtureArchiveSha256": fixture_sha256, "image": image_reference})
+    append_journal(journal, {"event": "run-start", "runId": run_id, "sourceRevision": revision, "sourceTree": tree, "fixtureArchiveSha256": fixture_sha256, "image": image_reference, "nestedHostNamespaceWorkaround": args.nested_host_namespace_workaround})
     try:
         for index, (name, workdir, executable, arguments) in enumerate(operations):
             container = f"fsgg-portable-{run_id[:12]}-{index}"
+            namespace_workaround = ["--pid=host", "--uts=host"] if args.nested_host_namespace_workaround else []
             create = run(
                 prefix
                 + [
@@ -222,6 +266,7 @@ def qualify(args: argparse.Namespace, source: Path, state: Path, image_reference
                     "--network=none",
                     "--cap-drop=all",
                     "--security-opt=no-new-privileges",
+                    *namespace_workaround,
                     f"--volume={source}:/source:ro",
                     f"--volume={output}:/output:rw",
                     "--tmpfs=/tmp:rw,noexec,nosuid,nodev,size=64m",
@@ -264,11 +309,21 @@ def main() -> int:
     parser.add_argument("--podman", default="/usr/bin/podman")
     parser.add_argument("--root", required=True)
     parser.add_argument("--runroot", required=True)
+    parser.add_argument(
+        "--nested-host-namespace-workaround",
+        action="store_true",
+        help="Use host PID/UTS namespaces only to diagnose nested environments that prohibit proc/UTS setup; this does not qualify strict isolation",
+    )
     args = parser.parse_args()
     source = Path(args.source).resolve()
     state = Path(args.state_dir).resolve()
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(state, 0o700)
+    if args.nested_host_namespace_workaround:
+        containers_conf = state / "containers.conf"
+        containers_conf.write_text("[containers]\ndefault_sysctls = []\n")
+        os.chmod(containers_conf, 0o600)
+        os.environ["CONTAINERS_CONF"] = str(containers_conf)
     image_reference, manifest_path, manifest = prepare(args, source, state)
     journal = qualify(args, source, state, image_reference)
     result = {
