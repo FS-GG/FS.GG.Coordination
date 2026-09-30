@@ -247,6 +247,13 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.orchestration.execution.codex": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Orchestration.Execution": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.coordination.orchestration.observer": {
         "type": "Project",
         "dependencies": {
