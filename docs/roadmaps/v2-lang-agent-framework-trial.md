@@ -1,14 +1,15 @@
 # V2-LANG-01.4 — bounded Microsoft Agent Framework trial
 
-**Part:** V2-LANG-01, milestone .4, windows A–D. This branch extends the A–B source candidate with
-window C. The accepted programme plan remains
+**Part:** V2-LANG-01, milestone .4, windows A–D. Protected Coordination main contains A–B through
+PR #898 at `2ecab6c3473b085a720f7ffcf34362cba67c346d`. This successor prepares C–D. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** A–C source and focused local tests are prepared. Window C starts from A–B PR #898 head
-`6ac32e1ceb1a5624788a917a27768327aa85cd25`; that source remains unmerged. Merge, D decision evidence,
-publication, installation and adoption remain pending. V2-LANG-01.4 is open.
+**Status:** A–B are delivered on protected Coordination main. C recovery semantics and the D rejection
+disposition are prepared locally from that protected base. C–D protected delivery and readback remain pending,
+so V2-LANG-01.4 is open. Publication, installation and operating activation are rejected by the D disposition.
 
-**Telemetry:** not configured for this dispatch. No usage or bureaucracy percentage is inferred.
+**Telemetry:** attempt `v2-lang-framework-disposition-20260930` is not configured. No usage or bureaucracy
+percentage is inferred.
 
 ## Trial boundary
 
@@ -82,9 +83,48 @@ branch exception is surfaced as the SDK's `WorkflowErrorEvent`; no workflow outp
   cancellation propagation, deadline behavior, framework exceptions and unknown effects against the
   durable coordinator. Framework checkpoint replay is unsupported; exact durable coordinator reconciliation
   is the only admitted recovery path in this source trial.
-- [ ] **D — measured disposition.** Measure the trial against the existing supported baseline and record
-  adopt, defer or reject. Include dependency/runtime cost, failure behavior, maintenance surface and an
-  actual unmet need. A–C alone makes no adoption decision.
+- [x] **D — measured disposition prepared: reject production adoption.** The direct neutral coordinator
+  remains the supported path. The trial adds runtime, dependency and maintenance cost, cannot use framework
+  checkpoints for durable replay, and demonstrates no unmet product need that requires the facade or graph.
+  The milestone remains open until this C–D result is delivered to and read back from protected main.
+
+## D measurement and disposition
+
+The bounded runtime comparison used Release builds on Linux x64, .NET SDK 10.0.400/runtime 10.0.12 and an
+AMD Ryzen 9 7900. Each scenario ran in five fresh processes after 25 warm-up operations. The table reports
+the median process result. Direct and facade success used 5,000 measured work items per process; recovery used
+2,000; workflow used 500. Every operation constructed a fresh in-memory journal and deterministic provider
+fixture returning the same candidate and usage. Allocation is the change in `GC.GetTotalAllocatedBytes(true)`
+across the measured loop. These are local framework overhead measurements, not provider latency, capacity,
+token usage or operating-cost evidence.
+
+| Scenario | Median time/work item | Allocated bytes/work item | Compared with direct path |
+| --- | ---: | ---: | --- |
+| Neutral `ExecutionSessionCoordinator.Launch` | 6.63 µs | 4,616 | supported baseline |
+| `BoundExecutionAgent.RunAsync` over the same coordinator | 16.79 µs | 10,352 | +10.16 µs and +5,736 bytes; 2.53× time |
+| Additional fixed framework workflow | 210.94 µs | 108,749 | added after the execution projection |
+| Direct ambiguous launch plus durable reconciliation | 9.95 µs | 5,440 | recovery baseline; one launch, one reconciliation |
+| Two facade instances around that recovery | 35.76 µs | 16,608 | +25.81 µs and +11,168 bytes; 3.60× time |
+
+The workflow result confirms the bounded fan-out/barrier behavior but contributes no execution authority,
+durable scheduling or delivery capability. Combining the facade and fixed workflow would add their costs;
+the provider call would normally dominate absolute elapsed time, but it does not remove the allocation,
+dependency or ownership surface.
+
+The maintained trial surface is 464 physical source lines and 685 physical test lines across four F# files,
+with 13 focused tests, two direct SDK pins and a separate package lock. Against the existing Codex adapter,
+the restored graph adds 18 package identities and 5,345,168 bytes of selected runtime assemblies. Adverse
+lifecycle behavior still depends on the existing journal/coordinator for effect ownership and reconciliation;
+the framework adds exception translation and fresh facade construction while its session and workflow
+checkpoint replay remain fail-closed.
+
+No current product requirement needs an `AIAgent` identity, framework message/session portability, or this
+in-process two-branch graph. The neutral coordinator already performs the one authoritative launch and durable
+reconciliation, and the two local candidate checks do not require a workflow runtime. The disposition is
+therefore **reject production adoption** of Microsoft Agent Framework 1.22.0 for this path: do not publish,
+install, activate or place it in generated workspaces. The optional source trial remains repository evidence.
+A future trial requires a concrete unmet need and must remeasure the then-current SDK; this result does not
+claim that later SDK versions have the same limits.
 
 ## Upstream identity and measured package footprint
 
@@ -131,9 +171,9 @@ Focused evidence covers:
 
 ## Unified section 9.9 workspace impact
 
-There is no generated-workspace change in A–C. No SDD, Spec Kit, typed-SDD, none or product-language
+There is no generated-workspace change in A–D. No SDD, Spec Kit, typed-SDD, none or product-language
 family changes fresh creation, retained behavior, defaults or enabled runtime behavior. The source is an
 optional build/test assembly and establishes no installed capability. A later effective change would
 require an exact Coordination artifact publication, explicit receiver selection, clean-creation proof and
-separate retained-upgrade handling. D remains prerequisite to any adopt decision. Source merge,
-installed availability and operating activation remain separate facts.
+separate retained-upgrade handling. D rejects that adoption step for this trial. Source merge, installed
+availability and operating activation remain separate facts.
