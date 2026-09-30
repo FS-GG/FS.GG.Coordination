@@ -18,7 +18,7 @@ RUN set -eu; \
     test "$(/usr/local/bin/node --version)" = "v24.8.0"; \
     test "$(/opt/typescript/bin/tsc --version)" = "Version 5.9.2"
 
-USER 65532:65532
+USER 32768:32768
 WORKDIR /source
 ENTRYPOINT []
 CMD []

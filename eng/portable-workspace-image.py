@@ -93,7 +93,7 @@ def verify_image(image: dict) -> None:
     volumes = config.get("Volumes")
     if image.get("Os") != "linux" or image.get("Architecture") != "amd64":
         raise RuntimeError("image platform is not linux/amd64")
-    if config.get("User") not in ("65532", "65532:65532"):
+    if config.get("User") not in ("32768", "32768:32768"):
         raise RuntimeError("image does not select the fixed non-root user")
     if entrypoint not in (None, []) or command not in (None, []) or volumes not in (None, {}):
         raise RuntimeError("image declares an entrypoint, command, or volume hook")
@@ -186,7 +186,7 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
                 + [
                     "commit",
                     "--format=oci",
-                    "--change=USER 65532:65532",
+                    "--change=USER 32768:32768",
                     "--change=WORKDIR /source",
                     "--change=ENTRYPOINT []",
                     "--change=CMD []",
@@ -278,7 +278,7 @@ def qualify(args: argparse.Namespace, source: Path, state: Path, image_reference
     output.mkdir(parents=True, mode=0o755)
     journal = run_dir / "journal.jsonl"
     os.chmod(run_dir, 0o700)
-    run(prefix + ["unshare", "chown", "65532:65532", str(output)])
+    run(prefix + ["unshare", "chown", "32768:32768", str(output)])
 
     common_env = [
         "--unsetenv-all",
