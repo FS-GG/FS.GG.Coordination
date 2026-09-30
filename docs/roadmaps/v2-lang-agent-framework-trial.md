@@ -8,8 +8,9 @@ PR #898 at `2ecab6c3473b085a720f7ffcf34362cba67c346d`. This successor prepares C
 disposition are prepared locally from that protected base. C–D protected delivery and readback remain pending,
 so V2-LANG-01.4 is open. Publication, installation and operating activation are rejected by the D disposition.
 
-**Telemetry:** attempt `v2-lang-framework-disposition-20260930` is not configured. No usage or bureaucracy
-percentage is inferred.
+**Telemetry:** attempts `v2-lang-framework-disposition-20260930` and
+`v2-lang-framework-measurement-evidence-20260930` are not configured. No usage or bureaucracy percentage is
+inferred.
 
 ## Trial boundary
 
@@ -98,6 +99,19 @@ fixture returning the same candidate and usage. Allocation is the change in `GC.
 across the measured loop. These are local framework overhead measurements, not provider latency, capacity,
 token usage or operating-cost evidence.
 
+The checkout-relative [measurement runner](evidence/v2-lang-agent-framework-trial/measure.sh) creates its
+unregistered helper project under a temporary directory and deletes it after the run. It adds no solution,
+package or workflow registration. From the checkout root, reproduce the five-process aggregates with:
+
+```console
+docs/roadmaps/evidence/v2-lang-agent-framework-trial/measure.sh > /tmp/agent-framework-results.jsonl
+```
+
+The retained [raw process aggregates](evidence/v2-lang-agent-framework-trial/results-20260930.jsonl) bind the
+reported figures to source head `9fa7d8ea45625e5e0a8cf14dab7cca7d88f0eece`, tree
+`da7c0e9d101b3c1594026a124854e5701e9f53b2`, SDK/runtime and host identity. The runner emits the current source
+head, tree and measurement-helper SHA-256 so a later reproduction cannot be mistaken for the original observation.
+
 | Scenario | Median time/work item | Allocated bytes/work item | Compared with direct path |
 | --- | ---: | ---: | --- |
 | Neutral `ExecutionSessionCoordinator.Launch` | 6.63 µs | 4,616 | supported baseline |
@@ -111,8 +125,9 @@ durable scheduling or delivery capability. Combining the facade and fixed workfl
 the provider call would normally dominate absolute elapsed time, but it does not remove the allocation,
 dependency or ownership surface.
 
-The maintained trial surface is 464 physical source lines and 685 physical test lines across four F# files,
-with 13 focused tests, two direct SDK pins and a separate package lock. Against the existing Codex adapter,
+The runtime trial and registered checks comprise 464 physical source lines and 685 physical test lines across
+four F# files, with 13 focused tests, two direct SDK pins and a separate package lock. The unregistered evidence
+helper is retained separately from that runtime/test count. Against the existing Codex adapter,
 the restored graph adds 18 package identities and 5,345,168 bytes of selected runtime assemblies. Adverse
 lifecycle behavior still depends on the existing journal/coordinator for effect ownership and reconciliation;
 the framework adds exception translation and fresh facade construction while its session and workflow

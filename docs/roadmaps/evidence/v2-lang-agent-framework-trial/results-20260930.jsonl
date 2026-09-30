@@ -1,0 +1,26 @@
+{"schema":"fsgg.agent-framework-measurement/1","sourceHead":"9fa7d8ea45625e5e0a8cf14dab7cca7d88f0eece","sourceTree":"da7c0e9d101b3c1594026a124854e5701e9f53b2","helperSha256":"5221f4f3f5132695920ab0126e5840e9ed2c9252a488d998b19439ec7162a9ce","sdkVersion":"10.0.400","runtimeVersion":"10.0.12","os":"Arch Linux x64 20260920.0.596911","cpu":"AMD Ryzen 9 7900 12-Core Processor","warmupOperations":25,"repetitions":5,"successIterations":5000,"recoveryIterations":2000,"workflowIterations":500}
+{"allocatedBytes":23080120,"allocatedBytesPerOperation":4616.024,"elapsedMilliseconds":33.671,"iterations":5000,"microsecondsPerOperation":6.7342,"scenario":"direct-coordinator"}
+{"allocatedBytes":23080120,"allocatedBytesPerOperation":4616.024,"elapsedMilliseconds":32.6412,"iterations":5000,"microsecondsPerOperation":6.52824,"scenario":"direct-coordinator"}
+{"allocatedBytes":23080120,"allocatedBytesPerOperation":4616.024,"elapsedMilliseconds":33.6893,"iterations":5000,"microsecondsPerOperation":6.73786,"scenario":"direct-coordinator"}
+{"allocatedBytes":23080120,"allocatedBytesPerOperation":4616.024,"elapsedMilliseconds":33.1337,"iterations":5000,"microsecondsPerOperation":6.62674,"scenario":"direct-coordinator"}
+{"allocatedBytes":23080120,"allocatedBytesPerOperation":4616.024,"elapsedMilliseconds":32.8144,"iterations":5000,"microsecondsPerOperation":6.562880000000001,"scenario":"direct-coordinator"}
+{"allocatedBytes":51760792,"allocatedBytesPerOperation":10352.1584,"elapsedMilliseconds":81.1219,"iterations":5000,"microsecondsPerOperation":16.22438,"scenario":"agent-facade"}
+{"allocatedBytes":51760792,"allocatedBytesPerOperation":10352.1584,"elapsedMilliseconds":83.9332,"iterations":5000,"microsecondsPerOperation":16.78664,"scenario":"agent-facade"}
+{"allocatedBytes":51760792,"allocatedBytesPerOperation":10352.1584,"elapsedMilliseconds":117.45,"iterations":5000,"microsecondsPerOperation":23.49,"scenario":"agent-facade"}
+{"allocatedBytes":51760792,"allocatedBytesPerOperation":10352.1584,"elapsedMilliseconds":90.7607,"iterations":5000,"microsecondsPerOperation":18.15214,"scenario":"agent-facade"}
+{"allocatedBytes":51760792,"allocatedBytesPerOperation":10352.1584,"elapsedMilliseconds":80.4413,"iterations":5000,"microsecondsPerOperation":16.088260000000002,"scenario":"agent-facade"}
+{"allocatedBytes":54419376,"allocatedBytesPerOperation":108838.752,"elapsedMilliseconds":101.5646,"iterations":500,"microsecondsPerOperation":203.12920000000003,"scenario":"fixed-workflow"}
+{"allocatedBytes":54374504,"allocatedBytesPerOperation":108749.008,"elapsedMilliseconds":105.4696,"iterations":500,"microsecondsPerOperation":210.9392,"scenario":"fixed-workflow"}
+{"allocatedBytes":54273520,"allocatedBytesPerOperation":108547.04,"elapsedMilliseconds":103.2932,"iterations":500,"microsecondsPerOperation":206.5864,"scenario":"fixed-workflow"}
+{"allocatedBytes":54279656,"allocatedBytesPerOperation":108559.312,"elapsedMilliseconds":127.9326,"iterations":500,"microsecondsPerOperation":255.86520000000002,"scenario":"fixed-workflow"}
+{"allocatedBytes":54387992,"allocatedBytesPerOperation":108775.984,"elapsedMilliseconds":111.6399,"iterations":500,"microsecondsPerOperation":223.2798,"scenario":"fixed-workflow"}
+{"allocatedBytes":10880120,"allocatedBytesPerOperation":5440.06,"elapsedMilliseconds":19.8103,"iterations":2000,"microsecondsPerOperation":9.905149999999999,"scenario":"direct-recovery"}
+{"allocatedBytes":10880120,"allocatedBytesPerOperation":5440.06,"elapsedMilliseconds":21.0096,"iterations":2000,"microsecondsPerOperation":10.5048,"scenario":"direct-recovery"}
+{"allocatedBytes":10880120,"allocatedBytesPerOperation":5440.06,"elapsedMilliseconds":19.894,"iterations":2000,"microsecondsPerOperation":9.947,"scenario":"direct-recovery"}
+{"allocatedBytes":10880120,"allocatedBytesPerOperation":5440.06,"elapsedMilliseconds":19.2979,"iterations":2000,"microsecondsPerOperation":9.648950000000001,"scenario":"direct-recovery"}
+{"allocatedBytes":10880120,"allocatedBytesPerOperation":5440.06,"elapsedMilliseconds":20.9892,"iterations":2000,"microsecondsPerOperation":10.4946,"scenario":"direct-recovery"}
+{"allocatedBytes":33216792,"allocatedBytesPerOperation":16608.396,"elapsedMilliseconds":71.492,"iterations":2000,"microsecondsPerOperation":35.746,"scenario":"agent-facade-recovery"}
+{"allocatedBytes":33216792,"allocatedBytesPerOperation":16608.396,"elapsedMilliseconds":77.0206,"iterations":2000,"microsecondsPerOperation":38.5103,"scenario":"agent-facade-recovery"}
+{"allocatedBytes":33216792,"allocatedBytesPerOperation":16608.396,"elapsedMilliseconds":68.5747,"iterations":2000,"microsecondsPerOperation":34.287349999999996,"scenario":"agent-facade-recovery"}
+{"allocatedBytes":33216792,"allocatedBytesPerOperation":16608.396,"elapsedMilliseconds":71.5173,"iterations":2000,"microsecondsPerOperation":35.75865,"scenario":"agent-facade-recovery"}
+{"allocatedBytes":33216792,"allocatedBytesPerOperation":16608.396,"elapsedMilliseconds":76.3243,"iterations":2000,"microsecondsPerOperation":38.162150000000004,"scenario":"agent-facade-recovery"}
