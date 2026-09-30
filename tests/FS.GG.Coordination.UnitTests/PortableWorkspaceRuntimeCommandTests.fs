@@ -33,7 +33,7 @@ type private PythonHelloRunner(fixtureRoot: string) =
 
             let start =
                 ProcessStartInfo(
-                    "/usr/sbin/python3",
+                    "/usr/bin/python3",
                     WorkingDirectory = Path.Combine(fixtureRoot, request.WorkingDirectory),
                     RedirectStandardOutput = true,
                     RedirectStandardError = true,
