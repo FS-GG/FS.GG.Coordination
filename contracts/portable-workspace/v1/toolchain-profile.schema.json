@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://fs.gg/contracts/portable-workspace/v1/toolchain-profile.schema.json",
+  "title": "FS.GG portable workspace toolchain profile v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema", "profileId", "revision", "workspaceScope", "sourceRevision", "qualifiedImage", "components", "product", "limits"],
+  "properties": {
+    "schema": { "const": "fsgg.workspace.toolchain-profile/1" },
+    "profileId": { "$ref": "#/$defs/id" },
+    "revision": { "$ref": "#/$defs/counter" },
+    "workspaceScope": { "$ref": "#/$defs/id" },
+    "sourceRevision": { "type": "string", "pattern": "^[A-Za-z0-9_-]{1,128}$" },
+    "qualifiedImage": { "type": "string", "maxLength": 256, "pattern": "^.+@sha256:[0-9a-f]{64}$" },
+    "components": {
+      "type": "array", "minItems": 1, "maxItems": 32,
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "language", "workingDirectory", "toolchain", "entryPoints"],
+        "properties": {
+          "id": { "$ref": "#/$defs/id" },
+          "language": { "$ref": "#/$defs/id" },
+          "workingDirectory": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$))(?!.*//)(?!.*\\\\)[^/].{0,255}$" },
+          "toolchain": {
+            "type": "object", "additionalProperties": false, "required": ["id", "version"],
+            "properties": { "id": { "$ref": "#/$defs/id" }, "version": { "type": "string", "minLength": 1, "maxLength": 128, "not": { "enum": ["latest", "LATEST", "*"] } } }
+          },
+          "entryPoints": {
+            "type": "object", "additionalProperties": false, "required": ["build", "test"],
+            "properties": { "build": { "$ref": "#/$defs/id" }, "test": { "$ref": "#/$defs/id" }, "lint": { "$ref": "#/$defs/id" }, "artifact": { "$ref": "#/$defs/id" } }
+          }
+        }
+      }
+    },
+    "product": {
+      "type": "object", "additionalProperties": false, "required": ["build", "test", "journey"],
+      "properties": { "build": { "$ref": "#/$defs/id" }, "test": { "$ref": "#/$defs/id" }, "journey": { "$ref": "#/$defs/id" } }
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false, "required": ["maximumRuntimeSeconds", "maximumOutputBytes"],
+      "properties": { "maximumRuntimeSeconds": { "$ref": "#/$defs/positiveCounter" }, "maximumOutputBytes": { "$ref": "#/$defs/positiveCounter" } }
+    }
+  },
+  "$defs": {
+    "id": { "type": "string", "pattern": "^[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}$" },
+    "counter": { "type": "string", "pattern": "^(0|[1-9][0-9]{0,19})$" },
+    "positiveCounter": { "type": "string", "pattern": "^[1-9][0-9]{0,19}$" }
+  }
+}

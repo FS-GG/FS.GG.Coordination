@@ -56,6 +56,22 @@
         "resolved": "3.1.5",
         "contentHash": "tKi7dSTwP4m5m9eXPM2Ime4Kn7xNf4x4zT9sdLO/G4hZVnQCRiMTWoSZqI/pYTVeI27oPPqHBKYI/DjJ9GsYgA=="
       },
+      "AGUI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "+lW3TXbkJf3j8WhVur7DlLA5WNXiowGbNQJmJuQONXzlbcv2EvqB2lH7Y7TP/1a3ftBMSECrzoN/aMO1vZNBEQ==",
+        "dependencies": {
+          "Microsoft.Extensions.AI.Abstractions": "10.6.0"
+        }
+      },
+      "AGUI.Formatting": {
+        "type": "Transitive",
+        "resolved": "1.0.0",
+        "contentHash": "CXo1iLk+SoLQ5elyKwfs8vVJinjQCYFsqtaA8gYtofKe0bGYGW+n/NV9cWbo6ET1RKNyha3IxMme17WfVCbu6w==",
+        "dependencies": {
+          "AGUI.Abstractions": "1.0.0"
+        }
+      },
       "Akka.Analyzers": {
         "type": "Transitive",
         "resolved": "0.3.3",
@@ -151,6 +167,11 @@
         "type": "Transitive",
         "resolved": "18.8.1",
         "contentHash": "Eclse/ZZjr4lmWzZFNN9h/OluhKL+SK/QbUyKUewgX139aGeyMEO/DkMPwuFs2MixvanTnz6891rF8UHDg+W4Q=="
+      },
+      "Microsoft.Extensions.AI.Abstractions": {
+        "type": "Transitive",
+        "resolved": "10.6.0",
+        "contentHash": "JCkVoyqBqi9r3Vs5Qo5PfZobT0+CWeOx+9y9yggBxtW9s/X5CAoa7Iw/tP/rfUdz+nxRKMSBmrytYgwmu60lgA=="
       },
       "Microsoft.Extensions.DependencyInjection.Abstractions": {
         "type": "Transitive",
@@ -384,6 +405,8 @@
       "fsgg-coord-orchestration-host": {
         "type": "Project",
         "dependencies": {
+          "AGUI.Abstractions": "[1.0.0, 1.0.0]",
+          "AGUI.Formatting": "[1.0.0, 1.0.0]",
           "FS.GG.Coordination.Core": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Observer": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Pilot": "[1.0.0, )",
