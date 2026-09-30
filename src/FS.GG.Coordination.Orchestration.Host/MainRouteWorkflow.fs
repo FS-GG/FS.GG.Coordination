@@ -635,7 +635,7 @@ type MainRouteWorkflow
                     | _ -> return Error "main-route-transition-refused"
                 | _ -> return Error "main-route-candidate-receipt-missing"
             | ReadNativeDelivery ->
-                return! append value "attempt-complete" (ObserveAttempt(value.Route.AttemptId, Completed)) token
+                return! append value "attempt-complete" (ObserveAttempt(value.Route.AttemptId, AttemptStatus.Completed)) token
             | kind ->
                 match nextIntent value.Route payload kind with
                 | Some next -> return! append value ($"intent-{kind}") (RecordEffectIntent next) token
