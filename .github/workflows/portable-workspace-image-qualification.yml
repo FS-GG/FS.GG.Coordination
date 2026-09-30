@@ -27,9 +27,9 @@ jobs:
     timeout-minutes: 20
     env:
       BASE_IMAGE: docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056
-      PODMAN_ROOT: /tmp/portable-workspace-podman-${{ github.run_id }}-${{ github.run_attempt }}/root
-      PODMAN_RUNROOT: /tmp/portable-workspace-podman-${{ github.run_id }}-${{ github.run_attempt }}/runroot
-      QUALIFICATION_STATE: /tmp/portable-workspace-image-${{ github.run_id }}-${{ github.run_attempt }}
+      PODMAN_ROOT: /tmp/pwr-${{ github.run_id }}-${{ github.run_attempt }}
+      PODMAN_RUNROOT: /tmp/pwu-${{ github.run_id }}-${{ github.run_attempt }}
+      QUALIFICATION_STATE: /tmp/pws-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
       - name: Check out the exact candidate without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -51,7 +51,7 @@ jobs:
             --state-dir "$QUALIFICATION_STATE" \
             --root "$PODMAN_ROOT" \
             --runroot "$PODMAN_RUNROOT" \
-            > "$RUNNER_TEMP/portable-workspace-preflight-result.json"
+            > "$QUALIFICATION_STATE/preflight-result.json"
 
       - name: Pull only the approved base digest
         shell: bash
@@ -78,16 +78,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          mapfile -t containers < <(
-            podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
-              container ps --all --quiet --filter label=fsgg.portable-workspace.qualification=true
-          )
+          mkdir -p "$QUALIFICATION_STATE"
+          containers_file="$QUALIFICATION_STATE/cleanup-containers.txt"
+          remaining_file="$QUALIFICATION_STATE/cleanup-remaining.txt"
+          podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+            container ps --all --quiet --filter label=fsgg.portable-workspace.qualification=true \
+            > "$containers_file"
+          mapfile -t containers < "$containers_file"
           if (( ${#containers[@]} > 0 )); then
             podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
               container rm --force "${containers[@]}"
           fi
-          test -z "$(podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
-            container ps --all --quiet --filter label=fsgg.portable-workspace.qualification=true)"
+          podman --storage-driver=vfs --root "$PODMAN_ROOT" --runroot "$PODMAN_RUNROOT" \
+            container ps --all --quiet --filter label=fsgg.portable-workspace.qualification=true \
+            > "$remaining_file"
+          test ! -s "$remaining_file"
 
       - name: Retain the bounded candidate and qualification evidence
         if: always()
@@ -101,7 +106,7 @@ jobs:
             ${{ env.QUALIFICATION_STATE }}/qualification-result.json
             ${{ env.QUALIFICATION_STATE }}/runs/*/journal.jsonl
             ${{ env.QUALIFICATION_STATE }}/runs/*/output/**
-            ${{ runner.temp }}/portable-workspace-preflight-result.json
+            ${{ env.QUALIFICATION_STATE }}/preflight-result.json
           if-no-files-found: warn
           retention-days: 14
           compression-level: 0

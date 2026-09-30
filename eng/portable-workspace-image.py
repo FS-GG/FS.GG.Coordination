@@ -37,14 +37,27 @@ def run(
     check: bool = True,
     timeout_seconds: int = 120,
 ) -> subprocess.CompletedProcess[str]:
-    return subprocess.run(
-        argv,
-        cwd=cwd,
-        check=check,
-        text=True,
-        capture_output=True,
-        timeout=timeout_seconds,
-    )
+    try:
+        return subprocess.run(
+            argv,
+            cwd=cwd,
+            check=check,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+        )
+    except subprocess.CalledProcessError as error:
+        stdout = (error.stdout or "").strip()[-4096:]
+        stderr = (error.stderr or "").strip()[-4096:]
+        raise RuntimeError(
+            f"command failed with exit {error.returncode}; stdout={stdout!r}; stderr={stderr!r}"
+        ) from error
+    except subprocess.TimeoutExpired as error:
+        stdout = (error.stdout or "")[-4096:]
+        stderr = (error.stderr or "")[-4096:]
+        raise RuntimeError(
+            f"command timed out after {timeout_seconds} seconds; stdout={stdout!r}; stderr={stderr!r}"
+        ) from error
 
 
 def sha256_file(path: Path) -> str:
@@ -201,26 +214,23 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
         shutil.copyfile(cache / archive, context / archive)
 
     prefix = podman_prefix(args)
-    try:
-        built = run(
-            prefix
-            + [
-                "build",
-                "--pull=never",
-                "--network=none",
-                "--source-date-epoch=0",
-                "--platform=linux/amd64",
-                "--format=oci",
-                "--tag",
-                IMAGE_NAME,
-                "--file",
-                str(context / "Containerfile"),
-                str(context),
-            ],
-            timeout_seconds=600,
-        )
-    except subprocess.CalledProcessError as error:
-        raise RuntimeError(f"Podman image build failed: {error.stderr.strip()}") from error
+    built = run(
+        prefix
+        + [
+            "build",
+            "--pull=never",
+            "--network=none",
+            "--source-date-epoch=0",
+            "--platform=linux/amd64",
+            "--format=oci",
+            "--tag",
+            IMAGE_NAME,
+            "--file",
+            str(context / "Containerfile"),
+            str(context),
+        ],
+        timeout_seconds=600,
+    )
     build_output = built.stdout
     image = inspect_image(prefix, IMAGE_NAME)
     verify_image(image)
