@@ -1,0 +1,90 @@
+name: V2 Host fixed qualification
+
+on:
+  workflow_dispatch:
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: v2-host-fixed-qualification
+  cancel-in-progress: false
+
+jobs:
+  fixed-qualification:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      ARTIFACTS: /tmp/v2-host-fixed-${{ github.run_id }}/artifacts
+      RESULT: /tmp/v2-host-fixed-${{ github.run_id }}/result
+      PROFILE: eng/v2-host-fixed-qualification-profile.json
+    steps:
+      - name: Check out the reviewed fixed job
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Validate the reviewed profile
+        id: profile
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          python3 eng/v2-host-fixed-qualification.py validate-profile --profile "$PROFILE"
+          python3 eng/v2-host-fixed-qualification.py workflow-values --profile "$PROFILE" --github-output "$GITHUB_OUTPUT"
+
+      - name: Download the exact Host candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          github-token: ${{ github.token }}
+          repository: FS-GG/FS.GG.Coordination
+          run-id: ${{ steps.profile.outputs.host-run-id }}
+          artifact-ids: ${{ steps.profile.outputs.host-candidate-id }}
+          path: ${{ env.ARTIFACTS }}/host-candidate
+
+      - name: Download the exact Host verification
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          github-token: ${{ github.token }}
+          repository: FS-GG/FS.GG.Coordination
+          run-id: ${{ steps.profile.outputs.host-run-id }}
+          artifact-ids: ${{ steps.profile.outputs.host-verification-id }}
+          path: ${{ env.ARTIFACTS }}/host-verification
+
+      - name: Download the exact runner candidate
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          github-token: ${{ github.token }}
+          repository: FS-GG/FS.GG.Coordination
+          run-id: ${{ steps.profile.outputs.runner-run-id }}
+          artifact-ids: ${{ steps.profile.outputs.runner-candidate-id }}
+          path: ${{ env.ARTIFACTS }}/runner-candidate
+
+      - name: Download the exact runner verification
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          github-token: ${{ github.token }}
+          repository: FS-GG/FS.GG.Coordination
+          run-id: ${{ steps.profile.outputs.runner-run-id }}
+          artifact-ids: ${{ steps.profile.outputs.runner-verification-id }}
+          path: ${{ env.ARTIFACTS }}/runner-verification
+
+      - name: Run the one-shot disposable diagnostic and cleanup
+        run: >-
+          python3 eng/v2-host-fixed-qualification.py qualify
+          --profile "$PROFILE"
+          --artifacts "$ARTIFACTS"
+          --output "$RESULT"
+          --workflow-revision "$GITHUB_SHA"
+
+      - name: Retain bounded qualification evidence
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: v2-host-fixed-qualification-${{ github.sha }}
+          path: ${{ env.RESULT }}/result.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
