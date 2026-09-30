@@ -595,7 +595,7 @@ let ``main admission preparation is ordered retry stable and required by workflo
                   ExpiresAt = Fixture.now.AddMinutes 5. }
               Generation = priorRoute.Generation
               StartedAt = Fixture.now
-              Status = Completed }
+              Status = AttemptStatus.Completed }
         let priorState =
             { journal.State with Attempts = Map.ofList [ priorAttempt.AttemptId, priorAttempt ] }
         let nextAttemptId = Guid.NewGuid()
@@ -806,7 +806,7 @@ let ``main admission preparation is ordered retry stable and required by workflo
                 CancellationToken.None
         Assert.True(Result.isOk parentFirst)
         parentJournal.Seed(AttemptStarted priorAttempt)
-        parentJournal.Seed(AttemptObserved(priorAttempt.AttemptId, Completed))
+        parentJournal.Seed(AttemptObserved(priorAttempt.AttemptId, AttemptStatus.Completed))
         parentJournal.Seed(CancelRequestedEvent "terminal-follow-up")
         parentJournal.Seed(CancelledEvent "terminal-follow-up")
         parentJournal.Seed(GenerationAdvanced(Id.generation 2L))
