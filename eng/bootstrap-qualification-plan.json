@@ -20,7 +20,7 @@
     "cancelInProgress": true
   },
   "requiredGateCount": 10,
-  "requiredProjectCount": 24,
+  "requiredProjectCount": 25,
   "requiredVulnerabilitySources": ["https://api.nuget.org/v3/index.json"],
   "requiredProjects": [
     "eng/telemetry-host-manager/TelemetryHostManager.fsproj",
@@ -30,6 +30,7 @@
     "src/FS.GG.Coordination.GitHub/FS.GG.Coordination.GitHub.fsproj",
     "src/FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj",
     "src/FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj",
+    "src/FS.GG.Coordination.Orchestration.Execution.AgentFramework/FS.GG.Coordination.Orchestration.Execution.AgentFramework.fsproj",
     "src/FS.GG.Coordination.Orchestration.Host/FS.GG.Coordination.Orchestration.Host.fsproj",
     "src/FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj",
     "src/FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj",

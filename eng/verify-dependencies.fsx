@@ -151,6 +151,12 @@ let private allowedDependencies =
             "FS.GG.Coordination.Orchestration.Execution", Set.empty
             "FS.GG.Coordination.Orchestration.Execution.Codex",
             Set.singleton "FS.GG.Coordination.Orchestration.Execution"
+            "FS.GG.Coordination.Orchestration.Execution.AgentFramework",
+            Set.ofList
+                [
+                    "FS.GG.Coordination.Orchestration.Execution"
+                    "FS.GG.Coordination.Orchestration.Execution.Codex"
+                ]
             "FS.GG.Coordination.Orchestration.Runner.Client",
             Set.ofList
                 [
