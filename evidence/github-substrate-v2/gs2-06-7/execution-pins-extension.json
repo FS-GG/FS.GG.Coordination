@@ -85,7 +85,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-prepare.yml",
-      "sha256": "c459b27cfd57e8ef80ee02e5e9e5d168e766c08786085c61480d8f5c450887c5",
+      "sha256": "b5289a5ba9c859b0bacd16b3c5fada09c812005086659f071c39ef4c20921ff5",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",

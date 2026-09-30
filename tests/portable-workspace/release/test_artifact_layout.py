@@ -31,9 +31,19 @@ def main() -> None:
     assert 'cp "$RELEASE_OUTPUT"/* "$ARTIFACT_ROOT/"' in workflow
     assert 'cp "$EVIDENCE_ROOT"/*.json "$ARTIFACT_ROOT/evidence/"' in workflow
     assert "path: ${{ env.ARTIFACT_ROOT }}/" in workflow
-    upload = workflow.split("- name: Retain the coherent candidate and bounded evidence", 1)[1]
-    assert "CANDIDATE_OUTPUT" not in upload
-    assert "EVIDENCE_ROOT }}" not in upload
+    diagnostics = workflow.index("- name: Retain bounded preparation diagnostics")
+    cleanup = workflow.index("- name: Remove exact private runtime state")
+    upload = workflow.index("- name: Retain the coherent candidate and bounded evidence")
+    assert diagnostics < cleanup < upload
+    assert '"qualificationPassed": status == "success"' in workflow
+    assert '("*.json", "preflight.json", "manifests/*.json", "runs/*/journal.jsonl")' in workflow
+    assert 'source.is_symlink() or source.suffix not in (".json", ".jsonl") or info.st_size > 1048576' in workflow
+    assert 'podman unshare /usr/bin/rm -rf -- "$path"' in workflow
+    assert 'refusing cleanup outside exact run scope' in workflow
+    assert "shutil.rmtree" not in workflow
+    upload_text = workflow.split("- name: Retain the coherent candidate and bounded evidence", 1)[1]
+    assert "CANDIDATE_OUTPUT" not in upload_text
+    assert "EVIDENCE_ROOT }}" not in upload_text
 
     with tempfile.TemporaryDirectory(prefix="portable-artifact-layout-") as temporary:
         root = Path(temporary)
