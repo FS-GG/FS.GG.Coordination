@@ -323,6 +323,13 @@
           "FSharp.Core": "[10.1.302, )"
         }
       },
+      "fs.gg.coordination.orchestration.execution.codex": {
+        "type": "Project",
+        "dependencies": {
+          "FS.GG.Coordination.Orchestration.Execution": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
       "fs.gg.coordination.orchestration.observer": {
         "type": "Project",
         "dependencies": {
@@ -374,6 +381,8 @@
           "AGUI.Abstractions": "[1.0.0, 1.0.0]",
           "AGUI.Formatting": "[1.0.0, 1.0.0]",
           "FS.GG.Coordination.Core": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Execution": "[1.0.0, )",
+          "FS.GG.Coordination.Orchestration.Execution.Codex": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Observer": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Pilot": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.PostgreSql": "[1.0.0, )",

@@ -37,6 +37,7 @@
     <Compile Include="MainHostComposition.fs" />
     <Compile Include="RunnerWireRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
+    <Compile Include="FixedNativeCapabilityDiagnostic.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -49,5 +50,7 @@
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.PostgreSql\FS.GG.Coordination.Orchestration.PostgreSql.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Observer\FS.GG.Coordination.Orchestration.Observer.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Runner.Protocol\FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Execution\FS.GG.Coordination.Orchestration.Execution.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Execution.Codex\FS.GG.Coordination.Orchestration.Execution.Codex.fsproj" />
   </ItemGroup>
 </Project>

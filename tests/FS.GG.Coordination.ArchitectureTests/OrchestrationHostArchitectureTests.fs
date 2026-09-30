@@ -47,6 +47,8 @@ let ``administration host is separate and serve path is migration free`` () =
             "../FS.GG.Coordination.Orchestration.PostgreSql/FS.GG.Coordination.Orchestration.PostgreSql.fsproj"
             "../FS.GG.Coordination.Orchestration.Observer/FS.GG.Coordination.Orchestration.Observer.fsproj"
             "../FS.GG.Coordination.Orchestration.Runner.Protocol/FS.GG.Coordination.Orchestration.Runner.Protocol.fsproj"
+            "../FS.GG.Coordination.Orchestration.Execution/FS.GG.Coordination.Orchestration.Execution.fsproj"
+            "../FS.GG.Coordination.Orchestration.Execution.Codex/FS.GG.Coordination.Orchestration.Execution.Codex.fsproj"
         ],
         references
     )
