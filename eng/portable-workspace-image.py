@@ -8,6 +8,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -28,6 +29,30 @@ EXPECTED_OUTPUTS = {
     "python-test.json": "2ed645adefe2c23308832036a3b5163dc39faaf152c2c9d1d3afb3bd637f146a",
     "python/app.pyc": "ab89c3c1b5404d87622387ba576e44ffb6e089b768a19f268886fc5b42ac3f93",
 }
+REQUIRED_BUILD_OPTIONS = (
+    "--file",
+    "--format",
+    "--network",
+    "--platform",
+    "--pull",
+    "--tag",
+    "--timestamp",
+)
+REQUIRED_CREATE_OPTIONS = (
+    "--cap-drop",
+    "--entrypoint",
+    "--env",
+    "--label",
+    "--name",
+    "--network",
+    "--pull",
+    "--read-only",
+    "--security-opt",
+    "--tmpfs",
+    "--unsetenv-all",
+    "--volume",
+    "--workdir",
+)
 
 
 def run(
@@ -137,6 +162,17 @@ def verify_image(image: dict) -> None:
         raise RuntimeError("image declares an entrypoint, command, or volume hook")
 
 
+def require_podman_options(prefix: list[str], command: str, required: tuple[str, ...]) -> None:
+    help_text = run(prefix + [command, "--help"]).stdout
+    missing = [
+        option
+        for option in required
+        if re.search(rf"(?<![\w-]){re.escape(option)}(?=[\s=,]|$)", help_text) is None
+    ]
+    if missing:
+        raise RuntimeError(f"Podman {command} lacks required options: {', '.join(missing)}")
+
+
 def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
     revision, tree, fixture_sha256 = require_exact_source(source, args.expected_source_revision)
     image_dir = source / "tests" / "portable-workspace" / "image"
@@ -159,6 +195,9 @@ def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
 
     prefix = podman_prefix(args)
     info = json.loads(run(prefix + ["info", "--format=json"]).stdout)
+    require_podman_options(prefix, "build", REQUIRED_BUILD_OPTIONS)
+    require_podman_options(prefix, "create", REQUIRED_CREATE_OPTIONS)
+    podman_version = run(prefix + ["version", "--format", "{{.Client.Version}}"]).stdout.strip()
     host = info["host"]
     if host.get("os") != "linux" or host.get("arch") != "amd64" or not host["security"].get("rootless"):
         raise RuntimeError("runner does not provide rootless Podman on linux/amd64")
@@ -181,6 +220,8 @@ def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
         "architecture": host["arch"],
         "containerUser": "32768:32768",
         "forbiddenIsolationOverrides": "absent",
+        "podmanVersion": podman_version,
+        "deterministicBuildTimestamp": "--timestamp=0",
     }
     path = state / "preflight.json"
     payload = canonical_bytes(receipt)
@@ -220,7 +261,7 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
             "build",
             "--pull=never",
             "--network=none",
-            "--source-date-epoch=0",
+            "--timestamp=0",
             "--platform=linux/amd64",
             "--format=oci",
             "--tag",
