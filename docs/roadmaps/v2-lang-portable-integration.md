@@ -48,6 +48,22 @@ or noncanonical fields fail closed.
   journeys, cancellation, duplicate delivery, recovery, unsupported toolchain refusal and the declared language
   population against exact installed artifacts. Record supported and unresolved routes before closing .2.
 
+## P4 trusted resolver source preparation
+
+The first Python adoption now has a source-qualified, fixed `portable-workspace` command route. Its production
+resolver reads only `/etc/fsgg/portable-workspaces/python-hello-v1.json`, requires a non-root selected account and
+administrator-owned non-link path components with no delegated write ACL, validates a closed bounded record, and
+reconstructs one compiled Python test operation. Before constructing the runner it verifies the installed CLI
+payload/version, fixed Git/tar/Podman executable identities, clean receiver commit/tree and the complete projected
+payload inventory. Caller JSON cannot add operations, arguments, environment keys or authority. Console
+cancellation reaches the existing asynchronous P2 executor, and cleanup remains incomplete until exact recovery
+observes cleanup without another launch.
+
+This is source preparation only. The accepted fixture constructor remains test support and is not the production
+enrollment source. No administrator grant was provisioned, no container ran, and frozen `0.2.0` does not contain
+this capability. P4 stays open for the receiver fixture/provider join, successor package identity, installed
+runtime-only qualification, public readback and fresh explicit adoption.
+
 ## P1 evidence
 
 The focused Execution tests cover the F# codec, strict shapes, fences and placeholder refusal. Independent Python

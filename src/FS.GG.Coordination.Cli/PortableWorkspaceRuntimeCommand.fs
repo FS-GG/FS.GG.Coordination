@@ -223,8 +223,8 @@ module PortableWorkspaceRuntimeCommand =
             | _ -> return usage ()
         }
 
-    let run dependencies arguments =
-        let result = executeAsync dependencies arguments CancellationToken.None |> _.GetAwaiter().GetResult()
+    let runWithCancellation dependencies arguments cancellationToken =
+        let result = executeAsync dependencies arguments cancellationToken |> _.GetAwaiter().GetResult()
 
         if not (String.IsNullOrEmpty result.StandardOutput) then
             Console.Out.WriteLine result.StandardOutput
@@ -233,3 +233,6 @@ module PortableWorkspaceRuntimeCommand =
             Console.Error.WriteLine result.StandardError
 
         result.ExitCode
+
+    let run dependencies arguments =
+        runWithCancellation dependencies arguments CancellationToken.None
