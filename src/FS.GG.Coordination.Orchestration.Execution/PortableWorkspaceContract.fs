@@ -80,6 +80,11 @@ type PortableWorkspaceResult =
         Error: PortableWorkspaceError option
     }
 
+type PortableWorkspaceDocumentKind =
+    | ToolchainProfile
+    | Command
+    | Result
+
 [<RequireQualifiedAccess>]
 module PortableWorkspaceContract =
     let profileSchema = "fsgg.workspace.toolchain-profile/1"
@@ -758,3 +763,19 @@ module PortableWorkspaceContract =
 
     let digest (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let canonicalBytes kind (bytes: byte array) =
+        match kind with
+        | ToolchainProfile -> parseProfile bytes |> Result.bind profileBytes
+        | Command -> parseCommand bytes |> Result.bind commandBytes
+        | Result -> parseResult bytes |> Result.bind resultBytes
+
+    let canonicalDigest kind bytes =
+        canonicalBytes kind bytes |> Result.map digest
+
+    let kindForSchema schema =
+        match schema with
+        | value when value = profileSchema -> Ok ToolchainProfile
+        | value when value = commandSchema -> Ok Command
+        | value when value = resultSchema -> Ok Result
+        | _ -> Error "portable-schema-unsupported"

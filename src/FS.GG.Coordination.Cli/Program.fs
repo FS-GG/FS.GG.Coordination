@@ -10,11 +10,12 @@ let main arguments =
     | "observer-view" :: rest -> ObserverViewCommand.run (List.toArray rest)
     | "delivery" :: rest -> DeliveryCommand.run (List.toArray rest)
     | "ordinary-settlement" :: rest -> OrdinarySettlementCommand.run (List.toArray rest)
+    | "workspace-contract" :: rest -> PortableWorkspaceCommand.run (List.toArray rest)
     | [] ->
         printfn "FS.GG.Coordination CLI boundary is installed; no production commands are enabled."
         0
     | _ ->
         eprintfn
-            "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view, delivery, ordinary-settlement"
+            "unknown command; available commands: workflow-select, roadmap-work, qualification-manifest, ledger-protection, observer-view, delivery, ordinary-settlement, workspace-contract"
 
         2

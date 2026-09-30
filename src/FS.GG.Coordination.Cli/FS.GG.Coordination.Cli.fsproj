@@ -105,6 +105,7 @@
     <Compile Include="MigrationSandboxProviderObservation.fsi" />
     <Compile Include="MigrationSandboxProviderObservation.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
+    <Compile Include="PortableWorkspaceCommand.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -114,6 +115,7 @@
     <ProjectReference Include="..\FS.GG.Coordination.GitHub\FS.GG.Coordination.GitHub.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
     <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Observer\FS.GG.Coordination.Orchestration.Observer.fsproj" />
+    <ProjectReference Include="..\FS.GG.Coordination.Orchestration.Execution\FS.GG.Coordination.Orchestration.Execution.fsproj" />
   </ItemGroup>
 
 </Project>

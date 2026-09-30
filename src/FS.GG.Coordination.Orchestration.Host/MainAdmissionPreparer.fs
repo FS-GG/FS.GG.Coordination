@@ -86,7 +86,7 @@ module MainAdmissionPreparer =
                     | Some route, status when route.AttemptId = attempt.AttemptId && route.Generation = attempt.Generation ->
                         let relation =
                             match status with
-                            | Completed -> Some "follow-up"
+                            | AttemptStatus.Completed -> Some "follow-up"
                             | CancelledByRunner
                             | ReconciledAbsent _
                             | ReconciledUndelivered _ -> Some "child"

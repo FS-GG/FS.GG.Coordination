@@ -73,21 +73,23 @@ cd "$scratch_root"
 
 verify_lane() {
   local main="$1"
+  local endpoint_base="$2"
   local log="$scratch_root/$main.log"
-  timeout 150s "$quint_bin" verify "$model" \
+  bash "$repo_root/eng/run-choreo-c2-tlc.sh" 150 "$log" "$endpoint_base" -- \
+    "$quint_bin" verify "$model" \
     --main="$main" \
     --init=init \
     --step=step \
     --invariant=safety \
     --max-steps=20 \
     --backend=tlc \
-    --verbosity=3 2>&1 | tee "$log"
+    --verbosity=3
   grep -Fq '[ok] No violation found' "$log"
   grep -Eq '[0-9]+ states generated, [0-9]+ distinct states found, 0 states left on queue\.' "$log"
 }
 
-verify_lane O2HostedWriterChoreoProviderBounded
-verify_lane O2HostedWriterChoreoRunnerBounded
+verify_lane O2HostedWriterChoreoProviderBounded 19820
+verify_lane O2HostedWriterChoreoRunnerBounded 19822
 
 FSGG_QUINT_BIN="$quint_bin" bash "$repo_root/eng/verify-choreo-c3-traces.sh"
 FSGG_QUINT_BIN="$quint_bin" python3 "$repo_root/eng/verify-choreo-c5-parity.py"

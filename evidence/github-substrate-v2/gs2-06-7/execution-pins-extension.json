@@ -202,6 +202,17 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/portable-workspace-executor-qualification.yml",
+      "sha256": "6a15943b81081337efdf570301797993088a980f5dd79c6aa483d676fd766459",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
     }
   ]
 }
