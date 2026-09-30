@@ -52,7 +52,7 @@ jobs:
         env:
           REQUESTED_OPERATION: ${{ inputs.operation }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
-          WORKFLOW_REVISION: ${{ job.workflow_sha }}
+          WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           test -n "$WORKFLOW_REVISION"
@@ -107,7 +107,7 @@ jobs:
           EXPECTED_RECEIPT_SHA256: ${{ needs.qualify-source.outputs.receipt_sha256 }}
           REQUESTED_OPERATION: ${{ inputs.operation }}
           RESUME_RUN_ID: ${{ inputs.resume_run_id }}
-          WORKFLOW_REVISION: ${{ job.workflow_sha }}
+          WORKFLOW_REVISION: ${{ github.workflow_sha }}
         run: |
           set -euo pipefail
           test -n "$WORKFLOW_REVISION"

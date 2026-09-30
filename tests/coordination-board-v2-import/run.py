@@ -138,8 +138,8 @@ class Tests(unittest.TestCase):
         workflow = (ROOT / ".github" / "workflows" / "coordination-board-v2-import.yml").read_text()
         self.assertIn("group: coordination-board-v2-fixed-import", workflow)
         self.assertIn("cancel-in-progress: false", workflow)
-        self.assertEqual(2, workflow.count("WORKFLOW_REVISION: ${{ job.workflow_sha }}"))
-        self.assertNotIn("github.workflow_sha", workflow)
+        self.assertEqual(2, workflow.count("WORKFLOW_REVISION: ${{ github.workflow_sha }}"))
+        self.assertNotIn("job.workflow_sha", workflow)
         self.assertEqual(2, workflow.count('test -n "$WORKFLOW_REVISION"'))
         for action in ("actions/checkout@", "actions/download-artifact@", "actions/upload-artifact@", "actions/create-github-app-token@"):
             positions = [line.strip().split("@", 1)[1] for line in workflow.splitlines() if action in line]
