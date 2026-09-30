@@ -11,6 +11,8 @@ from pathlib import Path
 import shutil
 import subprocess
 import sys
+import tarfile
+import tempfile
 import urllib.request
 import uuid
 
@@ -97,6 +99,48 @@ def verify_image(image: dict) -> None:
         raise RuntimeError("image declares an entrypoint, command, or volume hook")
 
 
+def clear_image_hooks(prefix: list[str], image: str, state: Path) -> str:
+    """Clear inherited process hooks in an OCI archive, then load the amended image."""
+    original = state / "prepared-with-hooks.oci.tar"
+    amended = state / "prepared.oci.tar"
+    run(prefix + ["save", "--format=oci-archive", "--output", str(original), image])
+    with tempfile.TemporaryDirectory(prefix="portable-oci-", dir=state) as temporary:
+        layout = Path(temporary)
+        with tarfile.open(original, "r") as archive:
+            archive.extractall(layout, filter="data")
+        index_path = layout / "index.json"
+        index = json.loads(index_path.read_text())
+        descriptor = index["manifests"][0]
+        manifest_path = layout / "blobs" / "sha256" / descriptor["digest"].removeprefix("sha256:")
+        manifest = json.loads(manifest_path.read_text())
+        config_descriptor = manifest["config"]
+        config_path = layout / "blobs" / "sha256" / config_descriptor["digest"].removeprefix("sha256:")
+        config = json.loads(config_path.read_text())
+        config["config"]["Entrypoint"] = []
+        config["config"]["Cmd"] = []
+        config_payload = canonical_bytes(config)
+        config_digest = hashlib.sha256(config_payload).hexdigest()
+        (layout / "blobs" / "sha256" / config_digest).write_bytes(config_payload)
+        manifest["config"] = {**config_descriptor, "digest": f"sha256:{config_digest}", "size": len(config_payload)}
+        manifest_payload = canonical_bytes(manifest)
+        manifest_digest = hashlib.sha256(manifest_payload).hexdigest()
+        (layout / "blobs" / "sha256" / manifest_digest).write_bytes(manifest_payload)
+        index["manifests"][0] = {**descriptor, "digest": f"sha256:{manifest_digest}", "size": len(manifest_payload)}
+        index_path.write_bytes(canonical_bytes(index))
+        with tarfile.open(amended, "w") as archive:
+            for path in sorted(layout.rglob("*")):
+                info = archive.gettarinfo(path, arcname=str(path.relative_to(layout)))
+                info.mtime = 0
+                info.uid = info.gid = 0
+                info.uname = info.gname = ""
+                if path.is_file():
+                    with path.open("rb") as stream:
+                        archive.addfile(info, stream)
+                else:
+                    archive.addfile(info)
+    return run(prefix + ["load", "--input", str(amended)]).stdout
+
+
 def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, Path, dict]:
     revision, tree, fixture_sha256 = require_exact_source(source)
     image_dir = source / "tests" / "portable-workspace" / "image"
@@ -152,7 +196,8 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
                     IMAGE_NAME,
                 ]
             )
-            build_output = created.stdout + started.stdout + committed.stdout
+            sanitized = clear_image_hooks(prefix, IMAGE_NAME, state)
+            build_output = created.stdout + started.stdout + committed.stdout + sanitized
         finally:
             run(prefix + ["container", "rm", container], check=False)
     else:
