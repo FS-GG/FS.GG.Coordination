@@ -1,0 +1,24 @@
+FROM docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056
+
+LABEL org.opencontainers.image.title="FS.GG portable workspace qualification toolchain" \
+      org.opencontainers.image.description="Pinned CPython, Node.js, and TypeScript toolchain for bounded local qualification" \
+      org.opencontainers.image.licenses="PSF-2.0 AND MIT AND Apache-2.0" \
+      org.opencontainers.image.source="https://github.com/FS-GG/FS.GG.Coordination"
+
+COPY node-v24.8.0-linux-x64.tar.gz /tmp/node.tar.gz
+COPY typescript-5.9.2.tgz /tmp/typescript.tgz
+
+RUN set -eu; \
+    tar -xzf /tmp/node.tar.gz -C /usr/local --strip-components=1; \
+    mkdir -p /opt/typescript; \
+    tar -xzf /tmp/typescript.tgz -C /opt/typescript --strip-components=1; \
+    chmod 0555 /opt/typescript/bin/tsc /opt/typescript/bin/tsserver; \
+    rm /tmp/node.tar.gz /tmp/typescript.tgz; \
+    test "$(/usr/local/bin/python3 --version)" = "Python 3.14.0"; \
+    test "$(/usr/local/bin/node --version)" = "v24.8.0"; \
+    test "$(/opt/typescript/bin/tsc --version)" = "Version 5.9.2"
+
+USER 32768:32768
+WORKDIR /source
+ENTRYPOINT []
+CMD []
