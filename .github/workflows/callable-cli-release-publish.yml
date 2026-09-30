@@ -24,14 +24,14 @@ permissions:
   contents: read
 
 concurrency:
-  group: callable-cli-release-v0.1.7
+  group: callable-cli-release-v0.2.0
   cancel-in-progress: false
 
 jobs:
   publish:
-    name: Publish and read back exact callable CLI
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
+    name: Qualify, publish, and read back exact portable CLI
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
     permissions:
       actions: read
       contents: write
@@ -40,18 +40,30 @@ jobs:
       attestations: write
       artifact-metadata: write
     env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      DOTNET_PROCESSOR_COUNT: 4
       PACKAGE_ID: FS.GG.Coordination.Cli
-      PACKAGE_VERSION: 0.1.7
-      PACKAGE_FILE: FS.GG.Coordination.Cli.0.1.7.nupkg
-      EXPECTED_SOURCE: fdfdcfc91e65f814b42d8c9e061fec0e6221a139
-      EXPECTED_TREE: 9a31a52256577f3b40e2bfc25463001d5a64c5d8
-      EXPECTED_MERGE: fdfdcfc91e65f814b42d8c9e061fec0e6221a139
-      EXPECTED_SHA256: f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c
-      EXPECTED_PREPARATION_RUN_ID: 36466095004
-      EXPECTED_PREPARATION_ARTIFACT_ID: 10989613858
-      EXPECTED_PREPARATION_ARCHIVE_SHA256: a7fbe0d657ddd50369bcbe7511a28ab33e9760d616999eaa4df9fd6ec3b49d8f
+      PACKAGE_VERSION: 0.2.0
+      PACKAGE_FILE: FS.GG.Coordination.Cli.0.2.0.nupkg
+      PORTABLE_BUNDLE: portable-workspace-v1-0.2.0.zip
+      PORTABLE_IMAGE: portable-workspace-linux-amd64-0.2.0.oci.tar
+      PORTABLE_MANIFEST: portable-workspace-release-manifest.json
+      EXPECTED_SOURCE: 0000000000000000000000000000000000000000
+      EXPECTED_TREE: 0000000000000000000000000000000000000000
+      EXPECTED_MERGE: 0000000000000000000000000000000000000000
+      EXPECTED_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+      EXPECTED_BUNDLE_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+      EXPECTED_IMAGE_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+      EXPECTED_PORTABLE_MANIFEST_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
+      EXPECTED_PREPARATION_RUN_ID: 0
+      EXPECTED_PREPARATION_ARTIFACT_ID: 0
+      EXPECTED_PREPARATION_ARCHIVE_SHA256: 0000000000000000000000000000000000000000000000000000000000000000
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
+      PUBLISH_ROOT: /tmp/fsgg-${{ github.run_id }}-portable-publish-root
+      PUBLISH_RUNROOT: /tmp/fsgg-${{ github.run_id }}-portable-publish-run
+      PUBLISH_STATE: /tmp/fsgg-${{ github.run_id }}-portable-publish-state
       CANONICAL_SOURCE: ${{ github.workspace }}
     steps:
       - name: Check out the protected workflow revision
@@ -59,11 +71,13 @@ jobs:
         with:
           fetch-depth: 0
           persist-credentials: false
+
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
-      - name: Bind operation, protected source, tree, identity, and live collisions
+
+      - name: Bind operation, protected source, assets, identity, and live collisions
         shell: bash
         env:
           OPERATION: ${{ inputs.operation }}
@@ -72,17 +86,18 @@ jobs:
           REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
         run: |
           set -euo pipefail
-          # Refuse missing or malformed protected source and preparation pins
-          # before observing or attempting any publication effect.
-          [[ "$EXPECTED_SOURCE" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$EXPECTED_TREE" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$EXPECTED_MERGE" =~ ^[0-9a-f]{40}$ ]]
-          [[ "$EXPECTED_SHA256" =~ ^[0-9a-f]{64}$ ]]
-          [[ "$EXPECTED_PREPARATION_RUN_ID" =~ ^[0-9]+$ ]]
-          [[ "$EXPECTED_PREPARATION_ARTIFACT_ID" =~ ^[0-9]+$ ]]
-          [[ "$EXPECTED_PREPARATION_ARCHIVE_SHA256" =~ ^[0-9a-f]{64}$ ]]
+          for value in "$EXPECTED_SOURCE" "$EXPECTED_TREE" "$EXPECTED_MERGE"; do
+            [[ "$value" =~ ^[0-9a-f]{40}$ ]]
+            test "$value" != 0000000000000000000000000000000000000000
+          done
+          for value in "$EXPECTED_SHA256" "$EXPECTED_BUNDLE_SHA256" "$EXPECTED_IMAGE_SHA256" "$EXPECTED_PORTABLE_MANIFEST_SHA256" "$EXPECTED_PREPARATION_ARCHIVE_SHA256"; do
+            [[ "$value" =~ ^[0-9a-f]{64}$ ]]
+            test "$value" != 0000000000000000000000000000000000000000000000000000000000000000
+          done
+          [[ "$EXPECTED_PREPARATION_RUN_ID" =~ ^[1-9][0-9]*$ ]]
+          [[ "$EXPECTED_PREPARATION_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
           test "$GITHUB_REF" = refs/heads/main
-          test "$OPERATION" = publish-c3-coordination-cli-017
+          test "$OPERATION" = publish-v2-lang-01-2-cli-020
           test "$REQUESTED_SOURCE" = "$EXPECTED_SOURCE"
           test "$REQUESTED_MERGE" = "$EXPECTED_MERGE"
           test "$REQUESTED_SHA256" = "$EXPECTED_SHA256"
@@ -93,13 +108,10 @@ jobs:
           git merge-base --is-ancestor "$EXPECTED_MERGE" refs/remotes/origin/main
           test "$(git rev-parse "$EXPECTED_SOURCE^{tree}")" = "$EXPECTED_TREE"
           test "$(git rev-parse "$EXPECTED_MERGE^{tree}")" = "$EXPECTED_TREE"
-          tagged="$(git ls-remote --tags origin refs/tags/v0.1.7 refs/tags/v0.1.7^\{\} | awk '$2=="refs/tags/v0.1.7^{}"{peeled=$1} $2=="refs/tags/v0.1.7"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.2.0 refs/tags/v0.2.0^\{\} | awk '$2=="refs/tags/v0.2.0^{}"{peeled=$1} $2=="refs/tags/v0.2.0"{plain=$1} END{print peeled ? peeled : plain}')"
           test -z "$tagged" || test "$tagged" = "$EXPECTED_MERGE"
-          jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' \
-            eng/repository-settings/desired.json >/dev/null || {
-            echo "::error::protected-main desired state does not admit only the exact NuGet/login action"
-            exit 1
-          }
+          jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' eng/repository-settings/desired.json >/dev/null
+
       - name: Bind the immutable preparation run and artifact
         shell: bash
         env:
@@ -107,75 +119,135 @@ jobs:
         run: |
           set -euo pipefail
           run="$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$EXPECTED_PREPARATION_RUN_ID")"
-          jq -e --argjson id "$EXPECTED_PREPARATION_RUN_ID" \
-            '.id == $id and .path == ".github/workflows/callable-cli-release-prepare.yml" and .conclusion == "success"' \
-            <<<"$run" >/dev/null
+          jq -e --argjson id "$EXPECTED_PREPARATION_RUN_ID" '.id == $id and .path == ".github/workflows/callable-cli-release-prepare.yml" and .conclusion == "success"' <<<"$run" >/dev/null
           artifact="$(gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$EXPECTED_PREPARATION_ARTIFACT_ID")"
-          jq -e --argjson id "$EXPECTED_PREPARATION_ARTIFACT_ID" \
-            --argjson run "$EXPECTED_PREPARATION_RUN_ID" \
-            --arg name "callable-cli-$EXPECTED_SOURCE" \
-            --arg digest "sha256:$EXPECTED_PREPARATION_ARCHIVE_SHA256" \
-            --arg source "$EXPECTED_SOURCE" \
-            '.id == $id and .name == $name and .digest == $digest and .expired == false and .workflow_run.id == $run and .workflow_run.head_sha == $source' \
-            <<<"$artifact" >/dev/null
+          jq -e --argjson id "$EXPECTED_PREPARATION_ARTIFACT_ID" --argjson run "$EXPECTED_PREPARATION_RUN_ID"             --arg name "callable-cli-$EXPECTED_SOURCE" --arg digest "sha256:$EXPECTED_PREPARATION_ARCHIVE_SHA256" --arg source "$EXPECTED_SOURCE"             '.id == $id and .name == $name and .digest == $digest and .expired == false and .workflow_run.id == $run and .workflow_run.head_sha == $source' <<<"$artifact" >/dev/null
+
       - name: Retrieve the immutable reviewed preparation artifact
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
-          name: callable-cli-fdfdcfc91e65f814b42d8c9e061fec0e6221a139
+          name: callable-cli-${{ env.EXPECTED_SOURCE }}
           run-id: ${{ env.EXPECTED_PREPARATION_RUN_ID }}
           repository: FS-GG/FS.GG.Coordination
           github-token: ${{ github.token }}
           path: ${{ env.CANDIDATE_OUTPUT }}
-      - name: Reproduce and compare the reviewed bytes at their preparation root
+
+      - name: Verify every retained candidate asset and reproduce the package
         shell: bash
         run: |
           set -euo pipefail
-          test "$CANONICAL_SOURCE" = "$GITHUB_WORKSPACE"
           test "$(sha256sum "$CANDIDATE_OUTPUT/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
-          test "$(jq -r .packageSha256 "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_SHA256"
-          test "$(jq -r .sourceCommit "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_SOURCE"
-          test "$(jq -r .sourceTree "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")" = "$EXPECTED_TREE"
+          test "$(sha256sum "$CANDIDATE_OUTPUT/$PORTABLE_BUNDLE" | cut -d' ' -f1)" = "$EXPECTED_BUNDLE_SHA256"
+          test "$(sha256sum "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE" | cut -d' ' -f1)" = "$EXPECTED_IMAGE_SHA256"
+          test "$(sha256sum "$CANDIDATE_OUTPUT/$PORTABLE_MANIFEST" | cut -d' ' -f1)" = "$EXPECTED_PORTABLE_MANIFEST_SHA256"
+          jq -e --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg package "$EXPECTED_SHA256"             --arg bundle "$EXPECTED_BUNDLE_SHA256" --arg image "$EXPECTED_IMAGE_SHA256"             '.sourceCommit == $source and .sourceTree == $tree and .packageSha256 == $package and .bundleSha256 == $bundle and .imageArchiveSha256 == $image and .publicationAuthorized == false and .tagAuthorized == false and .activationAuthorized == false'             "$CANDIDATE_OUTPUT/$PORTABLE_MANIFEST" >/dev/null
+          test "$CANONICAL_SOURCE" = "$GITHUB_WORKSPACE"
           git -C "$CANONICAL_SOURCE" checkout --detach "$EXPECTED_SOURCE"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
-          git -C "$CANONICAL_SOURCE" tag -d v0.1.7 2>/dev/null || true
+          git -C "$CANONICAL_SOURCE" tag -d v0.2.0 2>/dev/null || true
           dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
           mkdir -p "$READBACK_OUTPUT/reproduced"
-          (
-            cd "$CANONICAL_SOURCE"
-            dotnet fsi eng/callable-cli-release.fsx prepare \
-              --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION" --output "$READBACK_OUTPUT/reproduced"
-          )
-          test "$(sha256sum "$READBACK_OUTPUT/reproduced/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+          (cd "$CANONICAL_SOURCE" && dotnet fsi eng/callable-cli-release.fsx prepare --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION" --output "$READBACK_OUTPUT/reproduced")
           cmp "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/reproduced/$PACKAGE_FILE"
-      - name: Retain exact candidate before any external package or tag effect
+          dotnet fsi "$CANONICAL_SOURCE/eng/portable-workspace-release.fsx" verify             --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION"             --package "$CANDIDATE_OUTPUT/$PACKAGE_FILE"             --package-manifest "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json"             --image-archive "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE"             --image-manifest "$CANDIDATE_OUTPUT/portable-workspace-image-manifest.json"             --image-qualification "$CANDIDATE_OUTPUT/portable-workspace-image-qualification.json"             --executor-evidence "$CANDIDATE_OUTPUT/portable-workspace-executor-evidence.json"             --output "$CANDIDATE_OUTPUT"
+
+      - name: Load exact retained image in a fresh store and rerun six packaged operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$PUBLISH_ROOT" "$PUBLISH_RUNROOT" "$PUBLISH_STATE" "$READBACK_OUTPUT"
+          podman --storage-driver=vfs --root "$PUBLISH_ROOT" --runroot "$PUBLISH_RUNROOT" load --input "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE"
+          image_manifest="$CANDIDATE_OUTPUT/portable-workspace-image-manifest.json"
+          python3 eng/run-packaged-portable-workspace-qualification.py             --package "$CANDIDATE_OUTPUT/$PACKAGE_FILE" --expected-package-sha256 "$EXPECTED_SHA256"             --script eng/portable-workspace-executor-qualification.fsx             --work-dir "$PUBLISH_STATE/package" --receipt "$READBACK_OUTPUT/packaged-qualification.json" --             --fixture tests/portable-workspace/executor-qualification/fixture             --image-manifest "$image_manifest" --state-dir "$PUBLISH_STATE/executor"             --evidence "$READBACK_OUTPUT/executor-evidence.json"             --podman /usr/bin/podman --git /usr/bin/git --tar /usr/bin/tar             --root "$PUBLISH_ROOT" --runroot "$PUBLISH_RUNROOT"
+          jq -e --arg package "$EXPECTED_SHA256"             '.packageSha256 == $package and .qualificationExitCode == 0 and .publicationAuthorized == false and .activationAuthorized == false'             "$READBACK_OUTPUT/packaged-qualification.json" >/dev/null
+          jq -e '.outcome == "passed" and .strictAcceptance == true and .passed == 6 and .failed == 0 and .unknown == 0 and .remainingExecutionRoots == 0'             "$READBACK_OUTPUT/executor-evidence.json" >/dev/null
+
+      - name: Observe release assets and refuse collisions before any package effect
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p "$READBACK_OUTPUT/release-preflight"
+          release_json="$READBACK_OUTPUT/release-preflight/release.json"
+          status="$(curl --silent --show-error --location --output "$release_json" --write-out '%{http_code}' \
+            --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/v0.2.0")"
+          case "$status" in
+            404) echo 'exists=false' >> "$GITHUB_OUTPUT"; exit 0 ;;
+            200) echo 'exists=true' >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::GitHub release observation is unknown (HTTP $status)"; exit 1 ;;
+          esac
+          jq -e '.tag_name == "v0.2.0" and .draft == false and .prerelease == false' "$release_json" >/dev/null
+          for path in "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$CANDIDATE_OUTPUT/$PORTABLE_BUNDLE" "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE" "$CANDIDATE_OUTPUT/$PORTABLE_MANIFEST"; do
+            name="$(basename "$path")"
+            mapfile -t ids < <(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' "$release_json")
+            test "${#ids[@]}" -le 1
+            if (( ${#ids[@]} == 1 )); then
+              curl --fail --silent --show-error --location \
+                --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/octet-stream' \
+                --output "$READBACK_OUTPUT/release-preflight/$name" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/${ids[0]}"
+              cmp "$READBACK_OUTPUT/release-preflight/$name" "$path"
+            fi
+          done
+          mapfile -t readbacks < <(jq -r '.assets[] | select(.name == "release-readback.json") | .id' "$release_json")
+          test "${#readbacks[@]}" -le 1
+          if (( ${#readbacks[@]} == 1 )); then
+            curl --fail --silent --show-error --location \
+              --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/octet-stream' \
+              --output "$READBACK_OUTPUT/release-preflight/release-readback.json" \
+              "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/assets/${readbacks[0]}"
+            jq -e --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg merge "$EXPECTED_MERGE" \
+              --arg package "$EXPECTED_SHA256" --arg bundle "$EXPECTED_BUNDLE_SHA256" --arg image "$EXPECTED_IMAGE_SHA256" --arg manifest "$EXPECTED_PORTABLE_MANIFEST_SHA256" \
+              '.source == $source and .sourceTree == $tree and .protectedMerge == $merge and .packageSha256 == $package and .portableAssets.bundleSha256 == $bundle and .portableAssets.imageArchiveSha256 == $image and .portableAssets.manifestSha256 == $manifest' \
+              "$READBACK_OUTPUT/release-preflight/release-readback.json" >/dev/null
+          fi
+
+      - name: Retain exact candidate before any external effect
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: callable-cli-release-custody-${{ env.EXPECTED_SHA256 }}
           path: |
             ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
             ${{ env.CANDIDATE_OUTPUT }}/callable-cli-release-manifest.json
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PORTABLE_BUNDLE }}
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PORTABLE_IMAGE }}
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PORTABLE_MANIFEST }}
+            ${{ env.CANDIDATE_OUTPUT }}/portable-workspace-*.json
+            ${{ env.READBACK_OUTPUT }}/packaged-qualification.json
+            ${{ env.READBACK_OUTPUT }}/executor-evidence.json
           if-no-files-found: error
           retention-days: 90
-      - name: Attest the exact prepared archive
-        id: attestation
+          compression-level: 0
+
+      - name: Attest the exact prepared release assets
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
-          subject-path: ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
-      - name: Verify provenance and local install before publication
+          subject-path: |
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PORTABLE_BUNDLE }}
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PORTABLE_IMAGE }}
+            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PORTABLE_MANIFEST }}
+
+      - name: Verify provenance and installed schemas before publication
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh attestation verify "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
-            --repo "$GITHUB_REPOSITORY" \
-            --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml"
+          for asset in "$PACKAGE_FILE" "$PORTABLE_BUNDLE" "$PORTABLE_IMAGE" "$PORTABLE_MANIFEST"; do
+            gh attestation verify "$CANDIDATE_OUTPUT/$asset" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml"
+          done
           config="$RUNNER_TEMP/local-only.config"
-          cat > "$config" <<CFG
-          <?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="candidate" value="$CANDIDATE_OUTPUT"/></packageSources></configuration>
-          CFG
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="candidate" value="'"$CANDIDATE_OUTPUT"'"/></packageSources></configuration>' > "$config"
           dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$RUNNER_TEMP/prepublish-tool" --configfile "$config" --no-cache
-          "$RUNNER_TEMP/prepublish-tool/fsgg-coordination"
+          for name in toolchain-profile command result; do
+            "$RUNNER_TEMP/prepublish-tool/fsgg-coordination" workspace-contract schema export "$name" > "$READBACK_OUTPUT/$name.schema.json"
+            cmp "contracts/portable-workspace/v1/$name.schema.json" "$READBACK_OUTPUT/$name.schema.json"
+          done
+
       - name: Observe GitHub Packages before the first effect
         id: org
         shell: bash
@@ -191,6 +263,7 @@ jobs:
             200) python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages ;;
             *) echo "::error::GitHub Packages observation is unknown (HTTP $status)"; exit 1 ;;
           esac
+
       - name: Observe nuget.org and validate recoverable ordering before either effect
         id: public
         shell: bash
@@ -208,22 +281,21 @@ jobs:
             echo "::error::nuget.org is populated while the required first GitHub Packages effect is absent"
             exit 1
           fi
+
       - name: Prove Trusted Publishing authorization before the first package effect
         if: steps.public.outputs.push == 'true'
         id: nuget-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
         with:
           user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+
       - name: Publish to GitHub Packages first
         if: steps.org.outputs.push == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-        run: |
-          set -euo pipefail
-          dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
-            --source https://nuget.pkg.github.com/FS-GG/index.json \
-            --api-key "$GH_TOKEN"
+        run: dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE" --source https://nuget.pkg.github.com/FS-GG/index.json --api-key "$GH_TOKEN"
+
       - name: Verify exact bytes served by GitHub Packages
         shell: bash
         env:
@@ -232,12 +304,12 @@ jobs:
           set -euo pipefail
           url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
           for attempt in {1..60}; do
-            if curl --fail --location --silent --show-error --user "${GITHUB_ACTOR}:${GH_TOKEN}" \
-              --output "$READBACK_OUTPUT/github/$PACKAGE_FILE" "$url"; then break; fi
+            if curl --fail --location --silent --show-error --user "${GITHUB_ACTOR}:${GH_TOKEN}" --output "$READBACK_OUTPUT/github/$PACKAGE_FILE" "$url"; then break; fi
             test "$attempt" != 60
             sleep 10
           done
           test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
+
       - name: Publish the same retained bytes to nuget.org
         if: steps.public.outputs.push == 'true'
         shell: bash
@@ -245,6 +317,7 @@ jobs:
           dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE"
           --source https://api.nuget.org/v3/index.json
           --api-key "${{ steps.nuget-login.outputs.NUGET_API_KEY }}"
+
       - name: Read back nuget.org and verify payload identity
         shell: bash
         run: |
@@ -256,72 +329,85 @@ jobs:
             sleep 10
           done
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org
-      - name: Anonymous public install and invocation
+
+      - name: Anonymous public install and schema readback
         shell: bash
         run: |
           set -euo pipefail
           config="$RUNNER_TEMP/public-only.config"
-          cat > "$config" <<'CFG'
-          <?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>
-          CFG
+          printf '%s\n' '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>' > "$config"
           dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$RUNNER_TEMP/public-tool" --configfile "$config" --no-cache
-          "$RUNNER_TEMP/public-tool/fsgg-coordination"
-      - name: Record dual-feed readback
+          for name in toolchain-profile command result; do
+            "$RUNNER_TEMP/public-tool/fsgg-coordination" workspace-contract schema export "$name" > "$READBACK_OUTPUT/public-$name.schema.json"
+            cmp "contracts/portable-workspace/v1/$name.schema.json" "$READBACK_OUTPUT/public-$name.schema.json"
+          done
+
+      - name: Record dual-feed and portable-asset readback
         shell: bash
         run: |
           set -euo pipefail
-          python3 eng/verify-callable-cli-served.py \
-            "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages \
-            > "$READBACK_OUTPUT/github.json"
-          python3 eng/verify-callable-cli-served.py \
-            "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org \
-            > "$READBACK_OUTPUT/nuget.json"
-          jq -n \
-            --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg merge "$EXPECTED_MERGE" \
-            --arg package "$PACKAGE_ID" --arg version "$PACKAGE_VERSION" --arg digest "$EXPECTED_SHA256" \
-            --slurpfile github "$READBACK_OUTPUT/github.json" --slurpfile nuget "$READBACK_OUTPUT/nuget.json" \
-            '{schema:"fsgg.coordination.callable-cli-release-readback/1",source:$source,sourceTree:$tree,protectedMerge:$merge,packageId:$package,version:$version,packageSha256:$digest,feeds:{githubPackages:$github[0],nugetOrg:$nuget[0]}}' \
-            > "$READBACK_OUTPUT/release-readback.json"
+          python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github/$PACKAGE_FILE" github-packages > "$READBACK_OUTPUT/github.json"
+          python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org > "$READBACK_OUTPUT/nuget.json"
+          jq -n --arg source "$EXPECTED_SOURCE" --arg tree "$EXPECTED_TREE" --arg merge "$EXPECTED_MERGE"             --arg package "$PACKAGE_ID" --arg version "$PACKAGE_VERSION" --arg digest "$EXPECTED_SHA256"             --arg bundle "$EXPECTED_BUNDLE_SHA256" --arg image "$EXPECTED_IMAGE_SHA256" --arg manifest "$EXPECTED_PORTABLE_MANIFEST_SHA256"             --slurpfile github "$READBACK_OUTPUT/github.json" --slurpfile nuget "$READBACK_OUTPUT/nuget.json"             '{schema:"fsgg.coordination.callable-cli-release-readback/2",source:$source,sourceTree:$tree,protectedMerge:$merge,packageId:$package,version:$version,packageSha256:$digest,portableAssets:{bundleSha256:$bundle,imageArchiveSha256:$image,manifestSha256:$manifest},feeds:{githubPackages:$github[0],nugetOrg:$nuget[0]}}'             > "$READBACK_OUTPUT/release-readback.json"
+
       - name: Create immutable tag and GitHub release only after both feeds settle
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          RELEASE_EXISTS: ${{ steps.release.outputs.exists }}
         run: |
           set -euo pipefail
           test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org >/dev/null
-          tagged="$(git ls-remote --tags origin refs/tags/v0.1.7 refs/tags/v0.1.7^\{\} | awk '$2=="refs/tags/v0.1.7^{}"{peeled=$1} $2=="refs/tags/v0.1.7"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.2.0 refs/tags/v0.2.0^\{\} | awk '$2=="refs/tags/v0.2.0^{}"{peeled=$1} $2=="refs/tags/v0.2.0"{plain=$1} END{print peeled ? peeled : plain}')"
           if test -z "$tagged"; then
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.1.7 -f sha="$EXPECTED_MERGE"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.2.0 -f sha="$EXPECTED_MERGE"
           else
             test "$tagged" = "$EXPECTED_MERGE"
           fi
-          if ! gh release view v0.1.7 --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            gh release create v0.1.7 --repo "$GITHUB_REPOSITORY" --verify-tag \
-              --title "FS.GG.Coordination.Cli 0.1.7" \
-              --notes "C3 Coordination full-qualification source profile CLI 0.1.7; receiver adoption remains separately gated." \
-              "$CANDIDATE_OUTPUT/$PACKAGE_FILE" \
-              "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" \
-              "$READBACK_OUTPUT/release-readback.json"
+          assets=("$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$CANDIDATE_OUTPUT/$PORTABLE_BUNDLE" "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE" "$CANDIDATE_OUTPUT/$PORTABLE_MANIFEST" "$READBACK_OUTPUT/release-readback.json")
+          if test "$RELEASE_EXISTS" = false; then
+            gh release create v0.2.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title "FS.GG.Coordination.Cli 0.2.0"               --notes "Portable workspace v1 CLI and exact qualified Linux amd64 OCI archive; receiver adoption remains separately gated." "${assets[@]}"
+          else
+            test "$RELEASE_EXISTS" = true
           fi
           release_dir="$RUNNER_TEMP/release-readback"
           mkdir "$release_dir"
-          for path in "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$READBACK_OUTPUT/release-readback.json"; do
+          for path in "${assets[@]}"; do
             name="$(basename "$path")"
-            if ! gh release view v0.1.7 --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
-              gh release upload v0.1.7 --repo "$GITHUB_REPOSITORY" "$path"
+            release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.2.0")"
+            count="$(jq --arg name "$name" '[.assets[] | select(.name == $name)] | length' <<<"$release")"
+            test "$count" -le 1
+            if test "$count" = 0; then
+              gh release upload v0.2.0 --repo "$GITHUB_REPOSITORY" "$path"
             fi
-            gh release download v0.1.7 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
-            test "$(sha256sum "$release_dir/$name" | cut -d' ' -f1)" = "$(sha256sum "$path" | cut -d' ' -f1)"
+            gh release download v0.2.0 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
+            cmp "$release_dir/$name" "$path"
           done
+
+      - name: Remove exact private runtime state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          if test -d "$PUBLISH_ROOT" || test -d "$PUBLISH_RUNROOT"; then
+            mapfile -t containers < <(podman --storage-driver=vfs --root "$PUBLISH_ROOT" --runroot "$PUBLISH_RUNROOT" container ps --all --quiet || true)
+            if (( ${#containers[@]} > 0 )); then
+              podman --storage-driver=vfs --root "$PUBLISH_ROOT" --runroot "$PUBLISH_RUNROOT" container rm --force "${containers[@]}"
+            fi
+            podman --storage-driver=vfs --root "$PUBLISH_ROOT" --runroot "$PUBLISH_RUNROOT" system reset --force
+          fi
+          rm -rf -- "$PUBLISH_ROOT" "$PUBLISH_RUNROOT" "$PUBLISH_STATE"
+          test ! -e "$PUBLISH_ROOT" && test ! -e "$PUBLISH_RUNROOT" && test ! -e "$PUBLISH_STATE"
+
       - name: Retain terminal or partial recovery evidence
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: callable-cli-release-state-${{ github.run_id }}
           path: |
-            ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
-            ${{ env.CANDIDATE_OUTPUT }}/callable-cli-release-manifest.json
-            ${{ env.READBACK_OUTPUT }}/**
+            ${{ env.CANDIDATE_OUTPUT }}/
+            ${{ env.READBACK_OUTPUT }}/
           if-no-files-found: warn
           retention-days: 90
+          compression-level: 0

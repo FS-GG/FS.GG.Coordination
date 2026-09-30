@@ -27,3 +27,9 @@ schema identifiers, JSON nulls, duplicate or unknown fields and noncanonical enc
 The Python and TypeScript/Python examples demonstrate non-.NET and mixed component profiles. They are
 contract fixtures only: publication through SDD/Templates, clean creation, retained adoption, local-only
 operation and native product qualification remain receiver-owned V2-LANG-01.2 work.
+
+The finite 0.2.0 release bundle is prepared separately from these frozen contract bytes. It contains this
+directory, the reviewed Linux amd64 image recipe and pinned toolchain inputs, a sanitized qualification summary,
+and checksums. Its release manifest binds the exact CLI package, bundle and tested OCI archive. The helper accepts
+only explicit package, image-manifest, OCI archive and executor-evidence inputs; it has no runtime image fallback.
+Publication, receiver activation and generated-workspace changes require their own authority and evidence.

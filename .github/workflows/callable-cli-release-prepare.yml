@@ -10,37 +10,214 @@ on:
       version:
         description: Proposed package version (preparation only)
         required: true
-        default: 0.1.0
+        default: 0.2.0
         type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: callable-cli-release-prepare-${{ inputs.source }}
+  cancel-in-progress: false
+
+# Preflight decision: this is one linear, secret-free preparation job. Static
+# source, package, recipe, rootless-runtime and output-collision checks run
+# before the costly image build and six-operation qualification. There is no
+# fan-out, retry, publication effect or shared mutable cache to justify a
+# separate state-machine model. Reassess if those interactions are added.
 jobs:
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      DOTNET_PROCESSOR_COUNT: 4
+      BASE_IMAGE: docker.io/library/python@sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056
+      BUILD_ROOT: /tmp/pw-build-${{ github.run_id }}-${{ github.run_attempt }}
+      BUILD_RUNROOT: /tmp/pw-build-run-${{ github.run_id }}-${{ github.run_attempt }}
+      LOAD_ROOT: /tmp/pw-load-${{ github.run_id }}-${{ github.run_attempt }}
+      LOAD_RUNROOT: /tmp/pw-load-run-${{ github.run_id }}-${{ github.run_attempt }}
+      IMAGE_STATE: /tmp/pw-image-${{ github.run_id }}-${{ github.run_attempt }}
+      EXECUTOR_STATE: /tmp/pw-executor-${{ github.run_id }}-${{ github.run_attempt }}
+      PACKAGED_STATE: /tmp/pw-package-${{ github.run_id }}-${{ github.run_attempt }}
+      CANDIDATE_OUTPUT: /tmp/pw-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+      ARTIFACT_ROOT: /tmp/pw-artifact-${{ github.run_id }}-${{ github.run_attempt }}
+      RELEASE_OUTPUT: /tmp/pw-release-${{ github.run_id }}-${{ github.run_attempt }}
+      EVIDENCE_ROOT: /tmp/pw-evidence-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - name: Check out the exact candidate without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ inputs.source }}
+          fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          global-json-file: global.json
-      - run: dotnet restore FS.GG.Coordination.sln --locked-mode
-      - name: Prepare immutable candidate without publication authority
+
+      - name: Run bounded source recipe and rootless preflight
+        shell: bash
         env:
-          CANDIDATE_OUTPUT: ${{ runner.temp }}/callable-cli-candidate
           CANDIDATE_SOURCE: ${{ inputs.source }}
           CANDIDATE_VERSION: ${{ inputs.version }}
-        run: >-
-          dotnet fsi eng/callable-cli-release.fsx prepare
-          --source "$CANDIDATE_SOURCE"
-          --version "$CANDIDATE_VERSION"
-          --output "$CANDIDATE_OUTPUT"
-      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        run: |
+          set -euo pipefail
+          [[ "$CANDIDATE_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          test "$CANDIDATE_VERSION" = 0.2.0
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
+          test -z "$(git status --porcelain)"
+          test -f eng/callable-cli-release.fsx
+          test -f eng/portable-workspace-release.fsx
+          test -f eng/run-packaged-portable-workspace-qualification.py
+          command -v podman
+          install -d -m 0700 "$IMAGE_STATE" "$EXECUTOR_STATE" "$EVIDENCE_ROOT"
+          python3 eng/portable-workspace-image.py preflight \
+            --source "$GITHUB_WORKSPACE" \
+            --expected-source-revision "$CANDIDATE_SOURCE" \
+            --state-dir "$IMAGE_STATE" \
+            --root "$BUILD_ROOT" \
+            --runroot "$BUILD_RUNROOT" \
+            > "$EVIDENCE_ROOT/image-preflight-result.json"
+
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+
+      - name: Restore the exact locked source
+        run: dotnet restore FS.GG.Coordination.sln --locked-mode
+
+      - name: Prepare deterministic CLI package without effect authority
+        shell: bash
+        env:
+          CANDIDATE_SOURCE: ${{ inputs.source }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          dotnet fsi eng/callable-cli-release.fsx prepare \
+            --source "$CANDIDATE_SOURCE" \
+            --version "$CANDIDATE_VERSION" \
+            --output "$CANDIDATE_OUTPUT"
+
+      - name: Build and retain the exact pinned OCI archive
+        shell: bash
+        env:
+          CANDIDATE_SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          podman --storage-driver=vfs --root "$BUILD_ROOT" --runroot "$BUILD_RUNROOT" \
+            pull --platform linux/amd64 "$BASE_IMAGE"
+          python3 eng/portable-workspace-image.py qualify \
+            --source "$GITHUB_WORKSPACE" \
+            --expected-source-revision "$CANDIDATE_SOURCE" \
+            --state-dir "$IMAGE_STATE" \
+            --root "$BUILD_ROOT" \
+            --runroot "$BUILD_RUNROOT" \
+            > "$EVIDENCE_ROOT/image-qualification-result.json"
+          test "$(stat --format=%s "$IMAGE_STATE/candidate.oci.tar")" -le 268435456
+
+      - name: Load retained bytes into a fresh private store and run packaged executor
+        shell: bash
+        env:
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          package="$CANDIDATE_OUTPUT/FS.GG.Coordination.Cli.$CANDIDATE_VERSION.nupkg"
+          package_sha="$(jq -r .packageSha256 "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")"
+          image_manifest="$(jq -r .manifest "$EVIDENCE_ROOT/image-qualification-result.json")"
+          install -d -m 0700 "$LOAD_ROOT" "$LOAD_RUNROOT" "$PACKAGED_STATE"
+          podman --storage-driver=vfs --root "$LOAD_ROOT" --runroot "$LOAD_RUNROOT" \
+            load --input "$IMAGE_STATE/candidate.oci.tar"
+          python3 eng/run-packaged-portable-workspace-qualification.py \
+            --package "$package" \
+            --expected-package-sha256 "$package_sha" \
+            --script eng/portable-workspace-executor-qualification.fsx \
+            --work-dir "$PACKAGED_STATE" \
+            --receipt "$EVIDENCE_ROOT/packaged-qualification.json" \
+            -- \
+            --fixture tests/portable-workspace/executor-qualification/fixture \
+            --image-manifest "$image_manifest" \
+            --state-dir "$EXECUTOR_STATE" \
+            --evidence "$EVIDENCE_ROOT/executor-evidence.json" \
+            --podman /usr/bin/podman \
+            --git /usr/bin/git \
+            --tar /usr/bin/tar \
+            --root "$LOAD_ROOT" \
+            --runroot "$LOAD_RUNROOT"
+          python3 - "$EVIDENCE_ROOT/executor-evidence.json" "$EVIDENCE_ROOT/packaged-qualification.json" "$package_sha" <<'PY'
+          import json, sys
+          evidence = json.load(open(sys.argv[1], encoding="utf-8"))
+          packaged = json.load(open(sys.argv[2], encoding="utf-8"))
+          assert evidence["outcome"] == "passed" and evidence["strictAcceptance"] is True
+          assert (evidence["passed"], evidence["failed"], evidence["unknown"]) == (6, 0, 0)
+          assert evidence["remainingExecutionRoots"] == 0
+          assert packaged["packageSha256"] == sys.argv[3]
+          assert packaged["qualificationExitCode"] == 0
+          assert packaged["publicationAuthorized"] is False
+          assert packaged["activationAuthorized"] is False
+          PY
+
+      - name: Construct and verify finite release assets
+        shell: bash
+        env:
+          CANDIDATE_SOURCE: ${{ inputs.source }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          package="$CANDIDATE_OUTPUT/FS.GG.Coordination.Cli.$CANDIDATE_VERSION.nupkg"
+          image_manifest="$(jq -r .manifest "$EVIDENCE_ROOT/image-qualification-result.json")"
+          dotnet fsi eng/portable-workspace-release.fsx prepare \
+            --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" \
+            --package "$package" \
+            --package-manifest "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" \
+            --image-archive "$IMAGE_STATE/candidate.oci.tar" \
+            --image-manifest "$image_manifest" \
+            --image-qualification "$EVIDENCE_ROOT/image-qualification-result.json" \
+            --executor-evidence "$EVIDENCE_ROOT/executor-evidence.json" \
+            --output "$RELEASE_OUTPUT"
+          cp "$image_manifest" "$CANDIDATE_OUTPUT/portable-workspace-image-manifest.json"
+          cp "$EVIDENCE_ROOT/image-qualification-result.json" "$CANDIDATE_OUTPUT/portable-workspace-image-qualification.json"
+          cp "$EVIDENCE_ROOT/executor-evidence.json" "$CANDIDATE_OUTPUT/portable-workspace-executor-evidence.json"
+          cp "$EVIDENCE_ROOT/packaged-qualification.json" "$CANDIDATE_OUTPUT/portable-workspace-packaged-qualification.json"
+          install -d -m 0700 "$ARTIFACT_ROOT/evidence"
+          cp "$CANDIDATE_OUTPUT"/* "$ARTIFACT_ROOT/"
+          cp "$RELEASE_OUTPUT"/* "$ARTIFACT_ROOT/"
+          cp "$EVIDENCE_ROOT"/*.json "$ARTIFACT_ROOT/evidence/"
+
+      - name: Remove exact private runtime state
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          for pair in "$BUILD_ROOT:$BUILD_RUNROOT" "$LOAD_ROOT:$LOAD_RUNROOT"; do
+            root="${pair%%:*}"
+            runroot="${pair#*:}"
+            mapfile -t containers < <(podman --storage-driver=vfs --root "$root" --runroot "$runroot" container ps --all --quiet || true)
+            if (( ${#containers[@]} > 0 )); then
+              podman --storage-driver=vfs --root "$root" --runroot "$runroot" container rm --force "${containers[@]}"
+            fi
+            test -z "$(podman --storage-driver=vfs --root "$root" --runroot "$runroot" container ps --all --quiet)"
+            podman --storage-driver=vfs --root "$root" --runroot "$runroot" system reset --force
+          done
+          python3 - "$BUILD_ROOT" "$BUILD_RUNROOT" "$LOAD_ROOT" "$LOAD_RUNROOT" "$IMAGE_STATE" "$EXECUTOR_STATE" "$PACKAGED_STATE" "$CANDIDATE_OUTPUT" "$RELEASE_OUTPUT" "$EVIDENCE_ROOT" "$ARTIFACT_ROOT/evidence/cleanup-state.json" <<'PY'
+          import json, pathlib, shutil, sys
+          for value in sys.argv[1:-1]:
+              path = pathlib.Path(value)
+              if path.exists(): shutil.rmtree(path)
+          removed = {pathlib.Path(value).name + "Removed": not pathlib.Path(value).exists() for value in sys.argv[1:-1]}
+          assert all(removed.values())
+          receipt = pathlib.Path(sys.argv[-1])
+          receipt.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+          receipt.write_text(json.dumps({
+              "schema":"fsgg.portable-workspace-release-cleanup/1",
+              **removed,
+          },sort_keys=True,separators=(",",":"))+"\n",encoding="utf-8")
+          PY
+
+      - name: Retain the coherent candidate and bounded evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: callable-cli-${{ inputs.source }}
-          path: ${{ runner.temp }}/callable-cli-candidate/
-          if-no-files-found: error
+          path: ${{ env.ARTIFACT_ROOT }}/
+          if-no-files-found: warn
           retention-days: 14
+          compression-level: 0

@@ -22,9 +22,9 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.1.7</Version>"
-            "<PackageVersion>0.1.7</PackageVersion>"
-            "<PackageReleaseNotes>Adds a Coordination ordinary settlement source profile while preserving all published profiles.</PackageReleaseNotes>"
+            "<Version>0.2.0</Version>"
+            "<PackageVersion>0.2.0</PackageVersion>"
+            "<PackageReleaseNotes>Adds the portable workspace v1 contract and packaged executor assembly while preserving all published source profiles.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =
@@ -37,6 +37,19 @@ let ``release preparation route has no publication tag or credential authority``
     let workflow = read ".github/workflows/callable-cli-release-prepare.yml"
     Assert.Contains("workflow_dispatch:", workflow, StringComparison.Ordinal)
     Assert.Contains("contents: read", workflow, StringComparison.Ordinal)
+    for expected in
+        [
+            "DOTNET_PROCESSOR_COUNT: 4"
+            "run-packaged-portable-workspace-qualification.py"
+            "load --input \"$IMAGE_STATE/candidate.oci.tar\""
+            "passed\"], evidence[\"failed\"], evidence[\"unknown\"]) == (6, 0, 0)"
+            "portable-workspace-release.fsx prepare"
+            "ARTIFACT_ROOT: /tmp/pw-artifact-${{ github.run_id }}-${{ github.run_attempt }}"
+            "EVIDENCE_ROOT: /tmp/pw-evidence-${{ github.run_id }}-${{ github.run_attempt }}"
+            "cp \"$CANDIDATE_OUTPUT\"/* \"$ARTIFACT_ROOT/\""
+            "path: ${{ env.ARTIFACT_ROOT }}/"
+            "compression-level: 0"
+        ] do Assert.Contains(expected, workflow, StringComparison.Ordinal)
     for forbidden in [ "packages: write"; "contents: write"; "nuget push"; "gh release"; "git tag"; "secrets." ] do
         Assert.DoesNotContain(forbidden, workflow, StringComparison.OrdinalIgnoreCase)
 
@@ -50,11 +63,45 @@ let ``callable CLI release preparation binds reviewed version project and tag`` 
     let script = read "eng/callable-cli-release.fsx"
     for expected in
         [
-            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\" ]"
+            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\" ]"
             "projectPackageVersion () = version"
             "let tag = $\"v{version}\""
             "root.GetProperty(\"tag\").GetString() = tag"
+            "candidate package must contain exactly one Execution assembly"
+            "installed schema export changed: {name}"
+            "installed CLI did not refuse a malformed portable contract"
         ] do Assert.Contains(expected, script, StringComparison.Ordinal)
+
+[<Fact>]
+let ``portable release preparation binds explicit package image and qualification bytes without effect authority`` () =
+    let script = read "eng/portable-workspace-release.fsx"
+    for expected in
+        [
+            "only reviewed portable release version 0.2.0 may be prepared"
+            "--package-manifest"
+            "--image-archive"
+            "--image-manifest"
+            "--image-qualification"
+            "--executor-evidence"
+            "portable-workspace-v1-{version}.zip"
+            "portable-workspace-linux-amd64-{version}.oci.tar"
+            "portable-workspace-release-manifest.json"
+            "package must contain exactly one Execution assembly"
+            "OCI archive must contain exactly one image manifest"
+            "executor qualification did not pass strictly"
+            "manifest.Add(\"publicationAuthorized\", false)"
+            "manifest.Add(\"tagAuthorized\", false)"
+            "manifest.Add(\"activationAuthorized\", false)"
+        ] do Assert.Contains(expected, script, StringComparison.Ordinal)
+
+    Assert.DoesNotContain("podman pull", script, StringComparison.OrdinalIgnoreCase)
+    Assert.DoesNotContain("docker pull", script, StringComparison.OrdinalIgnoreCase)
+    Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_release_helper.py")))
+    Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_packaged_qualification.py")))
+    Assert.True(File.Exists(Path.Combine(root, "tests/portable-workspace/release/test_artifact_layout.py")))
+    let packaged = read "eng/run-packaged-portable-workspace-qualification.py"
+    for expected in [ "package digest changed"; "qualification script package reference changed"; "DOTNET_PROCESSOR_COUNT\": \"4\""; "publicationAuthorized\": False" ] do
+        Assert.Contains(expected, packaged, StringComparison.Ordinal)
 
 [<Fact>]
 let ``protected publication route preserves exact bytes ordering and recovery boundaries`` () =
@@ -62,28 +109,38 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     for expected in
         [
             "operation:"
-            "publish-c3-coordination-cli-017"
-            "PACKAGE_VERSION: 0.1.7"
-            "EXPECTED_SOURCE: fdfdcfc91e65f814b42d8c9e061fec0e6221a139"
-            "EXPECTED_TREE: 9a31a52256577f3b40e2bfc25463001d5a64c5d8"
-            "EXPECTED_SHA256: f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c"
+            "publish-v2-lang-01-2-cli-020"
+            "PACKAGE_VERSION: 0.2.0"
+            "PORTABLE_BUNDLE: portable-workspace-v1-0.2.0.zip"
+            "PORTABLE_IMAGE: portable-workspace-linux-amd64-0.2.0.oci.tar"
+            "EXPECTED_BUNDLE_SHA256:"
+            "EXPECTED_IMAGE_SHA256:"
             "packages: write"
             "id-token: write"
             "attestations: write"
             "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"
             "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c"
-            "EXPECTED_PREPARATION_RUN_ID: 36466095004"
-            "EXPECTED_PREPARATION_ARTIFACT_ID: 10989613858"
-            "EXPECTED_PREPARATION_ARCHIVE_SHA256: a7fbe0d657ddd50369bcbe7511a28ab33e9760d616999eaa4df9fd6ec3b49d8f"
-            "[[ \"$EXPECTED_SOURCE\" =~ ^[0-9a-f]{40}$ ]]"
-            "[[ \"$EXPECTED_PREPARATION_ARTIFACT_ID\" =~ ^[0-9]+$ ]]"
+            "EXPECTED_PREPARATION_RUN_ID: 0"
+            "EXPECTED_PREPARATION_ARTIFACT_ID: 0"
+            "test \"$value\" != 0000000000000000000000000000000000000000"
+            "[[ \"$value\" =~ ^[0-9a-f]{40}$ ]]"
+            "[[ \"$EXPECTED_PREPARATION_ARTIFACT_ID\" =~ ^[1-9][0-9]*$ ]]"
             ".workflow_run.id == $run"
             ".workflow_run.head_sha == $source"
             "cmp \"$CANDIDATE_OUTPUT/$PACKAGE_FILE\" \"$READBACK_OUTPUT/reproduced/$PACKAGE_FILE\""
+            "portable-workspace-release.fsx\" verify"
+            "load --input \"$CANDIDATE_OUTPUT/$PORTABLE_IMAGE\""
+            "run-packaged-portable-workspace-qualification.py"
+            ".passed == 6 and .failed == 0 and .unknown == 0"
+            "Anonymous public install and schema readback"
+            "cmp \"contracts/portable-workspace/v1/$name.schema.json\""
             "eng/repository-settings/desired.json"
             "Publish to GitHub Packages first"
             "Observe nuget.org and validate recoverable ordering before either effect"
             "Create immutable tag and GitHub release only after both feeds settle"
+            "Observe release assets and refuse collisions before any package effect"
+            "GitHub release observation is unknown"
+            "Accept: application/octet-stream"
             "if: always()"
         ] do Assert.Contains(expected, workflow, StringComparison.Ordinal)
 
@@ -92,6 +149,8 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     Assert.DoesNotContain("NUGET_API_KEY }}", workflow.Replace("steps.nuget-login.outputs.NUGET_API_KEY }}", ""), StringComparison.Ordinal)
     let githubPush = workflow.IndexOf("nuget.pkg.github.com/FS-GG/index.json", StringComparison.Ordinal)
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
+    let releaseCollision = workflow.IndexOf("Observe release assets and refuse collisions before any package effect", StringComparison.Ordinal)
+    Assert.True(releaseCollision >= 0 && releaseCollision < githubPush)
     Assert.True(githubPush >= 0 && publicPush > githubPush)
 
     let operation = read "eng/callable-cli-release-operation-017.json"
