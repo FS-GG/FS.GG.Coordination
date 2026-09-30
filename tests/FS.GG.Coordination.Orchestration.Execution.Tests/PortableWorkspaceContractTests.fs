@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Tests
 open System
 open System.Text
 open System.IO
+open System.Diagnostics
 open FS.GG.Coordination.Orchestration.Execution
 open Xunit
 
@@ -20,9 +21,9 @@ type PortableWorkspaceContractTests() =
             ProfileId = "web-service-v1"
             Revision = 3UL
             WorkspaceScope = "fs-gg/example-polyglot"
-            SourceRevision = "0123456789abcdef"
+            SourceRevision = "0123456789abcdef0123456789abcdef01234567"
             QualifiedImage =
-                "ghcr.io/fs-gg/polyglot@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+                "ghcr.io/fs-gg/polyglot@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
             Components =
                 [
                     {
@@ -232,6 +233,17 @@ type PortableWorkspaceContractTests() =
 
         Assert.True(PortableWorkspaceContract.parseCommand changed |> Result.isError)
 
+        let duplicate =
+            Encoding.UTF8
+                .GetString(commandBytes)
+                .Replace(
+                    "\"schema\":\"fsgg.workspace.command/1\"",
+                    "\"schema\":\"fsgg.workspace.command/1\",\"schema\":\"fsgg.workspace.command/1\""
+                )
+            |> Encoding.UTF8.GetBytes
+
+        Assert.True(PortableWorkspaceContract.parseCommand duplicate |> Result.isError)
+
         Assert.True(
             PortableWorkspaceContract.validateProfile
                 { profile with
@@ -276,3 +288,160 @@ type PortableWorkspaceContractTests() =
                     Operation = "uploaded-shell"
                 }
         )
+
+    [<Fact>]
+    member _.``maximum portable counters and microsecond UTC timestamps remain exact``() =
+        let maximum = UInt64.MaxValue
+
+        let maximumProfile =
+            { profile with
+                Revision = maximum
+                MaximumRuntimeSeconds = maximum
+                MaximumOutputBytes = maximum
+            }
+
+        let profileJson =
+            PortableWorkspaceContract.profileBytes maximumProfile
+            |> Result.defaultWith failwith
+            |> Encoding.UTF8.GetString
+
+        Assert.Contains($"\"revision\":\"{maximum}\"", profileJson)
+        Assert.Contains($"\"maximumRuntimeSeconds\":\"{maximum}\"", profileJson)
+
+        let maximumCommand =
+            { command with
+                ProfileRevision = maximum
+                ExpectedWorkflowRevision = maximum
+                FenceGeneration = maximum
+            }
+
+        let commandJson =
+            PortableWorkspaceContract.commandBytes maximumCommand
+            |> Result.defaultWith failwith
+            |> Encoding.UTF8.GetString
+
+        Assert.Contains("\"deadline\":\"2026-09-30T12:34:56.789123Z\"", commandJson)
+        Assert.DoesNotContain(":null", commandJson)
+
+        Assert.Equal(
+            maximumCommand,
+            commandJson
+            |> Encoding.UTF8.GetBytes
+            |> PortableWorkspaceContract.parseCommand
+            |> Result.defaultWith failwith
+        )
+
+    [<Fact>]
+    member _.``canonical validation binds the declared schema and digest``() =
+        let bytes =
+            PortableWorkspaceContract.commandBytes command |> Result.defaultWith failwith
+
+        Assert.Equal(
+            Ok PortableWorkspaceDocumentKind.Command,
+            PortableWorkspaceContract.kindForSchema PortableWorkspaceContract.commandSchema
+        )
+
+        Assert.Equal(
+            Error "portable-schema-unsupported",
+            PortableWorkspaceContract.kindForSchema "fsgg.workspace.command/2"
+        )
+
+        Assert.Equal(
+            Ok(PortableWorkspaceContract.digest bytes),
+            PortableWorkspaceContract.canonicalDigest PortableWorkspaceDocumentKind.Command bytes
+        )
+
+    [<Fact>]
+    member _.``placeholder source and image pins validate as fixtures but refuse operation preparation``() =
+        let authority =
+            {
+                WorkspaceScope = profile.WorkspaceScope
+                WorkflowRevision = command.ExpectedWorkflowRevision
+                FenceGeneration = command.FenceGeneration
+                ObservedAt = deadline.AddMinutes(-2.0)
+            }
+
+        let placeholderSource =
+            { profile with
+                SourceRevision = "0123456789abcdef"
+            }
+
+        Assert.True(PortableWorkspaceContract.validateProfile placeholderSource |> Result.isOk)
+
+        Assert.Equal(
+            Error "portable-source-placeholder-refused",
+            PortableWorkspaceAdapter.prepare
+                (deadline.AddMinutes(-1.0))
+                authority
+                placeholderSource
+                { command with
+                    SourceRevision = placeholderSource.SourceRevision
+                }
+        )
+
+        let placeholderImage =
+            { profile with
+                QualifiedImage =
+                    "ghcr.io/fs-gg/polyglot@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+            }
+
+        Assert.True(PortableWorkspaceContract.validateProfile placeholderImage |> Result.isOk)
+
+        Assert.Equal(
+            Error "portable-image-placeholder-refused",
+            PortableWorkspaceAdapter.prepare (deadline.AddMinutes(-1.0)) authority placeholderImage command
+        )
+
+    [<Fact>]
+    member _.``python javascript and fsharp codecs agree on canonical bytes and digest``() =
+        let maximumCommand =
+            { command with
+                IdempotencyId = "max-counter"
+                WorkspaceScope = "fs-gg/conformance"
+                ProfileId = "portable-v1"
+                ProfileRevision = UInt64.MaxValue
+                ExpectedWorkflowRevision = UInt64.MaxValue
+                FenceGeneration = UInt64.MaxValue
+                Operation = "build"
+            }
+
+        let expected =
+            PortableWorkspaceContract.commandBytes maximumCommand
+            |> Result.map PortableWorkspaceContract.digest
+            |> Result.defaultWith failwith
+
+        let run (executable: string) (script: string) =
+            let start: ProcessStartInfo =
+                ProcessStartInfo(
+                    executable,
+                    script,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false
+                )
+
+            use child: Process = Process.Start start
+            let output = child.StandardOutput.ReadToEnd().Trim()
+            let error = child.StandardError.ReadToEnd()
+            child.WaitForExit()
+            Assert.True(child.ExitCode = 0, $"{executable} codec failed: {error}")
+            output
+
+        let rec findFixtureRoot (directory: DirectoryInfo) =
+            let candidate = Path.Combine(directory.FullName, "tests", "portable-workspace")
+
+            if Directory.Exists candidate then
+                candidate
+            elif isNull directory.Parent then
+                failwith "tests/portable-workspace was not found"
+            else
+                findFixtureRoot directory.Parent
+
+        let fixtureRoot = findFixtureRoot (DirectoryInfo AppContext.BaseDirectory)
+        let pythonDigest = run "python3" (Path.Combine(fixtureRoot, "python_codec.py"))
+
+        let javascriptDigest =
+            run "node" (Path.Combine(fixtureRoot, "javascript_codec.mjs"))
+
+        Assert.Equal(expected, pythonDigest)
+        Assert.Equal(expected, javascriptDigest)
