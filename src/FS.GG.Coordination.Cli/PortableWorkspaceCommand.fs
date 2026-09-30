@@ -62,13 +62,7 @@ module PortableWorkspaceCommand =
         match artifactPath category name |> Option.bind embeddedArtifact with
         | None -> usage ()
         | Some bytes ->
-            let length =
-                if category = "example" && bytes.Length > 0 && bytes[bytes.Length - 1] = byte '\n' then
-                    bytes.Length - 1
-                else
-                    bytes.Length
-
-            Console.OpenStandardOutput().Write(bytes, 0, length)
+            Console.OpenStandardOutput().Write(bytes, 0, bytes.Length)
             0
 
     let private commonOptions arguments =

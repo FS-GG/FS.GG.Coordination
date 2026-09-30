@@ -1,4 +1,4 @@
-namespace FS.GG.Coordination.UnitTests
+namespace FS.GG.Coordination.PortableWorkspace.UnitTests
 
 open System.IO
 open FS.GG.Coordination.Cli

@@ -192,6 +192,7 @@ let private allowedDependencies =
                     "FS.GG.Coordination.Core"
                     "FS.GG.Coordination.GitHub"
                     "FS.GG.Coordination.Orchestration.Observer"
+                    "FS.GG.Coordination.Orchestration.Execution"
                     "FS.GG.Coordination.Qualification.Contracts"
                 ]
             "FS.GG.Coordination.App",

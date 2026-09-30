@@ -99,6 +99,7 @@
     <Compile Include="AdministrativeRetirementTests.fs" />
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
+    <Compile Include="PortableWorkspaceCommandTests.fs" />
     <Compile Include="CritiqueEvidenceTests.fs" />
     <Compile Include="Tests.fs" />
   </ItemGroup>
