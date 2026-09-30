@@ -1226,12 +1226,23 @@ elif args[:2] == ["image", "inspect"]:
         image_id = "sha256:" + image_id
     print("sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef|" + image_id + "|[\"HOME=/tmp\",\"PATH=/usr/local/bin:/usr/bin:/bin\"]|null|null|null|" + user)
 elif args[:2] == ["unshare", "chown"]:
-    pass
+    with pathlib.Path("chown-args.jsonl").open("a") as stream:
+        stream.write(json.dumps(args) + "\n")
+    if "--recursive" in args and pathlib.Path(sys.argv[0]).name.startswith("reclaim-refused"):
+        print("ownership handback refused", file=sys.stderr)
+        raise SystemExit(93)
+    if "--recursive" in args:
+        pathlib.Path(args[-1], "generated").chmod(0o755)
 elif args and args[0] == "create":
     pathlib.Path("create-args.json").write_text(json.dumps(args))
     volumes = [args[index + 1] for index, value in enumerate(args) if value == "--volume"]
     output = pathlib.Path([value for value in volumes if value.endswith(":/output:rw")][0].split(":/output:rw")[0])
     output.joinpath("verified.txt").write_bytes(b"verified")
+    output.joinpath("generated").mkdir()
+    output.joinpath("generated", "artifact.txt").write_bytes(b"container-owned")
+    executable_name = pathlib.Path(sys.argv[0]).name
+    if executable_name == "podman-shim.py" or executable_name.startswith("reclaim-refused"):
+        output.joinpath("generated").chmod(0)
     print("container-id")
 elif args[:2] == ["container", "inspect"] and ".Image" in args[-2]:
     print("sha256:" + "0123456789abcdef" * 4 + "|container-id|32768:32768")
@@ -1334,7 +1345,71 @@ else:
                     let! cleaned = runner.CleanupAsync(request, CancellationToken.None)
                     Assert.True(cleaned)
 
+                    let ownershipCommands =
+                        File.ReadAllLines(Path.Combine(stateRoot, "chown-args.jsonl"))
+
+                    Assert.Equal(2, ownershipCommands.Length)
+                    Assert.DoesNotContain("--recursive", ownershipCommands[0])
+                    Assert.Contains("--recursive", ownershipCommands[1])
+                    Assert.Contains("--no-dereference", ownershipCommands[1])
+                    Assert.Contains("0:0", ownershipCommands[1])
+
                     Assert.False(Directory.Exists(Path.Combine(stateRoot, "executions", request.ContainerName)))
+
+                    let reclaimRefusedScript = Path.Combine(temporary, "reclaim-refused-podman-shim.py")
+                    File.Copy(script, reclaimRefusedScript)
+
+                    File.SetUnixFileMode(
+                        reclaimRefusedScript,
+                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                    )
+
+                    let reclaimRefusedStateRoot = Path.Combine(temporary, "reclaim-refused-state")
+
+                    let reclaimRefusedRuntime =
+                        { runtime with
+                            PodmanExecutable = reclaimRefusedScript
+                            StateRoot = reclaimRefusedStateRoot
+                        }
+
+                    let reclaimRefusedRequest =
+                        { request with
+                            ContainerName = "fsgg-portable-reclaim-refused-test"
+                        }
+
+                    let reclaimRefusedRunner =
+                        PortableWorkspacePodmanRunner reclaimRefusedRuntime :> IPortableProcessRunner
+
+                    let! reclaimRefusedObserved =
+                        reclaimRefusedRunner.RunAsync(reclaimRefusedRequest, CancellationToken.None)
+
+                    Assert.True(reclaimRefusedObserved.TerminationObserved)
+
+                    let! reclaimRefusedCleanup =
+                        reclaimRefusedRunner.CleanupAsync(reclaimRefusedRequest, CancellationToken.None)
+
+                    Assert.False(reclaimRefusedCleanup)
+
+                    Assert.True(
+                        Directory.Exists(
+                            Path.Combine(
+                                reclaimRefusedStateRoot,
+                                "executions",
+                                reclaimRefusedRequest.ContainerName
+                            )
+                        )
+                    )
+
+                    File.SetUnixFileMode(
+                        Path.Combine(
+                            reclaimRefusedStateRoot,
+                            "executions",
+                            reclaimRefusedRequest.ContainerName,
+                            "output",
+                            "generated"
+                        ),
+                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                    )
 
                     let rawIdScript = Path.Combine(temporary, "raw-id-podman-shim.py")
                     File.Copy(script, rawIdScript)

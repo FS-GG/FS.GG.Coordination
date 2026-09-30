@@ -1128,10 +1128,45 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         let executionRoot =
                             Path.Combine(runtime.StateRoot, "executions", request.ContainerName)
 
-                        if Directory.Exists executionRoot then
-                            Directory.Delete(executionRoot, true)
+                        let outputRoot = Path.Combine(executionRoot, "output")
 
-                        return not (Directory.Exists executionRoot) && not (File.Exists executionRoot)
+                        let deleteExecutionRoot () =
+                            try
+                                if Directory.Exists executionRoot then
+                                    Directory.Delete(executionRoot, true)
+
+                                not (Directory.Exists executionRoot) && not (File.Exists executionRoot)
+                            with
+                            | :? IOException
+                            | :? UnauthorizedAccessException -> false
+
+                        let deletedWithoutOwnershipReturn = deleteExecutionRoot ()
+
+                        let! ownershipReturned =
+                            if not deletedWithoutOwnershipReturn && Directory.Exists outputRoot then
+                                task {
+                                    let! ownership =
+                                        PortablePodmanRuntime.runPodman
+                                            runtime
+                                            request
+                                            [
+                                                "unshare"
+                                                "chown"
+                                                "--recursive"
+                                                "--no-dereference"
+                                                "0:0"
+                                                outputRoot
+                                            ]
+                                            cancellationToken
+
+                                    return ownership.ExitCode = Some 0 && ownership.OutputComplete
+                                }
+                            else
+                                Task.FromResult true
+
+                        return
+                            deletedWithoutOwnershipReturn
+                            || (ownershipReturned && deleteExecutionRoot ())
                 with
                 | :? IOException
                 | :? UnauthorizedAccessException -> return false
