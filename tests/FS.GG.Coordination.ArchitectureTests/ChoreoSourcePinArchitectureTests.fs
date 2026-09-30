@@ -341,7 +341,18 @@ let ``hosted writer Choreo bounded roots cover provider and runner fault schedul
     Assert.Contains("verify_lane O2HostedWriterChoreoProviderBounded", script)
     Assert.Contains("verify_lane O2HostedWriterChoreoRunnerBounded", script)
     Assert.Contains("--max-steps=20", script)
-    Assert.Contains("timeout 150s", script)
+    Assert.Contains("run-choreo-c2-tlc.sh\" 150", script)
+
+    let tlcWrapper =
+        File.ReadAllText(Path.Combine(root, "eng/run-choreo-c2-tlc.sh"))
+
+    Assert.Contains("timeout --signal=TERM --kill-after=10s", tlcWrapper)
+    Assert.Contains("execution-timeout-after-parser", tlcWrapper)
+    Assert.Contains("APALACHE_STARTUP_RETRY count=1 command=verify", tlcWrapper)
+    Assert.Contains("run_attempt 2", tlcWrapper)
+    Assert.Contains("PASS #0: SanyParser", tlcWrapper)
+    Assert.Contains("states generated", tlcWrapper)
+    Assert.Contains("Invariant violated", tlcWrapper)
     Assert.Contains("let choreoBoundary = \"// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt\"", validator)
     Assert.Contains("let qualificationQnt = Path.Combine(scratch, \"protocol-q2-legacy-qualification.qnt\")", validator)
     Assert.Contains("File.WriteAllText(qualificationQnt, q2Source.Substring(0, choreoBoundaryIndex)", validator)
