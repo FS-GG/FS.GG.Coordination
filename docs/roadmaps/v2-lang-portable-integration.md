@@ -4,8 +4,9 @@
 publication and receiver qualification. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** P1 source implementation and local qualification complete on its isolated branch. Integration,
-package publication, installed-tool qualification, receiver adoption and P2–P5 remain pending.
+**Status:** P1 source and local CLI integration are complete on the isolated branch. P2 package installation
+passed locally; hosted qualification and protected source merge remain pending. Publication, receiver adoption
+and P3–P5 remain pending.
 
 ## Authority and compatibility
 
@@ -44,6 +45,8 @@ or noncanonical fields fail closed.
 The focused Execution tests cover the F# codec, strict shapes, fences and placeholder refusal. Independent Python
 and JavaScript standard-library codecs reconstruct the same maximum-counter command, reject the adverse shapes and
 produce the same digest. A CLI unit test compares every compiled schema/example byte with its tracked v1 file.
+The CLI emits canonical example JSON without the tracked text file's terminal newline, so the exported
+example passes its own canonical digest check.
 
 Run after the shared CLI project registrations are integrated:
 
@@ -51,6 +54,15 @@ Run after the shared CLI project registrations are integrated:
 dotnet test tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj --no-restore
 dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --no-restore
 ```
+
+## P2 local evidence
+
+The shared CLI project and command registrations compile with zero warnings. The dependency policy accepts
+the single new CLI-to-Execution reference, and the registered CLI artifact test passes. A local preview tool
+package was packed and installed under `/tmp`, then invoked from outside the source checkout: schema export
+worked and an exported Python profile produced canonical SHA-256 digest
+`469cf5c0bdc54e4db241b98dd7ba11cae396e2080bb9beec0365a2cbc2a8537c`.
+The preview package is local qualification evidence, not a published Coordination release.
 
 ## Workspace impact
 
