@@ -87,8 +87,9 @@ remain silently unexecuted.
 
 A deliberate local fault changed the graph's false delivery assertion to expect true. The focused runner
 observed the named test failure and exited 1; the fault was then reverted and all six focused tests passed.
-Before acceptance, registration in the owning UnitTests project must repeat the known-failure observation
-and restore check through the native gate. No economic savings claim is made without measurement.
+After registration in the owning UnitTests project, the focused native gate observed that same named
+workflow test fail with exit 1 under the deliberate false delivery assertion. The assertion was restored,
+and the registered AgentFramework filter passed 6/6. No economic savings claim is made without measurement.
 
 Focused evidence covers:
 

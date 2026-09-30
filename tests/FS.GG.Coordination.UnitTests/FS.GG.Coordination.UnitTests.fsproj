@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="AgentFrameworkExecutionTests.fs" />
+    <Compile Include="AgentFrameworkWorkflowTests.fs" />
     <Compile Include="QualificationReuseSelectionTests.fs" />
     <Compile Include="OrganizationIssueFieldsTests.fs" />
     <Compile Include="WorkTaxonomyTests.fs" />
@@ -115,6 +117,7 @@
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Qualification.Contracts\FS.GG.Coordination.Qualification.Contracts.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.GitHub\FS.GG.Coordination.GitHub.fsproj" />
     <ProjectReference Include="..\..\src\FS.GG.Coordination.Cli\FS.GG.Coordination.Cli.fsproj" />
+    <ProjectReference Include="..\..\src\FS.GG.Coordination.Orchestration.Execution.AgentFramework\FS.GG.Coordination.Orchestration.Execution.AgentFramework.fsproj" />
   </ItemGroup>
 
   <ItemGroup>
