@@ -504,19 +504,25 @@ module private PortablePodmanRuntime =
                 verificationFile.StartsWith(outputPrefix, StringComparison.Ordinal)
                 && noLinks
                 && File.Exists verificationFile
-                && uint64 (FileInfo(verificationFile).Length) <= request.MaximumOutputBytes
             then
-                let bytes = File.ReadAllBytes verificationFile
+                let length = uint64 (FileInfo(verificationFile).Length)
 
-                if sha256 bytes = request.VerificationSha256 then
-                    Some bytes
+                if length > uint64 PortableWorkspaceContract.maximumDocumentBytes then
+                    None, true
+                elif length > request.MaximumOutputBytes then
+                    None, false
                 else
-                    None
+                    let bytes = File.ReadAllBytes verificationFile
+
+                    if sha256 bytes = request.VerificationSha256 then
+                        Some bytes, false
+                    else
+                        None, false
             else
-                None
+                None, false
         with
         | :? IOException
-        | :? UnauthorizedAccessException -> None
+        | :? UnauthorizedAccessException -> None, false
 
 type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
     interface IPortableProcessRunner with
@@ -539,6 +545,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         ContainerIdentity = containerIdentity
                         VerificationObserved = false
                         VerificationOutput = None
+                        VerificationCustodyLimitExceeded = false
                     }
 
                 match! PortablePodmanRuntime.prepareSnapshot runtime request cancellationToken with
@@ -776,11 +783,11 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                         && stateParts[0] = "exited"
                                         && Int32.TryParse(stateParts[1], &observedExit)
 
-                                    let verificationOutput =
+                                    let verificationOutput, verificationCustodyLimitExceeded =
                                         if terminationObserved then
                                             PortablePodmanRuntime.verificationOutput outputRoot request
                                         else
-                                            None
+                                            None, false
 
                                     return
                                         {
@@ -800,6 +807,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             ContainerIdentity = Some containerIdentity
                                             VerificationObserved = verificationOutput.IsSome
                                             VerificationOutput = verificationOutput
+                                            VerificationCustodyLimitExceeded = verificationCustodyLimitExceeded
                                         }
                     | _ ->
                         return
@@ -832,6 +840,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         ContainerIdentity = containerIdentity
                         VerificationObserved = false
                         VerificationOutput = None
+                        VerificationCustodyLimitExceeded = false
                     }
 
                 match PortablePodmanRuntime.safeStateRoot runtime with
@@ -933,7 +942,8 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             [ "logs"; request.ContainerName ]
                                             cancellationToken
 
-                                    let verificationOutput = PortablePodmanRuntime.verificationOutput outputRoot request
+                                    let verificationOutput, verificationCustodyLimitExceeded =
+                                        PortablePodmanRuntime.verificationOutput outputRoot request
 
                                     return
                                         {
@@ -952,6 +962,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                             ContainerIdentity = Some stateParts[1]
                                             VerificationObserved = verificationOutput.IsSome
                                             VerificationOutput = verificationOutput
+                                            VerificationCustodyLimitExceeded = verificationCustodyLimitExceeded
                                         }
                         | _ -> return unknown (Some sourceTree) (Some snapshotDigest) None (Some request.ContainerName)
             }

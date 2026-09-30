@@ -152,6 +152,7 @@ module private PortableExecutorFixtures =
             ContainerIdentity = Some "container-test"
             VerificationObserved = true
             VerificationOutput = Some Array.empty
+            VerificationCustodyLimitExceeded = false
         }
 
     let rec fixtureRoot (directory: DirectoryInfo) =
@@ -442,6 +443,7 @@ type PortableWorkspaceExecutorTests() =
                         ContainerIdentity = Some "container-test"
                         VerificationObserved = true
                         VerificationOutput = Some Array.empty
+                        VerificationCustodyLimitExceeded = false
                     })
 
             let reviewed =
@@ -640,6 +642,7 @@ type PortableWorkspaceExecutorTests() =
                             ContainerIdentity = Some "container-test"
                             VerificationObserved = false
                             VerificationOutput = None
+                            VerificationCustodyLimitExceeded = false
                         }
                     else
                         {
@@ -658,6 +661,7 @@ type PortableWorkspaceExecutorTests() =
                             ContainerIdentity = Some "container-test"
                             VerificationObserved = false
                             VerificationOutput = None
+                            VerificationCustodyLimitExceeded = false
                         })
 
             let reviewed =
@@ -791,6 +795,7 @@ type PortableWorkspaceExecutorTests() =
                             ContainerIdentity = None
                             VerificationObserved = false
                             VerificationOutput = None
+                            VerificationCustodyLimitExceeded = false
                         }),
                     cleanup = (fun _ -> cleanupAllowed)
                 )
@@ -927,6 +932,136 @@ type PortableWorkspaceExecutorTests() =
         }
 
     [<Fact>]
+    member _.``verification custody bound roundtrips and oversized evidence stays truthful``() =
+        task {
+            let selectedProfile =
+                { profile
+                      "fs-gg/verification-custody"
+                      [
+                          fixtureComponent "app" "python" "python" "cpython" "3.14.0" "python-build" "python-test"
+                      ] with
+                    MaximumOutputBytes = 512UL * 1024UL
+                }
+
+            let retained = Array.zeroCreate<byte> PortableWorkspaceContract.maximumDocumentBytes
+
+            let fake =
+                FakeRunner(fun request ->
+                    if request.Arguments = [ "build.py" ] then
+                        { successfulObservation with
+                            VerificationOutput = Some retained
+                        }
+                    else
+                        { successfulObservation with
+                            VerificationObserved = false
+                            VerificationOutput = None
+                            VerificationCustodyLimitExceeded = true
+                        })
+
+            let reviewed =
+                [
+                    operation
+                        "python-build"
+                        "build"
+                        (Some "app")
+                        "python"
+                        [ "cpython", "3.14.0" ]
+                        "python3"
+                        [ "build.py" ]
+                        "python-build-v1"
+                    operation
+                        "python-test"
+                        "test"
+                        (Some "app")
+                        "python"
+                        [ "cpython", "3.14.0" ]
+                        "python3"
+                        [ "test.py" ]
+                        "python-test-v1"
+                ]
+
+            let policy =
+                {
+                    WorkspaceRoot = root ()
+                    WorkspaceScope = selectedProfile.WorkspaceScope
+                    SourceRevision = sourceRevision
+                    QualifiedImage = image
+                    MaximumRuntimeSeconds = 30UL
+                    MaximumOutputBytes = selectedProfile.MaximumOutputBytes
+                    Operations = reviewed
+                    Runtime = runtimePolicy ()
+                }
+
+            let buildCommand =
+                command selectedProfile (Guid.Parse "36000000-0000-0000-0000-000000000001") "build" (Some "app")
+
+            let first = PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
+
+            let! completed =
+                first.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    buildCommand,
+                    CancellationToken.None
+                )
+
+            match completed with
+            | Completed receipt ->
+                Assert.Equal(retained.Length, receipt.VerificationOutput.Value.Length)
+                Assert.True(receipt.CleanupCompleted)
+            | other -> failwithf "expected retained verification receipt, got %A" other
+
+            let reconstructed =
+                PortableWorkspaceExecutor.Executor(policy, fake, (fun () -> now))
+
+            let! duplicate =
+                reconstructed.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    buildCommand,
+                    CancellationToken.None
+                )
+
+            match duplicate with
+            | Duplicate receipt -> Assert.Equal(retained, receipt.VerificationOutput.Value)
+            | other -> failwithf "expected retained verification duplicate, got %A" other
+
+            let testCommand =
+                command selectedProfile (Guid.Parse "36000000-0000-0000-0000-000000000002") "test" (Some "app")
+
+            let! oversized =
+                first.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    testCommand,
+                    CancellationToken.None
+                )
+
+            match oversized with
+            | Completed receipt ->
+                Assert.Equal("execution-verification-custody-limit", receipt.Result.Error.Value.Code)
+                Assert.True(receipt.CleanupCompleted)
+                Assert.True(receipt.VerificationOutput.IsNone)
+            | other -> failwithf "expected truthful custody refusal, got %A" other
+
+            let! oversizedDuplicate =
+                reconstructed.ExecuteAsync(
+                    authority selectedProfile.WorkspaceScope,
+                    selectedProfile,
+                    testCommand,
+                    CancellationToken.None
+                )
+
+            Assert.True(
+                match oversizedDuplicate with
+                | Duplicate receipt -> receipt.Result.Error.Value.Code = "execution-verification-custody-limit"
+                | _ -> false
+            )
+
+            Assert.Equal(2, fake.Calls)
+        }
+
+    [<Fact>]
     member _.``maximum runtime arithmetic saturates and a deadline crossed before launch refuses``() =
         task {
             let selectedProfile =
@@ -956,6 +1091,7 @@ type PortableWorkspaceExecutorTests() =
                         ContainerIdentity = Some "container-test"
                         VerificationObserved = true
                         VerificationOutput = Some Array.empty
+                        VerificationCustodyLimitExceeded = false
                     })
 
             let reviewed =

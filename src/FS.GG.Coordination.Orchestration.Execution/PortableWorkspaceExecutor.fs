@@ -88,6 +88,7 @@ type PortableProcessObservation =
         ContainerIdentity: string option
         VerificationObserved: bool
         VerificationOutput: byte array option
+        VerificationCustodyLimitExceeded: bool
     }
 
 type IPortableProcessRunner =
@@ -645,6 +646,19 @@ module PortableWorkspaceExecutor =
                             "The fixed operation was interrupted before termination was observed."
                             true
                             [ "verification", operation.VerificationIdentity ])
+                elif observed.VerificationCustodyLimitExceeded then
+                    result
+                        completedAt
+                        prepared
+                        (observed.ExitCode
+                         |> Option.map EvidenceKnown
+                         |> Option.defaultValue (EvidenceMissing "process-exit-code-unavailable"))
+                        (EvidenceMissing "verification-output-exceeds-custody-limit")
+                        (error
+                            "execution-verification-custody-limit"
+                            "The reviewed verification output exceeds the durable custody limit."
+                            false
+                            [ "verification", operation.VerificationIdentity ])
                 elif
                     observed.OutputLimitExceeded
                     || not observed.OutputComplete
@@ -943,6 +957,7 @@ module PortableWorkspaceExecutor =
                                         ContainerIdentity = None
                                         VerificationObserved = false
                                         VerificationOutput = None
+                                        VerificationCustodyLimitExceeded = false
                                     }
                         }
 
@@ -1009,6 +1024,7 @@ module PortableWorkspaceExecutor =
                                             ContainerIdentity = Some containerName
                                             VerificationObserved = false
                                             VerificationOutput = None
+                                            VerificationCustodyLimitExceeded = false
                                         }
                             }
 
