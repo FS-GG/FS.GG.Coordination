@@ -131,12 +131,18 @@ module PortableWorkspaceRuntimeCommand =
             |}
 
     let private completedResponse disposition receipt =
-        let exitCode =
-            match receipt.Result.ExitCode, receipt.Result.Error with
-            | EvidenceKnown 0, None -> 0
-            | _ -> 5
+        if not receipt.CleanupCompleted then
+            response
+                5
+                (output "cleanup-incomplete" receipt)
+                "portable-runtime-cleanup-incomplete"
+        else
+            let exitCode =
+                match receipt.Result.ExitCode, receipt.Result.Error with
+                | EvidenceKnown 0, None -> 0
+                | _ -> 5
 
-        response exitCode (output disposition receipt) ""
+            response exitCode (output disposition receipt) ""
 
     let private executeResolved
         (dependencies: PortableWorkspaceRuntimeCommandDependencies)

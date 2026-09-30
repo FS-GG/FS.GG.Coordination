@@ -4,6 +4,7 @@ open System
 open System.Diagnostics
 open System.IO
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coordination.Cli
@@ -20,6 +21,8 @@ type private EnrollmentSource(enrollment: PortableWorkspaceRuntimeEnrollment) =
 
 type private PythonHelloRunner(fixtureRoot: string) =
     let mutable calls = 0
+    let mutable cleanupAllowed = true
+    let mutable cleanupThrows = false
     let mutable observedRequest: PortableProcessRequest option = None
     let mutable observedOutput = ""
 
@@ -75,6 +78,10 @@ type private PythonHelloRunner(fixtureRoot: string) =
     member _.Calls = calls
     member _.ObservedRequest = observedRequest
     member _.ObservedOutput = observedOutput
+    member _.CleanupAllowed
+        with set value = cleanupAllowed <- value
+    member _.CleanupThrows
+        with set value = cleanupThrows <- value
 
     interface IPortableProcessRunner with
         member _.RunAsync(request, cancellationToken) = run request cancellationToken
@@ -82,7 +89,10 @@ type private PythonHelloRunner(fixtureRoot: string) =
         member _.RecoverAsync(request, cancellationToken) =
             run request cancellationToken
 
-        member _.CleanupAsync(_, _) = Task.FromResult true
+        member _.CleanupAsync(_, _) =
+            if cleanupThrows then
+                raise (IOException "scripted cleanup failure")
+            Task.FromResult cleanupAllowed
 
 type private TemporaryDirectory() =
     let path = Path.Combine(Path.GetTempPath(), "portable-runtime-command-" + Guid.NewGuid().ToString("N"))
@@ -190,6 +200,69 @@ type PortableWorkspaceRuntimeCommandTests() =
             Assert.Equal<string list>([ "test.py" ], request.Arguments)
             Assert.Equal("python", request.WorkingDirectory)
             Assert.Equal("python-test-ok\n", runner.ObservedOutput)
+        }
+
+    [<Fact>]
+    member _.``completed process remains incomplete until cleanup recovery is observed``() =
+        task {
+            use temporary = new TemporaryDirectory()
+            let fixture = Path.Combine(AppContext.BaseDirectory, "portable-python-hello")
+            let state = Path.Combine(temporary.Path, "state")
+            let now = portableNow ()
+
+            let enrollment =
+                PortableWorkspacePythonHelloQualification.create
+                    temporary.Path
+                    state
+                    (now.AddMinutes(-1.0))
+                    (runtimePolicy state)
+
+            let selected = command enrollment.Profile now
+            let profilePath, commandPath = writeInputs temporary.Path enrollment.Profile selected
+            let runner = PythonHelloRunner fixture
+            runner.CleanupAllowed <- false
+
+            let dependencies =
+                {
+                    Enrollments = EnrollmentSource enrollment
+                    CreateRunner = fun _ -> runner
+                    Clock = portableNow
+                }
+
+            let executeArguments =
+                [|
+                    "execute"; "--enrollment"; PortableWorkspacePythonHelloQualification.EnrollmentId
+                    "--operation-id"; PortableWorkspacePythonHelloQualification.OperationId
+                    "--profile"; profilePath; "--command"; commandPath
+                |]
+
+            let recoverArguments = Array.copy executeArguments
+            recoverArguments[0] <- "recover"
+
+            let! first = PortableWorkspaceRuntimeCommand.executeAsync dependencies executeArguments CancellationToken.None
+            runner.CleanupThrows <- true
+            let! duplicate = PortableWorkspaceRuntimeCommand.executeAsync dependencies executeArguments CancellationToken.None
+            let! unresolvedRecovery = PortableWorkspaceRuntimeCommand.executeAsync dependencies recoverArguments CancellationToken.None
+
+            for incomplete in [ first; duplicate; unresolvedRecovery ] do
+                Assert.Equal(5, incomplete.ExitCode)
+                Assert.Equal("portable-runtime-cleanup-incomplete", incomplete.StandardError)
+                Assert.Contains("\"outcome\":\"cleanup-incomplete\"", incomplete.StandardOutput)
+                Assert.Contains("\"cleanupCompleted\":false", incomplete.StandardOutput)
+                use document = JsonDocument.Parse incomplete.StandardOutput
+                let exitCode = document.RootElement.GetProperty("result").GetProperty("exitCode")
+                Assert.Equal("known", exitCode.GetProperty("state").GetString())
+                Assert.Equal(0, exitCode.GetProperty("value").GetInt32())
+
+            runner.CleanupThrows <- false
+            runner.CleanupAllowed <- true
+            let! settledRecovery = PortableWorkspaceRuntimeCommand.executeAsync dependencies recoverArguments CancellationToken.None
+
+            Assert.Equal(0, settledRecovery.ExitCode)
+            Assert.Equal("", settledRecovery.StandardError)
+            Assert.Contains("\"outcome\":\"duplicate\"", settledRecovery.StandardOutput)
+            Assert.Contains("\"cleanupCompleted\":true", settledRecovery.StandardOutput)
+            Assert.Equal(1, runner.Calls)
         }
 
     [<Fact>]
