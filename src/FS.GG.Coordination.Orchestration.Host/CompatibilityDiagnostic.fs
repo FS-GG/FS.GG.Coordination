@@ -29,6 +29,19 @@ type ServedCompatibilityDiagnostic =
 
 [<RequireQualifiedAccess>]
 module ServedCompatibilityDiagnostic =
+    let private scrubEnvironment (allowList: Set<string>) (start: ProcessStartInfo) =
+        let retained =
+            start.Environment
+            |> Seq.choose (fun pair ->
+                if allowList.Contains pair.Key then
+                    Some(pair.Key, pair.Value)
+                else
+                    None)
+            |> Seq.toArray
+
+        start.Environment.Clear()
+        retained |> Array.iter (fun (key, value) -> start.Environment[key] <- value)
+
     let private sha256 path =
         try
             use stream = File.OpenRead path
@@ -62,9 +75,11 @@ module ServedCompatibilityDiagnostic =
                 if not child.HasExited then
                     child.Kill(true)
 
-                do! child.WaitForExitAsync()
+                use cleanup = new CancellationTokenSource(TimeSpan.FromSeconds 5.)
+                do! child.WaitForExitAsync(cleanup.Token)
+                return child.HasExited
             with _ ->
-                ()
+                return false
         }
 
     let run (configuration: CompatibilityDiagnosticConfiguration) =
@@ -110,6 +125,8 @@ module ServedCompatibilityDiagnostic =
                         string (int configuration.Timeout.TotalSeconds)
                     ] do
                     start.ArgumentList.Add value
+
+                scrubEnvironment configuration.EnvironmentAllowList start
 
                 use child = new Process(StartInfo = start)
 
@@ -162,7 +179,9 @@ module ServedCompatibilityDiagnostic =
                                         return Error "compatibility-extra-response-refused"
                                     elif sha256 configuration.RunnerExecutable <> Some configuration.RunnerSha256 then
                                         return Error "compatibility-runner-changed"
-                                    elif sha256 configuration.ProviderExecutable <> Some configuration.ProviderSha256 then
+                                    elif
+                                        sha256 configuration.ProviderExecutable <> Some configuration.ProviderSha256
+                                    then
                                         return Error "compatibility-provider-changed"
                                     else
                                         match CompatibilityDiagnosticWire.parseResponse responseBytes with
@@ -200,6 +219,10 @@ module ServedCompatibilityDiagnostic =
                         | _ -> return Error "compatibility-diagnostic-unavailable"
                     }
 
-                do! terminate child
-                return outcome
+                let! processCleanupSucceeded = terminate child
+
+                if processCleanupSucceeded then
+                    return outcome
+                else
+                    return Error "compatibility-process-cleanup-refused"
         }

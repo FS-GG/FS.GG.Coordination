@@ -90,10 +90,32 @@ type CompatibilityDiagnosticConfiguration =
         WorkingDirectory: string
         ExpectedCodexVersion: string
         Timeout: TimeSpan
+        EnvironmentAllowList: Set<string>
+    }
+
+type FixedQualificationInvocationConfiguration =
+    {
+        ProfileFile: string
+        ResultFile: string
     }
 
 [<RequireQualifiedAccess>]
 module HostConfiguration =
+    let compatibilityDiagnosticEnvironmentAllowList =
+        set
+            [
+                "HOME"
+                "PATH"
+                "LANG"
+                "LC_ALL"
+                "TERM"
+                "TMPDIR"
+                "CODEX_HOME"
+                "XDG_CONFIG_HOME"
+                "XDG_DATA_HOME"
+                "XDG_CACHE_HOME"
+            ]
+
     [<Struct; StructLayout(LayoutKind.Sequential)>]
     type private Timespec = { Seconds: int64; Nanoseconds: int64 }
 
@@ -440,16 +462,27 @@ module HostConfiguration =
                 if telemetryValues |> List.forall (fun (_, value) -> value.IsNone) then
                     Ok None
                 elif telemetryValues |> List.forall (fun (_, value) -> value.IsSome) then
-                    let get name = telemetryValues |> List.find (fun (key, _) -> key = name) |> snd |> Option.get
+                    let get name =
+                        telemetryValues |> List.find (fun (key, _) -> key = name) |> snd |> Option.get
+
                     let paths =
-                        [ "--telemetry-executable"; "--telemetry-config"; "--telemetry-credential-file"; "--telemetry-ca-file"; "--telemetry-outbox" ]
+                        [
+                            "--telemetry-executable"
+                            "--telemetry-config"
+                            "--telemetry-credential-file"
+                            "--telemetry-ca-file"
+                            "--telemetry-outbox"
+                        ]
 
                     let digest = get "--telemetry-binding-digest"
                     let repository = get "--telemetry-repository"
 
                     if paths |> List.exists (fun name -> not (Path.IsPathFullyQualified(get name))) then
                         Error "local-telemetry-path-must-be-absolute"
-                    elif digest.Length <> 64 || digest |> Seq.exists (fun value -> not (Char.IsAsciiHexDigitLower value)) then
+                    elif
+                        digest.Length <> 64
+                        || digest |> Seq.exists (fun value -> not (Char.IsAsciiHexDigitLower value))
+                    then
                         Error "local-telemetry-binding-digest-refused"
                     elif String.IsNullOrWhiteSpace repository then
                         Error "local-telemetry-repository-required"
@@ -498,7 +531,10 @@ module HostConfiguration =
                         Error "local-executor-path-must-be-absolute"
                     elif String.IsNullOrWhiteSpace(get "--executor-binding") then
                         Error "local-executor-binding-required"
-                    elif telemetry |> Option.exists (fun selected -> selected.Repository <> github.Repository) then
+                    elif
+                        telemetry
+                        |> Option.exists (fun selected -> selected.Repository <> github.Repository)
+                    then
                         Error "local-telemetry-repository-binding-mismatch"
                     else
                         Ok(
@@ -621,9 +657,37 @@ module HostConfiguration =
                         WorkingDirectory = working
                         ExpectedCodexVersion = version
                         Timeout = TimeSpan.FromSeconds(float timeout)
+                        EnvironmentAllowList = compatibilityDiagnosticEnvironmentAllowList
                     }
             | _ -> return! Error "compatibility-diagnostic-option-refused"
         }
+
+    let parseFixedQualification arguments =
+        let pairs = arguments |> Array.chunkBySize 2
+
+        if
+            arguments.Length <> 4
+            || pairs |> Array.exists (fun pair -> pair.Length <> 2)
+            || pairs |> Array.map (fun pair -> pair[0]) |> Array.distinct |> Array.length <> 2
+        then
+            Error "fixed-qualification-invocation-refused"
+        else
+            let values = pairs |> Array.map (fun pair -> pair[0], pair[1]) |> Map.ofArray
+
+            match Map.tryFind "--profile" values, Map.tryFind "--result" values with
+            | Some profile, Some result when
+                Path.IsPathFullyQualified profile
+                && Path.IsPathFullyQualified result
+                && Path.GetFullPath profile = profile
+                && Path.GetFullPath result = result
+                && profile <> result
+                ->
+                Ok
+                    {
+                        ProfileFile = profile
+                        ResultFile = result
+                    }
+            | _ -> Error "fixed-qualification-invocation-refused"
 
     let parseInit arguments =
         result {

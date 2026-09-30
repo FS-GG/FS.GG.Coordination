@@ -17,6 +17,7 @@
     <Compile Include="..\FS.GG.Coordination.Orchestration.Runner.Client\TelemetryCliPublisher.fs" Link="TelemetryCliPublisher.fs" />
     <Compile Include="HostConfiguration.fs" />
     <Compile Include="CompatibilityDiagnostic.fs" />
+    <Compile Include="FixedQualificationOperation.fs" />
     <Compile Include="HostInitialization.fs" />
     <Compile Include="HostedWriterRuntime.fs" />
     <Compile Include="RemoteExecutorProvider.fs" />

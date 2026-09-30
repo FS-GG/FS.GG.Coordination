@@ -5,6 +5,8 @@ open System.Diagnostics
 open System.IO
 open System.Security.Cryptography
 open System.Text.Json
+open System.Text.Json.Nodes
+open FS.GG.Coordination.Orchestration.Host
 open Xunit
 
 let private sourceRoot =
@@ -65,6 +67,7 @@ let private run
         )
 
     arguments |> List.iter start.ArgumentList.Add
+    start.Environment["FSGG_FORBIDDEN_FIXTURE"] <- "secret"
     use child = Process.Start start
 
     match input with
@@ -111,6 +114,134 @@ case "$*" in
   "login status") printf '%%s\n' 'Logged in using ChatGPT' ;;
   *) printf '%%s\n' 'unexpected provider command' >&2; exit 91 ;;
 esac"""
+
+let private fixedProfile root provider =
+    let workspace = Path.Combine(root, "owned-workspace")
+    let profilePath = Path.Combine(root, "reviewed-profile.json")
+    let resultPath = Path.Combine(root, "result.json")
+
+    let profile =
+        {
+            Schema = FixedQualificationOperation.profileSchema
+            Operation = FixedQualificationOperation.operation
+            Revision = "fixture-review-1"
+            HostExecutableSha256 = sha256 host
+            RunnerExecutable = runner
+            RunnerExecutableSha256 = sha256 runner
+            ProviderExecutable = provider
+            ProviderExecutableSha256 = sha256 provider
+            ExpectedRunnerProtocol = FixedQualificationOperation.runnerProtocol
+            ExpectedAdapterVersion = FixedQualificationOperation.adapterVersion
+            ExpectedCodexVersion = "0.158.0"
+            EnvironmentAllowList = [| "PATH" |]
+            CredentialScope = FixedQualificationOperation.credentialScope
+            MaximumRuntimeSeconds = 2
+            ExpiresAt = DateTimeOffset.UtcNow.AddMinutes 5.
+            DisposableWorkspace = workspace
+            Cleanup = FixedQualificationOperation.cleanupKind
+        }
+
+    File.WriteAllBytes(
+        profilePath,
+        JsonSerializer.SerializeToUtf8Bytes(
+            profile,
+            JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+        )
+    )
+
+    profilePath, resultPath, workspace
+
+[<Fact>]
+let ``fixed qualification runs only the reviewed diagnostic and records cleanup`` () =
+    let root = Directory.CreateTempSubdirectory("fixed-qualification-").FullName
+
+    let provider =
+        script
+            root
+            "fixed-codex-sentinel"
+            $"""printf '%%s\n' "$*" >> '{root}/calls'
+printf '%%s\n' "${{FSGG_FORBIDDEN_FIXTURE-unset}}" >> '{root}/environment'
+case "$*" in
+  --version) printf '%%s\n' 'codex-cli 0.158.0' ;;
+  "login status") printf '%%s\n' 'Logged in using ChatGPT' ;;
+  *) exit 91 ;;
+esac"""
+
+    let profile, result, workspace = fixedProfile root provider
+
+    let code, output, error =
+        run host root [ "qualify-fixed-job"; "--profile"; profile; "--result"; result ] None 10000
+
+    Assert.Equal(0, code)
+    Assert.Equal("", output)
+    Assert.Equal("", error)
+    Assert.False(Directory.Exists workspace)
+    use document = JsonDocument.Parse(File.ReadAllBytes result)
+    let value = document.RootElement
+    Assert.Equal(FixedQualificationOperation.resultSchema, value.GetProperty("schema").GetString())
+    Assert.Equal("executor-compatibility/1", value.GetProperty("operation").GetString())
+    Assert.Equal("passed", value.GetProperty("disposition").GetString())
+    Assert.True(value.GetProperty("cleanup").GetProperty("processTreeTerminated").GetBoolean())
+    Assert.True(value.GetProperty("cleanup").GetProperty("workspaceRemovalAttempted").GetBoolean())
+    Assert.True(value.GetProperty("cleanup").GetProperty("workspaceRemoved").GetBoolean())
+
+    Assert.Equal<string list>(
+        [ "--version"; "login status" ],
+        File.ReadAllLines(Path.Combine(root, "calls")) |> Array.toList
+    )
+
+    Assert.All(File.ReadAllLines(Path.Combine(root, "environment")), fun value -> Assert.Equal("unset", value))
+
+[<Fact>]
+let ``fixed qualification rejects profile field injection before provider launch`` () =
+    let root =
+        Directory.CreateTempSubdirectory("fixed-qualification-injection-").FullName
+
+    let provider = sentinel root "0.158.0"
+    let profile, result, workspace = fixedProfile root provider
+    let node = JsonNode.Parse(File.ReadAllBytes profile).AsObject()
+    node["command"] <- "sh -c arbitrary"
+    File.WriteAllText(profile, node.ToJsonString())
+
+    let code, _, error =
+        run host root [ "qualify-fixed-job"; "--profile"; profile; "--result"; result ] None 10000
+
+    Assert.Equal(3, code)
+    Assert.Contains("fixed-profile-shape-refused", error)
+    Assert.False(File.Exists(Path.Combine(root, "calls")))
+    Assert.False(Directory.Exists workspace)
+    use document = JsonDocument.Parse(File.ReadAllBytes result)
+    Assert.Equal("refused", document.RootElement.GetProperty("disposition").GetString())
+    Assert.Equal("fixed-profile-shape-refused", document.RootElement.GetProperty("detail").GetString())
+
+[<Fact>]
+let ``fixed qualification kills a timed out reviewed runner and removes its workspace`` () =
+    let root = Directory.CreateTempSubdirectory("fixed-qualification-timeout-").FullName
+    let provider = sentinel root "0.158.0"
+    let profile, result, workspace = fixedProfile root provider
+
+    let hung =
+        script root "hung-reviewed-runner" $"printf '%%s' $$ > '{root}/hung-pid'; sleep 30"
+
+    let node = JsonNode.Parse(File.ReadAllBytes profile).AsObject()
+    node["runnerExecutable"] <- hung
+    node["runnerExecutableSha256"] <- sha256 hung
+    node["maximumRuntimeSeconds"] <- 1
+    File.WriteAllText(profile, node.ToJsonString())
+
+    let code, _, error =
+        run host root [ "qualify-fixed-job"; "--profile"; profile; "--result"; result ] None 10000
+
+    Assert.Equal(3, code)
+    Assert.Contains("compatibility-diagnostic-timeout", error)
+    Assert.False(Directory.Exists workspace)
+    let pid = File.ReadAllText(Path.Combine(root, "hung-pid"))
+    Assert.False(Directory.Exists("/proc/" + pid))
+    use document = JsonDocument.Parse(File.ReadAllBytes result)
+    let cleanup = document.RootElement.GetProperty("cleanup")
+    Assert.True(cleanup.GetProperty("processTreeTerminationRequired").GetBoolean())
+    Assert.True(cleanup.GetProperty("processTreeTerminated").GetBoolean())
+    Assert.True(cleanup.GetProperty("workspaceRemoved").GetBoolean())
 
 [<Fact>]
 let ``served Host diagnostic uses only production version and login probes`` () =

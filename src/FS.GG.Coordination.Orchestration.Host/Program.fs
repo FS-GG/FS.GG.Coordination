@@ -25,6 +25,9 @@ let private usage () =
         "   or: fsgg-coord-orchestration-host probe-executor-compatibility --runner-executable <absolute-path> --runner-sha256 <lowercase-sha256> --provider-executable <absolute-path> --provider-sha256 <lowercase-sha256> --working-directory <existing-absolute-directory> [--expected-codex-version <MAJOR.MINOR.PATCH>] --timeout-seconds <1..30>"
 
     eprintfn
+        "   or: fsgg-coord-orchestration-host qualify-fixed-job --profile <absolute-reviewed-profile-path> --result <absolute-result-path>"
+
+    eprintfn
         "   or: fsgg-coord-orchestration-host serve ... [--github-token-file <path> --github-repository <owner/repo> --github-issue-number <n> --github-base-ref <ref> --runner-executable <absolute-path> --runner-repository-root <absolute-path> --runner-workspace-root <absolute-path> --runner-input-root <absolute-path> --runner-state-root <absolute-path> --runner-artifact-root <absolute-path> --codex-executable <absolute-path> [--expected-codex-version <MAJOR.MINOR.PATCH>] --executor-binding <identity> [--telemetry-executable <absolute-path> --telemetry-config <absolute-path> --telemetry-credential-file <absolute-path> --telemetry-ca-file <absolute-path> --telemetry-outbox <absolute-path> --telemetry-binding-digest <sha256> --telemetry-repository <owner/repo>]]"
 
     2
@@ -166,6 +169,44 @@ let main arguments =
                     ))
 
                 0
+    | Some "qualify-fixed-job" ->
+        match HostConfiguration.parseFixedQualification arguments[1..] with
+        | Error reason ->
+            eprintfn "%s" reason
+            2
+        | Ok configuration ->
+            try
+                let result =
+                    FixedQualificationOperation.readAndExecute configuration.ProfileFile
+                    |> _.GetAwaiter().GetResult()
+
+                let bytes = FixedQualificationOperation.serialize result
+                let parent = DirectoryInfo(Path.GetDirectoryName configuration.ResultFile)
+
+                if
+                    not parent.Exists
+                    || parent.Attributes.HasFlag FileAttributes.ReparsePoint
+                    || File.Exists configuration.ResultFile
+                    || Directory.Exists configuration.ResultFile
+                then
+                    eprintfn "fixed-qualification-result-path-refused"
+                    2
+                else
+                    use output =
+                        new FileStream(configuration.ResultFile, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+
+                    output.Write bytes
+                    output.Flush true
+                    File.SetUnixFileMode(configuration.ResultFile, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+
+                    if result.Disposition = "passed" then
+                        0
+                    else
+                        eprintfn "%s" result.Detail
+                        3
+            with _ ->
+                eprintfn "fixed-qualification-result-write-refused"
+                2
     | Some "serve" ->
         match HostConfiguration.parseServe arguments[1..] with
         | Error reason ->
@@ -259,7 +300,8 @@ let main arguments =
                             TelemetryOutcomeBridge(telemetry.Repository, github, publisher))
 
                     let outcomeDrain =
-                        outcomeBridge |> Option.map (fun bridge -> bridge.DrainUntilCancelled shutdown.Token)
+                        outcomeBridge
+                        |> Option.map (fun bridge -> bridge.DrainUntilCancelled shutdown.Token)
 
                     let admission =
                         MainProductionAdmission(
