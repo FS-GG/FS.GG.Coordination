@@ -14,6 +14,15 @@ type PreparedWorkspaceOperation =
     {
         CommandId: Guid
         IdempotencyId: string
+        WorkspaceScope: string
+        ProfileId: string
+        ProfileRevision: uint64
+        SourceRevision: string
+        QualifiedImage: string
+        WorkflowRevision: uint64
+        FenceGeneration: uint64
+        ComponentId: string option
+        OperationIdentity: string
         WorkingDirectory: string
         EntryPoint: string
         Deadline: DateTimeOffset
@@ -103,6 +112,15 @@ module PortableWorkspaceAdapter =
                         {
                             CommandId = command.CommandId
                             IdempotencyId = command.IdempotencyId
+                            WorkspaceScope = command.WorkspaceScope
+                            ProfileId = command.ProfileId
+                            ProfileRevision = command.ProfileRevision
+                            SourceRevision = command.SourceRevision
+                            QualifiedImage = profile.QualifiedImage
+                            WorkflowRevision = command.ExpectedWorkflowRevision
+                            FenceGeneration = command.FenceGeneration
+                            ComponentId = command.ComponentId
+                            OperationIdentity = command.Operation
                             WorkingDirectory = directory
                             EntryPoint = entryPoint
                             Deadline = command.Deadline

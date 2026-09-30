@@ -4,9 +4,9 @@
 publication and receiver qualification. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** P1 source and local CLI integration are complete on the isolated branch. P2 package installation
-passed locally; hosted qualification and protected source merge remain pending. Publication, receiver adoption
-and P3–P5 remain pending.
+**Status:** P1 source, local CLI integration and installed-package qualification are complete on the isolated
+branch. P2 bounded executable binding is complete and locally qualified. Hosted qualification and protected
+source merge remain pending. Publication, receiver adoption and P3–P5 remain pending.
 
 ## Authority and compatibility
 
@@ -23,13 +23,20 @@ or noncanonical fields fail closed.
 
 ## Delivery plan
 
-- [x] **P1 — Distributable contract source.** Add checkout-independent schema/example export, canonical
-  validate/digest and read-only operation preparation to the existing CLI source. Prove F#, Python and JavaScript
-  agreement for maximum unsigned counters, six-digit UTC timestamps, omission instead of null, closed objects,
-  known/missing/unknown evidence and canonical digests. Refuse unsupported schemas and placeholder execution pins.
-- [ ] **P2 — Coordination integration and package qualification.** Integrate the shared CLI registrations, run
-  repository checks, pack the existing tool and prove the installed command works with the source checkout absent.
-  Source merge and installed behavior are recorded separately; no publication is claimed by P1.
+- [x] **P1 — Distributable and installed contract utility.** Add checkout-independent schema/example export,
+  canonical validate/digest and read-only operation preparation to the existing CLI source. Prove F#, Python and
+  JavaScript agreement for maximum unsigned counters, six-digit UTC timestamps, omission instead of null, closed
+  objects, known/missing/unknown evidence and canonical digests. Refuse unsupported schemas and placeholder
+  execution pins. Integrate the shared CLI registrations, run repository checks, pack the existing tool and prove
+  the installed command works with the source checkout absent. Source merge and installed behavior are recorded
+  separately; no publication is claimed by P1.
+- [x] **P2 — Bounded executable binding.** Bind one real fixed-operation executor to the prepared source revision,
+  immutable toolchain image, reviewed operation identity, working directory, finite runtime/output limits and
+  verification identity. Exercise actual Python component build/test and a minimal TypeScript frontend with Python
+  backend build/test plus frontend-to-backend journey in isolated fixtures. Distinguish cancellation request from
+  observed termination, make duplicate delivery idempotent, preserve interrupted execution as unknown until exact
+  reconciliation, and refuse unsupported toolchains, foreign scope, stale generations and arbitrary command
+  injection before process launch.
 - [ ] **P3 — Publish exact producer artifacts.** Publish the accepted Coordination tool and contract artifacts,
   then have SDD/Templates pin those exact versions and digests. Preserve the existing fixed-operation and execution
   authorization boundaries.
@@ -63,6 +70,21 @@ package was packed and installed under `/tmp`, then invoked from outside the sou
 worked and an exported Python profile produced canonical SHA-256 digest
 `469cf5c0bdc54e4db241b98dd7ba11cae396e2080bb9beec0365a2cbc2a8537c`.
 The preview package is local qualification evidence, not a published Coordination release.
+
+## P2 local evidence
+
+The executor accepts only a reviewed entry point whose operation, component, working directory, toolchains and
+immutable image match the prepared P1 binding. Its receipt carries the source revision, image, operation and
+verification identities, output digest and byte count. Runtime and output limits are enforced by the process
+runner. Exact duplicate delivery reuses the settled receipt, while a changed binding under the same idempotency
+identity refuses. Cancellation request and observed termination are separate facts; an interrupted process remains
+unknown until an exact source/image/verification-bound reconciliation observes termination.
+
+The focused Execution suite passed 42 tests locally. It ran actual Python build/test processes plus Node frontend
+build/test, Python backend build/test and a localhost frontend-to-backend journey from isolated fixture copies. The
+same suite proves that foreign scope, stale generation, arbitrary operation text and unsupported toolchains refuse
+before the runner is called. This is source qualification only; it does not claim package publication, hosted
+qualification, workspace activation or receiver adoption.
 
 ## Workspace impact
 
