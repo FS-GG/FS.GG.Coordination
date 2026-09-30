@@ -362,12 +362,14 @@ Directory.CreateDirectory runtime.StateRoot |> ignore
 
 for arguments in
     [
+        [ "-C"; fixtureRepository; "rev-parse"; sourceRevision + "^{commit}" ]
         runtime.PodmanGlobalArguments @ [ "version"; "--format"; "{{.Client.Version}}" ]
         runtime.PodmanGlobalArguments
         @ [ "image"; "inspect"; "--format"; "{{.Digest}}|{{.Id}}|{{.Config.User}}"; imageReference ]
         runtime.PodmanGlobalArguments @ [ "unshare"; "/usr/bin/true" ]
     ] do
-    runtimeProbes.Add(probe podman arguments runtime.StateRoot probeEnvironment)
+    let executable = if arguments.Head = "-C" then git else podman
+    runtimeProbes.Add(probe executable arguments runtime.StateRoot probeEnvironment)
 
 let now () =
     let value = DateTimeOffset.UtcNow

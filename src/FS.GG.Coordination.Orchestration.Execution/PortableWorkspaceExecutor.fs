@@ -85,6 +85,8 @@ type PortableProcessRefusal =
     {
         Stage: PortableProcessRefusalStage
         Reason: string
+        HelperTimedOut: bool
+        HelperOutputComplete: bool
     }
 
 type PortableProcessObservation =
@@ -648,11 +650,22 @@ module PortableWorkspaceExecutor =
                     let diagnosticBytes = observed.StandardError |> Array.truncate maximumDiagnosticBytes
                     let diagnostic = Encoding.UTF8.GetString(diagnosticBytes).Trim()
 
+                    let sourceOutput =
+                        if refusal.Stage = PortableProcessRefusalStage.SourceSnapshot then
+                            observed.StandardOutput
+                            |> Array.truncate maximumDiagnosticBytes
+                            |> Encoding.UTF8.GetString
+                            |> _.Trim()
+                        else
+                            ""
+
                     [
                         "verification", operation.VerificationIdentity
                         "refusalStage", string refusal.Stage
                         "refusalReason", refusal.Reason
                         "helperExitCode", observed.ExitCode |> Option.map string |> Option.defaultValue "unavailable"
+                        "helperTimedOut", string refusal.HelperTimedOut
+                        "helperOutputComplete", string refusal.HelperOutputComplete
                         "helperStderrSha256", sha256 observed.StandardError
                         "helperStderrTruncated", string (observed.StandardError.Length > maximumDiagnosticBytes)
                     ]
@@ -660,6 +673,14 @@ module PortableWorkspaceExecutor =
                           []
                       else
                           [ "helperStderr", diagnostic ]
+                    @ if String.IsNullOrWhiteSpace sourceOutput then
+                          []
+                      else
+                          [
+                              "helperStdout", sourceOutput
+                              "helperStdoutSha256", sha256 observed.StandardOutput
+                              "helperStdoutTruncated", string (observed.StandardOutput.Length > maximumDiagnosticBytes)
+                          ]
 
             let workspaceResult =
                 if not observed.ExecutionStarted then

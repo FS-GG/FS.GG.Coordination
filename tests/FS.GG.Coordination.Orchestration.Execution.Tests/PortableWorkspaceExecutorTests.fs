@@ -806,6 +806,8 @@ type PortableWorkspaceExecutorTests() =
                                     {
                                         Stage = PortableProcessRefusalStage.ImageInspection
                                         Reason = "portable-image-inspect-refused"
+                                        HelperTimedOut = false
+                                        HelperOutputComplete = true
                                     }
                         }),
                     cleanup = (fun _ -> cleanupAllowed)
@@ -856,6 +858,8 @@ type PortableWorkspaceExecutorTests() =
                 Assert.Equal("ImageInspection", receipt.Result.Error.Value.Details["refusalStage"])
                 Assert.Equal("portable-image-inspect-refused", receipt.Result.Error.Value.Details["refusalReason"])
                 Assert.Equal("125", receipt.Result.Error.Value.Details["helperExitCode"])
+                Assert.Equal("False", receipt.Result.Error.Value.Details["helperTimedOut"])
+                Assert.Equal("True", receipt.Result.Error.Value.Details["helperOutputComplete"])
                 Assert.StartsWith("image not known in the selected store", receipt.Result.Error.Value.Details["helperStderr"])
                 Assert.Equal(512, Encoding.UTF8.GetByteCount receipt.Result.Error.Value.Details["helperStderr"])
                 Assert.Equal("True", receipt.Result.Error.Value.Details["helperStderrTruncated"])
@@ -1167,14 +1171,33 @@ type PortableWorkspaceExecutorTests() =
     [<Fact>]
     member _.``podman runner snapshots Git objects and emits only the fixed isolated create shape``() =
         task {
-            let repository = repositoryRoot (DirectoryInfo AppContext.BaseDirectory)
+            let repositorySource = repositoryRoot (DirectoryInfo AppContext.BaseDirectory)
 
             let temporary =
                 Path.Combine(Path.GetTempPath(), "fsgg-podman-runner-" + Guid.NewGuid().ToString("N"))
 
             Directory.CreateDirectory temporary |> ignore
+            let repository = Path.Combine(temporary, "clean-checkout")
 
             try
+                let clone =
+                    Diagnostics.ProcessStartInfo(
+                        "/usr/bin/git",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false
+                    )
+
+                for argument in [ "clone"; "--quiet"; "--no-local"; repositorySource; repository ] do
+                    clone.ArgumentList.Add argument
+
+                use cloneProcess = Diagnostics.Process.Start clone
+                let cloneError = cloneProcess.StandardError.ReadToEnd()
+                cloneProcess.WaitForExit()
+
+                if cloneProcess.ExitCode <> 0 then
+                    failwithf "clean Git checkout failed: %s" cloneError
+
                 let script = Path.Combine(temporary, "podman-shim.py")
 
                 File.WriteAllText(
@@ -1364,6 +1387,32 @@ else:
                         Assert.Equal(PortableProcessRefusalStage.ImageIdentity, invalidIdObserved.Refusal.Value.Stage)
                         Assert.Equal("portable-image-identity-refused", invalidIdObserved.Refusal.Value.Reason)
                         Assert.False(File.Exists(Path.Combine(invalidIdStateRoot, "create-args.json")))
+
+                    let missingCommitStateRoot = Path.Combine(temporary, "missing-commit-state")
+
+                    let missingCommitRuntime =
+                        { runtime with
+                            StateRoot = missingCommitStateRoot
+                        }
+
+                    let missingCommitRequest =
+                        { request with
+                            SourceRevision = String.replicate 40 "f"
+                            ContainerName = "fsgg-portable-missing-commit-test"
+                        }
+
+                    let missingCommitRunner =
+                        PortableWorkspacePodmanRunner missingCommitRuntime :> IPortableProcessRunner
+
+                    let! missingCommitObserved =
+                        missingCommitRunner.RunAsync(missingCommitRequest, CancellationToken.None)
+
+                    Assert.False(missingCommitObserved.ExecutionStarted)
+                    Assert.Equal(Some 128, missingCommitObserved.ExitCode)
+                    Assert.Equal(PortableProcessRefusalStage.SourceSnapshot, missingCommitObserved.Refusal.Value.Stage)
+                    Assert.Equal("portable-source-commit-refused", missingCommitObserved.Refusal.Value.Reason)
+                    Assert.NotEmpty(missingCommitObserved.StandardError)
+                    Assert.False(File.Exists(Path.Combine(missingCommitStateRoot, "create-args.json")))
 
                     let badUserScript = Path.Combine(temporary, "bad-user-podman-shim.py")
                     File.Copy(script, badUserScript)

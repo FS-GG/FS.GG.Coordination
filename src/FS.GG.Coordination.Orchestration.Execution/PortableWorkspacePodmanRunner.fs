@@ -20,6 +20,12 @@ type private PortableToolObservation =
         OutputComplete: bool
     }
 
+type private PortableSnapshotFailure =
+    {
+        Reason: string
+        Helper: PortableToolObservation option
+    }
+
 [<RequireQualifiedAccess>]
 module private PortablePodmanRuntime =
     let sha256 (bytes: byte array) =
@@ -325,7 +331,7 @@ module private PortablePodmanRuntime =
     let prepareSnapshot runtime request cancellationToken =
         task {
             match safeStateRoot runtime with
-            | Error reason -> return Error reason
+            | Error reason -> return Error { Reason = reason; Helper = None }
             | Ok() ->
                 let executionRoot =
                     Path.Combine(runtime.StateRoot, "executions", request.ContainerName)
@@ -335,7 +341,7 @@ module private PortablePodmanRuntime =
                 let archive = Path.Combine(executionRoot, "source.tar")
 
                 if Directory.Exists executionRoot || File.Exists executionRoot then
-                    return Error "portable-runtime-execution-root-exists"
+                    return Error { Reason = "portable-runtime-execution-root-exists"; Helper = None }
                 else
                     Directory.CreateDirectory snapshot |> ignore
                     Directory.CreateDirectory output |> ignore
@@ -358,9 +364,14 @@ module private PortablePodmanRuntime =
                         runGit runtime request [ "rev-parse"; request.SourceRevision + "^{commit}" ] cancellationToken
 
                     match requireSuccess "portable-source-commit-refused" commit with
-                    | Error reason -> return Error reason
+                    | Error reason -> return Error { Reason = reason; Helper = Some commit }
                     | Ok commit when text commit <> request.SourceRevision ->
-                        return Error "portable-source-commit-refused"
+                        return
+                            Error
+                                {
+                                    Reason = "portable-source-commit-refused"
+                                    Helper = Some commit
+                                }
                     | Ok _ ->
                         let! tree =
                             runGit runtime request [ "rev-parse"; request.SourceRevision + "^{tree}" ] cancellationToken
@@ -378,7 +389,7 @@ module private PortablePodmanRuntime =
                         with
                         | Ok treeResult, Ok entryResult ->
                             match parseTreeEntries entryResult.StandardOutput with
-                            | Error reason -> return Error reason
+                            | Error reason -> return Error { Reason = reason; Helper = Some entryResult }
                             | Ok _ ->
                                 let! archived =
                                     runGit
@@ -388,9 +399,9 @@ module private PortablePodmanRuntime =
                                         cancellationToken
 
                                 match requireSuccess "portable-source-archive-refused" archived with
-                                | Error reason -> return Error reason
+                                | Error reason -> return Error { Reason = reason; Helper = Some archived }
                                 | Ok _ when uint64 (FileInfo(archive).Length) > runtime.MaximumSnapshotBytes ->
-                                    return Error "portable-source-size-refused"
+                                    return Error { Reason = "portable-source-size-refused"; Helper = None }
                                 | Ok _ ->
                                     let! extracted =
                                         runTool
@@ -410,10 +421,10 @@ module private PortablePodmanRuntime =
                                             cancellationToken
 
                                     match requireSuccess "portable-source-extract-refused" extracted with
-                                    | Error reason -> return Error reason
+                                    | Error reason -> return Error { Reason = reason; Helper = Some extracted }
                                     | Ok _ ->
                                         match snapshotDigest runtime.MaximumSnapshotBytes snapshot with
-                                        | Error reason -> return Error reason
+                                        | Error reason -> return Error { Reason = reason; Helper = None }
                                         | Ok digest ->
                                             File.WriteAllText(
                                                 Path.Combine(executionRoot, "source-tree"),
@@ -422,7 +433,20 @@ module private PortablePodmanRuntime =
 
                                             File.WriteAllText(Path.Combine(executionRoot, "snapshot-sha256"), digest)
                                             return Ok(snapshot, output, text treeResult, digest)
-                        | _ -> return Error "portable-source-tree-refused"
+                        | Error _, _ ->
+                            return
+                                Error
+                                    {
+                                        Reason = "portable-source-tree-refused"
+                                        Helper = Some tree
+                                    }
+                        | _, Error _ ->
+                            return
+                                Error
+                                    {
+                                        Reason = "portable-source-tree-refused"
+                                        Helper = Some entries
+                                    }
         }
 
     let imageDigest (image: string) =
@@ -553,25 +577,27 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                     runtimeIdentity
                     containerIdentity
                     =
-                    let stdout, stderr, exitCode, outputLimitExceeded =
+                    let stdout, stderr, exitCode, timedOut, outputLimitExceeded, outputComplete =
                         match helper with
                         | Some observation ->
                             observation.StandardOutput,
                             observation.StandardError,
                             observation.ExitCode,
-                            observation.OutputLimitExceeded
-                        | None -> Array.empty, Array.empty, None, false
+                            observation.TimedOut,
+                            observation.OutputLimitExceeded,
+                            observation.OutputComplete
+                        | None -> Array.empty, Array.empty, None, false, false, false
 
                     {
                         ExecutionStarted = false
                         ExitCode = exitCode
                         StandardOutput = stdout
                         StandardError = stderr
-                        CancellationRequested = cancelled
+                        CancellationRequested = cancelled || timedOut
                         TerminationObserved = false
                         Interrupted = true
                         OutputLimitExceeded = outputLimitExceeded
-                        OutputComplete = false
+                        OutputComplete = outputComplete
                         SourceTree = sourceTree
                         SnapshotSha256 = snapshot
                         RuntimeIdentity = runtimeIdentity
@@ -579,16 +605,23 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                         VerificationObserved = false
                         VerificationOutput = None
                         VerificationCustodyLimitExceeded = false
-                        Refusal = Some { Stage = stage; Reason = reason }
+                        Refusal =
+                            Some
+                                {
+                                    Stage = stage
+                                    Reason = reason
+                                    HelperTimedOut = timedOut
+                                    HelperOutputComplete = outputComplete
+                                }
                     }
 
                 match! PortablePodmanRuntime.prepareSnapshot runtime request cancellationToken with
-                | Error reason ->
+                | Error failure ->
                     return
                         unknown
                             PortableProcessRefusalStage.SourceSnapshot
-                            reason
-                            None
+                            failure.Reason
+                            failure.Helper
                             cancellationToken.IsCancellationRequested
                             None
                             None
