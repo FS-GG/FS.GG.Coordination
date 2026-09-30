@@ -978,7 +978,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                             cancellationToken
 
                     let! absent =
-                        if removed.ExitCode = Some 0 && removed.OutputComplete then
+                        if removed.ExitCode = Some 0 then
                             Task.FromResult true
                         else
                             task {
@@ -989,7 +989,7 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                         [ "container"; "exists"; request.ContainerName ]
                                         cancellationToken
 
-                                return exists.ExitCode = Some 1 && exists.OutputComplete
+                                return exists.ExitCode = Some 1
                             }
 
                     if not absent then
