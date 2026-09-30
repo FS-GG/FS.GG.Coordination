@@ -278,7 +278,7 @@ def qualify(args: argparse.Namespace, source: Path, state: Path, image_reference
     output.mkdir(parents=True, mode=0o755)
     journal = run_dir / "journal.jsonl"
     os.chmod(run_dir, 0o700)
-    run([str(Path(args.podman).resolve()), "unshare", "chown", "65532:65532", str(output)])
+    run(prefix + ["unshare", "chown", "65532:65532", str(output)])
 
     common_env = [
         "--unsetenv-all",
