@@ -168,6 +168,8 @@ let private allowedDependencies =
             Set.ofList
                 [
                     "FS.GG.Coordination.Core"
+                    "FS.GG.Coordination.Orchestration.Execution"
+                    "FS.GG.Coordination.Orchestration.Execution.Codex"
                     "FS.GG.Coordination.Orchestration.Pilot"
                     "FS.GG.Coordination.Orchestration.PostgreSql"
                     "FS.GG.Coordination.Orchestration.Observer"
