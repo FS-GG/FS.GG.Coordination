@@ -9,6 +9,8 @@ open System.Security.Cryptography
 open System.Text
 open System.Text.Json
 open System.Text.RegularExpressions
+open System.Threading
+open System.Threading.Tasks
 open Microsoft.Win32.SafeHandles
 open FS.GG.Coordination.Orchestration.Execution
 
@@ -22,6 +24,9 @@ type IPortableWorkspaceTrustedGrantReader =
 
 type IPortableWorkspaceTrustedReceiverInspector =
     abstract Validate: PortableWorkspacePythonHelloGrant -> Result<unit, string>
+
+type IPortableWorkspacePrivateRuntimePreparer =
+    abstract Prepare: PortableWorkspacePythonHelloGrant -> Result<unit, string>
 
 type internal PortableWorkspaceTrustedPathEvidence =
     {
@@ -99,6 +104,8 @@ module private TrustedLinuxFile =
     extern int openFile(string path, int flags)
     [<DllImport("libc", EntryPoint = "fstat", SetLastError = true)>]
     extern int fstat(int descriptor, TrustedLinuxStat& value)
+    [<DllImport("libc", EntryPoint = "lstat", SetLastError = true)>]
+    extern int lstat(string path, TrustedLinuxStat& value)
     [<DllImport("libc", EntryPoint = "geteuid")>]
     extern uint32 geteuid()
     [<DllImport("libacl.so.1", EntryPoint = "acl_get_fd", SetLastError = true)>]
@@ -211,6 +218,14 @@ module private TrustedLinuxFile =
                                 Ok { Bytes = memory.ToArray(); EffectiveUserId = geteuid () }
             with _ -> Error "portable-trusted-grant-read-refused"
 
+    let ownedPath expectedDirectory path =
+        let mutable status = Unchecked.defaultof<TrustedLinuxStat>
+        let expectedType = if expectedDirectory then 0x4000u else 0x8000u
+        lstat(path, &status) = 0
+        && (status.Mode &&& 0xF000u) = expectedType
+        && status.UserId = geteuid()
+        && (status.Mode &&& 0x3Fu) = 0u
+
 type LinuxAdministratorPortableWorkspaceGrantReader() =
     interface IPortableWorkspaceTrustedGrantReader with
         member _.Read() = TrustedLinuxFile.read ()
@@ -320,23 +335,86 @@ module private TrustedGrantCodec =
         with _ -> Error "portable-trusted-grant-json-refused"
 
 type LinuxPortableWorkspaceTrustedReceiverInspector() =
+    [<Literal>]
+    let GitTimeoutSeconds = 5
+    [<Literal>]
+    let GitOutputLimit = 4 * 1024 * 1024
+
     let digestFile path =
         try
             use stream = File.OpenRead path
             Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant() |> Ok
         with _ -> Error "portable-trusted-executable-read-refused"
 
+    let readBounded (stream: Stream) maximumBytes cancellationToken =
+        task {
+            use memory = new MemoryStream()
+            let buffer = Array.zeroCreate<byte> 8192
+            let mutable complete = false
+            while not complete do
+                let! count = stream.ReadAsync(buffer.AsMemory(), cancellationToken)
+                if count = 0 then complete <- true
+                elif memory.Length + int64 count > int64 maximumBytes then
+                    raise (InvalidDataException "portable-trusted-git-output-limit")
+                else
+                    memory.Write(buffer, 0, count)
+            return Encoding.UTF8.GetString(memory.ToArray())
+        }
+
     let runGit executable root arguments =
         try
-            let start = ProcessStartInfo(executable, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false)
-            start.ArgumentList.Add "-C"
-            start.ArgumentList.Add root
-            arguments |> List.iter start.ArgumentList.Add
-            use child = Process.Start start
-            let stdout = child.StandardOutput.ReadToEnd()
-            let _ = child.StandardError.ReadToEnd()
-            child.WaitForExit()
-            if child.ExitCode = 0 then Ok stdout else Error "portable-trusted-receiver-git-refused"
+            let gitDirectory = Path.Combine(root, ".git")
+            let gitInfo = DirectoryInfo gitDirectory
+            let rootInfo = DirectoryInfo root
+            if not rootInfo.Exists || not (isNull rootInfo.LinkTarget)
+               || not gitInfo.Exists || not (isNull gitInfo.LinkTarget) then
+                Error "portable-trusted-receiver-git-layout-refused"
+            else
+                let start = ProcessStartInfo(executable, WorkingDirectory = root, RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false)
+                start.Environment.Clear()
+                start.Environment.Add("HOME", "/nonexistent")
+                start.Environment.Add("PATH", "/usr/bin:/bin")
+                start.Environment.Add("GIT_CONFIG_NOSYSTEM", "1")
+                start.Environment.Add("GIT_CONFIG_GLOBAL", "/dev/null")
+                start.Environment.Add("GIT_ATTR_NOSYSTEM", "1")
+                start.Environment.Add("GIT_OPTIONAL_LOCKS", "0")
+                start.Environment.Add("GIT_TERMINAL_PROMPT", "0")
+                start.ArgumentList.Add "--no-optional-locks"
+                start.ArgumentList.Add "-c"
+                start.ArgumentList.Add "core.fsmonitor=false"
+                start.ArgumentList.Add "-c"
+                start.ArgumentList.Add "core.hooksPath=/dev/null"
+                start.ArgumentList.Add "-c"
+                start.ArgumentList.Add "credential.helper="
+                start.ArgumentList.Add "-c"
+                start.ArgumentList.Add "protocol.file.allow=never"
+                start.ArgumentList.Add "-c"
+                start.ArgumentList.Add "submodule.recurse=false"
+                start.ArgumentList.Add "-c"
+                start.ArgumentList.Add "status.showUntrackedFiles=all"
+                start.ArgumentList.Add "--git-dir"
+                start.ArgumentList.Add gitDirectory
+                start.ArgumentList.Add "--work-tree"
+                start.ArgumentList.Add root
+                arguments |> List.iter start.ArgumentList.Add
+                use child = new Process(StartInfo = start)
+                if not (child.Start()) then Error "portable-trusted-receiver-git-refused"
+                else
+                    use deadline = new CancellationTokenSource(TimeSpan.FromSeconds(float GitTimeoutSeconds))
+                    let stdout = readBounded child.StandardOutput.BaseStream GitOutputLimit deadline.Token
+                    let stderr = readBounded child.StandardError.BaseStream 65536 deadline.Token
+                    let wait = child.WaitForExitAsync(deadline.Token)
+                    try
+                        Task.WhenAll(stdout :> Task, stderr :> Task, wait).GetAwaiter().GetResult()
+                        let output = stdout.GetAwaiter().GetResult()
+                        let _ = stderr.GetAwaiter().GetResult()
+                        if child.ExitCode = 0 then Ok output else Error "portable-trusted-receiver-git-refused"
+                    with _ ->
+                        try
+                            if not child.HasExited then child.Kill(true)
+                            child.WaitForExit(1000) |> ignore
+                        with _ -> ()
+                        Error "portable-trusted-receiver-git-refused"
         with _ -> Error "portable-trusted-receiver-git-refused"
 
     let validate (grant: PortableWorkspacePythonHelloGrant) =
@@ -389,8 +467,73 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
     interface IPortableWorkspaceTrustedReceiverInspector with
         member _.Validate grant = validate grant
 
+type LinuxPortableWorkspacePrivateRuntimePreparer() =
+    let directoryMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+    let fileMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+    let safePath = Regex("\\A/[A-Za-z0-9._/-]+\\z", RegexOptions.CultureInvariant)
+
+    let ensureDirectory path =
+        try
+            let existed = Directory.Exists path
+            if existed then
+                let info = DirectoryInfo path
+                if not (isNull info.LinkTarget) then Error "portable-trusted-runtime-layout-refused"
+                else
+                    File.SetUnixFileMode(path, directoryMode)
+                    if TrustedLinuxFile.ownedPath true path then Ok() else Error "portable-trusted-runtime-layout-refused"
+            elif File.Exists path then Error "portable-trusted-runtime-layout-refused"
+            else
+                Directory.CreateDirectory path |> ignore
+                File.SetUnixFileMode(path, directoryMode)
+                if TrustedLinuxFile.ownedPath true path then Ok() else Error "portable-trusted-runtime-layout-refused"
+        with _ -> Error "portable-trusted-runtime-layout-refused"
+
+    let ensureFile path content =
+        try
+            if File.Exists path then
+                let info = FileInfo path
+                if not (isNull info.LinkTarget) || not (TrustedLinuxFile.ownedPath false path) then
+                    Error "portable-trusted-runtime-layout-refused"
+                elif File.ReadAllText(path, Encoding.UTF8) <> content then
+                    Error "portable-trusted-runtime-config-refused"
+                else Ok()
+            elif Directory.Exists path then Error "portable-trusted-runtime-layout-refused"
+            else
+                let options = FileStreamOptions()
+                options.Mode <- FileMode.CreateNew
+                options.Access <- FileAccess.Write
+                options.Share <- FileShare.None
+                options.UnixCreateMode <- fileMode
+                use stream = new FileStream(path, options)
+                let bytes = Encoding.UTF8.GetBytes content
+                stream.Write(bytes, 0, bytes.Length)
+                stream.Flush(true)
+                if TrustedLinuxFile.ownedPath false path then Ok() else Error "portable-trusted-runtime-layout-refused"
+        with _ -> Error "portable-trusted-runtime-layout-refused"
+
+    let prepare (grant: PortableWorkspacePythonHelloGrant) =
+        if not (OperatingSystem.IsLinux()) || not (safePath.IsMatch grant.JournalStateRoot) then
+            Error "portable-trusted-runtime-layout-refused"
+        else
+            let layout = PortableWorkspacePythonHelloPolicy.privateRuntimeLayout grant.JournalStateRoot
+            let directories =
+                [ grant.JournalStateRoot; layout.Root; layout.Home; layout.ConfigRoot
+                  Path.GetDirectoryName layout.ContainersConfig; layout.RuntimeRoot; layout.StorageRoot; layout.RunRoot ]
+            directories
+            |> List.fold (fun state path -> state |> Result.bind (fun () -> ensureDirectory path)) (Ok())
+            |> Result.bind (fun () -> ensureFile layout.ContainersConfig "")
+            |> Result.bind (fun () ->
+                let content =
+                    $"[storage]\ndriver = \"vfs\"\ngraphroot = \"%s{layout.StorageRoot}\"\nrunroot = \"%s{layout.RunRoot}\"\n"
+                ensureFile layout.StorageConfig content)
+
+    interface IPortableWorkspacePrivateRuntimePreparer with
+        member _.Prepare grant = prepare grant
+
 type PortableWorkspaceTrustedEnrollmentSource
-    (reader: IPortableWorkspaceTrustedGrantReader, inspector: IPortableWorkspaceTrustedReceiverInspector) =
+    (reader: IPortableWorkspaceTrustedGrantReader,
+     inspector: IPortableWorkspaceTrustedReceiverInspector,
+     runtimePreparer: IPortableWorkspacePrivateRuntimePreparer) =
     interface IPortableWorkspaceRuntimeEnrollmentSource with
         member _.Resolve enrollmentId =
             if enrollmentId <> PortableWorkspacePythonHelloPolicy.EnrollmentId then
@@ -403,7 +546,10 @@ type PortableWorkspaceTrustedEnrollmentSource
                         TrustedGrantCodec.parse trusted.Bytes
                         |> Result.bind (fun grant ->
                             if grant.AllowedUserId <> trusted.EffectiveUserId then Error "portable-trusted-runtime-uid-refused"
-                            else inspector.Validate grant |> Result.bind (fun () -> PortableWorkspacePythonHelloPolicy.create grant)))
+                            else
+                                inspector.Validate grant
+                                |> Result.bind (fun () -> runtimePreparer.Prepare grant)
+                                |> Result.bind (fun () -> PortableWorkspacePythonHelloPolicy.create grant)))
 
 [<RequireQualifiedAccess>]
 module PortableWorkspaceTrustedEnrollment =
@@ -411,7 +557,8 @@ module PortableWorkspaceTrustedEnrollment =
         let source =
             PortableWorkspaceTrustedEnrollmentSource(
                 LinuxAdministratorPortableWorkspaceGrantReader(),
-                LinuxPortableWorkspaceTrustedReceiverInspector())
+                LinuxPortableWorkspaceTrustedReceiverInspector(),
+                LinuxPortableWorkspacePrivateRuntimePreparer())
         {
             Enrollments = source
             CreateRunner = fun runtime -> PortableWorkspacePodmanRunner runtime

@@ -27,6 +27,12 @@ type private Inspector(result: Result<unit, string>) =
         member _.Validate _ = calls <- calls + 1; result
     member _.Calls = calls
 
+type private RuntimePreparer(result: Result<unit, string>) =
+    let mutable calls = 0
+    interface IPortableWorkspacePrivateRuntimePreparer with
+        member _.Prepare _ = calls <- calls + 1; result
+    member _.Calls = calls
+
 type private RecordingRunner() =
     let mutable calls = 0
     let mutable cancellable = false
@@ -57,6 +63,9 @@ type private TemporaryDirectory() =
     member _.Path = path
     interface IDisposable with
         member _.Dispose() = if Directory.Exists path then Directory.Delete(path, true)
+
+[<CollectionDefinition("trusted-portable-process-environment", DisableParallelization = true)>]
+type TrustedPortableProcessEnvironmentCollection() = class end
 
 module private Fixture =
     let sha = String.replicate 64 "a"
@@ -109,7 +118,7 @@ module private Fixture =
         Encoding.UTF8.GetBytes(root.ToJsonString())
 
     let source bytes userId inspection =
-        PortableWorkspaceTrustedEnrollmentSource(GrantReader(bytes, userId), inspection)
+        PortableWorkspaceTrustedEnrollmentSource(GrantReader(bytes, userId), inspection, RuntimePreparer(Ok()))
         :> IPortableWorkspaceRuntimeEnrollmentSource
 
     let command (profile: PortableWorkspaceProfile) workflow fence operation =
@@ -126,6 +135,15 @@ module private Fixture =
         use stream = File.OpenRead path
         Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
 
+    let userId () =
+        let start = ProcessStartInfo("/usr/bin/id", RedirectStandardOutput = true, UseShellExecute = false)
+        start.ArgumentList.Add "-u"
+        use child = Process.Start start
+        let value = child.StandardOutput.ReadToEnd().Trim() |> UInt32.Parse
+        child.WaitForExit()
+        Assert.Equal(0, child.ExitCode)
+        value
+
     let git root arguments =
         let start = ProcessStartInfo("/usr/bin/git", RedirectStandardOutput = true, RedirectStandardError = true, UseShellExecute = false)
         start.ArgumentList.Add "-C"
@@ -138,6 +156,7 @@ module private Fixture =
         Assert.Equal(0, child.ExitCode)
         output.Trim()
 
+[<Collection("trusted-portable-process-environment")>]
 type PortableWorkspaceTrustedEnrollmentSourceTests() =
     [<Fact>]
     member _.``administrator path policy rejects links caller ownership and delegated writes``() =
@@ -186,7 +205,7 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
 
     [<Fact>]
     member _.``missing trusted grant refuses without resolving caller profile``() =
-        let source = PortableWorkspaceTrustedEnrollmentSource(RefusingGrantReader("portable-trusted-grant-missing"), Inspector(Ok()))
+        let source = PortableWorkspaceTrustedEnrollmentSource(RefusingGrantReader("portable-trusted-grant-missing"), Inspector(Ok()), RuntimePreparer(Ok()))
         let outcome = (source :> IPortableWorkspaceRuntimeEnrollmentSource).Resolve PortableWorkspacePythonHelloPolicy.EnrollmentId
         Assert.Equal(Error "portable-trusted-grant-missing", outcome)
 
@@ -224,9 +243,94 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
             }
         let inspector = LinuxPortableWorkspaceTrustedReceiverInspector() :> IPortableWorkspaceTrustedReceiverInspector
         Assert.Equal(Ok(), inspector.Validate grant)
+
+        let marker = Path.Combine(temporary.Path, "hostile-git-executed")
+        let helper = Path.Combine(temporary.Path, "slow-oversized-fsmonitor")
+        File.WriteAllText(helper, $"#!/bin/sh\ntouch '%s{marker}'\ndd if=/dev/zero bs=1048576 count=8 2>/dev/null\nsleep 30\n")
+        File.SetUnixFileMode(helper, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+        Fixture.git receiver [ "config"; "core.fsmonitor"; helper ] |> ignore
+        let oldGitDir = Environment.GetEnvironmentVariable "GIT_DIR"
+        let oldGitConfig = Environment.GetEnvironmentVariable "GIT_CONFIG_GLOBAL"
+        let hostileGlobal = Path.Combine(temporary.Path, "hostile.gitconfig")
+        File.WriteAllText(hostileGlobal, $"[core]\n\tfsmonitor = %s{helper}\n")
+        try
+            Environment.SetEnvironmentVariable("GIT_DIR", Path.Combine(temporary.Path, "redirected.git"))
+            Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", hostileGlobal)
+            let elapsed = Stopwatch.StartNew()
+            Assert.Equal(Ok(), inspector.Validate grant)
+            elapsed.Stop()
+            Assert.True(elapsed.Elapsed < TimeSpan.FromSeconds 4.0, $"Git inspection took %O{elapsed.Elapsed}")
+            Assert.False(File.Exists marker)
+        finally
+            Environment.SetEnvironmentVariable("GIT_DIR", oldGitDir)
+            Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", oldGitConfig)
         Assert.Equal(Error "portable-trusted-receiver-tree-refused", inspector.Validate { grant with ReceiverTree = Fixture.tree })
         File.AppendAllText(Path.Combine(receiver, "python", "test.py"), "# changed\n")
         Assert.Equal(Error "portable-trusted-receiver-dirty-refused", inspector.Validate grant)
+
+    [<Fact>]
+    member _.``private runtime layout scopes Podman state and refuses tampered config``() =
+        use temporary = new TemporaryDirectory()
+        let stateRoot = Path.Combine(temporary.Path, "state")
+        let uid = Fixture.userId()
+        let bytes =
+            Fixture.bytes(Some(fun root ->
+                root["allowedUid"] <- uid
+                root["stateRoot"] <- stateRoot))
+        let source =
+            PortableWorkspaceTrustedEnrollmentSource(
+                GrantReader(bytes, uid), Inspector(Ok()), LinuxPortableWorkspacePrivateRuntimePreparer())
+            :> IPortableWorkspaceRuntimeEnrollmentSource
+        let oldHome = Environment.GetEnvironmentVariable "HOME"
+        let oldContainers = Environment.GetEnvironmentVariable "CONTAINERS_CONF"
+        let oldStorage = Environment.GetEnvironmentVariable "CONTAINERS_STORAGE_CONF"
+        let enrollment =
+            try
+                Environment.SetEnvironmentVariable("HOME", "/tmp/hostile-home")
+                Environment.SetEnvironmentVariable("CONTAINERS_CONF", "/tmp/hostile-containers.conf")
+                Environment.SetEnvironmentVariable("CONTAINERS_STORAGE_CONF", "/tmp/hostile-storage.conf")
+                source.Resolve PortableWorkspacePythonHelloPolicy.EnrollmentId |> Result.defaultWith failwith
+            finally
+                Environment.SetEnvironmentVariable("HOME", oldHome)
+                Environment.SetEnvironmentVariable("CONTAINERS_CONF", oldContainers)
+                Environment.SetEnvironmentVariable("CONTAINERS_STORAGE_CONF", oldStorage)
+        let layout = PortableWorkspacePythonHelloPolicy.privateRuntimeLayout stateRoot
+        let expectedDirectoryMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+        let expectedFileMode = UnixFileMode.UserRead ||| UnixFileMode.UserWrite
+        [ stateRoot; layout.Root; layout.Home; layout.ConfigRoot; Path.GetDirectoryName layout.ContainersConfig
+          layout.RuntimeRoot; layout.StorageRoot; layout.RunRoot ]
+        |> List.iter (fun path -> Assert.Equal(expectedDirectoryMode, File.GetUnixFileMode path))
+        [ layout.ContainersConfig; layout.StorageConfig ]
+        |> List.iter (fun path -> Assert.Equal(expectedFileMode, File.GetUnixFileMode path))
+        Assert.Equal<string list>(
+            [ "--storage-driver=vfs"; "--root"; layout.StorageRoot; "--runroot"; layout.RunRoot ],
+            enrollment.Policy.Runtime.PodmanGlobalArguments)
+        Assert.Equal(layout.Home, enrollment.Policy.Runtime.HostEnvironment["HOME"])
+        Assert.Equal(layout.ContainersConfig, enrollment.Policy.Runtime.HostEnvironment["CONTAINERS_CONF"])
+        Assert.Equal(layout.StorageConfig, enrollment.Policy.Runtime.HostEnvironment["CONTAINERS_STORAGE_CONF"])
+
+        File.WriteAllText(layout.ContainersConfig, "[engine]\nhelper_binaries_dir=[\"/tmp/hostile\"]\n")
+        Assert.Equal(Error "portable-trusted-runtime-config-refused", source.Resolve PortableWorkspacePythonHelloPolicy.EnrollmentId)
+
+    [<Fact>]
+    member _.``private runtime layout refuses a preexisting symlink``() =
+        use temporary = new TemporaryDirectory()
+        let stateRoot = Path.Combine(temporary.Path, "state")
+        Directory.CreateDirectory stateRoot |> ignore
+        File.SetUnixFileMode(stateRoot, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+        let outside = Path.Combine(temporary.Path, "outside")
+        Directory.CreateDirectory outside |> ignore
+        Directory.CreateSymbolicLink(Path.Combine(stateRoot, "runtime-v1"), outside) |> ignore
+        let uid = Fixture.userId()
+        let bytes =
+            Fixture.bytes(Some(fun root ->
+                root["allowedUid"] <- uid
+                root["stateRoot"] <- stateRoot))
+        let source =
+            PortableWorkspaceTrustedEnrollmentSource(
+                GrantReader(bytes, uid), Inspector(Ok()), LinuxPortableWorkspacePrivateRuntimePreparer())
+            :> IPortableWorkspaceRuntimeEnrollmentSource
+        Assert.Equal(Error "portable-trusted-runtime-layout-refused", source.Resolve PortableWorkspacePythonHelloPolicy.EnrollmentId)
 
     [<Fact>]
     member _.``compiled Program routes portable workspace to fixed missing-grant refusal``() =

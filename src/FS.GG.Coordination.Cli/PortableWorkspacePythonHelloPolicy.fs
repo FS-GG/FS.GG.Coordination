@@ -38,6 +38,18 @@ type PortableWorkspacePythonHelloGrant =
         ImageRecipeSha256: string
     }
 
+type internal PortableWorkspacePrivateRuntimeLayout =
+    {
+        Root: string
+        Home: string
+        ConfigRoot: string
+        RuntimeRoot: string
+        StorageRoot: string
+        RunRoot: string
+        ContainersConfig: string
+        StorageConfig: string
+    }
+
 [<RequireQualifiedAccess>]
 module PortableWorkspacePythonHelloPolicy =
     [<Literal>]
@@ -95,6 +107,21 @@ module PortableWorkspacePythonHelloPolicy =
         |> PortableWorkspaceContract.profileBytes
         |> Result.map PortableWorkspaceContract.digest
 
+    let internal privateRuntimeLayout stateRoot =
+        let root = IO.Path.Combine(stateRoot, "runtime-v1")
+        let config = IO.Path.Combine(root, "xdg-config")
+        let runtime = IO.Path.Combine(root, "xdg-runtime")
+        {
+            Root = root
+            Home = IO.Path.Combine(root, "home")
+            ConfigRoot = config
+            RuntimeRoot = runtime
+            StorageRoot = IO.Path.Combine(root, "storage")
+            RunRoot = IO.Path.Combine(runtime, "containers-runroot")
+            ContainersConfig = IO.Path.Combine(config, "containers", "containers.conf")
+            StorageConfig = IO.Path.Combine(config, "containers", "storage.conf")
+        }
+
     let create (grant: PortableWorkspacePythonHelloGrant) =
         if grant.EnrollmentId <> EnrollmentId then
             Error "portable-runtime-enrollment-not-found"
@@ -110,6 +137,7 @@ module PortableWorkspacePythonHelloPolicy =
             | Error reason -> Error reason
             | Ok actual when actual <> grant.ProfileSha256 -> Error "portable-runtime-profile-digest-refused"
             | Ok _ ->
+                let layout = privateRuntimeLayout grant.JournalStateRoot
                 let operation =
                     {
                         EntryPoint = "python-test"
@@ -151,11 +179,18 @@ module PortableWorkspacePythonHelloPolicy =
                                         GitExecutable = grant.Git.Path
                                         TarExecutable = grant.Tar.Path
                                         PodmanExecutable = grant.Podman.Path
-                                        PodmanGlobalArguments = []
+                                        PodmanGlobalArguments =
+                                            [ "--storage-driver=vfs"; "--root"; layout.StorageRoot; "--runroot"; layout.RunRoot ]
                                         StateRoot = grant.JournalStateRoot
                                         ContainerPath = "/usr/local/bin:/usr/bin:/bin"
                                         ContainerUser = "32768:32768"
-                                        HostEnvironment = Map [ "HOME", "/tmp"; "PATH", "/usr/local/bin:/usr/bin:/bin" ]
+                                        HostEnvironment =
+                                            Map [
+                                                "HOME", layout.Home
+                                                "PATH", "/usr/local/bin:/usr/bin:/bin"
+                                                "CONTAINERS_CONF", layout.ContainersConfig
+                                                "CONTAINERS_STORAGE_CONF", layout.StorageConfig
+                                            ]
                                         ContainerEnvironment = Map [ "HOME", "/tmp"; "PATH", "/usr/local/bin:/usr/bin:/bin" ]
                                         MaximumSnapshotBytes = 16UL * 1024UL * 1024UL
                                         TerminationGrace = TimeSpan.FromSeconds 5.0
