@@ -59,6 +59,12 @@ def main() -> None:
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
     assert '["save", "--format=oci-archive", "--output", str(candidate), IMAGE_NAME]' in source
     assert '["save", "--format=oci-archive", "--output", str(candidate), build_reference]' not in source
+    workflow = (ROOT / ".github/workflows/portable-workspace-executor-qualification.yml").read_text()
+    assert 'manifest = pathlib.Path(result["buildManifest"])' in workflow
+    assert 'result["buildManifestSha256"]' in workflow
+    assert 'value["image"]["reference"] == result["buildImageReference"]' in workflow
+    assert 'evidence["imageReference"] == qualification["buildImageReference"]' in workflow
+    assert 'exported["image"]["reference"] == result["imageReference"]' in workflow
     with tempfile.TemporaryDirectory(prefix="portable-image-archive-") as temporary:
         root = Path(temporary)
         candidate = root / "candidate.oci.tar"
@@ -69,8 +75,12 @@ def main() -> None:
         state = root / "state"
         state.mkdir()
         value = {"image": {"digest": "sha256:" + "a" * 64, "reference": "old", "id": f"sha256:{config_digest}"}}
+        build_path = IMAGE.persist_manifest(state, value)
+        build = json.loads(build_path.read_text())
         path = IMAGE.write_manifest(state, value, identity)
         written = json.loads(path.read_text())
+        assert build["image"] == {"digest": "sha256:" + "a" * 64, "reference": "old", "id": f"sha256:{config_digest}"}
+        assert build_path != path
         assert written["image"]["buildDigest"] == "sha256:" + "a" * 64
         assert written["image"]["digest"] == f"sha256:{manifest_digest}"
         assert written["image"]["reference"] == f"{IMAGE.IMAGE_NAME}@sha256:{manifest_digest}"

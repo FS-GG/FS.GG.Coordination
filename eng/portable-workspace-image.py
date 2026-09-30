@@ -383,14 +383,7 @@ def sha256_stream(stream) -> str:
     return digest.hexdigest()
 
 
-def write_manifest(state: Path, manifest: dict, archive_identity: dict) -> Path:
-    if manifest["image"]["id"] != archive_identity["configDigest"]:
-        raise RuntimeError("OCI archive config identity differs from the qualified image ID")
-    build_digest = manifest["image"]["digest"]
-    manifest["image"]["buildDigest"] = build_digest
-    manifest["image"]["digest"] = archive_identity["digest"]
-    manifest["image"]["reference"] = f"{IMAGE_NAME}@{archive_identity['digest']}"
-    manifest["image"]["archiveConfigDigest"] = archive_identity["configDigest"]
+def persist_manifest(state: Path, manifest: dict) -> Path:
     payload = canonical_bytes(manifest)
     digest = hashlib.sha256(payload).hexdigest()
     directory = state / "manifests"
@@ -402,6 +395,17 @@ def write_manifest(state: Path, manifest: dict, archive_identity: dict) -> Path:
         stream.flush()
         os.fsync(stream.fileno())
     return path
+
+
+def write_manifest(state: Path, manifest: dict, archive_identity: dict) -> Path:
+    if manifest["image"]["id"] != archive_identity["configDigest"]:
+        raise RuntimeError("OCI archive config identity differs from the qualified image ID")
+    build_digest = manifest["image"]["digest"]
+    manifest["image"]["buildDigest"] = build_digest
+    manifest["image"]["digest"] = archive_identity["digest"]
+    manifest["image"]["reference"] = f"{IMAGE_NAME}@{archive_identity['digest']}"
+    manifest["image"]["archiveConfigDigest"] = archive_identity["configDigest"]
+    return persist_manifest(state, manifest)
 
 
 def append_journal(path: Path, record: dict) -> None:
@@ -530,6 +534,7 @@ def main() -> int:
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
     build_reference, manifest = prepare(args, source, state)
+    build_manifest_path = persist_manifest(state, manifest)
     journal = qualify(args, source, state, build_reference)
     candidate = state / "candidate.oci.tar"
     run(
@@ -545,6 +550,8 @@ def main() -> int:
         "candidateSha256": sha256_file(candidate),
         "imageReference": image_reference,
         "buildImageReference": build_reference,
+        "buildManifest": str(build_manifest_path),
+        "buildManifestSha256": build_manifest_path.stem.removeprefix("sha256-"),
         "imageId": manifest["image"]["id"],
         "manifest": str(manifest_path),
         "manifestSha256": manifest_path.stem.removeprefix("sha256-"),
