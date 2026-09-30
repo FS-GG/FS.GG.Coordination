@@ -249,7 +249,19 @@ module private TrustedLinuxFile =
                     use stream = new FileStream(handle, FileAccess.Read, 8192, false)
                     use memory = new MemoryStream(int status.Size)
                     use deadline = new CancellationTokenSource(timeout)
-                    let copy = stream.CopyToAsync(memory, deadline.Token)
+                    let copy =
+                        task {
+                            let buffer = Array.zeroCreate<byte> 8192
+                            let mutable complete = false
+                            while not complete do
+                                let! count = stream.ReadAsync(buffer.AsMemory(), deadline.Token)
+                                if count = 0 then complete <- true
+                                elif memory.Length + int64 count > status.Size
+                                     || memory.Length + int64 count > maximumBytes then
+                                    raise (InvalidDataException "portable-trusted-receiver-payload-size-changed")
+                                else
+                                    memory.Write(buffer, 0, count)
+                        }
                     try
                         copy.GetAwaiter().GetResult()
                         if memory.Length <> status.Size then Error "portable-trusted-receiver-payload-refused"
