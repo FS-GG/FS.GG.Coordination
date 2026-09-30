@@ -1,11 +1,11 @@
 # V2-LANG-01.4 — bounded Microsoft Agent Framework trial
 
-**Part:** V2-LANG-01, milestone .4, windows A–D. This branch contains only the first source window,
-A–B. The accepted programme plan remains
+**Part:** V2-LANG-01, milestone .4, windows A–D. This branch extends the A–B source candidate with
+window C. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** A–B source and focused local tests are prepared from protected Coordination main
-`125a6ba3ac019b4c4f6be57db04b958555f73409`. Merge, C recovery semantics, D decision evidence,
+**Status:** A–C source and focused local tests are prepared. Window C starts from A–B PR #898 head
+`6ac32e1ceb1a5624788a917a27768327aa85cd25`; that source remains unmerged. Merge, D decision evidence,
 publication, installation and adoption remain pending. V2-LANG-01.4 is open.
 
 **Telemetry:** not configured for this dispatch. No usage or bureaucracy percentage is inferred.
@@ -47,6 +47,29 @@ item while a separately built and executed graph completes another work item, th
 branch. This proves independence between those in-process trial executions; it does not establish durable
 recovery, distributed scheduling or production concurrency.
 
+## Recovery and adverse lifecycle disposition
+
+Durable execution recovery remains owned by `ExecutionSessionCoordinator` and its journal. If cancellation,
+a provider exception or an ambiguous provider response occurs after `LaunchAttemptRecorded`, a fresh facade
+may bind the same exact intent to a coordinator over that journal. Before the original deadline, the
+coordinator reconciles the existing provider attempt and never launches another attempt. A framework session
+is not recovery evidence, and the facade still permits only one invocation per instance.
+
+The 1.22.0 framework checkpoint path is refused for this trial. The graph's barrier join retains process-local
+branch state, and a framework checkpoint does not bind that state to the durable execution journal or prove
+provider-effect ownership. `AgentFrameworkWorkflow.start` therefore accepts only `Fresh`; a nonempty checkpoint
+identity returns `agent-framework-workflow-checkpoint-replay-unsupported`, a malformed identity refuses, and no
+executor runs. `AIAgent` session serialization and deserialization also remain explicitly unsupported. This is
+a fail-closed disposition, not a durable replay implementation.
+
+Cancellation reaches the coordinator/provider token. The test cancels only after the durable launch-attempt
+event and provider entry, then recovers through a new coordinator/facade by reconciliation with one total
+provider launch. A request at its exact deadline refuses before any journal or provider effect. Non-cancellation
+exceptions crossing the coordinator call are reported as `agent-framework-execution-effect-unknown`; ambiguous
+and still-unknown reconciliation results use the same classification and emit no projection. A later conclusive
+reconciliation can return the candidate, still with `deliveryClaimed=false` and no additional launch. A workflow
+branch exception is surfaced as the SDK's `WorkflowErrorEvent`; no workflow output or delivery claim is emitted.
+
 ## A–D windows
 
 - [x] **A — exact SDK and execution-facade source trial.** Pin and call the real 1.22.0 abstractions,
@@ -55,12 +78,13 @@ recovery, distributed scheduling or production concurrency.
 - [x] **B — fixed graph and bounded parallelism source trial.** Run the candidate, parallel inspection
   and deterministic verification, and barrier join through the real workflow runtime. Prove that a held
   branch does not block a separate execution work item and that graph completion never claims delivery.
-- [ ] **C — recovery and adverse lifecycle trial.** Define and test checkpoint/recovery ownership,
+- [x] **C — recovery and adverse lifecycle trial.** Define and test checkpoint/recovery ownership,
   cancellation propagation, deadline behavior, framework exceptions and unknown effects against the
-  durable coordinator. No recovery, cancellation or unknown-effect claim follows from A–B.
+  durable coordinator. Framework checkpoint replay is unsupported; exact durable coordinator reconciliation
+  is the only admitted recovery path in this source trial.
 - [ ] **D — measured disposition.** Measure the trial against the existing supported baseline and record
   adopt, defer or reject. Include dependency/runtime cost, failure behavior, maintenance surface and an
-  actual unmet need. A–B alone makes no adoption decision.
+  actual unmet need. A–C alone makes no adoption decision.
 
 ## Upstream identity and measured package footprint
 
@@ -89,7 +113,8 @@ A deliberate local fault changed the graph's false delivery assertion to expect 
 observed the named test failure and exited 1; the fault was then reverted and all six focused tests passed.
 After registration in the owning UnitTests project, the focused native gate observed that same named
 workflow test fail with exit 1 under the deliberate false delivery assertion. The assertion was restored,
-and the registered AgentFramework filter passed 6/6. No economic savings claim is made without measurement.
+and the registered AgentFramework filter passed 6/6. Window C extends that registered filter to 13 tests.
+No economic savings claim is made without measurement.
 
 Focused evidence covers:
 
@@ -97,13 +122,18 @@ Focused evidence covers:
 - baseline/adapter equality for candidate identity, head/tree and usage;
 - wrong input/session/options/profile limits and duplicate invocation with no extra provider launch;
 - the real fixed workflow graph, barrier join and explicit false delivery claim; and
-- an independently completing work item while another graph branch is held.
+- an independently completing work item while another graph branch is held;
+- framework session and workflow checkpoint replay refusal before execution;
+- cancellation after durable attempt followed by reconciliation with no second launch;
+- provider exception and ambiguous-effect classification with conclusive later reconciliation;
+- exact-deadline refusal before provider effect; and
+- workflow exception emission with no workflow output.
 
 ## Unified section 9.9 workspace impact
 
-There is no generated-workspace change in A–B. No SDD, Spec Kit, typed-SDD, none or product-language
+There is no generated-workspace change in A–C. No SDD, Spec Kit, typed-SDD, none or product-language
 family changes fresh creation, retained behavior, defaults or enabled runtime behavior. The source is an
-unregistered optional assembly and establishes no installed capability. A later effective change would
+optional build/test assembly and establishes no installed capability. A later effective change would
 require an exact Coordination artifact publication, explicit receiver selection, clean-creation proof and
-separate retained-upgrade handling. C and D remain prerequisites to any adopt decision. Source merge,
+separate retained-upgrade handling. D remains prerequisite to any adopt decision. Source merge,
 installed availability and operating activation remain separate facts.

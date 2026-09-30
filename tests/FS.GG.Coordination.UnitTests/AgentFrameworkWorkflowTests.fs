@@ -26,17 +26,19 @@ let private projection candidateId =
         DeliveryClaimed = false
     }
 
+let private start request candidate hold cancellationToken =
+    task {
+        let! started = AgentFrameworkWorkflow.start request candidate hold cancellationToken
+
+        return
+            match started with
+            | Ok value -> value
+            | Error reason -> failwithf "agent-framework-workflow-start-refused:%s" reason
+    }
+
 let private run candidate hold =
     task {
-        let workflow = AgentFrameworkWorkflow.build candidate hold
-        let! stream =
-            InProcessExecution.RunStreamingAsync<AgentFrameworkCandidateWorkItem>(
-                workflow,
-                candidate,
-                null,
-                CancellationToken.None
-            )
-            |> _.AsTask()
+        let! stream = start Fresh candidate hold CancellationToken.None
 
         let enumerator = stream.WatchStreamAsync(CancellationToken.None).GetAsyncEnumerator()
         let mutable output: AgentFrameworkWorkflowResult option = None
@@ -123,4 +125,81 @@ let ``held branch does not block an independent execution work item`` () =
         let! heldResult = held.WaitAsync(TimeSpan.FromSeconds 5.)
         Assert.Equal("held-work", heldResult.WorkItemId)
         Assert.False(heldResult.DeliveryClaimed)
+    }
+
+[<Fact>]
+let ``framework checkpoint replay refuses before any executor runs`` () =
+    task {
+        let candidate =
+            {
+                WorkItemId = "checkpoint-work"
+                Projection = projection "30000000-0000-0000-0000-000000000107"
+            }
+
+        let mutable invocations = 0
+
+        let hold _ _ =
+            Interlocked.Increment(&invocations) |> ignore
+            Task.CompletedTask
+
+        let! unsupported =
+            AgentFrameworkWorkflow.start
+                (ResumeFromFrameworkCheckpoint "checkpoint-107")
+                candidate
+                hold
+                CancellationToken.None
+
+        let! invalid =
+            AgentFrameworkWorkflow.start
+                (ResumeFromFrameworkCheckpoint " ")
+                candidate
+                hold
+                CancellationToken.None
+
+        match unsupported with
+        | Error reason -> Assert.Equal("agent-framework-workflow-checkpoint-replay-unsupported", reason)
+        | Ok run ->
+            do! run.DisposeAsync().AsTask()
+            failwith "framework checkpoint replay unexpectedly started"
+
+        match invalid with
+        | Error reason -> Assert.Equal("agent-framework-workflow-checkpoint-identity-invalid", reason)
+        | Ok run ->
+            do! run.DisposeAsync().AsTask()
+            failwith "invalid framework checkpoint unexpectedly started"
+
+        Assert.Equal(0, invocations)
+    }
+
+[<Fact>]
+let ``workflow branch exception emits an error and never emits delivery output`` () =
+    task {
+        let candidate =
+            {
+                WorkItemId = "exception-work"
+                Projection = projection "30000000-0000-0000-0000-000000000108"
+            }
+
+        let hold _ _ = Task.FromException(ApplicationException "fixture-workflow-branch-failed")
+        let! stream = start Fresh candidate hold CancellationToken.None
+        let enumerator = stream.WatchStreamAsync(CancellationToken.None).GetAsyncEnumerator()
+        let mutable errors = 0
+        let mutable outputs = 0
+        let mutable reading = true
+
+        while reading do
+            let! present = enumerator.MoveNextAsync().AsTask()
+
+            if present then
+                match enumerator.Current with
+                | :? WorkflowErrorEvent -> errors <- errors + 1
+                | :? WorkflowOutputEvent -> outputs <- outputs + 1
+                | _ -> ()
+            else
+                reading <- false
+
+        do! enumerator.DisposeAsync().AsTask()
+        do! stream.DisposeAsync().AsTask()
+        Assert.Equal(1, errors)
+        Assert.Equal(0, outputs)
     }

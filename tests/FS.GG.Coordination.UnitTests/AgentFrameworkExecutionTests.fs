@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Security.Cryptography
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Agents.AI
@@ -64,9 +65,15 @@ type private FixedClock() =
     inherit TimeProvider()
     override _.GetUtcNow() = now
 
+type private AtClock(value: DateTimeOffset) =
+    inherit TimeProvider()
+    override _.GetUtcNow() = value
+
 type private MemoryJournal() =
     let gate = obj()
     let mutable events: SessionEvent list = []
+
+    member _.Events = lock gate (fun () -> events)
 
     interface IExecutionSessionJournal with
         member _.ReadAttempt(_, _, _) =
@@ -90,45 +97,45 @@ type private MemoryJournal() =
                     events <- events @ [ eventValue ]
                     Task.FromResult Appended)
 
+let private observation =
+    {
+        Provider =
+            {
+                Provider = "Codex"
+                AdapterVersion = "codex-subscription-exec/1"
+            }
+        Session =
+            match ProviderSessionReference.create "codex-session-104" with
+            | Ok value -> value
+            | Error reason -> failwith reason
+        Resolved =
+            {
+                Model = profile.ExactModel
+                Effort = profile.ExactEffort
+            }
+        Lifecycle = Succeeded
+        Output = []
+        LifecycleReferences = []
+        Usage =
+            {
+                Values =
+                    Map
+                        [ "input_tokens", UsageKnown(11L, "tokens", "fixture")
+                          "output_tokens", UsageKnown(7L, "tokens", "fixture") ]
+                Cost = CostNotApplicable "subscription"
+            }
+        Candidate =
+            Some
+                {
+                    CandidateId = candidateId
+                    HeadSha = String.replicate 40 "a"
+                    TreeSha = String.replicate 40 "b"
+                }
+        ObservedAt = now
+    }
+
 type private CountingProvider() =
     let mutable launches = 0
-
-    let observation =
-        {
-            Provider =
-                {
-                    Provider = "Codex"
-                    AdapterVersion = "codex-subscription-exec/1"
-                }
-            Session =
-                match ProviderSessionReference.create "codex-session-104" with
-                | Ok value -> value
-                | Error reason -> failwith reason
-            Resolved =
-                {
-                    Model = profile.ExactModel
-                    Effort = profile.ExactEffort
-                }
-            Lifecycle = Succeeded
-            Output = []
-            LifecycleReferences = []
-            Usage =
-                {
-                    Values =
-                        Map
-                            [ "input_tokens", UsageKnown(11L, "tokens", "fixture")
-                              "output_tokens", UsageKnown(7L, "tokens", "fixture") ]
-                    Cost = CostNotApplicable "subscription"
-                }
-            Candidate =
-                Some
-                    {
-                        CandidateId = candidateId
-                        HeadSha = String.replicate 40 "a"
-                        TreeSha = String.replicate 40 "b"
-                    }
-            ObservedAt = now
-        }
 
     member _.Launches = Volatile.Read(&launches)
 
@@ -148,6 +155,43 @@ type private CountingProvider() =
 
         member _.Observe(_, _) = Task.FromResult(Ok observation)
         member _.Reconcile(_, _) = Task.FromResult(Reconciled observation)
+        member _.Cancel(_, _) = Task.FromResult CancelAccepted
+
+type private ScriptedProvider
+    (
+        launchBehavior: CancellationToken -> Task<LaunchResult>,
+        initialReconcile: ReconcileResult
+    ) =
+    let mutable launches = 0
+    let mutable reconciles = 0
+    let mutable reconcileResult = initialReconcile
+
+    member _.Launches = Volatile.Read(&launches)
+    member _.Reconciles = Volatile.Read(&reconciles)
+
+    member _.ReconcileResult
+        with set value = reconcileResult <- value
+
+    interface IExecutionProvider with
+        member _.ObserveReadiness(_) =
+            Task.FromResult
+                {
+                    Identity = observation.Provider
+                    Authentication = Authenticated "fixture"
+                    SupportsResume = true
+                    ObservedAt = now
+                }
+
+        member _.Launch(_, cancellationToken) =
+            Interlocked.Increment(&launches) |> ignore
+            launchBehavior cancellationToken
+
+        member _.Observe(_, _) = Task.FromResult(Ok observation)
+
+        member _.Reconcile(_, _) =
+            Interlocked.Increment(&reconciles) |> ignore
+            Task.FromResult reconcileResult
+
         member _.Cancel(_, _) = Task.FromResult CancelAccepted
 
 let private coordinator () =
@@ -261,3 +305,176 @@ let ``binding refuses changed request identity and profile limits`` () =
 
     for candidate in cases do
         Assert.Equal(Error "agent-framework-launch-binding-mismatch", BoundAgentFrameworkLaunch.create profile candidate)
+
+[<Fact>]
+let ``framework session checkpoint and replay are refused`` () =
+    task {
+        let value, provider = coordinator ()
+        let agent = BoundExecutionAgent(value, binding ())
+        let! session = agent.CreateSessionAsync().AsTask()
+
+        let! serializeError =
+            Assert.ThrowsAsync<NotSupportedException>(fun () ->
+                agent.SerializeSessionAsync(session, null, CancellationToken.None).AsTask() :> Task)
+
+        use document = JsonDocument.Parse "{}"
+
+        let! deserializeError =
+            Assert.ThrowsAsync<NotSupportedException>(fun () ->
+                agent.DeserializeSessionAsync(document.RootElement, null, CancellationToken.None).AsTask() :> Task)
+
+        Assert.Equal("agent-framework-session-serialization-refused", serializeError.Message)
+        Assert.Equal("agent-framework-session-deserialization-refused", deserializeError.Message)
+        Assert.Equal(0, provider.Launches)
+    }
+
+[<Fact>]
+let ``cancelled launch recovers only by durable coordinator reconciliation`` () =
+    task {
+        let started = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let journal = MemoryJournal()
+
+        let provider =
+            ScriptedProvider(
+                (fun cancellationToken ->
+                    task {
+                        started.TrySetResult() |> ignore
+                        do! Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken)
+                        return LaunchAmbiguous "unreachable"
+                    }),
+                Reconciled observation
+            )
+
+        let firstCoordinator =
+            ExecutionSessionCoordinator(provider, journal, FixedClock())
+
+        let firstAgent = BoundExecutionAgent(firstCoordinator, binding ())
+        let! firstSession = firstAgent.CreateSessionAsync().AsTask()
+        use cancellation = new CancellationTokenSource()
+        let firstRun = firstAgent.RunAsync(input, firstSession, null, cancellation.Token)
+        do! started.Task.WaitAsync(TimeSpan.FromSeconds 5.)
+        cancellation.Cancel()
+        let! _ = Assert.ThrowsAnyAsync<OperationCanceledException>(fun () -> firstRun :> Task)
+
+        Assert.Equal(1, provider.Launches)
+        Assert.Contains(journal.Events, function | LaunchAttemptRecorded(1, _) -> true | _ -> false)
+
+        let recoveryCoordinator =
+            ExecutionSessionCoordinator(provider, journal, FixedClock())
+
+        let recoveryAgent = BoundExecutionAgent(recoveryCoordinator, binding ())
+        let! recoverySession = recoveryAgent.CreateSessionAsync().AsTask()
+        let! recovered = recoveryAgent.RunAsync(input, recoverySession, null, CancellationToken.None)
+        let projected = decode recovered.Text
+
+        Assert.Equal(candidateId.ToString("D"), projected.CandidateId)
+        Assert.False(projected.DeliveryClaimed)
+        Assert.Equal(1, provider.Launches)
+        Assert.Equal(1, provider.Reconciles)
+    }
+
+[<Fact>]
+let ``provider exception becomes unknown effect and durable reconciliation does not relaunch`` () =
+    task {
+        let journal = MemoryJournal()
+
+        let provider =
+            ScriptedProvider(
+                (fun _ -> Task.FromException<LaunchResult>(ApplicationException "fixture-provider-crash")),
+                Reconciled observation
+            )
+
+        let firstAgent =
+            BoundExecutionAgent(ExecutionSessionCoordinator(provider, journal, FixedClock()), binding ())
+
+        let! firstSession = firstAgent.CreateSessionAsync().AsTask()
+
+        let! unknown =
+            Assert.ThrowsAsync<InvalidOperationException>(fun () ->
+                firstAgent.RunAsync(input, firstSession, null, CancellationToken.None) :> Task)
+
+        Assert.Equal("agent-framework-execution-effect-unknown", unknown.Message)
+        Assert.IsType<ApplicationException>(unknown.InnerException) |> ignore
+        Assert.Equal(1, provider.Launches)
+
+        let recoveryAgent =
+            BoundExecutionAgent(ExecutionSessionCoordinator(provider, journal, FixedClock()), binding ())
+
+        let! recoverySession = recoveryAgent.CreateSessionAsync().AsTask()
+        let! recovered = recoveryAgent.RunAsync(input, recoverySession, null, CancellationToken.None)
+        Assert.Equal(candidateId.ToString("D"), (decode recovered.Text).CandidateId)
+        Assert.Equal(1, provider.Launches)
+        Assert.Equal(1, provider.Reconciles)
+    }
+
+[<Fact>]
+let ``ambiguous effect stays unknown until durable reconciliation succeeds`` () =
+    task {
+        let journal = MemoryJournal()
+
+        let provider =
+            ScriptedProvider(
+                (fun _ -> Task.FromResult(LaunchAmbiguous "provider-response-lost")),
+                ReconcileUnknown "provider-still-unknown"
+            )
+
+        let runAgent () =
+            task {
+                let agent =
+                    BoundExecutionAgent(ExecutionSessionCoordinator(provider, journal, FixedClock()), binding ())
+
+                let! session = agent.CreateSessionAsync().AsTask()
+                return agent, session
+            }
+
+        let! firstAgent, firstSession = runAgent ()
+
+        let! firstUnknown =
+            Assert.ThrowsAsync<InvalidOperationException>(fun () ->
+                firstAgent.RunAsync(input, firstSession, null, CancellationToken.None) :> Task)
+
+        Assert.Equal(
+            "agent-framework-execution-effect-unknown:provider-response-lost",
+            firstUnknown.Message
+        )
+
+        let! secondAgent, secondSession = runAgent ()
+
+        let! secondUnknown =
+            Assert.ThrowsAsync<InvalidOperationException>(fun () ->
+                secondAgent.RunAsync(input, secondSession, null, CancellationToken.None) :> Task)
+
+        Assert.Equal(
+            "agent-framework-execution-effect-unknown:provider-still-unknown",
+            secondUnknown.Message
+        )
+
+        Assert.Equal(1, provider.Launches)
+        provider.ReconcileResult <- Reconciled observation
+        let! thirdAgent, thirdSession = runAgent ()
+        let! recovered = thirdAgent.RunAsync(input, thirdSession, null, CancellationToken.None)
+
+        Assert.Equal(candidateId.ToString("D"), (decode recovered.Text).CandidateId)
+        Assert.False((decode recovered.Text).DeliveryClaimed)
+        Assert.Equal(1, provider.Launches)
+        Assert.Equal(2, provider.Reconciles)
+    }
+
+[<Fact>]
+let ``expired bound request refuses before provider effect`` () =
+    task {
+        let provider = CountingProvider()
+
+        let value =
+            ExecutionSessionCoordinator(provider, MemoryJournal(), AtClock(profile.ExactDeadline))
+
+        let agent = BoundExecutionAgent(value, binding ())
+        let! session = agent.CreateSessionAsync().AsTask()
+
+        let! expired =
+            Assert.ThrowsAsync<InvalidOperationException>(fun () ->
+                agent.RunAsync(input, session, null, CancellationToken.None) :> Task)
+
+        Assert.Equal("execution-budget-expired", expired.Message)
+        Assert.Equal(0, provider.Launches)
+    }
