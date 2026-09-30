@@ -87,6 +87,8 @@ type PortableProcessRefusal =
         Reason: string
         HelperTimedOut: bool
         HelperOutputComplete: bool
+        HelperReadStatus: string
+        HelperReadFailure: string option
     }
 
 type PortableProcessObservation =
@@ -666,6 +668,8 @@ module PortableWorkspaceExecutor =
                         "helperExitCode", observed.ExitCode |> Option.map string |> Option.defaultValue "unavailable"
                         "helperTimedOut", string refusal.HelperTimedOut
                         "helperOutputComplete", string refusal.HelperOutputComplete
+                        "helperOutputLimitExceeded", string observed.OutputLimitExceeded
+                        "helperReadStatus", refusal.HelperReadStatus
                         "helperStderrSha256", sha256 observed.StandardError
                         "helperStderrTruncated", string (observed.StandardError.Length > maximumDiagnosticBytes)
                     ]
@@ -673,6 +677,9 @@ module PortableWorkspaceExecutor =
                           []
                       else
                           [ "helperStderr", diagnostic ]
+                    @ (refusal.HelperReadFailure
+                       |> Option.map (fun value -> [ "helperReadFailure", value ])
+                       |> Option.defaultValue [])
                     @ if String.IsNullOrWhiteSpace sourceOutput then
                           []
                       else

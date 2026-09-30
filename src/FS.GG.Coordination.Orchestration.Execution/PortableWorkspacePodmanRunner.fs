@@ -18,6 +18,8 @@ type private PortableToolObservation =
         TimedOut: bool
         OutputLimitExceeded: bool
         OutputComplete: bool
+        ReadStatus: string
+        ReadFailure: string option
     }
 
 type private PortableSnapshotFailure =
@@ -81,6 +83,8 @@ module private PortablePodmanRuntime =
                         TimedOut = true
                         OutputLimitExceeded = false
                         OutputComplete = false
+                        ReadStatus = "not-started"
+                        ReadFailure = None
                     }
             elif not (child.Start()) then
                 return
@@ -91,26 +95,28 @@ module private PortablePodmanRuntime =
                         TimedOut = false
                         OutputLimitExceeded = false
                         OutputComplete = false
+                        ReadStatus = "not-started"
+                        ReadFailure = None
                     }
             else
                 let outputGate = obj ()
                 let mutable capturedBytes = 0UL
                 let mutable outputLimitExceeded = false
-                use readCancellation = new CancellationTokenSource()
 
                 let readBounded (source: Stream) =
-                    task {
+                    Task.Run(fun () ->
                         use captured = new MemoryStream()
                         let buffer = Array.zeroCreate<byte> 4096
                         let mutable reading = true
+                        let mutable complete = false
 
                         try
                             while reading do
-                                let! count =
-                                    source.ReadAsync(buffer.AsMemory(0, buffer.Length), readCancellation.Token)
+                                let count = source.Read(buffer, 0, buffer.Length)
 
                                 if count = 0 then
                                     reading <- false
+                                    complete <- true
                                 else
                                     let allowed, exceeded =
                                         lock outputGate (fun () ->
@@ -135,11 +141,12 @@ module private PortablePodmanRuntime =
                                             child.Kill(true)
                                         with _ ->
                                             ()
-                        with :? OperationCanceledException ->
+                        with
+                        | :? IOException
+                        | :? ObjectDisposedException ->
                             ()
 
-                        return captured.ToArray()
-                    }
+                        captured.ToArray(), complete)
 
                 let stdout = readBounded child.StandardOutput.BaseStream
                 let stderr = readBounded child.StandardError.BaseStream
@@ -172,8 +179,6 @@ module private PortablePodmanRuntime =
                 let! _ = Task.WhenAny(reads :> Task, Task.Delay(runtime.TerminationGrace))
 
                 if not reads.IsCompleted then
-                    readCancellation.Cancel()
-
                     try
                         child.StandardOutput.Close()
                         child.StandardError.Close()
@@ -185,9 +190,23 @@ module private PortablePodmanRuntime =
 
                 let output, error =
                     if reads.IsCompletedSuccessfully then
-                        reads.Result[0], reads.Result[1]
+                        fst reads.Result[0], fst reads.Result[1]
                     else
                         Array.empty, Array.empty
+
+                let streamsComplete =
+                    reads.IsCompletedSuccessfully && reads.Result |> Array.forall snd
+
+                let readFailure =
+                    if not (isNull reads.Exception) then
+                        reads.Exception.Flatten().InnerExceptions
+                        |> Seq.map (fun error -> error.GetType().FullName + ":" + string error.HResult)
+                        |> String.concat ","
+                        |> Some
+                    elif reads.IsCompletedSuccessfully && not streamsComplete then
+                        Some "stream-read-interrupted"
+                    else
+                        None
 
                 return
                     {
@@ -196,7 +215,9 @@ module private PortablePodmanRuntime =
                         StandardError = error
                         TimedOut = timedOut
                         OutputLimitExceeded = outputLimitExceeded
-                        OutputComplete = reads.IsCompletedSuccessfully && not outputLimitExceeded
+                        OutputComplete = streamsComplete && not outputLimitExceeded
+                        ReadStatus = $"{stdout.Status}/{stderr.Status}/{reads.Status}"
+                        ReadFailure = readFailure
                     }
         }
 
@@ -612,6 +633,9 @@ type PortableWorkspacePodmanRunner(runtime: PortableRuntimePolicy) =
                                     Reason = reason
                                     HelperTimedOut = timedOut
                                     HelperOutputComplete = outputComplete
+                                    HelperReadStatus =
+                                        helper |> Option.map _.ReadStatus |> Option.defaultValue "not-applicable"
+                                    HelperReadFailure = helper |> Option.bind _.ReadFailure
                                 }
                     }
 

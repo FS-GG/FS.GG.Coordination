@@ -3,6 +3,7 @@ namespace FS.GG.Coordination.Orchestration.Execution.Tests
 open System
 open System.IO
 open System.Text
+open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Coordination.Orchestration.Execution
@@ -808,6 +809,8 @@ type PortableWorkspaceExecutorTests() =
                                         Reason = "portable-image-inspect-refused"
                                         HelperTimedOut = false
                                         HelperOutputComplete = true
+                                        HelperReadStatus = "RanToCompletion/RanToCompletion/RanToCompletion"
+                                        HelperReadFailure = None
                                     }
                         }),
                     cleanup = (fun _ -> cleanupAllowed)
@@ -1542,3 +1545,76 @@ else:
                     if Directory.Exists temporary then
                         Directory.Delete(temporary, true)
         }
+
+    [<Fact>]
+    member _.``qualification FSI host drains the production runner Git streams``() =
+        if not (OperatingSystem.IsWindows()) then
+            let repository = repositoryRoot (DirectoryInfo AppContext.BaseDirectory)
+            let temporary = Path.Combine(Path.GetTempPath(), "fsgg-portable-fsi-" + Guid.NewGuid().ToString("N"))
+            let manifest = Path.Combine(temporary, "manifest.json")
+            let state = Path.Combine(temporary, "state")
+            let evidence = Path.Combine(temporary, "evidence.json")
+            let store = Path.Combine(temporary, "store")
+            let runRoot = Path.Combine(temporary, "runroot")
+
+            try
+                for path in [ temporary; state; store; runRoot ] do
+                    Directory.CreateDirectory path |> ignore
+
+                File.WriteAllText(
+                    manifest,
+                    """{"schema":"fsgg.portable-workspace-local-image/1","image":{"reference":"localhost/fsgg-portable-workspace:test@sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","id":"sha256:0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef","os":"linux","architecture":"amd64","user":"32768:32768"}}"""
+                )
+
+                let start =
+                    Diagnostics.ProcessStartInfo(
+                        Environment.ProcessPath,
+                        WorkingDirectory = repository,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false
+                    )
+
+                for argument in
+                    [
+                        "fsi"
+                        "eng/portable-workspace-executor-qualification.fsx"
+                        "--"
+                        "--fixture"
+                        "tests/portable-workspace/executor-qualification/fixture"
+                        "--image-manifest"
+                        manifest
+                        "--state-dir"
+                        state
+                        "--evidence"
+                        evidence
+                        "--podman"
+                        "/usr/bin/false"
+                        "--git"
+                        "/usr/bin/git"
+                        "--tar"
+                        "/usr/bin/tar"
+                        "--root"
+                        store
+                        "--runroot"
+                        runRoot
+                    ] do
+                    start.ArgumentList.Add argument
+
+                use child = Diagnostics.Process.Start start
+                let stdout = child.StandardOutput.ReadToEndAsync()
+                let stderr = child.StandardError.ReadToEndAsync()
+                child.WaitForExit()
+
+                Assert.Equal(2, child.ExitCode)
+                Assert.True(File.Exists evidence, stderr.GetAwaiter().GetResult())
+
+                use document = JsonDocument.Parse(File.ReadAllBytes evidence)
+                let first = document.RootElement.GetProperty("operations")[0]
+                Assert.Equal("RuntimeVersion", first.GetProperty("refusalStage").GetString())
+                Assert.Equal("True", first.GetProperty("helperOutputComplete").GetString())
+                Assert.Equal("RanToCompletion/RanToCompletion/RanToCompletion", first.GetProperty("helperReadStatus").GetString())
+                Assert.DoesNotContain("MissingMethodException", stdout.GetAwaiter().GetResult())
+            finally
+                if Directory.Exists temporary then
+                    Directory.Delete(temporary, true)
