@@ -1,0 +1,171 @@
+name: Coordination V2 fixed import
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: Read-only preflight or admitted protected effect
+        required: true
+        type: choice
+        default: preflight
+        options:
+          - preflight
+          - execute
+      resume_run_id:
+        description: Prior same-source run containing a recovery-state artifact
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: coordination-board-v2-fixed-import
+  cancel-in-progress: false
+
+jobs:
+  qualify-source:
+    name: qualify protected fixed source
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      receipt_sha256: ${{ steps.receipt.outputs.sha256 }}
+    steps:
+      - name: Check out the dispatched protected revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Qualify fixed operation source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          PYTHONDONTWRITEBYTECODE=1 python3 tests/coordination-board-v2-import/run.py
+      - name: Bind this run's operation request
+        id: receipt
+        shell: bash
+        env:
+          REQUESTED_OPERATION: ${{ inputs.operation }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFLOW_REVISION"
+          case "$REQUESTED_OPERATION" in preflight|execute) ;; *) exit 2 ;; esac
+          case "$RESUME_RUN_ID" in ''|*[!0-9]*) test -z "$RESUME_RUN_ID" ;; esac
+          python3 - <<'PY' > "$RUNNER_TEMP/coordination-board-v2-request.json"
+          import json, os
+          print(json.dumps({
+              "schema": "fsgg.coordination-board-v2-workflow-request/v1",
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "workflowRevision": os.environ["WORKFLOW_REVISION"],
+              "operation": os.environ["REQUESTED_OPERATION"],
+              "resumeRunId": os.environ["RESUME_RUN_ID"] or None,
+          }, sort_keys=True, separators=(",", ":")))
+          PY
+          digest="$(sha256sum "$RUNNER_TEMP/coordination-board-v2-request.json" | cut -d ' ' -f 1)"
+          echo "sha256=$digest" >> "$GITHUB_OUTPUT"
+      - name: Retain exact request receipt
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: coordination-board-v2-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/coordination-board-v2-request.json
+          if-no-files-found: error
+          retention-days: 30
+          compression-level: 0
+
+  operate:
+    name: fixed organization Projects operation
+    needs: [qualify-source]
+    if: github.ref == 'refs/heads/main'
+    environment: coordination-board-v2-import
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Check out the same protected revision
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Download this run's qualified request
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: coordination-board-v2-request-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/coordination-board-v2-request
+      - name: Verify qualified request
+        shell: bash
+        env:
+          EXPECTED_RECEIPT_SHA256: ${{ needs.qualify-source.outputs.receipt_sha256 }}
+          REQUESTED_OPERATION: ${{ inputs.operation }}
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+          WORKFLOW_REVISION: ${{ github.workflow_sha }}
+        run: |
+          set -euo pipefail
+          test -n "$WORKFLOW_REVISION"
+          receipt="$RUNNER_TEMP/coordination-board-v2-request/coordination-board-v2-request.json"
+          test "$(sha256sum "$receipt" | cut -d ' ' -f 1)" = "$EXPECTED_RECEIPT_SHA256"
+          python3 - "$receipt" <<'PY'
+          import json, os, sys
+          value = json.load(open(sys.argv[1], encoding="utf-8"))
+          expected = {
+              "schema": "fsgg.coordination-board-v2-workflow-request/v1",
+              "sourceSha": os.environ["GITHUB_SHA"],
+              "workflowRevision": os.environ["WORKFLOW_REVISION"],
+              "operation": os.environ["REQUESTED_OPERATION"],
+              "resumeRunId": os.environ["RESUME_RUN_ID"] or None,
+          }
+          if value != expected:
+              raise SystemExit("request receipt drift")
+          PY
+      - name: Recover a prior same-source operation state
+        if: inputs.operation == 'execute' && inputs.resume_run_id != ''
+        uses: actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0
+        with:
+          name: coordination-board-v2-state-${{ inputs.resume_run_id }}
+          path: ${{ runner.temp }}/coordination-board-v2-state
+          github-token: ${{ github.token }}
+          run-id: ${{ inputs.resume_run_id }}
+      - name: Mint the dedicated organization Projects credential
+        id: app-token
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.BOARD_V2_APP_ID }}
+          private-key: ${{ secrets.BOARD_V2_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: |
+            .github
+            FS.GG.Coordination
+          permission-organization-projects: write
+      - name: Run the fixed metered operation
+        shell: bash
+        env:
+          GH_TOKEN: ${{ steps.app-token.outputs.token }}
+          REQUESTED_OPERATION: ${{ inputs.operation }}
+        run: |
+          set -euo pipefail
+          if test "$REQUESTED_OPERATION" = preflight; then
+            python3 tools/coordination-board-v2-import.py preflight
+          else
+            mkdir -p "$RUNNER_TEMP/coordination-board-v2-state"
+            python3 tools/coordination-board-v2-import.py execute \
+              --state "$RUNNER_TEMP/coordination-board-v2-state/state.json" \
+              --admitted-source "$GITHUB_SHA"
+          fi
+      - name: Retain recovery state without credentials
+        if: always() && inputs.operation == 'execute'
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: coordination-board-v2-state-${{ github.run_id }}
+          path: ${{ runner.temp }}/coordination-board-v2-state/state.json
+          if-no-files-found: warn
+          retention-days: 30
+          compression-level: 0

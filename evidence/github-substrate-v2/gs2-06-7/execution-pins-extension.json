@@ -180,6 +180,18 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/coordination-board-v2-import.yml",
+      "sha256": "92ef5665fdce84ba89ee773f1c9c4181f05f6903d77ce9c2f80c88b5d66feef2",
+      "externalReferences": [
+        "actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803",
+        "actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f",
+        "actions/download-artifact@634f93cb2916e3fdff6788551b99b062d0335ce0",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1"
+      ],
+      "localReferences": []
     }
   ]
 }
