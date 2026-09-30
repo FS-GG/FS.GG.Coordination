@@ -86,6 +86,8 @@ module private TrustedLinuxFile =
     [<Literal>]
     let O_NOFOLLOW = 0x20000
     [<Literal>]
+    let O_NONBLOCK = 0x800
+    [<Literal>]
     let O_DIRECTORY = 0x10000
     [<Literal>]
     let ACL_TYPE_ACCESS = 0x8000
@@ -226,6 +228,36 @@ module private TrustedLinuxFile =
         && status.UserId = geteuid()
         && (status.Mode &&& 0x3Fu) = 0u
 
+    let pathKindAndSize path =
+        let mutable status = Unchecked.defaultof<TrustedLinuxStat>
+        if lstat(path, &status) <> 0 then None
+        else Some(status.Mode &&& 0xF000u, status.Size)
+
+    let digestRegularFile path (maximumBytes: int64) (timeout: TimeSpan) =
+        try
+            let descriptor = openFile(path, O_RDONLY ||| O_CLOEXEC ||| O_NOFOLLOW ||| O_NONBLOCK)
+            if descriptor < 0 then Error "portable-trusted-receiver-payload-refused"
+            else
+                use handle = new SafeFileHandle(nativeint descriptor, true)
+                let mutable status = Unchecked.defaultof<TrustedLinuxStat>
+                if fstat(descriptor, &status) <> 0
+                   || status.Mode &&& 0xF000u <> 0x8000u
+                   || status.Size < 0L
+                   || status.Size > maximumBytes then
+                    Error "portable-trusted-receiver-payload-refused"
+                else
+                    use stream = new FileStream(handle, FileAccess.Read, 8192, false)
+                    use memory = new MemoryStream(int status.Size)
+                    use deadline = new CancellationTokenSource(timeout)
+                    let copy = stream.CopyToAsync(memory, deadline.Token)
+                    try
+                        copy.GetAwaiter().GetResult()
+                        if memory.Length <> status.Size then Error "portable-trusted-receiver-payload-refused"
+                        else
+                            Ok(Convert.ToHexString(SHA256.HashData(memory.ToArray())).ToLowerInvariant(), status.Size)
+                    with _ -> Error "portable-trusted-receiver-payload-refused"
+        with _ -> Error "portable-trusted-receiver-payload-refused"
+
 type LinuxAdministratorPortableWorkspaceGrantReader() =
     interface IPortableWorkspaceTrustedGrantReader with
         member _.Read() = TrustedLinuxFile.read ()
@@ -339,6 +371,14 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
     let GitTimeoutSeconds = 5
     [<Literal>]
     let GitOutputLimit = 4 * 1024 * 1024
+    [<Literal>]
+    let MaximumWorktreeEntries = 8192
+    [<Literal>]
+    let MaximumWorktreeDepth = 64
+    [<Literal>]
+    let MaximumPayloadFileBytes = 16L * 1024L * 1024L
+    [<Literal>]
+    let MaximumPayloadBytes = 64L * 1024L * 1024L
 
     let digestFile path =
         try
@@ -417,24 +457,41 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
                         Error "portable-trusted-receiver-git-refused"
         with _ -> Error "portable-trusted-receiver-git-refused"
 
-    let worktreeInventory root =
+    let worktreeInventory root expectedPaths =
         try
             let root = Path.GetFullPath root
             let collected = ResizeArray<string>()
+            let expected = Set.ofList expectedPaths
             let mutable refused = false
-            let rec walk (directory: DirectoryInfo) =
-                for entry in directory.EnumerateFileSystemInfos() do
+            let mutable entries = 0
+            let mutable totalBytes = 0L
+            let deadline = Stopwatch.StartNew()
+            let rec walk depth (directory: DirectoryInfo) =
+                use iterator = directory.EnumerateFileSystemInfos().GetEnumerator()
+                while not refused && iterator.MoveNext() do
+                    let entry = iterator.Current
+                    entries <- entries + 1
+                    if entries > MaximumWorktreeEntries
+                       || depth > MaximumWorktreeDepth
+                       || deadline.Elapsed > TimeSpan.FromSeconds(float GitTimeoutSeconds) then
+                        refused <- true
                     if directory.FullName = root && entry.Name = ".git" then
-                        if not (entry :? DirectoryInfo) || not (isNull entry.LinkTarget) then refused <- true
-                    elif not (isNull entry.LinkTarget) then
-                        refused <- true
-                    elif entry.Attributes &&& FileAttributes.Directory = FileAttributes.Directory then
-                        walk (DirectoryInfo entry.FullName)
-                    elif entry :? FileInfo then
-                        collected.Add(Path.GetRelativePath(root, entry.FullName).Replace('\\', '/'))
-                    else
-                        refused <- true
-            walk (DirectoryInfo root)
+                        match TrustedLinuxFile.pathKindAndSize entry.FullName with
+                        | Some(kind, _) when kind = 0x4000u -> ()
+                        | _ -> refused <- true
+                    elif not refused then
+                        match TrustedLinuxFile.pathKindAndSize entry.FullName with
+                        | Some(kind, _) when kind = 0x4000u -> walk (depth + 1) (DirectoryInfo entry.FullName)
+                        | Some(kind, size) when kind = 0x8000u ->
+                            let relative = Path.GetRelativePath(root, entry.FullName).Replace('\\', '/')
+                            if not (expected.Contains relative) || size < 0L || size > MaximumPayloadFileBytes then
+                                refused <- true
+                            else
+                                totalBytes <- totalBytes + size
+                                if totalBytes > MaximumPayloadBytes then refused <- true
+                                else collected.Add relative
+                        | _ -> refused <- true
+            walk 0 (DirectoryInfo root)
             if refused then Error "portable-trusted-receiver-layout-refused"
             else Ok(collected |> Seq.sortWith (fun left right -> StringComparer.Ordinal.Compare(left, right)) |> Seq.toList)
         with _ -> Error "portable-trusted-receiver-layout-refused"
@@ -475,20 +532,28 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
                     let expectedPaths = grant.ProjectedPayload |> List.map _.Path |> List.sortWith compare
                     if actualPaths <> expectedPaths then Error "portable-trusted-receiver-inventory-refused"
                     else
-                        worktreeInventory grant.WorkspaceRoot
+                        worktreeInventory grant.WorkspaceRoot expectedPaths
                         |> Result.bind (fun worktreePaths ->
                             if worktreePaths <> expectedPaths then Error "portable-trusted-receiver-dirty-refused"
                             else
+                                let hashingDeadline = Stopwatch.StartNew()
                                 grant.ProjectedPayload
                                 |> List.fold (fun state item ->
-                                    state |> Result.bind (fun () ->
+                                    state |> Result.bind (fun totalBytes ->
                                         let full = Path.GetFullPath(item.Path, grant.WorkspaceRoot)
                                         let root = Path.GetFullPath(grant.WorkspaceRoot) + string Path.DirectorySeparatorChar
-                                        let info = FileInfo full
-                                        if not (full.StartsWith(root, StringComparison.Ordinal)) || not info.Exists || not (isNull info.LinkTarget) then
+                                        if not (full.StartsWith(root, StringComparison.Ordinal)) then
                                             Error "portable-trusted-receiver-payload-refused"
                                         else
-                                            digestFile full |> Result.bind (fun actual -> if actual = item.Sha256 then Ok() else Error "portable-trusted-receiver-dirty-refused"))) (Ok()))))
+                                            let remaining = TimeSpan.FromSeconds(float GitTimeoutSeconds) - hashingDeadline.Elapsed
+                                            if remaining <= TimeSpan.Zero then Error "portable-trusted-receiver-payload-refused"
+                                            else
+                                                TrustedLinuxFile.digestRegularFile full MaximumPayloadFileBytes remaining
+                                                |> Result.bind (fun (actual, size) ->
+                                                    if totalBytes + size > MaximumPayloadBytes then Error "portable-trusted-receiver-payload-refused"
+                                                    elif actual = item.Sha256 then Ok(totalBytes + size)
+                                                    else Error "portable-trusted-receiver-dirty-refused"))) (Ok 0L)
+                                |> Result.map ignore)))
 
     interface IPortableWorkspaceTrustedReceiverInspector with
         member _.Validate grant = validate grant

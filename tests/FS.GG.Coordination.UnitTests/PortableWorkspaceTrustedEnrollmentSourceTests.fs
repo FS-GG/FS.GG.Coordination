@@ -245,7 +245,8 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
                 ImageManifestDigest = Fixture.sha; ImageConfigDigest = Fixture.sha; ImageRecipeSha256 = PortableWorkspacePythonHelloPolicy.RecipeSha256
             }
         let inspector = LinuxPortableWorkspaceTrustedReceiverInspector() :> IPortableWorkspaceTrustedReceiverInspector
-        Assert.Equal(Ok(), inspector.Validate grant)
+        let initialInspection = inspector.Validate grant
+        Assert.True((initialInspection = Ok()), sprintf "Initial inspection failed: %A" initialInspection)
 
         let marker = Path.Combine(temporary.Path, "hostile-git-executed")
         let fsmonitor = Path.Combine(temporary.Path, "slow-oversized-git-helper")
@@ -270,7 +271,38 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
             Environment.SetEnvironmentVariable("GIT_DIR", oldGitDir)
             Environment.SetEnvironmentVariable("GIT_CONFIG_GLOBAL", oldGitConfig)
         Assert.Equal(Error "portable-trusted-receiver-tree-refused", inspector.Validate { grant with ReceiverTree = Fixture.tree })
-        File.AppendAllText(Path.Combine(receiver, "python", "test.py"), "# changed\n")
+
+        let productFile = Path.Combine(receiver, "python", "test.py")
+        File.Delete productFile
+        let fifoStart = ProcessStartInfo("/usr/bin/mkfifo", UseShellExecute = false)
+        fifoStart.ArgumentList.Add productFile
+        use fifo = Process.Start fifoStart
+        fifo.WaitForExit()
+        Assert.Equal(0, fifo.ExitCode)
+        let fifoElapsed = Stopwatch.StartNew()
+        Assert.Equal(Error "portable-trusted-receiver-layout-refused", inspector.Validate grant)
+        fifoElapsed.Stop()
+        Assert.True(fifoElapsed.Elapsed < TimeSpan.FromSeconds 2.0, $"FIFO refusal took %O{fifoElapsed.Elapsed}")
+        File.Delete productFile
+        File.WriteAllText(productFile, "print('ok')\n")
+
+        let extra = Path.Combine(receiver, "untracked.txt")
+        File.WriteAllText(extra, "extra")
+        Assert.Equal(Error "portable-trusted-receiver-layout-refused", inspector.Validate grant)
+        File.Delete extra
+
+        let mutable deep = receiver
+        for index in 1 .. 66 do
+            deep <- Path.Combine(deep, $"d%d{index}")
+            Directory.CreateDirectory deep |> ignore
+        Assert.Equal(Error "portable-trusted-receiver-layout-refused", inspector.Validate grant)
+        Directory.Delete(Path.Combine(receiver, "d1"), true)
+
+        use oversized = new FileStream(productFile, FileMode.Create, FileAccess.Write, FileShare.None)
+        oversized.SetLength(16L * 1024L * 1024L + 1L)
+        oversized.Dispose()
+        Assert.Equal(Error "portable-trusted-receiver-layout-refused", inspector.Validate grant)
+        File.WriteAllText(productFile, "print('ok')\n# changed\n")
         Assert.Equal(Error "portable-trusted-receiver-dirty-refused", inspector.Validate grant)
 
     [<Fact>]
