@@ -49,6 +49,28 @@ module LearningMainAdmission =
         | Descendant parent -> "descendant", Some parent
         | Retry parent -> "retry", Some parent
 
+    let authoritativeOperationalReadiness
+        (clock: TimeProvider)
+        (options: LearningOperationalAdmissionOptions)
+        (authority: ILearningOperationalAuthoritySource)
+        (cohort: ILearningOperationalCohortSource)
+        (census: ILearningOperationalCensusSource)
+        =
+        if not options.Enabled then
+            Error "learning-operational-readiness-composition-disabled"
+        elif options.MaximumEvidenceAge <= TimeSpan.Zero then
+            Error "learning-operational-readiness-composition-age-refused"
+        else
+            AuthoritativeLearningOperationalReadinessSource(
+                clock,
+                options.MaximumEvidenceAge,
+                authority,
+                cohort,
+                census
+            )
+            :> ILearningOperationalReadinessSource
+            |> Ok
+
     let private treatmentMatches (prepared: PreparedLearningTreatment) (treatment: DurableLearningTreatment) =
         let input = prepared.Input
 
