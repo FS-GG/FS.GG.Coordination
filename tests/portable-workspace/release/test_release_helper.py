@@ -42,15 +42,15 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="portable-release-test-") as temporary:
         work = Path(temporary)
-        package = work / "FS.GG.Coordination.Cli.0.2.0.nupkg"
+        package = work / "FS.GG.Coordination.Cli.0.2.1.nupkg"
         with zipfile.ZipFile(package, "w") as archive:
             archive.writestr("tools/net10.0/any/FS.GG.Coordination.Orchestration.Execution.dll", b"MZ-test")
         package_manifest = work / "callable-cli-release-manifest.json"
         write_json(package_manifest, {
             "schema": "fsgg.coordination.callable-cli-release-preparation/1",
             "packageId": "FS.GG.Coordination.Cli",
-            "version": "0.2.0",
-            "tag": "v0.2.0",
+            "version": "0.2.1",
+            "tag": "v0.2.1",
             "sourceCommit": source,
             "sourceTree": tree,
             "packageSha256": digest(package.read_bytes()),
@@ -134,7 +134,7 @@ def main() -> None:
 
         arguments = [
             "dotnet", "fsi", "eng/portable-workspace-release.fsx", "--", "prepare",
-            "--source", source, "--version", "0.2.0",
+            "--source", source, "--version", "0.2.1",
             "--package", str(package), "--package-manifest", str(package_manifest),
             "--image-archive", str(image_archive), "--image-manifest", str(qualified_manifest),
             "--image-qualification", str(qualification), "--executor-evidence", str(evidence),
@@ -142,8 +142,8 @@ def main() -> None:
         output = work / "release"
         subprocess.run([*arguments, "--output", str(output)], cwd=ROOT, check=True)
         expected = {
-            "portable-workspace-v1-0.2.0.zip",
-            "portable-workspace-linux-amd64-0.2.0.oci.tar",
+            "portable-workspace-v1-0.2.1.zip",
+            "portable-workspace-linux-amd64-0.2.1.oci.tar",
             "portable-workspace-release-manifest.json",
         }
         assert {item.name for item in output.iterdir()} == expected

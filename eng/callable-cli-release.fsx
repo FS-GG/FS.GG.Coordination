@@ -128,8 +128,8 @@ let verify () =
 match command with
 | "prepare" ->
     require
-        (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0" ]))
-        "only reviewed callable CLI versions 0.1.1 through 0.1.7 and 0.2.0 may be prepared"
+        (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0"; "0.2.1" ]))
+        "only reviewed callable CLI versions 0.1.1 through 0.1.7 and 0.2.0 through 0.2.1 may be prepared"
     require (projectPackageVersion () = version) "requested version does not equal the callable CLI PackageVersion"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" [ "rev-parse"; "HEAD" ] = source) "source does not equal HEAD"

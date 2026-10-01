@@ -4,9 +4,10 @@
 publication and receiver qualification. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** P1 and P2 are complete. The exact 0.2.0 producer candidate was prepared and qualified from protected
-source. Its publication workflow is pinned to the retained candidate and independently verified digests; P3
-publication remains pending. Receiver pins and adoption remain pending, as do P4 and P5.
+**Status:** P1 and P2 are complete. The exact 0.2.0 producer is published and independently read back from both
+feeds and its immutable GitHub release. P3 remains open until SDD and Templates land their exact receiver pins.
+P4 source is reserved under the independent 0.2.1 successor identity; installed receiver qualification,
+explicit fresh adoption and P5 remain pending.
 
 ## Authority and compatibility
 
@@ -155,16 +156,26 @@ image, manifest and custody identities while setting publication, tag and activa
 
 ## P3 qualified publication pins
 
-The 0.2.0 publication workflow is pinned to the exact protected source, tree, package, bundle, OCI archive,
+The 0.2.0 publication workflow was pinned to the exact protected source, tree, package, bundle, OCI archive,
 portable manifest, successful preparation run, retained artifact and artifact archive listed above. It rechecks
 the live immutable preparation identities, reproduces the package, reruns all six packaged operations, requires
 zero remaining execution roots, observes collisions, verifies provenance, publishes the same package bytes to
 GitHub Packages before nuget.org, reads both feeds back and creates the tag and release only after both feeds
-settle. Publication is **PENDING**; pinning this source performs no feed, tag, release or activation effect.
+settle. Recovery run `36813849644` completed every gate. Release `400643766` and tag `v0.2.0` resolve to frozen
+commit `d25b9eaec991c94593adcecda6869d07dabdfb43`; all five retained assets match the hashes above. The private
+root readback receipt has SHA-256 `0b28f16f45a52d7d8f7176c83d5eceb94b889b353c996eab6a07062cc3303b9f`.
+The release API's `target_commitish` metadata says `main`, while the actual immutable tag readback binds the
+required frozen commit. Producer publication is **CLOSED**. Installation or activation is not implied.
+
+SDD and Templates receiver pin candidates bind version 0.2.0, the frozen source and tree, release/run identities,
+and exact package, contract bundle, OCI archive and portable manifest digests. Both candidates keep adoption
+disabled and require separate installed qualification. P3 remains open until those receiver pins land on their
+protected branches and are read back.
 
 The accepted P4 source from PR #905, exact candidate `2933d7e4dd77fb321c001aeee4b78efa0eb63346` and protected
-merge `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, is excluded from the frozen 0.2.0 bytes. Its independently
-compiled successor remains reserved for version 0.2.1 and cannot enter this candidate under the 0.2.0 identity.
+merge `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, is excluded from the frozen 0.2.0 bytes. The current producer
+source assigns that successor package version 0.2.1 and restricts future preparation to 0.2.1. This is source
+preparation only: no 0.2.1 package, image, tag or release is claimed, and P4 remains open.
 
 ## Workspace impact
 
