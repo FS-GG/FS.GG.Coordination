@@ -151,7 +151,7 @@ jobs:
           [[ "$P_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
           test "$(git rev-parse "$P_SOURCE^{tree}")" = "$P_TREE"
           test ! -e "$STAGE_ROOT"; test ! -e "$STAGE_OUTPUT"
-          install -d -m 0700 "$STAGE_ROOT"
+          mkdir -m 0700 -- "$STAGE_ROOT"
           printf 'stage_root_owned=true\n' >> "$GITHUB_OUTPUT"
       - name: Acquire exact public producer records and archives
         env:

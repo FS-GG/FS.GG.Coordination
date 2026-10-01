@@ -123,6 +123,27 @@ def main() -> None:
         assert blocked_sentinel.read_bytes() == b"output"
         blocked_sentinel.unlink(); blocked_output.rmdir()
 
+        raced_root = Path("/tmp/p4-public-stage-991004-1"); raced_output = Path("/tmp/p4-public-stage-output-991004-1")
+        fake_bin = temporary_root / "race-bin"; fake_bin.mkdir()
+        fake_mkdir = fake_bin / "mkdir"
+        fake_mkdir.write_text("""#!/usr/bin/env bash
+set -euo pipefail
+target="${@: -1}"
+/usr/bin/mkdir -m 0700 -- "$target"
+printf unowned > "$target/sentinel"
+exec /usr/bin/mkdir "$@"
+""")
+        fake_mkdir.chmod(0o700)
+        raced_marker = temporary_root / "raced-output"; raced_marker.write_text("")
+        raced = {**common, "GITHUB_RUN_ID": "991004", "STAGE_ROOT": str(raced_root),
+                 "STAGE_OUTPUT": str(raced_output), "GITHUB_OUTPUT": str(raced_marker),
+                 "PATH": str(fake_bin) + os.pathsep + os.environ["PATH"]}
+        result = run_shell(reservation, raced); assert result.returncode != 0
+        assert raced_marker.read_text() == "" and (raced_root / "sentinel").read_bytes() == b"unowned"
+        result = run_shell(cleanup, {**raced, "STAGE_ROOT_OWNED": ""}); assert result.returncode == 0, result.stderr
+        assert (raced_root / "sentinel").read_bytes() == b"unowned"
+        (raced_root / "sentinel").unlink(); raced_root.rmdir()
+
     with tempfile.TemporaryDirectory(prefix="provider-input-") as temporary:
         root = Path(temporary)
         paths = {
