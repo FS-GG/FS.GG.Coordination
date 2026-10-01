@@ -61,6 +61,46 @@ type ILearningExecutionBindingStore =
         assignmentId: Guid * attemptId: Guid * CancellationToken -> Task<Result<LearningExecutionBinding, string>>
 
 [<RequireQualifiedAccess>]
+type LearningExecutionOwnerPhase =
+    | Prospective
+    | AssignedUnlaunched
+    | LaunchCommittedUnknown
+    | Started
+    | Terminal
+    | EvidenceUnavailable
+
+type LearningExecutionOwnerRecord =
+    {
+        ItemId: string
+        OriginalItemId: string
+        Role: string option
+        Binding: LearningExecutionBinding option
+        BindingSha256: string option
+        RouteBindingSha256: string option
+        SessionRevision: int64 option
+        FirstDispatchSha256: string option
+        CommandSha256: string option
+        Phase: LearningExecutionOwnerPhase
+    }
+
+type LearningExecutionOwnerPopulation =
+    {
+        Key: LearningOperationalWindowKey
+        RosterSource: LearningOperationalProducerIdentity
+        StoreGenerationFence: int64
+        ObservedAt: DateTimeOffset
+        Records: LearningExecutionOwnerRecord list
+    }
+
+type ILearningExecutionOwnerSource =
+    /// Reads one complete, repeatable owner snapshot. Implementations refuse
+    /// more than 256 bindings, 256 events or commands per attempt, an 8 MiB
+    /// binding population, a 4 MiB event history, or a 30 second total query.
+    abstract ReadLearningExecutionOwners:
+        LearningOperationalRosterIdentity * CancellationToken ->
+            Task<Result<LearningExecutionOwnerPopulation, string>>
+
+[<RequireQualifiedAccess>]
 module LearningExecutionBinding =
     [<Literal>]
     let schema = "fsgg.orchestration.learning-execution-binding/1"

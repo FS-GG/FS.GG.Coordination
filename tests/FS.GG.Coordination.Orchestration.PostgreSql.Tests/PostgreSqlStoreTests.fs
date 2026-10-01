@@ -63,6 +63,27 @@ module private Fixture =
         |> Convert.ToHexString
         |> fun value -> value.ToLowerInvariant()
 
+    let dispatchSha
+        (kind: string)
+        (binding: LearningExecutionBinding)
+        (revision: int64)
+        (identity: string)
+        (payload: byte array)
+        =
+        let owner =
+            String.concat
+                "\n"
+                [ "fsgg.learning-execution-first-dispatch/1"
+                  kind
+                  binding.AssignmentId.ToString("D")
+                  binding.AttemptId.ToString("D")
+                  binding.Generation.ToString(Globalization.CultureInfo.InvariantCulture)
+                  revision.ToString(Globalization.CultureInfo.InvariantCulture)
+                  identity ]
+            + "\n"
+
+        Array.concat [ Encoding.ASCII.GetBytes owner; payload ] |> sha
+
     let run (executable: string) (arguments: string) =
         let startInfo = ProcessStartInfo(executable, arguments)
         startInfo.RedirectStandardOutput <- true
@@ -4122,6 +4143,244 @@ finally:
             let restarted = PostgreSqlExecutionStore(options) :> ILearningExecutionBindingStore
             let! recovered = restarted.ReadLearningExecution(assignmentId, attemptId, cancellationToken)
             Assert.Equal(Ok value, recovered)
+        }
+
+    [<Fact>]
+    member _.``learning execution owner snapshot preserves prospective unlaunched lost response and terminal evidence``() =
+        task {
+            let! source, identity = Fixture.reset ()
+            use source = source
+            do! PostgreSqlExecutionSchema.migrate source cancellationToken
+            let options = { Fixture.options source identity 0L with RuntimeSchemaVersion = 2 }
+            let now = DateTimeOffset.UtcNow
+            let original = "R_learn_owner:1:I_learn_owner:1"
+            let windowRequest: LearningOperationalWindowRequest =
+                { Enabled = true; WindowId = "learn-owner-window"; SeedReferenceSha256 = String.replicate 64 "7"
+                  Repository = LearningOperationalWindow.policyRepository; CalendarAdmissionBlock = "2026-10-01/2026-10-29"
+                  OriginalItemId = original; AuthorityId = "owner"; AuthorityRevision = "1"; AuthoritySha256 = String.replicate 64 "a"
+                  OptedInAt = now.AddMinutes -2.; EnrollmentOpensAt = now.AddMinutes -1.; EnrollmentClosesAt = now.AddDays 28. }
+            let readiness: LearningOperationalReadinessEvidence =
+                { Schema = LearningOperationalWindow.readinessSchema; WindowId = windowRequest.WindowId; Repository = windowRequest.Repository
+                  WorkClassId = LearningOperationalWindow.workClassId; OriginalItemId = original
+                  AcceptedPlanSha256 = String.replicate 64 "1"; CanonicalWorkItemSha256 = String.replicate 64 "2"
+                  CoverageRosterSha256 = String.replicate 64 "3"; DispatchCensusSha256 = String.replicate 64 "4"
+                  NativeDeliverySha256 = String.replicate 64 "5"; SharedCostRosterSha256 = String.replicate 64 "6"
+                  ObservedAt = now.AddMinutes -1.; ExpiresAt = now.AddMinutes 5.; CompleteNativeUsage = true
+                  UnassignedSharedAllocation = true; Provenance = "owner-query-fixture" }
+            let window = (LearningOperationalWindow.prepare now windowRequest readiness |> Result.defaultWith failwith).Binding
+            let members =
+                [ "root", original; "child", "member-child"; "retry", "member-retry"; "review", "member-review"
+                  "rescue", "member-rescue"; "repair", "member-repair" ]
+                |> List.map (fun (role, item) -> { ItemId = item; OriginalItemId = original; Role = role })
+            let roster: LearningOperationalRosterIdentity =
+                { Key = { WindowId = window.WindowId; OriginalItemId = original }
+                  Source = { ProducerId = "observer"; Revision = "observer:1"; RecordId = String.replicate 64 "8"; ObservedAt = now }
+                  AdmittedAt = now; AcceptedPlanSha256 = readiness.AcceptedPlanSha256
+                  CanonicalWorkItemSha256 = readiness.CanonicalWorkItemSha256; Members = members }
+            let bindings = PostgreSqlExecutionStore(options) :> ILearningExecutionBindingStore
+            let routes = PostgreSqlExecutionStore(options) :> IExecutorCommandStore
+            let journal = PostgreSqlExecutionStore(options) :> IExecutionSessionJournal
+
+            let addAttempt item = task {
+                let assignmentId, attemptId = Guid.NewGuid(), Guid.NewGuid()
+                let unsigned: LearningExecutionBinding =
+                    { Schema = LearningExecutionBinding.operationalSchema; BindingSha256 = ""
+                      TreatmentAssignmentSha256 = String.replicate 64 "a"; SubjectBindingSha256 = String.replicate 64 "b"
+                      TreatmentOwnerPrincipalId = "owner"; TreatmentWorkflowRevision = "7"; TreatmentGeneration = 3L; TreatmentAssignedAt = now
+                      TreatmentProposalSha256 = String.replicate 64 "1"; TreatmentContextManifestSha256 = String.replicate 64 "2"; TreatmentArm = window.Arm
+                      ItemId = item; OriginalItemId = original
+                      Relation = (if item = original then "original" elif item = "member-retry" then "retry" else "descendant")
+                      ParentItemId = (if item = original then None else Some original); AssignmentId = assignmentId; AttemptId = attemptId; Generation = 3L
+                      ProposalSha256 = String.replicate 64 "c"; ContextManifestSha256 = String.replicate 64 "d"; RenderedInputSha256 = String.replicate 64 "e"
+                      Requested = { Model = Some "gpt-5.6-sol"; Effort = Some "medium" }; Deadline = now.AddMinutes 30.; MaximumRuntimeSeconds = 1800L; MaximumAttempts = 1
+                      SnapshotId = "snapshot"; SnapshotDigest = String.replicate 64 "f"; SnapshotCapturedAt = now
+                      ManifestId = "manifest"; ManifestVersion = "1"; ExperimentContractId = "learn-01-current-focused-v1"
+                      PolicyRepository = window.PolicyRepository; PolicyRevision = window.PolicyRevision; PolicyPath = window.PolicyPath
+                      PolicySha256 = window.PolicySha256; PolicyStatus = window.PolicyStatus; WorkClassId = window.WorkClassId
+                      RubricVersion = "1"; RecipeId = "recipe"; RecipeDigest = String.replicate 64 "0"; Arm = window.Arm
+                      QualificationOnly = false; OperationalWindow = Some window }
+                let binding = { unsigned with BindingSha256 = LearningExecutionBinding.digest unsigned }
+                let! bound = bindings.BindLearningExecution(binding, cancellationToken)
+                bound |> Result.defaultWith failwith |> ignore
+                let route0: ExecutorRouteBinding =
+                    { Schema = ExecutorWire.routeBindingSchema; BindingSha256 = ""; WorkItemPersistenceId = item
+                      RouteId = Guid.NewGuid(); RouteOperationId = assignmentId; ProcessOperationId = assignmentId
+                      AssignmentId = assignmentId; AttemptId = attemptId; CandidateId = Guid.NewGuid(); Generation = 3L
+                      RepositoryBinding = "FS-GG/FS.GG.Coordination"; BaselineObjectId = String.replicate 40 "a"
+                      PromptDigest = String.replicate 64 "b"; WorkspaceManifestSha256 = String.replicate 64 "c"
+                      ExecutorBinding = "runner"; ParentAttemptId = Nullable(); ParentGeneration = Nullable(); TelemetryRelation = null }
+                let route = { route0 with BindingSha256 = ExecutorWire.routeBindingDigest route0 }
+                let! routeResult = routes.BindRoute(ExecutorWire.encodeRouteBinding route, cancellationToken)
+                Assert.True(Result.isOk routeResult)
+                let intent: LaunchIntent =
+                    { Schema = ExecutionProtocol.launchSchema; Key = { AssignmentId = assignmentId; AttemptId = attemptId; Generation = 3L }
+                      InputDigest = String.replicate 64 "b"; Workspace = "/workspace"; Requested = binding.Requested
+                      Limits = { Deadline = binding.Deadline; MaximumRuntime = TimeSpan.FromSeconds(float binding.MaximumRuntimeSeconds); MaximumAttempts = 1 }
+                      RecordedAt = now }
+                let! appended = journal.AppendAttempt(assignmentId, attemptId, 0L, LaunchIntentRecorded intent, cancellationToken)
+                Assert.Equal(Appended, appended)
+                return binding, route, intent
+            }
+
+            let! unlaunched, _, _ = addAttempt original
+            let! lost, _, _ = addAttempt "member-child"
+            let lostAttemptEvent = LaunchAttemptRecorded(1, now)
+            let! lostAppend = journal.AppendAttempt(lost.AssignmentId, lost.AttemptId, 1L, lostAttemptEvent, cancellationToken)
+            Assert.Equal(Appended, lostAppend)
+            let! terminal, _, _ = addAttempt "member-retry"
+            let! terminalAttempt = journal.AppendAttempt(terminal.AssignmentId, terminal.AttemptId, 1L, LaunchAttemptRecorded(1, now), cancellationToken)
+            Assert.Equal(Appended, terminalAttempt)
+            let observation: SessionObservation =
+                { Provider = { Provider = "fixture"; AdapterVersion = "1" }
+                  Session = ProviderSessionReference.create "session" |> Result.defaultWith failwith
+                  Resolved = { Model = Some "gpt-5.6-sol"; Effort = Some "medium" }; Lifecycle = Failed
+                  Output = []; LifecycleReferences = []; Usage = { Values = Map.empty; Cost = CostUnknown "fixture" }
+                  Candidate = None; ObservedAt = now }
+            let! observed = journal.AppendAttempt(terminal.AssignmentId, terminal.AttemptId, 2L, ObservationRecorded observation, cancellationToken)
+            Assert.Equal(Appended, observed)
+            let! cancelled, _, _ = addAttempt "member-rescue"
+            let! cancelledAttempt = journal.AppendAttempt(cancelled.AssignmentId, cancelled.AttemptId, 1L, LaunchAttemptRecorded(1, now), cancellationToken)
+            Assert.Equal(Appended, cancelledAttempt)
+            let! cancelledObserved = journal.AppendAttempt(cancelled.AssignmentId, cancelled.AttemptId, 2L, ObservationRecorded { observation with Lifecycle = SessionLifecycle.Cancelled; Session = ProviderSessionReference.create "cancelled-session" |> Result.defaultWith failwith }, cancellationToken)
+            Assert.Equal(Appended, cancelledObserved)
+            let! outbox, _, outboxIntent = addAttempt "member-review"
+            let command0 =
+                { Schema = ExecutorWire.commandSchema; CommandId = Guid.NewGuid(); BodySha256 = ""; Kind = "launch"
+                  WorkItemPersistenceId = outbox.ItemId; RouteOperationId = outbox.AssignmentId
+                  AssignmentId = outbox.AssignmentId; AttemptId = outbox.AttemptId; CandidateId = Guid.NewGuid()
+                  Generation = outbox.Generation; ExpectedRevision = 1L; RecordedAt = now; Deadline = outbox.Deadline
+                  MaximumRuntimeSeconds = outbox.MaximumRuntimeSeconds; MaximumAttempts = 1; Workspace = outboxIntent.Workspace
+                  RequestedModel = "gpt-5.6-sol"; RequestedEffort = "medium"; InputDigest = outboxIntent.InputDigest
+                  ExecutorBinding = "runner"; ContentOffset = 0L; ContentLength = 0 }
+            let command = { command0 with BodySha256 = ExecutorWire.commandDigest command0 }
+            use insertConnection = source.CreateConnection()
+            do! insertConnection.OpenAsync cancellationToken
+            use insertCommand = new NpgsqlCommand("INSERT INTO fsgg_orchestration.executor_command(command_id,body_sha256,assignment_id,attempt_id,generation,expected_revision,deadline,payload,durable_revision,visible,created_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,true,$10)", insertConnection)
+            insertCommand.Parameters.AddWithValue(command.CommandId) |> ignore
+            insertCommand.Parameters.AddWithValue(command.BodySha256) |> ignore
+            insertCommand.Parameters.AddWithValue(command.AssignmentId) |> ignore
+            insertCommand.Parameters.AddWithValue(command.AttemptId) |> ignore
+            insertCommand.Parameters.AddWithValue(command.Generation) |> ignore
+            insertCommand.Parameters.AddWithValue(command.ExpectedRevision) |> ignore
+            insertCommand.Parameters.AddWithValue(command.Deadline) |> ignore
+            insertCommand.Parameters.AddWithValue(ExecutorWire.encodeCommand command) |> ignore
+            insertCommand.Parameters.AddWithValue(1L) |> ignore
+            insertCommand.Parameters.AddWithValue(now) |> ignore
+            let! inserted = insertCommand.ExecuteNonQueryAsync cancellationToken
+            Assert.Equal(1, inserted)
+            let! laterRevision, _, _ = addAttempt "outside-revision"
+            let! intervening = journal.AppendAttempt(laterRevision.AssignmentId, laterRevision.AttemptId, 1L, CancelRequested now, cancellationToken)
+            Assert.Equal(Appended, intervening)
+            let! laterAttempt = journal.AppendAttempt(laterRevision.AssignmentId, laterRevision.AttemptId, 2L, lostAttemptEvent, cancellationToken)
+            Assert.Equal(Appended, laterAttempt)
+
+            let! result = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            let population = result |> Result.defaultWith failwith
+            Assert.Equal(7, population.Records.Length)
+            Assert.Equal(LearningExecutionOwnerPhase.AssignedUnlaunched, population.Records |> List.find (fun r -> r.ItemId = original) |> _.Phase)
+            let lostRecord = population.Records |> List.find (fun r -> r.ItemId = "member-child")
+            Assert.Equal(LearningExecutionOwnerPhase.LaunchCommittedUnknown, lostRecord.Phase)
+            let eventIdentity = SessionEventCodec.identity lostAttemptEvent
+            let eventPayload = SessionEventCodec.encode lostAttemptEvent
+            Assert.Equal(Some(Fixture.dispatchSha "event" lost 2L eventIdentity eventPayload), lostRecord.FirstDispatchSha256)
+            let terminalRecord = population.Records |> List.find (fun r -> r.ItemId = "member-retry")
+            Assert.Equal(LearningExecutionOwnerPhase.Terminal, terminalRecord.Phase)
+            Assert.NotEqual(lostRecord.FirstDispatchSha256, terminalRecord.FirstDispatchSha256)
+            let laterRecord = population.Records |> List.find (fun r -> r.ItemId = "outside-revision")
+            Assert.Equal(Some(Fixture.dispatchSha "event" laterRevision 3L eventIdentity eventPayload), laterRecord.FirstDispatchSha256)
+            Assert.NotEqual(lostRecord.FirstDispatchSha256, laterRecord.FirstDispatchSha256)
+            Assert.Equal(LearningExecutionOwnerPhase.Terminal, population.Records |> List.find (fun r -> r.ItemId = "member-rescue") |> _.Phase)
+            let outboxRecord = population.Records |> List.find (fun r -> r.ItemId = "member-review")
+            Assert.Equal(LearningExecutionOwnerPhase.LaunchCommittedUnknown, outboxRecord.Phase)
+            Assert.Equal(Some command.BodySha256, outboxRecord.CommandSha256)
+            Assert.Equal(
+                Some(
+                    Fixture.dispatchSha
+                        "command"
+                        outbox
+                        1L
+                        (command.CommandId.ToString("D") + ":" + command.BodySha256)
+                        (ExecutorWire.encodeCommand command)
+                ),
+                outboxRecord.FirstDispatchSha256
+            )
+            Assert.Equal(1, population.Records |> List.filter (fun r -> r.Phase = LearningExecutionOwnerPhase.Prospective) |> List.length)
+            let! repeated = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            Assert.True(population.Records = (repeated |> Result.defaultWith failwith).Records)
+            let interveningEvent = CancelRequested(now.AddTicks 1L)
+            let interveningPayload = SessionEventCodec.encode interveningEvent
+            use moveRevision = new NpgsqlCommand("UPDATE fsgg_orchestration.execution_event SET revision=3 WHERE assignment_id=$1 AND attempt_id=$2 AND revision=2", insertConnection)
+            moveRevision.Parameters.AddWithValue(lost.AssignmentId) |> ignore
+            moveRevision.Parameters.AddWithValue(lost.AttemptId) |> ignore
+            moveRevision.Parameters.AddWithValue(SessionEventCodec.identity interveningEvent) |> ignore
+            moveRevision.Parameters.AddWithValue(SessionEventCodec.schema) |> ignore
+            moveRevision.Parameters.AddWithValue(interveningPayload) |> ignore
+            moveRevision.Parameters.AddWithValue(now) |> ignore
+            Assert.Equal(1, moveRevision.ExecuteNonQuery())
+            moveRevision.CommandText <- "INSERT INTO fsgg_orchestration.execution_event(assignment_id,attempt_id,revision,event_identity,schema,payload,recorded_at) VALUES($1,$2,2,$3,$4,$5,$6)"
+            Assert.Equal(1, moveRevision.ExecuteNonQuery())
+            moveRevision.CommandText <- "UPDATE fsgg_orchestration.execution_stream SET last_revision=3 WHERE assignment_id=$1 AND attempt_id=$2"
+            Assert.Equal(1, moveRevision.ExecuteNonQuery())
+            let! movedRevision = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            let movedRecord = (movedRevision |> Result.defaultWith failwith).Records |> List.find (fun r -> r.ItemId = "member-child")
+            Assert.Equal(Some(Fixture.dispatchSha "event" lost 3L eventIdentity eventPayload), movedRecord.FirstDispatchSha256)
+            Assert.NotEqual(lostRecord.FirstDispatchSha256, movedRecord.FirstDispatchSha256)
+            moveRevision.CommandText <- "DELETE FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 AND revision=2"
+            Assert.Equal(1, moveRevision.ExecuteNonQuery())
+            moveRevision.CommandText <- "UPDATE fsgg_orchestration.execution_event SET revision=2 WHERE assignment_id=$1 AND attempt_id=$2 AND revision=3"
+            Assert.Equal(1, moveRevision.ExecuteNonQuery())
+            moveRevision.CommandText <- "UPDATE fsgg_orchestration.execution_stream SET last_revision=2 WHERE assignment_id=$1 AND attempt_id=$2"
+            Assert.Equal(1, moveRevision.ExecuteNonQuery())
+            let invalidRoster = { roster with Members = { roster.Members.Head with Role = "child" } :: roster.Members.Tail }
+            let! refused = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(invalidRoster, cancellationToken)
+            Assert.Equal(Error "learning-execution-owner-roster-refused", refused)
+
+            use corruptGeneration = new NpgsqlCommand("UPDATE fsgg_orchestration.learning_execution_binding SET generation=4 WHERE assignment_id=$1 AND attempt_id=$2", insertConnection)
+            corruptGeneration.Parameters.AddWithValue(unlaunched.AssignmentId) |> ignore
+            corruptGeneration.Parameters.AddWithValue(unlaunched.AttemptId) |> ignore
+            Assert.Equal(1, corruptGeneration.ExecuteNonQuery())
+            let! generationRefused = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            Assert.Equal(Error "learning-execution-owner-binding-corrupt", generationRefused)
+            corruptGeneration.CommandText <- "UPDATE fsgg_orchestration.learning_execution_binding SET generation=3 WHERE assignment_id=$1 AND attempt_id=$2"
+            Assert.Equal(1, corruptGeneration.ExecuteNonQuery())
+            corruptGeneration.CommandText <- "UPDATE fsgg_orchestration.learning_execution_binding SET treatment_assignment_sha256=repeat('b',64) WHERE assignment_id=$1 AND attempt_id=$2"
+            Assert.Equal(1, corruptGeneration.ExecuteNonQuery())
+            let! treatmentRefused = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            Assert.Equal(Error "learning-execution-owner-binding-corrupt", treatmentRefused)
+            corruptGeneration.CommandText <- "UPDATE fsgg_orchestration.learning_execution_binding SET treatment_assignment_sha256=repeat('a',64) WHERE assignment_id=$1 AND attempt_id=$2"
+            Assert.Equal(1, corruptGeneration.ExecuteNonQuery())
+
+            let replacementAssignment = Guid.NewGuid()
+            use corruptKey = new NpgsqlCommand("UPDATE fsgg_orchestration.learning_execution_binding SET assignment_id=$3 WHERE assignment_id=$1 AND attempt_id=$2", insertConnection)
+            corruptKey.Parameters.AddWithValue(unlaunched.AssignmentId) |> ignore
+            corruptKey.Parameters.AddWithValue(unlaunched.AttemptId) |> ignore
+            corruptKey.Parameters.AddWithValue(replacementAssignment) |> ignore
+            Assert.Equal(1, corruptKey.ExecuteNonQuery())
+            let! keyRefused = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            Assert.Equal(Error "learning-execution-owner-binding-corrupt", keyRefused)
+            corruptKey.CommandText <- "UPDATE fsgg_orchestration.learning_execution_binding SET assignment_id=$1 WHERE assignment_id=$3 AND attempt_id=$2"
+            Assert.Equal(1, corruptKey.ExecuteNonQuery())
+
+            let replacementAttempt = Guid.NewGuid()
+            corruptKey.Parameters.AddWithValue(replacementAttempt) |> ignore
+            corruptKey.CommandText <- "UPDATE fsgg_orchestration.learning_execution_binding SET attempt_id=$4 WHERE assignment_id=$1 AND attempt_id=$2"
+            Assert.Equal(1, corruptKey.ExecuteNonQuery())
+            let! attemptRefused = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            Assert.Equal(Error "learning-execution-owner-binding-corrupt", attemptRefused)
+            corruptKey.CommandText <- "UPDATE fsgg_orchestration.learning_execution_binding SET attempt_id=$2 WHERE assignment_id=$1 AND attempt_id=$4"
+            Assert.Equal(1, corruptKey.ExecuteNonQuery())
+
+            use removePayloadBound = new NpgsqlCommand("ALTER TABLE fsgg_orchestration.execution_event DROP CONSTRAINT execution_event_payload_check", insertConnection)
+            removePayloadBound.ExecuteNonQuery() |> ignore
+            use oversizePayload = new NpgsqlCommand("UPDATE fsgg_orchestration.execution_event SET payload=decode(repeat('00',262145),'hex') WHERE assignment_id=$1 AND attempt_id=$2 AND revision=2", insertConnection)
+            oversizePayload.Parameters.AddWithValue(lost.AssignmentId) |> ignore
+            oversizePayload.Parameters.AddWithValue(lost.AttemptId) |> ignore
+            Assert.Equal(1, oversizePayload.ExecuteNonQuery())
+            let! payloadRefused = (PostgreSqlExecutionStore(options) :> ILearningExecutionOwnerSource).ReadLearningExecutionOwners(roster, cancellationToken)
+            Assert.Equal(Error "learning-execution-owner-event-overflow", payloadRefused)
+            oversizePayload.CommandText <- "UPDATE fsgg_orchestration.execution_event SET payload=$3 WHERE assignment_id=$1 AND attempt_id=$2 AND revision=2"
+            oversizePayload.Parameters.AddWithValue(eventPayload) |> ignore
+            Assert.Equal(1, oversizePayload.ExecuteNonQuery())
         }
 
     member _.``learning operational window is durable before assignment idempotent and conflict fenced``() =

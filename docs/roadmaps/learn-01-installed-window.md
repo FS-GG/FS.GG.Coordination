@@ -197,6 +197,8 @@ record or successful sudo is not this gate. Genuine installed inputs remain a
 later activation prerequisite; controlled adapter implementation need not wait
 for installation once its producer contract exists.
 
+Window C1 adds the source-only owner query seam: the Observer journal exposes its exact admitted six-role roster identity, while a bounded repeatable-read PostgreSQL query returns every matching execution binding and its verified route, contiguous session history, and visible outbox state. The query distinguishes prospective, assigned-unlaunched, committed-but-unknown, started, terminal, and unavailable records; a launch-attempt or visible command can never be relabelled as unlaunched. This does not enable production composition. Window C2 must supply installed-origin and native-route producers, and Window C3 must join them behind the existing default-disabled Host configuration.
+
 The bounded W6 source composition now has a coherent candidate. The existing
 Observer journal owns a versioned six-role prospective window record, derives
 the accepted Plan and canonical WorkItem/coverage/allocation digests from its
