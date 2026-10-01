@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, hashlib, importlib.util, json, os, stat, subprocess, sys, tempfile, time, zipfile
+import argparse, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, zipfile
 from pathlib import Path
 HERE=Path(__file__).parent
 def load(name,file):
@@ -98,4 +98,28 @@ def main():
   flood=d/'flood'; flood.write_text('#!/usr/bin/python3\nimport sys\nsys.stdout.write("x"*(2*1024*1024))\n'); flood.chmod(0o755); args.dotnet=flood; args.receipt=d/'flood.json'; args.timeout_seconds=5
   try: Q.invoke(args); raise AssertionError('oversized output admitted')
   except ValueError as e: assert 'output exceeds' in str(e)
+  # Model a legal schedule where the leader is already complete and reader
+  # work is deferred until join. Late stdout and stderr overflow must refuse.
+  class DeferredThread:
+   def __init__(self,target,args,daemon): self.target,self.args,self.ran=target,args,False
+   def start(self): pass
+   def join(self,timeout=None):
+    if not self.ran: self.ran=True; self.target(*self.args)
+   def is_alive(self): return False
+  class CompletedChild:
+   def __init__(self,stdout,stderr): self.pid=987654; self.stdout=io.BytesIO(stdout); self.stderr=io.BytesIO(stderr); self.returncode=0
+   def poll(self): return 0
+   def wait(self,timeout=None): return 0
+   def kill(self): raise AssertionError('completed leader killed')
+  production=json.dumps(result,separators=(',',':')).encode()
+  original_popen,original_thread,original_getpgid,original_getsid=Q.subprocess.Popen,Q.threading.Thread,Q.os.getpgid,Q.os.getsid
+  try:
+   Q.threading.Thread=DeferredThread; Q.os.getpgid=lambda _:987654; Q.os.getsid=lambda _:987654
+   for label,stdout,stderr in [('stdout',production+b' '*(Q.MAX_OUTPUT_BYTES+1),b''),('stderr',production,b'x'*(Q.MAX_OUTPUT_BYTES+1))]:
+    Q.subprocess.Popen=lambda *a,_stdout=stdout,_stderr=stderr,**k: CompletedChild(_stdout,_stderr)
+    args.receipt=d/f'late-{label}.json'
+    try: Q.invoke(args); raise AssertionError(f'late {label} overflow admitted')
+    except ValueError as e: assert 'output exceeds' in str(e)
+    assert not args.receipt.exists()
+  finally: Q.subprocess.Popen,Q.threading.Thread,Q.os.getpgid,Q.os.getsid=original_popen,original_thread,original_getpgid,original_getsid
 if __name__=='__main__': main()

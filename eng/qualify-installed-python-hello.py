@@ -435,6 +435,8 @@ def invoke(args: argparse.Namespace) -> int:
         reader.join(timeout=1)
     if any(reader.is_alive() for reader in readers):
         settlement_error = settlement_error or "output readers survived group settlement"
+    if primary is None and exceeded.is_set():
+        primary = ValueError("installed CLI output exceeds its bound")
     if primary is None and had_members:
         primary = ValueError("installed CLI left an owned descendant after leader exit")
     if settlement_error:
