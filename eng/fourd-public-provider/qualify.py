@@ -16,16 +16,19 @@ import re
 import selectors
 import shutil
 import signal
+import stat
 import subprocess
 import tarfile
 import threading
 import time
 import urllib.request
+import urllib.parse
+import importlib.util
 from dataclasses import dataclass
 from typing import Mapping, Sequence
 
 SCHEMA = "fsgg.fourd.public-provider-qualification/1"
-ADMISSION_SCHEMA = "fsgg.fourd.public-provider-admission/1"
+ADMISSION_SCHEMA = "fsgg.fourd.public-provider-admission/2"
 EXPECTED_REPOSITORY = "FS-GG/FS.GG.Coordination"
 EXPECTED_REPOSITORY_ID = "1346720714"
 EXPECTED_REF = "refs/heads/qualification/fourd-native-20261001"
@@ -51,7 +54,7 @@ SEALER_RECIPE_SHA = "88d65daa1a1262d563c2312698e4a5e57109a824"
 SEALER_SHA256 = "4f46d5a1762eaee9ba800e5fb58933a9c312e22e4d416b9489e632fd9b2ce85d"
 PUBLIC_KEY_SHA256 = "de40516580a5e6e97c154a8889c3ac6edf047b695ff5d4187386aeaccd61d3e7"
 ADMISSION_SECRET = "FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64"
-KEY_SECRET = "FSGG_FOURD_READONLY_DEPLOY_KEY_B64"
+KEY_SECRET = "FSGG_FOURD_SOURCE_CAPSULE_PRIVATE_KEY_B64"
 MAX_ADMISSION = 32 * 1024
 MAX_KEY = 16 * 1024
 MAX_CAPTURE = 128 * 1024
@@ -65,7 +68,6 @@ HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 DECIMAL = re.compile(r"[1-9][0-9]*\Z")
 NONCE = re.compile(r"[a-z0-9][a-z0-9-]{7,47}\Z")
-SSH_FINGERPRINT = re.compile(r"SHA256:[A-Za-z0-9+/]{43}\Z")
 LOGIN = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?\Z")
 
 ADMISSION_KEYS = {
@@ -74,14 +76,30 @@ ADMISSION_KEYS = {
     "originalActorId", "triggeringActorId", "fourdRepository", "fourdRepositoryId",
     "fourdSourceSha", "fourdSourceTree", "fourdInventorySha256", "p2SourceSha",
     "p2SourceTree", "capacityRunId", "capacityRunAttempt", "capacityArtifactId",
-    "capacityArtifactDigest", "deployKeyId", "publicKeyFingerprint", "readOnly",
+    "capacityArtifactDigest", "sourceCapsule",
     "sealerRecipeSha", "sealerSha256", "custodyPublicKeySha256", "nativePolicySha256",
     "custodyPolicySha256", "environmentReadbackSha256", "issuedAt", "expiresAt",
 }
+SOURCE_CAPSULE_KEYS = {"transport", "releaseId", "assetId", "tag", "name", "ciphertextBytes",
+                       "ciphertextSha256", "descriptor", "descriptorSha256", "recipientPublicKeySha256"}
 
 
 class Refusal(RuntimeError):
     pass
+
+
+def source_module():
+    name = "fsgg_fourd_source_capsule"
+    if name in __import__("sys").modules:
+        return __import__("sys").modules[name]
+    path = pathlib.Path(__file__).with_name("source_capsule.py")
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise Refusal("source-capsule-module-refused")
+    module = importlib.util.module_from_spec(spec)
+    __import__("sys").modules[name] = module
+    spec.loader.exec_module(module)
+    return module
 
 
 @dataclass(frozen=True)
@@ -89,6 +107,56 @@ class RunResult:
     returncode: int
     stdout: bytes
     stderr: bytes
+
+
+@dataclass
+class HeldFile:
+    path: pathlib.Path
+    fd: int
+    device: int
+    inode: int
+
+    @classmethod
+    def open(cls, path: pathlib.Path) -> "HeldFile":
+        fd = os.open(path, os.O_RDWR | os.O_NOFOLLOW)
+        value = os.fstat(fd)
+        if (not stat.S_ISREG(value.st_mode) or value.st_uid != os.getuid()
+                or value.st_nlink != 1 or stat.S_IMODE(value.st_mode) != 0o600):
+            os.close(fd); raise Refusal("source-held-file-refused")
+        os.set_inheritable(fd, True)
+        return cls(path, fd, value.st_dev, value.st_ino)
+
+    def read(self, limit: int) -> bytes:
+        value = os.fstat(self.fd)
+        if value.st_size > limit: raise Refusal("source-held-file-refused")
+        os.lseek(self.fd, 0, os.SEEK_SET); result = bytearray()
+        while len(result) <= limit:
+            block = os.read(self.fd, min(1024 * 1024, limit + 1 - len(result)))
+            if not block: return bytes(result)
+            result.extend(block)
+        raise Refusal("source-held-file-refused")
+
+    def wipe_close(self) -> bool:
+        complete = True
+        try:
+            size = os.fstat(self.fd).st_size; os.lseek(self.fd, 0, os.SEEK_SET)
+            remaining = size
+            zero = b"\0" * min(1024 * 1024, max(1, size))
+            while remaining:
+                written = os.write(self.fd, zero[:min(len(zero), remaining)])
+                if written <= 0: complete = False; break
+                remaining -= written
+            os.fsync(self.fd)
+        except OSError: complete = False
+        try: os.close(self.fd)
+        except OSError: complete = False
+        try:
+            current = self.path.lstat()
+            if (current.st_dev, current.st_ino) == (self.device, self.inode): self.path.unlink()
+            else: complete = False
+        except FileNotFoundError: complete = False
+        except OSError: complete = False
+        return complete
 
 
 def _sha(path: pathlib.Path) -> str:
@@ -108,7 +176,11 @@ def _private_dir(path: pathlib.Path) -> None:
 def _write_new(path: pathlib.Path, data: bytes) -> None:
     fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
     try:
-        os.write(fd, data)
+        view = memoryview(data)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0: raise Refusal("private-write-refused")
+            view = view[written:]
         os.fsync(fd)
     finally:
         os.close(fd)
@@ -213,7 +285,7 @@ def admission(environ: Mapping[str, str], now: dt.datetime | None = None) -> tup
     if not encoded_admission or not encoded_key:
         raise Refusal("admission-partial")
     raw = _decode("admission", encoded_admission, MAX_ADMISSION)
-    key = _decode("deploy-key", encoded_key, MAX_KEY)
+    key = _decode("source-recipient-key", encoded_key, MAX_KEY)
     current_triggering_actor_id = triggering_actor_id(environ)
     try:
         def closed_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -239,29 +311,54 @@ def admission(environ: Mapping[str, str], now: dt.datetime | None = None) -> tup
         "fourdRepository": FOURD_REPOSITORY, "fourdRepositoryId": FOURD_REPOSITORY_ID,
         "fourdSourceSha": FOURD_SHA, "fourdSourceTree": FOURD_TREE,
         "fourdInventorySha256": FOURD_INVENTORY, "p2SourceSha": P2_SHA,
-        "p2SourceTree": P2_TREE, "readOnly": True, "sealerRecipeSha": SEALER_RECIPE_SHA,
+        "p2SourceTree": P2_TREE, "sealerRecipeSha": SEALER_RECIPE_SHA,
         "sealerSha256": SEALER_SHA256, "custodyPublicKeySha256": PUBLIC_KEY_SHA256,
         "nativePolicySha256": NATIVE_POLICY_SHA256, "custodyPolicySha256": CUSTODY_POLICY_SHA256,
     }
     for field, expected in exact.items():
         if value.get(field) != expected:
             raise Refusal("admission-binding-refused")
-    for field in ("runId", "runAttempt", "originalActorId", "triggeringActorId", "capacityRunId", "capacityRunAttempt", "capacityArtifactId", "deployKeyId"):
+    for field in ("runId", "runAttempt", "originalActorId", "triggeringActorId", "capacityRunId", "capacityRunAttempt", "capacityArtifactId"):
         if not isinstance(value[field], str) or not DECIMAL.fullmatch(value[field]):
             raise Refusal("admission-identifier-refused")
     if not isinstance(value["runNonce"], str) or not NONCE.fullmatch(value["runNonce"]):
         raise Refusal("admission-nonce-refused")
-    if not isinstance(value["publicKeyFingerprint"], str) or not SSH_FINGERPRINT.fullmatch(value["publicKeyFingerprint"]):
-        raise Refusal("admission-key-fingerprint-refused")
+    capsule = value["sourceCapsule"]
+    if not isinstance(capsule, dict) or set(capsule) != SOURCE_CAPSULE_KEYS:
+        raise Refusal("admission-capsule-shape-refused")
+    if capsule.get("transport") != "coordination-release-asset":
+        raise Refusal("admission-capsule-transport-refused")
+    for field in ("releaseId", "assetId"):
+        if not isinstance(capsule[field], str) or not DECIMAL.fullmatch(capsule[field]):
+            raise Refusal("admission-capsule-identifier-refused")
+    for field in ("ciphertextSha256", "descriptorSha256", "recipientPublicKeySha256"):
+        if not isinstance(capsule[field], str) or not HEX64.fullmatch(capsule[field]):
+            raise Refusal("admission-capsule-digest-refused")
+    if (not isinstance(capsule["tag"], str) or not NONCE.fullmatch(capsule["tag"])
+            or not isinstance(capsule["name"], str) or not re.fullmatch(r"fourd-source-[a-z0-9-]{8,64}\.capsule\.json", capsule["name"])):
+        raise Refusal("admission-capsule-name-refused")
+    if type(capsule["ciphertextBytes"]) is not int or not 2 <= capsule["ciphertextBytes"] <= 24 * 1024 * 1024:
+        raise Refusal("admission-capsule-size-refused")
+    descriptor = capsule["descriptor"]
+    descriptor_raw = json.dumps(descriptor, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+    if hashlib.sha256(descriptor_raw).hexdigest() != capsule["descriptorSha256"]:
+        raise Refusal("admission-descriptor-digest-refused")
+    source_module().validate_descriptor(descriptor, {
+        "placementSha": placement_sha, "runId": value["runId"], "runAttempt": attempt,
+        "runNonce": value["runNonce"], "coordinationRepositoryId": EXPECTED_REPOSITORY_ID,
+        "fourdRepositoryId": FOURD_REPOSITORY_ID, "sourceSha": FOURD_SHA, "sourceTree": FOURD_TREE,
+        "inventorySha256": FOURD_INVENTORY, "recipientPublicKeySha256": capsule["recipientPublicKeySha256"],
+        "sealerSha256": SEALER_SHA256, "issuedAt": value["issuedAt"], "expiresAt": value["expiresAt"],
+    })
     for field in ("capacityArtifactDigest", "environmentReadbackSha256"):
         if not isinstance(value[field], str) or not HEX64.fullmatch(value[field]):
             raise Refusal("admission-digest-refused")
     issued, expires = _instant(value["issuedAt"]), _instant(value["expiresAt"])
     current = now or dt.datetime.now(dt.timezone.utc)
-    if expires <= issued or expires - issued > dt.timedelta(hours=1) or current < issued or current >= expires:
+    if expires <= issued or expires - issued > dt.timedelta(minutes=45) or current < issued or current >= expires:
         raise Refusal("admission-time-refused")
-    if not key.startswith(b"-----BEGIN OPENSSH PRIVATE KEY-----\n") or not key.endswith(b"-----END OPENSSH PRIVATE KEY-----\n"):
-        raise Refusal("deploy-key-format-refused")
+    if not key.startswith(b"-----BEGIN PRIVATE KEY-----\n") or not key.endswith(b"-----END PRIVATE KEY-----\n"):
+        raise Refusal("source-recipient-key-format-refused")
     return value, key
 
 
@@ -426,7 +523,8 @@ class Effects:
 
     def run(self, argv: Sequence[str], *, cwd: pathlib.Path, env: Mapping[str, str], timeout: float,
             capture: pathlib.Path | None, allow_cancelled: bool = False,
-            termination_grace: float = 10, total_timeout: float | None = None) -> RunResult:
+            termination_grace: float = 10, total_timeout: float | None = None,
+            pass_fds: Sequence[int] = ()) -> RunResult:
         if self.cancelled and not allow_cancelled:
             raise Refusal("cancelled")
         reserve = termination_grace + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS + WAIT_SECONDS + DRAIN_SECONDS
@@ -438,7 +536,7 @@ class Effects:
         before = set(self.owned.values())
         process = subprocess.Popen(list(argv), cwd=cwd, env=dict(env), stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
-                                   bufsize=0)
+                                   bufsize=0, pass_fds=tuple(pass_fds))
         root = _process_identity(process.pid)
         if root is None: raise Refusal("child-identity-refused")
         self.owned[root.pid] = root
@@ -571,52 +669,101 @@ def verify_public_checkout(root: pathlib.Path, environ: Mapping[str, str], effec
 
 
 def acquire_source(key: bytes, admission_value: Mapping[str, object], private: pathlib.Path,
-                   known_hosts: pathlib.Path, effects: Effects, env: Mapping[str, str]) -> pathlib.Path:
+                   _known_hosts: pathlib.Path, effects: Effects, env: Mapping[str, str]) -> pathlib.Path:
     credentials, source, capture = private / "credentials", private / "source", private / "capture"
-    _private_dir(credentials); _private_dir(source); _private_dir(capture)
-    key_path = credentials / "id_ed25519"
+    _private_dir(credentials); _private_dir(capture)
+    key_path = credentials / "source-recipient.pem"
+    capsule_path = credentials / "source.capsule.json"
+    plaintext_path = credentials / "source.snapshot.json"
     _write_new(key_path, key)
+    held: list[HeldFile] = [HeldFile.open(key_path)]
     safe_env = {"PATH": "/usr/bin:/bin", "HOME": str(private / "home"), "LANG": "C.UTF-8",
-                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null",
-                "GIT_TERMINAL_PROMPT": "0", "GIT_LFS_SKIP_SMUDGE": "1",
-                "GIT_SSH_COMMAND": (f"/usr/bin/ssh -i {key_path} -o BatchMode=yes -o IdentitiesOnly=yes "
-                                    f"-o IdentityAgent=none -o ForwardAgent=no -o StrictHostKeyChecking=yes "
-                                    f"-o UserKnownHostsFile={known_hosts}")}
-    (private / "home").mkdir(mode=0o700)
+                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}
+    capsule = admission_value["sourceCapsule"]
     try:
-        key_result = effects.run(["/usr/bin/ssh-keygen", "-y", "-f", str(key_path)], cwd=private,
-                                 env=safe_env, timeout=15, capture=capture / "ssh-key-readback.json")
-        if key_result.returncode: raise Refusal("deploy-key-type-refused")
-        public_key = key_result.stdout.split()
-        if len(public_key) != 2 or public_key[0] != b"ssh-ed25519":
-            raise Refusal("deploy-key-type-refused")
-        try: key_blob = base64.b64decode(public_key[1], validate=True)
-        except binascii.Error as error: raise Refusal("deploy-key-type-refused") from error
-        fingerprint = "SHA256:" + base64.b64encode(hashlib.sha256(key_blob).digest()).decode().rstrip("=")
-        if fingerprint != admission_value["publicKeyFingerprint"]:
-            raise Refusal("deploy-key-fingerprint-refused")
-        init = effects.run(["/usr/bin/git", "init", "--quiet"], cwd=source, env=safe_env, timeout=30, capture=capture / "git-init.json")
-        if init.returncode: raise Refusal("source-init-refused")
-        for index, argv in enumerate((
-            ["/usr/bin/git", "remote", "add", "origin", "git@github.com:FS-GG/FS.GG.FourD.git"],
-            ["/usr/bin/git", "config", "core.hooksPath", "/dev/null"],
-            ["/usr/bin/git", "config", "submodule.recurse", "false"],
-            ["/usr/bin/git", "-c", "protocol.allow=never", "-c", "protocol.ssh.allow=always",
-             "-c", "credential.helper=", "fetch", "--quiet", "--no-tags", "--no-recurse-submodules", "--depth=1", "origin", FOURD_SHA],
-            ["/usr/bin/git", "checkout", "--quiet", "--detach", "FETCH_HEAD"],
-        )):
-            result = effects.run(argv, cwd=source, env=safe_env, timeout=180 if index == 3 else 30, capture=capture / f"git-{index}.json")
-            if result.returncode: raise Refusal("source-acquisition-refused")
+        public = effects.run(["/usr/bin/openssl", "pkey", "-in", f"/proc/self/fd/{held[0].fd}", "-pubout"], cwd=private,
+                             env=safe_env, timeout=15, capture=capture / "source-key-readback.json",
+                             pass_fds=(held[0].fd,))
+        if public.returncode or hashlib.sha256(public.stdout).hexdigest() != capsule["recipientPublicKeySha256"]:
+            raise Refusal("source-recipient-key-refused")
+        metadata_url = ("https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/"
+                        + capsule["releaseId"])
+        metadata_request = urllib.request.Request(metadata_url, headers={"Accept":"application/vnd.github+json",
+            "User-Agent":"fsgg-fourd-source-acquisition/1", "X-GitHub-Api-Version":"2022-11-28"})
+        try:
+            with urllib.request.urlopen(metadata_request, timeout=15) as response:
+                final_metadata = urllib.parse.urlparse(response.geturl())
+                if final_metadata.scheme != "https" or final_metadata.hostname != "api.github.com":
+                    raise Refusal("source-release-readback-refused")
+                metadata_raw = response.read(256 * 1024 + 1)
+        except Refusal: raise
+        except Exception as error: raise Refusal("source-release-readback-refused") from error
+        if len(metadata_raw) > 256 * 1024: raise Refusal("source-release-readback-refused")
+        try: metadata = json.loads(metadata_raw)
+        except json.JSONDecodeError as error: raise Refusal("source-release-readback-refused") from error
+        assets = metadata.get("assets") if isinstance(metadata, dict) else None
+        matching = [item for item in assets or [] if isinstance(item, dict) and str(item.get("id")) == capsule["assetId"]]
+        if (str(metadata.get("id")) != capsule["releaseId"] or metadata.get("tag_name") != capsule["tag"]
+                or len(matching) != 1 or matching[0].get("name") != capsule["name"]
+                or matching[0].get("size") != capsule["ciphertextBytes"]):
+            raise Refusal("source-release-binding-refused")
+        url = ("https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/assets/" + capsule["assetId"])
+        request = urllib.request.Request(url, headers={"Accept":"application/octet-stream",
+            "User-Agent":"fsgg-fourd-source-acquisition/1", "X-GitHub-Api-Version":"2022-11-28"})
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                final = urllib.parse.urlparse(response.geturl())
+                if final.scheme != "https" or final.hostname not in {
+                    "api.github.com", "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"
+                }:
+                    raise Refusal("source-download-redirect-refused")
+                raw = response.read(24 * 1024 * 1024 + 1)
+        except Refusal: raise
+        except Exception as error: raise Refusal("source-download-refused") from error
+        if (len(raw) != capsule["ciphertextBytes"]
+                or hashlib.sha256(raw).hexdigest() != capsule["ciphertextSha256"]):
+            raise Refusal("source-download-binding-refused")
+        module = source_module()
+        descriptor_raw = json.dumps(capsule["descriptor"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+        profile = hashlib.sha256(descriptor_raw).hexdigest()
+        module.validate_outer_capsule(raw, str(admission_value["runNonce"]) + "-source", FOURD_SHA, profile)
+        _write_new(capsule_path, raw)
+        capsule_file = HeldFile.open(capsule_path); held.append(capsule_file)
+        unseal = effects.run(["/usr/bin/node", str(pathlib.Path(__file__).with_name("seal_native_custody.mjs")),
+                              "unseal", f"/proc/self/fd/{capsule_file.fd}", f"/proc/self/fd/{held[0].fd}", str(plaintext_path),
+                              str(admission_value["runNonce"]) + "-source", FOURD_SHA, profile],
+                             cwd=private, env=safe_env, timeout=120, capture=capture / "source-unseal.json",
+                             pass_fds=(capsule_file.fd, held[0].fd))
+        plaintext_file = HeldFile.open(plaintext_path) if plaintext_path.exists() else None
+        if plaintext_file is not None: held.append(plaintext_file)
+        if unseal.returncode or plaintext_file is None: raise Refusal("source-unseal-refused")
+        plaintext = plaintext_file.read(16 * 1024 * 1024)
+        descriptor = capsule["descriptor"]
+        if (len(plaintext) != descriptor["plaintextBytes"]
+                or hashlib.sha256(plaintext).hexdigest() != descriptor["plaintextSha256"]):
+            raise Refusal("source-plaintext-binding-refused")
+        module.reconstruct(plaintext, source, {"sourceSha":FOURD_SHA, "sourceTree":FOURD_TREE,
+                                              "inventorySha256":FOURD_INVENTORY})
+        receipt = {"schema":"fsgg.fourd.source-acquisition-receipt/1", "sourceSha":FOURD_SHA,
+                   "sourceTree":FOURD_TREE, "inventorySha256":FOURD_INVENTORY,
+                   "descriptorSha256":capsule["descriptorSha256"],
+                   "ciphertextSha256":capsule["ciphertextSha256"], "assetId":capsule["assetId"],
+                   "keyProcessExited":True, "sourceKeyAbsent":True}
     finally:
-        key_path.unlink(missing_ok=True)
+        cleanup_complete = True
+        for item in reversed(held):
+            if not item.wipe_close(): cleanup_complete = False
         try: credentials.rmdir()
-        except OSError: pass
+        except OSError: cleanup_complete = False
         if isinstance(env, dict):
             env.pop(ADMISSION_SECRET, None); env.pop(KEY_SECRET, None)
         os.environ.pop(ADMISSION_SECRET, None); os.environ.pop(KEY_SECRET, None)
         key = b""  # noqa: F841
+    if not cleanup_complete or credentials.exists():
+        raise Refusal("source-key-cleanup-refused")
+    _write_new(private / "source-acquisition.json",
+               json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n")
     return source
-
 
 def git_inventory(source: pathlib.Path, effects: Effects, env: Mapping[str, str], capture: pathlib.Path) -> str:
     program = r'''import hashlib,subprocess,sys
@@ -888,10 +1035,82 @@ def validate_native(p2_path: pathlib.Path, binding_path: pathlib.Path) -> dict[s
     return image
 
 
-def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, effects: Effects | None = None) -> int:
+def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, effects: Effects | None = None) -> int:
+    """Run the only process that receives the source-recipient private key."""
     env = environ if environ is not None else dict(os.environ)
     output = pathlib.Path(args.output); public = output.parent
     public.mkdir(mode=0o700, parents=True, exist_ok=False)
+    result = base_result(env, "failed"); runner = effects or Effects(); private = pathlib.Path(args.private_root)
+    old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
+    for sig in old_handlers: signal.signal(sig, runner.request_cancel)
+    try:
+        verify_capacity(pathlib.Path(args.capacity_result)); result["capacityPassed"] = True
+        public_source = pathlib.Path(args.public_source); capture = public / "placement-capture"; _private_dir(capture)
+        placement_sha, placement_tree = verify_public_checkout(public_source, env, runner, capture)
+        shutil.rmtree(capture); result.update(placementSha=placement_sha, placementTree=placement_tree)
+        verify_public_tools(public_source, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source))
+        admitted, key = admission(env)
+        if admitted is None:
+            result["outcome"] = "awaiting-exact-admission"; write_result(output, result); return 0
+        _private_dir(private); (private / "home").mkdir(mode=0o700)
+        source = acquire_source(key or b"", admitted, private, pathlib.Path(args.known_hosts), runner, env)
+        safe_env = {"PATH":"/usr/bin:/bin", "HOME":str(private / "home"), "LANG":"C.UTF-8"}
+        validate_checkout(source, runner, safe_env, private / "capture")
+        if git_inventory(source, runner, safe_env, private / "capture/inventory.json") != FOURD_INVENTORY:
+            raise Refusal("source-binding-refused")
+        if not runner.settle(): raise Refusal("child-scope-refused")
+        _write_new(private / "admitted-route.json",
+                   json.dumps(admitted, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
+        return 0
+    except Refusal as error:
+        result["outcome"] = "refused"; result["failureCode"] = str(error) if len(str(error)) <= 64 else "qualification-refused"
+        write_result(output, result); return 2
+    except Exception:
+        result["outcome"] = "failed"; result["failureCode"] = "qualification-refused"; write_result(output, result); return 2
+    finally:
+        env.pop(ADMISSION_SECRET, None); env.pop(KEY_SECRET, None)
+        os.environ.pop(ADMISSION_SECRET, None); os.environ.pop(KEY_SECRET, None)
+        runner.settle()
+        for sig, handler in old_handlers.items(): signal.signal(sig, handler)
+
+
+def load_prepared(private: pathlib.Path, env: Mapping[str, str]) -> tuple[dict[str, object], pathlib.Path]:
+    if env.get(ADMISSION_SECRET) or env.get(KEY_SECRET): raise Refusal("native-secret-boundary-refused")
+    admission_path, receipt_path, source = private / "admitted-route.json", private / "source-acquisition.json", private / "source"
+    require_owned_file(admission_path, "source-receipt-refused"); require_owned_file(receipt_path, "source-receipt-refused")
+    admitted, receipt = json.loads(admission_path.read_bytes()), json.loads(receipt_path.read_bytes())
+    if (not isinstance(admitted, dict) or set(admitted) != ADMISSION_KEYS or admitted.get("schema") != ADMISSION_SCHEMA
+            or admitted.get("placementSha") != env.get("GITHUB_SHA") or admitted.get("runId") != env.get("GITHUB_RUN_ID")
+            or admitted.get("runAttempt") != env.get("GITHUB_RUN_ATTEMPT")):
+        raise Refusal("source-receipt-refused")
+    fixed = {"repository":EXPECTED_REPOSITORY, "repositoryId":EXPECTED_REPOSITORY_ID,
+             "environment":EXPECTED_ENVIRONMENT, "workflowPath":EXPECTED_WORKFLOW,
+             "workflowRef":EXPECTED_WORKFLOW_REF, "phase":"qualification",
+             "operationId":"fourd-portable-technical", "fourdRepository":FOURD_REPOSITORY,
+             "fourdRepositoryId":FOURD_REPOSITORY_ID, "fourdSourceSha":FOURD_SHA,
+             "fourdSourceTree":FOURD_TREE, "fourdInventorySha256":FOURD_INVENTORY,
+             "p2SourceSha":P2_SHA, "p2SourceTree":P2_TREE, "sealerRecipeSha":SEALER_RECIPE_SHA,
+             "sealerSha256":SEALER_SHA256, "custodyPublicKeySha256":PUBLIC_KEY_SHA256,
+             "nativePolicySha256":NATIVE_POLICY_SHA256, "custodyPolicySha256":CUSTODY_POLICY_SHA256}
+    if any(admitted.get(key) != value for key,value in fixed.items()): raise Refusal("source-receipt-refused")
+    issued,expires=_instant(admitted.get("issuedAt")),_instant(admitted.get("expiresAt")); current=dt.datetime.now(dt.timezone.utc)
+    if expires<=issued or expires-issued>dt.timedelta(minutes=45) or current<issued or current>=expires:
+        raise Refusal("source-receipt-refused")
+    expected_receipt = {"schema":"fsgg.fourd.source-acquisition-receipt/1", "sourceSha":FOURD_SHA,
+        "sourceTree":FOURD_TREE, "inventorySha256":FOURD_INVENTORY,
+        "descriptorSha256":admitted["sourceCapsule"]["descriptorSha256"],
+        "ciphertextSha256":admitted["sourceCapsule"]["ciphertextSha256"],
+        "assetId":admitted["sourceCapsule"]["assetId"], "keyProcessExited":True, "sourceKeyAbsent":True}
+    if receipt != expected_receipt or not source.is_dir(): raise Refusal("source-receipt-refused")
+    return admitted, source
+
+
+def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, effects: Effects | None = None) -> int:
+    env = environ if environ is not None else dict(os.environ)
+    output = pathlib.Path(args.output); public = output.parent
+    if not public.exists(): public.mkdir(mode=0o700, parents=True, exist_ok=False)
+    if public.is_symlink() or public.stat().st_uid != os.getuid() or public.stat().st_mode & 0o777 != 0o700:
+        return 2
     result = base_result(env, "failed"); runner = effects or Effects(); private: pathlib.Path | None = None
     old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     for sig in old_handlers: signal.signal(sig, runner.request_cancel)
@@ -907,11 +1126,8 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         fixed_known_hosts = public_source / "eng/fourd-public-provider/github-known-hosts"
         if known_hosts.resolve() != fixed_known_hosts.resolve(): raise Refusal("known-host-refused")
         verify_public_tools(public_source, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source))
-        admitted, key = admission(env)
-        if admitted is None:
-            result["outcome"] = "awaiting-exact-admission"; return 0
-        private = pathlib.Path(args.private_root); _private_dir(private)
-        source = acquire_source(key or b"", admitted, private, known_hosts, runner, env)
+        private = pathlib.Path(args.private_root)
+        admitted, source = load_prepared(private, env)
         safe_env = {"PATH": "/usr/bin:/bin", "HOME": str(private / "home"), "LANG": "C.UTF-8"}
         head_result = runner.run(["/usr/bin/git", "rev-parse", "HEAD"], cwd=source, env=safe_env, timeout=30,
                                  capture=private / "capture/head.json")
@@ -1048,7 +1264,7 @@ def verify_upload(root: pathlib.Path, public_source: pathlib.Path, environ: Mapp
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("command", choices=("execute", "verify-upload"))
+    parser.add_argument("command", choices=("acquire", "execute", "verify-upload"))
     parser.add_argument("--capacity-result"); parser.add_argument("--public-source")
     parser.add_argument("--setup-dotnet"); parser.add_argument("--p2-source")
     parser.add_argument("--known-hosts"); parser.add_argument("--private-root")
@@ -1059,6 +1275,8 @@ def main() -> int:
         return verify_upload(pathlib.Path(args.output), pathlib.Path(args.public_source), os.environ)
     if not all((args.capacity_result, args.public_source, args.setup_dotnet, args.p2_source, args.known_hosts, args.private_root)):
         return 2
+    if args.command == "acquire":
+        return acquire(args)
     return execute(args)
 
 

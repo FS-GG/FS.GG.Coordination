@@ -120,15 +120,37 @@ jobs:
           status=$?
           echo "capacityStatus=$status" >> "$GITHUB_OUTPUT"
           exit 0
-      - name: Apply exact admission and run fixed private route silently
-        id: private-route
+      - name: Acquire admitted encrypted source in an isolated key process
+        id: source-acquisition
         shell: bash
         env:
           FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64: ${{ secrets.FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64 }}
-          FSGG_FOURD_READONLY_DEPLOY_KEY_B64: ${{ secrets.FSGG_FOURD_READONLY_DEPLOY_KEY_B64 }}
+          FSGG_FOURD_SOURCE_CAPSULE_PRIVATE_KEY_B64: ${{ secrets.FSGG_FOURD_SOURCE_CAPSULE_PRIVATE_KEY_B64 }}
         run: |
           set +e
           umask 077
+          python3 "$PUBLIC_SOURCE/eng/fourd-public-provider/qualify.py" acquire \
+            --capacity-result "$CAPACITY_ROOT/result.json" --public-source "$PUBLIC_SOURCE" \
+            --setup-dotnet "$SETUP_DOTNET_ROOT" --p2-source "$P2_ROOT" \
+            --known-hosts "$PUBLIC_SOURCE/eng/fourd-public-provider/github-known-hosts" \
+            --private-root "$PRIVATE_ROOT" --output "$PUBLIC_OUTPUT/result.json"
+          status=$?
+          if test "$status" = 0 && test -f "$PRIVATE_ROOT/source-acquisition.json"; then
+            echo 'sourceReady=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'sourceReady=false' >> "$GITHUB_OUTPUT"
+          fi
+          echo "acquisitionStatus=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Run fixed native route without admission or source key secrets
+        id: private-route
+        if: steps.source-acquisition.outputs.sourceReady == 'true'
+        shell: bash
+        run: |
+          set +e
+          umask 077
+          test -z "${FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64-}"
+          test -z "${FSGG_FOURD_SOURCE_CAPSULE_PRIVATE_KEY_B64-}"
           python3 "$PUBLIC_SOURCE/eng/fourd-public-provider/qualify.py" execute \
             --capacity-result "$CAPACITY_ROOT/result.json" --public-source "$PUBLIC_SOURCE" \
             --setup-dotnet "$SETUP_DOTNET_ROOT" --p2-source "$P2_ROOT" \
@@ -173,11 +195,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 - "$PUBLIC_OUTPUT/result.json" '${{ steps.private-route.outputs.qualificationStatus }}' <<'PY'
+          python3 - "$PUBLIC_OUTPUT/result.json" '${{ steps.source-acquisition.outputs.acquisitionStatus }}' '${{ steps.private-route.outputs.qualificationStatus }}' <<'PY'
           import json,sys
-          result=json.load(open(sys.argv[1],encoding='utf-8')); status=int(sys.argv[2])
+          result=json.load(open(sys.argv[1],encoding='utf-8')); acquisition=int(sys.argv[2]); native=sys.argv[3]
           if result['outcome']=='awaiting-exact-admission':
-              assert status==0 and result['qualified'] is False
+              assert acquisition==0 and not native and result['qualified'] is False
           else:
-              assert status==0 and result['qualified'] is True
+              assert acquisition==0 and int(native)==0 and result['qualified'] is True
           PY

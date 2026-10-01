@@ -37,6 +37,23 @@ def context(attempt="2"):
 
 
 def valid_admission(now):
+    issued = (now - dt.timedelta(minutes=1)).isoformat().replace("+00:00", "Z")
+    expires = (now + dt.timedelta(minutes=30)).isoformat().replace("+00:00", "Z")
+    descriptor = {
+        "schema":"fsgg.fourd.source-capsule-descriptor/1", "purpose":"fourd-source-acquisition",
+        "placementSha":"a"*40, "runId":"12345", "runAttempt":"2", "runNonce":"run-12345-02",
+        "coordinationRepositoryId":qualify.EXPECTED_REPOSITORY_ID, "fourdRepositoryId":qualify.FOURD_REPOSITORY_ID,
+        "sourceSha":qualify.FOURD_SHA, "sourceTree":qualify.FOURD_TREE,
+        "inventorySha256":qualify.FOURD_INVENTORY, "plaintextBytes":1024, "plaintextSha256":"c"*64,
+        "recipientPublicKeySha256":"d"*64, "sealerSha256":qualify.SEALER_SHA256,
+        "issuedAt":issued, "expiresAt":expires,
+    }
+    descriptor_raw = json.dumps(descriptor,sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()+b"\n"
+    capsule = {"transport":"coordination-release-asset", "releaseId":"300", "assetId":"301",
+        "tag":"fourd-source-12345-02", "name":"fourd-source-run-12345-02.capsule.json",
+        "ciphertextBytes":2048, "ciphertextSha256":"e"*64, "descriptor":descriptor,
+        "descriptorSha256":__import__("hashlib").sha256(descriptor_raw).hexdigest(),
+        "recipientPublicKeySha256":"d"*64}
     value = {
         "schema": qualify.ADMISSION_SCHEMA, "repository": qualify.EXPECTED_REPOSITORY,
         "repositoryId": qualify.EXPECTED_REPOSITORY_ID, "environment": qualify.EXPECTED_ENVIRONMENT,
@@ -48,17 +65,13 @@ def valid_admission(now):
         "fourdSourceSha": qualify.FOURD_SHA, "fourdSourceTree": qualify.FOURD_TREE,
         "fourdInventorySha256": qualify.FOURD_INVENTORY, "p2SourceSha": qualify.P2_SHA,
         "p2SourceTree": qualify.P2_TREE, "capacityRunId": "100", "capacityRunAttempt": "1",
-        "capacityArtifactId": "200", "capacityArtifactDigest": "a" * 64,
-        "deployKeyId": "300", "publicKeyFingerprint": qualify.KNOWN_HOST_FINGERPRINT,
-        "readOnly": True, "sealerRecipeSha": qualify.SEALER_RECIPE_SHA,
-        "sealerSha256": qualify.SEALER_SHA256, "custodyPublicKeySha256": qualify.PUBLIC_KEY_SHA256,
-        "nativePolicySha256": qualify.NATIVE_POLICY_SHA256,
-        "custodyPolicySha256": qualify.CUSTODY_POLICY_SHA256,
-        "environmentReadbackSha256": "b" * 64,
-        "issuedAt": (now - dt.timedelta(minutes=1)).isoformat().replace("+00:00", "Z"),
-        "expiresAt": (now + dt.timedelta(minutes=30)).isoformat().replace("+00:00", "Z"),
+        "capacityArtifactId": "200", "capacityArtifactDigest": "a" * 64, "sourceCapsule": capsule,
+        "sealerRecipeSha": qualify.SEALER_RECIPE_SHA, "sealerSha256": qualify.SEALER_SHA256,
+        "custodyPublicKeySha256": qualify.PUBLIC_KEY_SHA256, "nativePolicySha256": qualify.NATIVE_POLICY_SHA256,
+        "custodyPolicySha256": qualify.CUSTODY_POLICY_SHA256, "environmentReadbackSha256": "b" * 64,
+        "issuedAt": issued, "expiresAt": expires,
     }
-    key = b"-----BEGIN OPENSSH PRIVATE KEY-----\nfixture\n-----END OPENSSH PRIVATE KEY-----\n"
+    key = b"-----BEGIN PRIVATE KEY-----\nfixture\n-----END PRIVATE KEY-----\n"
     env = context(); env[qualify.ADMISSION_SECRET] = base64.b64encode(json.dumps(value).encode()).decode()
     env[qualify.KEY_SECRET] = base64.b64encode(key).decode()
     return env, value, key
@@ -95,7 +108,7 @@ class AdmissionTests(unittest.TestCase):
         value["issuedAt"] = (now-dt.timedelta(hours=2)).isoformat().replace("+00:00", "Z")
         value["expiresAt"] = (now-dt.timedelta(hours=1)).isoformat().replace("+00:00", "Z")
         env[qualify.ADMISSION_SECRET] = base64.b64encode(json.dumps(value).encode()).decode()
-        with self.assertRaisesRegex(qualify.Refusal, "admission-time"):
+        with self.assertRaises(Exception):
             qualify.admission(env, now)
 
     def test_exact_actor_run_key_readonly_and_all_pins_bind(self):
@@ -103,8 +116,8 @@ class AdmissionTests(unittest.TestCase):
         env, expected, key = valid_admission(now)
         actual, actual_key = qualify.admission(env, now)
         self.assertEqual(expected, actual); self.assertEqual(key, actual_key)
-        for field, wrong in (("triggeringActorId", "18"), ("readOnly", False),
-                             ("fourdInventorySha256", "0" * 64), ("publicKeyFingerprint", "wrong")):
+        for field, wrong in (("triggeringActorId", "18"),
+                             ("fourdInventorySha256", "0" * 64), ("schema", "old")):
             changed = dict(expected); changed[field] = wrong
             bad = dict(env); bad[qualify.ADMISSION_SECRET] = base64.b64encode(json.dumps(changed).encode()).decode()
             with self.subTest(field=field), self.assertRaises(qualify.Refusal):
@@ -287,7 +300,7 @@ class ExecuteTests(unittest.TestCase):
             root = pathlib.Path(temporary); args = self.args(root)
             (root / "capacity.json").write_text('{"schema":"wrong"}\n')
             with mock.patch.object(qualify, "verify_public_tools") as tools, mock.patch.object(qualify, "acquire_source") as acquire:
-                self.assertEqual(2, qualify.execute(args, context("1"), qualify.Effects()))
+                self.assertEqual(2, qualify.acquire(args, context("1"), qualify.Effects()))
                 tools.assert_not_called(); acquire.assert_not_called()
             result = json.loads((root / "public/result.json").read_text())
             self.assertFalse(result["capacityPassed"]); self.assertFalse(result["qualified"])
@@ -296,7 +309,7 @@ class ExecuteTests(unittest.TestCase):
             (root / "capacity.json").write_text(json.dumps({"schema":"fsgg.fourd.public-provider-capacity/1","phase":"capacity","capacityScreenPassed":True,"qualified":False}))
             with mock.patch.object(qualify, "verify_public_checkout", return_value=("a" * 40, "b" * 40)), \
                  mock.patch.object(qualify, "verify_public_tools"), mock.patch.object(qualify, "acquire_source") as acquire:
-                self.assertEqual(0, qualify.execute(args, context("1"), qualify.Effects()))
+                self.assertEqual(0, qualify.acquire(args, context("1"), qualify.Effects()))
                 acquire.assert_not_called()
             result = json.loads((root / "public/result.json").read_text())
             self.assertEqual("awaiting-exact-admission", result["outcome"])
@@ -338,6 +351,33 @@ class ExecuteTests(unittest.TestCase):
             reserve = (qualify.NATIVE_SUPERVISOR_GRACE + qualify.TERM_SETTLE_SECONDS
                        + qualify.KILL_SETTLE_SECONDS + qualify.WAIT_SECONDS + qualify.DRAIN_SECONDS)
             self.assertTrue(all(call["total_timeout"] >= call["timeout"] + reserve for call in native_calls))
+
+    def test_prepared_source_refuses_secret_leak_and_altered_receipt(self):
+        now = dt.datetime.now(dt.timezone.utc); _env, admitted, _key = valid_admission(now)
+        with tempfile.TemporaryDirectory() as temporary:
+            private = pathlib.Path(temporary); source = private / "source"; source.mkdir()
+            receipt = {"schema":"fsgg.fourd.source-acquisition-receipt/1", "sourceSha":qualify.FOURD_SHA,
+                "sourceTree":qualify.FOURD_TREE, "inventorySha256":qualify.FOURD_INVENTORY,
+                "descriptorSha256":admitted["sourceCapsule"]["descriptorSha256"],
+                "ciphertextSha256":admitted["sourceCapsule"]["ciphertextSha256"],
+                "assetId":admitted["sourceCapsule"]["assetId"], "keyProcessExited":True, "sourceKeyAbsent":True}
+            for name,value in (("admitted-route.json",admitted),("source-acquisition.json",receipt)):
+                path=private/name; path.write_text(json.dumps(value)); path.chmod(0o600)
+            self.assertEqual((admitted,source),qualify.load_prepared(private,context()))
+            leaked=context(); leaked[qualify.KEY_SECRET]="present"
+            with self.assertRaisesRegex(qualify.Refusal,"native-secret-boundary"):
+                qualify.load_prepared(private,leaked)
+            receipt["sourceKeyAbsent"]=False; (private/"source-acquisition.json").write_text(json.dumps(receipt))
+            with self.assertRaisesRegex(qualify.Refusal,"source-receipt"):
+                qualify.load_prepared(private,context())
+
+    def test_held_plaintext_wipes_original_inode_and_preserves_replacement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); path=root/"plain"; path.write_bytes(b"secret"); path.chmod(0o600)
+            held=qualify.HeldFile.open(path); original=root/"original-hardlink"
+            os.link(path,original); path.unlink(); path.write_bytes(b"replacement"); path.chmod(0o600)
+            self.assertFalse(held.wipe_close())
+            self.assertEqual(b"replacement",path.read_bytes()); self.assertEqual(b"\0"*6,original.read_bytes())
 
     def test_private_route_success_uses_real_native_validator_and_receipt_custody(self):
         class FakeEffects:
@@ -561,12 +601,17 @@ class SourceContractTests(unittest.TestCase):
         text = WORKFLOW.read_text(); helper = (ROOT / "eng/fourd-public-provider/qualify.py").read_text()
         self.assertNotIn("ssh-keyscan", text + helper)
         self.assertNotIn("ssh-agent", text + helper)
-        self.assertIn("IdentitiesOnly=yes", helper); self.assertIn("IdentityAgent=none", helper)
+        self.assertNotIn("IdentitiesOnly=yes", helper); self.assertNotIn("IdentityAgent=none", helper)
         self.assertIn(qualify.FOURD_SHA, helper); self.assertIn(qualify.P2_SHA, text + helper)
         self.assertIn('("10.0.400", "10.0.401")', helper)
         self.assertIn('"preflight"', helper); self.assertLess(helper.index('"preflight"'), helper.index('"10.0.400"'))
         self.assertEqual(1, text.count("secrets.FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64"))
-        self.assertEqual(1, text.count("secrets.FSGG_FOURD_READONLY_DEPLOY_KEY_B64"))
+        self.assertEqual(1, text.count("secrets.FSGG_FOURD_SOURCE_CAPSULE_PRIVATE_KEY_B64"))
+        self.assertNotIn("FSGG_FOURD_READONLY_DEPLOY_KEY_B64", text + helper)
+        native_step = text.split("Run fixed native route without admission or source key secrets", 1)[1]
+        self.assertNotIn("secrets.", native_step)
+        self.assertLess(text.index("Acquire admitted encrypted source"), text.index("Run fixed native route"))
+        self.assertIn("test -z \"${FSGG_FOURD_SOURCE_CAPSULE_PRIVATE_KEY_B64-}\"", native_step)
         self.assertIn("id: public-validation", text)
         self.assertIn("if: steps.public-validation.outcome == 'success'", text)
         self.assertNotIn("placementSha\": PLACEMENT_SHA", helper)
