@@ -124,6 +124,45 @@ class AdmissionTests(unittest.TestCase):
 
 
 class SilentProcessTests(unittest.TestCase):
+    def test_newly_adopted_unreadable_descendant_is_sticky_unknown_and_never_signalled(self):
+        for observation in ("permission", "malformed"):
+            with self.subTest(observation=observation), tempfile.TemporaryDirectory() as temporary:
+                root = pathlib.Path(temporary); pid_file = root / "descendant.pid"; capture = root / "capture.json"
+                effects = qualify.Effects(); original = pathlib.Path.read_text
+                def read_text(path, *args, **kwargs):
+                    raw = original(path, *args, **kwargs)
+                    if str(path).startswith("/proc/") and str(path).endswith("/stat") and "(sleep)" in raw:
+                        if observation == "permission": raise PermissionError("fixture")
+                        return "malformed"
+                    return raw
+                program = ("import pathlib,subprocess,sys; "
+                           "p=subprocess.Popen(['sleep','30'],start_new_session=True,"
+                           "stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL); "
+                           "pathlib.Path(sys.argv[1]).write_text(str(p.pid))")
+                descendant = None
+                try:
+                    with mock.patch.object(pathlib.Path, "read_text", read_text), \
+                         mock.patch.object(qualify.os, "kill") as sent:
+                        with self.assertRaisesRegex(qualify.Refusal, "child-scope-refused"):
+                            effects.run(["/usr/bin/python3", "-c", program, str(pid_file)], cwd=root,
+                                        env={"PATH":"/usr/bin:/bin"}, timeout=3, capture=capture)
+                        descendant = int(pid_file.read_text())
+                        self.assertIn(descendant, effects.unknown_pids)
+                        self.assertTrue(effects.topology_unknown)
+                        self.assertNotIn(descendant, effects.owned)
+                        self.assertFalse(effects.settle())
+                        sent.assert_not_called()
+                    os.kill(descendant, 0)
+                    effects._discover()
+                    self.assertIn(descendant, effects.unknown_pids)
+                    self.assertNotIn(descendant, effects.owned)
+                finally:
+                    if descendant is not None:
+                        try: os.kill(descendant, __import__("signal").SIGKILL)
+                        except ProcessLookupError: pass
+                        try: os.waitpid(descendant, 0)
+                        except ChildProcessError: pass
+
     def test_reused_pid_is_old_identity_dead_and_new_process_is_never_signalled(self):
         old = qualify.ProcessIdentity(4242, 10)
         with mock.patch.object(qualify, "_process_observation",

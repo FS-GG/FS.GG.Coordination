@@ -314,11 +314,18 @@ class Effects:
         self.cancelled = False
         self.owner_pid = os.getpid()
         self.owned: dict[int, ProcessIdentity] = {}
+        self.unknown_pids: set[int] = set()
         self.topology_unknown = False
         initial_children = _child_pids(self.owner_pid)
         if initial_children is None: raise Refusal("child-topology-refused")
-        self._baseline = {identity for pid in initial_children
-                          if (identity := _process_identity(pid)) is not None}
+        baseline: set[ProcessIdentity] = set()
+        for pid in initial_children:
+            state, identity = _process_observation(pid)
+            if state == "unknown": raise Refusal("child-topology-refused")
+            if state == "live":
+                assert identity is not None
+                baseline.add(identity)
+        self._baseline = baseline
         libc = ctypes.CDLL(None, use_errno=True)
         if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
             raise Refusal("child-subreaper-refused")
@@ -338,6 +345,13 @@ class Effects:
             try: os.kill(identity.pid, selected)
             except ProcessLookupError: pass
 
+    def _unknown_discovery(self, pid: int) -> None:
+        # A PID discovered through an owned topology edge is relevant to this
+        # scope, but unreadable stat data does not establish a start identity
+        # and therefore grants no authority to signal it.
+        self.unknown_pids.add(pid)
+        self.topology_unknown = True
+
     def _discover(self, root_pid: int | None = None) -> None:
         queue: list[int] = []
         if root_pid is not None: queue.append(root_pid)
@@ -347,16 +361,25 @@ class Effects:
             self.topology_unknown = True
             owner_children = ()
         for pid in owner_children:
-            identity = _process_identity(pid)
-            if identity is not None and identity not in self._baseline:
-                queue.append(pid)
+            if pid in self.unknown_pids: continue
+            state, identity = _process_observation(pid)
+            if state == "unknown":
+                if pid not in self.owned: self._unknown_discovery(pid)
+            elif state == "live":
+                assert identity is not None
+                if identity not in self._baseline: queue.append(pid)
         seen: set[int] = set()
         while queue:
             pid = queue.pop()
             if pid in seen: continue
             seen.add(pid)
-            identity = _process_identity(pid)
-            if identity is None: continue
+            if pid in self.unknown_pids: continue
+            state, identity = _process_observation(pid)
+            if state == "unknown":
+                if pid not in self.owned: self._unknown_discovery(pid)
+                continue
+            if state == "dead": continue
+            assert identity is not None
             prior = self.owned.get(pid)
             if prior is not None and prior != identity:
                 raise Refusal("child-identity-refused")
