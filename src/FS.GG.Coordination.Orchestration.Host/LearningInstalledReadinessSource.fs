@@ -229,6 +229,75 @@ module private LinuxFiles =
     let readExecutable maximumBytes expectedUid path =
         readPrivate maximumBytes expectedUid (set [ 0o500us; 0o700us; 0o555us; 0o755us ]) path
 
+    let hashExecutable maximumBytes expectedUid (token: CancellationToken) path =
+        try
+            if not (canonicalAbsolutePath path) then
+                Error "learning-installed-path-refused"
+            else
+                let descriptor = openFile (path, readOnly ||| closeOnExec ||| noFollow)
+
+                if descriptor < 0 then
+                    Error "learning-installed-file-unavailable"
+                else
+                    use handle = new SafeFileHandle(nativeint descriptor, true)
+
+                    match identity handle with
+                    | Error reason -> Error reason
+                    | Ok before when
+                        before.FileType <> regularFile
+                        || before.LinkCount <> 1u
+                        || before.OwnerUid <> expectedUid
+                        || not (Set.contains before.Mode (set [ 0o500us; 0o700us; 0o555us; 0o755us ]))
+                        || before.Size < 1UL
+                        || before.Size > uint64 maximumBytes
+                        ->
+                        Error "learning-installed-file-custody-refused"
+                    | Ok before ->
+                        use stream = new FileStream(handle, FileAccess.Read, 1048576, false)
+                        use digest = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+                        let buffer = Array.zeroCreate<byte> 1048576
+                        let mutable remaining = before.Size
+                        let mutable failure = None
+
+                        while remaining > 0UL && Option.isNone failure do
+                            if token.IsCancellationRequested then
+                                failure <- Some "learning-installed-readiness-cancelled"
+                            else
+                                let requested = int (min remaining (uint64 buffer.Length))
+                                let count = stream.Read(buffer, 0, requested)
+
+                                if count = 0 then
+                                    failure <- Some "learning-installed-file-truncated"
+                                else
+                                    digest.AppendData(buffer, 0, count)
+                                    remaining <- remaining - uint64 count
+
+                        match failure with
+                        | Some reason -> Error reason
+                        | None ->
+                            match identity handle with
+                            | Ok after when after = before ->
+                                let currentDescriptor = openFile (path, readOnly ||| closeOnExec ||| noFollow)
+
+                                if currentDescriptor < 0 then
+                                    Error "learning-installed-file-changed"
+                                else
+                                    use currentHandle = new SafeFileHandle(nativeint currentDescriptor, true)
+
+                                    match identity currentHandle with
+                                    | Ok current when current = before ->
+                                        digest.GetHashAndReset()
+                                        |> Convert.ToHexString
+                                        |> _.ToLowerInvariant()
+                                        |> Ok
+                                    | _ -> Error "learning-installed-file-changed"
+                            | _ -> Error "learning-installed-file-changed"
+        with
+        | :? IOException
+        | :? UnauthorizedAccessException
+        | :? ArgumentException
+        | :? NotSupportedException -> Error "learning-installed-file-unavailable"
+
     let validatePrivateDirectory expectedUid allowedModes path =
         try
             if not (canonicalAbsolutePath path) then
@@ -769,13 +838,14 @@ type LearningInstalledReadinessSource
                             return Error "learning-installed-selection-refused"
                         else
                             match
-                                LinuxFiles.readExecutable
-                                    (256 * 1024 * 1024)
+                                LinuxFiles.hashExecutable
+                                    (512 * 1024 * 1024)
                                     options.ExpectedExecutableOwnerUid
+                                    token
                                     executable
                             with
                             | Error reason -> return Error reason
-                            | Ok executableBytes when sha executableBytes <> executableSha ->
+                            | Ok observedExecutableSha when observedExecutableSha <> executableSha ->
                                 return Error "learning-installed-executable-changed"
                             | Ok _ ->
                                 match readPrivate 65536 sourceReferencePath with
