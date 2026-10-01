@@ -295,3 +295,26 @@ A receiver must select the [newly qualified paired artifacts](evidence/learn-01.
 explicitly; old-runner upgrade is separate and fails closed until those bytes are
 adopted. No scaffold, installer, provider account, collector credential or service
 is changed here.
+
+## W6 installed executable compatibility source window
+
+The installed reader now hashes the selected native executable through a held
+descriptor instead of allocating the whole file. Its executable-only ceiling is
+512 MiB, which admits the source-pinned 286,594,376-byte Codex artifact while
+remaining finite. The reader still requires the exact expected SHA-256, owner,
+mode, regular-file type and single link. It checks descriptor identity before and
+after streaming, including nanosecond modification and status-change times, and
+reopens the path to reject replacement. The executable observation refuses a
+missing `statx` type, mode, link, owner, timestamp, inode or size result and uses
+the containing-filesystem device identity. Truncation, cancellation and a
+512 MiB plus one byte file fail before producer authority. Small configuration
+and evidence files retain their existing bounds.
+
+Focused production-seam tests cover the exact pinned size, the ceiling refusal,
+digest drift, replacement, truncation and the prior small valid executable. This
+includes a same-inode already-read-prefix mutation with restored modification
+time; the changed status time prevents producer authority. The observations bind
+the measured read window and do not claim that no writer can act after the final
+check. This is source compatibility only. No Codex process ran, and installed
+custody, authentication, native capture, genuine producer receipts and LEARN
+enrollment remain open gates.
