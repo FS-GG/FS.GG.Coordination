@@ -5,12 +5,16 @@ namespace FS.GG.Coordination.Orchestration.Host
 open System
 open System.IO
 open System.Runtime.InteropServices
+open System.Runtime.CompilerServices
 open System.Security.Cryptography
 open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.Win32.SafeHandles
 open FS.GG.Coordination.Orchestration.Execution
+
+[<assembly: InternalsVisibleTo("FS.GG.Coordination.Orchestration.Host.Tests")>]
+do ()
 
 type LearningInstalledReadinessOptions =
     {
@@ -74,7 +78,7 @@ type ILearningInstalledReadinessSource =
         LearningSelectionQuery * CancellationToken -> Task<Result<LearningInstalledReadinessSnapshot, string>>
 
 [<StructLayout(LayoutKind.Explicit, Size = 256)>]
-type private LinuxStatx =
+type internal LinuxStatx =
     struct
         [<FieldOffset(0)>]
         val mutable Mask: uint32
@@ -97,14 +101,26 @@ type private LinuxStatx =
         [<FieldOffset(40)>]
         val mutable Size: uint64
 
-        [<FieldOffset(128)>]
+        [<FieldOffset(96)>]
+        val mutable ChangedSeconds: int64
+
+        [<FieldOffset(104)>]
+        val mutable ChangedNanoseconds: uint32
+
+        [<FieldOffset(112)>]
+        val mutable ModifiedSeconds: int64
+
+        [<FieldOffset(120)>]
+        val mutable ModifiedNanoseconds: uint32
+
+        [<FieldOffset(136)>]
         val mutable DeviceMajor: uint32
 
-        [<FieldOffset(132)>]
+        [<FieldOffset(140)>]
         val mutable DeviceMinor: uint32
     end
 
-type private PrivateFileIdentity =
+type internal PrivateFileIdentity =
     {
         DeviceMajor: uint32
         DeviceMinor: uint32
@@ -116,8 +132,17 @@ type private PrivateFileIdentity =
         LinkCount: uint32
     }
 
+type internal ExecutableFileObservation =
+    {
+        Identity: PrivateFileIdentity
+        ChangedSeconds: int64
+        ChangedNanoseconds: uint32
+        ModifiedSeconds: int64
+        ModifiedNanoseconds: uint32
+    }
+
 [<RequireQualifiedAccess>]
-module private LinuxFiles =
+module internal LinuxFiles =
     [<Literal>]
     let private readOnly = 0
 
@@ -137,6 +162,9 @@ module private LinuxFiles =
     let private statxBasicStats = 0x7ffu
 
     [<Literal>]
+    let executableStatxMask = 0x3cfu
+
+    [<Literal>]
     let private regularFile = 0x8000us
 
     [<Literal>]
@@ -154,24 +182,45 @@ module private LinuxFiles =
     [<DllImport("libc", EntryPoint = "geteuid")>]
     extern uint32 effectiveUserId()
 
-    let private identity (handle: SafeFileHandle) =
+    let private stat (handle: SafeFileHandle) =
         let mutable value = LinuxStatx()
         let descriptor = handle.DangerousGetHandle().ToInt32()
 
         if statx (descriptor, "", atEmptyPath, statxBasicStats, &value) <> 0 then
             Error "learning-installed-file-stat-refused"
         else
+            Ok value
+
+    let identityFromStatx (value: LinuxStatx) =
+        {
+            DeviceMajor = value.DeviceMajor
+            DeviceMinor = value.DeviceMinor
+            Inode = value.Inode
+            Size = value.Size
+            OwnerUid = value.OwnerUid
+            FileType = value.Mode &&& fileType
+            Mode = value.Mode &&& 0x1ffus
+            LinkCount = value.LinkCount
+        }
+
+    let executableObservationFromStatx (value: LinuxStatx) =
+        if value.Mask &&& executableStatxMask <> executableStatxMask then
+            Error "learning-installed-file-stat-refused"
+        else
             Ok
                 {
-                    DeviceMajor = value.DeviceMajor
-                    DeviceMinor = value.DeviceMinor
-                    Inode = value.Inode
-                    Size = value.Size
-                    OwnerUid = value.OwnerUid
-                    FileType = value.Mode &&& fileType
-                    Mode = value.Mode &&& 0x1ffus
-                    LinkCount = value.LinkCount
+                    Identity = identityFromStatx value
+                    ChangedSeconds = value.ChangedSeconds
+                    ChangedNanoseconds = value.ChangedNanoseconds
+                    ModifiedSeconds = value.ModifiedSeconds
+                    ModifiedNanoseconds = value.ModifiedNanoseconds
                 }
+
+    let private identity handle =
+        stat handle |> Result.map identityFromStatx
+
+    let private executableObservation handle =
+        stat handle |> Result.bind executableObservationFromStatx
 
     let private canonicalAbsolutePath (path: string) =
         not (String.IsNullOrWhiteSpace path)
@@ -228,6 +277,79 @@ module private LinuxFiles =
 
     let readExecutable maximumBytes expectedUid path =
         readPrivate maximumBytes expectedUid (set [ 0o500us; 0o700us; 0o555us; 0o755us ]) path
+
+    let hashExecutable maximumBytes expectedUid (token: CancellationToken) path =
+        try
+            if not (canonicalAbsolutePath path) then
+                Error "learning-installed-path-refused"
+            else
+                let descriptor = openFile (path, readOnly ||| closeOnExec ||| noFollow)
+
+                if descriptor < 0 then
+                    Error "learning-installed-file-unavailable"
+                else
+                    use handle = new SafeFileHandle(nativeint descriptor, true)
+
+                    match executableObservation handle with
+                    | Error reason -> Error reason
+                    | Ok before when
+                        before.Identity.FileType <> regularFile
+                        || before.Identity.LinkCount <> 1u
+                        || before.Identity.OwnerUid <> expectedUid
+                        || not (
+                            Set.contains
+                                before.Identity.Mode
+                                (set [ 0o500us; 0o700us; 0o555us; 0o755us ])
+                        )
+                        || before.Identity.Size < 1UL
+                        || before.Identity.Size > uint64 maximumBytes
+                        ->
+                        Error "learning-installed-file-custody-refused"
+                    | Ok before ->
+                        use stream = new FileStream(handle, FileAccess.Read, 1048576, false)
+                        use digest = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+                        let buffer = Array.zeroCreate<byte> 1048576
+                        let mutable remaining = before.Identity.Size
+                        let mutable failure = None
+
+                        while remaining > 0UL && Option.isNone failure do
+                            if token.IsCancellationRequested then
+                                failure <- Some "learning-installed-readiness-cancelled"
+                            else
+                                let requested = int (min remaining (uint64 buffer.Length))
+                                let count = stream.Read(buffer, 0, requested)
+
+                                if count = 0 then
+                                    failure <- Some "learning-installed-file-truncated"
+                                else
+                                    digest.AppendData(buffer, 0, count)
+                                    remaining <- remaining - uint64 count
+
+                        match failure with
+                        | Some reason -> Error reason
+                        | None ->
+                            match executableObservation handle with
+                            | Ok after when after = before ->
+                                let currentDescriptor = openFile (path, readOnly ||| closeOnExec ||| noFollow)
+
+                                if currentDescriptor < 0 then
+                                    Error "learning-installed-file-changed"
+                                else
+                                    use currentHandle = new SafeFileHandle(nativeint currentDescriptor, true)
+
+                                    match executableObservation currentHandle with
+                                    | Ok current when current = before ->
+                                        digest.GetHashAndReset()
+                                        |> Convert.ToHexString
+                                        |> _.ToLowerInvariant()
+                                        |> Ok
+                                    | _ -> Error "learning-installed-file-changed"
+                            | _ -> Error "learning-installed-file-changed"
+        with
+        | :? IOException
+        | :? UnauthorizedAccessException
+        | :? ArgumentException
+        | :? NotSupportedException -> Error "learning-installed-file-unavailable"
 
     let validatePrivateDirectory expectedUid allowedModes path =
         try
@@ -769,13 +891,14 @@ type LearningInstalledReadinessSource
                             return Error "learning-installed-selection-refused"
                         else
                             match
-                                LinuxFiles.readExecutable
-                                    (256 * 1024 * 1024)
+                                LinuxFiles.hashExecutable
+                                    (512 * 1024 * 1024)
                                     options.ExpectedExecutableOwnerUid
+                                    token
                                     executable
                             with
                             | Error reason -> return Error reason
-                            | Ok executableBytes when sha executableBytes <> executableSha ->
+                            | Ok observedExecutableSha when observedExecutableSha <> executableSha ->
                                 return Error "learning-installed-executable-changed"
                             | Ok _ ->
                                 match readPrivate 65536 sourceReferencePath with
