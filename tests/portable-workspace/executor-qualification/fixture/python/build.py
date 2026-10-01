@@ -1,7 +1,8 @@
+import os
 import pathlib
 import py_compile
 
-target = pathlib.Path("/output/python/app.pyc")
+target = pathlib.Path(os.environ.get("PORTABLE_OUTPUT_ROOT", "/output")) / "python/app.pyc"
 target.parent.mkdir(parents=True, exist_ok=True)
 py_compile.compile(
     "app.py",
@@ -10,3 +11,4 @@ py_compile.compile(
     doraise=True,
     invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH,
 )
+print("python-build-ok")
