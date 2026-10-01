@@ -213,6 +213,18 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/portable-workspace-python-provider-qualification.yml",
+      "sha256": "6a19c105fcfdc682975360fde518adfdba5ee31bf50f267ee01f91e44990dc0c",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
     }
   ]
 }

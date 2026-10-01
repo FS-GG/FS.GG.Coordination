@@ -26,6 +26,26 @@ type private PythonHelloRunner(fixtureRoot: string) =
     let mutable observedRequest: PortableProcessRequest option = None
     let mutable observedOutput = ""
 
+    do
+        File.WriteAllText(
+            Path.Combine(fixtureRoot, "python", "build.py"),
+            """import os
+import pathlib
+import py_compile
+
+target = pathlib.Path(os.environ.get("PORTABLE_OUTPUT_ROOT", "/output")) / "python/app.pyc"
+target.parent.mkdir(parents=True, exist_ok=True)
+py_compile.compile(
+    "app.py",
+    cfile=target,
+    dfile="/source/tests/portable-workspace/image/fixture/python/app.py",
+    doraise=True,
+    invalidation_mode=py_compile.PycInvalidationMode.CHECKED_HASH,
+)
+print("python-build-ok")
+"""
+        )
+
     let run request cancellationToken =
         task {
             calls <- calls + 1
@@ -42,6 +62,7 @@ type private PythonHelloRunner(fixtureRoot: string) =
 
             start.Environment.Clear()
             start.Environment.Add("PATH", "/usr/sbin:/usr/bin:/bin")
+            start.Environment.Add("PORTABLE_OUTPUT_ROOT", Path.Combine(fixtureRoot, "artifact"))
 
             for argument in request.Arguments do
                 start.ArgumentList.Add argument
@@ -199,7 +220,7 @@ type PortableWorkspaceRuntimeCommandTests() =
             Assert.Equal("/usr/local/bin/python3", request.Executable)
             Assert.Equal<string list>([ "test.py" ], request.Arguments)
             Assert.Equal("python", request.WorkingDirectory)
-            Assert.Equal("python-test-ok\n", runner.ObservedOutput)
+            Assert.Equal("python-build-ok\npython-test-ok\n", runner.ObservedOutput)
         }
 
     [<Fact>]
