@@ -15,7 +15,7 @@ import uuid
 
 
 SCHEMA = "fsgg.portable-workspace-python-provider-facts/1"
-IMAGE = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
+IMAGE = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:40085dd0a7c3c16af6b24e247cec47707bc957d6453f7e15d82636fcbf6f0755"
 ROLE_AGGREGATE_BYTES = {
     "receiver": 64 * 1024 * 1024,
     "runtime": 128 * 1024 * 1024,

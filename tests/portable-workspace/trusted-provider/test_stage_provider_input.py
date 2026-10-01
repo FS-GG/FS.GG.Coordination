@@ -157,7 +157,7 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="p4-stage-output-") as temporary:
         root = Path(temporary); args = fixture(root); args.output.mkdir()
         refusal(lambda: STAGE.assemble(args), "output or official runtime custody differs")
-    old_digest = "sha256:a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e"
+    old_digest = "sha256:e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
     def mutate_json(members: dict[str, bytes], name: str, edit) -> None:
         value = json.loads(members[name]); edit(value); members[name] = STAGE.canonical(value)
     with tempfile.TemporaryDirectory(prefix="p4-stage-old-image-") as temporary:

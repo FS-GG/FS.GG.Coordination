@@ -221,9 +221,15 @@ private facts; its actual archive and receipt hashes are read back rather than c
 preparation. Fresh preparation `36880017242` did not reproduce that identity: one generated Node compile-cache
 payload changed the final layer, yielding manifest `4c28a8fa06d12d917f66c12e419f16968b45b002ecebd3ed0aa12f8f8a1df51d`
 and config `f5d0ded18bb757d465a2dbffab5480fa4264161aed5d7face1aa7b6441c2bc16`.
-The build recipe must suppress that cache and the exported archive must refuse it. Two independent cold builds
-must then agree before one corrected semantic identity is reviewed; neither observed pair is repinned here.
-This source boundary does not qualify the provider, authorize a grant, publish 0.2.1 or close P4.
+Candidate `2d58f604372d7fcfc40ea6f03b3a0dd4815d1b7f` suppresses that cache and refuses an
+exported archive that contains it. Independent cold runs `36886526452` and `36886549027` produced identical OCI
+content while retaining their distinct archive and receipt custody. Both selected manifest
+`40085dd0a7c3c16af6b24e247cec47707bc957d6453f7e15d82636fcbf6f0755` and config
+`371d2b5db7c9708812ca8c3d752376e38aa81432a8bcbe7d99146414636dd872`; that reviewed semantic pair is now the
+fixed source policy. Run-specific archive and complete producer-receipt hashes remain mandatory authenticated
+inputs and are not compiled constants. This source qualification does not stage provider facts, authorize a
+grant, publish 0.2.1, activate a provider or close P4. A final protected producer must freshly build package
+0.2.1 and this image together and reproduce the fixed semantic pair before public staging and private facts.
 
 ## Workspace impact
 
