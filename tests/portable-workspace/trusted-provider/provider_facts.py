@@ -16,6 +16,12 @@ import uuid
 
 SCHEMA = "fsgg.portable-workspace-python-provider-facts/1"
 IMAGE = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e"
+ROLE_AGGREGATE_BYTES = {
+    "receiver": 64 * 1024 * 1024,
+    "runtime": 128 * 1024 * 1024,
+}
+MAX_ENTRIES = 4096
+MAX_FILE_BYTES = 16 * 1024 * 1024
 
 
 def canonical(value: object) -> bytes:
@@ -35,7 +41,10 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
-def tree_digest(root: Path) -> tuple[str, list[dict[str, object]]]:
+def tree_digest(root: Path, role: str) -> tuple[str, list[dict[str, object]]]:
+    if role not in ROLE_AGGREGATE_BYTES:
+        raise ValueError("payload role is not closed")
+    aggregate_bound = ROLE_AGGREGATE_BYTES[role]
     files: list[dict[str, object]] = []
     total = 0
     for path in sorted(root.rglob("*"), key=lambda item: item.relative_to(root).as_posix()):
@@ -50,8 +59,8 @@ def tree_digest(root: Path) -> tuple[str, list[dict[str, object]]]:
         relative = path.relative_to(root).as_posix()
         size = path.stat().st_size
         total += size
-        if len(files) >= 4096 or size > 16 * 1024 * 1024 or total > 64 * 1024 * 1024:
-            raise ValueError("payload exceeds receiver bounds")
+        if len(files) >= MAX_ENTRIES or size > MAX_FILE_BYTES or total > aggregate_bound:
+            raise ValueError(f"payload exceeds {role} bounds")
         files.append({"path": relative, "sha256": sha256(path), "size": size})
     lines = "".join(f"{item['sha256']} {item['size']} {item['path']}\n" for item in files)
     return hashlib.sha256(lines.encode()).hexdigest(), files
@@ -105,10 +114,10 @@ def collect(args: argparse.Namespace) -> None:
     commit, tree = git(receiver, "rev-parse", "HEAD"), git(receiver, "rev-parse", "HEAD^{tree}")
     tracked = git(receiver, "ls-files", "-z").split("\0")
     tracked = [value for value in tracked if value]
-    payload_digest, payload = tree_digest(receiver)
+    payload_digest, payload = tree_digest(receiver, "receiver")
     if [item["path"] for item in payload] != tracked:
         raise ValueError("receiver inventory differs from tracked paths")
-    runtime_digest, runtime_files = tree_digest(args.runtime.resolve())
+    runtime_digest, runtime_files = tree_digest(args.runtime.resolve(), "runtime")
     profile_value = profile(commit)
     profile_bytes = contract_bytes(profile_value)
     args.profile.write_bytes(profile_bytes)
@@ -157,7 +166,7 @@ def verify(args: argparse.Namespace) -> None:
             or facts["installedCli"] != candidate["installedCli"]):
         raise ValueError("installed candidate differs from provider facts")
     receiver = args.receiver.resolve()
-    payload_digest, payload = tree_digest(receiver)
+    payload_digest, payload = tree_digest(receiver, "receiver")
     if git(receiver, "status", "--porcelain") or git(receiver, "rev-parse", "HEAD") != facts["receiver"]["commit"]:
         raise ValueError("receiver commit or cleanliness changed")
     if git(receiver, "rev-parse", "HEAD^{tree}") != facts["receiver"]["tree"]:
@@ -166,7 +175,7 @@ def verify(args: argparse.Namespace) -> None:
         raise ValueError("receiver payload changed")
     if [{"path": item["path"], "sha256": item["sha256"]} for item in payload] != facts["receiver"]["projectedPayload"]:
         raise ValueError("receiver inventory changed")
-    runtime_digest, runtime_files = tree_digest(args.runtime.resolve())
+    runtime_digest, runtime_files = tree_digest(args.runtime.resolve(), "runtime")
     if runtime_digest != facts["runtime"]["payloadSha256"] or runtime_files != facts["runtime"]["files"]:
         raise ValueError("runtime payload changed")
     for value in facts["executables"].values():
