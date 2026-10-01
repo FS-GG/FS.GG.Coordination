@@ -1,4 +1,10 @@
-module FourDOperation {
+namespace FS.GG.FourD.Typed
+
+/// Canonical authored source for the FourD operation model. The Quint file is generated only
+/// into an owned temporary path so generated protocol artifacts never become repository authority.
+module FourDOperationModel =
+    [<Literal>]
+    let Source = """module FourDOperation {
   type State = {
     phase: str,
     acquiredIdentity: int,
@@ -141,3 +147,4 @@ module FourDOperationCleanupFailureCorrespondence {
     else if (state.phase=="cleanup" and state.closed==0) state'=Model::cleanupNext(state,1)
     else state'=Model::finishNext(state)
 }
+"""

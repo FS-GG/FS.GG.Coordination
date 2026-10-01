@@ -7,6 +7,7 @@
     <IsPackable>false</IsPackable>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="FourDOperationModel.fs" />
     <Compile Include="Join.fs" />
     <Compile Include="Policy.fs" />
     <Compile Include="Program.fs" />

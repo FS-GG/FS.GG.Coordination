@@ -158,10 +158,22 @@ module Program =
             File.WriteAllText(output, JsonSerializer.Serialize(
                 {| schema="fsgg.fourd.typed-root-join/1"; accepted=true; identity=identity |}, options)+"\n"); 0
 
+    let private generateQuint output =
+        let path = Path.GetFullPath output
+        let parent = Path.GetDirectoryName path
+        if String.IsNullOrWhiteSpace parent || not (Directory.Exists parent) || File.Exists path then
+            invalidArg "output" "typed-quint-output-refused"
+        use stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+        use writer = new StreamWriter(stream, Text.UTF8Encoding(false))
+        writer.Write(FourDOperationModel.Source)
+        writer.Flush()
+        0
+
     [<EntryPoint>]
     let main argv =
         try
-            if argv.Length <> 3 then 2
+            if argv.Length = 2 && argv[0] = "generate-quint" then generateQuint argv[1]
+            elif argv.Length <> 3 then 2
             elif argv[0] = "transition" then execute argv[1] argv[2]
             elif argv[0] = "validate-join" then validateJoin argv[1] argv[2]
             elif argv[0] = "validate-root" then validateRoot argv[1] argv[2]
