@@ -208,6 +208,14 @@ performs no learning owner read. The initial admission accepts the roster-derive
 canonical WorkItem digest while retaining the observation revision join, so it
 can durably assign a genuinely prospective root and reread the same authority
 before an effect intent without relabelling an assigned item as prospective.
+That reread requires a typed execution-journal phase bound to the exact
+assignment, attempt and generation. `assigned-unlaunched` is the only assigned
+phase allowed without usage or shared-cost counters, and it requires an
+authoritative route binding plus absence of a first dispatch. A started or
+terminal member requires its retained first-dispatch identity and real accounting;
+missing phase, early counters and a launch without counters all refuse. The Host
+pins the first assigned reread and requires the pre-intent reread to be identical,
+so an intervening dispatch or source change cannot cross the intent fence.
 
 This is an owning-ready source window, not installed W6 delivery. Production
 composition reports `learning-installed-origin-receipt-producer-unavailable`

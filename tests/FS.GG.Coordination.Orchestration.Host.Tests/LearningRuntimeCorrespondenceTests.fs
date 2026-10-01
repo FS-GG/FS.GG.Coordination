@@ -591,6 +591,36 @@ type private ExactLearningProvider(evidence: LearningSelectionEvidence) =
         member _.LaunchLearning(_, _) =
             Task.FromException<LaunchResult>(InvalidOperationException "Host admission must not launch the provider")
 
+type private ComposedTransitioningReadinessSource
+    (
+        now: DateTimeOffset,
+        key: LearningOperationalWindowKey,
+        authority: LearningOperationalAuthorityRecord,
+        cohort: LearningOperationalCohortRecord,
+        prospective: LearningOperationalCensusRecord,
+        assigned: LearningOperationalCensusRecord
+    ) =
+    let mutable reads = 0
+    member _.Reads = reads
+
+    interface ILearningOperationalReadinessSource with
+        member _.ReadLearningOperationalReadiness(actualKey, _) =
+            reads <- reads + 1
+
+            if actualKey <> key then
+                Task.FromResult(Error "controlled-readiness-key-refused")
+            else
+                let census = if reads = 1 then prospective else assigned
+
+                LearningOperationalWindow.composeAuthoritativeReadiness
+                    now
+                    (TimeSpan.FromMinutes 10.)
+                    key
+                    authority
+                    cohort
+                    census
+                |> Task.FromResult
+
 let private operationalWindow
     (assignedAt: DateTimeOffset)
     (originalItemId: string)
@@ -625,37 +655,115 @@ let private operationalWindow
         |> List.map (fun value -> request (value.ToString("x2") |> String.replicate 32))
         |> List.find (fun candidate -> LearningOperationalWindow.deriveArm candidate = armName)
 
-    let evidence: LearningOperationalReadinessEvidence =
+    let key = { WindowId = selected.WindowId; OriginalItemId = originalItemId }
+
+    let source producer record observedAt =
         {
-            Schema = LearningOperationalWindow.readinessSchema
-            WindowId = selected.WindowId
+            ProducerId = producer
+            Revision = string admission.WorkflowRevision
+            RecordId = record
+            ObservedAt = observedAt
+        }
+
+    let roles = [ "root"; "child"; "retry"; "review"; "rescue"; "repair" ]
+
+    let authority =
+        {
+            Key = key
+            Source = source "observer-journal" "authority" (assignedAt.AddMinutes -1.)
+            Enabled = true
             Repository = selected.Repository
-            WorkClassId = LearningOperationalWindow.workClassId
-            OriginalItemId = originalItemId
+            CalendarAdmissionBlock = selected.CalendarAdmissionBlock
+            SeedReferenceSha256 = selected.SeedReferenceSha256
+            AuthorityId = selected.AuthorityId
+            AuthorityRevision = selected.AuthorityRevision
+            OptedInAt = selected.OptedInAt
+            EnrollmentOpensAt = selected.EnrollmentOpensAt
+            EnrollmentClosesAt = selected.EnrollmentClosesAt
+            RevokedAt = None
+        }
+
+    let cohort =
+        {
+            Key = key
+            Source = source "observer-journal" "cohort" (assignedAt.AddMinutes -1.)
+            AppliedAt = assignedAt.AddMinutes -2.
             AcceptedPlanSha256 = acceptedPlanSha256
             CanonicalWorkItemSha256 = canonicalWorkItemSha256
-            CoverageRosterSha256 = String.replicate 64 "3"
-            DispatchCensusSha256 = String.replicate 64 "4"
-            NativeDeliverySha256 = String.replicate 64 "5"
-            SharedCostRosterSha256 = String.replicate 64 "6"
-            ObservedAt = assignedAt.AddMinutes -1.
-            ExpiresAt = assignedAt.AddMinutes 5.
-            CompleteNativeUsage = true
-            UnassignedSharedAllocation = true
-            Provenance = "controlled-independent-readiness"
+            Members =
+                roles
+                |> List.mapi (fun index role ->
+                    {
+                        ItemId = if index = 0 then originalItemId else $"{originalItemId}-{role}"
+                        OriginalItemId = originalItemId
+                        Role = role
+                    })
+        }
+
+    let prospectiveMembers =
+        cohort.Members
+        |> List.map (fun memberValue ->
+            {
+                ItemId = memberValue.ItemId
+                OriginalItemId = originalItemId
+                Role = memberValue.Role
+                State = "prospective"
+                Source = source "execution-census" ($"prospective-{memberValue.Role}") (assignedAt.AddMinutes -1.)
+                NativeUsageSha256 = None
+                SharedCostSha256 = None
+                Execution = None
+            })
+
+    let prospective =
+        {
+            Key = key
+            Source = source "execution-census" "prospective" (assignedAt.AddMinutes -1.)
+            InstalledCustody = Some(source "installed-owner" "custody" (assignedAt.AddMinutes -1.))
+            ProviderCapability = Some(source "installed-owner" "capability" (assignedAt.AddMinutes -1.))
+            NativeDeliveryRevision = "no-native-delivery-before-assignment"
+            Members = prospectiveMembers
+        }
+
+    let assigned =
+        { prospective with
+            Source = source "execution-census" "assigned" assignedAt
+            Members =
+                prospectiveMembers
+                |> List.map (fun memberValue ->
+                    if memberValue.Role = "root" then
+                        { memberValue with
+                            State = "assigned"
+                            Source = source "execution-census" "assigned-root" assignedAt
+                            Execution =
+                                Some
+                                    {
+                                        AssignmentId = admission.ProcessOperationId
+                                        AttemptId = admission.AttemptId
+                                        Generation = 1L
+                                        Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                                        FirstDispatchSha256 = None
+                                        Source = source "execution-route-store" "route-binding" assignedAt
+                                    }
+                        }
+                    else
+                        memberValue)
         }
 
     let snapshot =
-        {
-            Request = selected
-            Evidence = evidence
-        }
-
-    let prepared =
-        LearningOperationalWindow.prepare assignedAt selected evidence
+        LearningOperationalWindow.composeAuthoritativeReadiness
+            assignedAt
+            (TimeSpan.FromMinutes 10.)
+            key
+            authority
+            cohort
+            prospective
         |> Result.defaultWith failwith
 
-    snapshot, prepared
+    let prepared =
+        LearningOperationalWindow.prepare assignedAt snapshot.Request snapshot.Evidence
+        |> Result.defaultWith failwith
+
+    snapshot, prepared, key, authority, cohort, prospective, assigned
 
 [<Fact>]
 let ``operational admission requires a durable pre-assignment window before launch`` () =
@@ -665,7 +773,7 @@ let ``operational admission requires a durable pre-assignment window before laun
 
         let request, _, evidence = selectionFor prepared
 
-        let readinessSnapshot, window =
+        let readinessSnapshot, window, windowKey, windowAuthority, windowCohort, prospectiveCensus, assignedCensus =
             operationalWindow
                 treatment.AssignedAt
                 treatment.OriginalItemId
@@ -675,7 +783,25 @@ let ``operational admission requires a durable pre-assignment window before laun
                 (String.replicate 64 "9")
 
         let producerWindows = ExactOperationalWindowStore(Some window.Binding)
-        let producerReadiness = ExactOperationalReadinessSource(Some readinessSnapshot)
+        let producerReadiness =
+            ComposedTransitioningReadinessSource(
+                treatment.AssignedAt,
+                windowKey,
+                windowAuthority,
+                windowCohort,
+                prospectiveCensus,
+                assignedCensus
+            )
+
+        let assignedSnapshot =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                treatment.AssignedAt
+                (TimeSpan.FromMinutes 10.)
+                windowKey
+                windowAuthority
+                windowCohort
+                assignedCensus
+            |> Result.defaultWith failwith
 
         let runWithReadiness enabled stored (readiness: ILearningOperationalReadinessSource) (clock: TimeProvider) =
             task {
@@ -730,7 +856,7 @@ let ``operational admission requires a durable pre-assignment window before laun
         let! preparedAssignment =
             LearningMainAdmission.prepareOperationalAssignment
                 (Fixture.FixedClock())
-                producerReadiness
+                (producerReadiness :> ILearningOperationalReadinessSource)
                 (ExactOperationalWindowStore(None))
                 {
                     WindowId = readinessSnapshot.Request.WindowId
@@ -746,7 +872,11 @@ let ``operational admission requires a durable pre-assignment window before laun
         Assert.Equal(window.Binding, preparedWindow.Binding)
 
         let! accepted, attempts, _, bindings, observations =
-            run true producerWindows.Value producerReadiness.Value (Fixture.FixedClock())
+            runWithReadiness
+                true
+                producerWindows.Value
+                (producerReadiness :> ILearningOperationalReadinessSource)
+                (Fixture.FixedClock())
 
         let admitted = accepted |> Result.defaultWith failwith
         Assert.True(bindings.BeforeIntent)
@@ -755,28 +885,37 @@ let ``operational admission requires a durable pre-assignment window before laun
         Assert.Equal(LearningExecutionBinding.operationalSchema, admitted.Binding.Schema)
         Assert.False(admitted.Binding.QualificationOnly)
         Assert.Equal(Some window.Binding, admitted.Binding.OperationalWindow)
+        Assert.Equal(3, producerReadiness.Reads)
 
-        let assignedEvidence =
-            { readinessSnapshot.Evidence with
-                DispatchCensusSha256 = String.replicate 64 "a"
-                NativeDeliverySha256 = String.replicate 64 "b"
-                SharedCostRosterSha256 = String.replicate 64 "c"
-                UnassignedSharedAllocation = false
+        let nativeBeginWithoutCounters =
+            { assignedCensus with
+                Members =
+                    assignedCensus.Members
+                    |> List.map (fun memberValue ->
+                        if memberValue.Role = "root" then
+                            { memberValue with
+                                Execution =
+                                    memberValue.Execution
+                                    |> Option.map (fun execution ->
+                                        { execution with
+                                            Phase = LearningOperationalExecutionPhase.Started
+                                            FirstDispatchSha256 = Some(String.replicate 64 "7")
+                                        })
+                            }
+                        else
+                            memberValue)
             }
 
-        let assignedReadiness =
-            SequencedOperationalReadinessSource(
-                readinessSnapshot,
-                { readinessSnapshot with Evidence = assignedEvidence }
-            )
-
-        let! acceptedAfterAssignment, assignedAttempts, _, assignedBindings, _ =
-            runWithReadiness true (Some window.Binding) assignedReadiness (Fixture.FixedClock())
-
-        Assert.True(acceptedAfterAssignment |> Result.isOk)
-        Assert.Equal(2, assignedReadiness.Reads)
-        Assert.Equal(1, assignedAttempts)
-        Assert.True(assignedBindings.BeforeIntent)
+        Assert.Equal(
+            Error "learning-operational-readiness-accounting-unknown",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                treatment.AssignedAt
+                (TimeSpan.FromMinutes 10.)
+                windowKey
+                windowAuthority
+                windowCohort
+                nativeBeginWithoutCounters
+        )
 
         Assert.Equal(
             (match treatment.Arm with
@@ -838,7 +977,7 @@ let ``operational admission requires a durable pre-assignment window before laun
                     childExecutor
                     childExecutor
                     childBindings
-                    producerReadiness
+                    (producerReadiness :> ILearningOperationalReadinessSource)
                     producerWindows
                     identity
                     "pilot-route"
@@ -860,7 +999,7 @@ let ``operational admission requires a durable pre-assignment window before laun
             Assert.Equal(1, childExecutor.AttemptCount)
 
         let! absent, absentAttempts, absentWrites, _, _ =
-            run true None producerReadiness.Value (Fixture.FixedClock())
+            run true None (Some assignedSnapshot) (Fixture.FixedClock())
 
         Assert.Equal(Error "learning-main-admission-operational-window-unavailable", absent)
         Assert.Equal(0, absentAttempts)
@@ -885,14 +1024,14 @@ let ``operational admission requires a durable pre-assignment window before laun
             }
 
         let! changedResult, changedAttempts, changedWrites, _, _ =
-            run true (Some changed) producerReadiness.Value (Fixture.FixedClock())
+            run true (Some changed) (Some assignedSnapshot) (Fixture.FixedClock())
 
         Assert.Equal(Error "learning-main-admission-operational-window-not-durable", changedResult)
         Assert.Equal(0, changedAttempts)
         Assert.Equal(0, changedWrites)
 
         let! disabled, disabledAttempts, disabledWrites, _, disabledObservations =
-            run false (Some window.Binding) producerReadiness.Value (Fixture.FixedClock())
+            run false (Some window.Binding) (Some assignedSnapshot) (Fixture.FixedClock())
 
         Assert.Equal(Error "learning-main-admission-operational-disabled", disabled)
         Assert.Equal(0, disabledAttempts)
@@ -925,7 +1064,7 @@ let ``operational admission requires a durable pre-assignment window before laun
             run
                 true
                 (Some window.Binding)
-                producerReadiness.Value
+                (Some assignedSnapshot)
                 (ExactClock(readinessSnapshot.Evidence.ExpiresAt) :> TimeProvider)
 
         Assert.Equal(Error "learning-operational-window-readiness-stale", expired)
@@ -933,15 +1072,15 @@ let ``operational admission requires a durable pre-assignment window before laun
         Assert.Equal(0, expiredWrites)
 
         let changedReadiness =
-            { readinessSnapshot with
+            { assignedSnapshot with
                 Evidence =
-                    { readinessSnapshot.Evidence with
+                    { assignedSnapshot.Evidence with
                         DispatchCensusSha256 = String.replicate 64 "e"
                     }
             }
 
         let changingSource =
-            SequencedOperationalReadinessSource(readinessSnapshot, changedReadiness)
+            SequencedOperationalReadinessSource(assignedSnapshot, changedReadiness)
 
         let! changedAtFence, changedAtFenceAttempts, _, changedAtFenceBindings, _ =
             runWithReadiness true (Some window.Binding) changingSource (Fixture.FixedClock())
@@ -950,6 +1089,31 @@ let ``operational admission requires a durable pre-assignment window before laun
         Assert.Equal(2, changingSource.Reads)
         Assert.Equal(0, changedAtFenceAttempts)
         Assert.False(changedAtFenceBindings.BeforeIntent)
+
+        let selectedExecution = assignedSnapshot.SelectedExecution |> Option.defaultWith (fun () -> failwith "execution")
+
+        let alteredExecutions =
+            [
+                None
+                Some { selectedExecution with AssignmentId = Guid.NewGuid() }
+                Some { selectedExecution with AttemptId = Guid.NewGuid() }
+                Some { selectedExecution with Generation = selectedExecution.Generation + 1L }
+                Some
+                    { selectedExecution with
+                        Phase = LearningOperationalExecutionPhase.Started
+                        FirstDispatchSha256 = Some(String.replicate 64 "7")
+                    }
+            ]
+
+        for altered in alteredExecutions do
+            let alteredSnapshot = { assignedSnapshot with SelectedExecution = altered }
+            let source = SequencedOperationalReadinessSource(assignedSnapshot, alteredSnapshot)
+            let! result, attemptCount, _, alteredBindings, _ =
+                runWithReadiness true (Some window.Binding) source (Fixture.FixedClock())
+
+            Assert.Equal(Error "learning-main-admission-operational-readiness-changed", result)
+            Assert.Equal(0, attemptCount)
+            Assert.False(alteredBindings.BeforeIntent)
     }
 
 [<Fact>]

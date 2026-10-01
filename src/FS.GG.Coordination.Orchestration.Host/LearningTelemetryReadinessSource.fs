@@ -120,7 +120,7 @@ module LearningTelemetryReadinessDocument =
             use document = JsonDocument.Parse(json, JsonDocumentOptions(MaxDepth = 32, AllowTrailingCommas = false))
             let root = document.RootElement
             let fields = set [ "schema"; "status"; "key"; "source"; "nativeDeliveryRevision"; "members"; "unavailable"; "workspaceSha256" ]
-            if not (exactFields fields root) || root.GetProperty("schema").GetString() <> "fsgg.learn.telemetry-readiness-census/1" then
+            if not (exactFields fields root) || root.GetProperty("schema").GetString() <> "fsgg.learn.telemetry-readiness-census/2" then
                 Error "learning-telemetry-reader-schema-invalid"
             elif root.GetProperty("status").GetString() <> "ready" then
                 let reasons = root.GetProperty("unavailable").EnumerateArray() |> Seq.map _.GetString() |> String.concat ","
@@ -139,7 +139,7 @@ module LearningTelemetryReadinessDocument =
                         let identities = System.Collections.Generic.HashSet<string>(StringComparer.Ordinal)
                         let mutable failure = None
                         for censusMember in root.GetProperty("members").EnumerateArray() do
-                            let memberFields = set [ "itemId"; "originalItemId"; "role"; "state"; "source"; "nativeUsageSha256"; "sharedCostSha256" ]
+                            let memberFields = set [ "itemId"; "originalItemId"; "role"; "state"; "source"; "nativeUsageSha256"; "sharedCostSha256"; "execution" ]
                             if failure.IsNone && not (exactFields memberFields censusMember) then
                                 failure <- Some "learning-telemetry-reader-member-schema-invalid"
                             elif failure.IsNone then
@@ -148,9 +148,72 @@ module LearningTelemetryReadinessDocument =
                                     let optionalDigest (name: string) =
                                         let value = censusMember.GetProperty name
                                         if value.ValueKind = JsonValueKind.Null then None else Some(value.GetString())
-                                    members.Add { ItemId = item; OriginalItemId = original; Role = role; State = state; Source = memberSource
-                                                  NativeUsageSha256 = optionalDigest "nativeUsageSha256"
-                                                  SharedCostSha256 = optionalDigest "sharedCostSha256" }
+
+                                    let execution =
+                                        let value = censusMember.GetProperty "execution"
+
+                                        if value.ValueKind = JsonValueKind.Null then
+                                            Ok None
+                                        elif
+                                            not (
+                                                exactFields
+                                                    (set
+                                                        [
+                                                            "assignmentId"
+                                                            "attemptId"
+                                                            "generation"
+                                                            "phase"
+                                                            "firstDispatchSha256"
+                                                            "source"
+                                                        ])
+                                                    value
+                                            )
+                                        then
+                                            Error "learning-telemetry-reader-execution-schema-invalid"
+                                        else
+                                            match
+                                                Guid.TryParse(value.GetProperty("assignmentId").GetString()),
+                                                Guid.TryParse(value.GetProperty("attemptId").GetString()),
+                                                value.GetProperty("generation").TryGetInt64(),
+                                                text "phase" value,
+                                                source (value.GetProperty "source")
+                                            with
+                                            | (true, assignment), (true, attempt), (true, generation), Ok phaseName, Ok executionSource ->
+                                                let dispatch =
+                                                    let property = value.GetProperty "firstDispatchSha256"
+                                                    if property.ValueKind = JsonValueKind.Null then None else Some(property.GetString())
+
+                                                let phase =
+                                                    match phaseName with
+                                                    | "assigned-unlaunched" ->
+                                                        Some LearningOperationalExecutionPhase.AssignedUnlaunched
+                                                    | "started" -> Some LearningOperationalExecutionPhase.Started
+                                                    | "terminal" -> Some LearningOperationalExecutionPhase.Terminal
+                                                    | _ -> None
+
+                                                match phase with
+                                                | Some phase ->
+                                                    Ok(
+                                                        Some
+                                                            {
+                                                                AssignmentId = assignment
+                                                                AttemptId = attempt
+                                                                Generation = generation
+                                                                Phase = phase
+                                                                FirstDispatchSha256 = dispatch
+                                                                Source = executionSource
+                                                            }
+                                                    )
+                                                | None -> Error "learning-telemetry-reader-execution-invalid"
+                                            | _ -> Error "learning-telemetry-reader-execution-invalid"
+
+                                    match execution with
+                                    | Error reason -> failure <- Some reason
+                                    | Ok execution ->
+                                        members.Add { ItemId = item; OriginalItemId = original; Role = role; State = state; Source = memberSource
+                                                      NativeUsageSha256 = optionalDigest "nativeUsageSha256"
+                                                      SharedCostSha256 = optionalDigest "sharedCostSha256"
+                                                      Execution = execution }
                                 | _ -> failure <- Some "learning-telemetry-reader-member-invalid"
                         match failure with
                         | Some reason -> Error reason

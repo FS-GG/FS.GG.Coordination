@@ -95,12 +95,6 @@ type LearningOperationalWindowKey =
         OriginalItemId: string
     }
 
-type LearningOperationalReadinessSnapshot =
-    {
-        Request: LearningOperationalWindowRequest
-        Evidence: LearningOperationalReadinessEvidence
-    }
-
 /// Stable identity of a record read from an authoritative owner.  The digest of
 /// the joined readiness record is computed by this assembly; producers do not
 /// get to provide the readiness digests consumed by admission.
@@ -154,6 +148,29 @@ type LearningOperationalCensusMember =
         Source: LearningOperationalProducerIdentity
         NativeUsageSha256: string option
         SharedCostSha256: string option
+        Execution: LearningOperationalExecutionRecord option
+    }
+
+and LearningOperationalExecutionRecord =
+    {
+        AssignmentId: Guid
+        AttemptId: Guid
+        Generation: int64
+        Phase: LearningOperationalExecutionPhase
+        FirstDispatchSha256: string option
+        Source: LearningOperationalProducerIdentity
+    }
+
+and [<RequireQualifiedAccess>] LearningOperationalExecutionPhase =
+    | AssignedUnlaunched
+    | Started
+    | Terminal
+
+type LearningOperationalReadinessSnapshot =
+    {
+        Request: LearningOperationalWindowRequest
+        Evidence: LearningOperationalReadinessEvidence
+        SelectedExecution: LearningOperationalExecutionRecord option
     }
 
 type LearningOperationalCensusRecord =
@@ -299,6 +316,22 @@ module LearningOperationalWindow =
         | "unfinished" -> true
         | _ -> false
 
+    let private executionBytes (value: LearningOperationalExecutionRecord) =
+        let phase =
+            match value.Phase with
+            | LearningOperationalExecutionPhase.AssignedUnlaunched -> "assigned-unlaunched"
+            | LearningOperationalExecutionPhase.Started -> "started"
+            | LearningOperationalExecutionPhase.Terminal -> "terminal"
+
+        [
+            value.AssignmentId.ToString("D")
+            value.AttemptId.ToString("D")
+            string value.Generation
+            phase
+            Option.defaultValue "" value.FirstDispatchSha256
+            yield! producerBytes value.Source
+        ]
+
     let private cohortMemberBytes (value: LearningOperationalCohortMember) =
         [ value.ItemId; value.OriginalItemId; value.Role ]
 
@@ -310,6 +343,7 @@ module LearningOperationalWindow =
             value.State
             Option.defaultValue "" value.NativeUsageSha256
             Option.defaultValue "" value.SharedCostSha256
+            yield! value.Execution |> Option.map executionBytes |> Option.defaultValue [ "no-execution" ]
             yield! producerBytes value.Source
         ]
 
@@ -460,6 +494,18 @@ module LearningOperationalWindow =
             || not (validProducer value.Source)
             || (value.NativeUsageSha256 |> Option.exists (sha >> not))
             || (value.SharedCostSha256 |> Option.exists (sha >> not))
+            || (value.Execution
+                |> Option.exists (fun execution ->
+                    execution.AssignmentId = Guid.Empty
+                    || execution.AttemptId = Guid.Empty
+                    || execution.Generation < 0L
+                    || not (validProducer execution.Source)
+                    || (execution.FirstDispatchSha256 |> Option.exists (sha >> not))
+                    || match execution.Phase, execution.FirstDispatchSha256 with
+                       | LearningOperationalExecutionPhase.AssignedUnlaunched, None
+                       | LearningOperationalExecutionPhase.Started, Some _
+                       | LearningOperationalExecutionPhase.Terminal, Some _ -> false
+                       | _ -> true))
 
         let targetCohort =
             cohort.Members
@@ -548,10 +594,22 @@ module LearningOperationalWindow =
         elif
             census.Members
             |> List.exists (fun memberValue ->
-                if memberValue.State = "prospective" then
+                match memberValue.State, memberValue.Execution with
+                | "prospective", None ->
                     memberValue.NativeUsageSha256.IsSome || memberValue.SharedCostSha256.IsSome
-                else
-                    memberValue.NativeUsageSha256.IsNone || memberValue.SharedCostSha256.IsNone)
+                | "assigned", Some execution when
+                    execution.Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                    ->
+                    memberValue.NativeUsageSha256.IsSome || memberValue.SharedCostSha256.IsSome
+                | "assigned", Some execution when execution.Phase = LearningOperationalExecutionPhase.Started ->
+                    memberValue.NativeUsageSha256.IsNone || memberValue.SharedCostSha256.IsNone
+                | "unfinished", Some execution when execution.Phase = LearningOperationalExecutionPhase.Started ->
+                    memberValue.NativeUsageSha256.IsNone || memberValue.SharedCostSha256.IsNone
+                | ("completed" | "cancelled" | "failed"), Some execution when
+                    execution.Phase = LearningOperationalExecutionPhase.Terminal
+                    ->
+                    memberValue.NativeUsageSha256.IsNone || memberValue.SharedCostSha256.IsNone
+                | _ -> true)
         then
             Error "learning-operational-readiness-accounting-unknown"
         elif
@@ -643,6 +701,7 @@ module LearningOperationalWindow =
                 {
                     Request = request
                     Evidence = evidence
+                    SelectedExecution = targetCensus |> Option.bind _.Execution
                 }
 
     let assignmentInput (request: LearningOperationalWindowRequest) =

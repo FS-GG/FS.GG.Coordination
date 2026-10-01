@@ -115,7 +115,7 @@ type LearningOperationalWindowTests() =
                 NativeDeliveryRevision = "capture-2"
                 Members =
                     List.map2
-                        (fun (itemId, role) state ->
+                        (fun (index, (itemId, role)) state ->
                             let actual = state <> "prospective"
 
                             {
@@ -126,8 +126,26 @@ type LearningOperationalWindowTests() =
                                 Source = source "utel-native-census" ("input-" + itemId) (assignedAt.AddMinutes -2.)
                                 NativeUsageSha256 = if actual then Some(digest "e") else None
                                 SharedCostSha256 = if actual then Some(digest "f") else None
+                                Execution =
+                                    if not actual then
+                                        None
+                                    else
+                                        Some
+                                            {
+                                                AssignmentId = Guid.Parse($"10000000-0000-0000-0000-00000000000{index + 1}")
+                                                AttemptId = Guid.Parse($"20000000-0000-0000-0000-00000000000{index + 1}")
+                                                Generation = 3L
+                                                Phase =
+                                                    match state with
+                                                    | "completed"
+                                                    | "cancelled"
+                                                    | "failed" -> LearningOperationalExecutionPhase.Terminal
+                                                    | _ -> LearningOperationalExecutionPhase.Started
+                                                FirstDispatchSha256 = Some(digest "7")
+                                                Source = source "execution-journal" ($"execution-{index}") (assignedAt.AddMinutes -2.)
+                                            }
                             })
-                        members
+                        (members |> List.indexed)
                         states
             }
 
@@ -242,8 +260,18 @@ type LearningOperationalWindowTests() =
                         if memberValue.ItemId = key.OriginalItemId then
                             { memberValue with
                                 State = "assigned"
-                                NativeUsageSha256 = Some(digest "8")
-                                SharedCostSha256 = Some(digest "9")
+                                NativeUsageSha256 = None
+                                SharedCostSha256 = None
+                                Execution =
+                                    Some
+                                        {
+                                            AssignmentId = Guid.Parse "10000000-0000-0000-0000-000000000001"
+                                            AttemptId = Guid.Parse "20000000-0000-0000-0000-000000000001"
+                                            Generation = 3L
+                                            Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                                            FirstDispatchSha256 = None
+                                            Source = source "execution-journal" "assigned-root" (assignedAt.AddMinutes -1.)
+                                        }
                             }
                         else
                             memberValue)
@@ -264,6 +292,59 @@ type LearningOperationalWindowTests() =
             Error "learning-operational-window-readiness-incomplete",
             LearningOperationalWindow.prepare assignedAt current.Request current.Evidence
         )
+
+    [<Fact>]
+    member _.``assigned execution phase never manufactures future accounting``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+        let root = census.Members |> List.find (fun value -> value.Role = "root")
+
+        let execution =
+            {
+                AssignmentId = Guid.Parse "10000000-0000-0000-0000-000000000001"
+                AttemptId = Guid.Parse "20000000-0000-0000-0000-000000000001"
+                Generation = 3L
+                Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                FirstDispatchSha256 = None
+                Source = source "execution-journal" "assigned-root" (assignedAt.AddMinutes -1.)
+            }
+
+        let censusWith replacement =
+            { census with
+                Members = census.Members |> List.map (fun value -> if value.Role = "root" then replacement else value)
+            }
+
+        let compose replacement =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                (censusWith replacement)
+
+        let missingPhase =
+            { root with State = "assigned"; Execution = None }
+
+        let earlyCounter =
+            { root with
+                State = "assigned"
+                Execution = Some execution
+                NativeUsageSha256 = Some(digest "8")
+            }
+
+        let startedWithoutCounters =
+            { root with
+                State = "assigned"
+                Execution =
+                    Some
+                        { execution with
+                            Phase = LearningOperationalExecutionPhase.Started
+                            FirstDispatchSha256 = Some(digest "7")
+                        }
+            }
+
+        for replacement in [ missingPhase; earlyCounter; startedWithoutCounters ] do
+            Assert.Equal(Error "learning-operational-readiness-accounting-unknown", compose replacement)
 
     [<Fact>]
     member _.``empty or partial authoritative census never certifies coverage``() =

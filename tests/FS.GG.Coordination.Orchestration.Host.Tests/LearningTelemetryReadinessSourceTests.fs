@@ -16,13 +16,30 @@ module private TelemetryFixture =
     let states = [ "prospective"; "assigned"; "completed"; "cancelled"; "failed"; "unfinished" ]
     let json status =
         let members =
-            List.map2 (fun role state ->
+            List.map2 (fun (index, role) state ->
                 {| itemId = "item-" + role; originalItemId = "LEARN-01.4"; role = role; state = state
                    source = source "coordination-observer-learning-member/1" ("member-" + role)
                    nativeUsageSha256 = if state = "prospective" then null else String('a', 64)
-                   sharedCostSha256 = if state = "prospective" then null else String('b', 64) |}) roles states
+                   sharedCostSha256 = if state = "prospective" then null else String('b', 64)
+                   execution =
+                       if state = "prospective" then
+                           null
+                       else
+                           box
+                               {| assignmentId = $"10000000-0000-0000-0000-00000000000{index + 1}"
+                                  attemptId = $"20000000-0000-0000-0000-00000000000{index + 1}"
+                                  generation = 3L
+                                  phase =
+                                      if List.contains state [ "completed"; "cancelled"; "failed" ] then
+                                          "terminal"
+                                      else
+                                          "started"
+                                  firstDispatchSha256 = String('7', 64)
+                                  source = source "coordination-execution-journal/1" ("execution-" + role) |} |})
+                (roles |> List.indexed)
+                states
         JsonSerializer.Serialize(
-            {| schema = "fsgg.learn.telemetry-readiness-census/1"; status = status
+            {| schema = "fsgg.learn.telemetry-readiness-census/2"; status = status
                key = {| windowId = "window-1"; originalItemId = "LEARN-01.4" |}
                source = source "protected-learning-export/2" "window-1:LEARN-01.4"
                nativeDeliveryRevision = String('c', 64); members = members
@@ -45,6 +62,10 @@ type LearningTelemetryReadinessSourceTests() =
             let prospective = members |> List.find (fun value -> value.State = "prospective")
             Assert.True(prospective.NativeUsageSha256.IsNone)
             Assert.True(prospective.SharedCostSha256.IsNone)
+            Assert.True(prospective.Execution.IsNone)
+            let assigned = members |> List.find (fun value -> value.State = "assigned")
+            Assert.Equal(LearningOperationalExecutionPhase.Started, assigned.Execution.Value.Phase)
+            Assert.True(assigned.Execution.Value.FirstDispatchSha256.IsSome)
 
     [<Fact>]
     member _.``unavailable telemetry never asks installed producers to manufacture readiness``() = task {
