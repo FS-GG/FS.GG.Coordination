@@ -47,7 +47,7 @@ for index,role in roles |> List.indexed do
     let digest=sha bytes
     roleNodes.Add(obj ["path",JsonValue.Create(path);"role",JsonValue.Create(role);"assetId",JsonValue.Create(id);"name",JsonValue.Create(Path.GetFileName(path));"bytes",JsonValue.Create(bytes.Length);"sha256",JsonValue.Create(digest);"producer",JsonValue.Create(0)])
     roleReceipts[role] <- obj ["path",JsonValue.Create(full);"bytes",JsonValue.Create(bytes.Length);"sha256",JsonValue.Create(digest)]
-    assetNodes.Add(obj ["id",JsonValue.Create(id);"name",JsonValue.Create(Path.GetFileName(path));"bytes",JsonValue.Create(bytes.Length);"sha256",JsonValue.Create(digest)])
+    assetNodes.Add(obj ["id",JsonValue.Create(id);"name",JsonValue.Create(Path.GetFileName(path));"bytes",JsonValue.Create(bytes.Length);"sha256",JsonValue.Create(digest);"state",JsonValue.Create("uploaded")])
 let manifest = obj [
     "schema",JsonValue.Create("fsgg.portable-p4-private-inputs/2"); "classification",JsonValue.Create("public-candidate-files-only")
     "release",obj ["repository",JsonValue.Create("FS-GG/FS.GG.GitHub.Substrate.Sandbox");"releaseId",JsonValue.Create(55);"tag",JsonValue.Create("portable-p4-python-private-inputs-20261001");"targetCommit",JsonValue.Create(target)]
@@ -60,7 +60,7 @@ let constructCode,constructError=run "construct" sourcePath canonicalPath []
 assertTrue (constructCode=0) constructError
 let body=File.ReadAllBytes(canonicalPath)
 let manifestId=111
-assetNodes.Add(obj ["id",JsonValue.Create(manifestId);"name",JsonValue.Create("public-inputs-manifest.json");"bytes",JsonValue.Create(body.Length);"sha256",JsonValue.Create(sha body)])
+assetNodes.Add(obj ["id",JsonValue.Create(manifestId);"name",JsonValue.Create("public-inputs-manifest.json");"bytes",JsonValue.Create(body.Length);"sha256",JsonValue.Create(sha body);"state",JsonValue.Create("uploaded")])
 let canonicalManifest=JsonNode.Parse(body)
 let transport=obj ["schema",JsonValue.Create("fsgg.portable-p4-manifest-transport/2");"releaseId",JsonValue.Create(55);"manifestAssetId",JsonValue.Create(manifestId);"manifestSha256",JsonValue.Create(sha body);"manifest",canonicalManifest;"assets",arr assetNodes;"roles",roleReceipts]
 let transportPath=Path.Combine(root,"transport.json")

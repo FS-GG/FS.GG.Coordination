@@ -207,10 +207,11 @@ match command with
     let byId = Dictionary<int64,JsonElement>()
     let assetNames = HashSet<string>(StringComparer.Ordinal)
     for asset in assets.EnumerateArray() do
-        exactKeys asset ["id";"name";"bytes";"sha256"] "transport-asset-shape"
+        exactKeys asset ["id";"name";"bytes";"sha256";"state"] "transport-asset-shape"
         let id = positiveInt "id" asset
         require (byId.TryAdd(id,asset)) "transport-asset-id"
         require (assetNames.Add(text "name" asset)) "transport-asset-name"
+        require (text "state" asset = "uploaded") "transport-asset-state"
         positiveInt "bytes" asset |> ignore
         ensureHash shaRx (text "sha256" asset) "transport-asset-hash" |> ignore
     require (byId.ContainsKey manifestId) "transport-manifest-asset"
