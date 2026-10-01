@@ -213,63 +213,75 @@ class ScreenTests(unittest.TestCase):
                 capacity.context_fact()
         self.assertNotIn("unexpected-private-key", str(capacity.FORBIDDEN_CREDENTIALS))
 
-    def test_unimplemented_qualification_is_typed_and_never_qualified(self):
+    def test_capacity_result_is_never_a_qualification(self):
         with tempfile.TemporaryDirectory() as temporary:
             output = pathlib.Path(temporary) / "result.json"
-            result = capacity.base_result("qualification")
-            result["failureCode"] = "qualification-phase-unimplemented"
+            result = capacity.base_result("capacity")
+            result["capacityScreenPassed"] = True
             capacity.write_result(output, result)
             saved = json.loads(output.read_text())
-            self.assertEqual("qualification-phase-unimplemented", saved["failureCode"])
-            self.assertFalse(saved["capacityScreenPassed"])
+            self.assertEqual("capacity", saved["phase"])
+            self.assertTrue(saved["capacityScreenPassed"])
             self.assertFalse(saved["qualified"])
 
 
 class WorkflowSourceTests(unittest.TestCase):
-    def test_workflow_is_manual_fixed_public_capacity_without_credentials_or_effects(self):
+    def test_capacity_job_is_manual_fixed_and_has_no_credentials_or_private_effects(self):
         text = WORKFLOW.read_text()
         helper = HELPER.read_text()
+        capacity_job = text.split("  capacity:\n", 1)[1].split("\n  qualification:\n", 1)[0]
         self.assertIn("workflow_dispatch:", text)
         self.assertNotIn("pull_request:", text)
         self.assertNotIn("push:", text)
         self.assertIn("runs-on: ubuntu-24.04", text)
-        self.assertIn("environment: fourd-native-private-source", text)
+        self.assertNotIn("environment:", capacity_job)
         self.assertIn("refs/heads/qualification/fourd-native-20261001", text)
         self.assertIn("github.repository == 'FS-GG/FS.GG.Coordination'", text)
-        self.assertNotIn("secrets.", text)
-        self.assertNotIn("qualify.py", text)
-        self.assertNotIn("custody.py", text)
-        self.assertNotIn("git clone", text.lower())
-        self.assertNotIn("ssh-agent", text.lower())
+        self.assertNotIn("secrets.", capacity_job)
+        self.assertNotIn("FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64", capacity_job)
+        self.assertNotIn("FSGG_FOURD_READONLY_DEPLOY_KEY_B64", capacity_job)
+        self.assertNotIn("qualify.py", capacity_job)
+        self.assertNotIn("git clone", capacity_job.lower())
+        self.assertNotIn("ssh-agent", capacity_job.lower())
         for absent in ("podman version", "podman info", "podman pull", "podman build",
                        "subprocess", "--state", "state_root", "native-image", "image save",
                        "image load", "p2 result"):
-            self.assertNotIn(absent, (text + helper).lower())
+            self.assertNotIn(absent, (capacity_job + helper).lower())
         self.assertNotIn("workflow_call", text)
         self.assertEqual(1, text.count("path: ${{ env.RESULT_ROOT }}/result.json"))
-        self.assertIn("qualification-phase-unimplemented", text)
         self.assertIn("capacityScreenPassed'] is True", text)
         self.assertIn("qualified'] is False", text)
+        self.assertIn("inputs.phase == 'capacity'", capacity_job)
 
     def test_workflow_has_only_closed_phase_input_and_valid_shell(self):
         text = WORKFLOW.read_text()
         self.assertEqual(1, text.count("inputs:"))
         self.assertNotIn("source_key:", text)
         self.assertNotIn("command:", text)
-        try:
-            import yaml
-        except ImportError as error:
-            self.fail(f"PyYAML required for this source check: {error}")
-        value = yaml.safe_load(text)
-        dispatch = value.get("on", value.get(True))["workflow_dispatch"]
-        self.assertEqual({"phase"}, set(dispatch["inputs"]))
-        for step in value["jobs"]["fixed-public-provider"]["steps"]:
-            if "run" in step:
-                checked = __import__("subprocess").run(
-                    ["bash", "-n"], input=step["run"], text=True,
-                    stdout=__import__("subprocess").PIPE,
-                    stderr=__import__("subprocess").PIPE)
-                self.assertEqual(0, checked.returncode, checked.stderr)
+        self.assertEqual(1, text.count("    inputs:\n"))
+        self.assertEqual(1, text.count("      phase:\n"))
+        self.assertEqual(1, text.count("  capacity:\n"))
+        self.assertEqual(1, text.count("  qualification:\n"))
+        lines = text.splitlines()
+        scripts = []
+        for index, line in enumerate(lines):
+            if line.strip() != "run: |":
+                continue
+            indent = len(line) - len(line.lstrip())
+            script = []
+            for candidate in lines[index + 1:]:
+                current = len(candidate) - len(candidate.lstrip())
+                if candidate and current <= indent:
+                    break
+                script.append(candidate[indent + 2:] if candidate else "")
+            scripts.append("\n".join(script))
+        self.assertGreaterEqual(len(scripts), 5)
+        for script in scripts:
+            checked = __import__("subprocess").run(
+                ["bash", "-n"], input=script, text=True,
+                stdout=__import__("subprocess").PIPE,
+                stderr=__import__("subprocess").PIPE)
+            self.assertEqual(0, checked.returncode, checked.stderr)
 
 
 if __name__ == "__main__":

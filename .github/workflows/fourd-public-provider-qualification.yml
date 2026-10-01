@@ -7,9 +7,7 @@ on:
         description: Fixed qualification phase
         required: true
         type: choice
-        options:
-          - capacity
-          - qualification
+        options: [capacity, qualification]
 
 permissions:
   contents: read
@@ -19,54 +17,30 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  fixed-public-provider:
-    if: >-
-      github.repository == 'FS-GG/FS.GG.Coordination' &&
-      github.event_name == 'workflow_dispatch' &&
-      github.ref == 'refs/heads/qualification/fourd-native-20261001'
-    environment: fourd-native-private-source
+  capacity:
+    if: inputs.phase == 'capacity' && github.repository == 'FS-GG/FS.GG.Coordination' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/qualification/fourd-native-20261001'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     env:
       RESULT_ROOT: /tmp/fsgg-fourd-capacity-${{ github.run_id }}-${{ github.run_attempt }}
     steps:
-      - name: Check out the exact registered placement without persisted credentials
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 1
-          persist-credentials: false
-
-      - name: Refuse source drift and unexpected credential material
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: {ref: "${{ github.sha }}", fetch-depth: 1, persist-credentials: false}
+      - name: Verify exact public placement
         shell: bash
         run: |
           set -euo pipefail
-          test "$GITHUB_REPOSITORY" = 'FS-GG/FS.GG.Coordination'
-          test "$GITHUB_REF" = 'refs/heads/qualification/fourd-native-20261001'
-          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          umask 077
+          test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
+          test "$GITHUB_REF" = refs/heads/qualification/fourd-native-20261001
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
-          test -z "${FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64-}"
-          test -z "${FSGG_FOURD_READONLY_DEPLOY_KEY_B64-}"
           install -d -m 0700 "$RESULT_ROOT"
-
       - name: Measure credential-free public capacity
-        if: inputs.phase == 'capacity'
         shell: bash
-        run: |
-          set -euo pipefail
-          python3 eng/fourd-public-provider/capacity.py screen \
-            --output "$RESULT_ROOT/result.json"
-
-      - name: Refuse the unimplemented private qualification phase
-        if: inputs.phase == 'qualification'
-        shell: bash
-        run: |
-          set -euo pipefail
-          python3 eng/fourd-public-provider/capacity.py qualification-unimplemented \
-            --output "$RESULT_ROOT/result.json"
-
-      - name: Retain only the bounded typed capacity result
+        run: python3 eng/fourd-public-provider/capacity.py screen --output "$RESULT_ROOT/result.json"
+      - name: Retain only the bounded capacity result
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:
@@ -75,34 +49,128 @@ jobs:
           if-no-files-found: error
           retention-days: 1
           compression-level: 0
-
-      - name: Enforce the selected phase verdict
+      - name: Enforce the capacity verdict
         if: always()
         shell: bash
         run: |
           set -euo pipefail
-          test -f "$RESULT_ROOT/result.json"
           test "$(stat --format=%a "$RESULT_ROOT/result.json")" = 600
           test "$(stat --format=%s "$RESULT_ROOT/result.json")" -le 8192
-          if [[ '${{ inputs.phase }}' == capacity ]]; then
-            python3 - "$RESULT_ROOT/result.json" <<'PY'
+          python3 - "$RESULT_ROOT/result.json" <<'PY'
           import json,sys
           value=json.load(open(sys.argv[1],encoding='utf-8'))
           assert value['schema']=='fsgg.fourd.public-provider-capacity/1'
-          assert value['phase']=='capacity'
-          assert value['qualified'] is False
-          assert value['capacityScreenPassed'] is True
-          assert value['failureCode'] is None
+          assert value['phase']=='capacity' and value['qualified'] is False
+          assert value['capacityScreenPassed'] is True and value['failureCode'] is None
           PY
-          else
-            python3 - "$RESULT_ROOT/result.json" <<'PY'
+
+  qualification:
+    if: inputs.phase == 'qualification' && github.repository == 'FS-GG/FS.GG.Coordination' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/qualification/fourd-native-20261001'
+    environment: fourd-native-private-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    env:
+      CAPACITY_ROOT: /tmp/fsgg-fourd-qualification-capacity-${{ github.run_id }}-${{ github.run_attempt }}
+      PRIVATE_ROOT: /tmp/fsgg-fourd-private-${{ github.run_id }}-${{ github.run_attempt }}
+      PUBLIC_OUTPUT: /tmp/fsgg-fourd-public-${{ github.run_id }}-${{ github.run_attempt }}
+      SETUP_DOTNET_ROOT: ${{ github.workspace }}/setup-dotnet-source
+      P2_ROOT: ${{ github.workspace }}/coordination-p2
+      PYTHONDONTWRITEBYTECODE: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with: {ref: "${{ github.sha }}", fetch-depth: 1, persist-credentials: false}
+      - name: Verify public placement before reading admission
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
+          test "$GITHUB_REF" = refs/heads/qualification/fourd-native-20261001
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          install -d -m 0700 "$CAPACITY_ROOT"
+      - name: Freeze pinned setup-dotnet before private acquisition
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: actions/setup-dotnet
+          ref: a98b56852c35b8e3190ac28c8c2271da59106c68
+          path: setup-dotnet-source
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Freeze exact accepted P2 before private acquisition
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          repository: FS-GG/FS.GG.Coordination
+          ref: c069263c3e9e8780b1596eee82d2f6c017daa8df
+          path: coordination-p2
+          fetch-depth: 1
+          persist-credentials: false
+      - name: Repeat unchanged credential-free capacity screen
+        id: qualification-capacity
+        shell: bash
+        run: |
+          set +e
+          python3 eng/fourd-public-provider/capacity.py screen --output "$CAPACITY_ROOT/result.json"
+          status=$?
+          echo "capacityStatus=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Apply exact admission and run fixed private route silently
+        id: private-route
+        shell: bash
+        env:
+          FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64: ${{ secrets.FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64 }}
+          FSGG_FOURD_READONLY_DEPLOY_KEY_B64: ${{ secrets.FSGG_FOURD_READONLY_DEPLOY_KEY_B64 }}
+        run: |
+          set +e
+          umask 077
+          python3 eng/fourd-public-provider/qualify.py execute \
+            --capacity-result "$CAPACITY_ROOT/result.json" --public-source "$GITHUB_WORKSPACE" \
+            --setup-dotnet "$SETUP_DOTNET_ROOT" --p2-source "$P2_ROOT" \
+            --known-hosts "$GITHUB_WORKSPACE/eng/fourd-public-provider/github-known-hosts" \
+            --private-root "$PRIVATE_ROOT" --output "$PUBLIC_OUTPUT/result.json"
+          status=$?
+          echo "qualificationStatus=$status" >> "$GITHUB_OUTPUT"
+          exit 0
+      - name: Validate closed public output
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(stat --format=%a "$PUBLIC_OUTPUT/result.json")" = 600
+          test "$(stat --format=%s "$PUBLIC_OUTPUT/result.json")" -le 8192
+          python3 - "$PUBLIC_OUTPUT/result.json" "$PUBLIC_OUTPUT" <<'PY'
+          import json,pathlib,sys
+          result=json.load(open(sys.argv[1],encoding='utf-8')); root=pathlib.Path(sys.argv[2])
+          assert result['schema']=='fsgg.fourd.public-provider-qualification/1'
+          assert result['phase']=='qualification'
+          assert result['rootReadback']==result['credentialRevocation']=='pending-root-readback'
+          assert result['qualified'] is (result['outcome']=='sealed-native-evidence')
+          allowed={'result.json'} if not result['qualified'] else {'result.json','sealed-stage'}
+          assert {item.name for item in root.iterdir()}==allowed
+          PY
+          python3 eng/fourd-public-provider/qualify.py verify-upload --output "$PUBLIC_OUTPUT"
+      - name: Upload only verified public result and sealed capsules
+        if: always()
+        timeout-minutes: 10
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: fourd-public-provider-qualification-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.PUBLIC_OUTPUT }}
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+          overwrite: false
+      - name: Enforce exact qualification disposition
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - "$PUBLIC_OUTPUT/result.json" '${{ steps.private-route.outputs.qualificationStatus }}' <<'PY'
           import json,sys
-          value=json.load(open(sys.argv[1],encoding='utf-8'))
-          assert value['schema']=='fsgg.fourd.public-provider-capacity/1'
-          assert value['phase']=='qualification'
-          assert value['qualified'] is False
-          assert value['capacityScreenPassed'] is False
-          assert value['failureCode']=='qualification-phase-unimplemented'
-          raise SystemExit(1)
+          result=json.load(open(sys.argv[1],encoding='utf-8')); status=int(sys.argv[2])
+          if result['outcome']=='awaiting-exact-admission':
+              assert status==0 and result['qualified'] is False
+          else:
+              assert status==0 and result['qualified'] is True
           PY
-          fi
