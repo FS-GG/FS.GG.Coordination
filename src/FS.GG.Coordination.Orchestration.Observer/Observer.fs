@@ -239,6 +239,93 @@ type DurableLearningTreatmentBinding =
         BoundAt: DateTimeOffset
     }
 
+[<RequireQualifiedAccess>]
+type LearningOperationalOwnerRole =
+    | Root
+    | Child
+    | Retry
+    | Review
+    | Rescue
+    | Repair
+
+type LearningOperationalOwnerMemberInput =
+    {
+        ItemId: string
+        Role: LearningOperationalOwnerRole
+    }
+
+type LearningOperationalOwnerAdmissionInput =
+    {
+        WindowId: string
+        OriginalItemId: string
+        ProposalId: ProposalId
+        Repository: string
+        WorkClassId: string
+        CalendarAdmissionBlock: string
+        SeedReferenceSha256: string
+        SharedAllocationRosterReference: string
+        Members: LearningOperationalOwnerMemberInput list
+        ExpectedWorkflowRevision: WorkflowRevision
+        ExpectedGeneration: Generation
+        OptedInAt: DateTimeOffset
+        EnrollmentOpensAt: DateTimeOffset
+        EnrollmentClosesAt: DateTimeOffset
+        AdmittedAt: DateTimeOffset
+    }
+
+type LearningOperationalOwnerMember =
+    {
+        ItemId: string
+        OriginalItemId: string
+        CanonicalWorkItemId: string
+        Role: LearningOperationalOwnerRole
+    }
+
+type DurableLearningOperationalOwnerWindow =
+    {
+        WindowId: string
+        OriginalItemId: string
+        Repository: string
+        WorkClassId: string
+        CalendarAdmissionBlock: string
+        SeedReferenceSha256: string
+        SharedAllocationRosterReference: string
+        SharedAllocationRosterSha256: string
+        AcceptedPlanSha256: string
+        CanonicalWorkItemSha256: string
+        CoverageRosterSha256: string
+        SourceObservationSha256: string
+        WorkflowRevision: WorkflowRevision
+        Generation: Generation
+        AuthorityId: string
+        AuthorityRevision: string
+        AuthoritySha256: string
+        Members: LearningOperationalOwnerMember list
+        OptedInAt: DateTimeOffset
+        EnrollmentOpensAt: DateTimeOffset
+        EnrollmentClosesAt: DateTimeOffset
+        AdmittedAt: DateTimeOffset
+        RecordSha256: string
+    }
+
+type LearningOperationalOwnerRevocationInput =
+    {
+        WindowId: string
+        OriginalItemId: string
+        Reason: string
+        RevokedAt: DateTimeOffset
+    }
+
+type DurableLearningOperationalOwnerRevocation =
+    {
+        WindowId: string
+        OriginalItemId: string
+        AuthorityId: string
+        Reason: string
+        RevokedAt: DateTimeOffset
+        RevocationSha256: string
+    }
+
 type ConversationRole =
     | Operator
     | PlanningAgent
@@ -268,6 +355,8 @@ type ObserverState =
         Effects: Map<OperationId, DurableEffectCompletion>
         LearningTreatments: Map<string, DurableLearningTreatment>
         LearningTreatmentBindings: Map<string, DurableLearningTreatmentBinding>
+        LearningOperationalOwnerWindows: Map<string, DurableLearningOperationalOwnerWindow>
+        LearningOperationalOwnerRevocations: Map<string, DurableLearningOperationalOwnerRevocation>
         Conversation: ConversationEntry list
     }
 
@@ -285,6 +374,8 @@ type ObserverEvent =
     | EffectCompletionRecorded of DurableEffectCompletion
     | LearningTreatmentAssigned of DurableLearningTreatment
     | LearningTreatmentInherited of DurableLearningTreatmentBinding
+    | LearningOperationalOwnerWindowAdmitted of DurableLearningOperationalOwnerWindow
+    | LearningOperationalOwnerWindowRevoked of DurableLearningOperationalOwnerRevocation
 
 type ProposalInput =
     {
@@ -327,6 +418,8 @@ type ObserverCommand =
     | RecordEffectCompletion of DurableEffectCompletion
     | AssignLearningTreatment of LearningTreatmentAssignmentInput
     | AssignPreparedLearningTreatment of PreparedLearningTreatment
+    | AdmitLearningOperationalOwnerWindow of LearningOperationalOwnerAdmissionInput
+    | RevokeLearningOperationalOwnerWindow of LearningOperationalOwnerRevocationInput
 
 [<RequireQualifiedAccess>]
 module ObserverCommand =
@@ -394,6 +487,8 @@ module Observer =
             Effects = Map.empty
             LearningTreatments = Map.empty
             LearningTreatmentBindings = Map.empty
+            LearningOperationalOwnerWindows = Map.empty
+            LearningOperationalOwnerRevocations = Map.empty
             Conversation = []
         }
 
@@ -655,6 +750,85 @@ module Observer =
             ]
         |> digest
 
+    let learningOperationalOwnerKey windowId originalItemId = $"{windowId}\n{originalItemId}"
+
+    let private ownerRole =
+        function
+        | LearningOperationalOwnerRole.Root -> "root"
+        | LearningOperationalOwnerRole.Child -> "child"
+        | LearningOperationalOwnerRole.Retry -> "retry"
+        | LearningOperationalOwnerRole.Review -> "review"
+        | LearningOperationalOwnerRole.Rescue -> "rescue"
+        | LearningOperationalOwnerRole.Repair -> "repair"
+
+    let learningOperationalCanonicalWorkItemSha256 (observationSha: string) (members: LearningOperationalOwnerMember list) =
+        canonicalFields (
+            "learn-01-operational-canonical-work-items/1"
+            :: observationSha.ToLowerInvariant()
+            :: (members
+                |> List.sortBy (fun value -> value.ItemId)
+                |> List.collect (fun value -> [ value.ItemId; value.CanonicalWorkItemId ])))
+        |> digest
+
+    let learningOperationalCoverageRosterSha256 (members: LearningOperationalOwnerMember list) =
+        canonicalFields (
+            "learn-01-operational-coverage-roster/1"
+            :: (members
+                |> List.sortBy (fun value -> value.ItemId)
+                |> List.collect (fun value ->
+                    [ value.ItemId; value.OriginalItemId; value.CanonicalWorkItemId; ownerRole value.Role ])))
+        |> digest
+
+    let learningOperationalSharedAllocationSha256 (referenceValue: string) (coverageSha256: string) =
+        canonicalFields
+            [ "learn-01-operational-shared-allocation-roster/1"; referenceValue; coverageSha256 ]
+        |> digest
+
+    let learningOperationalAuthoritySha256 (principal: string) (revision: string) (observationSha: string) =
+        canonicalFields
+            [ "learn-01-operational-authority/1"; principal; revision; observationSha.ToLowerInvariant() ]
+        |> digest
+
+    let learningOperationalRecordSha256 (value: DurableLearningOperationalOwnerWindow) =
+        canonicalFields
+            [
+                "learn-01-operational-owner-window/1"
+                value.WindowId
+                value.OriginalItemId
+                value.Repository
+                value.WorkClassId
+                value.CalendarAdmissionBlock
+                value.SeedReferenceSha256.ToLowerInvariant()
+                value.SharedAllocationRosterReference
+                value.SharedAllocationRosterSha256.ToLowerInvariant()
+                value.AcceptedPlanSha256.ToLowerInvariant()
+                value.CanonicalWorkItemSha256.ToLowerInvariant()
+                value.CoverageRosterSha256.ToLowerInvariant()
+                value.SourceObservationSha256.ToLowerInvariant()
+                string (Id.revisionValue value.WorkflowRevision)
+                string (Id.generationValue value.Generation)
+                value.AuthorityId
+                value.AuthorityRevision
+                value.AuthoritySha256.ToLowerInvariant()
+                value.OptedInAt.ToUniversalTime().ToString("O")
+                value.EnrollmentOpensAt.ToUniversalTime().ToString("O")
+                value.EnrollmentClosesAt.ToUniversalTime().ToString("O")
+                value.AdmittedAt.ToUniversalTime().ToString("O")
+            ]
+        |> digest
+
+    let learningOperationalRevocationSha256 authorityId (input: LearningOperationalOwnerRevocationInput) =
+        canonicalFields
+            [
+                "learn-01-operational-owner-revocation/1"
+                input.WindowId
+                input.OriginalItemId
+                authorityId
+                input.Reason
+                input.RevokedAt.ToUniversalTime().ToString("O")
+            ]
+        |> digest
+
     let private sameLearningTreatment
         (input: LearningTreatmentAssignmentInput)
         (assignment: DurableLearningTreatment)
@@ -815,6 +989,18 @@ module Observer =
             { state with
                 LearningTreatmentBindings =
                     Map.add binding.ItemId binding state.LearningTreatmentBindings
+                Sequence = next
+            }
+        | LearningOperationalOwnerWindowAdmitted window ->
+            { state with
+                LearningOperationalOwnerWindows =
+                    Map.add (learningOperationalOwnerKey window.WindowId window.OriginalItemId) window state.LearningOperationalOwnerWindows
+                Sequence = next
+            }
+        | LearningOperationalOwnerWindowRevoked revocation ->
+            { state with
+                LearningOperationalOwnerRevocations =
+                    Map.add (learningOperationalOwnerKey revocation.WindowId revocation.OriginalItemId) revocation state.LearningOperationalOwnerRevocations
                 Sequence = next
             }
 
@@ -1153,6 +1339,147 @@ module Observer =
                         [ CommandAcceptanceRecorded acceptance ]
                         "durable-command-acceptance-recorded"
                 | _ -> reject envelope body state "unbound-command-acceptance"
+            | AdmitLearningOperationalOwnerWindow input ->
+                let key = learningOperationalOwnerKey input.WindowId input.OriginalItemId
+
+                let roles =
+                    input.Members |> List.map _.Role |> Set.ofList
+
+                let requiredRoles =
+                    Set.ofList
+                        [
+                            LearningOperationalOwnerRole.Root
+                            LearningOperationalOwnerRole.Child
+                            LearningOperationalOwnerRole.Retry
+                            LearningOperationalOwnerRole.Review
+                            LearningOperationalOwnerRole.Rescue
+                            LearningOperationalOwnerRole.Repair
+                        ]
+
+                let canonicalMembers =
+                    state.Observation
+                    |> Option.bind (fun observation ->
+                        input.Members
+                        |> List.map (fun memberInput ->
+                            observation.WorkItems
+                            |> List.filter (fun item -> item.MembershipItemId = memberInput.ItemId)
+                            |> function
+                                | [ item ] ->
+                                    Some
+                                        {
+                                            ItemId = memberInput.ItemId
+                                            OriginalItemId = input.OriginalItemId
+                                            CanonicalWorkItemId = WorkItemIdentity.persistenceId item.Identity
+                                            Role = memberInput.Role
+                                        }
+                                | _ -> None)
+                        |> fun values ->
+                            if values |> List.forall Option.isSome then
+                                Some(values |> List.choose id)
+                            else
+                                None)
+
+                match
+                    state.Observation,
+                    Map.tryFind input.ProposalId state.Proposals,
+                    Map.tryFind input.ProposalId state.Approvals,
+                    canonicalMembers
+                with
+                | Some observation, Some proposal, Some approval, Some members when
+                    not (Map.containsKey key state.LearningOperationalOwnerWindows)
+                    && state.CurrentProposal = Some input.ProposalId
+                    && approval.PlanSha256 = proposal.PlanSha256
+                    && approval.PrincipalId = envelope.PrincipalId
+                    && proposal.ObservationSha256 = observation.ObservationSha256
+                    && proposal.WorkflowRevision = observation.WorkflowRevision
+                    && proposal.Generation = observation.Generation
+                    && input.ExpectedWorkflowRevision = observation.WorkflowRevision
+                    && input.ExpectedGeneration = observation.Generation
+                    && validText input.WindowId
+                    && validText input.OriginalItemId
+                    && validText input.Repository
+                    && validText input.WorkClassId
+                    && validText input.CalendarAdmissionBlock
+                    && validSha input.SeedReferenceSha256
+                    && validText input.SharedAllocationRosterReference
+                    && input.Members.Length = 6
+                    && roles = requiredRoles
+                    && (input.Members |> List.map _.ItemId |> Set.ofList |> Set.count) = input.Members.Length
+                    && (members |> List.map _.CanonicalWorkItemId |> Set.ofList |> Set.count) = members.Length
+                    && (members
+                        |> List.exists (fun memberValue ->
+                            memberValue.Role = LearningOperationalOwnerRole.Root
+                            && memberValue.ItemId = input.OriginalItemId))
+                    && input.OptedInAt <= input.AdmittedAt
+                    && input.EnrollmentOpensAt <= input.AdmittedAt
+                    && input.AdmittedAt < input.EnrollmentClosesAt
+                    && input.EnrollmentOpensAt <= now
+                    && now < input.EnrollmentClosesAt
+                    && input.AdmittedAt <= now
+                    ->
+                    let coverage = learningOperationalCoverageRosterSha256 members
+                    let revision = string (Id.revisionValue observation.WorkflowRevision)
+
+                    let value0 =
+                        {
+                            WindowId = input.WindowId
+                            OriginalItemId = input.OriginalItemId
+                            Repository = input.Repository
+                            WorkClassId = input.WorkClassId
+                            CalendarAdmissionBlock = input.CalendarAdmissionBlock
+                            SeedReferenceSha256 = input.SeedReferenceSha256.ToLowerInvariant()
+                            SharedAllocationRosterReference = input.SharedAllocationRosterReference
+                            SharedAllocationRosterSha256 =
+                                learningOperationalSharedAllocationSha256 input.SharedAllocationRosterReference coverage
+                            AcceptedPlanSha256 = proposal.PlanSha256
+                            CanonicalWorkItemSha256 =
+                                learningOperationalCanonicalWorkItemSha256 observation.ObservationSha256 members
+                            CoverageRosterSha256 = coverage
+                            SourceObservationSha256 = observation.ObservationSha256
+                            WorkflowRevision = observation.WorkflowRevision
+                            Generation = observation.Generation
+                            AuthorityId = envelope.PrincipalId
+                            AuthorityRevision = revision
+                            AuthoritySha256 =
+                                learningOperationalAuthoritySha256 envelope.PrincipalId revision observation.ObservationSha256
+                            Members = members
+                            OptedInAt = input.OptedInAt
+                            EnrollmentOpensAt = input.EnrollmentOpensAt
+                            EnrollmentClosesAt = input.EnrollmentClosesAt
+                            AdmittedAt = input.AdmittedAt
+                            RecordSha256 = ""
+                        }
+
+                    let value =
+                        { value0 with
+                            RecordSha256 = learningOperationalRecordSha256 value0
+                        }
+
+                    accept envelope body state [ LearningOperationalOwnerWindowAdmitted value ] "learning-operational-owner-window-admitted"
+                | _ -> reject envelope body state "learning-operational-owner-window-refused"
+            | RevokeLearningOperationalOwnerWindow input ->
+                let key = learningOperationalOwnerKey input.WindowId input.OriginalItemId
+
+                match Map.tryFind key state.LearningOperationalOwnerWindows with
+                | Some window when
+                    not (Map.containsKey key state.LearningOperationalOwnerRevocations)
+                    && window.AuthorityId = envelope.PrincipalId
+                    && validText input.Reason
+                    && input.RevokedAt >= window.AdmittedAt
+                    && input.RevokedAt <= now
+                    ->
+                    let revocation =
+                        {
+                            WindowId = input.WindowId
+                            OriginalItemId = input.OriginalItemId
+                            AuthorityId = envelope.PrincipalId
+                            Reason = input.Reason
+                            RevokedAt = input.RevokedAt
+                            RevocationSha256 = learningOperationalRevocationSha256 envelope.PrincipalId input
+                        }
+
+                    accept envelope body state [ LearningOperationalOwnerWindowRevoked revocation ] "learning-operational-owner-window-revoked"
+                | _ -> reject envelope body state "learning-operational-owner-window-revocation-refused"
             | command when (ObserverCommand.tryLearningTreatmentInput command).IsSome ->
                 let input = ObserverCommand.tryLearningTreatmentInput command |> Option.get
 
