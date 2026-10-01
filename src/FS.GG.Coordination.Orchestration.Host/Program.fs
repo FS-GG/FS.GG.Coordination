@@ -257,6 +257,14 @@ let main arguments =
             try
                 let source, store, executionStore = HostRuntime.createProductionStores configuration
                 use source = source
+                let observerStore = HostRuntime.createLearningObserverStore configuration source
+
+                let _learningOperational =
+                    MainHostComposition.learningOperational
+                        TimeProvider.System
+                        configuration.LearningOperational
+                        observerStore
+
                 use shutdown = new CancellationTokenSource()
 
                 Console.CancelKeyPress.Add(fun event ->

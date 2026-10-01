@@ -47,8 +47,19 @@ type HostConfiguration =
         WorkItemId: WorkItemId
         GitHub: MainGitHubConfiguration option
         LocalExecutor: LocalExecutorConfiguration option
+        LearningOperational: LearningOperationalHostConfiguration option
         RequestTimeout: TimeSpan
         MaximumConcurrentRequests: int
+    }
+
+and LearningOperationalHostConfiguration =
+    {
+        ObserverId: string
+        MaximumEvidenceAge: TimeSpan
+        InstalledHostConfigPath: string
+        InstalledOwnerUid: uint32
+        InstalledExecutableOwnerUid: uint32
+        MaximumCapabilityAge: TimeSpan
     }
 
 and MainGitHubConfiguration =
@@ -357,6 +368,12 @@ module HostConfiguration =
                             "--telemetry-outbox"
                             "--telemetry-binding-digest"
                             "--telemetry-repository"
+                            "--learning-observer-id"
+                            "--learning-maximum-evidence-seconds"
+                            "--learning-installed-host-config"
+                            "--learning-installed-owner-uid"
+                            "--learning-installed-executable-owner-uid"
+                            "--learning-maximum-capability-seconds"
                         ])
                     arguments
 
@@ -457,6 +474,56 @@ module HostConfiguration =
                 |> List.map (fun name -> name, optionalValue name arguments)
 
             let! selectedExpectedCodexVersion = expectedCodexVersion arguments
+
+            let learningValues =
+                [
+                    "--learning-observer-id"
+                    "--learning-maximum-evidence-seconds"
+                    "--learning-installed-host-config"
+                    "--learning-installed-owner-uid"
+                    "--learning-installed-executable-owner-uid"
+                    "--learning-maximum-capability-seconds"
+                ]
+                |> List.map (fun name -> name, optionalValue name arguments)
+
+            let! learningOperational =
+                if learningValues |> List.forall (fun (_, selected) -> selected.IsNone) then
+                    Ok None
+                elif learningValues |> List.forall (fun (_, selected) -> selected.IsSome) then
+                    let get name =
+                        learningValues |> List.find (fun (key, _) -> key = name) |> snd |> Option.get
+
+                    match
+                        Int32.TryParse(get "--learning-maximum-evidence-seconds"),
+                        UInt32.TryParse(get "--learning-installed-owner-uid"),
+                        UInt32.TryParse(get "--learning-installed-executable-owner-uid"),
+                        Int32.TryParse(get "--learning-maximum-capability-seconds")
+                    with
+                    | (true, evidenceSeconds), (true, ownerUid), (true, executableOwnerUid), (true, capabilitySeconds) when
+                        evidenceSeconds >= 1
+                        && evidenceSeconds <= 3600
+                        && capabilitySeconds >= 1
+                        && capabilitySeconds <= 3600
+                        && get "--learning-observer-id" = (get "--learning-observer-id").Trim()
+                        && (get "--learning-observer-id").Length <= 512
+                        && Path.IsPathFullyQualified(get "--learning-installed-host-config")
+                        && Path.GetFullPath(get "--learning-installed-host-config") =
+                            get "--learning-installed-host-config"
+                        ->
+                        Ok(
+                            Some
+                                {
+                                    ObserverId = get "--learning-observer-id"
+                                    MaximumEvidenceAge = TimeSpan.FromSeconds(float evidenceSeconds)
+                                    InstalledHostConfigPath = get "--learning-installed-host-config"
+                                    InstalledOwnerUid = ownerUid
+                                    InstalledExecutableOwnerUid = executableOwnerUid
+                                    MaximumCapabilityAge = TimeSpan.FromSeconds(float capabilitySeconds)
+                                }
+                        )
+                    | _ -> Error "learning-operational-configuration-refused"
+                else
+                    Error "incomplete-learning-operational-configuration"
 
             let! telemetry =
                 if telemetryValues |> List.forall (fun (_, value) -> value.IsNone) then
@@ -601,6 +668,7 @@ module HostConfiguration =
                             WorkItemIdentity.create repositoryNodeId repositoryDatabaseId issueNodeId issueDatabaseId
                         GitHub = github
                         LocalExecutor = localExecutor
+                        LearningOperational = learningOperational
                         RequestTimeout = TimeSpan.FromSeconds 5.
                         MaximumConcurrentRequests = 4
                     }

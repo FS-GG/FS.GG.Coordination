@@ -197,6 +197,36 @@ record or successful sudo is not this gate. Genuine installed inputs remain a
 later activation prerequisite; controlled adapter implementation need not wait
 for installation once its producer contract exists.
 
+The bounded W6 source composition now has a coherent candidate. The existing
+Observer journal owns a versioned six-role prospective window record, derives
+the accepted Plan and canonical WorkItem/coverage/allocation digests from its
+validated proposal, approval and observation state, and exposes authority and
+cohort readers over the existing PostgreSQL Observer store. The Host has a
+closed installed-custody reader and a pinned telemetry census reader, plus an
+optional all-or-none configuration that is absent by default. Disabled startup
+performs no learning owner read. The initial admission accepts the roster-derived
+canonical WorkItem digest while retaining the observation revision join, so it
+can durably assign a genuinely prospective root and reread the same authority
+before an effect intent without relabelling an assigned item as prospective.
+That reread requires a typed execution-journal phase bound to the exact
+assignment, attempt and generation. `assigned-unlaunched` is the only assigned
+phase allowed without usage or shared-cost counters, and it requires an
+authoritative route binding plus absence of a first dispatch. A started or
+terminal member requires its retained first-dispatch identity and real accounting;
+missing phase, early counters and a launch without counters all refuse. The Host
+pins the first assigned reread and requires the pre-intent reread to be identical,
+so an intervening dispatch or source change cannot cross the intent fence.
+
+This is an owning-ready source window, not installed W6 delivery. Production
+composition reports `learning-installed-origin-receipt-producer-unavailable`
+until an installed-origin receipt producer exists, and
+`learning-native-work-item-window-route-binding-unavailable` until the protected
+telemetry acquisition is joined to the actual native WorkItem and window route.
+Those facts cannot be supplied by request payloads or inferred from the durable
+operational-window row. No experiment route is enabled while either producer is
+missing. Actual installed custody, native capture, complete census, publication,
+activation, recovery and experimental enrollment remain qualification gates.
+
 W4 and W5 have disjoint owners and can proceed in parallel. Root integrates this
 owning plan and the Unified projection; the independent container owner owns actual
 installation and receiver verification under the V2-HOST replacement plan. The earlier served candidate identities remain

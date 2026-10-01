@@ -118,6 +118,12 @@ module HostRuntime =
         let source, store = createStoreAt 2 configuration
         source, store, PostgreSqlExecutionStore(storeOptions 2 configuration source)
 
+    /// Uses the same protected data source, backup identity and generation fence as
+    /// the production journals. Construction performs no journal read.
+    let createLearningObserverStore (configuration: HostConfiguration) (source: NpgsqlDataSource) =
+        PostgreSqlObserverStore(storeOptions 2 configuration source)
+        :> FS.GG.Coordination.Orchestration.Observer.IObserverJournalStore
+
     let status (store: HostStore) permitId cancellationToken =
         task {
             let! readiness = store.CheckReadiness cancellationToken
