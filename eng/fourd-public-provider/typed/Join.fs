@@ -4,6 +4,7 @@ open System
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Text.RegularExpressions
 
 module Join =
     let private rootKeys = Set ["placementSha";"runId";"runAttempt";"runNonce";"originalActorId";"triggeringActorId"
@@ -17,6 +18,15 @@ module Join =
         "capacityRunId"; "capacityRunAttempt"; "capacityArtifactId"; "capacityArtifactDigest"
         "sourceCapsule"; "sealerRecipeSha"; "sealerSha256"; "custodyPublicKeySha256"
         "nativePolicySha256"; "custodyPolicySha256"; "environmentReadbackSha256"; "issuedAt"; "expiresAt"
+    ]
+    let private rootObservationKeys = Set [
+        "placementRefSha"; "placementCommitSha"; "placementTree"; "reservationRunId"
+        "reservationRunAttempt"; "reservationHeadSha"; "reservationStatus"; "reservationConclusion"
+        "originalActorId"; "triggeringActorId"; "reservationArtifactId"; "reservationArtifactDigest"
+        "reservationResultRunId"; "reservationResultRunAttempt"; "reservationResultPlacementSha"
+        "reservationResultPlacementTree"; "reservationResultOutcome"; "reservationResultQualified"
+        "environmentReadbackSha256"; "capacityRunId"; "capacityRunAttempt"; "capacityRunConclusion"
+        "capacityArtifactId"; "capacityArtifactDigest"; "secretCount"; "releaseCount"
     ]
     let private sourceSha = "d5d8b6d242b13dd79007fcbbb6e5ee4069fd3264"
     let private sourceTree = "ae626190a30a784db8968157a1ef1c9c5c499770"
@@ -33,7 +43,11 @@ module Join =
         | true, item when item.ValueKind = JsonValueKind.String -> item.GetString()
         | _ -> null
     let private exact value name expected = getString value name = expected
-    let private decimal (value: string) = not (String.IsNullOrEmpty value) && value |> Seq.forall Char.IsDigit
+    let private decimal (value: string) = not (String.IsNullOrEmpty value) && value[0] <> '0' && value |> Seq.forall Char.IsDigit
+    let private nonce (value: string) =
+        not (isNull value) && value.Length >= 8 && value.Length <= 48
+        && (Char.IsLower value[0] || Char.IsDigit value[0])
+        && value |> Seq.forall (fun c -> Char.IsLower c || Char.IsDigit c || c = '-')
     let private time (value: string) =
         match DateTimeOffset.TryParse(value, Globalization.CultureInfo.InvariantCulture,
                                       Globalization.DateTimeStyles.AssumeUniversal) with
@@ -85,11 +99,18 @@ module Join =
                                 | true, value -> value.ValueKind=JsonValueKind.Object
                                 | _ -> false)
         let descriptor = if capsuleShape then capsule.GetProperty "descriptor" else Unchecked.defaultof<JsonElement>
-        let descriptorValues = capsuleValues
+        let descriptorKeys = if descriptor.ValueKind=JsonValueKind.Object then descriptor.EnumerateObject() |> Seq.map (_.Name) |> Set.ofSeq else Set.empty
+        let descriptorShape = descriptorKeys = Set ["schema";"purpose";"placementSha";"runId";"runAttempt";"runNonce";
+            "coordinationRepositoryId";"fourdRepositoryId";"sourceSha";"sourceTree";"inventorySha256";
+            "plaintextBytes";"plaintextSha256";"recipientPublicKeySha256";"sealerSha256";"issuedAt";"expiresAt"]
+        let descriptorRaw = if descriptorShape then Encoding.UTF8.GetBytes(descriptor.GetRawText() + "\n") else Array.empty
+        let descriptorDigest = if descriptorRaw.Length > 0 then Convert.ToHexString(SHA256.HashData(descriptorRaw)).ToLowerInvariant() else ""
+        let descriptorValues = capsuleValues && descriptorShape
                                && exact descriptor "schema" "fsgg.fourd.source-capsule-descriptor/1"
                                && exact descriptor "purpose" "fourd-source-acquisition"
                                && exact descriptor "placementSha" placement && exact descriptor "runId" runId
                                && exact descriptor "runAttempt" runAttempt
+                               && exact descriptor "runNonce" (getString admission "runNonce")
                                && exact descriptor "coordinationRepositoryId" "1346720714"
                                && exact descriptor "fourdRepositoryId" "1390568106"
                                && exact descriptor "sourceSha" sourceSha && exact descriptor "sourceTree" sourceTree
@@ -98,6 +119,16 @@ module Join =
                                && exact descriptor "recipientPublicKeySha256" (getString capsule "recipientPublicKeySha256")
                                && exact descriptor "issuedAt" (getString admission "issuedAt")
                                && exact descriptor "expiresAt" (getString admission "expiresAt")
+                               && hex 64 (getString descriptor "plaintextSha256")
+                               && (match descriptor.TryGetProperty("plaintextBytes") with
+                                   | true,value when value.ValueKind=JsonValueKind.Number ->
+                                       let bytes = value.GetInt32()
+                                       bytes >= 2 && bytes <= 16 * 1024 * 1024
+                                   | _ -> false)
+                               && descriptorDigest = getString capsule "descriptorSha256"
+                               && nonce (getString admission "runNonce") && nonce (getString capsule "tag")
+                               && (let name = getString capsule "name"
+                                   not (isNull name) && Regex.IsMatch(name, "\\Afourd-source-[a-z0-9-]{8,64}\\.capsule\\.json\\z"))
         let capacity = decimal (getString admission "capacityRunId") && decimal (getString admission "capacityRunAttempt")
                        && decimal (getString admission "capacityArtifactId")
                        && hex 64 (getString admission "capacityArtifactDigest")
@@ -113,9 +144,20 @@ module Join =
             let canonical = JsonSerializer.SerializeToUtf8Bytes(admission)
             Ok(Convert.ToHexString(SHA256.HashData canonical).ToLowerInvariant())
 
-    let validateRoot (context: JsonElement) placement tree runId =
+    let validateRoot (context: JsonElement) (observed: JsonElement) placement tree runId =
         let keys = context.EnumerateObject() |> Seq.map (_.Name) |> Set.ofSeq
+        let observedKeys = observed.EnumerateObject() |> Seq.map (_.Name) |> Set.ofSeq
+        let exactInt name expected =
+            match observed.TryGetProperty(name: string) with
+            | true, value when value.ValueKind = JsonValueKind.Number -> value.TryGetInt32() = (true, expected)
+            | _ -> false
+        let exactBool name expected =
+            match observed.TryGetProperty(name: string) with
+            | true, value when value.ValueKind = JsonValueKind.True -> expected
+            | true, value when value.ValueKind = JsonValueKind.False -> not expected
+            | _ -> false
         if keys <> rootKeys then Error "typed-root-context-shape-refused"
+        elif observedKeys <> rootObservationKeys then Error "typed-root-observation-shape-refused"
         elif not (hex 40 placement && hex 40 tree && decimal runId) then Error "typed-root-identity-refused"
         elif not (exact context "placementSha" placement && exact context "runId" runId && exact context "runAttempt" "2") then
             Error "typed-root-binding-refused"
@@ -123,6 +165,29 @@ module Join =
             Error "typed-root-actor-refused"
         elif not (hex 64 (getString context "capacityArtifactDigest") && hex 64 (getString context "environmentReadbackSha256")) then
             Error "typed-root-digest-refused"
+        elif not (
+            exact observed "placementRefSha" placement && exact observed "placementCommitSha" placement
+            && exact observed "placementTree" tree && exact observed "reservationRunId" runId
+            && exact observed "reservationRunAttempt" "1" && exact observed "reservationHeadSha" placement
+            && exact observed "reservationStatus" "completed" && exact observed "reservationConclusion" "success"
+            && exact observed "originalActorId" (getString context "originalActorId")
+            && exact observed "triggeringActorId" (getString context "triggeringActorId")
+            && getString observed "reservationArtifactId" <> getString context "capacityArtifactId"
+            && decimal (getString observed "reservationArtifactId")
+            && hex 64 (getString observed "reservationArtifactDigest")
+            && exact observed "reservationResultRunId" runId && exact observed "reservationResultRunAttempt" "1"
+            && exact observed "reservationResultPlacementSha" placement && exact observed "reservationResultPlacementTree" tree
+            && exact observed "reservationResultOutcome" "awaiting-exact-admission"
+            && exactBool "reservationResultQualified" false
+            && exact observed "environmentReadbackSha256" (getString context "environmentReadbackSha256")
+            && exact observed "capacityRunId" (getString context "capacityRunId")
+            && exact observed "capacityRunAttempt" (getString context "capacityRunAttempt")
+            && exact observed "capacityRunConclusion" "success"
+            && exact observed "capacityArtifactId" (getString context "capacityArtifactId")
+            && exact observed "capacityArtifactDigest" (getString context "capacityArtifactDigest")
+            && exactInt "secretCount" 0 && exactInt "releaseCount" 0) then
+            Error "typed-root-observation-refused"
         else
-            let canonical = JsonSerializer.SerializeToUtf8Bytes(context)
+            let canonical = JsonSerializer.SerializeToUtf8Bytes(
+                {| context = context; observed = observed; placementSha = placement; placementTree = tree; runId = runId |})
             Ok(Convert.ToHexString(SHA256.HashData canonical).ToLowerInvariant())

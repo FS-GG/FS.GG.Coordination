@@ -1146,6 +1146,14 @@ def settle_typed_failure(*, runner: Effects, public_source: pathlib.Path, work: 
         return False
 
 
+def project_typed_cancellation(*, runner: Effects, public_source: pathlib.Path, work: pathlib.Path,
+                               state: Mapping[str, object], name: str) -> dict[str, object]:
+    if runner.cancelled and state.get("cancelled") is not True:
+        return typed_module().transition(runner=runner, source_root=public_source, work=work, name=name,
+                                         observation={"kind":"cancel"}, state=state)
+    return dict(state)
+
+
 def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, effects: Effects | None = None) -> int:
     """Run the only process that receives the source-recipient private key."""
     env = environ if environ is not None else dict(os.environ)
@@ -1176,7 +1184,7 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
                                                inventory_sha256=FOURD_INVENTORY)
             typed_state = typed_module().transition(
                 runner=runner, source_root=public_source, work=typed_work, name="begin-source-effect",
-                observation={"kind":"begin-effect", "resource":"source-acquisition"}, state=typed_state)
+                observation={"kind":"begin-effect", "resource":"source-acquisition", "acknowledged":False}, state=typed_state)
         except Exception as error:
             raise Refusal("typed-policy-admission-refused") from error
         source = acquire_source(key or b"", admitted, private, pathlib.Path(args.known_hosts), runner, env)
@@ -1189,15 +1197,19 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
             typed_state = typed_module().transition(runner=runner, source_root=public_source, work=typed_work,
                 name="observe-source-success", observation={"kind":"observe-success"}, state=typed_state)
             typed_state = typed_module().transition(runner=runner, source_root=public_source, work=typed_work,
-                name="begin-source-cleanup", observation={"kind":"begin-cleanup", "cancelled":False}, state=typed_state)
+                name="begin-source-cleanup", observation={"kind":"begin-cleanup", "cancelled":bool(runner.cancelled)}, state=typed_state)
             for resource,name in (("source-join","close-source-join"),("source-acquisition","close-source-acquisition")):
                 typed_state=typed_module().transition(runner=runner,source_root=public_source,work=typed_work,name=name,
                     observation={"kind":"close","resource":resource},state=typed_state)
+                typed_state=project_typed_cancellation(runner=runner,public_source=public_source,work=typed_work,
+                    state=typed_state,name=name+"-cancel")
             typed_state=typed_module().transition(runner=runner,source_root=public_source,work=typed_work,name="finish-source",
                 observation={"kind":"finish"},state=typed_state)
+            typed_state=project_typed_cancellation(runner=runner,public_source=public_source,work=typed_work,
+                state=typed_state,name="finish-source-cancel")
         except Exception as error:
             raise Refusal("typed-policy-cleanup-refused") from error
-        if typed_state.get("successful") is not True or typed_state.get("cleanupComplete") is not True:
+        if runner.cancelled or typed_state.get("successful") is not True or typed_state.get("cleanupComplete") is not True:
             raise Refusal("typed-policy-cleanup-refused")
         _write_new(private / "typed-operation-state.json",
                    json.dumps(typed_state, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
@@ -1358,18 +1370,22 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         try:
             typed_state = typed_module().transition(
                 runner=runner, source_root=public_source, work=typed_work, name="begin-cleanup",
-                observation={"kind":"begin-cleanup", "cancelled":False, "cost":1}, state=typed_state)
+                observation={"kind":"begin-cleanup", "cancelled":bool(runner.cancelled), "cost":1}, state=typed_state)
             for resource, name in (("source-join", "close-source-join"), ("native-route", "close-native-route")):
                 typed_state = typed_module().transition(
                     runner=runner, source_root=public_source, work=typed_work, name=name,
                     observation={"kind":"close", "resource":resource, "cost":1}, state=typed_state)
+                typed_state=project_typed_cancellation(runner=runner,public_source=public_source,work=typed_work,
+                    state=typed_state,name=name+"-cancel")
             typed_state = typed_module().transition(
                 runner=runner, source_root=public_source, work=typed_work, name="finish",
                 observation={"kind":"finish", "cost":1}, state=typed_state)
+            typed_state=project_typed_cancellation(runner=runner,public_source=public_source,work=typed_work,
+                state=typed_state,name="finish-cancel")
         except Exception as error:
             shutil.rmtree(sealed, ignore_errors=True)
             raise Refusal("typed-policy-cleanup-refused") from error
-        if typed_state.get("successful") is not True or typed_state.get("cleanupComplete") is not True:
+        if runner.cancelled or typed_state.get("successful") is not True or typed_state.get("cleanupComplete") is not True:
             shutil.rmtree(sealed, ignore_errors=True)
             raise Refusal("typed-policy-cleanup-refused")
         result.update(outcome="sealed-native-evidence", custodyOutcome=verified.outcome, archiveComplete=True,

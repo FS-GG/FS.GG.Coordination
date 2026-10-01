@@ -77,7 +77,9 @@ module Policy =
             | BeginCleanup(cancelled, _) when state.Phase <> Cleanup && state.Phase <> Finished && state.Phase <> CleanupFailed ->
                 Ok { next with Phase = Cleanup; Cancelled = cancelled;
                                     Outcome = (if state.Outcome = Success then Success else Unknown) }
-            | Cancel _ when state.Phase <> Finished && state.Phase <> CleanupFailed ->
+            | Cancel _ when state.Phase = Finished ->
+                Ok { next with Cancelled = true }
+            | Cancel _ when state.Phase <> CleanupFailed ->
                 Ok { next with Phase = Cleanup; Cancelled = true;
                                     Outcome = (if state.Outcome = Success then Success else Unknown) }
             | Close(resource, _) when state.Phase = Cleanup && state.Owned.Contains resource ->
@@ -89,18 +91,30 @@ module Policy =
     let cleanupComplete state = state.Phase = Finished && state.Closed = state.Owned
     let effectEligible state = state.Phase = Admitted && state.AdmittedIdentity.IsSome
                                && state.CurrentIdentity.IsSome && state.AdmittedIdentity = state.CurrentIdentity
-    let successful state = state.Outcome = Success && state.EffectAcknowledged && cleanupComplete state
+    let successful state = not state.Cancelled && state.Outcome = Success && state.EffectAcknowledged && cleanupComplete state
 
     let validateState state =
         let identitiesValid = [state.AcquiredIdentity;state.ValidatedIdentity;state.AdmittedIdentity;state.CurrentIdentity]
                               |> List.forall (Option.forall validToken)
+        let allEqual = state.AcquiredIdentity = state.ValidatedIdentity
+                       && state.ValidatedIdentity = state.AdmittedIdentity
+                       && state.AdmittedIdentity = state.CurrentIdentity
         let identityChain =
             match state.Phase with
-            | Admitted | Effect | Cleanup | Finished | CleanupFailed ->
-                state.AcquiredIdentity.IsSome && state.ValidatedIdentity.IsSome && state.CurrentIdentity.IsSome
-                && (state.Phase = CleanupFailed || state.AdmittedIdentity.IsSome)
-            | _ -> true
+            | Idle -> [state.AcquiredIdentity; state.ValidatedIdentity; state.AdmittedIdentity; state.CurrentIdentity]
+                      |> List.forall Option.isNone
+            | Acquired -> state.AcquiredIdentity.IsSome && state.AcquiredIdentity = state.CurrentIdentity
+                          && state.ValidatedIdentity.IsNone && state.AdmittedIdentity.IsNone
+            | Validated -> state.AcquiredIdentity.IsSome && state.ValidatedIdentity.IsSome && state.CurrentIdentity.IsSome
+                           && state.AdmittedIdentity.IsNone
+            | Admitted | Effect -> state.AcquiredIdentity.IsSome && allEqual
+            | Cleanup | Finished | CleanupFailed ->
+                state.AcquiredIdentity.IsSome && state.CurrentIdentity.IsSome
+                && (match state.AdmittedIdentity with
+                    | Some _ -> allEqual
+                    | None -> state.Outcome <> Success)
         identitiesValid && identityChain && state.BudgetRemaining >= 0 && state.BudgetRemaining <= 2700
         && Set.isSubset state.Closed state.Owned
         && (state.Outcome <> Success || state.EffectAcknowledged)
+        && (not state.Cancelled || not (successful state))
         && (state.Phase <> Finished || state.Closed = state.Owned)

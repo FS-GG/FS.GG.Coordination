@@ -32,7 +32,8 @@ module FourDOperation {
     owned: s.owned + 1, budget: s.budget - 1 }
   pure def beginCleanupNext(s, cancelled) = { ...s, phase: "cleanup", cancelled: cancelled,
     outcome: if (s.outcome == "success") "success" else "unknown", budget: s.budget - 1 }
-  pure def cancelNext(s) = beginCleanupNext(s, true)
+  pure def cancelNext(s) = if (s.phase == "finished") { ...s, cancelled: true, budget: s.budget - 1 }
+    else beginCleanupNext(s, true)
   pure def cleanupNext(s, count) = { ...s, phase: "cleanup", closed: s.closed + count,
     budget: s.budget - 1 }
   pure def finishNext(s) = { ...s,
@@ -51,7 +52,7 @@ module FourDOperation {
     state.admittedIdentity == state.currentIdentity, state' = effectNext(state, false) }
   action acknowledgeEffect = all { state.phase == "admitted", state.budget > 0,
     state.admittedIdentity == state.currentIdentity, state' = effectNext(state, true) }
-  action cancel = all { state.phase != "finished", state.phase != "cleanup-failed",
+  action cancel = all { state.phase != "cleanup-failed",
     state.budget > 0, state' = cancelNext(state) }
   action beginCleanup = all { state.phase != "cleanup", state.phase != "finished",
     state.phase != "cleanup-failed", state.budget > 0,

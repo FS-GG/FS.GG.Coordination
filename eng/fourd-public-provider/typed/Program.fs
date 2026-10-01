@@ -65,7 +65,11 @@ module Program =
           Outcome = (match requiredString root "outcome" with "success" -> Success | "unknown" -> Unknown | "refused" -> Refused | "none" -> NoneObserved | _ -> invalidArg "outcome" "typed-outcome-refused");
           Owned = strings "owned"; Closed = strings "closed"; Cancelled = requiredBool root "cancelled";
           BudgetRemaining = requiredInt root "budgetRemaining" }
-        if requiredString root "schema" <> "fsgg.fourd.typed-operation-state/1" || not (Policy.validateState state) then
+        if requiredString root "schema" <> "fsgg.fourd.typed-operation-state/1"
+           || requiredBool root "effectEligible" <> Policy.effectEligible state
+           || requiredBool root "cleanupComplete" <> Policy.cleanupComplete state
+           || requiredBool root "successful" <> Policy.successful state
+           || not (Policy.validateState state) then
             invalidArg "state" "typed-state-refused"
         state
 
@@ -143,10 +147,10 @@ module Program =
         use doc = JsonDocument.Parse(bytes, JsonDocumentOptions(MaxDepth = 16))
         let root = doc.RootElement
         let fields = root.EnumerateObject() |> Seq.map (_.Name) |> Set.ofSeq
-        if fields <> Set ["schema";"context";"placementSha";"placementTree";"runId"]
+        if fields <> Set ["schema";"context";"observed";"placementSha";"placementTree";"runId"]
            || requiredString root "schema" <> "fsgg.fourd.typed-root-join-request/1" then
             invalidArg "input" "typed-root-request-refused"
-        match Join.validateRoot (root.GetProperty "context") (requiredString root "placementSha")
+        match Join.validateRoot (root.GetProperty "context") (root.GetProperty "observed") (requiredString root "placementSha")
                                 (requiredString root "placementTree") (requiredString root "runId") with
         | Error reason ->
             File.WriteAllText(output, JsonSerializer.Serialize({| accepted=false; refusal=reason |}, options)+"\n"); 2

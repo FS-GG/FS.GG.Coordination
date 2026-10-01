@@ -26,7 +26,7 @@ def admission():
         workflowPath=".github/workflows/fourd-public-provider-qualification.yml", phase="qualification",
         workflowRef="FS-GG/FS.GG.Coordination/.github/workflows/fourd-public-provider-qualification.yml@refs/heads/qualification/fourd-native-20261001",
         operationId="fourd-portable-technical", fourdRepository="FS-GG/FS.GG.FourD", fourdRepositoryId="1390568106",
-        placementSha="a"*40, runId="12345", runAttempt="2", originalActorId="17", triggeringActorId="17",
+        placementSha="a"*40, runId="12345", runAttempt="2", runNonce="fixture-1", originalActorId="17", triggeringActorId="17",
         fourdSourceSha="d5d8b6d242b13dd79007fcbbb6e5ee4069fd3264",
         fourdSourceTree="ae626190a30a784db8968157a1ef1c9c5c499770",
         fourdInventorySha256="bf3ec0ab2fe639bc9f4bc53da8f33c8adf8f237a505f9eee6eca0002b1cd1c49",
@@ -40,16 +40,18 @@ def admission():
         environmentReadbackSha256="5"*64,
         issuedAt="2026-10-01T16:00:00Z", expiresAt="2026-10-01T16:30:00Z",
         sourceCapsule={"transport":"coordination-release-asset","releaseId":"1","assetId":"2","tag":"fixture-tag",
-            "name":"fourd-source-fixture.capsule.json","ciphertextBytes":2,"ciphertextSha256":"1"*64,
+            "name":"fourd-source-fixture-1.capsule.json","ciphertextBytes":2,"ciphertextSha256":"1"*64,
             "descriptor":{"schema":"fsgg.fourd.source-capsule-descriptor/1","purpose":"fourd-source-acquisition",
-                "placementSha":"a"*40,"runId":"12345","runAttempt":"2","runNonce":"fixture",
+                "placementSha":"a"*40,"runId":"12345","runAttempt":"2","runNonce":"fixture-1",
                 "coordinationRepositoryId":"1346720714","fourdRepositoryId":"1390568106",
                 "sourceSha":"d5d8b6d242b13dd79007fcbbb6e5ee4069fd3264","sourceTree":"ae626190a30a784db8968157a1ef1c9c5c499770",
                 "inventorySha256":"bf3ec0ab2fe639bc9f4bc53da8f33c8adf8f237a505f9eee6eca0002b1cd1c49",
                 "plaintextBytes":2,"plaintextSha256":"6"*64,"recipientPublicKeySha256":"3"*64,
                 "sealerSha256":"4f46d5a1762eaee9ba800e5fb58933a9c312e22e4d416b9489e632fd9b2ce85d",
                 "issuedAt":"2026-10-01T16:00:00Z","expiresAt":"2026-10-01T16:30:00Z"},
-            "descriptorSha256":"2"*64,"recipientPublicKeySha256":"3"*64})
+            "descriptorSha256":"pending","recipientPublicKeySha256":"3"*64})
+    descriptor=value["sourceCapsule"]["descriptor"]
+    value["sourceCapsule"]["descriptorSha256"]=hashlib.sha256((json.dumps(descriptor,sort_keys=True,separators=(",",":"))+"\n").encode()).hexdigest()
     return value
 
 def admit(runner, root, work, value=None):
@@ -137,6 +139,25 @@ class TypedPolicyTests(unittest.TestCase):
                         admit(ActualRunner(),ROOT,work,changed)
                 finally: os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
 
+    def test_compiled_join_closes_and_hashes_capsule_descriptor_and_transport_names(self):
+        cases=[]
+        changed=admission();changed["sourceCapsule"]["descriptor"]["extra"]=True;cases.append(changed)
+        changed=admission();changed["sourceCapsule"]["descriptorSha256"]="0"*64;cases.append(changed)
+        changed=admission();changed["sourceCapsule"]["descriptor"]["runNonce"]="different-1";cases.append(changed)
+        changed=admission();changed["sourceCapsule"]["tag"]="short";cases.append(changed)
+        changed=admission();changed["sourceCapsule"]["name"]="unexpected.json";cases.append(changed)
+        for index,changed in enumerate(cases):
+            descriptor=changed["sourceCapsule"]["descriptor"]
+            if index in (0,2):
+                changed["sourceCapsule"]["descriptorSha256"]=hashlib.sha256(
+                    (json.dumps(descriptor,sort_keys=True,separators=(",",":"))+"\n").encode()).hexdigest()
+            with self.subTest(index=index),tempfile.TemporaryDirectory() as temporary:
+                os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+                try:
+                    with self.assertRaisesRegex(typed.TypedPolicyRefusal,"typed-source-join-refused"):
+                        admit(ActualRunner(),ROOT,pathlib.Path(temporary),changed)
+                finally: os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
     def test_missing_identity_and_duplicate_json_refuse_before_effect(self):
         with tempfile.TemporaryDirectory() as temporary:
             root=pathlib.Path(temporary); output=root/"output.json"
@@ -147,6 +168,84 @@ class TypedPolicyTests(unittest.TestCase):
             self.assertEqual(2,process.returncode);self.assertFalse(output.exists())
             duplicate=root/"duplicate.json";duplicate.write_text('{"schema":"fsgg.fourd.typed-operation-request/1","schema":"fsgg.fourd.typed-operation-request/1","budget":5,"observation":{"kind":"cancel","cost":1}}')
             self.assertEqual(2,subprocess.run([str(EXE),"transition",str(duplicate),str(output)],check=False).returncode)
+
+    def test_compiled_state_requires_equal_identity_chain_and_truthful_derived_fields(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                admitted=admit(ActualRunner(),ROOT,root)
+                for name,changed in (
+                    ("identity",dict(admitted,validatedIdentity="b"*64)),
+                    ("eligibility",dict(admitted,effectEligible=False)),
+                    ("success",dict(admitted,successful=True))):
+                    request={"schema":typed.REQUEST_SCHEMA,"state":changed,
+                             "observation":{"kind":"begin-effect","resource":"native","acknowledged":False,"cost":1}}
+                    source=root/f"{name}.json"; output=root/f"{name}.out"
+                    source.write_text(json.dumps(request,sort_keys=True,separators=(",",":")))
+                    self.assertEqual(2,subprocess.run([str(EXE),"transition",str(source),str(output)],check=False).returncode)
+                    self.assertFalse(output.exists())
+            finally: os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
+    def test_early_cancel_roundtrips_and_cancelled_success_is_never_successful(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                acquired=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="acquire-only",
+                    observation={"kind":"acquire","identity":"a"*64,"resource":"source","cost":1})
+                cleaning=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="early-clean",
+                    observation={"kind":"begin-cleanup","cancelled":True,"cost":1},state=acquired)
+                closed=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="early-close",
+                    observation={"kind":"close","resource":"source","cost":1},state=cleaning)
+                finished=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="early-finish",
+                    observation={"kind":"finish","cost":1},state=closed)
+                self.assertTrue(finished["cleanupComplete"]); self.assertFalse(finished["successful"])
+                state=admit(ActualRunner(),ROOT,root)
+                state=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="cancelled-effect",
+                    observation={"kind":"begin-effect","resource":"effect","acknowledged":True,"cost":1},state=state)
+                state=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="cancelled-clean",
+                    observation={"kind":"begin-cleanup","cancelled":True,"cost":1},state=state)
+                for resource in ("source-join","effect"):
+                    state=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="cancelled-close-"+resource,
+                        observation={"kind":"close","resource":resource,"cost":1},state=state)
+                state=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="cancelled-finish",
+                    observation={"kind":"finish","cost":1},state=state)
+                self.assertTrue(state["cleanupComplete"]); self.assertFalse(state["successful"])
+                state=dict(state,cancelled=False,successful=True)
+                state=typed.transition(runner=ActualRunner(),source_root=ROOT,work=root,name="late-cancel",
+                    observation={"kind":"cancel","cost":1},state=state)
+                self.assertEqual("finished",state["phase"]);self.assertTrue(state["cleanupComplete"])
+                self.assertTrue(state["cancelled"]);self.assertFalse(state["successful"])
+            finally: os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
+    def test_compiled_root_identity_binds_placement_tree(self):
+        context={"placementSha":"a"*40,"runId":"12345","runAttempt":"2","runNonce":"fixture-1",
+                 "originalActorId":"17","triggeringActorId":"17","capacityRunId":"100",
+                 "capacityRunAttempt":"1","capacityArtifactId":"200","capacityArtifactDigest":"4"*64,
+                 "environmentReadbackSha256":"5"*64}
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary); identities=[]
+            for index,tree in enumerate(("b"*40,"c"*40)):
+                observed={"placementRefSha":"a"*40,"placementCommitSha":"a"*40,"placementTree":tree,
+                    "reservationRunId":"12345","reservationRunAttempt":"1","reservationHeadSha":"a"*40,
+                    "reservationStatus":"completed","reservationConclusion":"success","originalActorId":"17",
+                    "triggeringActorId":"17","reservationArtifactId":"201","reservationArtifactDigest":"6"*64,
+                    "reservationResultRunId":"12345","reservationResultRunAttempt":"1",
+                    "reservationResultPlacementSha":"a"*40,"reservationResultPlacementTree":tree,
+                    "reservationResultOutcome":"awaiting-exact-admission","reservationResultQualified":False,
+                    "environmentReadbackSha256":"5"*64,"capacityRunId":"100","capacityRunAttempt":"1",
+                    "capacityRunConclusion":"success","capacityArtifactId":"200","capacityArtifactDigest":"4"*64,
+                    "secretCount":0,"releaseCount":0}
+                request={"schema":"fsgg.fourd.typed-root-join-request/1","context":context,"observed":observed,
+                         "placementSha":"a"*40,"placementTree":tree,"runId":"12345"}
+                source=root/f"root-{index}.json";output=root/f"root-{index}.out"
+                source.write_text(json.dumps(request,sort_keys=True,separators=(",",":")))
+                self.assertEqual(0,subprocess.run([str(EXE),"validate-root",str(source),str(output)],check=False).returncode)
+                identities.append(json.loads(output.read_text())["identity"])
+            self.assertNotEqual(*identities)
+            request["observed"]["reservationConclusion"]="failure"
+            source=root/"root-tampered.json";output=root/"root-tampered.out"
+            source.write_text(json.dumps(request,sort_keys=True,separators=(",",":")))
+            self.assertEqual(2,subprocess.run([str(EXE),"validate-root",str(source),str(output)],check=False).returncode)
 
     def test_production_entrypoint_requires_finished_typed_state_for_success(self):
         source=(ROOT/"eng/fourd-public-provider/qualify.py").read_text()

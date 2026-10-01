@@ -68,10 +68,19 @@ let states, observations =
                                  |> apply "finish" (Finish 1)
     | _ -> fail "FSGG_FOURD_QUINT_SCENARIO is required"
 
+let fingerprint name =
+    let value = Environment.GetEnvironmentVariable name
+    if String.IsNullOrWhiteSpace value || value.Length <> 64
+       || value |> Seq.exists (fun c -> not (Char.IsDigit c || c >= 'a' && c <= 'f')) then
+        fail $"{name} must contain an observed SHA-256 fingerprint"
+    value
 let environment = {
-    Seed = "20261001"; Bounds = ["steps", 12L]; ToolFingerprint = String.replicate 64 "1"
-    ProfileFingerprint = String.replicate 64 "2"; ContractFingerprint = String.replicate 64 "3"
-    AdapterFingerprint = String.replicate 64 "4"; ImplementationFingerprint = String.replicate 64 "5"
+    Seed = "20261001"; Bounds = ["steps", 12L]
+    ToolFingerprint = fingerprint "FSGG_FOURD_QUINT_TOOL_SHA256"
+    ProfileFingerprint = fingerprint "FSGG_FOURD_QUINT_PROFILE_SHA256"
+    ContractFingerprint = fingerprint "FSGG_FOURD_QUINT_CONTRACT_SHA256"
+    AdapterFingerprint = fingerprint "FSGG_FOURD_QUINT_ADAPTER_SHA256"
+    ImplementationFingerprint = fingerprint "FSGG_FOURD_QUINT_IMPLEMENTATION_SHA256"
 }
 let bindings = observations |> List.map (fun item -> { Index=item.Index; Action=item.Action; Source=item.Source })
 let trace =
