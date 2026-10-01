@@ -5,6 +5,7 @@ open System.Data
 open System.IO
 open System.Reflection
 open System.Security.Cryptography
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open Npgsql
@@ -35,6 +36,7 @@ type private StoredExecutorCommand =
         CommandId: Guid
         BodySha256: string
         Kind: string
+        WorkItemPersistenceId: string
         AssignmentId: Guid
         AttemptId: Guid
         Generation: int64
@@ -61,6 +63,7 @@ module private StoredExecutorCommand =
                     CommandId = value.CommandId
                     BodySha256 = value.BodySha256
                     Kind = value.Kind
+                    WorkItemPersistenceId = value.WorkItemPersistenceId
                     AssignmentId = value.AssignmentId
                     AttemptId = value.AttemptId
                     Generation = value.Generation
@@ -84,6 +87,7 @@ module private StoredExecutorCommand =
                         CommandId = value.CommandId
                         BodySha256 = value.BodySha256
                         Kind = value.Kind
+                        WorkItemPersistenceId = value.WorkItemPersistenceId
                         AssignmentId = value.AssignmentId
                         AttemptId = value.AttemptId
                         Generation = value.Generation
@@ -159,6 +163,32 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
     let sha (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let durableDispatchDigest
+        (kind: string)
+        (assignmentId: Guid)
+        (attemptId: Guid)
+        (generation: int64)
+        (revision: int64)
+        (identity: string)
+        (payload: byte array)
+        =
+        // Versioned, line-framed ASCII owner fields followed by the exact
+        // retained payload bytes. UUIDs and integers use invariant canonical
+        // renderings; payload is last so arbitrary bytes cannot change framing.
+        let owner =
+            String.concat
+                "\n"
+                [ "fsgg.learning-execution-first-dispatch/1"
+                  kind
+                  assignmentId.ToString("D")
+                  attemptId.ToString("D")
+                  generation.ToString(Globalization.CultureInfo.InvariantCulture)
+                  revision.ToString(Globalization.CultureInfo.InvariantCulture)
+                  identity ]
+            + "\n"
+
+        Array.concat [ Encoding.ASCII.GetBytes owner; payload ] |> sha
 
     let gateLearning
         (connection: NpgsqlConnection)
@@ -448,7 +478,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
                     use bindings =
                         new NpgsqlCommand(
-                            "SELECT binding_sha256,payload FROM fsgg_orchestration.learning_execution_binding ORDER BY created_at,assignment_id,attempt_id LIMIT 257",
+                            "SELECT assignment_id,attempt_id,generation,binding_sha256,treatment_assignment_sha256,payload_bytes,cumulative_bytes,ordinal,CASE WHEN ordinal <= 256 AND payload_bytes <= 32768 AND cumulative_bytes <= 8388608 THEN payload END FROM (SELECT assignment_id,attempt_id,generation,binding_sha256,treatment_assignment_sha256,payload,octet_length(payload)::bigint AS payload_bytes,sum(octet_length(payload)::bigint) OVER (ORDER BY created_at,assignment_id,attempt_id) AS cumulative_bytes,row_number() OVER (ORDER BY created_at,assignment_id,attempt_id) AS ordinal,created_at FROM fsgg_orchestration.learning_execution_binding ORDER BY created_at,assignment_id,attempt_id LIMIT 257) bounded ORDER BY created_at,assignment_id,attempt_id",
                             connection,
                             transaction
                         )
@@ -457,7 +487,6 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                     use! bindingRows = bindings.ExecuteReaderAsync queryToken
                     let decoded = ResizeArray<LearningExecutionBinding>()
                     let mutable bindingCount = 0
-                    let mutable bindingBytes = 0L
                     let mutable bindingFailure = None
                     let mutable reading = true
 
@@ -467,16 +496,36 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
                         if more then
                             bindingCount <- bindingCount + 1
-                            let expected = bindingRows.GetString 0
-                            let payload = bindingRows.GetFieldValue<byte array> 1
-                            bindingBytes <- bindingBytes + int64 payload.Length
-
-                            if bindingCount > 256 || bindingBytes > 8L * 1024L * 1024L then
+                            let assignmentId = bindingRows.GetGuid 0
+                            let attemptId = bindingRows.GetGuid 1
+                            let generation = bindingRows.GetInt64 2
+                            let expected = bindingRows.GetString 3
+                            let treatmentAssignment = bindingRows.GetString 4
+                            let payloadBytes = bindingRows.GetInt64 5
+                            let cumulativeBytes = bindingRows.GetInt64 6
+                            if
+                                bindingCount > 256
+                                || payloadBytes > 32768L
+                                || cumulativeBytes > 8L * 1024L * 1024L
+                                || bindingRows.GetInt64 7 > 256L
+                                || bindingRows.IsDBNull 8
+                            then
                                 bindingFailure <- Some "learning-execution-owner-population-overflow"
+                                reading <- false
                             elif bindingFailure.IsNone then
+                                let payload = bindingRows.GetFieldValue<byte array> 8
+
                                 match LearningExecutionBinding.decode payload with
-                                | Ok value when value.BindingSha256 = expected -> decoded.Add value
-                                | _ -> bindingFailure <- Some "learning-execution-owner-binding-corrupt"
+                                | Ok value when
+                                    value.BindingSha256 = expected
+                                    && value.AssignmentId = assignmentId
+                                    && value.AttemptId = attemptId
+                                    && value.Generation = generation
+                                    && value.TreatmentAssignmentSha256 = treatmentAssignment
+                                    -> decoded.Add value
+                                | _ ->
+                                    bindingFailure <- Some "learning-execution-owner-binding-corrupt"
+                                    reading <- false
 
                     do! bindingRows.CloseAsync()
 
@@ -499,7 +548,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                             if ownerFailure.IsNone then
                                 use route =
                                     new NpgsqlCommand(
-                                        "SELECT generation,binding_sha256,payload FROM fsgg_orchestration.execution_route_binding WHERE assignment_id=$1 AND attempt_id=$2",
+                                        "SELECT generation,binding_sha256,octet_length(payload)::bigint,CASE WHEN octet_length(payload) <= 32768 THEN payload END FROM fsgg_orchestration.execution_route_binding WHERE assignment_id=$1 AND attempt_id=$2",
                                         connection,
                                         transaction
                                     )
@@ -511,9 +560,14 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                 let! routeFound = routeRow.ReadAsync queryToken
 
                                 let routeDigest =
-                                    if routeFound && routeRow.GetInt64 0 = binding.Generation then
+                                    if
+                                        routeFound
+                                        && routeRow.GetInt64 0 = binding.Generation
+                                        && routeRow.GetInt64 2 <= 32768L
+                                        && not (routeRow.IsDBNull 3)
+                                    then
                                         let expected = routeRow.GetString 1
-                                        let payload = routeRow.GetFieldValue<byte array> 2
+                                        let payload = routeRow.GetFieldValue<byte array> 3
 
                                         match ExecutorWire.parseRouteBinding payload with
                                         | Ok value when
@@ -521,6 +575,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                             && value.AssignmentId = binding.AssignmentId
                                             && value.AttemptId = binding.AttemptId
                                             && value.Generation = binding.Generation
+                                            && value.WorkItemPersistenceId = binding.ItemId
                                             -> Some expected
                                         | _ -> None
                                     else
@@ -551,7 +606,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
                                 use events =
                                     new NpgsqlCommand(
-                                        "SELECT revision,event_identity,payload FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 ORDER BY revision LIMIT 257",
+                                        "SELECT revision,event_identity,payload_bytes,cumulative_bytes,ordinal,CASE WHEN ordinal <= 256 AND payload_bytes <= 262144 AND cumulative_bytes <= 4194304 THEN payload END FROM (SELECT revision,event_identity,payload,octet_length(payload)::bigint AS payload_bytes,sum(octet_length(payload)::bigint) OVER (ORDER BY revision) AS cumulative_bytes,row_number() OVER (ORDER BY revision) AS ordinal FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 ORDER BY revision LIMIT 257) bounded ORDER BY revision",
                                         connection,
                                         transaction
                                     )
@@ -560,10 +615,9 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                 add events binding.AssignmentId
                                 add events binding.AttemptId
                                 use! eventRows = events.ExecuteReaderAsync queryToken
-                                let observedEvents = ResizeArray<int64 * string * SessionEvent>()
+                                let observedEvents = ResizeArray<int64 * string * SessionEvent * string>()
                                 let mutable eventFailure = None
                                 let mutable eventCount = 0
-                                let mutable eventBytes = 0L
                                 let mutable readEvents = true
 
                                 while readEvents do
@@ -574,22 +628,42 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                         eventCount <- eventCount + 1
                                         let revision = eventRows.GetInt64 0
                                         let identity = eventRows.GetString 1
-                                        let payload = eventRows.GetFieldValue<byte array> 2
-                                        eventBytes <- eventBytes + int64 payload.Length
-
-                                        if eventCount > 256 || eventBytes > 4L * 1024L * 1024L then
+                                        let payloadBytes = eventRows.GetInt64 2
+                                        let cumulativeBytes = eventRows.GetInt64 3
+                                        if
+                                            eventCount > 256
+                                            || payloadBytes > 262144L
+                                            || cumulativeBytes > 4L * 1024L * 1024L
+                                            || eventRows.GetInt64 4 > 256L
+                                            || eventRows.IsDBNull 5
+                                        then
                                             eventFailure <- Some "learning-execution-owner-event-overflow"
+                                            readEvents <- false
                                         elif eventFailure.IsNone then
+                                            let payload = eventRows.GetFieldValue<byte array> 5
+
                                             match SessionEventCodec.decode payload with
                                             | Ok value when SessionEventCodec.identity value = identity ->
-                                                observedEvents.Add((revision, identity, value))
-                                            | _ -> eventFailure <- Some "learning-execution-owner-event-corrupt"
+                                                let dispatch =
+                                                    durableDispatchDigest
+                                                        "event"
+                                                        binding.AssignmentId
+                                                        binding.AttemptId
+                                                        binding.Generation
+                                                        revision
+                                                        identity
+                                                        payload
+
+                                                observedEvents.Add((revision, identity, value, dispatch))
+                                            | _ ->
+                                                eventFailure <- Some "learning-execution-owner-event-corrupt"
+                                                readEvents <- false
 
                                 do! eventRows.CloseAsync()
 
                                 use commands =
                                     new NpgsqlCommand(
-                                        "SELECT body_sha256,generation,payload FROM fsgg_orchestration.executor_command WHERE assignment_id=$1 AND attempt_id=$2 AND visible ORDER BY durable_revision,created_at,command_id LIMIT 257",
+                                        "SELECT command_id,body_sha256,generation,durable_revision,payload_bytes,ordinal,CASE WHEN ordinal <= 256 AND payload_bytes <= 32768 THEN payload END FROM (SELECT command_id,body_sha256,generation,durable_revision,payload,octet_length(payload)::bigint AS payload_bytes,row_number() OVER (ORDER BY durable_revision,created_at,command_id) AS ordinal,created_at FROM fsgg_orchestration.executor_command WHERE assignment_id=$1 AND attempt_id=$2 AND visible ORDER BY durable_revision,created_at,command_id LIMIT 257) bounded ORDER BY durable_revision,created_at,command_id",
                                         connection,
                                         transaction
                                     )
@@ -598,7 +672,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                 add commands binding.AssignmentId
                                 add commands binding.AttemptId
                                 use! commandRows = commands.ExecuteReaderAsync queryToken
-                                let commandDigests = ResizeArray<string>()
+                                let commandDigests = ResizeArray<string * string>()
                                 let mutable commandFailure = None
                                 let mutable readCommands = true
 
@@ -609,20 +683,42 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                     if more then
                                         if commandDigests.Count >= 256 then
                                             commandFailure <- Some "learning-execution-owner-command-overflow"
-                                        elif commandRows.GetInt64 1 <> binding.Generation then
+                                            readCommands <- false
+                                        elif commandRows.GetInt64 2 <> binding.Generation then
                                             commandFailure <- Some "learning-execution-owner-generation-refused"
+                                            readCommands <- false
+                                        elif commandRows.GetInt64 4 > 32768L || commandRows.GetInt64 5 > 256L || commandRows.IsDBNull 6 then
+                                            commandFailure <- Some "learning-execution-owner-command-overflow"
+                                            readCommands <- false
                                         else
-                                            let expected = commandRows.GetString 0
-                                            let payload = commandRows.GetFieldValue<byte array> 2
+                                            let commandId = commandRows.GetGuid 0
+                                            let expected = commandRows.GetString 1
+                                            let durableRevision = commandRows.GetInt64 3
+                                            let payload = commandRows.GetFieldValue<byte array> 6
 
                                             match StoredExecutorCommand.parse payload with
                                             | Ok value when
                                                 value.BodySha256 = expected
+                                                && value.CommandId = commandId
+                                                && value.WorkItemPersistenceId = binding.ItemId
                                                 && value.AssignmentId = binding.AssignmentId
                                                 && value.AttemptId = binding.AttemptId
                                                 && value.Generation = binding.Generation
-                                                -> commandDigests.Add expected
-                                            | _ -> commandFailure <- Some "learning-execution-owner-command-corrupt"
+                                                ->
+                                                let dispatch =
+                                                    durableDispatchDigest
+                                                        "command"
+                                                        binding.AssignmentId
+                                                        binding.AttemptId
+                                                        binding.Generation
+                                                        durableRevision
+                                                        (commandId.ToString("D") + ":" + expected)
+                                                        payload
+
+                                                commandDigests.Add((expected, dispatch))
+                                            | _ ->
+                                                commandFailure <- Some "learning-execution-owner-command-corrupt"
+                                                readCommands <- false
 
                                 do! commandRows.CloseAsync()
 
@@ -636,14 +732,14 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                         | Some revision ->
                                             revision = int64 eventList.Length
                                             && (eventList
-                                                |> List.mapi (fun index (actual, _, _) -> actual = int64 index + 1L)
+                                                |> List.mapi (fun index (actual, _, _, _) -> actual = int64 index + 1L)
                                                 |> List.forall id)
                                         | None -> false
 
                                     let intentMatches =
                                         eventList
                                         |> List.tryHead
-                                        |> Option.exists (fun (_, _, eventValue) ->
+                                        |> Option.exists (fun (_, _, eventValue, _) ->
                                             match eventValue with
                                             | LaunchIntentRecorded intent ->
                                                 intent.Key.AssignmentId = binding.AssignmentId
@@ -653,21 +749,22 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
                                     let attemptDigest =
                                         eventList
-                                        |> List.tryPick (fun (_, identity, eventValue) ->
+                                        |> List.tryPick (fun (_, _, eventValue, dispatch) ->
                                             match eventValue with
-                                            | LaunchAttemptRecorded _ -> Some identity
+                                            | LaunchAttemptRecorded _ -> Some dispatch
                                             | _ -> None)
 
                                     let latestObservation =
                                         eventList
                                         |> List.rev
-                                        |> List.tryPick (fun (_, identity, eventValue) ->
+                                        |> List.tryPick (fun (_, identity, eventValue, _) ->
                                             match eventValue with
                                             | StartObserved observation
                                             | ObservationRecorded observation -> Some(identity, observation)
                                             | _ -> None)
 
-                                    let commandDigest = commandDigests |> Seq.tryHead
+                                    let commandDigest = commandDigests |> Seq.tryHead |> Option.map fst
+                                    let commandDispatch = commandDigests |> Seq.tryHead |> Option.map snd
 
                                     let phase =
                                         match routeDigest, revisionsComplete, intentMatches, latestObservation with
@@ -698,7 +795,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                             SessionRevision = streamRevision
                                             FirstDispatchSha256 =
                                                 attemptDigest
-                                                |> Option.orElse commandDigest
+                                                |> Option.orElse commandDispatch
                                             CommandSha256 = commandDigest
                                             Phase = phase
                                         }
