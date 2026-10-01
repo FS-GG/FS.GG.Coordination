@@ -354,7 +354,21 @@ jobs:
           set -euo pipefail
           config="$RUNNER_TEMP/public-only.config"
           printf '%s\n' '<?xml version="1.0" encoding="utf-8"?><configuration><packageSources><clear/><add key="nuget.org" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>' > "$config"
-          dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$RUNNER_TEMP/public-tool" --configfile "$config" --no-cache
+          installed=false
+          for attempt in {1..60}; do
+            rm -rf -- "$RUNNER_TEMP/public-tool"
+            install_log="$READBACK_OUTPUT/public-install-$attempt.log"
+            if dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$RUNNER_TEMP/public-tool" --configfile "$config" --no-cache >"$install_log" 2>&1; then
+              cat "$install_log"
+              installed=true
+              break
+            fi
+            cat "$install_log" >&2
+            grep -F "Version $PACKAGE_VERSION of package ${PACKAGE_ID,,} is not found in NuGet feeds https://api.nuget.org/v3/index.json." "$install_log" >/dev/null
+            test "$attempt" != 60
+            sleep 10
+          done
+          test "$installed" = true
           for name in toolchain-profile command result; do
             "$RUNNER_TEMP/public-tool/fsgg-coordination" workspace-contract schema export "$name" > "$READBACK_OUTPUT/public-$name.schema.json"
             cmp "contracts/portable-workspace/v1/$name.schema.json" "$READBACK_OUTPUT/public-$name.schema.json"
