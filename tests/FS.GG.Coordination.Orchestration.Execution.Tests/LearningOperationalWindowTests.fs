@@ -347,6 +347,54 @@ type LearningOperationalWindowTests() =
             Assert.Equal(Error "learning-operational-readiness-accounting-unknown", compose replacement)
 
     [<Fact>]
+    member _.``assigned execution authority is current and follows durable owner and cohort observations``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+        let root = census.Members |> List.find (fun value -> value.Role = "root")
+
+        let execution observedAt =
+            {
+                AssignmentId = Guid.Parse "10000000-0000-0000-0000-000000000001"
+                AttemptId = Guid.Parse "20000000-0000-0000-0000-000000000001"
+                Generation = 3L
+                Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                FirstDispatchSha256 = None
+                Source = source "execution-journal" "assigned-root" observedAt
+            }
+
+        let compose observedAt =
+            let assigned =
+                { root with
+                    State = "assigned"
+                    NativeUsageSha256 = None
+                    SharedCostSha256 = None
+                    Execution = Some(execution observedAt)
+                }
+
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                { census with
+                    Members =
+                        census.Members
+                        |> List.map (fun value -> if value.Role = "root" then assigned else value)
+                }
+
+        Assert.True(compose (assignedAt.AddMinutes -1.) |> Result.isOk)
+
+        Assert.Equal(
+            Error "learning-operational-readiness-census-refused",
+            compose (assignedAt.AddDays 1.)
+        )
+
+        Assert.Equal(
+            Error "learning-operational-readiness-roster-order-refused",
+            compose (cohort.AppliedAt.AddDays -1.)
+        )
+
+    [<Fact>]
     member _.``empty or partial authoritative census never certifies coverage``() =
         let key, authority, cohort, census = authoritativeRecords ()
 

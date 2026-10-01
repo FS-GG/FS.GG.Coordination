@@ -500,6 +500,7 @@ module LearningOperationalWindow =
                     || execution.AttemptId = Guid.Empty
                     || execution.Generation < 0L
                     || not (validProducer execution.Source)
+                    || execution.Source.ObservedAt > now
                     || (execution.FirstDispatchSha256 |> Option.exists (sha >> not))
                     || match execution.Phase, execution.FirstDispatchSha256 with
                        | LearningOperationalExecutionPhase.AssignedUnlaunched, None
@@ -517,12 +518,18 @@ module LearningOperationalWindow =
 
         let installedSources = [ census.InstalledCustody; census.ProviderCapability ]
 
+        let executionSources =
+            census.Members
+            |> List.choose _.Execution
+            |> List.map _.Source
+
         let sourceTimes =
             [
                 authority.Source.ObservedAt
                 cohort.Source.ObservedAt
                 census.Source.ObservedAt
                 yield! installedSources |> List.choose id |> List.map _.ObservedAt
+                yield! executionSources |> List.map _.ObservedAt
             ]
 
         let observedAt = sourceTimes |> List.max
@@ -587,8 +594,13 @@ module LearningOperationalWindow =
         elif
             census.Members
             |> List.exists (fun memberValue ->
-                memberValue.State <> "prospective"
-                && cohort.AppliedAt > memberValue.Source.ObservedAt)
+                (memberValue.State <> "prospective"
+                 && cohort.AppliedAt > memberValue.Source.ObservedAt)
+                || (memberValue.Execution
+                    |> Option.exists (fun execution ->
+                        execution.Source.ObservedAt < authority.Source.ObservedAt
+                        || execution.Source.ObservedAt < cohort.Source.ObservedAt
+                        || execution.Source.ObservedAt < cohort.AppliedAt)))
         then
             Error "learning-operational-readiness-roster-order-refused"
         elif
