@@ -73,6 +73,7 @@ def main() -> None:
     assert "stage_provider_input.py" in workflow
     assert "STAGE_ROOT_OWNED: ${{ steps.stage-reservation.outputs.stage_root_owned }}" in workflow
     assert "test_provider_facts_runtime_bounds.py" in workflow
+    assert "dotnet fsi --exec tests/portable-workspace/trusted-provider/test_private_input_manifest.fsx" in workflow
     staging_helper = (ROOT / "tests/portable-workspace/trusted-provider/stage_provider_input.py").read_text(encoding="utf-8")
     assert "callable-cli-release-prepare.yml" in staging_helper
     assert "fsgg.portable-python-provider-staging-provenance/1" in staging_helper
