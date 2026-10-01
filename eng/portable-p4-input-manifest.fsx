@@ -111,6 +111,7 @@ let validateManifest (root: JsonElement) expectedRelease expectedTarget expected
     for producer in producers.EnumerateArray() do
         exactKeys producer ["repository";"runId";"runAttempt";"workflowPath";"headSha";"artifactId";"archiveSha256"] "producer-shape"
         require ((text "repository" producer).Contains('/')) "producer-repository"
+        safeRelative (text "workflowPath" producer) |> ignore
         positiveInt "runId" producer |> ignore
         positiveInt "runAttempt" producer |> ignore
         positiveInt "artifactId" producer |> ignore
