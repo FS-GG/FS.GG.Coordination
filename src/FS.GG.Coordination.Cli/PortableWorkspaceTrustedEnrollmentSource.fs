@@ -391,12 +391,64 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
     let MaximumPayloadFileBytes = 16L * 1024L * 1024L
     [<Literal>]
     let MaximumPayloadBytes = 64L * 1024L * 1024L
+    [<Literal>]
+    let MaximumInstalledPayloadEntries = 4096
+    [<Literal>]
+    let MaximumInstalledPayloadBytes = 128L * 1024L * 1024L
 
     let digestFile path =
         try
             use stream = File.OpenRead path
             Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant() |> Ok
         with _ -> Error "portable-trusted-executable-read-refused"
+
+    let installedPayloadDigest (entryPath: string) =
+        try
+            let root = Path.GetDirectoryName entryPath |> Path.GetFullPath
+            let rootInfo = DirectoryInfo root
+            if not rootInfo.Exists || not (isNull rootInfo.LinkTarget) then
+                Error "portable-trusted-cli-payload-refused"
+            else
+                let files = ResizeArray<string * string * int64>()
+                let mutable refused = false
+                let mutable entries = 0
+                let mutable totalBytes = 0L
+                let rec walk (directory: DirectoryInfo) =
+                    use iterator = directory.EnumerateFileSystemInfos().GetEnumerator()
+                    while not refused && iterator.MoveNext() do
+                        let item = iterator.Current
+                        entries <- entries + 1
+                        if entries > MaximumInstalledPayloadEntries || not (isNull item.LinkTarget) then
+                            refused <- true
+                        else
+                            match TrustedLinuxFile.pathKindAndSize item.FullName with
+                            | Some(kind, _) when kind = 0x4000u -> walk (DirectoryInfo item.FullName)
+                            | Some(kind, size) when kind = 0x8000u && size >= 0L ->
+                                let relative = Path.GetRelativePath(root, item.FullName).Replace('\\', '/')
+                                if relative.Length = 0 || relative.Length > 512
+                                   || relative.Contains('\n') || relative.Contains('\r') then
+                                    refused <- true
+                                else
+                                    totalBytes <- totalBytes + size
+                                    if totalBytes > MaximumInstalledPayloadBytes then refused <- true
+                                    else
+                                        match TrustedLinuxFile.digestRegularFile item.FullName MaximumPayloadFileBytes (TimeSpan.FromSeconds 5.0) with
+                                        | Ok(digest, observedSize) when observedSize = size -> files.Add(relative, digest, size)
+                                        | _ -> refused <- true
+                            | _ -> refused <- true
+                walk rootInfo
+                if refused || files.Count = 0 then Error "portable-trusted-cli-payload-refused"
+                else
+                    files
+                    |> Seq.sortWith (fun (left, _, _) (right, _, _) -> StringComparer.Ordinal.Compare(left, right))
+                    |> Seq.map (fun (path, digest, size) -> $"%s{digest} %d{size} %s{path}\n")
+                    |> String.concat ""
+                    |> Encoding.UTF8.GetBytes
+                    |> SHA256.HashData
+                    |> Convert.ToHexString
+                    |> _.ToLowerInvariant()
+                    |> Ok
+        with _ -> Error "portable-trusted-cli-payload-refused"
 
     let readBounded (stream: Stream) maximumBytes cancellationToken =
         task {
@@ -522,7 +574,7 @@ type LinuxPortableWorkspaceTrustedReceiverInspector() =
                     let value = entryAssembly.GetName().Version
                     $"%d{value.Major}.%d{value.Minor}.%d{value.Build}"
             (if entryVersion <> grant.CliVersion then Error "portable-trusted-cli-version-refused"
-             else digestFile entryPath |> Result.bind (fun actual -> if actual = grant.CliPayloadSha256 then Ok() else Error "portable-trusted-cli-payload-refused"))
+             else installedPayloadDigest entryPath |> Result.bind (fun actual -> if actual = grant.CliPayloadSha256 then Ok() else Error "portable-trusted-cli-payload-refused"))
             |> Result.bind (fun () ->
                 ([ grant.Git; grant.Tar; grant.Podman ]: PortableWorkspaceTrustedExecutable list)
                 |> List.fold

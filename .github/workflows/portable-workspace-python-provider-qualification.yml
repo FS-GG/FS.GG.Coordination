@@ -1,0 +1,189 @@
+name: Portable workspace Python provider qualification
+
+on:
+  pull_request:
+    paths:
+      - .github/workflows/portable-workspace-python-provider-qualification.yml
+      - eng/qualify-installed-python-hello.py
+      - src/FS.GG.Coordination.Cli/PortableWorkspacePythonHelloPolicy.fs
+      - src/FS.GG.Coordination.Cli/PortableWorkspaceTrustedEnrollmentSource.fs
+      - tests/portable-workspace/trusted-provider/**
+      - tests/portable-workspace/**/fixture/python/**
+      - tests/portable-workspace/executor/python/**
+      - tests/FS.GG.Coordination.UnitTests/PortableWorkspace*Tests.fs
+  push:
+    branches: [main]
+    paths:
+      - .github/workflows/portable-workspace-python-provider-qualification.yml
+      - eng/qualify-installed-python-hello.py
+      - src/FS.GG.Coordination.Cli/PortableWorkspacePythonHelloPolicy.fs
+      - src/FS.GG.Coordination.Cli/PortableWorkspaceTrustedEnrollmentSource.fs
+      - tests/portable-workspace/trusted-provider/**
+      - tests/portable-workspace/**/fixture/python/**
+      - tests/portable-workspace/executor/python/**
+      - tests/FS.GG.Coordination.UnitTests/PortableWorkspace*Tests.fs
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Select source checks or unauthorized candidate fact capture
+        required: true
+        default: source-only
+        type: choice
+        options: [source-only, candidate-facts]
+      upstream_artifact_id:
+        description: Exact post-pack Coordination, SDD, Templates, runtime, and image join
+        required: false
+        type: string
+      upstream_run_id:
+        description: Exact successful producer run for the post-pack join
+        required: false
+        type: string
+      upstream_run_attempt:
+        description: Exact producer run attempt
+        required: false
+        type: string
+      upstream_source_revision:
+        description: Exact producer source revision
+        required: false
+        type: string
+      upstream_artifact_digest:
+        description: Exact sha256-prefixed Actions artifact digest
+        required: false
+        type: string
+      upstream_workflow:
+        description: Exact repository-relative producer workflow path
+        required: false
+        type: string
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: portable-python-provider-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+# Static preflight is the smallest useful check. It detects fixture drift,
+# unsafe package/archive input, false authorization, and workflow ordering.
+# Candidate facts are explicitly unauthorized and perform no account, mount,
+# Podman, grant, image, installed CLI, publication, or private-custody effect.
+
+jobs:
+  source-contract:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Run bounded source and authorization preflight
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 tests/portable-workspace/trusted-provider/test_python_fixture.py
+          python3 tests/portable-workspace/trusted-provider/test_installed_qualification.py
+          python3 tests/portable-workspace/trusted-provider/test_provider_workflow.py
+          python3 tests/portable-workspace/trusted-provider/test_provider_runtime.py
+          dotnet restore tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --locked-mode
+          dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj \
+            --no-restore \
+            --filter 'FullyQualifiedName~PortableWorkspaceTrustedEnrollmentSourceTests|FullyQualifiedName~PortableWorkspaceRuntimeCommandTests'
+
+  candidate-facts:
+    if: github.event_name == 'workflow_dispatch' && inputs.phase == 'candidate-facts'
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      ROOT: /tmp/p4-public-candidate
+      UPSTREAM: /tmp/p4-public-candidate/upstream
+      EVIDENCE: /tmp/p4-public-candidate/evidence
+      PUBLIC_FACTS: /tmp/p4-public-facts
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify exact predecessor run and artifact
+        env:
+          UPSTREAM_ID: ${{ inputs.upstream_artifact_id }}
+          UPSTREAM_RUN: ${{ inputs.upstream_run_id }}
+          UPSTREAM_ATTEMPT: ${{ inputs.upstream_run_attempt }}
+          UPSTREAM_SOURCE: ${{ inputs.upstream_source_revision }}
+          UPSTREAM_DIGEST: ${{ inputs.upstream_artifact_digest }}
+          UPSTREAM_WORKFLOW: ${{ inputs.upstream_workflow }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for value in "$UPSTREAM_ID" "$UPSTREAM_RUN" "$UPSTREAM_ATTEMPT"; do [[ "$value" =~ ^[1-9][0-9]*$ ]]; done
+          [[ "$UPSTREAM_SOURCE" =~ ^[0-9a-f]{40}$ ]]; [[ "$UPSTREAM_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$UPSTREAM_WORKFLOW" =~ ^\.github/workflows/[A-Za-z0-9._/-]+\.ya?ml$ ]]
+          test ! -e "$ROOT"; install -d -m 0700 "$EVIDENCE"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py ledger-init --ledger "$EVIDENCE/owned-resources.json" --source "$GITHUB_SHA"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py ledger-register --ledger "$EVIDENCE/owned-resources.json" --kind path --value "$ROOT"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$UPSTREAM_RUN" > "$EVIDENCE/upstream-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$UPSTREAM_ID" > "$EVIDENCE/upstream-artifact.json"
+          jq -n --argjson run "$UPSTREAM_RUN" --argjson attempt "$UPSTREAM_ATTEMPT" --arg source "$UPSTREAM_SOURCE" --arg workflow "$UPSTREAM_WORKFLOW" \
+            --argjson artifact "$UPSTREAM_ID" --arg digest "$UPSTREAM_DIGEST" --arg name "portable-python-provider-input-$UPSTREAM_SOURCE" \
+            '{runId:$run,runAttempt:$attempt,sourceRevision:$source,workflow:$workflow,artifactId:$artifact,artifactDigest:$digest,artifactName:$name}' > "$EVIDENCE/upstream-expected.json"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py artifact-custody --run "$EVIDENCE/upstream-run.json" --artifact "$EVIDENCE/upstream-artifact.json" \
+            --expected "$EVIDENCE/upstream-expected.json" --output "$EVIDENCE/upstream-custody.json"
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          artifact-ids: ${{ inputs.upstream_artifact_id }}
+          run-id: ${{ inputs.upstream_run_id }}
+          repository: ${{ github.repository }}
+          github-token: ${{ github.token }}
+          path: ${{ env.UPSTREAM }}
+      - name: Build closed unauthorized candidate facts
+        run: |
+          set -euo pipefail
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --root "$UPSTREAM" --output "$EVIDENCE/validated-join.json"
+          join="$EVIDENCE/validated-join.json"; value() { jq -r "$1" "$join"; }
+          python3 eng/qualify-installed-python-hello.py prepare --package "$UPSTREAM/$(value .coordination.package)" --expected-package-sha256 "$(value .coordination.sha256)" \
+            --expected-version "$(value .coordination.version)" --install-root "$ROOT/cli" --producer-source "$(value .coordination.sourceRevision)" \
+            --producer-tree "$(value .coordination.sourceTree)" --image-archive "$UPSTREAM/$(value .image.archive)" --expected-image-archive-sha256 "$(value .image.archiveSha256)" \
+            --image-manifest "$UPSTREAM/$(value .image.manifest)" --expected-image-manifest-sha256 "$(value .image.manifestSha256)" --receipt "$EVIDENCE/candidate-receipt.json"
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --runtime "$UPSTREAM/$(value .runtime.archive)" --extract-runtime "$ROOT/runtime"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py extract-zip --archive "$UPSTREAM/$(value .sdd.package)" --target "$ROOT/sdd" \
+            --sha256 "$(value .sdd.sha256)" --package-id FS.GG.SDD.Cli --version "$(value .sdd.version)" --output "$EVIDENCE/sdd-install.json"
+          install -d -m 0700 "$ROOT/p4-receiver/.fsgg"; cp "$UPSTREAM/$(value .templates.descriptor)" "$ROOT/p4-receiver/.fsgg/providers.yml"
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --descriptor "$ROOT/p4-receiver/.fsgg/providers.yml" --template-package "$UPSTREAM/$(value .templates.package)"
+          dotnet "$ROOT/sdd/tools/net10.0/any/FS.GG.SDD.Cli.dll" scaffold --root "$ROOT/p4-receiver" --provider python --param productName=ReceiverPython --param lifecycle=sdd --no-update --json > "$EVIDENCE/scaffold.json"
+          for file in app.py build.py test.py; do cmp "$ROOT/p4-receiver/python/$file" "tests/portable-workspace/image/fixture/python/$file"; done
+          git -C "$ROOT/p4-receiver" init -q; git -C "$ROOT/p4-receiver" config user.name p4-provider-qualification; git -C "$ROOT/p4-receiver" config user.email p4-provider@example.invalid
+          git -C "$ROOT/p4-receiver" add --all; GIT_AUTHOR_DATE=2026-10-01T00:00:00Z GIT_COMMITTER_DATE=2026-10-01T00:00:00Z git -C "$ROOT/p4-receiver" commit -q -m 'Fresh Python receiver candidate'
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -C "$ROOT" -cf "$EVIDENCE/receiver.tar" p4-receiver
+          python3 tests/portable-workspace/trusted-provider/provider_facts.py collect --join "$EVIDENCE/validated-join.json" --candidate "$EVIDENCE/candidate-receipt.json" \
+            --receiver "$ROOT/p4-receiver" --receiver-archive "$EVIDENCE/receiver.tar" --runtime "$ROOT/runtime" --output "$EVIDENCE/provider-facts.json" --profile "$EVIDENCE/profile.json"
+          test "$(jq -r .authorizationState "$EVIDENCE/provider-facts.json")" = required-external
+          test "$(jq -r .nativeExecutionAuthorized "$EVIDENCE/provider-facts.json")" = false
+      - name: Project public candidate facts and clean owned state
+        if: always()
+        run: |
+          set +e; cleanup_failed=0
+          LEDGER_COPY="$RUNNER_TEMP/p4-public-ledger-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          install -d -m 0700 "$PUBLIC_FACTS" || cleanup_failed=1
+          if test -f "$EVIDENCE/owned-resources.json"; then
+            for name in validated-join.json candidate-receipt.json receiver.tar profile.json provider-facts.json upstream-custody.json upstream-expected.json; do
+              test ! -f "$EVIDENCE/$name" || cp "$EVIDENCE/$name" "$PUBLIC_FACTS/$name" || cleanup_failed=1
+            done
+            cp "$EVIDENCE/owned-resources.json" "$LEDGER_COPY" || cleanup_failed=1
+          else
+            cleanup_failed=1
+          fi
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py cleanup-paths --ledger "$LEDGER_COPY" --output "$PUBLIC_FACTS/cleanup.json" || cleanup_failed=1
+          test "$cleanup_failed" = 0
+      - name: Upload bounded unauthorized public facts after cleanup
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: portable-python-candidate-facts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PUBLIC_FACTS }}/
+          if-no-files-found: error
+          retention-days: 14

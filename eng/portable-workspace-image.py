@@ -22,13 +22,21 @@ INPUTS_SHA256 = "c5ef4bb365b37c9213015166758e0fd62bd9230d2bde51c2f2d265ae21f6606
 BASE_DIGEST = "sha256:9bbb8720ae0a24a6ca8dd678bfdf57818fe70caf54c52a53ec01d8db43405056"
 NODE_SHA256 = "daf68404b478b4c3616666580d02500a24148c0f439e4d0134d65ce70e90e655"
 TYPESCRIPT_SHA256 = "67a3bc82e822b8f45f653a80fc3a9730d23214d36c83ba85dd7f5abebee82062"
+PYTHON_FIXTURE_SHA256 = {
+    "app.py": "3fef6bef50317388f407c27cee3361b2d1b7e9e4e2eda30d804952e320d0c030",
+    "build.py": "f64fb64121b4470a1d7ada581cf9d9cdeb5c61ac776196699bac33534948aeba",
+    "test.py": "acd1cf621e8f41d55337f773584551644372cea86137299b981aad020bb6b9c9",
+}
+PYTHON_EXPECTED_OUTPUTS = {
+    "python-test.json": "2ed645adefe2c23308832036a3b5163dc39faaf152c2c9d1d3afb3bd637f146a",
+    "python/app.pyc": "fa24f499efed4a2edaf770742fa63e4fc0ac4c40f1805ad64d12b76b1cde02c7",
+}
 EXPECTED_OUTPUTS = {
     "backend-test.json": "96755bcdb1d9b0a64ecb07d8e01ea22070bdc889712002b58d69f11902a81502",
     "backend/service.pyc": "cd136bcbbc1c5dbd87c0811c21d8e6d53d7ae873caef496f23664c62b09f2147",
     "composed-journey.json": "8fc03ef420b45054d93981848a4ba644e88a0fd6bdd47b124b18acc9b2b38b3d",
     "frontend/app.js": "75d96c0c9851a8d87141ac50d3c4fc5059c0090ad0568be62682bc72681c3137",
-    "python-test.json": "2ed645adefe2c23308832036a3b5163dc39faaf152c2c9d1d3afb3bd637f146a",
-    "python/app.pyc": "ab89c3c1b5404d87622387ba576e44ffb6e089b768a19f268886fc5b42ac3f93",
+    **PYTHON_EXPECTED_OUTPUTS,
 }
 REQUIRED_BUILD_OPTIONS = (
     "--file",
@@ -96,6 +104,13 @@ def sha256_file(path: Path) -> str:
 
 def canonical_bytes(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def require_python_fixture_oracle(python_fixture: Path) -> dict[str, str]:
+    actual = {name: sha256_file(python_fixture / name) for name in PYTHON_FIXTURE_SHA256}
+    if actual != PYTHON_FIXTURE_SHA256:
+        raise RuntimeError(f"canonical Python fixture digest mismatch: {json.dumps(actual, sort_keys=True)}")
+    return dict(PYTHON_EXPECTED_OUTPUTS)
 
 
 def download(url: str, target: Path, expected_sha256: str) -> None:
@@ -177,6 +192,7 @@ def require_podman_options(prefix: list[str], command: str, required: tuple[str,
 def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
     revision, tree, fixture_sha256 = require_exact_source(source, args.expected_source_revision)
     image_dir = source / "tests" / "portable-workspace" / "image"
+    require_python_fixture_oracle(image_dir / "fixture" / "python")
     inputs_path = image_dir / "inputs.json"
     containerfile = image_dir / "Containerfile"
     inputs = json.loads(inputs_path.read_text())

@@ -107,9 +107,9 @@ module private Fixture =
                         image =
                             {|
                                 qualifiedImage = PortableWorkspacePythonHelloPolicy.QualifiedImage
-                                archiveSha256 = sha
-                                manifestDigest = sha
-                                configDigest = sha
+                                archiveSha256 = PortableWorkspacePythonHelloPolicy.ImageArchiveSha256
+                                manifestDigest = PortableWorkspacePythonHelloPolicy.ImageManifestDigest
+                                configDigest = PortableWorkspacePythonHelloPolicy.ImageConfigDigest
                                 recipeSha256 = PortableWorkspacePythonHelloPolicy.RecipeSha256
                             |}
                     |})
@@ -134,6 +134,21 @@ module private Fixture =
     let fileSha path =
         use stream = File.OpenRead path
         Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
+
+    let installedPayloadSha (entryPath: string) =
+        let root = Path.GetDirectoryName entryPath
+        Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories)
+        |> Seq.map (fun path ->
+            let relative = Path.GetRelativePath(root, path).Replace('\\', '/')
+            let size = FileInfo(path).Length
+            relative, fileSha path, size)
+        |> Seq.sortWith (fun (left, _, _) (right, _, _) -> StringComparer.Ordinal.Compare(left, right))
+        |> Seq.map (fun (path, digest, size) -> $"%s{digest} %d{size} %s{path}\n")
+        |> String.concat ""
+        |> Encoding.UTF8.GetBytes
+        |> SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
 
     let userId () =
         let start = ProcessStartInfo("/usr/bin/id", RedirectStandardOutput = true, UseShellExecute = false)
@@ -196,12 +211,20 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
         let extra = Fixture.bytes(Some(fun root -> root["callerApproval"] <- true))
         let wrongProfile = Fixture.bytes(Some(fun root -> root["profileSha256"] <- String.replicate 64 "f"))
         let wrongImage = Fixture.bytes(Some(fun root -> root["image"].AsObject()["qualifiedImage"] <- "localhost/unreviewed@sha256:" + Fixture.sha))
+        let wrongArchive = Fixture.bytes(Some(fun root -> root["image"].AsObject()["archiveSha256"] <- Fixture.sha))
+        let wrongManifest = Fixture.bytes(Some(fun root -> root["image"].AsObject()["manifestDigest"] <- Fixture.sha))
+        let wrongConfig = Fixture.bytes(Some(fun root -> root["image"].AsObject()["configDigest"] <- Fixture.sha))
+        let wrongRecipe = Fixture.bytes(Some(fun root -> root["image"].AsObject()["recipeSha256"] <- Fixture.sha))
         Assert.Equal(Error "portable-trusted-grant-schema-refused", resolve unknown 1000u (Ok()))
         Assert.Equal(Error "portable-trusted-grant-schema-refused", resolve extra 1000u (Ok()))
         Assert.Equal(Error "portable-trusted-runtime-uid-refused", resolve (Fixture.bytes None) 1001u (Ok()))
         Assert.Equal(Error "portable-trusted-receiver-tree-refused", resolve (Fixture.bytes None) 1000u (Error "portable-trusted-receiver-tree-refused"))
         Assert.Equal(Error "portable-runtime-profile-digest-refused", resolve wrongProfile 1000u (Ok()))
         Assert.Equal(Error "portable-runtime-image-binding-refused", resolve wrongImage 1000u (Ok()))
+        Assert.Equal(Error "portable-runtime-image-binding-refused", resolve wrongArchive 1000u (Ok()))
+        Assert.Equal(Error "portable-runtime-image-binding-refused", resolve wrongManifest 1000u (Ok()))
+        Assert.Equal(Error "portable-runtime-image-binding-refused", resolve wrongConfig 1000u (Ok()))
+        Assert.Equal(Error "portable-runtime-image-binding-refused", resolve wrongRecipe 1000u (Ok()))
 
     [<Fact>]
     member _.``missing trusted grant refuses without resolving caller profile``() =
@@ -230,7 +253,7 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
             {
                 EnrollmentId = PortableWorkspacePythonHelloPolicy.EnrollmentId; GrantId = "actual-inspector"
                 AllowedUserId = 1000u; CliVersion = cliVersion; CliPackageSha256 = Fixture.sha
-                CliPayloadSha256 = Fixture.fileSha entry.Location; ProviderVersion = "0.1.0"
+                CliPayloadSha256 = Fixture.installedPayloadSha entry.Location; ProviderVersion = "0.1.0"
                 ProviderPackageSha256 = Fixture.sha; ProducerSourceRevision = Fixture.commit
                 WorkspaceRoot = receiver; ReceiverCommit = commit; ReceiverTree = tree
                 ProjectedPayload =
@@ -241,8 +264,11 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
                 Git = { Path = "/usr/bin/git"; Sha256 = Fixture.fileSha "/usr/bin/git" }
                 Tar = { Path = "/usr/bin/tar"; Sha256 = Fixture.fileSha "/usr/bin/tar" }
                 Podman = { Path = "/usr/bin/podman"; Sha256 = Fixture.fileSha "/usr/bin/podman" }
-                QualifiedImage = PortableWorkspacePythonHelloPolicy.QualifiedImage; ImageArchiveSha256 = Fixture.sha
-                ImageManifestDigest = Fixture.sha; ImageConfigDigest = Fixture.sha; ImageRecipeSha256 = PortableWorkspacePythonHelloPolicy.RecipeSha256
+                QualifiedImage = PortableWorkspacePythonHelloPolicy.QualifiedImage
+                ImageArchiveSha256 = PortableWorkspacePythonHelloPolicy.ImageArchiveSha256
+                ImageManifestDigest = PortableWorkspacePythonHelloPolicy.ImageManifestDigest
+                ImageConfigDigest = PortableWorkspacePythonHelloPolicy.ImageConfigDigest
+                ImageRecipeSha256 = PortableWorkspacePythonHelloPolicy.RecipeSha256
             }
         let inspector = LinuxPortableWorkspaceTrustedReceiverInspector() :> IPortableWorkspaceTrustedReceiverInspector
         let initialInspection = inspector.Validate grant
