@@ -32,8 +32,10 @@ jobs:
           set -euo pipefail
           umask 077
           test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
+          test "$GITHUB_REPOSITORY_ID" = 1346720714
           test "$GITHUB_REF" = refs/heads/qualification/fourd-native-20261001
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
+          test "$GITHUB_SHA" = "$GITHUB_WORKFLOW_SHA"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           test -z "$(git status --porcelain)"
           install -d -m 0700 "$RESULT_ROOT"
@@ -73,22 +75,25 @@ jobs:
       CAPACITY_ROOT: /tmp/fsgg-fourd-qualification-capacity-${{ github.run_id }}-${{ github.run_attempt }}
       PRIVATE_ROOT: /tmp/fsgg-fourd-private-${{ github.run_id }}-${{ github.run_attempt }}
       PUBLIC_OUTPUT: /tmp/fsgg-fourd-public-${{ github.run_id }}-${{ github.run_attempt }}
+      PUBLIC_SOURCE: ${{ github.workspace }}/coordination-source
       SETUP_DOTNET_ROOT: ${{ github.workspace }}/setup-dotnet-source
       P2_ROOT: ${{ github.workspace }}/coordination-p2
       PYTHONDONTWRITEBYTECODE: '1'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
-        with: {ref: "${{ github.sha }}", fetch-depth: 1, persist-credentials: false}
+        with: {ref: "${{ github.sha }}", path: coordination-source, fetch-depth: 1, persist-credentials: false}
       - name: Verify public placement before reading admission
         shell: bash
         run: |
           set -euo pipefail
           umask 077
           test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
+          test "$GITHUB_REPOSITORY_ID" = 1346720714
           test "$GITHUB_REF" = refs/heads/qualification/fourd-native-20261001
           test "$GITHUB_EVENT_NAME" = workflow_dispatch
-          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-          test -z "$(git status --porcelain)"
+          test "$GITHUB_SHA" = "$GITHUB_WORKFLOW_SHA"
+          test "$(git -C "$PUBLIC_SOURCE" rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git -C "$PUBLIC_SOURCE" status --porcelain --untracked-files=all)"
           install -d -m 0700 "$CAPACITY_ROOT"
       - name: Freeze pinned setup-dotnet before private acquisition
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
@@ -111,7 +116,7 @@ jobs:
         shell: bash
         run: |
           set +e
-          python3 eng/fourd-public-provider/capacity.py screen --output "$CAPACITY_ROOT/result.json"
+          python3 "$PUBLIC_SOURCE/eng/fourd-public-provider/capacity.py" screen --output "$CAPACITY_ROOT/result.json"
           status=$?
           echo "capacityStatus=$status" >> "$GITHUB_OUTPUT"
           exit 0
@@ -124,15 +129,16 @@ jobs:
         run: |
           set +e
           umask 077
-          python3 eng/fourd-public-provider/qualify.py execute \
-            --capacity-result "$CAPACITY_ROOT/result.json" --public-source "$GITHUB_WORKSPACE" \
+          python3 "$PUBLIC_SOURCE/eng/fourd-public-provider/qualify.py" execute \
+            --capacity-result "$CAPACITY_ROOT/result.json" --public-source "$PUBLIC_SOURCE" \
             --setup-dotnet "$SETUP_DOTNET_ROOT" --p2-source "$P2_ROOT" \
-            --known-hosts "$GITHUB_WORKSPACE/eng/fourd-public-provider/github-known-hosts" \
+            --known-hosts "$PUBLIC_SOURCE/eng/fourd-public-provider/github-known-hosts" \
             --private-root "$PRIVATE_ROOT" --output "$PUBLIC_OUTPUT/result.json"
           status=$?
           echo "qualificationStatus=$status" >> "$GITHUB_OUTPUT"
           exit 0
       - name: Validate closed public output
+        id: public-validation
         if: always()
         shell: bash
         run: |
@@ -149,9 +155,10 @@ jobs:
           allowed={'result.json'} if not result['qualified'] else {'result.json','sealed-stage'}
           assert {item.name for item in root.iterdir()}==allowed
           PY
-          python3 eng/fourd-public-provider/qualify.py verify-upload --output "$PUBLIC_OUTPUT"
+          python3 "$PUBLIC_SOURCE/eng/fourd-public-provider/qualify.py" verify-upload \
+            --public-source "$PUBLIC_SOURCE" --output "$PUBLIC_OUTPUT"
       - name: Upload only verified public result and sealed capsules
-        if: always()
+        if: steps.public-validation.outcome == 'success'
         timeout-minutes: 10
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
         with:

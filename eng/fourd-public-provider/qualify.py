@@ -6,12 +6,14 @@ from __future__ import annotations
 import argparse
 import base64
 import binascii
+import ctypes
 import datetime as dt
 import hashlib
 import json
 import os
 import pathlib
 import re
+import selectors
 import shutil
 import signal
 import subprocess
@@ -25,14 +27,13 @@ from typing import Mapping, Sequence
 SCHEMA = "fsgg.fourd.public-provider-qualification/1"
 ADMISSION_SCHEMA = "fsgg.fourd.public-provider-admission/1"
 EXPECTED_REPOSITORY = "FS-GG/FS.GG.Coordination"
-EXPECTED_REPOSITORY_ID = "PENDING_REPOSITORY_ID"
+EXPECTED_REPOSITORY_ID = "1346720714"
 EXPECTED_REF = "refs/heads/qualification/fourd-native-20261001"
 EXPECTED_ENVIRONMENT = "fourd-native-private-source"
 EXPECTED_WORKFLOW = ".github/workflows/fourd-public-provider-qualification.yml"
 EXPECTED_WORKFLOW_REF = f"{EXPECTED_REPOSITORY}/{EXPECTED_WORKFLOW}@{EXPECTED_REF}"
-PLACEMENT_SHA = "PENDING_PLACEMENT_SHA"
 FOURD_REPOSITORY = "FS-GG/FS.GG.FourD"
-FOURD_REPOSITORY_ID = "PENDING_FOURD_REPOSITORY_ID"
+FOURD_REPOSITORY_ID = "1390568106"
 FOURD_SHA = "d5d8b6d242b13dd79007fcbbb6e5ee4069fd3264"
 FOURD_TREE = "ae626190a30a784db8968157a1ef1c9c5c499770"
 FOURD_INVENTORY = "bf3ec0ab2fe639bc9f4bc53da8f33c8adf8f237a505f9eee6eca0002b1cd1c49"
@@ -44,8 +45,8 @@ SETUP_DOTNET_ACTION_SHA256 = "75999c0bf863f23de88dad047ccf176b5089454cf7e3264c3f
 SETUP_DOTNET_ENTRY_SHA256 = "2f84c07aa0be5d2b1fce196bd549bb707b7ec01afa238533dee50c9e4b794569"
 KNOWN_HOST_SHA256 = "6233fddbb0a29afc8c4e8c699733c1a188c3a41f2fb63a2640653dc4aea624ce"
 KNOWN_HOST_FINGERPRINT = "SHA256:+DiY3wvvV6TuJJhbpZisF/zLDA0zPMSvHdkr4UvCOqU"
-NATIVE_POLICY_SHA256 = "PENDING_NATIVE_POLICY_SHA256"
-CUSTODY_POLICY_SHA256 = "PENDING_CUSTODY_POLICY_SHA256"
+NATIVE_POLICY_SHA256 = "92796150e503ee06f7dcda8e363d65d8d26a66563b142d8d1a58bfcfbd69ee45"
+CUSTODY_POLICY_SHA256 = "d69cbcba7b55e7682ee192332fd40cadd8c30be99b379e4c9d41b9262b051f75"
 SEALER_RECIPE_SHA = "88d65daa1a1262d563c2312698e4a5e57109a824"
 SEALER_SHA256 = "4f46d5a1762eaee9ba800e5fb58933a9c312e22e4d416b9489e632fd9b2ce85d"
 PUBLIC_KEY_SHA256 = "de40516580a5e6e97c154a8889c3ac6edf047b695ff5d4187386aeaccd61d3e7"
@@ -55,6 +56,7 @@ MAX_ADMISSION = 32 * 1024
 MAX_KEY = 16 * 1024
 MAX_CAPTURE = 128 * 1024
 MAX_RESULT = 8 * 1024
+NATIVE_SUPERVISOR_GRACE = 240
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 DECIMAL = re.compile(r"[1-9][0-9]*\Z")
@@ -114,6 +116,7 @@ def base_result(context: Mapping[str, str], outcome: str) -> dict[str, object]:
         "runId": context.get("GITHUB_RUN_ID", "unknown"),
         "runAttempt": context.get("GITHUB_RUN_ATTEMPT", "unknown"),
         "placementSha": context.get("GITHUB_SHA", "unknown"),
+        "placementTree": None,
         "fourdSourceSha": FOURD_SHA, "fourdSourceTree": FOURD_TREE,
         "capacityPassed": False, "rootlessPreflightPassed": False,
         "nativeAccepted": False, "cleanupComplete": False,
@@ -179,18 +182,29 @@ def triggering_actor_id(environ: Mapping[str, str]) -> str:
     return str(value["id"])
 
 
-def admission(environ: Mapping[str, str], now: dt.datetime | None = None) -> tuple[dict[str, object] | None, bytes | None]:
-    if (environ.get("GITHUB_REPOSITORY") != EXPECTED_REPOSITORY or environ.get("GITHUB_REF") != EXPECTED_REF
-            or environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch" or environ.get("GITHUB_SHA") != PLACEMENT_SHA
+def execution_context(environ: Mapping[str, str]) -> tuple[str, str]:
+    sha = environ.get("GITHUB_SHA", "")
+    if (environ.get("GITHUB_REPOSITORY") != EXPECTED_REPOSITORY
+            or environ.get("GITHUB_REPOSITORY_ID") != EXPECTED_REPOSITORY_ID
+            or environ.get("GITHUB_REF") != EXPECTED_REF
+            or environ.get("GITHUB_EVENT_NAME") != "workflow_dispatch"
             or environ.get("GITHUB_WORKFLOW_REF") != EXPECTED_WORKFLOW_REF
-            or environ.get("GITHUB_WORKFLOW_SHA") != PLACEMENT_SHA):
+            or environ.get("GITHUB_WORKFLOW_SHA") != sha
+            or not HEX40.fullmatch(sha)):
         raise Refusal("execution-context-refused")
+    for name in ("GITHUB_RUN_ID", "GITHUB_RUN_ATTEMPT", "GITHUB_ACTOR_ID"):
+        if not DECIMAL.fullmatch(environ.get(name, "")):
+            raise Refusal("execution-context-refused")
+    return sha, environ["GITHUB_RUN_ATTEMPT"]
+
+
+def admission(environ: Mapping[str, str], now: dt.datetime | None = None) -> tuple[dict[str, object] | None, bytes | None]:
+    placement_sha, attempt = execution_context(environ)
     encoded_admission = environ.get(ADMISSION_SECRET, "")
     encoded_key = environ.get(KEY_SECRET, "")
-    attempt = environ.get("GITHUB_RUN_ATTEMPT", "")
+    if attempt == "1":
+        return None, None
     if not encoded_admission and not encoded_key:
-        if attempt == "1":
-            return None, None
         raise Refusal("admission-missing")
     if not encoded_admission or not encoded_key:
         raise Refusal("admission-partial")
@@ -213,7 +227,7 @@ def admission(environ: Mapping[str, str], now: dt.datetime | None = None) -> tup
         "schema": ADMISSION_SCHEMA, "repository": EXPECTED_REPOSITORY,
         "repositoryId": EXPECTED_REPOSITORY_ID, "environment": EXPECTED_ENVIRONMENT,
         "workflowPath": EXPECTED_WORKFLOW, "workflowRef": EXPECTED_WORKFLOW_REF,
-        "placementSha": PLACEMENT_SHA, "phase": "qualification",
+        "placementSha": placement_sha, "phase": "qualification",
         "operationId": "fourd-portable-technical",
         "runId": environ.get("GITHUB_RUN_ID"), "runAttempt": attempt,
         "originalActorId": environ.get("GITHUB_ACTOR_ID"),
@@ -247,97 +261,200 @@ def admission(environ: Mapping[str, str], now: dt.datetime | None = None) -> tup
     return value, key
 
 
+@dataclass(frozen=True)
+class ProcessIdentity:
+    pid: int
+    start_ticks: int
+
+
+def _process_identity(pid: int) -> ProcessIdentity | None:
+    try:
+        raw = pathlib.Path(f"/proc/{pid}/stat").read_text()
+        fields = raw[raw.rfind(")") + 2:].split()
+        if len(fields) < 20 or fields[0] == "Z":
+            return None
+        return ProcessIdentity(pid, int(fields[19]))
+    except (FileNotFoundError, PermissionError, ValueError):
+        return None
+
+
+def _child_pids(pid: int) -> tuple[int, ...]:
+    try:
+        raw = pathlib.Path(f"/proc/{pid}/task/{pid}/children").read_text().strip()
+        return tuple(int(value) for value in raw.split()) if raw else ()
+    except (FileNotFoundError, PermissionError, ValueError):
+        return ()
+
+
 class Effects:
-    """Silent finite child execution with owned process-group settlement."""
+    """Finite Linux child execution with PID/start identity descendant custody."""
     def __init__(self) -> None:
         self.cancelled = False
-        self.groups: set[int] = set()
+        self.owner_pid = os.getpid()
+        self.owned: dict[int, ProcessIdentity] = {}
+        self._baseline = {identity for pid in _child_pids(self.owner_pid)
+                          if (identity := _process_identity(pid)) is not None}
+        libc = ctypes.CDLL(None, use_errno=True)
+        if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
+            raise Refusal("child-subreaper-refused")
 
     def request_cancel(self, *_args: object) -> None:
         self.cancelled = True
 
     @staticmethod
-    def _group_exists(group: int) -> bool:
-        try: os.killpg(group, 0); return True
-        except ProcessLookupError: return False
-        except PermissionError: return True
+    def _alive(identity: ProcessIdentity) -> bool:
+        return _process_identity(identity.pid) == identity
 
-    @classmethod
-    def _settle_one(cls, group: int) -> bool:
-        if not cls._group_exists(group): return True
-        try: os.killpg(group, signal.SIGTERM)
-        except ProcessLookupError: return True
-        deadline = time.monotonic() + 2
-        while cls._group_exists(group) and time.monotonic() < deadline: time.sleep(0.05)
-        if cls._group_exists(group):
-            try: os.killpg(group, signal.SIGKILL)
-            except ProcessLookupError: return True
-        deadline = time.monotonic() + 2
-        while cls._group_exists(group) and time.monotonic() < deadline: time.sleep(0.05)
-        return not cls._group_exists(group)
+    @staticmethod
+    def _signal(identity: ProcessIdentity, selected: signal.Signals) -> None:
+        if Effects._alive(identity):
+            try: os.kill(identity.pid, selected)
+            except ProcessLookupError: pass
 
-    def run(self, argv: Sequence[str], *, cwd: pathlib.Path, env: Mapping[str, str], timeout: int,
-            capture: pathlib.Path, allow_cancelled: bool = False) -> RunResult:
+    def _discover(self, root_pid: int | None = None) -> None:
+        queue: list[int] = []
+        if root_pid is not None: queue.append(root_pid)
+        queue.extend(identity.pid for identity in tuple(self.owned.values()) if self._alive(identity))
+        for pid in _child_pids(self.owner_pid):
+            identity = _process_identity(pid)
+            if identity is not None and identity not in self._baseline:
+                queue.append(pid)
+        seen: set[int] = set()
+        while queue:
+            pid = queue.pop()
+            if pid in seen: continue
+            seen.add(pid)
+            identity = _process_identity(pid)
+            if identity is None: continue
+            prior = self.owned.get(pid)
+            if prior is not None and prior != identity:
+                raise Refusal("child-identity-refused")
+            self.owned[pid] = identity
+            queue.extend(_child_pids(pid))
+        self._forget_dead()
+
+    def _forget_dead(self) -> None:
+        for pid, identity in tuple(self.owned.items()):
+            if self._alive(identity): continue
+            self.owned.pop(pid, None)
+
+    def _living(self) -> tuple[ProcessIdentity, ...]:
+        self._discover()
+        return tuple(identity for identity in self.owned.values() if self._alive(identity))
+
+    def _terminate(self, root: ProcessIdentity, grace: float, pump) -> bool:
+        # The coordinating parent receives TERM first and retains its admitted
+        # cleanup grace. Descendants are observed continuously, then boundedly
+        # terminated only if that protocol did not settle them.
+        self._signal(root, signal.SIGTERM)
+        deadline = time.monotonic() + max(0.0, grace)
+        while time.monotonic() < deadline:
+            self._discover(root.pid); pump()
+            if not self._living(): return True
+            time.sleep(0.02)
+        for identity in self._living(): self._signal(identity, signal.SIGTERM)
+        term_deadline = time.monotonic() + 5
+        while time.monotonic() < term_deadline:
+            self._discover(); pump()
+            if not self._living(): return True
+            time.sleep(0.02)
+        for identity in self._living(): self._signal(identity, signal.SIGKILL)
+        kill_deadline = time.monotonic() + 10
+        while time.monotonic() < kill_deadline:
+            self._discover(); pump()
+            if not self._living(): return True
+            time.sleep(0.02)
+        return not self._living()
+
+    def run(self, argv: Sequence[str], *, cwd: pathlib.Path, env: Mapping[str, str], timeout: float,
+            capture: pathlib.Path | None, allow_cancelled: bool = False,
+            termination_grace: float = 10) -> RunResult:
         if self.cancelled and not allow_cancelled:
             raise Refusal("cancelled")
+        before = set(self.owned.values())
         process = subprocess.Popen(list(argv), cwd=cwd, env=dict(env), stdin=subprocess.DEVNULL,
-                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
-        self.groups.add(process.pid)
+                                   stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
+                                   bufsize=0)
+        root = _process_identity(process.pid)
+        if root is None: raise Refusal("child-identity-refused")
+        self.owned[root.pid] = root
+        assert process.stdout is not None and process.stderr is not None
+        selector = selectors.DefaultSelector()
+        streams = (process.stdout, process.stderr)
         buffers = [bytearray(), bytearray()]
-        overflow = [False, False]
-        def drain(stream: object, slot: int) -> None:
-            while True:
-                chunk = stream.read(65536)  # type: ignore[attr-defined]
-                if not chunk:
-                    return
-                room = MAX_CAPTURE - len(buffers[slot])
-                buffers[slot].extend(chunk[:max(0, room)])
-                overflow[slot] |= len(chunk) > room
-        threads = [threading.Thread(target=drain, args=(process.stdout, 0)), threading.Thread(target=drain, args=(process.stderr, 1))]
-        for thread in threads: thread.start()
+        totals = [0, 0]
+        digests = [hashlib.sha256(), hashlib.sha256()]
+        for slot, stream in enumerate(streams):
+            os.set_blocking(stream.fileno(), False)
+            selector.register(stream, selectors.EVENT_READ, slot)
+
+        def pump(wait: float = 0.0) -> None:
+            for key, _mask in selector.select(wait):
+                slot = key.data
+                while True:
+                    try: chunk = os.read(key.fileobj.fileno(), 65536)
+                    except BlockingIOError: break
+                    if not chunk:
+                        try: selector.unregister(key.fileobj)
+                        except KeyError: pass
+                        break
+                    totals[slot] += len(chunk); digests[slot].update(chunk)
+                    buffers[slot].extend(chunk)
+                    if len(buffers[slot]) > MAX_CAPTURE:
+                        del buffers[slot][:-MAX_CAPTURE]
+
         deadline = time.monotonic() + timeout
-        forced_settlement = False
+        forced = False
         settled = True
-        try:
-            while process.poll() is None and time.monotonic() < deadline and (allow_cancelled or not self.cancelled):
-                time.sleep(0.05)
-            if process.poll() is None:
-                os.killpg(process.pid, signal.SIGTERM)
-                try: process.wait(timeout=5)
-                except subprocess.TimeoutExpired:
-                    os.killpg(process.pid, signal.SIGKILL)
-                    process.wait(timeout=5)
-            else:
-                process.wait(timeout=1)
-        finally:
-            if self._group_exists(process.pid):
-                forced_settlement = True
-                settled = self._settle_one(process.pid)
-            for thread in threads: thread.join(timeout=5)
-            for stream in (process.stdout, process.stderr):
-                if stream is not None: stream.close()
-            self.groups.discard(process.pid)
-        if any(thread.is_alive() for thread in threads):
-            raise Refusal("child-stream-refused")
+        while process.poll() is None and time.monotonic() < deadline and (allow_cancelled or not self.cancelled):
+            self._discover(root.pid); pump(0.02)
+        self._discover(root.pid); pump()
+        if process.poll() is None:
+            forced = True
+            settled = self._terminate(root, termination_grace, pump)
+        else:
+            # A direct parent can exit after starting a new session. The
+            # subreaper adopts it; sample briefly before declaring success.
+            discovery_deadline = time.monotonic() + 0.25
+            while time.monotonic() < discovery_deadline:
+                self._discover(root.pid); pump(0.02)
+            living = tuple(identity for identity in self._living() if identity != root)
+            if living:
+                forced = True
+                settled = self._terminate(root, 0, pump)
+        try: process.wait(timeout=1)
+        except subprocess.TimeoutExpired: settled = False
+        drain_deadline = time.monotonic() + 5
+        while selector.get_map() and time.monotonic() < drain_deadline:
+            pump(0.05)
+        if selector.get_map(): settled = False
+        for stream in streams:
+            try: selector.unregister(stream)
+            except KeyError: pass
+            stream.close()
+        selector.close()
+        self._discover()
+        survivors = tuple(identity for identity in self.owned.values()
+                          if identity not in before and self._alive(identity))
+        if survivors: settled = False
+        payload = json.dumps({
+            "returncode": process.returncode,
+            "stdoutTruncated": totals[0] > MAX_CAPTURE, "stderrTruncated": totals[1] > MAX_CAPTURE,
+            "stdoutSha256": digests[0].hexdigest(), "stderrSha256": digests[1].hexdigest(),
+            "stdoutTailBase64": base64.b64encode(buffers[0]).decode(),
+            "stderrTailBase64": base64.b64encode(buffers[1]).decode()},
+            sort_keys=True, separators=(",", ":")).encode() + b"\n"
+        if capture is not None: _write_new(capture, payload)
         if not settled: raise Refusal("child-scope-refused")
-        payload = json.dumps({"returncode": process.returncode, "stdoutTruncated": overflow[0], "stderrTruncated": overflow[1],
-                              "stdoutSha256": hashlib.sha256(buffers[0]).hexdigest(), "stderrSha256": hashlib.sha256(buffers[1]).hexdigest(),
-                              "stdoutTailBase64": base64.b64encode(buffers[0]).decode(),
-                              "stderrTailBase64": base64.b64encode(buffers[1]).decode()},
-                             sort_keys=True, separators=(",", ":")).encode() + b"\n"
-        _write_new(capture, payload)
-        if self.cancelled and not allow_cancelled:
-            raise Refusal("cancelled")
-        if forced_settlement and process.returncode == 0: raise Refusal("child-scope-refused")
+        if self.cancelled and not allow_cancelled: raise Refusal("cancelled")
+        if forced and process.returncode == 0: raise Refusal("child-scope-refused")
         return RunResult(process.returncode or 0, bytes(buffers[0]), bytes(buffers[1]))
 
-    def settle(self) -> bool:
-        complete = True
-        for group in tuple(self.groups):
-            complete = self._settle_one(group) and complete
-        self.groups.clear()
-        return complete
-
+    def settle(self, grace: float = 0) -> bool:
+        living = self._living()
+        if not living: return True
+        root = living[0]
+        return self._terminate(root, grace, lambda: None) and not self._living()
 
 def verify_capacity(path: pathlib.Path) -> None:
     value = json.loads(path.read_bytes())
@@ -366,6 +483,27 @@ def verify_public_tools(root: pathlib.Path, setup: pathlib.Path, p2: pathlib.Pat
         raise Refusal("setup-dotnet-bytes-refused")
 
 
+def verify_public_checkout(root: pathlib.Path, environ: Mapping[str, str], effects: Effects,
+                           capture: pathlib.Path) -> tuple[str, str]:
+    expected, _attempt = execution_context(environ)
+    safe_env = {"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "LANG": "C.UTF-8",
+                "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null"}
+    values: list[str] = []
+    for name, argv in (("head", ["/usr/bin/git", "rev-parse", "HEAD"]),
+                       ("tree", ["/usr/bin/git", "rev-parse", "HEAD^{tree}"])):
+        result = effects.run(argv, cwd=root, env=safe_env, timeout=30, capture=capture / f"public-{name}.json")
+        if result.returncode:
+            raise Refusal("public-placement-refused")
+        try: value = result.stdout.decode("ascii", "strict").strip()
+        except UnicodeDecodeError as error: raise Refusal("public-placement-refused") from error
+        values.append(value)
+    status = effects.run(["/usr/bin/git", "status", "--porcelain", "--untracked-files=all"],
+                         cwd=root, env=safe_env, timeout=30, capture=capture / "public-status.json")
+    if status.returncode or status.stdout or values[0] != expected or not HEX40.fullmatch(values[1]):
+        raise Refusal("public-placement-refused")
+    return values[0], values[1]
+
+
 def acquire_source(key: bytes, admission_value: Mapping[str, object], private: pathlib.Path,
                    known_hosts: pathlib.Path, effects: Effects, env: Mapping[str, str]) -> pathlib.Path:
     credentials, source, capture = private / "credentials", private / "source", private / "capture"
@@ -380,9 +518,10 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
                                     f"-o UserKnownHostsFile={known_hosts}")}
     (private / "home").mkdir(mode=0o700)
     try:
-        public_key = subprocess.run(["/usr/bin/ssh-keygen", "-y", "-f", str(key_path)], check=False,
-                                    stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
-                                    timeout=15, env=safe_env).stdout.split()
+        key_result = effects.run(["/usr/bin/ssh-keygen", "-y", "-f", str(key_path)], cwd=private,
+                                 env=safe_env, timeout=15, capture=capture / "ssh-key-readback.json")
+        if key_result.returncode: raise Refusal("deploy-key-type-refused")
+        public_key = key_result.stdout.split()
         if len(public_key) != 2 or public_key[0] != b"ssh-ed25519":
             raise Refusal("deploy-key-type-refused")
         try: key_blob = base64.b64decode(public_key[1], validate=True)
@@ -414,35 +553,25 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
 
 
 def git_inventory(source: pathlib.Path, effects: Effects, env: Mapping[str, str], capture: pathlib.Path) -> str:
-    result = effects.run(["/usr/bin/git", "ls-tree", "-rz", "--full-tree", "HEAD"], cwd=source, env=env, timeout=60, capture=capture)
-    if result.returncode or len(result.stdout) >= MAX_CAPTURE:
-        raise Refusal("source-inventory-refused")
-    entries = result.stdout.split(b"\0")
-    objects: list[tuple[bytes, bytes]] = []
-    for entry in entries:
-        if not entry: continue
-        meta, name = entry.split(b"\t", 1)
-        mode, kind, oid = meta.split(b" ")
-        if mode == b"160000" or kind != b"blob" or b"\n" in name:
-            raise Refusal("source-inventory-refused")
-        objects.append((name, oid))
-    digest = hashlib.sha256()
-    for name, oid in sorted(objects):
-        digest.update(name); digest.update(b"\0")
-        child = subprocess.Popen(["/usr/bin/git", "-C", str(source), "cat-file", "blob", oid.decode()],
-                                 env=dict(env), stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-                                 stderr=subprocess.DEVNULL, start_new_session=True)
-        assert child.stdout is not None
-        deadline = time.monotonic() + 30
-        while True:
-            if time.monotonic() >= deadline:
-                os.killpg(child.pid, signal.SIGKILL); child.wait(); raise Refusal("source-inventory-refused")
-            block = child.stdout.read(1024 * 1024)
-            if not block: break
-            digest.update(block)
-        if child.wait(timeout=2): raise Refusal("source-inventory-refused")
-        digest.update(b"\0")
-    return digest.hexdigest()
+    program = r'''import hashlib,subprocess,sys
+raw=subprocess.run(["/usr/bin/git","ls-tree","-rz","--full-tree","HEAD"],check=True,stdout=subprocess.PIPE).stdout
+objects=[]
+for entry in raw.split(b"\0"):
+    if not entry: continue
+    meta,name=entry.split(b"\t",1); mode,kind,oid=meta.split(b" ")
+    if mode==b"160000" or kind!=b"blob" or b"\n" in name: raise SystemExit(2)
+    objects.append((name,oid))
+digest=hashlib.sha256()
+for name,oid in sorted(objects):
+    digest.update(name); digest.update(b"\0")
+    child=subprocess.run(["/usr/bin/git","cat-file","blob",oid.decode("ascii")],check=True,stdout=subprocess.PIPE)
+    digest.update(child.stdout); digest.update(b"\0")
+print(digest.hexdigest())'''
+    result = effects.run(["/usr/bin/python3", "-c", program], cwd=source, env=env, timeout=300, capture=capture)
+    try: value = result.stdout.decode("ascii", "strict").strip()
+    except UnicodeDecodeError as error: raise Refusal("source-inventory-refused") from error
+    if result.returncode or not HEX64.fullmatch(value): raise Refusal("source-inventory-refused")
+    return value
 
 
 def validate_checkout(source: pathlib.Path, effects: Effects, env: Mapping[str, str], capture: pathlib.Path) -> None:
@@ -517,6 +646,16 @@ def load_owned_json(path: pathlib.Path, limit: int = 1024 * 1024) -> dict[str, o
     return value
 
 
+def verify_native_archive(archive: pathlib.Path, binding: Mapping[str, object]) -> None:
+    require_owned_file(archive, "native-archive-refused")
+    if (not 2 <= archive.stat().st_size <= 4 * 1024**3
+            or binding.get("archivePath") != str(archive)
+            or binding.get("archiveSha256") != _sha(archive)
+            or type(binding.get("archiveBytes")) is not int
+            or binding.get("archiveBytes") != archive.stat().st_size):
+        raise Refusal("native-archive-refused")
+
+
 def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathlib.Path, p2: pathlib.Path,
                       admission_value: Mapping[str, object], effects: Effects,
                       progress: dict[str, object]) -> tuple[pathlib.Path, pathlib.Path, dict[str, object]]:
@@ -548,7 +687,9 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
     archive = state / "build" / f"fsgg-fourd-portable-{FOURD_SHA}.oci.tar"
     binding = state / "native-image-binding.json"
     try:
-        preflight = effects.run(["/usr/bin/python3", str(native), "preflight", *locations], cwd=source, env=base_env, timeout=budget(900), capture=capture / "preflight.json")
+        preflight = effects.run(["/usr/bin/python3", str(native), "preflight", *locations], cwd=source, env=base_env,
+                                timeout=budget(900), capture=capture / "preflight.json",
+                                termination_grace=NATIVE_SUPERVISOR_GRACE)
         _require_success(preflight, "rootless-preflight-failed")
         try: preflight_value = json.loads(preflight.stdout)
         except json.JSONDecodeError as error: raise Refusal("rootless-preflight-output-refused") from error
@@ -570,7 +711,9 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
         for argv, name in ((["/usr/bin/dotnet", "restore", str(project), "--locked-mode"], "p2-restore"),
                            (["/usr/bin/dotnet", "build", str(project), "--configuration", "Release", "--no-restore", "--warnaserror"], "p2-build")):
             _require_success(effects.run(argv, cwd=p2, env=base_env, timeout=budget(900), capture=capture / f"{name}.json"), f"{name}-failed")
-        _require_success(effects.run(["/usr/bin/python3", str(native), "fresh-load", *locations, "--timeout", "4200"], cwd=source, env=base_env, timeout=budget(5400), capture=capture / "fresh-load.json"), "fresh-load-failed")
+        _require_success(effects.run(["/usr/bin/python3", str(native), "fresh-load", *locations, "--timeout", "4200"],
+                                     cwd=source, env=base_env, timeout=budget(5400), capture=capture / "fresh-load.json",
+                                     termination_grace=NATIVE_SUPERVISOR_GRACE), "fresh-load-failed")
         dll = p2 / "src/FS.GG.Coordination.Orchestration.Execution/bin/Release/net10.0/FS.GG.Coordination.Orchestration.Execution.dll"
         akka = private / "home/.nuget/packages/akka/1.5.71/lib/net6.0/Akka.dll"
         p2_result = evidence / "p2-result.json"
@@ -592,7 +735,8 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
         cleanup = effects.run(["/usr/bin/python3", str(native), "cleanup", "--state", str(state), "--podman", "/usr/bin/podman",
                                "--build-runroot", f"/tmp/f4b-{run_id}-{attempt}", "--fresh-runroot", f"/tmp/f4f-{run_id}-{attempt}",
                                "--image-tmpdir", f"/dev/shm/f4t-{run_id}-{attempt}"],
-                              cwd=source, env=base_env, timeout=900, capture=capture / "cleanup.json", allow_cancelled=True)
+                              cwd=source, env=base_env, timeout=900, capture=capture / "cleanup.json", allow_cancelled=True,
+                              termination_grace=NATIVE_SUPERVISOR_GRACE)
         if cleanup.returncode: raise Refusal("native-cleanup-failed") from route_failure
         try: cleanup_value = json.loads(cleanup.stdout)
         except json.JSONDecodeError as error: raise Refusal("native-cleanup-failed") from error
@@ -602,9 +746,8 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
         if route_failure is None and snapshot_failure is not None: route_failure = snapshot_failure
     if route_failure is not None: raise route_failure
     assert accepted is not None
-    require_owned_file(archive, "native-archive-refused")
-    if not 2 <= archive.stat().st_size <= 4 * 1024**3:
-        raise Refusal("native-archive-refused")
+    if not effects.settle(): raise Refusal("child-scope-refused")
+    verify_native_archive(archive, accepted)
     evidence_tar = private / "native-evidence.tar"
     retained = [("evidence", evidence), ("capture", capture)]
     total_retained = 0
@@ -622,6 +765,14 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
         for label, directory in retained:
             for item in sorted(directory.iterdir()):
                 output.add(item, arcname=f"{label}/{item.name}", recursive=False)
+        receipts = ((binding, "native/native-image-binding.json"),
+                    (state / "preflight.json", "native/preflight.json"),
+                    (state / "cleanup.json", "native/cleanup.json"),
+                    (state / "build/source-preparation.json", "native/source-preparation.json"))
+        for receipt, name in receipts:
+            require_owned_file(receipt, "native-evidence-refused")
+            if receipt.stat().st_size > 1024 * 1024: raise Refusal("native-evidence-overflow")
+            output.add(receipt, arcname=name, recursive=False)
     os.chmod(evidence_tar, 0o600)
     if evidence_tar.stat().st_size > 16 * 1024**2: raise Refusal("native-evidence-overflow")
     require_owned_file(evidence_tar, "native-evidence-refused")
@@ -630,6 +781,21 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
 
 def validate_native(p2_path: pathlib.Path, binding_path: pathlib.Path) -> dict[str, object]:
     p2, image = load_owned_json(p2_path), load_owned_json(binding_path)
+    digest = re.compile(r"sha256:[0-9a-f]{64}\Z")
+    identities = (image.get("imageReference"), image.get("manifestDigest"), image.get("buildConfigId"),
+                  image.get("configDigest"), image.get("imageId"))
+    if (image.get("schema") != "fsgg.fourd.native-image-binding/1"
+            or image.get("qualified") is not False
+            or image.get("sourceRevision") != FOURD_SHA or image.get("sourceTree") != FOURD_TREE
+            or image.get("sourceInventorySha256") != FOURD_INVENTORY
+            or not all(isinstance(value, str) and value for value in identities)
+            or not digest.fullmatch(str(image["manifestDigest"]))
+            or not all(digest.fullmatch(str(image[name])) for name in ("buildConfigId", "configDigest", "imageId"))
+            or not str(image["imageReference"]).endswith("@" + str(image["manifestDigest"]))
+            or not isinstance(image.get("archiveSha256"), str) or not HEX64.fullmatch(str(image["archiveSha256"]))
+            or type(image.get("archiveBytes")) is not int or not 2 <= int(image["archiveBytes"]) <= 4 * 1024**3):
+        raise Refusal("native-acceptance-refused")
+    prelaunch = p2.get("prelaunchRefusals")
     checks = [p2.get("schema") == "fsgg.fourd.native-p2-qualification/1", p2.get("qualified") is True,
               p2.get("outcome") == "passed", p2.get("sourceRevision") == image.get("sourceRevision") == FOURD_SHA,
               p2.get("sourceTree") == image.get("sourceTree") == FOURD_TREE,
@@ -638,7 +804,9 @@ def validate_native(p2_path: pathlib.Path, binding_path: pathlib.Path) -> dict[s
               image.get("temporaryMountNamespaceExited") is True, image.get("postNamespaceIdentityVerified") is True,
               p2.get("executionStarted") is True, p2.get("cleanupCompleted") is True,
               p2.get("duplicateSuppressedAfterReconstruction") is True, p2.get("settledRecoveryWithoutRelaunch") is True,
-              p2.get("remainingExecutionRoots") == 0, set(p2.get("prelaunchRefusals", [])) == {"source", "scope", "operation"}]
+              type(p2.get("remainingExecutionRoots")) is int and p2.get("remainingExecutionRoots") == 0,
+              isinstance(prelaunch, list) and all(isinstance(item, str) for item in prelaunch)
+              and set(prelaunch) == {"source", "scope", "operation"} and len(prelaunch) == 3]
     if not all(checks): raise Refusal("native-acceptance-refused")
     return image
 
@@ -653,6 +821,11 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
     try:
         verify_capacity(pathlib.Path(args.capacity_result)); result["capacityPassed"] = True
         public_source = pathlib.Path(args.public_source)
+        public_capture = public / "placement-capture"
+        _private_dir(public_capture)
+        placement_sha, placement_tree = verify_public_checkout(public_source, env, runner, public_capture)
+        shutil.rmtree(public_capture)
+        result["placementSha"] = placement_sha; result["placementTree"] = placement_tree
         known_hosts = pathlib.Path(args.known_hosts)
         fixed_known_hosts = public_source / "eng/fourd-public-provider/github-known-hosts"
         if known_hosts.resolve() != fixed_known_hosts.resolve(): raise Refusal("known-host-refused")
@@ -679,12 +852,15 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
             raise Refusal("source-private-inventory-refused")
         archive, evidence, binding = run_private_route(source, private, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source), admitted, runner, result)
         result["nativeAccepted"] = True
+        if not runner.settle(): raise Refusal("child-scope-refused")
+        custody_path = public_source / "eng/fourd-public-provider/custody.py"
+        if _sha(custody_path) != CUSTODY_POLICY_SHA256: raise Refusal("custody-module-refused")
         try:
             from custody import seal_series, verify_staging  # type: ignore
         except ImportError as error:
             raise Refusal("custody-module-refused") from error
         identity = {"schema": "fsgg.fourd.custody-identity/1", "runId": admitted["runId"], "runAttempt": admitted["runAttempt"],
-                    "runNonce": admitted["runNonce"], "placementSha": PLACEMENT_SHA, "fourdSourceSha": FOURD_SHA,
+                    "runNonce": admitted["runNonce"], "placementSha": placement_sha, "fourdSourceSha": FOURD_SHA,
                     "fourdSourceTree": FOURD_TREE, "fourdInventorySha256": FOURD_INVENTORY, "p2SourceSha": P2_SHA,
                     "p2SourceTree": P2_TREE, "nativePolicySha256": NATIVE_POLICY_SHA256, "sealerSha256": SEALER_SHA256,
                     "publicKeySha256": PUBLIC_KEY_SHA256, "nativeBindingSha256": _sha(private / "state/native-image-binding.json"),
@@ -694,10 +870,20 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
                               identity=identity, deadline_monotonic=time.monotonic() + 1200)
         verified = verify_staging(private_sealed, identity)
         if custody != verified or not verified.archiveComplete: raise Refusal("custody-verification-refused")
+        manifest = load_owned_json(private_sealed / verified.manifestName)
+        archive_record = manifest.get("archive")
+        if (not isinstance(archive_record, dict) or archive_record.get("sha256") != binding["archiveSha256"]
+                or archive_record.get("bytes") != binding["archiveBytes"]):
+            raise Refusal("custody-verification-refused")
+        if not runner.settle(): raise Refusal("child-scope-refused")
         sealed = public / "sealed-stage"
         os.rename(private_sealed, sealed)
-        moved = verify_staging(sealed, identity)
-        if moved != verified: raise Refusal("custody-verification-refused")
+        try:
+            moved = verify_staging(sealed, identity)
+            if moved != verified: raise Refusal("custody-verification-refused")
+        except BaseException:
+            shutil.rmtree(sealed, ignore_errors=True)
+            raise
         result.update(outcome="sealed-native-evidence", custodyOutcome=verified.outcome, archiveComplete=True,
                       manifestSha256=verified.manifestSha256, qualified=True)
         return 0
@@ -720,8 +906,16 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         write_result(output, result)
 
 
-def verify_upload(root: pathlib.Path, environ: Mapping[str, str]) -> int:
+def verify_upload(root: pathlib.Path, public_source: pathlib.Path, environ: Mapping[str, str],
+                  effects: Effects | None = None) -> int:
+    validation_capture = root.parent / (root.name + "-validation")
     try:
+        runner = effects or Effects()
+        _private_dir(validation_capture)
+        placement_sha, placement_tree = verify_public_checkout(public_source, environ, runner, validation_capture)
+        shutil.rmtree(validation_capture)
+        custody_path = public_source / "eng/fourd-public-provider/custody.py"
+        if _sha(custody_path) != CUSTODY_POLICY_SHA256: raise Refusal("custody-module-refused")
         result_path = root / "result.json"
         require_owned_file(result_path, "public-result-refused")
         if result_path.stat().st_size > MAX_RESULT: raise Refusal("public-result-refused")
@@ -729,7 +923,7 @@ def verify_upload(root: pathlib.Path, environ: Mapping[str, str]) -> int:
         if (set(result) != set(base_result(environ, "failed")) or result.get("schema") != SCHEMA
                 or result.get("runId") != environ.get("GITHUB_RUN_ID")
                 or result.get("runAttempt") != environ.get("GITHUB_RUN_ATTEMPT")
-                or result.get("placementSha") != environ.get("GITHUB_SHA")
+                or result.get("placementSha") != placement_sha or result.get("placementTree") != placement_tree
                 or result.get("rootReadback") != "pending-root-readback"
                 or result.get("credentialRevocation") != "pending-root-readback"):
             raise Refusal("public-result-refused")
@@ -747,7 +941,7 @@ def verify_upload(root: pathlib.Path, environ: Mapping[str, str]) -> int:
         identity = manifest.get("identity")
         if not isinstance(identity, dict): raise Refusal("public-manifest-refused")
         fixed = {"schema": "fsgg.fourd.custody-identity/1", "runId": environ.get("GITHUB_RUN_ID"),
-                 "runAttempt": environ.get("GITHUB_RUN_ATTEMPT"), "placementSha": PLACEMENT_SHA,
+                 "runAttempt": environ.get("GITHUB_RUN_ATTEMPT"), "placementSha": placement_sha,
                  "fourdSourceSha": FOURD_SHA, "fourdSourceTree": FOURD_TREE,
                  "fourdInventorySha256": FOURD_INVENTORY, "p2SourceSha": P2_SHA, "p2SourceTree": P2_TREE,
                  "nativePolicySha256": NATIVE_POLICY_SHA256, "sealerSha256": SEALER_SHA256,
@@ -768,9 +962,11 @@ def verify_upload(root: pathlib.Path, environ: Mapping[str, str]) -> int:
                 or result.get("outcome") != "sealed-native-evidence" or result.get("archiveComplete") is not True
                 or result.get("nativeAccepted") is not True or result.get("cleanupComplete") is not True):
             raise Refusal("public-output-refused")
-        return 0
+        return 0 if runner.settle() else 2
     except Exception:
         return 2
+    finally:
+        if validation_capture.is_dir(): shutil.rmtree(validation_capture, ignore_errors=True)
 
 
 def main() -> int:
@@ -781,7 +977,9 @@ def main() -> int:
     parser.add_argument("--known-hosts"); parser.add_argument("--private-root")
     parser.add_argument("--output", required=True)
     args = parser.parse_args()
-    if args.command == "verify-upload": return verify_upload(pathlib.Path(args.output), os.environ)
+    if args.command == "verify-upload":
+        if not args.public_source: return 2
+        return verify_upload(pathlib.Path(args.output), pathlib.Path(args.public_source), os.environ)
     if not all((args.capacity_result, args.public_source, args.setup_dotnet, args.p2_source, args.known_hosts, args.private_root)):
         return 2
     return execute(args)
