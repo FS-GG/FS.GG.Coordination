@@ -35,7 +35,9 @@ let private jsonOptions =
 let private shaBytes (bytes: byte array) =
     SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
 
-let private shaFile (path: string) = File.ReadAllBytes path |> shaBytes
+let private shaFile (path: string) =
+    use stream = File.OpenRead path
+    SHA256.HashData stream |> Convert.ToHexString |> _.ToLowerInvariant()
 
 let private writePrivate (path: string) (bytes: byte array) =
     File.WriteAllBytes(path, bytes)
@@ -59,7 +61,14 @@ type private Fixture =
     interface IDisposable with
         member this.Dispose() = Directory.Delete(this.Root, true)
 
-let private fixture () =
+let private writeSparseExecutable length path =
+    use stream = new FileStream(path, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+    stream.SetLength length
+    stream.Position <- 0L
+    let header = [| 0x7fuy; byte 'E'; byte 'L'; byte 'F'; 1uy; 2uy; 3uy |]
+    stream.Write(header, 0, header.Length)
+
+let private fixtureWithExecutable writeExecutable =
     let root = Directory.CreateTempSubdirectory("learning-installed-").FullName
     let privateRoot = Directory.CreateDirectory(Path.Combine(root, "private")).FullName
 
@@ -73,7 +82,7 @@ let private fixture () =
     File.SetUnixFileMode(evidence, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
     File.SetUnixFileMode(sourceRoot, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
     let executable = Path.Combine(privateRoot, "codex")
-    writePrivate executable [| 0x7fuy; byte 'E'; byte 'L'; byte 'F'; 1uy; 2uy; 3uy |]
+    writeExecutable executable
     File.SetUnixFileMode(executable, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
     let executableSha = shaFile executable
     let config = Path.Combine(privateRoot, "host.json")
@@ -319,6 +328,10 @@ let private fixture () =
             }
     }
 
+let private fixture () =
+    fixtureWithExecutable (fun path ->
+        writePrivate path [| 0x7fuy; byte 'E'; byte 'L'; byte 'F'; 1uy; 2uy; 3uy |])
+
 let private successReceipt observed expires (query: LearningInstalledProducerReceiptQuery) =
     Ok
         {
@@ -395,6 +408,91 @@ let ``installed source joins manager grant capability and actual native capture 
         Assert.True(snapshot.ProviderCapability.RecordId <> snapshot.NativeCapture.RecordId)
     }
 
+[<Fact>]
+let ``installed source streams the exact pinned Codex executable size`` () =
+    task {
+        use value =
+            fixtureWithExecutable (writeSparseExecutable 286594376L)
+
+        let observed = value.Now.AddMinutes(-1.)
+        let expires = value.Now.AddMinutes 3.
+        let receipts = ReceiptSource(successReceipt observed expires)
+
+        let source =
+            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
+            :> ILearningInstalledReadinessSource
+
+        let! result =
+            source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None)
+
+        Assert.True(Result.isOk result)
+        Assert.Equal(1, receipts.Calls)
+    }
+
+[<Fact>]
+let ``executable stat projection requires timestamps and uses containing filesystem device fields`` () =
+    let mutable value = LinuxStatx()
+    value.Mask <- LinuxFiles.executableStatxMask
+    value.LinkCount <- 1u
+    value.OwnerUid <- effectiveUserId ()
+    value.Mode <- 0x81c0us
+    value.Inode <- 17UL
+    value.Size <- 286594376UL
+    value.ChangedSeconds <- 101L
+    value.ChangedNanoseconds <- 102u
+    value.ModifiedSeconds <- 103L
+    value.ModifiedNanoseconds <- 104u
+    value.DeviceMajor <- 105u
+    value.DeviceMinor <- 106u
+
+    let observation =
+        LinuxFiles.executableObservationFromStatx value |> Result.defaultWith failwith
+
+    Assert.Equal(105u, observation.Identity.DeviceMajor)
+    Assert.Equal(106u, observation.Identity.DeviceMinor)
+    Assert.Equal(101L, observation.ChangedSeconds)
+    Assert.Equal(102u, observation.ChangedNanoseconds)
+    Assert.Equal(103L, observation.ModifiedSeconds)
+    Assert.Equal(104u, observation.ModifiedNanoseconds)
+    Assert.Equal(96, Marshal.OffsetOf<LinuxStatx>("ChangedSeconds").ToInt32())
+    Assert.Equal(104, Marshal.OffsetOf<LinuxStatx>("ChangedNanoseconds").ToInt32())
+    Assert.Equal(112, Marshal.OffsetOf<LinuxStatx>("ModifiedSeconds").ToInt32())
+    Assert.Equal(120, Marshal.OffsetOf<LinuxStatx>("ModifiedNanoseconds").ToInt32())
+    Assert.Equal(136, Marshal.OffsetOf<LinuxStatx>("DeviceMajor").ToInt32())
+    Assert.Equal(140, Marshal.OffsetOf<LinuxStatx>("DeviceMinor").ToInt32())
+
+    value.Mask <- value.Mask &&& ~~~0x40u
+
+    Assert.Equal(
+        Error "learning-installed-file-stat-refused",
+        LinuxFiles.executableObservationFromStatx value
+    )
+
+[<Fact>]
+let ``installed source refuses executable above the finite stream ceiling before producer authority`` () =
+    task {
+        use value = fixture ()
+        File.Delete value.Executable
+        writeSparseExecutable (512L * 1024L * 1024L + 1L) value.Executable
+        File.SetUnixFileMode(
+            value.Executable,
+            UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+        )
+
+        let receipts =
+            ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
+
+        let source =
+            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
+            :> ILearningInstalledReadinessSource
+
+        let! result =
+            source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None)
+
+        Assert.Equal(Error "learning-installed-file-custody-refused", result)
+        Assert.Equal(0, receipts.Calls)
+    }
+
 let private expectLocalRefusal mutate =
     task {
         use value = fixture ()
@@ -413,6 +511,109 @@ let private expectLocalRefusal mutate =
         Assert.True(Result.isError result)
         Assert.Equal(0, receipts.Calls)
     }
+
+[<Fact>]
+let ``installed source refuses digest mismatch replacement and truncation before producer authority`` () =
+    task {
+        do!
+            expectLocalRefusal (fun value ->
+                use stream = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+                stream.Position <- stream.Length - 1L
+                stream.WriteByte 0xffuy)
+
+        for mutation in [ "replacement"; "truncation" ] do
+            use value = fixtureWithExecutable (writeSparseExecutable (128L * 1024L * 1024L))
+
+            let receipts =
+                ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
+
+            let source =
+                LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
+                :> ILearningInstalledReadinessSource
+
+            let operation: Task<Result<LearningInstalledReadinessSnapshot, string>> =
+                Task.Run<Result<LearningInstalledReadinessSnapshot, string>>(
+                    Func<Task<Result<LearningInstalledReadinessSnapshot, string>>>(fun () ->
+                        source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None))
+                )
+
+            let mutable mutations = 0
+
+            while not operation.IsCompleted && mutations < 64 do
+                if mutation = "replacement" then
+                    let replacement = value.Executable + $".replacement-%d{mutations}"
+                    writeSparseExecutable (128L * 1024L * 1024L) replacement
+                    File.SetUnixFileMode(
+                        replacement,
+                        UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
+                    )
+                    File.Move(replacement, value.Executable, true)
+                else
+                    use stream = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+                    stream.SetLength(1024L + int64 mutations)
+
+                mutations <- mutations + 1
+                Thread.Yield() |> ignore
+
+            let! result = operation
+            Assert.True(mutations > 0)
+            Assert.True(Result.isError result)
+            Assert.Equal(0, receipts.Calls)
+    }
+
+[<Fact>]
+let ``installed source refuses same inode prefix mutation even when mtime is restored`` () =
+    task {
+        use value = fixtureWithExecutable (writeSparseExecutable 286594376L)
+
+        let receipts =
+            ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
+
+        let source =
+            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
+            :> ILearningInstalledReadinessSource
+
+        let originalModified = File.GetLastWriteTimeUtc value.Executable
+
+        let operation: Task<Result<LearningInstalledReadinessSnapshot, string>> =
+            Task.Run<Result<LearningInstalledReadinessSnapshot, string>>(
+                Func<Task<Result<LearningInstalledReadinessSnapshot, string>>>(fun () ->
+                    source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None))
+            )
+
+        let descriptorRoot = $"/proc/%d{Environment.ProcessId}/fd"
+        let deadline = DateTime.UtcNow.AddSeconds 5.
+        let mutable opened = false
+
+        while not opened && not operation.IsCompleted && DateTime.UtcNow < deadline do
+            opened <-
+                Directory.EnumerateFiles descriptorRoot
+                |> Seq.exists (fun descriptor ->
+                    try
+                        let target = File.ResolveLinkTarget(descriptor, false)
+                        not (isNull target) && target.FullName = value.Executable
+                    with
+                    | :? IOException
+                    | :? UnauthorizedAccessException -> false)
+
+            if not opened then
+                Thread.Yield() |> ignore
+
+        Assert.True(opened, "production executable descriptor was not observed")
+        Thread.Sleep 10
+
+        use writer = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+        writer.Position <- 0L
+        writer.WriteByte 0x58uy
+        writer.Flush true
+        File.SetLastWriteTimeUtc(value.Executable, originalModified)
+
+        let! result = operation
+        Assert.True(Result.isError result)
+        Assert.Equal(originalModified, File.GetLastWriteTimeUtc value.Executable)
+        Assert.Equal(0, receipts.Calls)
+    }
+
 
 [<Fact>]
 let ``changed executable revoked grant stale advertisement and foreign native capture refuse before producer authority``
