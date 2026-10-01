@@ -68,7 +68,8 @@ jobs:
           test -f eng/portable-workspace-release.fsx
           test -f eng/run-packaged-portable-workspace-qualification.py
           command -v podman
-          install -d -m 0700 "$IMAGE_STATE" "$EXECUTOR_STATE" "$EVIDENCE_ROOT"
+          install -d -m 0700 "$IMAGE_STATE" "$EXECUTOR_STATE" "$EVIDENCE_ROOT" "$ARTIFACT_ROOT/evidence/diagnostics"
+          printf '%s\n' preflight > "$ARTIFACT_ROOT/evidence/diagnostics/last-stage.txt"
           python3 eng/portable-workspace-image.py preflight \
             --source "$GITHUB_WORKSPACE" \
             --expected-source-revision "$CANDIDATE_SOURCE" \
@@ -92,6 +93,7 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          printf '%s\n' package > "$ARTIFACT_ROOT/evidence/diagnostics/last-stage.txt"
           dotnet fsi eng/callable-cli-release.fsx prepare \
             --source "$CANDIDATE_SOURCE" \
             --version "$CANDIDATE_VERSION" \
@@ -103,6 +105,7 @@ jobs:
           CANDIDATE_SOURCE: ${{ inputs.source }}
         run: |
           set -euo pipefail
+          printf '%s\n' image-build-export > "$ARTIFACT_ROOT/evidence/diagnostics/last-stage.txt"
           podman --storage-driver=vfs --root "$BUILD_ROOT" --runroot "$BUILD_RUNROOT" \
             pull --platform linux/amd64 "$BASE_IMAGE"
           python3 eng/portable-workspace-image.py qualify \
@@ -120,6 +123,7 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          printf '%s\n' fresh-load-qualification > "$ARTIFACT_ROOT/evidence/diagnostics/last-stage.txt"
           package="$CANDIDATE_OUTPUT/FS.GG.Coordination.Cli.$CANDIDATE_VERSION.nupkg"
           package_sha="$(jq -r .packageSha256 "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json")"
           image_manifest="$(jq -r .manifest "$EVIDENCE_ROOT/image-qualification-result.json")"
@@ -162,6 +166,7 @@ jobs:
           CANDIDATE_VERSION: ${{ inputs.version }}
         run: |
           set -euo pipefail
+          printf '%s\n' release-assets > "$ARTIFACT_ROOT/evidence/diagnostics/last-stage.txt"
           package="$CANDIDATE_OUTPUT/FS.GG.Coordination.Cli.$CANDIDATE_VERSION.nupkg"
           image_manifest="$(jq -r .manifest "$EVIDENCE_ROOT/image-qualification-result.json")"
           dotnet fsi eng/portable-workspace-release.fsx prepare \
@@ -182,6 +187,43 @@ jobs:
           cp "$RELEASE_OUTPUT"/* "$ARTIFACT_ROOT/"
           cp "$EVIDENCE_ROOT"/*.json "$ARTIFACT_ROOT/evidence/"
 
+      - name: Retain bounded preparation diagnostics
+        if: always()
+        shell: bash
+        env:
+          PREPARATION_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          install -d -m 0700 "$ARTIFACT_ROOT/evidence/diagnostics"
+          python3 - "$PREPARATION_STATUS" "$ARTIFACT_ROOT/evidence/diagnostics" "$EVIDENCE_ROOT" "$IMAGE_STATE" <<'PY'
+          import hashlib, json, pathlib, shutil, stat, sys
+          status, destination, *roots = sys.argv[1:]
+          destination = pathlib.Path(destination)
+          retained = []
+          for root_value in roots:
+              root = pathlib.Path(root_value)
+              if not root.is_dir() or root.is_symlink():
+                  continue
+              candidates = {source for pattern in ("*.json", "preflight.json", "manifests/*.json", "runs/*/journal.jsonl") for source in root.glob(pattern)}
+              for source in sorted(candidates):
+                  relative = source.relative_to(root)
+                  info = source.lstat()
+                  if not stat.S_ISREG(info.st_mode) or source.is_symlink() or source.suffix not in (".json", ".jsonl") or info.st_size > 1048576:
+                      continue
+                  name = f"{root.name}--{'--'.join(relative.parts)}"
+                  target = destination / name
+                  if not target.exists():
+                      shutil.copyfile(source, target)
+                  retained.append({"file":name,"bytes":target.stat().st_size,"sha256":hashlib.sha256(target.read_bytes()).hexdigest()})
+          (destination / "preparation-state.json").write_text(json.dumps({
+              "schema":"fsgg.portable-workspace-preparation-diagnostics/1",
+              "jobStatus":status,
+              "sourceOnly":True,
+              "qualificationPassed": status == "success",
+              "retained":retained,
+          },sort_keys=True,separators=(",",":"))+"\n",encoding="utf-8")
+          PY
+
       - name: Remove exact private runtime state
         if: always()
         shell: bash
@@ -197,11 +239,18 @@ jobs:
             test -z "$(podman --storage-driver=vfs --root "$root" --runroot "$runroot" container ps --all --quiet)"
             podman --storage-driver=vfs --root "$root" --runroot "$runroot" system reset --force
           done
-          python3 - "$BUILD_ROOT" "$BUILD_RUNROOT" "$LOAD_ROOT" "$LOAD_RUNROOT" "$IMAGE_STATE" "$EXECUTOR_STATE" "$PACKAGED_STATE" "$CANDIDATE_OUTPUT" "$RELEASE_OUTPUT" "$EVIDENCE_ROOT" "$ARTIFACT_ROOT/evidence/cleanup-state.json" <<'PY'
-          import json, pathlib, shutil, sys
-          for value in sys.argv[1:-1]:
-              path = pathlib.Path(value)
-              if path.exists(): shutil.rmtree(path)
+          owned=("$BUILD_ROOT" "$BUILD_RUNROOT" "$LOAD_ROOT" "$LOAD_RUNROOT" "$IMAGE_STATE" "$EXECUTOR_STATE" "$PACKAGED_STATE" "$CANDIDATE_OUTPUT" "$RELEASE_OUTPUT" "$EVIDENCE_ROOT")
+          for path in "${owned[@]}"; do
+            case "$path" in
+              /tmp/pw-*-${{ github.run_id }}-${{ github.run_attempt }}) ;;
+              *) echo "refusing cleanup outside exact run scope: $path" >&2; exit 1 ;;
+            esac
+            test ! -L "$path"
+            podman unshare /usr/bin/rm -rf -- "$path"
+            test ! -e "$path"
+          done
+          python3 - "${owned[@]}" "$ARTIFACT_ROOT/evidence/cleanup-state.json" <<'PY'
+          import json, pathlib, sys
           removed = {pathlib.Path(value).name + "Removed": not pathlib.Path(value).exists() for value in sys.argv[1:-1]}
           assert all(removed.values())
           receipt = pathlib.Path(sys.argv[-1])

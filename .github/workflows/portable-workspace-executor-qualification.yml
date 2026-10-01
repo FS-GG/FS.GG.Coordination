@@ -119,14 +119,17 @@ jobs:
           import sys
 
           result = json.load(open(sys.argv[1], encoding="utf-8"))
-          manifest = pathlib.Path(result["manifest"])
+          manifest = pathlib.Path(result["buildManifest"])
           candidate = pathlib.Path(result["candidate"])
-          assert hashlib.sha256(manifest.read_bytes()).hexdigest() == result["manifestSha256"]
+          assert hashlib.sha256(manifest.read_bytes()).hexdigest() == result["buildManifestSha256"]
           assert hashlib.sha256(candidate.read_bytes()).hexdigest() == result["candidateSha256"]
           value = json.loads(manifest.read_text(encoding="utf-8"))
           assert value["schema"] == "fsgg.portable-workspace-local-image/1"
-          assert value["image"]["reference"] == result["imageReference"]
+          assert value["image"]["reference"] == result["buildImageReference"]
           assert value["image"]["id"] == result["imageId"]
+          exported = json.loads(pathlib.Path(result["manifest"]).read_text(encoding="utf-8"))
+          assert exported["image"]["buildDigest"] == value["image"]["digest"]
+          assert exported["image"]["reference"] == result["imageReference"]
           print(manifest)
           PY
           )"
@@ -153,9 +156,9 @@ jobs:
           evidence = json.load(open(sys.argv[1], encoding="utf-8"))
           qualification = json.load(open(sys.argv[2], encoding="utf-8"))
           assert evidence["schema"] == "fsgg.portable-workspace-executor-qualification/1"
-          assert evidence["imageReference"] == qualification["imageReference"]
+          assert evidence["imageReference"] == qualification["buildImageReference"]
           assert evidence["imageId"] == qualification["imageId"]
-          assert evidence["manifestSha256"] == qualification["manifestSha256"]
+          assert evidence["manifestSha256"] == qualification["buildManifestSha256"]
           assert evidence["outcome"] == "passed"
           assert evidence["strictAcceptance"] is True
           assert evidence["passed"] == 6

@@ -12,6 +12,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tarfile
 import urllib.request
 import uuid
 
@@ -237,7 +238,7 @@ def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
     return path
 
 
-def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, Path, dict]:
+def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, dict]:
     revision, tree, fixture_sha256 = require_exact_source(source, args.expected_source_revision)
     image_dir = source / "tests" / "portable-workspace" / "image"
     inputs = json.loads((image_dir / "inputs.json").read_text())
@@ -302,17 +303,109 @@ def prepare(args: argparse.Namespace, source: Path, state: Path) -> tuple[str, P
         "buildStdoutSha256": hashlib.sha256(build_output.encode()).hexdigest(),
         "podman": run(prefix + ["version", "--format", "{{.Client.Version}}"]).stdout.strip(),
     }
+    return f"{IMAGE_NAME}@{digest}", manifest
+
+
+def _archive_json(archive: tarfile.TarFile, name: str) -> tuple[dict, bytes]:
+    try:
+        member = archive.getmember(name)
+    except KeyError as error:
+        raise RuntimeError(f"OCI archive lacks {name}") from error
+    if not member.isfile() or member.issym() or member.islnk():
+        raise RuntimeError(f"OCI archive member is not a regular file: {name}")
+    stream = archive.extractfile(member)
+    if stream is None:
+        raise RuntimeError(f"OCI archive member cannot be read: {name}")
+    payload = stream.read()
+    try:
+        return json.loads(payload), payload
+    except json.JSONDecodeError as error:
+        raise RuntimeError(f"OCI archive member is not JSON: {name}") from error
+
+
+def inspect_oci_archive(candidate: Path) -> dict:
+    with tarfile.open(candidate, "r:*") as archive:
+        layout, _ = _archive_json(archive, "oci-layout")
+        index, _ = _archive_json(archive, "index.json")
+        if layout != {"imageLayoutVersion": "1.0.0"}:
+            raise RuntimeError("OCI archive layout version changed")
+        manifests = index.get("manifests")
+        if not isinstance(manifests, list) or len(manifests) != 1:
+            raise RuntimeError("OCI archive must contain exactly one image manifest")
+        descriptor = manifests[0]
+        digest = descriptor.get("digest", "")
+        if descriptor.get("mediaType") != "application/vnd.oci.image.manifest.v1+json" or not re.fullmatch(r"sha256:[0-9a-f]{64}", digest):
+            raise RuntimeError("OCI archive image descriptor is not a sha256 OCI manifest")
+        if descriptor.get("annotations", {}).get("org.opencontainers.image.ref.name") != IMAGE_NAME:
+            raise RuntimeError("OCI archive does not retain the qualified stable image tag")
+        platform = descriptor.get("platform")
+        if platform is not None and (platform.get("os"), platform.get("architecture")) != ("linux", "amd64"):
+            raise RuntimeError("OCI archive descriptor platform differs from linux/amd64")
+        manifest, manifest_bytes = _archive_json(archive, f"blobs/sha256/{digest.removeprefix('sha256:')}")
+        if len(manifest_bytes) != descriptor.get("size") or sha256_file_bytes(manifest_bytes) != digest.removeprefix("sha256:"):
+            raise RuntimeError("OCI archive image manifest descriptor differs from retained bytes")
+        config_descriptor = manifest.get("config", {})
+        config_digest = config_descriptor.get("digest", "")
+        if not re.fullmatch(r"sha256:[0-9a-f]{64}", config_digest):
+            raise RuntimeError("OCI archive config descriptor is invalid")
+        config, config_bytes = _archive_json(archive, f"blobs/sha256/{config_digest.removeprefix('sha256:')}")
+        if len(config_bytes) != config_descriptor.get("size") or sha256_file_bytes(config_bytes) != config_digest.removeprefix("sha256:"):
+            raise RuntimeError("OCI archive config descriptor differs from retained bytes")
+        if config.get("os") != "linux" or config.get("architecture") != "amd64" or config.get("config", {}).get("User") not in ("32768", "32768:32768"):
+            raise RuntimeError("OCI archive config is not the qualified linux/amd64 non-root image")
+        layers = manifest.get("layers")
+        if not isinstance(layers, list) or not layers:
+            raise RuntimeError("OCI archive image manifest has no layers")
+        for layer in layers:
+            layer_digest = layer.get("digest", "")
+            if not re.fullmatch(r"sha256:[0-9a-f]{64}", layer_digest):
+                raise RuntimeError("OCI archive layer descriptor is invalid")
+            try:
+                member = archive.getmember(f"blobs/sha256/{layer_digest.removeprefix('sha256:')}")
+            except KeyError as error:
+                raise RuntimeError("OCI archive layer blob is absent") from error
+            if not member.isfile() or member.size != layer.get("size"):
+                raise RuntimeError("OCI archive layer size differs")
+            stream = archive.extractfile(member)
+            if stream is None or sha256_stream(stream) != layer_digest.removeprefix("sha256:"):
+                raise RuntimeError("OCI archive layer digest differs")
+        return {"digest": digest, "configDigest": config_digest, "manifestBytes": len(manifest_bytes)}
+
+
+def sha256_file_bytes(value: bytes) -> str:
+    return hashlib.sha256(value).hexdigest()
+
+
+def sha256_stream(stream) -> str:
+    digest = hashlib.sha256()
+    for chunk in iter(lambda: stream.read(1024 * 1024), b""):
+        digest.update(chunk)
+    return digest.hexdigest()
+
+
+def persist_manifest(state: Path, manifest: dict) -> Path:
     payload = canonical_bytes(manifest)
-    manifest_digest = hashlib.sha256(payload).hexdigest()
-    manifests = state / "manifests"
-    manifests.mkdir(parents=True, exist_ok=True, mode=0o700)
-    path = manifests / f"sha256-{manifest_digest}.json"
+    digest = hashlib.sha256(payload).hexdigest()
+    directory = state / "manifests"
+    directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+    path = directory / f"sha256-{digest}.json"
     with path.open("xb") as stream:
         os.fchmod(stream.fileno(), 0o600)
         stream.write(payload)
         stream.flush()
         os.fsync(stream.fileno())
-    return f"{IMAGE_NAME}@{digest}", path, manifest
+    return path
+
+
+def write_manifest(state: Path, manifest: dict, archive_identity: dict) -> Path:
+    if manifest["image"]["id"] != archive_identity["configDigest"]:
+        raise RuntimeError("OCI archive config identity differs from the qualified image ID")
+    build_digest = manifest["image"]["digest"]
+    manifest["image"]["buildDigest"] = build_digest
+    manifest["image"]["digest"] = archive_identity["digest"]
+    manifest["image"]["reference"] = f"{IMAGE_NAME}@{archive_identity['digest']}"
+    manifest["image"]["archiveConfigDigest"] = archive_identity["configDigest"]
+    return persist_manifest(state, manifest)
 
 
 def append_journal(path: Path, record: dict) -> None:
@@ -440,18 +533,25 @@ def main() -> int:
         }
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))
         return 0
-    image_reference, manifest_path, manifest = prepare(args, source, state)
-    journal = qualify(args, source, state, image_reference)
+    build_reference, manifest = prepare(args, source, state)
+    build_manifest_path = persist_manifest(state, manifest)
+    journal = qualify(args, source, state, build_reference)
     candidate = state / "candidate.oci.tar"
     run(
-        podman_prefix(args) + ["save", "--format=oci-archive", "--output", str(candidate), image_reference],
+        podman_prefix(args) + ["save", "--format=oci-archive", "--output", str(candidate), IMAGE_NAME],
         timeout_seconds=300,
     )
     os.chmod(candidate, 0o600)
+    archive_identity = inspect_oci_archive(candidate)
+    manifest_path = write_manifest(state, manifest, archive_identity)
+    image_reference = manifest["image"]["reference"]
     result = {
         "candidate": str(candidate),
         "candidateSha256": sha256_file(candidate),
         "imageReference": image_reference,
+        "buildImageReference": build_reference,
+        "buildManifest": str(build_manifest_path),
+        "buildManifestSha256": build_manifest_path.stem.removeprefix("sha256-"),
         "imageId": manifest["image"]["id"],
         "manifest": str(manifest_path),
         "manifestSha256": manifest_path.stem.removeprefix("sha256-"),
