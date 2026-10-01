@@ -23,6 +23,7 @@ bash tests/telemetry-runtime-receiver/run.sh
   mkdir -m 0700 "$native_root"
   trap 'chmod -R u+w "$native_root" 2>/dev/null || true; rm -rf -- "$native_root"' EXIT
   curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 \
+    --connect-timeout 10 --max-time 60 --retry 0 \
     "https://raw.githubusercontent.com/FS-GG/.github/$native_source_revision/tools/learn_01_native_source.py" \
     --output "$native_module"
   printf '%s  %s\n' "$native_source_sha256" "$native_module" | sha256sum --check --strict
