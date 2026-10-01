@@ -207,6 +207,19 @@ installed-candidate qualification, and fresh public adoption follows publication
 publication and artifacts remain unchanged. Public candidate facts, source checks and local preparation neither
 authorize provider execution nor close P4.
 
+The first genuine 0.2.1 preparation at protected source `0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`
+proved a stable semantic image boundary and a separate producer-custody boundary. Its OCI index selected manifest
+`e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e` and config
+`b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53`; six strict packaged operations passed
+with zero failed, unknown or remaining roots. It also proved that the full image receipt contains its producer
+source identity and that the exported OCI tar carries run-time packaging metadata. P4 therefore fixes the reviewed
+inner image identity while requiring the archive and complete producer-receipt hashes from the authenticated
+fixed-path grant and exact candidate custody. The receipt hash remains in the reviewed operation identity, so a
+different admitted receipt cannot replay an earlier settlement. Package and image must still share one protected
+producer P2. A fresh P2 preparation must reproduce the exact inner manifest/config before public staging and
+private facts; its actual archive and receipt hashes are read back rather than compiled or copied from the first
+preparation. This source boundary does not qualify the provider, authorize a grant, publish 0.2.1 or close P4.
+
 ## Workspace impact
 
 P1–P3 change Coordination source and distribution only. They do not change fresh workspace creation, retained

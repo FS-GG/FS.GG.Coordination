@@ -216,10 +216,27 @@ type PortableWorkspaceRuntimeCommandTests() =
             let! first = PortableWorkspaceRuntimeCommand.executeAsync dependencies arguments CancellationToken.None
             let! duplicate = PortableWorkspaceRuntimeCommand.executeAsync dependencies arguments CancellationToken.None
 
+            let reviewed = Assert.Single enrollment.Policy.Operations
+            let changedReceiptEnrollment =
+                {
+                    enrollment with
+                        Policy =
+                            {
+                                enrollment.Policy with
+                                    Operations = [ { reviewed with RecipeSha256 = String.replicate 64 "e" } ]
+                            }
+                }
+            let changedReceiptDependencies =
+                { dependencies with Enrollments = EnrollmentSource changedReceiptEnrollment }
+            let! changedReceiptReplay =
+                PortableWorkspaceRuntimeCommand.executeAsync changedReceiptDependencies arguments CancellationToken.None
+
             Assert.True(first.ExitCode = 0, first.StandardError)
             Assert.Contains("\"outcome\":\"completed\"", first.StandardOutput)
             Assert.Equal(0, duplicate.ExitCode)
             Assert.Contains("\"outcome\":\"duplicate\"", duplicate.StandardOutput)
+            Assert.Equal(3, changedReceiptReplay.ExitCode)
+            Assert.Equal("portable-executor-idempotency-conflict", changedReceiptReplay.StandardError)
             Assert.Equal(1, runner.Calls)
 
             let request = runner.ObservedRequest |> Option.defaultWith (fun () -> failwith "missing request")

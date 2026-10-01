@@ -54,7 +54,8 @@ def fixture(root: Path) -> argparse.Namespace:
     image = root / "candidate.oci.tar"; image.write_bytes(b"oci")
     image_manifest = {
         "schema": "fsgg.portable-workspace-local-image/1", "source": {"revision": source, "tree": tree},
-        "image": {"digest": STAGE.IMAGE_DIGEST, "reference": "localhost/image@" + STAGE.IMAGE_DIGEST},
+        "image": {"name": STAGE.IMAGE_NAME, "digest": STAGE.IMAGE_DIGEST,
+                  "archiveConfigDigest": STAGE.IMAGE_CONFIG_DIGEST, "reference": STAGE.IMAGE_REFERENCE},
     }
     callable_manifest = {"schema": "fsgg.coordination.callable-cli-release-preparation/1", "version": "0.2.1",
         "sourceCommit": source, "sourceTree": tree, "packageSha256": STAGE.digest(p_package),
@@ -64,7 +65,7 @@ def fixture(root: Path) -> argparse.Namespace:
         "sourceTree": tree, "packageName": "FS.GG.Coordination.Cli.0.2.1.nupkg", "packageSha256": STAGE.digest(p_package),
         "imageArchiveName": "portable-workspace-linux-amd64-0.2.1.oci.tar", "imageArchiveSha256": STAGE.digest(image),
         "imageManifestSha256": sha(image_manifest_bytes), "imageDigest": STAGE.IMAGE_DIGEST,
-        "imageReference": "localhost/image@" + STAGE.IMAGE_DIGEST, "publicationAuthorized": False,
+        "imageReference": STAGE.IMAGE_REFERENCE, "publicationAuthorized": False,
         "tagAuthorized": False, "activationAuthorized": False}
     packaged = {"schema": "fsgg.portable-workspace-packaged-qualification/1", "packageSha256": STAGE.digest(p_package),
         "qualificationExitCode": 0, "publicationAuthorized": False, "activationAuthorized": False}
@@ -109,6 +110,19 @@ def refusal(function, text: str) -> None:
     except ValueError as error: assert text in str(error)
 
 
+def rewrite_preparation(args: argparse.Namespace, edit) -> None:
+    with zipfile.ZipFile(args.preparation_archive) as archive:
+        members = {item.filename: archive.read(item) for item in archive.infolist()}
+    edit(members)
+    with zipfile.ZipFile(args.preparation_archive, "w") as archive:
+        for name, value in members.items(): archive.writestr(name, value)
+    changed_digest = "sha256:" + STAGE.digest(args.preparation_archive)
+    receipt = json.loads(args.preparation_artifact.read_text())
+    receipt["digest"] = changed_digest
+    write_json(args.preparation_artifact, receipt)
+    args.preparation_artifact_digest = changed_digest
+
+
 def main() -> None:
     with tempfile.TemporaryDirectory(prefix="p4-stage-") as temporary:
         root = Path(temporary); args = fixture(root); STAGE.assemble(args)
@@ -143,6 +157,35 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="p4-stage-output-") as temporary:
         root = Path(temporary); args = fixture(root); args.output.mkdir()
         refusal(lambda: STAGE.assemble(args), "output or official runtime custody differs")
+    old_digest = "sha256:a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e"
+    def mutate_json(members: dict[str, bytes], name: str, edit) -> None:
+        value = json.loads(members[name]); edit(value); members[name] = STAGE.canonical(value)
+    with tempfile.TemporaryDirectory(prefix="p4-stage-old-image-") as temporary:
+        root = Path(temporary); args = fixture(root)
+        def old_image(members):
+            mutate_json(members, "portable-workspace-release-manifest.json", lambda value: value.update(imageDigest=old_digest, imageReference=STAGE.IMAGE_NAME + "@" + old_digest))
+            mutate_json(members, "portable-workspace-image-manifest.json", lambda value: value["image"].update(digest=old_digest, reference=STAGE.IMAGE_NAME + "@" + old_digest))
+        rewrite_preparation(args, old_image)
+        refusal(lambda: STAGE.assemble(args), "coherent release provenance differs")
+    with tempfile.TemporaryDirectory(prefix="p4-stage-wrong-producer-") as temporary:
+        root = Path(temporary); args = fixture(root)
+        def wrong_producer(members):
+            mutate_json(members, "portable-workspace-image-manifest.json", lambda value: value["source"].update(revision="9" * 40))
+            mutate_json(members, "portable-workspace-release-manifest.json", lambda value: value.update(imageManifestSha256=sha(members["portable-workspace-image-manifest.json"])))
+        rewrite_preparation(args, wrong_producer)
+        refusal(lambda: STAGE.assemble(args), "image source or compiled digest differs")
+    with tempfile.TemporaryDirectory(prefix="p4-stage-image-bytes-") as temporary:
+        root = Path(temporary); args = fixture(root)
+        rewrite_preparation(args, lambda members: members.__setitem__("portable-workspace-linux-amd64-0.2.1.oci.tar", b"changed-image"))
+        refusal(lambda: STAGE.assemble(args), "coherent release provenance differs")
+    with tempfile.TemporaryDirectory(prefix="p4-stage-receipt-bytes-") as temporary:
+        root = Path(temporary); args = fixture(root)
+        rewrite_preparation(args, lambda members: mutate_json(members, "portable-workspace-image-manifest.json", lambda value: value.update(unadmitted=True)))
+        refusal(lambda: STAGE.assemble(args), "coherent release provenance differs")
+    with tempfile.TemporaryDirectory(prefix="p4-stage-false-strict-") as temporary:
+        root = Path(temporary); args = fixture(root)
+        rewrite_preparation(args, lambda members: mutate_json(members, "portable-workspace-packaged-qualification.json", lambda value: value.update(qualificationExitCode=1)))
+        refusal(lambda: STAGE.assemble(args), "packaged qualification differs")
     print("portable provider staging checks passed")
 
 

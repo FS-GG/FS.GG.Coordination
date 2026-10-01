@@ -16,7 +16,10 @@ import xml.etree.ElementTree as ET
 SHA = re.compile(r"^[0-9a-f]{64}$")
 COMMIT = re.compile(r"^[0-9a-f]{40}$")
 VERSION = "0.2.1"
-IMAGE_DIGEST = "sha256:a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e"
+IMAGE_NAME = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2"
+IMAGE_DIGEST = "sha256:e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
+IMAGE_CONFIG_DIGEST = "sha256:b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53"
+IMAGE_REFERENCE = f"{IMAGE_NAME}@{IMAGE_DIGEST}"
 RUNTIME_SHA256 = "8458f4cef855fcebd139d9853e47fb0a5d86ab65d4aa101ea158a11e036c0fa4"
 RUNTIME_SHA512 = "58388fdde4f13bd703c7a6f7defb3300b17e42ba5fe8bca50066f80f64ac7406620dcdfb4acc1eff7992750c8cc5cff8369dd12d09730c8a9e8760d6032f7f6e"
 RUNTIME_URL = "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.12/dotnet-runtime-10.0.12-linux-x64.tar.gz"
@@ -193,12 +196,14 @@ def preparation(expected: dict[str, object], run: dict[str, object], artifact: d
             or release.get("packageName") != package_name or release.get("packageSha256") != package_sha
             or release.get("imageArchiveName") != image_name or release.get("imageArchiveSha256") != image_sha
             or release.get("imageManifestSha256") != image_manifest_sha or release.get("imageDigest") != IMAGE_DIGEST
+            or release.get("imageReference") != IMAGE_REFERENCE
             or any(release.get(key) is not False for key in ("publicationAuthorized", "tagAuthorized", "activationAuthorized"))):
         raise ValueError("coherent release provenance differs")
     image_source = image_manifest.get("source", {}); image = image_manifest.get("image", {})
     if (image_manifest.get("schema") != "fsgg.portable-workspace-local-image/1"
             or not isinstance(image_source, dict) or image_source.get("revision") != source or image_source.get("tree") != tree
-            or not isinstance(image, dict) or image.get("digest") != IMAGE_DIGEST or image.get("reference") != release.get("imageReference")):
+            or not isinstance(image, dict) or image.get("name") != IMAGE_NAME or image.get("digest") != IMAGE_DIGEST
+            or image.get("archiveConfigDigest") != IMAGE_CONFIG_DIGEST or image.get("reference") != IMAGE_REFERENCE):
         raise ValueError("image source or compiled digest differs")
     if (packaged.get("schema") != "fsgg.portable-workspace-packaged-qualification/1"
             or packaged.get("packageSha256") != package_sha or packaged.get("qualificationExitCode") != 0

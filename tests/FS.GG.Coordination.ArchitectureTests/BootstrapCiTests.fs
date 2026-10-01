@@ -41,6 +41,23 @@ let private runGateWithoutRepositorySubject gateId root =
     let startInfo = ProcessStartInfo("bash")
     startInfo.ArgumentList.Add(Path.Combine(repositoryRoot, $"eng/bootstrap-gates/%s{gateId}.sh"))
     startInfo.WorkingDirectory <- root
+
+    if gateId = "bootstrap-recovery" then
+        let fakeBin = Directory.CreateDirectory(Path.Combine(root, "fake-bin"))
+        let fakeCurl = Path.Combine(fakeBin.FullName, "curl")
+
+        File.WriteAllText(
+            fakeCurl,
+            "#!/usr/bin/env bash\nprintf '%s\\n' 'unexpected-external-tool-fetch' >&2\nexit 91\n"
+        )
+
+        File.SetUnixFileMode(fakeCurl, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+        startInfo.Environment["PATH"] <-
+            fakeBin.FullName
+            + string Path.PathSeparator
+            + Environment.GetEnvironmentVariable("PATH")
+
     startInfo.Environment["RUNNER_TEMP"] <- Path.Combine(root, "runner-temp")
     startInfo.Environment["FSGG_CANDIDATE_SHA"] <- exactHead
     startInfo.Environment["FSGG_QUINT_RECEIPT"] <- Path.Combine(root, "runner-temp/canonical-quint/qualification.json")
