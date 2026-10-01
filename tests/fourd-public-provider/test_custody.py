@@ -44,6 +44,63 @@ class PlanningTests(unittest.TestCase):
 
 class SealingTests(unittest.TestCase):
 
+    def assert_sentinel_unchanged(self, directory, inode, payload=b'unowned'):
+        self.assertTrue(directory.is_dir())
+        self.assertEqual(inode, directory.stat().st_ino)
+        self.assertEqual(payload, (directory / 'unowned').read_bytes())
+
+    def test_preexisting_scratch_and_output_collisions_remain_untouched(self):
+        for existing in ('scratch', 'output', 'both'):
+            with self.subTest(existing=existing), tempfile.TemporaryDirectory() as d:
+                root = pathlib.Path(d)
+                a, e, i, scratch, output = setup(root)
+                selected = {'scratch': (scratch,), 'output': (output,), 'both': (scratch, output)}[existing]
+                before = {}
+                for directory in selected:
+                    directory.mkdir(mode=0o700)
+                    owned(directory / 'unowned', b'unowned')
+                    before[directory] = directory.stat().st_ino
+                with self.assertRaisesRegex(custody.CustodyRefusal, 'custody-path-refused'):
+                    custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                        identity=i, deadline_monotonic=time.monotonic() + 20)
+                for directory in selected:
+                    self.assert_sentinel_unchanged(directory, before[directory])
+                if existing == 'output':
+                    self.assertFalse(scratch.exists())
+
+    def test_failure_after_both_acquisitions_removes_only_acquired_directories(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            a, e, i, scratch, output = setup(root)
+            with mock.patch.object(custody, 'open_owned', side_effect=custody.CustodyRefusal('custody-source-refused')):
+                with self.assertRaisesRegex(custody.CustodyRefusal, 'custody-source-refused'):
+                    custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                        identity=i, deadline_monotonic=time.monotonic() + 20)
+            self.assertFalse(scratch.exists())
+            self.assertFalse(output.exists())
+
+    def test_replacement_paths_are_never_cleaned_as_owned(self):
+        for replaced in ('scratch', 'output'):
+            with self.subTest(replaced=replaced), tempfile.TemporaryDirectory() as d:
+                root = pathlib.Path(d)
+                a, e, i, scratch, output = setup(root)
+
+                def replace_then_refuse(*_args, **_kwargs):
+                    target = scratch if replaced == 'scratch' else output
+                    target.rename(root / f'acquired-{replaced}')
+                    target.mkdir(mode=0o700)
+                    owned(target / 'unowned', b'replacement')
+                    raise custody.CustodyRefusal('custody-source-refused')
+
+                with mock.patch.object(custody, 'open_owned', side_effect=replace_then_refuse):
+                    with self.assertRaisesRegex(custody.CustodyRefusal, 'custody-cleanup-refused'):
+                        custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                            identity=i, deadline_monotonic=time.monotonic() + 20)
+                target = scratch if replaced == 'scratch' else output
+                self.assertEqual(b'replacement', (target / 'unowned').read_bytes())
+                other = output if replaced == 'scratch' else scratch
+                self.assertFalse(other.exists())
+
     def test_actual_two_byte_archive_and_evidence_only_are_closed(self):
         for has_archive in (True, False):
             with self.subTest(has_archive=has_archive), tempfile.TemporaryDirectory() as d:
@@ -55,6 +112,30 @@ class SealingTests(unittest.TestCase):
                 self.assertFalse(s.exists())
                 self.assertEqual(r, custody.verify_staging(o, i))
                 self.assertEqual({'manifest.json', 'evidence.capsule.json'} | ({'oci-0000.capsule.json'} if has_archive else set()), {p.name for p in o.iterdir()})
+                manifest = json.loads((o / 'manifest.json').read_text())
+                if has_archive:
+                    self.assertEqual({'sha256': custody.shab(b'ab'), 'bytes': 2, 'chunkCount': 1},
+                                     manifest['archive'])
+                else:
+                    self.assertIsNone(manifest['archive'])
+
+    def test_directory_lease_file_descriptors_close_on_success_and_refusal(self):
+        before = set(os.listdir('/proc/self/fd'))
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            a, e, i, scratch, output = setup(root)
+            custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                identity=i, deadline_monotonic=time.monotonic() + 20)
+        self.assertEqual(before, set(os.listdir('/proc/self/fd')))
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            a, e, i, scratch, output = setup(root)
+            output.mkdir(mode=0o700)
+            owned(output / 'unowned', b'unowned')
+            with self.assertRaisesRegex(custody.CustodyRefusal, 'custody-path-refused'):
+                custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                    identity=i, deadline_monotonic=time.monotonic() + 20)
+        self.assertEqual(before, set(os.listdir('/proc/self/fd')))
 
     def test_actual_boundary_and_remainder_descriptors_reconstruct_without_padding(self):
         for size, expected_sizes in ((custody.CHUNK_BYTES, [custody.CHUNK_BYTES]),

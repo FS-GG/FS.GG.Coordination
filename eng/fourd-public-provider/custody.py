@@ -50,6 +50,13 @@ class CustodyResult:
     fileCount: int
     totalBytes: int
 
+@dataclass(frozen=True)
+class DirectoryLease:
+    path: Path
+    fd: int
+    device: int
+    inode: int
+
 def canonical(v):
     try:
         return (json.dumps(v, sort_keys=True, separators=(',', ':'), ensure_ascii=True) + '\n').encode('ascii')
@@ -137,6 +144,21 @@ def own_dir(p, create=False):
         refuse('custody-path-refused')
     if not stat.S_ISDIR(s.st_mode) or s.st_uid != os.getuid() or stat.S_IMODE(s.st_mode) != 448:
         refuse('custody-path-refused')
+
+def acquire_dir(p):
+    fd = None
+    try:
+        p.mkdir(mode=448, parents=False, exist_ok=False)
+        fd = os.open(p, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_DIRECTORY)
+        s = os.fstat(fd)
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        refuse('custody-path-refused')
+    if not stat.S_ISDIR(s.st_mode) or s.st_uid != os.getuid() or stat.S_IMODE(s.st_mode) != 448:
+        os.close(fd)
+        refuse('custody-path-refused')
+    return DirectoryLease(p, fd, s.st_dev, s.st_ino)
 
 def open_owned(p, lo, hi):
     try:
@@ -241,15 +263,28 @@ def wipe(p):
     except OSError:
         refuse('custody-cleanup-refused')
 
-def clean_dir(p):
-    if not p.exists():
-        return
+def clean_dir(lease):
+    p = lease.path
     try:
-        for q in p.iterdir():
-            s = q.stat(follow_symlinks=False)
+        held = os.fstat(lease.fd)
+        before = p.stat(follow_symlinks=False)
+        if ((held.st_dev, held.st_ino) != (lease.device, lease.inode)
+                or not stat.S_ISDIR(before.st_mode) or before.st_uid != os.getuid()
+                or stat.S_IMODE(before.st_mode) != 448
+                or (before.st_dev, before.st_ino) != (lease.device, lease.inode)):
+            refuse('custody-cleanup-refused')
+        for name in os.listdir(lease.fd):
+            if not isinstance(name, str) or name in ('', '.', '..') or '/' in name:
+                refuse('custody-cleanup-refused')
+            s = os.stat(name, dir_fd=lease.fd, follow_symlinks=False)
             if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1:
                 refuse('custody-cleanup-refused')
-            q.unlink()
+            os.unlink(name, dir_fd=lease.fd)
+        held_after = os.fstat(lease.fd)
+        after = p.stat(follow_symlinks=False)
+        if ((held_after.st_dev, held_after.st_ino) != (lease.device, lease.inode)
+                or (after.st_dev, after.st_ino) != (lease.device, lease.inode)):
+            refuse('custody-cleanup-refused')
         p.rmdir()
     except CustodyRefusal:
         raise
@@ -296,10 +331,11 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
     if shap(SEALER)[0] != SEALER_SHA256 or shap(PUBLIC_KEY)[0] != PUBLIC_KEY_SHA256 or (not NODE.is_file()):
         refuse('custody-source-refused')
     afd = efd = None
+    scratch_lease = output_lease = None
     success = False
     try:
-        own_dir(scratch, True)
-        own_dir(output, True)
+        scratch_lease = acquire_dir(scratch)
+        output_lease = acquire_dir(output)
         efd, es = open_owned(evidence, 2, MAX_EVIDENCE_BYTES)
         eh, eb = fdhash(efd, MAX_EVIDENCE_BYTES, deadline_monotonic)
         if eh != ident['nativeEvidenceSha256']:
@@ -343,15 +379,22 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
         if efd is not None:
             os.close(efd)
         cleanup_failed = False
-        try:
-            clean_dir(scratch)
-        except CustodyRefusal:
-            cleanup_failed = True
-        if not success:
+        if scratch_lease is not None:
             try:
-                clean_dir(output)
+                clean_dir(scratch_lease)
             except CustodyRefusal:
                 cleanup_failed = True
+        if output_lease is not None and (not success or cleanup_failed):
+            try:
+                clean_dir(output_lease)
+            except CustodyRefusal:
+                cleanup_failed = True
+        for lease in (scratch_lease, output_lease):
+            if lease is not None:
+                try:
+                    os.close(lease.fd)
+                except OSError:
+                    cleanup_failed = True
         if cleanup_failed:
             refuse('custody-cleanup-refused')
 
