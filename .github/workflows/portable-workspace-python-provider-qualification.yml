@@ -29,7 +29,31 @@ on:
         required: true
         default: source-only
         type: choice
-        options: [source-only, candidate-facts]
+        options: [source-only, stage-inputs, candidate-facts]
+      preparation_artifact_id:
+        description: Exact successful 0.2.1 preparation artifact
+        required: false
+        type: string
+      preparation_run_id:
+        description: Exact successful 0.2.1 preparation run
+        required: false
+        type: string
+      preparation_run_attempt:
+        description: Exact successful 0.2.1 preparation attempt
+        required: false
+        type: string
+      preparation_source_revision:
+        description: Exact coherent 0.2.1 package and image producer
+        required: false
+        type: string
+      preparation_source_tree:
+        description: Exact coherent 0.2.1 producer tree
+        required: false
+        type: string
+      preparation_artifact_digest:
+        description: Exact sha256-prefixed preparation artifact digest
+        required: false
+        type: string
       upstream_artifact_id:
         description: Exact post-pack Coordination, SDD, Templates, runtime, and image join
         required: false
@@ -87,11 +111,126 @@ jobs:
           python3 tests/portable-workspace/trusted-provider/test_python_fixture.py
           python3 tests/portable-workspace/trusted-provider/test_installed_qualification.py
           python3 tests/portable-workspace/trusted-provider/test_provider_workflow.py
+          python3 tests/portable-workspace/trusted-provider/test_stage_provider_input.py
+          python3 tests/portable-workspace/trusted-provider/test_provider_facts_runtime_bounds.py
           python3 tests/portable-workspace/trusted-provider/test_provider_runtime.py
           dotnet restore tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --locked-mode
           dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj \
             --no-restore \
             --filter 'FullyQualifiedName~PortableWorkspaceTrustedEnrollmentSourceTests|FullyQualifiedName~PortableWorkspaceRuntimeCommandTests'
+
+  stage-inputs:
+    if: github.event_name == 'workflow_dispatch' && inputs.phase == 'stage-inputs'
+    needs: source-contract
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      STAGE_ROOT: /tmp/p4-public-stage-${{ github.run_id }}-${{ github.run_attempt }}
+      STAGE_OUTPUT: /tmp/p4-public-stage-output-${{ github.run_id }}-${{ github.run_attempt }}
+      RUNTIME_URL: https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.12/dotnet-runtime-10.0.12-linux-x64.tar.gz
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Reserve exclusive public staging root
+        id: stage-reservation
+        env:
+          P_ARTIFACT: ${{ inputs.preparation_artifact_id }}
+          P_RUN: ${{ inputs.preparation_run_id }}
+          P_ATTEMPT: ${{ inputs.preparation_run_attempt }}
+          P_SOURCE: ${{ inputs.preparation_source_revision }}
+          P_TREE: ${{ inputs.preparation_source_tree }}
+          P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          for value in "$P_ARTIFACT" "$P_RUN" "$P_ATTEMPT"; do [[ "$value" =~ ^[1-9][0-9]*$ ]]; done
+          [[ "$P_SOURCE" =~ ^[0-9a-f]{40}$ ]]; [[ "$P_TREE" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$P_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          test "$(git rev-parse "$P_SOURCE^{tree}")" = "$P_TREE"
+          test ! -e "$STAGE_ROOT"; test ! -e "$STAGE_OUTPUT"
+          mkdir -m 0700 -- "$STAGE_ROOT"
+          printf 'stage_root_owned=true\n' >> "$GITHUB_OUTPUT"
+      - name: Acquire exact public producer records and archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          P_ARTIFACT: ${{ inputs.preparation_artifact_id }}
+          P_RUN: ${{ inputs.preparation_run_id }}
+          P_ATTEMPT: ${{ inputs.preparation_run_attempt }}
+          P_SOURCE: ${{ inputs.preparation_source_revision }}
+          P_TREE: ${{ inputs.preparation_source_tree }}
+          P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          gh api "repos/FS-GG/FS.GG.Coordination/actions/runs/$P_RUN" > "$STAGE_ROOT/preparation-run.json"
+          gh api "repos/FS-GG/FS.GG.Coordination/actions/artifacts/$P_ARTIFACT" > "$STAGE_ROOT/preparation-artifact.json"
+          gh api "repos/FS-GG/FS.GG.Coordination/actions/artifacts/$P_ARTIFACT/zip" > "$STAGE_ROOT/preparation.zip"
+          gh api repos/FS-GG/FS.GG.SDD/actions/runs/36475182052 > "$STAGE_ROOT/sdd-run.json"
+          gh api repos/FS-GG/FS.GG.SDD/actions/artifacts/10993636498 > "$STAGE_ROOT/sdd-artifact.json"
+          gh api repos/FS-GG/FS.GG.SDD/actions/artifacts/10993636498/zip > "$STAGE_ROOT/sdd.zip"
+          gh api repos/FS-GG/FS.GG.Templates/actions/runs/36832168724 > "$STAGE_ROOT/templates-run.json"
+          gh api repos/FS-GG/FS.GG.Templates/actions/artifacts/11147906420 > "$STAGE_ROOT/templates-artifact.json"
+          gh api repos/FS-GG/FS.GG.Templates/actions/artifacts/11147906420/zip > "$STAGE_ROOT/templates.zip"
+          gh api -H 'Accept: application/vnd.github.raw+json' \
+            'repos/FS-GG/FS.GG.Templates/contents/providers/python.providers.yml?ref=cfe37f35a66e3494b211197a1c84de69f08bf87e' \
+            > "$STAGE_ROOT/python.providers.source.yml"
+          gh api repos/FS-GG/FS.GG.Templates/git/commits/cfe37f35a66e3494b211197a1c84de69f08bf87e \
+            > "$STAGE_ROOT/descriptor-commit.json"
+          curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
+            --output "$STAGE_ROOT/dotnet-runtime-10.0.12-linux-x64.tar.gz" "$RUNTIME_URL"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git rev-parse 'HEAD^{tree}' > "$STAGE_ROOT/staging-tree.txt"
+      - name: Assemble the closed genuine provider input
+        env:
+          P_ARTIFACT: ${{ inputs.preparation_artifact_id }}
+          P_RUN: ${{ inputs.preparation_run_id }}
+          P_ATTEMPT: ${{ inputs.preparation_run_attempt }}
+          P_SOURCE: ${{ inputs.preparation_source_revision }}
+          P_TREE: ${{ inputs.preparation_source_tree }}
+          P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 tests/portable-workspace/trusted-provider/stage_provider_input.py \
+            --preparation-archive "$STAGE_ROOT/preparation.zip" --preparation-run "$STAGE_ROOT/preparation-run.json" \
+            --preparation-artifact "$STAGE_ROOT/preparation-artifact.json" --preparation-run-id "$P_RUN" \
+            --preparation-run-attempt "$P_ATTEMPT" --preparation-artifact-id "$P_ARTIFACT" \
+            --preparation-artifact-digest "$P_DIGEST" --preparation-source "$P_SOURCE" --preparation-tree "$P_TREE" \
+            --sdd-archive "$STAGE_ROOT/sdd.zip" --sdd-run "$STAGE_ROOT/sdd-run.json" --sdd-artifact "$STAGE_ROOT/sdd-artifact.json" \
+            --templates-archive "$STAGE_ROOT/templates.zip" --templates-run "$STAGE_ROOT/templates-run.json" \
+            --templates-artifact "$STAGE_ROOT/templates-artifact.json" --runtime "$STAGE_ROOT/dotnet-runtime-10.0.12-linux-x64.tar.gz" \
+            --descriptor "$STAGE_ROOT/python.providers.source.yml" --descriptor-commit "$STAGE_ROOT/descriptor-commit.json" --staging-source "$GITHUB_SHA" \
+            --staging-tree "$(cat "$STAGE_ROOT/staging-tree.txt")" --output "$STAGE_OUTPUT"
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py \
+            --root "$STAGE_OUTPUT" --output "$STAGE_ROOT/validated-join.json"
+          cmp "$STAGE_OUTPUT/provider-input.json" "$STAGE_ROOT/validated-join.json"
+      - name: Remove downloaded producer archives
+        if: always()
+        env:
+          STAGE_ROOT_OWNED: ${{ steps.stage-reservation.outputs.stage_root_owned }}
+        run: |
+          set -euo pipefail
+          test "$STAGE_ROOT" = "/tmp/p4-public-stage-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if test "$STAGE_ROOT_OWNED" != true; then
+            exit 0
+          fi
+          test ! -L "$STAGE_ROOT"
+          if test -d "$STAGE_ROOT"; then
+            find "$STAGE_ROOT" -type f -delete
+            find "$STAGE_ROOT" -depth -type d -empty -delete
+          fi
+          test ! -e "$STAGE_ROOT"
+      - name: Upload genuine public provider input
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: portable-python-provider-input-${{ github.sha }}
+          path: ${{ env.STAGE_OUTPUT }}/
+          if-no-files-found: error
+          retention-days: 14
+          compression-level: 0
 
   candidate-facts:
     if: github.event_name == 'workflow_dispatch' && inputs.phase == 'candidate-facts'

@@ -199,6 +199,14 @@ version 0.2.1 and restricts future preparation to 0.2.1. Unified Roadmap follow-
 `e4ffe40d6edcb5fca58b8cf52b3255b0a83dc903`. These are source and planning readbacks only: no 0.2.1 package,
 image, tag, release, valid provider grant, installed qualification or adoption is claimed, and P4 remains open.
 
+P4 retains the 0.2.1 successor. Its next source window separates the protected qualification helper from the
+original coherent package and image producer, gives runtime inventory its own 128 MiB aggregate bound, and adds
+the missing public post-pack input producer. A genuine protected 0.2.1 package and image candidate, followed by
+exact public staging provenance, must precede private facts and installed qualification. Publication follows that
+installed-candidate qualification, and fresh public adoption follows publication readback. The retained 0.2.0 P3
+publication and artifacts remain unchanged. Public candidate facts, source checks and local preparation neither
+authorize provider execution nor close P4.
+
 ## Workspace impact
 
 P1–P3 change Coordination source and distribution only. They do not change fresh workspace creation, retained
