@@ -35,10 +35,21 @@ def add(archive: tarfile.TarFile, name: str, payload: bytes) -> None:
     archive.addfile(info, io.BytesIO(payload))
 
 
+def layer(*, cache: bool = False) -> bytes:
+    output = io.BytesIO()
+    with tarfile.open(fileobj=output, mode="w") as value:
+        add(value, "usr/local/bin/qualified-tool", b"qualified\n")
+        if cache:
+            add(value, "tmp/node-compile-cache/v24.8.0-x64-test/cache", b"generated\n")
+    return output.getvalue()
+
+
 def assert_fixed_build_inputs(containerfile: str, builder: str, inputs: dict[str, object]) -> None:
     copies = [line.split()[1] for line in containerfile.splitlines() if line.startswith("COPY ")]
     assert copies == ["node-v24.8.0-linux-x64.tar.gz", "typescript-5.9.2.tgz"]
     assert "SOURCE_REVISION" not in containerfile and "policy" not in containerfile.lower()
+    assert 'NODE_DISABLE_COMPILE_CACHE=1 /opt/typescript/bin/tsc --version' in containerfile
+    assert "test ! -e /tmp/node-compile-cache" in containerfile
     prepare_source = builder.split("def prepare(", 1)[1].split("def _archive_json", 1)[0]
     assert "--build-arg" not in prepare_source and '"--label"' not in prepare_source
     assert {
@@ -46,21 +57,21 @@ def assert_fixed_build_inputs(containerfile: str, builder: str, inputs: dict[str
         inputs["node"]["archive"]: inputs["node"]["sha256"],
         inputs["typescript"]["archive"]: inputs["typescript"]["sha256"],
     } == {
-        "Containerfile": "dc9edf5d99d93649dd2fa80bdef25b8a1ab6463db381ba34c5384d38b3513c10",
+        "Containerfile": "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4",
         "node-v24.8.0-linux-x64.tar.gz": "daf68404b478b4c3616666580d02500a24148c0f439e4d0134d65ce70e90e655",
         "typescript-5.9.2.tgz": "67a3bc82e822b8f45f653a80fc3a9730d23214d36c83ba85dd7f5abebee82062",
     }
 
 
-def archive(path: Path, *, corrupt_layer: bool = False, user: str = "32768:32768") -> tuple[str, str]:
+def archive(path: Path, *, cache_layer: bool = False, corrupt_layer: bool = False, malformed_layer: bool = False, user: str = "32768:32768") -> tuple[str, str]:
     config = canonical({"architecture": "amd64", "os": "linux", "config": {"User": user}})
-    layer = b"qualified-layer"
-    config_digest, layer_digest = digest(config), digest(layer)
+    layer_bytes = b"not-a-tar" if malformed_layer else layer(cache=cache_layer)
+    config_digest, layer_digest = digest(config), digest(layer_bytes)
     manifest = canonical({
         "schemaVersion": 2,
         "mediaType": "application/vnd.oci.image.manifest.v1+json",
         "config": {"mediaType": "application/vnd.oci.image.config.v1+json", "digest": f"sha256:{config_digest}", "size": len(config)},
-        "layers": [{"mediaType": "application/vnd.oci.image.layer.v1.tar", "digest": f"sha256:{layer_digest}", "size": len(layer)}],
+        "layers": [{"mediaType": "application/vnd.oci.image.layer.v1.tar", "digest": f"sha256:{layer_digest}", "size": len(layer_bytes)}],
     })
     manifest_digest = digest(manifest)
     index = canonical({"schemaVersion": 2, "manifests": [{"mediaType": "application/vnd.oci.image.manifest.v1+json", "digest": f"sha256:{manifest_digest}", "size": len(manifest), "annotations": {"org.opencontainers.image.ref.name": IMAGE.IMAGE_NAME}}]})
@@ -68,7 +79,7 @@ def archive(path: Path, *, corrupt_layer: bool = False, user: str = "32768:32768
         add(output, "oci-layout", canonical({"imageLayoutVersion": "1.0.0"}))
         add(output, "index.json", index)
         add(output, f"blobs/sha256/{config_digest}", config)
-        add(output, f"blobs/sha256/{layer_digest}", b"qualified-layez" if corrupt_layer else layer)
+        add(output, f"blobs/sha256/{layer_digest}", b"x" + layer_bytes[1:] if corrupt_layer else layer_bytes)
         add(output, f"blobs/sha256/{manifest_digest}", manifest)
     return manifest_digest, config_digest
 
@@ -77,8 +88,18 @@ def main() -> None:
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
     containerfile = (ROOT / "tests/portable-workspace/image/Containerfile").read_text()
     inputs = json.loads((ROOT / "tests/portable-workspace/image/inputs.json").read_text())
-    assert hashlib.sha256(source.encode()).hexdigest() == "6c8ba5829097590d47231774b87f85de6aec16cc42fceb2c70ac3552ad9808c2"
+    assert hashlib.sha256(source.encode()).hexdigest() == "aa1d2ae85c35e89216bae3159a57e6aa13cf9464243142eae5abbea083977c58"
     assert_fixed_build_inputs(containerfile, source, inputs)
+    IMAGE.require_containerfile_contract(containerfile)
+    for changed, expected in (
+        (containerfile.replace("NODE_DISABLE_COMPILE_CACHE=1 ", ""), "does not disable the Node compile cache"),
+        (containerfile.replace("    test ! -e /tmp/node-compile-cache\n", ""), "does not refuse a generated Node compile cache"),
+    ):
+        try:
+            IMAGE.require_containerfile_contract(changed)
+            raise AssertionError("incomplete compile-cache guard was accepted")
+        except RuntimeError as error:
+            assert expected in str(error)
     for changed in (
         containerfile + "\nCOPY src/FS.GG.Coordination.Cli/PortableWorkspacePythonHelloPolicy.fs /policy\n",
         containerfile + "\nLABEL org.opencontainers.image.revision=$SOURCE_REVISION\n",
@@ -141,6 +162,31 @@ def main() -> None:
         assert written["image"]["digest"] == f"sha256:{manifest_digest}"
         assert written["image"]["reference"] == f"{IMAGE.IMAGE_NAME}@sha256:{manifest_digest}"
         assert path.stem == "sha256-" + digest(path.read_bytes())
+
+        archive(candidate, cache_layer=True)
+        try:
+            IMAGE.inspect_oci_archive(candidate)
+            raise AssertionError("generated Node compile cache was accepted")
+        except RuntimeError as error:
+            assert "generated Node compile cache" in str(error)
+
+        archive(candidate, malformed_layer=True)
+        try:
+            IMAGE.inspect_oci_archive(candidate)
+            raise AssertionError("malformed layer was accepted")
+        except RuntimeError as error:
+            assert "bounded tar stream" in str(error)
+
+        archive(candidate)
+        original_bound = IMAGE.MAX_LAYER_SCAN_MEMBERS
+        IMAGE.MAX_LAYER_SCAN_MEMBERS = 0
+        try:
+            IMAGE.inspect_oci_archive(candidate)
+            raise AssertionError("layer member bound was ignored")
+        except RuntimeError as error:
+            assert "member bound exceeded" in str(error)
+        finally:
+            IMAGE.MAX_LAYER_SCAN_MEMBERS = original_bound
 
         archive(candidate, corrupt_layer=True)
         try:

@@ -208,7 +208,7 @@ publication and artifacts remain unchanged. Public candidate facts, source check
 authorize provider execution nor close P4.
 
 The first genuine 0.2.1 preparation at protected source `0dd4aa26aca6697f1cc3cece762a4ecae60b5b81`
-proved a stable semantic image boundary and a separate producer-custody boundary. Its OCI index selected manifest
+observed one semantic image identity and a separate producer-custody boundary. Its OCI index selected manifest
 `e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e` and config
 `b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53`; six strict packaged operations passed
 with zero failed, unknown or remaining roots. It also proved that the full image receipt contains its producer
@@ -218,7 +218,12 @@ fixed-path grant and exact candidate custody. The receipt hash remains in the re
 different admitted receipt cannot replay an earlier settlement. Package and image must still share one protected
 producer P2. A fresh P2 preparation must reproduce the exact inner manifest/config before public staging and
 private facts; its actual archive and receipt hashes are read back rather than compiled or copied from the first
-preparation. This source boundary does not qualify the provider, authorize a grant, publish 0.2.1 or close P4.
+preparation. Fresh preparation `36880017242` did not reproduce that identity: one generated Node compile-cache
+payload changed the final layer, yielding manifest `4c28a8fa06d12d917f66c12e419f16968b45b002ecebd3ed0aa12f8f8a1df51d`
+and config `f5d0ded18bb757d465a2dbffab5480fa4264161aed5d7face1aa7b6441c2bc16`.
+The build recipe must suppress that cache and the exported archive must refuse it. Two independent cold builds
+must then agree before one corrected semantic identity is reviewed; neither observed pair is repinned here.
+This source boundary does not qualify the provider, authorize a grant, publish 0.2.1 or close P4.
 
 ## Workspace impact
 

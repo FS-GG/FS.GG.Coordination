@@ -16,7 +16,8 @@ RUN set -eu; \
     rm /tmp/node.tar.gz /tmp/typescript.tgz; \
     test "$(/usr/local/bin/python3 --version)" = "Python 3.14.0"; \
     test "$(/usr/local/bin/node --version)" = "v24.8.0"; \
-    test "$(/opt/typescript/bin/tsc --version)" = "Version 5.9.2"
+    test "$(NODE_DISABLE_COMPILE_CACHE=1 /opt/typescript/bin/tsc --version)" = "Version 5.9.2"; \
+    test ! -e /tmp/node-compile-cache
 
 USER 32768:32768
 WORKDIR /source
