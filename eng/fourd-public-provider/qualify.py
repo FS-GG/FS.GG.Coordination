@@ -1125,7 +1125,8 @@ def validate_native(p2_path: pathlib.Path, binding_path: pathlib.Path) -> dict[s
 
 
 def settle_typed_failure(*, runner: Effects, public_source: pathlib.Path, work: pathlib.Path,
-                         state: Mapping[str, object] | None, cleanup_complete: bool) -> bool:
+                         state: Mapping[str, object] | None, cleanup_complete: bool,
+                         closed_resources: set[str] | None = None) -> bool:
     if state is None:
         return cleanup_complete
     try:
@@ -1133,9 +1134,10 @@ def settle_typed_failure(*, runner: Effects, public_source: pathlib.Path, work: 
         if current.get("phase") not in {"cleanup","finished","cleanup-failed"}:
             current=typed_module().transition(runner=runner,source_root=public_source,work=work,name="failure-cleanup",
                 observation={"kind":"begin-cleanup","cancelled":bool(runner.cancelled)},state=current)
-        if cleanup_complete and current.get("phase")=="cleanup":
+        observed_closed = set(current.get("owned",())) if cleanup_complete and closed_resources is None else set(closed_resources or ())
+        if current.get("phase")=="cleanup":
             for resource in tuple(current.get("owned",())):
-                if resource not in set(current.get("closed",())):
+                if resource in observed_closed and resource not in set(current.get("closed",())):
                     current=typed_module().transition(runner=runner,source_root=public_source,work=work,
                         name="failure-close-"+str(resource),observation={"kind":"close","resource":resource},state=current)
         if current.get("phase")=="cleanup":
@@ -1392,23 +1394,33 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
                       manifestSha256=verified.manifestSha256, qualified=True)
         return 0
     except Refusal as error:
-        typed_cleanup=runner.settle()
+        local_settled=runner.settle()
+        native_cleaned=result.get("cleanupComplete") is True
+        observed_closed={"source-join"} if local_settled else set()
+        if local_settled and native_cleaned: observed_closed.add("native-route")
+        typed_cleanup=local_settled and native_cleaned
         if typed_work is not None:
             typed_cleanup=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
-                                               state=typed_state,cleanup_complete=typed_cleanup)
+                                               state=typed_state,cleanup_complete=typed_cleanup,
+                                               closed_resources=observed_closed)
         result["failureCode"] = str(error) if str(error) in {
             "admission-missing", "admission-partial", "admission-binding-refused", "admission-time-refused",
             "capacity-refused", "public-tool-source-refused", "known-host-refused", "rootless-preflight-failed",
             "source-acquisition-refused", "source-binding-refused", "native-acceptance-refused", "native-cleanup-failed",
             "custody-module-refused", "custody-verification-refused", "cancelled"} else "qualification-refused"
-        if not typed_cleanup: result["failureCode"]="cleanup-refused"
+        if not typed_cleanup and result["failureCode"] != "native-cleanup-failed": result["failureCode"]="cleanup-refused"
         result["outcome"] = "refused" if not result["rootlessPreflightPassed"] else "failed"
         return 2
     except Exception:
-        typed_cleanup=runner.settle()
+        local_settled=runner.settle()
+        native_cleaned=result.get("cleanupComplete") is True
+        observed_closed={"source-join"} if local_settled else set()
+        if local_settled and native_cleaned: observed_closed.add("native-route")
+        typed_cleanup=local_settled and native_cleaned
         if typed_work is not None:
             typed_cleanup=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
-                                               state=typed_state,cleanup_complete=typed_cleanup)
+                                               state=typed_state,cleanup_complete=typed_cleanup,
+                                               closed_resources=observed_closed)
         result["failureCode"] = "qualification-refused"
         if not typed_cleanup: result["failureCode"]="cleanup-refused"
         result["outcome"] = "failed"

@@ -375,6 +375,61 @@ class ExecuteTests(unittest.TestCase):
                 work=pathlib.Path(temporary),state=state,name="late-cancel")
         self.assertTrue(changed["cancelled"]);self.assertTrue(changed["cleanupComplete"]);self.assertFalse(changed["successful"])
 
+    def test_execute_closes_native_resource_only_with_observed_cleanup_receipt(self):
+        executable=ROOT/"eng/fourd-public-provider/typed/publish/FourD.Typed"
+        subprocess.run(["dotnet","publish",str(ROOT/"eng/fourd-public-provider/typed/FourD.Typed.fsproj"),
+                        "-c","Release","-o",str(executable.parent)],check=True,stdout=subprocess.DEVNULL)
+        names=("FourD.Typed","FourD.Typed.dll","FourD.Typed.deps.json","FourD.Typed.runtimeconfig.json","FSharp.Core.dll")
+        binding_path=executable.parent/"typed-policy-binding.json"
+        binding_path.write_text(json.dumps({"schema":"fsgg.fourd.typed-policy-binding/1","sourceSha":"a"*40,
+            "files":{name:__import__("hashlib").sha256((executable.parent/name).read_bytes()).hexdigest() for name in names}}));binding_path.chmod(0o600)
+        class CompiledEffects:
+            cancelled=False
+            def request_cancel(self,*_args): self.cancelled=True
+            def settle(self): return True
+            def run(self,argv,*,cwd,env,timeout,capture,**_kwargs):
+                if pathlib.Path(argv[0])==executable:
+                    process=subprocess.run(argv,cwd=cwd,env=env,timeout=timeout,capture_output=True,check=False)
+                    capture.write_text(json.dumps({"returncode":process.returncode}))
+                    return qualify.RunResult(process.returncode,process.stdout,process.stderr)
+                if argv[:3]==["/usr/bin/git","rev-parse","HEAD"]: return qualify.RunResult(0,(qualify.FOURD_SHA+"\n").encode(),b"")
+                if argv[:3]==["/usr/bin/git","rev-parse","HEAD^{tree}"]: return qualify.RunResult(0,(qualify.FOURD_TREE+"\n").encode(),b"")
+                if argv[:2]==["/usr/bin/python3","eng/portable-workspace/source-inventory.py"]:
+                    return qualify.RunResult(0,(qualify.FOURD_INVENTORY+"\n").encode(),b"")
+                raise AssertionError(argv)
+        for native_cleaned in (False,True):
+            with self.subTest(native_cleaned=native_cleaned),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);args=self.args(root);private=root/"private";private.mkdir(mode=0o700)
+                source=private/"source";source.mkdir(mode=0o700);(private/"capture").mkdir(mode=0o700)
+                (root/"capacity.json").write_text(json.dumps({"schema":"fsgg.fourd.public-provider-capacity/1",
+                    "phase":"capacity","capacityScreenPassed":True,"qualified":False}))
+                env,admitted,_key=valid_admission(dt.datetime.now(dt.timezone.utc))
+                failure="native-acceptance-refused" if native_cleaned else "native-cleanup-failed"
+                def native_failure(_source,_private,_setup,_p2,_admission,_runner,progress):
+                    progress["cleanupComplete"]=native_cleaned
+                    raise qualify.Refusal(failure)
+                with mock.patch.dict(os.environ,{"FSGG_FOURD_TYPED_POLICY":str(executable),
+                        "FSGG_FOURD_TYPED_POLICY_BINDING":str(binding_path),"GITHUB_SHA":"a"*40},clear=False), \
+                     mock.patch.object(qualify,"verify_public_checkout",return_value=("a"*40,"b"*40)), \
+                     mock.patch.object(qualify,"verify_public_tools"), \
+                     mock.patch.object(qualify,"load_prepared",return_value=(admitted,source)), \
+                     mock.patch.object(qualify,"validate_checkout"), \
+                     mock.patch.object(qualify,"git_inventory",return_value=qualify.FOURD_INVENTORY), \
+                     mock.patch.object(qualify,"run_private_route",side_effect=native_failure):
+                    self.assertEqual(2,qualify.execute(args,env,CompiledEffects()))
+                public=json.loads((root/"public/result.json").read_text())
+                typed_state=json.loads((private/"typed-native/typed-failure-finish.result.json").read_text())
+                self.assertFalse(public["qualified"]);self.assertEqual(native_cleaned,public["cleanupComplete"])
+                self.assertEqual(failure,public["failureCode"])
+                self.assertEqual({"native-route","source-join"},set(typed_state["owned"]))
+                if native_cleaned:
+                    self.assertEqual("finished",typed_state["phase"]);self.assertTrue(typed_state["cleanupComplete"])
+                    self.assertEqual({"native-route","source-join"},set(typed_state["closed"]))
+                else:
+                    self.assertEqual("cleanup-failed",typed_state["phase"]);self.assertFalse(typed_state["cleanupComplete"])
+                    self.assertEqual({"source-join"},set(typed_state["closed"]))
+                self.assertEqual("unknown",typed_state["outcome"]);self.assertFalse(typed_state["successful"])
+
     def test_actual_route_preflight_refusal_cleans_and_skips_sdk_build_image_and_p2(self):
         class FakeEffects:
             def __init__(self): self.calls = []
