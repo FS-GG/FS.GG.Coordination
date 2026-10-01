@@ -10,6 +10,8 @@ import os
 from pathlib import Path, PurePosixPath
 import stat
 import subprocess
+import signal
+import threading
 import sys
 import tarfile
 import tempfile
@@ -313,28 +315,79 @@ def invoke(args: argparse.Namespace) -> int:
         "--profile", str(args.profile.resolve()),
         "--command", str(args.command.resolve()),
     ]
-    completed = subprocess.run(
-        command,
-        cwd=args.workspace.resolve(),
-        env={
+    environment = {
             "DOTNET_CLI_TELEMETRY_OPTOUT": "1",
             "DOTNET_NOLOGO": "1",
             "HOME": os.environ.get("HOME", "/nonexistent"),
             "LANG": "C.UTF-8",
             "PATH": "/usr/local/bin:/usr/bin:/bin",
-        },
-        capture_output=True,
-        timeout=args.timeout_seconds,
-    )
-    if len(completed.stdout) > MAX_OUTPUT_BYTES or len(completed.stderr) > MAX_OUTPUT_BYTES:
-        raise ValueError("installed CLI output exceeds its bound")
+        }
+    child = subprocess.Popen(command, cwd=args.workspace.resolve(), env=environment,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    captured = {"stdout": bytearray(), "stderr": bytearray()}
+    exceeded = threading.Event()
+    def read(name: str, stream: object) -> None:
+        while True:
+            chunk = stream.read(65536)  # type: ignore[attr-defined]
+            if not chunk: break
+            if len(captured[name]) + len(chunk) > MAX_OUTPUT_BYTES:
+                exceeded.set()
+                try: os.killpg(child.pid, signal.SIGKILL)
+                except ProcessLookupError: pass
+                break
+            captured[name].extend(chunk)
+    readers = [threading.Thread(target=read, args=(name, stream), daemon=True)
+               for name, stream in (("stdout", child.stdout), ("stderr", child.stderr))]
+    for reader in readers: reader.start()
+    try:
+        child.wait(timeout=args.timeout_seconds)
+    except subprocess.TimeoutExpired as error:
+        os.killpg(child.pid, signal.SIGTERM)
+        try: child.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            os.killpg(child.pid, signal.SIGKILL); child.wait(timeout=5)
+        raise ValueError("installed CLI did not terminate within its bound") from error
+    if exceeded.is_set():
+        os.killpg(child.pid, signal.SIGKILL) if child.poll() is None else None
+        child.wait(timeout=5)
+    for reader in readers: reader.join(timeout=5)
+    if any(reader.is_alive() for reader in readers): raise ValueError("installed CLI output readers did not settle")
+    stdout, stderr = bytes(captured["stdout"]), bytes(captured["stderr"])
+    if exceeded.is_set(): raise ValueError("installed CLI output exceeds its bound")
+    try: production = json.loads(stdout)
+    except json.JSONDecodeError as error:
+        refusal = stderr.decode("utf-8", errors="replace")[:512].replace("\n", " ")
+        raise ValueError(f"installed CLI result is not JSON (exit={child.returncode}, refusal={refusal})") from error
+    command_value = json.loads(args.command.read_text(encoding="utf-8"))
+    profile_value = json.loads(args.profile.read_text(encoding="utf-8"))
+    result_value = production.get("result", {})
+    if (child.returncode != 0 or production.get("schema") != "fsgg.portable-workspace-runtime-result/1"
+            or production.get("outcome") != args.expected_outcome
+            or production.get("commandId") != command_value.get("commandId")
+            or production.get("operation") != "test"
+            or production.get("entryPoint") != "python-test"
+            or production.get("workspaceScope") != "fs-gg/p4-python-receiver"
+            or production.get("sourceRevision") != command_value.get("sourceRevision")
+            or production.get("qualifiedImage") != receipt["image"]["qualifiedImage"]
+            or profile_value.get("qualifiedImage") != receipt["image"]["qualifiedImage"]
+            or production.get("cleanupCompleted") is not True
+            or result_value.get("workflowRevision") != command_value.get("expectedWorkflowRevision")
+            or result_value.get("fenceGeneration") != command_value.get("fenceGeneration")
+            or result_value.get("exitCode") != {"state": "known", "value": 0}
+            or result_value.get("error") is not None):
+        raise ValueError("installed CLI production result did not prove the expected settled outcome")
     invocation = {
         "schema": INVOCATION_SCHEMA,
         "candidateReceiptSha256": sha256_file(args.candidate_receipt),
         "mode": args.mode,
-        "exitCode": completed.returncode,
-        "standardOutputSha256": sha256_bytes(completed.stdout),
-        "standardErrorSha256": sha256_bytes(completed.stderr),
+        "exitCode": child.returncode,
+        "outcome": production["outcome"],
+        "commandId": production["commandId"],
+        "executionStarted": production["executionStarted"],
+        "cleanupCompleted": production["cleanupCompleted"],
+        "operationOutputSha256": production["outputSha256"],
+        "productionResultSha256": sha256_bytes(stdout),
+        "standardErrorSha256": sha256_bytes(stderr),
         "authorizationConsumedFromFixedGrant": True,
         "grantWritten": False,
     }
@@ -342,9 +395,7 @@ def invoke(args: argparse.Namespace) -> int:
     with args.receipt.open("xb") as output:
         os.fchmod(output.fileno(), 0o600)
         output.write(canonical(invocation))
-    sys.stdout.buffer.write(completed.stdout)
-    sys.stderr.buffer.write(completed.stderr)
-    return completed.returncode
+    return child.returncode
 
 
 def parser() -> argparse.ArgumentParser:
@@ -369,6 +420,7 @@ def parser() -> argparse.ArgumentParser:
     invoke_command.add_argument("--profile", required=True, type=Path)
     invoke_command.add_argument("--command", required=True, type=Path)
     invoke_command.add_argument("--mode", choices=("execute", "recover"), required=True)
+    invoke_command.add_argument("--expected-outcome", choices=("completed", "duplicate"), required=True)
     invoke_command.add_argument("--grant-path", type=Path, default=GRANT_PATH)
     invoke_command.add_argument("--timeout-seconds", type=int, default=180)
     invoke_command.add_argument("--receipt", required=True, type=Path)

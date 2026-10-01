@@ -25,25 +25,33 @@ on:
   workflow_dispatch:
     inputs:
       phase:
-        description: Select source checks, provider fact capture, or authorized qualification
+        description: Select source checks or unauthorized candidate fact capture
         required: true
         default: source-only
         type: choice
-        options: [source-only, provider-facts, authorized-qualification]
-      native_admission:
-        description: Exact parent-owned native admission
-        required: false
-        type: string
+        options: [source-only, candidate-facts]
       upstream_artifact_id:
         description: Exact post-pack Coordination, SDD, Templates, runtime, and image join
         required: false
         type: string
-      provider_facts_artifact_id:
-        description: Exact prior provider-facts artifact
+      upstream_run_id:
+        description: Exact successful producer run for the post-pack join
         required: false
         type: string
-      authorization_artifact_id:
-        description: Exact external authorization artifact
+      upstream_run_attempt:
+        description: Exact producer run attempt
+        required: false
+        type: string
+      upstream_source_revision:
+        description: Exact producer source revision
+        required: false
+        type: string
+      upstream_artifact_digest:
+        description: Exact sha256-prefixed Actions artifact digest
+        required: false
+        type: string
+      upstream_workflow:
+        description: Exact repository-relative producer workflow path
         required: false
         type: string
 
@@ -56,9 +64,9 @@ concurrency:
   cancel-in-progress: false
 
 # Static preflight is the smallest useful check. It detects fixture drift,
-# unsafe package/archive input, false authorization, and workflow ordering
-# before either provider phase. The mutually exclusive fact and qualification
-# phases have no retry, cache, publication, or shared mutable runner.
+# unsafe package/archive input, false authorization, and workflow ordering.
+# Candidate facts are explicitly unauthorized and perform no account, mount,
+# Podman, grant, image, installed CLI, publication, or private-custody effect.
 
 jobs:
   source-contract:
@@ -79,303 +87,97 @@ jobs:
           python3 tests/portable-workspace/trusted-provider/test_python_fixture.py
           python3 tests/portable-workspace/trusted-provider/test_installed_qualification.py
           python3 tests/portable-workspace/trusted-provider/test_provider_workflow.py
+          python3 tests/portable-workspace/trusted-provider/test_provider_runtime.py
           dotnet restore tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --locked-mode
           dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj \
             --no-restore \
             --filter 'FullyQualifiedName~PortableWorkspaceTrustedEnrollmentSourceTests|FullyQualifiedName~PortableWorkspaceRuntimeCommandTests'
 
-  provider-facts:
-    if: github.event_name == 'workflow_dispatch' && inputs.phase == 'provider-facts'
+  candidate-facts:
+    if: github.event_name == 'workflow_dispatch' && inputs.phase == 'candidate-facts'
     needs: source-contract
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
-    environment: portable-p4-python-provider
+    timeout-minutes: 20
     env:
-      PROVIDER_UID: "32001"
-      CLI_ROOT: /opt/p4/cli
-      RUNTIME_ROOT: /opt/p4/runtime
-      RECEIVER_ROOT: /srv/p4-receiver
-      UPSTREAM: /tmp/p4-upstream
-      EVIDENCE: /tmp/p4-provider-facts
+      ROOT: /tmp/p4-public-candidate
+      UPSTREAM: /tmp/p4-public-candidate/upstream
+      EVIDENCE: /tmp/p4-public-candidate/evidence
+      PUBLIC_FACTS: /tmp/p4-public-facts
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Refuse missing admission and upstream identity
+      - name: Verify exact predecessor run and artifact
         env:
-          NATIVE_ADMISSION: ${{ inputs.native_admission }}
-          UPSTREAM_ARTIFACT_ID: ${{ inputs.upstream_artifact_id }}
+          UPSTREAM_ID: ${{ inputs.upstream_artifact_id }}
+          UPSTREAM_RUN: ${{ inputs.upstream_run_id }}
+          UPSTREAM_ATTEMPT: ${{ inputs.upstream_run_attempt }}
+          UPSTREAM_SOURCE: ${{ inputs.upstream_source_revision }}
+          UPSTREAM_DIGEST: ${{ inputs.upstream_artifact_digest }}
+          UPSTREAM_WORKFLOW: ${{ inputs.upstream_workflow }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test "$NATIVE_ADMISSION" = portable-p4-python-provider-v1
-          [[ "$UPSTREAM_ARTIFACT_ID" =~ ^[1-9][0-9]*$ ]]
+          for value in "$UPSTREAM_ID" "$UPSTREAM_RUN" "$UPSTREAM_ATTEMPT"; do [[ "$value" =~ ^[1-9][0-9]*$ ]]; done
+          [[ "$UPSTREAM_SOURCE" =~ ^[0-9a-f]{40}$ ]]; [[ "$UPSTREAM_DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]
+          [[ "$UPSTREAM_WORKFLOW" =~ ^\.github/workflows/[A-Za-z0-9._/-]+\.ya?ml$ ]]
+          test ! -e "$ROOT"; install -d -m 0700 "$EVIDENCE"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py ledger-init --ledger "$EVIDENCE/owned-resources.json" --source "$GITHUB_SHA"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py ledger-register --ledger "$EVIDENCE/owned-resources.json" --kind path --value "$ROOT"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$UPSTREAM_RUN" > "$EVIDENCE/upstream-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$UPSTREAM_ID" > "$EVIDENCE/upstream-artifact.json"
+          jq -n --argjson run "$UPSTREAM_RUN" --argjson attempt "$UPSTREAM_ATTEMPT" --arg source "$UPSTREAM_SOURCE" --arg workflow "$UPSTREAM_WORKFLOW" \
+            --argjson artifact "$UPSTREAM_ID" --arg digest "$UPSTREAM_DIGEST" --arg name "portable-python-provider-input-$UPSTREAM_SOURCE" \
+            '{runId:$run,runAttempt:$attempt,sourceRevision:$source,workflow:$workflow,artifactId:$artifact,artifactDigest:$digest,artifactName:$name}' > "$EVIDENCE/upstream-expected.json"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py artifact-custody --run "$EVIDENCE/upstream-run.json" --artifact "$EVIDENCE/upstream-artifact.json" \
+            --expected "$EVIDENCE/upstream-expected.json" --output "$EVIDENCE/upstream-custody.json"
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           artifact-ids: ${{ inputs.upstream_artifact_id }}
+          run-id: ${{ inputs.upstream_run_id }}
+          repository: ${{ github.repository }}
           github-token: ${{ github.token }}
           path: ${{ env.UPSTREAM }}
-      - name: Validate closed post-pack join before provider changes
+      - name: Build closed unauthorized candidate facts
         run: |
           set -euo pipefail
-          install -d -m 0700 "$EVIDENCE"
-          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py \
-            --root "$UPSTREAM" --output "$EVIDENCE/validated-join.json"
-      - name: Prepare exact installed CLI and runtime
-        run: |
-          set -euo pipefail
-          join="$EVIDENCE/validated-join.json"
-          value() { jq -r "$1" "$join"; }
-          sudo install -d -m 0755 "$CLI_ROOT" "$RUNTIME_ROOT"
-          sudo chown -R "$USER:$USER" /opt/p4
-          python3 eng/qualify-installed-python-hello.py prepare \
-            --package "$UPSTREAM/$(value .coordination.package)" \
-            --expected-package-sha256 "$(value .coordination.sha256)" \
-            --expected-version "$(value .coordination.version)" \
-            --install-root "$CLI_ROOT" \
-            --producer-source "$(value .coordination.sourceRevision)" \
-            --producer-tree "$(value .coordination.sourceTree)" \
-            --image-archive "$UPSTREAM/$(value .image.archive)" \
-            --expected-image-archive-sha256 "$(value .image.archiveSha256)" \
-            --image-manifest "$UPSTREAM/$(value .image.manifest)" \
-            --expected-image-manifest-sha256 "$(value .image.manifestSha256)" \
-            --receipt "$EVIDENCE/candidate-receipt.json"
-          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py \
-            --runtime "$UPSTREAM/$(value .runtime.archive)" \
-            --extract-runtime "$RUNTIME_ROOT"
-          test -x "$RUNTIME_ROOT/dotnet"
-      - name: Provision dedicated non-sudo provider and create fresh receiver
-        run: |
-          set -euo pipefail
-          if getent passwd "$PROVIDER_UID" >/dev/null; then exit 1; fi
-          sudo useradd --create-home --uid "$PROVIDER_UID" --shell /bin/bash p4executor
-          echo "p4executor:100000:65536" | sudo tee -a /etc/subuid >/dev/null
-          echo "p4executor:100000:65536" | sudo tee -a /etc/subgid >/dev/null
-          id -nG p4executor | grep -Ev '(^| )(sudo|docker|adm)( |$)'
-          join="$EVIDENCE/validated-join.json"
-          value() { jq -r "$1" "$join"; }
-          sdd=/tmp/p4-sdd
-          dotnet tool install --tool-path "$sdd" \
-            --add-source "$UPSTREAM/$(dirname "$(value .sdd.package)")" \
-            --version "$(value .sdd.version)" FS.GG.SDD.Cli
-          install -d -m 0700 "$RECEIVER_ROOT/.fsgg"
-          cp "$UPSTREAM/$(value .templates.descriptor)" "$RECEIVER_ROOT/.fsgg/providers.yml"
-          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py \
-            --descriptor "$RECEIVER_ROOT/.fsgg/providers.yml" \
-            --template-package "$UPSTREAM/$(value .templates.package)"
-          "$sdd/fsgg-sdd" scaffold --root "$RECEIVER_ROOT" \
-            --provider python --param productName=ReceiverPython --param lifecycle=sdd \
-            --no-update --json > "$EVIDENCE/scaffold.json"
-          for file in app.py build.py test.py; do
-            cmp "$RECEIVER_ROOT/python/$file" \
-              "tests/portable-workspace/image/fixture/python/$file"
-          done
-          git -C "$RECEIVER_ROOT" init -q
-          git -C "$RECEIVER_ROOT" config user.name p4-provider-qualification
-          git -C "$RECEIVER_ROOT" config user.email p4-provider@example.invalid
-          git -C "$RECEIVER_ROOT" add --all
-          GIT_AUTHOR_DATE=2026-10-01T00:00:00Z GIT_COMMITTER_DATE=2026-10-01T00:00:00Z \
-            git -C "$RECEIVER_ROOT" commit -q -m "Fresh Python receiver candidate"
-          sudo install -d -m 0700 -o p4executor -g p4executor /tmp/p4fr /tmp/p4fu
-          sudo -u p4executor podman --storage-driver=vfs --root /tmp/p4fr --runroot /tmp/p4fu \
-            info --format=json > "$EVIDENCE/provider-capability.json"
-      - name: Retain concrete facts without a grant
-        run: |
-          set -euo pipefail
-          python3 tests/portable-workspace/trusted-provider/provider_facts.py collect \
-            --join "$EVIDENCE/validated-join.json" \
-            --candidate "$EVIDENCE/candidate-receipt.json" \
-            --receiver "$RECEIVER_ROOT" --runtime "$RUNTIME_ROOT" \
-            --capability "$EVIDENCE/provider-capability.json" \
-            --allowed-uid "$PROVIDER_UID" --output "$EVIDENCE/provider-facts.json" \
-            --profile "$EVIDENCE/profile.json"
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --root "$UPSTREAM" --output "$EVIDENCE/validated-join.json"
+          join="$EVIDENCE/validated-join.json"; value() { jq -r "$1" "$join"; }
+          python3 eng/qualify-installed-python-hello.py prepare --package "$UPSTREAM/$(value .coordination.package)" --expected-package-sha256 "$(value .coordination.sha256)" \
+            --expected-version "$(value .coordination.version)" --install-root "$ROOT/cli" --producer-source "$(value .coordination.sourceRevision)" \
+            --producer-tree "$(value .coordination.sourceTree)" --image-archive "$UPSTREAM/$(value .image.archive)" --expected-image-archive-sha256 "$(value .image.archiveSha256)" \
+            --image-manifest "$UPSTREAM/$(value .image.manifest)" --expected-image-manifest-sha256 "$(value .image.manifestSha256)" --receipt "$EVIDENCE/candidate-receipt.json"
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --runtime "$UPSTREAM/$(value .runtime.archive)" --extract-runtime "$ROOT/runtime"
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py extract-zip --archive "$UPSTREAM/$(value .sdd.package)" --target "$ROOT/sdd" \
+            --sha256 "$(value .sdd.sha256)" --package-id FS.GG.SDD.Cli --version "$(value .sdd.version)" --output "$EVIDENCE/sdd-install.json"
+          install -d -m 0700 "$ROOT/p4-receiver/.fsgg"; cp "$UPSTREAM/$(value .templates.descriptor)" "$ROOT/p4-receiver/.fsgg/providers.yml"
+          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --descriptor "$ROOT/p4-receiver/.fsgg/providers.yml" --template-package "$UPSTREAM/$(value .templates.package)"
+          dotnet "$ROOT/sdd/tools/net10.0/any/FS.GG.SDD.Cli.dll" scaffold --root "$ROOT/p4-receiver" --provider python --param productName=ReceiverPython --param lifecycle=sdd --no-update --json > "$EVIDENCE/scaffold.json"
+          for file in app.py build.py test.py; do cmp "$ROOT/p4-receiver/python/$file" "tests/portable-workspace/image/fixture/python/$file"; done
+          git -C "$ROOT/p4-receiver" init -q; git -C "$ROOT/p4-receiver" config user.name p4-provider-qualification; git -C "$ROOT/p4-receiver" config user.email p4-provider@example.invalid
+          git -C "$ROOT/p4-receiver" add --all; GIT_AUTHOR_DATE=2026-10-01T00:00:00Z GIT_COMMITTER_DATE=2026-10-01T00:00:00Z git -C "$ROOT/p4-receiver" commit -q -m 'Fresh Python receiver candidate'
+          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner -C "$ROOT" -cf "$EVIDENCE/receiver.tar" p4-receiver
+          python3 tests/portable-workspace/trusted-provider/provider_facts.py collect --join "$EVIDENCE/validated-join.json" --candidate "$EVIDENCE/candidate-receipt.json" \
+            --receiver "$ROOT/p4-receiver" --receiver-archive "$EVIDENCE/receiver.tar" --runtime "$ROOT/runtime" --output "$EVIDENCE/provider-facts.json" --profile "$EVIDENCE/profile.json"
           test "$(jq -r .authorizationState "$EVIDENCE/provider-facts.json")" = required-external
           test "$(jq -r .nativeExecutionAuthorized "$EVIDENCE/provider-facts.json")" = false
-          tar --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner \
-            -C /srv -cf "$EVIDENCE/receiver.tar" p4-receiver
-      - name: Upload facts for external authorization
+      - name: Project public candidate facts and clean owned state
+        if: always()
+        run: |
+          set +e; cleanup_failed=0; install -d -m 0700 "$PUBLIC_FACTS"
+          if test -f "$EVIDENCE/owned-resources.json"; then
+            for name in validated-join.json candidate-receipt.json receiver.tar profile.json provider-facts.json upstream-custody.json upstream-expected.json; do test ! -f "$EVIDENCE/$name" || cp "$EVIDENCE/$name" "$PUBLIC_FACTS/$name"; done
+            cp "$EVIDENCE/owned-resources.json" /tmp/p4-public-ledger.json
+            python3 tests/portable-workspace/trusted-provider/provider_runtime.py cleanup-paths --ledger /tmp/p4-public-ledger.json --output "$PUBLIC_FACTS/cleanup.json" || cleanup_failed=1
+          fi
+          test "$cleanup_failed" = 0
+      - name: Upload bounded unauthorized public facts after cleanup
+        if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
-          name: portable-python-provider-facts-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE }}/
+          name: portable-python-candidate-facts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.PUBLIC_FACTS }}/
           if-no-files-found: error
           retention-days: 14
-      - name: Remove exact provider state
-        if: always()
-        run: |
-          sudo userdel --remove p4executor 2>/dev/null || true
-          sudo find /opt/p4 /srv/p4-receiver -depth -delete 2>/dev/null || true
-          sudo find /tmp/p4fr /tmp/p4fu -depth -delete 2>/dev/null || true
-
-  authorized-qualification:
-    if: github.event_name == 'workflow_dispatch' && inputs.phase == 'authorized-qualification'
-    needs: source-contract
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    environment: portable-p4-python-provider
-    env:
-      PROVIDER_UID: "32001"
-      CLI_ROOT: /opt/p4/cli
-      RUNTIME_ROOT: /opt/p4/runtime
-      RECEIVER_ROOT: /srv/p4-receiver
-      UPSTREAM: /tmp/p4-upstream
-      FACTS: /tmp/p4-facts
-      AUTHORIZATION: /tmp/p4-authorization
-      EVIDENCE: /tmp/p4-qualified
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
-      - name: Refuse missing admission and exact artifact identities
-        env:
-          NATIVE_ADMISSION: ${{ inputs.native_admission }}
-          UPSTREAM_ID: ${{ inputs.upstream_artifact_id }}
-          FACTS_ID: ${{ inputs.provider_facts_artifact_id }}
-          AUTHORIZATION_ID: ${{ inputs.authorization_artifact_id }}
-        run: |
-          set -euo pipefail
-          test "$NATIVE_ADMISSION" = portable-p4-python-provider-v1
-          for value in "$UPSTREAM_ID" "$FACTS_ID" "$AUTHORIZATION_ID"; do
-            [[ "$value" =~ ^[1-9][0-9]*$ ]]
-          done
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          artifact-ids: ${{ inputs.upstream_artifact_id }}
-          github-token: ${{ github.token }}
-          path: ${{ env.UPSTREAM }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          artifact-ids: ${{ inputs.provider_facts_artifact_id }}
-          github-token: ${{ github.token }}
-          path: ${{ env.FACTS }}
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
-        with:
-          artifact-ids: ${{ inputs.authorization_artifact_id }}
-          github-token: ${{ github.token }}
-          path: ${{ env.AUTHORIZATION }}
-      - name: Validate external authorization before provider mutation
-        run: |
-          set -euo pipefail
-          install -d -m 0700 "$EVIDENCE"
-          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py \
-            --facts-root "$FACTS" --authorization-root "$AUTHORIZATION" \
-            --validated-facts "$EVIDENCE/provider-facts.json" \
-            --validated-grant "$EVIDENCE/python-hello-v1.json"
-      - name: Reconstruct and recheck exact provider inputs
-        run: |
-          set -euo pipefail
-          join="$(find "$FACTS" -name validated-join.json -type f -print -quit)"
-          receiver="$(find "$FACTS" -name receiver.tar -type f -print -quit)"
-          test -n "$join" -a -n "$receiver"
-          value() { jq -r "$1" "$join"; }
-          sudo install -d -m 0755 "$CLI_ROOT" "$RUNTIME_ROOT" /srv
-          sudo chown -R "$USER:$USER" /opt/p4 /srv
-          tar --no-same-owner --no-same-permissions -xf "$receiver" -C /srv
-          python3 eng/qualify-installed-python-hello.py prepare \
-            --package "$UPSTREAM/$(value .coordination.package)" \
-            --expected-package-sha256 "$(value .coordination.sha256)" \
-            --expected-version "$(value .coordination.version)" --install-root "$CLI_ROOT" \
-            --producer-source "$(value .coordination.sourceRevision)" \
-            --producer-tree "$(value .coordination.sourceTree)" \
-            --image-archive "$UPSTREAM/$(value .image.archive)" \
-            --expected-image-archive-sha256 "$(value .image.archiveSha256)" \
-            --image-manifest "$UPSTREAM/$(value .image.manifest)" \
-            --expected-image-manifest-sha256 "$(value .image.manifestSha256)" \
-            --receipt "$EVIDENCE/candidate-receipt.json"
-          python3 tests/portable-workspace/trusted-provider/validate_provider_input.py \
-            --runtime "$UPSTREAM/$(value .runtime.archive)" \
-            --extract-runtime "$RUNTIME_ROOT"
-          sudo useradd --create-home --uid "$PROVIDER_UID" --shell /bin/bash p4executor
-          echo "p4executor:100000:65536" | sudo tee -a /etc/subuid >/dev/null
-          echo "p4executor:100000:65536" | sudo tee -a /etc/subgid >/dev/null
-          sudo install -d -m 0700 -o p4executor -g p4executor /tmp/p4fr /tmp/p4fu
-          sudo -u p4executor podman --storage-driver=vfs --root /tmp/p4fr --runroot /tmp/p4fu \
-            info --format=json > "$EVIDENCE/provider-capability.json"
-          python3 tests/portable-workspace/trusted-provider/provider_facts.py verify \
-            --facts "$EVIDENCE/provider-facts.json" --candidate "$EVIDENCE/candidate-receipt.json" \
-            --receiver "$RECEIVER_ROOT" --runtime "$RUNTIME_ROOT" \
-            --capability "$EVIDENCE/provider-capability.json" \
-            --allowed-uid "$PROVIDER_UID"
-      - name: Install only the externally authorized root grant
-        run: |
-          set -euo pipefail
-          sudo install -d -m 0755 -o root -g root /etc/fsgg /etc/fsgg/portable-workspaces
-          sudo install -m 0440 -o root -g p4executor "$EVIDENCE/python-hello-v1.json" \
-            /etc/fsgg/portable-workspaces/python-hello-v1.json
-          test "$(stat -c '%U:%G:%a' /etc/fsgg/portable-workspaces/python-hello-v1.json)" = root:p4executor:440
-      - name: Prepare private rootless storage and load exact retained archive
-        run: |
-          set -euo pipefail
-          join="$(find "$FACTS" -name validated-join.json -type f -print -quit)"
-          archive="$UPSTREAM/$(jq -r .image.archive "$join")"
-          sudo install -d -m 0700 -o p4executor -g p4executor /p4 \
-            /p4/runtime-v1 /p4/runtime-v1/home \
-            /p4/runtime-v1/xdg-config/containers \
-            /p4/runtime-v1/xdg-runtime/containers-runroot \
-            /p4/runtime-v1/storage /p4/evidence
-          sudo -u p4executor touch /p4/runtime-v1/xdg-config/containers/containers.conf
-          sudo -u p4executor tee /p4/runtime-v1/xdg-config/containers/storage.conf >/dev/null <<'EOF'
-          [storage]
-          driver = "vfs"
-          graphroot = "/p4/runtime-v1/storage"
-          runroot = "/p4/runtime-v1/xdg-runtime/containers-runroot"
-          EOF
-          sudo chmod 0600 /p4/runtime-v1/xdg-config/containers/*.conf
-          sudo -u p4executor env HOME=/p4/runtime-v1/home \
-            CONTAINERS_CONF=/p4/runtime-v1/xdg-config/containers/containers.conf \
-            CONTAINERS_STORAGE_CONF=/p4/runtime-v1/xdg-config/containers/storage.conf \
-            podman --storage-driver=vfs --root /p4/runtime-v1/storage \
-              --runroot /p4/runtime-v1/xdg-runtime/containers-runroot load --input "$archive"
-      - name: Invoke installed production CLI in runtime-only mount view
-        env:
-          SOURCE_ROOT: ${{ github.workspace }}
-        run: |
-          set -euo pipefail
-          cp "$(find "$FACTS" -name profile.json -type f -print -quit)" "$EVIDENCE/profile.json"
-          python3 tests/portable-workspace/trusted-provider/provider_facts.py command \
-            --facts "$EVIDENCE/provider-facts.json" --output "$EVIDENCE/command.json"
-          sudo chown -R root:root "$CLI_ROOT" "$RUNTIME_ROOT" "$RECEIVER_ROOT"
-          sudo find "$CLI_ROOT" "$RUNTIME_ROOT" "$RECEIVER_ROOT" -type d -exec chmod 0555 {} +
-          sudo find "$CLI_ROOT" "$RUNTIME_ROOT" "$RECEIVER_ROOT" -type f -exec chmod 0444 {} +
-          sudo chmod 0555 "$RUNTIME_ROOT/dotnet"
-          sudo install -m 0555 -o root -g root eng/qualify-installed-python-hello.py /opt/p4-python-qualify
-          sudo install -d -m 0755 /opt/p4-empty /opt/p4-requests
-          sudo install -m 0444 "$EVIDENCE/candidate-receipt.json" /opt/p4-requests/candidate.json
-          sudo install -m 0444 "$EVIDENCE/profile.json" /opt/p4-requests/profile.json
-          sudo install -m 0444 "$EVIDENCE/command.json" /opt/p4-requests/command.json
-          for mode in execute recover; do
-            sudo env SOURCE_ROOT="$SOURCE_ROOT" unshare --mount --fork bash -ceu '
-              mount --bind /opt/p4-empty "$SOURCE_ROOT"
-              mount --bind /opt/p4-empty /opt/hostedtoolcache
-              mount --bind /opt/p4-empty /usr/share/dotnet/sdk
-              exec runuser --user p4executor -- env HOME=/p4/runtime-v1/home \
-                PATH=/usr/local/bin:/usr/bin:/bin /usr/bin/python3 /opt/p4-python-qualify invoke \
-                --candidate-receipt /opt/p4-requests/candidate.json \
-                --dotnet /opt/p4/runtime/dotnet --workspace /srv/p4-receiver \
-                --profile /opt/p4-requests/profile.json --command /opt/p4-requests/command.json \
-                --mode "'"$mode"'" --receipt /p4/evidence/'"$mode"'.json
-            '
-          done
-          sudo cp /p4/evidence/*.json "$EVIDENCE/"
-          sudo chown "$USER:$USER" "$EVIDENCE/"*.json
-      - name: Retain bounded qualification evidence
-        if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
-        with:
-          name: portable-python-provider-qualified-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE }}/
-          if-no-files-found: warn
-          retention-days: 14
-      - name: Remove exact provider state
-        if: always()
-        run: |
-          sudo -u p4executor podman --storage-driver=vfs --root /p4/runtime-v1/storage \
-            --runroot /p4/runtime-v1/xdg-runtime/containers-runroot \
-            container rm --all --force 2>/dev/null || true
-          sudo userdel --remove p4executor 2>/dev/null || true
-          sudo find /p4 /opt/p4 /srv/p4-receiver /opt/p4-requests -depth -delete 2>/dev/null || true
-          sudo find /tmp/p4fr /tmp/p4fu -depth -delete 2>/dev/null || true
-          sudo find /etc/fsgg/portable-workspaces -depth -delete 2>/dev/null || true

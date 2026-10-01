@@ -73,7 +73,7 @@ def validate_join(root: Path, output: Path) -> None:
     output.write_text(json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n", encoding="utf-8")
 
 
-def extract_runtime(archive_path: Path, target: Path) -> None:
+def extract_bounded_archive(archive_path: Path, target: Path, expected_root: str | None = None) -> None:
     if target.exists() and (not target.is_dir() or target.is_symlink() or any(target.iterdir())):
         raise ValueError("runtime target must be empty")
     target.mkdir(parents=True, exist_ok=True)
@@ -82,16 +82,31 @@ def extract_runtime(archive_path: Path, target: Path) -> None:
         if not members or len(members) > 4096:
             raise ValueError("runtime archive entry count is outside bounds")
         total = 0
+        seen: set[str] = set()
         for member in members:
             path = PurePosixPath(member.name)
-            if path.is_absolute() or ".." in path.parts or member.issym() or member.islnk():
+            canonical = path.as_posix()
+            if (path.is_absolute() or ".." in path.parts or "." in path.parts or "\\" in member.name
+                    or "\n" in member.name or "\r" in member.name or canonical.casefold() in seen
+                    or member.issym() or member.islnk()):
                 raise ValueError("runtime archive contains an unsafe entry")
+            seen.add(canonical.casefold())
+            if expected_root and (not path.parts or path.parts[0] != expected_root):
+                raise ValueError("archive contains a path outside its selected root")
             if not (member.isdir() or member.isfile()):
                 raise ValueError("runtime archive contains a special entry")
             total += member.size
             if member.size > 64 * 1024 * 1024 or total > 256 * 1024 * 1024:
                 raise ValueError("runtime archive exceeds its bound")
         archive.extractall(target, filter="data")
+
+
+def extract_runtime(archive_path: Path, target: Path) -> None:
+    extract_bounded_archive(archive_path, target)
+
+
+def extract_receiver(archive_path: Path, target: Path) -> None:
+    extract_bounded_archive(archive_path, target, "p4-receiver")
 
 
 def bind_descriptor(path: Path, package: Path) -> None:
@@ -102,7 +117,19 @@ def bind_descriptor(path: Path, package: Path) -> None:
     path.write_text(text.replace(marker, f"source: {package.resolve()}"), encoding="utf-8")
 
 
-def validate_authorization(facts_root: Path, authorization_root: Path, facts_output: Path, grant_output: Path) -> None:
+def validate_authorization(
+    facts_root: Path,
+    authorization_root: Path,
+    upstream_root: Path,
+    join_path: Path,
+    receiver_archive: Path,
+    profile_path: Path,
+    candidate_path: Path,
+    source_revision: str,
+    source_tree: str,
+    facts_output: Path,
+    grant_output: Path,
+) -> None:
     facts = list(facts_root.rglob("provider-facts.json"))
     grants = list(authorization_root.rglob("python-hello-v1.json"))
     authorities = list(authorization_root.rglob("authorization.json"))
@@ -119,7 +146,7 @@ def validate_authorization(facts_root: Path, authorization_root: Path, facts_out
     if authority["nativeExecutionAuthorized"] is not True:
         raise ValueError("native execution is not authorized")
     if not isinstance(authority["authorizedBy"], str) or not authority["authorizedBy"].strip():
-        raise ValueError("authorization actor is absent")
+        raise ValueError("authorization attribution is absent")
     if not isinstance(authority["authorizedAt"], str):
         raise ValueError("authorization time is absent")
     try:
@@ -135,6 +162,16 @@ def validate_authorization(facts_root: Path, authorization_root: Path, facts_out
     facts_value = json.loads(facts[0].read_text(encoding="utf-8"))
     if facts_value["authorizationState"] != "required-external" or facts_value["nativeExecutionAuthorized"] is not False:
         raise ValueError("provider facts contain an authorization claim")
+    if (sha256(join_path) != facts_value["joinSha256"]
+            or sha256(receiver_archive) != facts_value["receiverArchiveSha256"]
+            or sha256(profile_path) != facts_value["profileSha256"]
+            or sha256(candidate_path) != facts_value["candidateReceiptSha256"]):
+        raise ValueError("authorization facts do not bind the selected join, receiver, profile, and candidate")
+    join_readback = join_path.parent / "authorization-join-readback.json"
+    validate_join(upstream_root, join_readback)
+    if join_readback.read_bytes() != join_path.read_bytes():
+        raise ValueError("authorized join differs from the selected upstream artifact")
+    join_readback.unlink()
     grant = json.loads(grants[0].read_text(encoding="utf-8"))
     if set(grant) != {
         "schema", "enrollmentId", "grantId", "allowedUid", "cli", "provider", "receiver",
@@ -210,17 +247,31 @@ def main() -> int:
     parser.add_argument("--authorization-root", type=Path)
     parser.add_argument("--validated-facts", type=Path)
     parser.add_argument("--validated-grant", type=Path)
+    parser.add_argument("--join", type=Path)
+    parser.add_argument("--receiver-archive", type=Path)
+    parser.add_argument("--profile", type=Path)
+    parser.add_argument("--candidate", type=Path)
+    parser.add_argument("--source-revision")
+    parser.add_argument("--source-tree")
+    parser.add_argument("--receiver-archive-input", type=Path)
+    parser.add_argument("--extract-receiver", type=Path)
     args = parser.parse_args()
     try:
         if args.root and args.output:
             validate_join(args.root.resolve(), args.output.resolve())
         elif args.runtime and args.extract_runtime:
             extract_runtime(args.runtime.resolve(), args.extract_runtime.resolve())
+        elif args.receiver_archive_input and args.extract_receiver:
+            extract_receiver(args.receiver_archive_input.resolve(), args.extract_receiver.resolve())
         elif args.descriptor and args.template_package:
             bind_descriptor(args.descriptor.resolve(), args.template_package.resolve())
-        elif all((args.facts_root, args.authorization_root, args.validated_facts, args.validated_grant)):
+        elif all((args.facts_root, args.authorization_root, args.root, args.join,
+                  args.receiver_archive, args.profile, args.candidate, args.source_revision,
+                  args.source_tree, args.validated_facts, args.validated_grant)):
             validate_authorization(
-                args.facts_root.resolve(), args.authorization_root.resolve(),
+                args.facts_root.resolve(), args.authorization_root.resolve(), args.root.resolve(),
+                args.join.resolve(), args.receiver_archive.resolve(), args.profile.resolve(),
+                args.candidate.resolve(), args.source_revision, args.source_tree,
                 args.validated_facts.resolve(), args.validated_grant.resolve(),
             )
         else:

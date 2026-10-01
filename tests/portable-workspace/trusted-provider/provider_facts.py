@@ -10,6 +10,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import uuid
 
 
@@ -19,6 +20,11 @@ IMAGE = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sh
 
 def canonical(value: object) -> bytes:
     return (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
+
+
+def contract_bytes(value: object) -> bytes:
+    """Match PortableWorkspaceContract's Utf8JsonWriter byte encoding."""
+    return json.dumps(value, separators=(",", ":"), ensure_ascii=False).encode()
 
 
 def sha256(path: Path) -> str:
@@ -104,21 +110,16 @@ def collect(args: argparse.Namespace) -> None:
         raise ValueError("receiver inventory differs from tracked paths")
     runtime_digest, runtime_files = tree_digest(args.runtime.resolve())
     profile_value = profile(commit)
-    capability = json.loads(args.capability.read_text(encoding="utf-8"))
-    host = capability["host"]
-    if host["os"] != "linux" or host["arch"] != "amd64" or host["security"]["rootless"] is not True:
-        raise ValueError("selected account is not rootless Linux amd64")
-    mappings = host["idMappings"]["uidmap"]
-    if not any(row["container_id"] <= 32768 < row["container_id"] + row["size"] for row in mappings):
-        raise ValueError("selected account mapping does not cover container uid 32768")
-    args.profile.write_bytes(canonical(profile_value))
+    profile_bytes = contract_bytes(profile_value)
+    args.profile.write_bytes(profile_bytes)
     facts = {
         "schema": SCHEMA,
         "authorizationState": "required-external",
         "nativeExecutionAuthorized": False,
-        "allowedUid": args.allowed_uid,
         "joinSha256": sha256(args.join),
         "candidateReceiptSha256": sha256(args.candidate),
+        "receiverArchiveSha256": sha256(args.receiver_archive),
+        "profileSha256": hashlib.sha256(profile_bytes).hexdigest(),
         "producerSourceRevision": candidate["producer"]["sourceRevision"],
         "package": candidate["package"],
         "installedCli": candidate["installedCli"],
@@ -128,15 +129,10 @@ def collect(args: argparse.Namespace) -> None:
             "payloadSha256": payload_digest,
             "projectedPayload": [{"path": item["path"], "sha256": item["sha256"]} for item in payload],
         },
-        "profileSha256": hashlib.sha256(canonical(profile_value)).hexdigest(),
         "runtime": {
             "version": join["runtime"]["version"],
             "payloadSha256": runtime_digest,
             "files": runtime_files,
-        },
-        "executables": {
-            name: {"path": f"/usr/bin/{name}", "sha256": sha256(Path(f"/usr/bin/{name}"))}
-            for name in ("git", "tar", "podman")
         },
         "image": candidate["image"],
         "provider": {
@@ -144,12 +140,6 @@ def collect(args: argparse.Namespace) -> None:
             "sddPackageSha256": join["sdd"]["sha256"],
             "templateVersion": join["templates"]["version"],
             "templatePackageSha256": join["templates"]["sha256"],
-        },
-        "capability": {
-            "os": host["os"],
-            "architecture": host["arch"],
-            "rootless": host["security"]["rootless"],
-            "uidMappings": host["idMappings"]["uidmap"],
         },
     }
     args.output.write_bytes(canonical(facts))
@@ -160,8 +150,8 @@ def verify(args: argparse.Namespace) -> None:
     candidate = json.loads(args.candidate.read_text())
     if facts["schema"] != SCHEMA or facts["authorizationState"] != "required-external":
         raise ValueError("provider facts schema or authorization state changed")
-    if facts["nativeExecutionAuthorized"] is not False or facts["allowedUid"] != args.allowed_uid:
-        raise ValueError("provider facts falsely authorize or select another user")
+    if facts["nativeExecutionAuthorized"] is not False:
+        raise ValueError("candidate facts falsely authorize execution")
     if (facts["candidateReceiptSha256"] != sha256(args.candidate)
             or facts["package"] != candidate["package"]
             or facts["installedCli"] != candidate["installedCli"]):
@@ -182,20 +172,11 @@ def verify(args: argparse.Namespace) -> None:
     for value in facts["executables"].values():
         if sha256(Path(value["path"])) != value["sha256"]:
             raise ValueError("selected host tool changed")
-    capability = json.loads(args.capability.read_text(encoding="utf-8"))
-    host = capability["host"]
-    observed = {
-        "os": host["os"],
-        "architecture": host["arch"],
-        "rootless": host["security"]["rootless"],
-        "uidMappings": host["idMappings"]["uidmap"],
-    }
-    if observed != facts["capability"]:
-        raise ValueError("selected-account rootless capability changed")
 
 
 def command(args: argparse.Namespace) -> None:
     facts = json.loads(args.facts.read_text())
+    grant = json.loads(args.grant.read_text())
     now = datetime.now(timezone.utc)
     deadline = now + timedelta(minutes=5)
     value = {
@@ -206,36 +187,48 @@ def command(args: argparse.Namespace) -> None:
         "profileId": "portable-python-hello-v1",
         "profileRevision": "1",
         "sourceRevision": facts["receiver"]["commit"],
-        "expectedWorkflowRevision": "1",
-        "fenceGeneration": "1",
+        "expectedWorkflowRevision": str(grant["workflowRevision"]),
+        "fenceGeneration": str(grant["fenceGeneration"]),
         "deadline": deadline.strftime("%Y-%m-%dT%H:%M:%S.") + f"{deadline.microsecond:06d}Z",
         "operation": "test",
         "componentId": "python",
     }
-    args.output.write_bytes(canonical(value))
+    args.output.write_bytes(contract_bytes(value))
+
+
+def contract(args: argparse.Namespace) -> None:
+    grant = json.loads(args.grant.read_text())
+    profile_value = profile(args.receiver_commit)
+    args.profile.write_bytes(contract_bytes(profile_value))
+    command(argparse.Namespace(facts=args.facts, grant=args.grant, output=args.command))
 
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser()
     commands = result.add_subparsers(dest="operation", required=True)
     collect_parser = commands.add_parser("collect")
-    for name in ("join", "candidate", "receiver", "runtime", "capability", "output", "profile"):
+    for name in ("join", "candidate", "receiver", "receiver-archive", "runtime", "output", "profile"):
         collect_parser.add_argument(f"--{name}", required=True, type=Path)
-    collect_parser.add_argument("--allowed-uid", required=True, type=int)
     verify_parser = commands.add_parser("verify")
-    for name in ("facts", "candidate", "receiver", "runtime", "capability"):
+    for name in ("facts", "candidate", "receiver", "runtime"):
         verify_parser.add_argument(f"--{name}", required=True, type=Path)
-    verify_parser.add_argument("--allowed-uid", required=True, type=int)
     command_parser = commands.add_parser("command")
     command_parser.add_argument("--facts", required=True, type=Path)
+    command_parser.add_argument("--grant", required=True, type=Path)
     command_parser.add_argument("--output", required=True, type=Path)
+    contract_parser = commands.add_parser("contract")
+    contract_parser.add_argument("--facts", required=True, type=Path)
+    contract_parser.add_argument("--grant", required=True, type=Path)
+    contract_parser.add_argument("--receiver-commit", required=True)
+    contract_parser.add_argument("--profile", required=True, type=Path)
+    contract_parser.add_argument("--command", required=True, type=Path)
     return result
 
 
 def main() -> int:
     args = parser().parse_args()
     try:
-        {"collect": collect, "verify": verify, "command": command}[args.operation](args)
+        {"collect": collect, "verify": verify, "command": command, "contract": contract}[args.operation](args)
         return 0
     except (OSError, ValueError, KeyError, json.JSONDecodeError, subprocess.SubprocessError) as error:
         print(f"PORTABLE_PROVIDER_FACTS_REFUSED {error}", file=sys.stderr)

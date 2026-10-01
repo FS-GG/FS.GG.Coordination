@@ -217,7 +217,7 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/portable-workspace-python-provider-qualification.yml",
-      "sha256": "6a19c105fcfdc682975360fde518adfdba5ee31bf50f267ee01f91e44990dc0c",
+      "sha256": "2be6b3d8c76482637be97f97505472530b22b9158221ef4ef2969bff8ec6b25a",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
         "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",

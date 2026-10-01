@@ -168,6 +168,12 @@ type PortableWorkspaceRuntimeCommandTests() =
         File.WriteAllBytes(commandPath, PortableWorkspaceContract.commandBytes command |> Result.defaultWith failwith)
         profilePath, commandPath
 
+    let rec repositoryRoot (directory: DirectoryInfo) =
+        let candidate = Path.Combine(directory.FullName, "tests", "portable-workspace", "trusted-provider", "provider_facts.py")
+        if File.Exists candidate then directory.FullName
+        elif isNull directory.Parent then failwith "repository root not found"
+        else repositoryRoot directory.Parent
+
     [<Fact>]
     member _.``compiled command invokes the fixed Python Hello journey and replays without relaunch``() =
         task {
@@ -354,3 +360,33 @@ type PortableWorkspaceRuntimeCommandTests() =
             Assert.Equal("portable-runtime-profile-not-enrolled", altered.StandardError)
             Assert.Equal(0, runnerCreations)
         }
+
+    [<Fact>]
+    member _.``provider contract generator round trips through production codecs``() =
+        use temporary = new TemporaryDirectory()
+        let root = repositoryRoot (DirectoryInfo(Environment.CurrentDirectory))
+        let factsPath = Path.Combine(temporary.Path, "facts.json")
+        let grantPath = Path.Combine(temporary.Path, "grant.json")
+        let profilePath = Path.Combine(temporary.Path, "profile.json")
+        let commandPath = Path.Combine(temporary.Path, "command.json")
+        let receiver = String.replicate 40 "a"
+        File.WriteAllText(factsPath, JsonSerializer.Serialize({| receiver = {| commit = receiver |} |}))
+        File.WriteAllText(grantPath, """{"workflowRevision":7,"fenceGeneration":9}""")
+        let start = ProcessStartInfo("/usr/bin/python3", UseShellExecute = false)
+        for argument in
+            [ "tests/portable-workspace/trusted-provider/provider_facts.py"; "contract"
+              "--facts"; factsPath; "--grant"; grantPath; "--receiver-commit"; receiver
+              "--profile"; profilePath; "--command"; commandPath ] do
+            start.ArgumentList.Add argument
+        start.WorkingDirectory <- root
+        use child = Process.Start start
+        child.WaitForExit()
+        Assert.Equal(0, child.ExitCode)
+        match PortableWorkspaceContract.parseProfile(File.ReadAllBytes profilePath) with
+        | Error reason -> failwith reason
+        | Ok profile -> Assert.Equal(receiver, profile.SourceRevision)
+        match PortableWorkspaceContract.parseCommand(File.ReadAllBytes commandPath) with
+        | Error reason -> failwith reason
+        | Ok command ->
+            Assert.Equal(7UL, command.ExpectedWorkflowRevision)
+            Assert.Equal(9UL, command.FenceGeneration)

@@ -167,6 +167,7 @@ def main() -> None:
                 "--profile", str(root / "profile.json"),
                 "--command", str(root / "command.json"),
                 "--mode", "execute",
+                "--expected-outcome", "completed",
                 "--grant-path", str(root / "draft-grant.json"),
                 "--receipt", str(root / "invoke.json"),
             ],
