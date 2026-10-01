@@ -62,6 +62,10 @@ REQUIRED_CREATE_OPTIONS = (
     "--volume",
     "--workdir",
 )
+MAX_LAYER_SCAN_MEMBERS = 100_000
+MAX_LAYER_SCAN_BYTES = 1024 * 1024 * 1024
+MAX_LAYER_MEMBER_NAME_BYTES = 4096
+NODE_COMPILE_CACHE_PREFIX = "tmp/node-compile-cache"
 
 
 def run(
@@ -189,6 +193,15 @@ def require_podman_options(prefix: list[str], command: str, required: tuple[str,
         raise RuntimeError(f"Podman {command} lacks required options: {', '.join(missing)}")
 
 
+def require_containerfile_contract(recipe: str) -> None:
+    if f"FROM docker.io/library/python@{BASE_DIGEST}" not in recipe:
+        raise RuntimeError("Containerfile does not use the approved single-platform base digest")
+    if 'NODE_DISABLE_COMPILE_CACHE=1 /opt/typescript/bin/tsc --version' not in recipe:
+        raise RuntimeError("Containerfile does not disable the Node compile cache for TypeScript")
+    if "test ! -e /tmp/node-compile-cache" not in recipe:
+        raise RuntimeError("Containerfile does not refuse a generated Node compile cache")
+
+
 def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
     revision, tree, fixture_sha256 = require_exact_source(source, args.expected_source_revision)
     image_dir = source / "tests" / "portable-workspace" / "image"
@@ -203,8 +216,7 @@ def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
     if inputs["node"]["sha256"] != NODE_SHA256 or inputs["typescript"]["sha256"] != TYPESCRIPT_SHA256:
         raise RuntimeError("portable image archive digest is not approved")
     recipe = containerfile.read_text()
-    if f"FROM docker.io/library/python@{BASE_DIGEST}" not in recipe:
-        raise RuntimeError("Containerfile does not use the approved single-platform base digest")
+    require_containerfile_contract(recipe)
     forbidden = tuple("--" + name + suffix for name, suffix in (("privileged", ""), ("pid=", "host"), ("uts=", "host"), ("userns=", "host")))
     checked_text = recipe + Path(__file__).read_text()
     if any(value in checked_text for value in forbidden):
@@ -339,6 +351,32 @@ def _archive_json(archive: tarfile.TarFile, name: str) -> tuple[dict, bytes]:
         raise RuntimeError(f"OCI archive member is not JSON: {name}") from error
 
 
+def require_layer_cache_absent(stream) -> None:
+    members = 0
+    content_bytes = 0
+    try:
+        with tarfile.open(fileobj=stream, mode="r|*") as layer:
+            for member in layer:
+                members += 1
+                if members > MAX_LAYER_SCAN_MEMBERS:
+                    raise RuntimeError("OCI archive layer member bound exceeded")
+                if not isinstance(member.name, str) or len(member.name.encode()) > MAX_LAYER_MEMBER_NAME_BYTES:
+                    raise RuntimeError("OCI archive layer member name bound exceeded")
+                if member.size < 0:
+                    raise RuntimeError("OCI archive layer member size is invalid")
+                content_bytes += member.size
+                if content_bytes > MAX_LAYER_SCAN_BYTES:
+                    raise RuntimeError("OCI archive layer content bound exceeded")
+                normalized = member.name
+                while normalized.startswith("./"):
+                    normalized = normalized[2:]
+                normalized = normalized.lstrip("/")
+                if normalized == NODE_COMPILE_CACHE_PREFIX or normalized.startswith(NODE_COMPILE_CACHE_PREFIX + "/"):
+                    raise RuntimeError("OCI archive contains a generated Node compile cache")
+    except (tarfile.TarError, OSError, EOFError) as error:
+        raise RuntimeError("OCI archive layer cannot be inspected as a bounded tar stream") from error
+
+
 def inspect_oci_archive(candidate: Path) -> dict:
     with tarfile.open(candidate, "r:*") as archive:
         layout, _ = _archive_json(archive, "oci-layout")
@@ -385,6 +423,10 @@ def inspect_oci_archive(candidate: Path) -> dict:
             stream = archive.extractfile(member)
             if stream is None or sha256_stream(stream) != layer_digest.removeprefix("sha256:"):
                 raise RuntimeError("OCI archive layer digest differs")
+            inspection_stream = archive.extractfile(member)
+            if inspection_stream is None:
+                raise RuntimeError("OCI archive layer cannot be inspected")
+            require_layer_cache_absent(inspection_stream)
         return {"digest": digest, "configDigest": config_digest, "manifestBytes": len(manifest_bytes)}
 
 

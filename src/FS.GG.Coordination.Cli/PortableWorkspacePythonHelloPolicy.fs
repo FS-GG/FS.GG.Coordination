@@ -60,13 +60,13 @@ module PortableWorkspacePythonHelloPolicy =
 
     [<Literal>]
     let QualifiedImage =
-        "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
+        "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:40085dd0a7c3c16af6b24e247cec47707bc957d6453f7e15d82636fcbf6f0755"
 
     [<Literal>]
-    let ImageManifestDigest = "e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
+    let ImageManifestDigest = "40085dd0a7c3c16af6b24e247cec47707bc957d6453f7e15d82636fcbf6f0755"
 
     [<Literal>]
-    let ImageConfigDigest = "b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53"
+    let ImageConfigDigest = "371d2b5db7c9708812ca8c3d752376e38aa81432a8bcbe7d99146414636dd872"
 
     [<Literal>]
     let VerificationSha256 = "2ed645adefe2c23308832036a3b5163dc39faaf152c2c9d1d3afb3bd637f146a"

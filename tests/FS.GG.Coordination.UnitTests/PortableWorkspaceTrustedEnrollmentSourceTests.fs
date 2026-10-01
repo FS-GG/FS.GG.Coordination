@@ -273,6 +273,20 @@ type PortableWorkspaceTrustedEnrollmentSourceTests() =
             PortableWorkspacePythonHelloPolicy.create (Fixture.directGrant changedArchive (String.replicate 64 "A")))
 
     [<Fact>]
+    member _.``predecessor semantic image tuple cannot satisfy current policy``() =
+        let predecessor =
+            {
+                Fixture.directGrant Fixture.archiveSha Fixture.receiptSha with
+                    QualifiedImage =
+                        "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
+                    ImageManifestDigest = "e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
+                    ImageConfigDigest = "b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53"
+            }
+        Assert.Equal(
+            Error "portable-runtime-image-binding-refused",
+            PortableWorkspacePythonHelloPolicy.create predecessor)
+
+    [<Fact>]
     member _.``missing trusted grant refuses without resolving caller profile``() =
         let source = PortableWorkspaceTrustedEnrollmentSource(RefusingGrantReader("portable-trusted-grant-missing"), Inspector(Ok()), RuntimePreparer(Ok()))
         let outcome = (source :> IPortableWorkspaceRuntimeEnrollmentSource).Resolve PortableWorkspacePythonHelloPolicy.EnrollmentId
