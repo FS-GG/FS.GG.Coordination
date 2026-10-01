@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, hashlib, importlib.util, json, os, stat, tempfile, zipfile
+import argparse, hashlib, importlib.util, json, os, stat, subprocess, sys, tempfile, time, zipfile
 from pathlib import Path
 HERE=Path(__file__).parent
 def load(name,file):
@@ -51,6 +51,25 @@ def main():
   owned=d/'owned'; foreign=d/'foreign'; owned.mkdir(); foreign.mkdir(); R.ALLOWED_PATHS=(owned,)
   ledger.write_bytes(R.canonical({'schema':'fsgg.portable-provider-owned-resources/1','source':'a'*40,'created':[{'kind':'path','value':str(owned)}]}))
   completed=R.cleanup_paths(ledger); assert completed['complete'] is True and not owned.exists() and foreign.exists()
+  # Cleanup CLI always emits its final receipt and fails on malformed ledgers,
+  # deletion errors, and survivors rather than returning a green status.
+  cli=HERE/'provider_runtime.py'; empty=d/'empty-ledger.json'; empty.write_bytes(R.canonical({'schema':'fsgg.portable-provider-owned-resources/1','source':'a'*40,'created':[]}))
+  cli_receipt=d/'cli-clean.json'; clean_run=subprocess.run([sys.executable,str(cli),'cleanup-paths','--ledger',str(empty),'--output',str(cli_receipt)],capture_output=True,text=True)
+  assert clean_run.returncode==0 and json.loads(cli_receipt.read_text())['complete'] is True
+  malformed=d/'malformed-ledger.json'; malformed.write_text('{'); malformed_receipt=d/'malformed-cleanup.json'
+  malformed_run=subprocess.run([sys.executable,str(cli),'cleanup-paths','--ledger',str(malformed),'--output',str(malformed_receipt)],capture_output=True,text=True)
+  assert malformed_run.returncode==2 and json.loads(malformed_receipt.read_text())['complete'] is False
+  survivor=d/'survivor'; survivor.mkdir(); survivor_ledger=d/'survivor-ledger.json'; survivor_ledger.write_bytes(R.canonical({'schema':'fsgg.portable-provider-owned-resources/1','source':'a'*40,'created':[{'kind':'path','value':str(survivor)}]})); survivor_receipt=d/'survivor-cleanup.json'
+  survivor_run=subprocess.run([sys.executable,str(cli),'cleanup-paths','--ledger',str(survivor_ledger),'--output',str(survivor_receipt)],capture_output=True,text=True)
+  assert survivor_run.returncode==2 and json.loads(survivor_receipt.read_text())['survivors']==[str(survivor)]
+  failing=d/'deletion-failure'; failing.mkdir(); failure_ledger=d/'failure-ledger.json'; failure_ledger.write_bytes(R.canonical({'schema':'fsgg.portable-provider-owned-resources/1','source':'a'*40,'created':[{'kind':'path','value':str(failing)}]})); failure_receipt=d/'failure-cleanup.json'
+  original_allowed,original_rmtree,original_argv=R.ALLOWED_PATHS,R.shutil.rmtree,sys.argv
+  try:
+   R.ALLOWED_PATHS=(failing,); R.shutil.rmtree=lambda _: (_ for _ in ()).throw(OSError('injected deletion failure'))
+   sys.argv=['provider_runtime.py','cleanup-paths','--ledger',str(failure_ledger),'--output',str(failure_receipt)]
+   assert R.main()==2
+  finally: R.ALLOWED_PATHS, R.shutil.rmtree, sys.argv=original_allowed,original_rmtree,original_argv
+  failed_receipt=json.loads(failure_receipt.read_text()); assert failed_receipt['complete'] is False and failed_receipt['survivors']==[str(failing)] and failed_receipt['failures']
   # Invoke validates real production-shaped output and bounds descendants/output.
   tool=d/'tool'; tool.mkdir(); entry=tool/Q.CLI_DLL; write(entry,b'dll')
   payload,files=Q.payload_digest(tool); candidate=d/'candidate.json'; grant=d/'grant.json'; profile=d/'profile.json'; command=d/'command.json'; workspace=d/'workspace'; workspace.mkdir()
@@ -66,6 +85,16 @@ def main():
   sleeper=d/'sleep'; sleeper.write_text('#!/bin/sh\nsleep 10\n'); sleeper.chmod(0o755); args.dotnet=sleeper; args.receipt=d/'timeout.json'; args.timeout_seconds=1
   try: Q.invoke(args); raise AssertionError('timeout admitted')
   except ValueError as e: assert 'terminate' in str(e)
+  # The session leader exits on TERM while its descendant ignores TERM and
+  # retains both output pipes. The helper must escalate, settle, and reap it.
+  descendant_pid=d/'descendant.pid'; stubborn=d/'stubborn'
+  stubborn.write_text('#!/usr/bin/python3\nimport pathlib,signal,subprocess,sys,time\np=subprocess.Popen([sys.executable,"-c","import signal,time; signal.signal(signal.SIGTERM,signal.SIG_IGN); time.sleep(30)"])\npathlib.Path('+repr(str(descendant_pid))+').write_text(str(p.pid))\ntime.sleep(30)\n'); stubborn.chmod(0o755)
+  args.dotnet=stubborn; args.receipt=d/'stubborn.json'; args.timeout_seconds=1
+  try: Q.invoke(args); raise AssertionError('stubborn descendant admitted')
+  except ValueError as e: assert 'terminate' in str(e)
+  pid=int(descendant_pid.read_text()); deadline=time.monotonic()+2
+  while time.monotonic()<deadline and Path(f'/proc/{pid}').exists(): time.sleep(.05)
+  assert not Path(f'/proc/{pid}').exists(), 'owned descendant survived refusal'
   flood=d/'flood'; flood.write_text('#!/usr/bin/python3\nimport sys\nsys.stdout.write("x"*(2*1024*1024))\n'); flood.chmod(0o755); args.dotnet=flood; args.receipt=d/'flood.json'; args.timeout_seconds=5
   try: Q.invoke(args); raise AssertionError('oversized output admitted')
   except ValueError as e: assert 'output exceeds' in str(e)

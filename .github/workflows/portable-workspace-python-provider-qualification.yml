@@ -166,12 +166,18 @@ jobs:
       - name: Project public candidate facts and clean owned state
         if: always()
         run: |
-          set +e; cleanup_failed=0; install -d -m 0700 "$PUBLIC_FACTS"
+          set +e; cleanup_failed=0
+          LEDGER_COPY="$RUNNER_TEMP/p4-public-ledger-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT.json"
+          install -d -m 0700 "$PUBLIC_FACTS" || cleanup_failed=1
           if test -f "$EVIDENCE/owned-resources.json"; then
-            for name in validated-join.json candidate-receipt.json receiver.tar profile.json provider-facts.json upstream-custody.json upstream-expected.json; do test ! -f "$EVIDENCE/$name" || cp "$EVIDENCE/$name" "$PUBLIC_FACTS/$name"; done
-            cp "$EVIDENCE/owned-resources.json" /tmp/p4-public-ledger.json
-            python3 tests/portable-workspace/trusted-provider/provider_runtime.py cleanup-paths --ledger /tmp/p4-public-ledger.json --output "$PUBLIC_FACTS/cleanup.json" || cleanup_failed=1
+            for name in validated-join.json candidate-receipt.json receiver.tar profile.json provider-facts.json upstream-custody.json upstream-expected.json; do
+              test ! -f "$EVIDENCE/$name" || cp "$EVIDENCE/$name" "$PUBLIC_FACTS/$name" || cleanup_failed=1
+            done
+            cp "$EVIDENCE/owned-resources.json" "$LEDGER_COPY" || cleanup_failed=1
+          else
+            cleanup_failed=1
           fi
+          python3 tests/portable-workspace/trusted-provider/provider_runtime.py cleanup-paths --ledger "$LEDGER_COPY" --output "$PUBLIC_FACTS/cleanup.json" || cleanup_failed=1
           test "$cleanup_failed" = 0
       - name: Upload bounded unauthorized public facts after cleanup
         if: always()

@@ -173,7 +173,14 @@ def main():
   elif args.cmd=='capability': args.output.write_bytes(canonical(capability(json.loads(args.input.read_text()),json.loads(args.plan.read_text()))))
   elif args.cmd=='ledger-init': init_ledger(args.ledger,args.source)
   elif args.cmd=='ledger-register': register(args.ledger,args.kind,args.value)
-  elif args.cmd=='cleanup-paths': args.output.write_bytes(canonical(cleanup_paths(args.ledger)))
+  elif args.cmd=='cleanup-paths':
+   try: result=cleanup_paths(args.ledger)
+   except (OSError,ValueError,KeyError,json.JSONDecodeError) as e:
+    result={'schema':'fsgg.portable-provider-cleanup/1','complete':False,
+            'failures':[{'path':str(args.ledger),'reason':f'ledger-error: {e}'}],'survivors':[]}
+   args.output.parent.mkdir(parents=True,exist_ok=True)
+   args.output.write_bytes(canonical(result))
+   if result.get('complete') is not True or result.get('failures') or result.get('survivors'): return 2
   elif args.cmd=='public-projection': args.output.write_bytes(canonical(public_projection(args.private,args.cleanup)))
   elif args.cmd=='artifact-custody': args.output.write_bytes(canonical(artifact_custody(json.loads(args.run.read_text()),json.loads(args.artifact.read_text()),json.loads(args.expected.read_text()))))
   elif args.cmd=='extract-zip': args.output.write_bytes(canonical(extract_zip(args.archive,args.target,args.sha256,args.package_id,args.version)))

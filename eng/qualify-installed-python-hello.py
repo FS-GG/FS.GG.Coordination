@@ -12,6 +12,7 @@ import stat
 import subprocess
 import signal
 import threading
+import time
 import sys
 import tarfile
 import tempfile
@@ -324,36 +325,125 @@ def invoke(args: argparse.Namespace) -> int:
         }
     child = subprocess.Popen(command, cwd=args.workspace.resolve(), env=environment,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True)
+    process_group = child.pid
+    process_session = child.pid
+    try:
+        observed_group = os.getpgid(child.pid)
+        observed_session = os.getsid(child.pid)
+    except ProcessLookupError:
+        observed_group = process_group
+        observed_session = process_session
+    if observed_group != process_group or observed_session != process_session:
+        child.kill()
+        child.wait(timeout=5)
+        raise ValueError("installed CLI process group is not privately owned")
     captured = {"stdout": bytearray(), "stderr": bytearray()}
     exceeded = threading.Event()
+    reader_errors: list[BaseException] = []
     def read(name: str, stream: object) -> None:
-        while True:
-            chunk = stream.read(65536)  # type: ignore[attr-defined]
-            if not chunk: break
-            if len(captured[name]) + len(chunk) > MAX_OUTPUT_BYTES:
-                exceeded.set()
-                try: os.killpg(child.pid, signal.SIGKILL)
-                except ProcessLookupError: pass
-                break
-            captured[name].extend(chunk)
+        try:
+            while True:
+                chunk = stream.read(65536)  # type: ignore[attr-defined]
+                if not chunk: break
+                remaining = MAX_OUTPUT_BYTES - len(captured[name])
+                if len(chunk) > remaining:
+                    captured[name].extend(chunk[:max(0, remaining)])
+                    exceeded.set()
+                    break
+                captured[name].extend(chunk)
+        except (OSError, ValueError) as error:
+            reader_errors.append(error)
     readers = [threading.Thread(target=read, args=(name, stream), daemon=True)
                for name, stream in (("stdout", child.stdout), ("stderr", child.stderr))]
     for reader in readers: reader.start()
+
+    def group_members() -> list[int]:
+        """Read back only processes in the fresh session and group owned above."""
+        result: list[int] = []
+        for entry in Path("/proc").iterdir():
+            if not entry.name.isdigit():
+                continue
+            try:
+                status = (entry / "stat").read_text()
+                tail = status[status.rfind(")") + 2:].split()
+                if int(tail[2]) == process_group and int(tail[3]) == process_session:
+                    result.append(int(entry.name))
+            except (OSError, ValueError, IndexError):
+                continue
+        return result
+
+    def wait_group_empty(seconds: float) -> bool:
+        deadline = time.monotonic() + seconds
+        while time.monotonic() < deadline:
+            child.poll()
+            if not group_members():
+                return True
+            time.sleep(0.05)
+        child.poll()
+        return not group_members()
+
+    def settle_group() -> tuple[bool, str | None]:
+        initial = group_members()
+        if not initial and child.poll() is None:
+            initial = [child.pid]
+        if not initial:
+            return False, None
+        try:
+            os.killpg(process_group, signal.SIGTERM)
+        except ProcessLookupError:
+            pass
+        if not wait_group_empty(2.0):
+            if group_members():
+                try:
+                    os.killpg(process_group, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+            if not wait_group_empty(5.0):
+                return True, f"owned process group survived SIGKILL: {group_members()}"
+        return True, None
+
+    primary: BaseException | None = None
     try:
-        child.wait(timeout=args.timeout_seconds)
-    except subprocess.TimeoutExpired as error:
-        os.killpg(child.pid, signal.SIGTERM)
-        try: child.wait(timeout=5)
-        except subprocess.TimeoutExpired:
-            os.killpg(child.pid, signal.SIGKILL); child.wait(timeout=5)
-        raise ValueError("installed CLI did not terminate within its bound") from error
-    if exceeded.is_set():
-        os.killpg(child.pid, signal.SIGKILL) if child.poll() is None else None
+        deadline = time.monotonic() + args.timeout_seconds
+        while child.poll() is None and not exceeded.is_set() and time.monotonic() < deadline:
+            time.sleep(0.02)
+        if exceeded.is_set():
+            primary = ValueError("installed CLI output exceeds its bound")
+        elif child.poll() is None:
+            primary = ValueError("installed CLI did not terminate within its bound")
+        else:
+            for reader in readers:
+                reader.join(timeout=0.5)
+            if any(reader.is_alive() for reader in readers):
+                primary = ValueError("installed CLI output readers did not settle")
+            elif reader_errors:
+                primary = ValueError(f"installed CLI output reader failed: {reader_errors[0]}")
+    except BaseException as error:
+        primary = error
+
+    had_members, settlement_error = settle_group()
+    try:
         child.wait(timeout=5)
-    for reader in readers: reader.join(timeout=5)
-    if any(reader.is_alive() for reader in readers): raise ValueError("installed CLI output readers did not settle")
+    except subprocess.TimeoutExpired:
+        settlement_error = settlement_error or "installed CLI leader survived group settlement"
+    for stream in (child.stdout, child.stderr):
+        try:
+            stream.close()  # type: ignore[union-attr]
+        except (OSError, ValueError):
+            pass
+    for reader in readers:
+        reader.join(timeout=1)
+    if any(reader.is_alive() for reader in readers):
+        settlement_error = settlement_error or "output readers survived group settlement"
+    if primary is None and had_members:
+        primary = ValueError("installed CLI left an owned descendant after leader exit")
+    if settlement_error:
+        if primary is not None:
+            raise ValueError(f"{primary}; settlement failed: {settlement_error}") from primary
+        raise ValueError(f"installed CLI settlement failed: {settlement_error}")
+    if primary is not None:
+        raise primary
     stdout, stderr = bytes(captured["stdout"]), bytes(captured["stderr"])
-    if exceeded.is_set(): raise ValueError("installed CLI output exceeds its bound")
     try: production = json.loads(stdout)
     except json.JSONDecodeError as error:
         refusal = stderr.decode("utf-8", errors="replace")[:512].replace("\n", " ")
