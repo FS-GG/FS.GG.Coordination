@@ -430,6 +430,45 @@ let ``installed source streams the exact pinned Codex executable size`` () =
     }
 
 [<Fact>]
+let ``executable stat projection requires timestamps and uses containing filesystem device fields`` () =
+    let mutable value = LinuxStatx()
+    value.Mask <- LinuxFiles.executableStatxMask
+    value.LinkCount <- 1u
+    value.OwnerUid <- effectiveUserId ()
+    value.Mode <- 0x81c0us
+    value.Inode <- 17UL
+    value.Size <- 286594376UL
+    value.ChangedSeconds <- 101L
+    value.ChangedNanoseconds <- 102u
+    value.ModifiedSeconds <- 103L
+    value.ModifiedNanoseconds <- 104u
+    value.DeviceMajor <- 105u
+    value.DeviceMinor <- 106u
+
+    let observation =
+        LinuxFiles.executableObservationFromStatx value |> Result.defaultWith failwith
+
+    Assert.Equal(105u, observation.Identity.DeviceMajor)
+    Assert.Equal(106u, observation.Identity.DeviceMinor)
+    Assert.Equal(101L, observation.ChangedSeconds)
+    Assert.Equal(102u, observation.ChangedNanoseconds)
+    Assert.Equal(103L, observation.ModifiedSeconds)
+    Assert.Equal(104u, observation.ModifiedNanoseconds)
+    Assert.Equal(96, Marshal.OffsetOf<LinuxStatx>("ChangedSeconds").ToInt32())
+    Assert.Equal(104, Marshal.OffsetOf<LinuxStatx>("ChangedNanoseconds").ToInt32())
+    Assert.Equal(112, Marshal.OffsetOf<LinuxStatx>("ModifiedSeconds").ToInt32())
+    Assert.Equal(120, Marshal.OffsetOf<LinuxStatx>("ModifiedNanoseconds").ToInt32())
+    Assert.Equal(136, Marshal.OffsetOf<LinuxStatx>("DeviceMajor").ToInt32())
+    Assert.Equal(140, Marshal.OffsetOf<LinuxStatx>("DeviceMinor").ToInt32())
+
+    value.Mask <- value.Mask &&& ~~~0x40u
+
+    Assert.Equal(
+        Error "learning-installed-file-stat-refused",
+        LinuxFiles.executableObservationFromStatx value
+    )
+
+[<Fact>]
 let ``installed source refuses executable above the finite stream ceiling before producer authority`` () =
     task {
         use value = fixture ()
@@ -520,6 +559,59 @@ let ``installed source refuses digest mismatch replacement and truncation before
             Assert.True(mutations > 0)
             Assert.True(Result.isError result)
             Assert.Equal(0, receipts.Calls)
+    }
+
+[<Fact>]
+let ``installed source refuses same inode prefix mutation even when mtime is restored`` () =
+    task {
+        use value = fixtureWithExecutable (writeSparseExecutable 286594376L)
+
+        let receipts =
+            ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
+
+        let source =
+            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
+            :> ILearningInstalledReadinessSource
+
+        let originalModified = File.GetLastWriteTimeUtc value.Executable
+
+        let operation: Task<Result<LearningInstalledReadinessSnapshot, string>> =
+            Task.Run<Result<LearningInstalledReadinessSnapshot, string>>(
+                Func<Task<Result<LearningInstalledReadinessSnapshot, string>>>(fun () ->
+                    source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None))
+            )
+
+        let descriptorRoot = $"/proc/%d{Environment.ProcessId}/fd"
+        let deadline = DateTime.UtcNow.AddSeconds 5.
+        let mutable opened = false
+
+        while not opened && not operation.IsCompleted && DateTime.UtcNow < deadline do
+            opened <-
+                Directory.EnumerateFiles descriptorRoot
+                |> Seq.exists (fun descriptor ->
+                    try
+                        let target = File.ResolveLinkTarget(descriptor, false)
+                        not (isNull target) && target.FullName = value.Executable
+                    with
+                    | :? IOException
+                    | :? UnauthorizedAccessException -> false)
+
+            if not opened then
+                Thread.Yield() |> ignore
+
+        Assert.True(opened, "production executable descriptor was not observed")
+        Thread.Sleep 10
+
+        use writer = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+        writer.Position <- 0L
+        writer.WriteByte 0x58uy
+        writer.Flush true
+        File.SetLastWriteTimeUtc(value.Executable, originalModified)
+
+        let! result = operation
+        Assert.True(Result.isError result)
+        Assert.Equal(originalModified, File.GetLastWriteTimeUtc value.Executable)
+        Assert.Equal(0, receipts.Calls)
     }
 
 
