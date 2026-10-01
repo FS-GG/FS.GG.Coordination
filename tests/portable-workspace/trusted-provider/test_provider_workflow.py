@@ -7,7 +7,9 @@ import hashlib
 import importlib.util
 import io
 import json
+import os
 from pathlib import Path
+import subprocess
 import tarfile
 import tempfile
 
@@ -30,6 +32,26 @@ def write(path: Path, value: bytes = b"candidate") -> None:
     path.write_bytes(value)
 
 
+def workflow_shell(workflow: str, name: str) -> str:
+    marker = f"      - name: {name}\n"
+    section = workflow.split(marker, 1)[1]
+    lines = section.splitlines()
+    start = next(index for index, line in enumerate(lines) if line == "        run: |") + 1
+    body: list[str] = []
+    for line in lines[start:]:
+        if line.startswith("      - "):
+            break
+        if line and not line.startswith("          "):
+            break
+        body.append(line[10:] if line else "")
+    return "\n".join(body) + "\n"
+
+
+def run_shell(script: str, environment: dict[str, str]) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(["bash", "-c", script], cwd=ROOT, env={**os.environ, **environment},
+                          text=True, capture_output=True, check=False)
+
+
 def main() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
     assert workflow.index("source-contract:") < workflow.index("stage-inputs:") < workflow.index("candidate-facts:")
@@ -43,6 +65,7 @@ def main() -> None:
     assert "run-id: ${{ inputs.upstream_run_id }}" in workflow
     assert "provider_runtime.py artifact-custody" in workflow
     assert "stage_provider_input.py" in workflow
+    assert "STAGE_ROOT_OWNED: ${{ steps.stage-reservation.outputs.stage_root_owned }}" in workflow
     assert "test_provider_facts_runtime_bounds.py" in workflow
     staging_helper = (ROOT / "tests/portable-workspace/trusted-provider/stage_provider_input.py").read_text(encoding="utf-8")
     assert "callable-cli-release-prepare.yml" in staging_helper
@@ -57,6 +80,48 @@ def main() -> None:
     assert "gh release" not in workflow
     assert "nuget push" not in workflow
     assert "docker push" not in workflow
+
+    reservation = workflow_shell(workflow, "Reserve exclusive public staging root")
+    cleanup = workflow_shell(workflow, "Remove downloaded producer archives")
+    with tempfile.TemporaryDirectory(prefix="provider-stage-workflow-") as temporary:
+        temporary_root = Path(temporary)
+        source = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+        tree = subprocess.check_output(["git", "rev-parse", "HEAD^{tree}"], cwd=ROOT, text=True).strip()
+        common = {
+            "P_ARTIFACT": "1", "P_RUN": "2", "P_ATTEMPT": "1", "P_SOURCE": source, "P_TREE": tree,
+            "P_DIGEST": "sha256:" + "1" * 64, "GITHUB_RUN_ID": "991001", "GITHUB_RUN_ATTEMPT": "1",
+        }
+        owned_root = Path("/tmp/p4-public-stage-991001-1")
+        owned_output = Path("/tmp/p4-public-stage-output-991001-1")
+        for path in (owned_root, owned_output):
+            assert not path.exists()
+        output = temporary_root / "github-output"
+        environment = {**common, "STAGE_ROOT": str(owned_root), "STAGE_OUTPUT": str(owned_output), "GITHUB_OUTPUT": str(output)}
+        result = run_shell(reservation, environment); assert result.returncode == 0, result.stderr
+        assert output.read_text() == "stage_root_owned=true\n" and owned_root.stat().st_mode & 0o777 == 0o700
+        write(owned_root / "download.zip")
+        result = run_shell(cleanup, {**environment, "STAGE_ROOT_OWNED": "true"}); assert result.returncode == 0, result.stderr
+        assert not owned_root.exists()
+
+        collision_root = Path("/tmp/p4-public-stage-991002-1"); collision_output = Path("/tmp/p4-public-stage-output-991002-1")
+        collision_root.mkdir(mode=0o700); sentinel = collision_root / "sentinel"; write(sentinel, b"preexisting")
+        collision_marker = temporary_root / "collision-output"
+        collision = {**common, "GITHUB_RUN_ID": "991002", "STAGE_ROOT": str(collision_root),
+                     "STAGE_OUTPUT": str(collision_output), "GITHUB_OUTPUT": str(collision_marker)}
+        result = run_shell(reservation, collision); assert result.returncode != 0
+        result = run_shell(cleanup, {**collision, "STAGE_ROOT_OWNED": ""}); assert result.returncode == 0, result.stderr
+        assert sentinel.read_bytes() == b"preexisting"
+        sentinel.unlink(); collision_root.rmdir()
+
+        blocked_root = Path("/tmp/p4-public-stage-991003-1"); blocked_output = Path("/tmp/p4-public-stage-output-991003-1")
+        blocked_output.mkdir(mode=0o700); blocked_sentinel = blocked_output / "sentinel"; write(blocked_sentinel, b"output")
+        blocked_marker = temporary_root / "blocked-output"
+        blocked = {**common, "GITHUB_RUN_ID": "991003", "STAGE_ROOT": str(blocked_root),
+                   "STAGE_OUTPUT": str(blocked_output), "GITHUB_OUTPUT": str(blocked_marker)}
+        result = run_shell(reservation, blocked); assert result.returncode != 0 and not blocked_root.exists()
+        result = run_shell(cleanup, {**blocked, "STAGE_ROOT_OWNED": ""}); assert result.returncode == 0, result.stderr
+        assert blocked_sentinel.read_bytes() == b"output"
+        blocked_sentinel.unlink(); blocked_output.rmdir()
 
     with tempfile.TemporaryDirectory(prefix="provider-input-") as temporary:
         root = Path(temporary)

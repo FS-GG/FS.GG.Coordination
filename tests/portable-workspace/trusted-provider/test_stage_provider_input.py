@@ -80,6 +80,8 @@ def fixture(root: Path) -> argparse.Namespace:
     STAGE.SDD["packageSha256"] = STAGE.digest(sdd_package); STAGE.TEMPLATES["packageSha256"] = STAGE.digest(templates_package)
     sdd_zip = root / "sdd.zip"; artifact(sdd_zip, {STAGE.SDD["package"]: sdd_package})
     templates_zip = root / "templates.zip"; artifact(templates_zip, {STAGE.TEMPLATES["package"]: templates_package})
+    STAGE.SDD["artifactDigest"] = "sha256:" + STAGE.digest(sdd_zip)
+    STAGE.TEMPLATES["artifactDigest"] = "sha256:" + STAGE.digest(templates_zip)
     runtime = root / "runtime.tar.gz"; runtime.write_bytes(b"runtime")
     STAGE.RUNTIME_SHA256 = STAGE.digest(runtime); STAGE.RUNTIME_SHA512 = STAGE.digest(runtime, "sha512")
     descriptor = root / "descriptor.yml"; descriptor.write_text("source: FS.GG.Workspace.Template::0.16.0\n")
@@ -88,7 +90,7 @@ def fixture(root: Path) -> argparse.Namespace:
     write_json(descriptor_commit, {"sha": STAGE.DESCRIPTOR["revision"], "tree": {"sha": STAGE.DESCRIPTOR["tree"]}})
     p_expected = {"repository": "FS-GG/FS.GG.Coordination", "runId": 11, "runAttempt": 1,
         "workflow": ".github/workflows/callable-cli-release-prepare.yml", "headSha": source, "headTree": tree,
-        "artifactId": 12, "artifactName": "callable-cli-" + source, "artifactDigest": "sha256:" + "1" * 64,
+        "artifactId": 12, "artifactName": "callable-cli-" + source, "artifactDigest": "sha256:" + STAGE.digest(prep_zip),
         "event": "workflow_dispatch"}
     paths = {}
     for label, expected in (("preparation", p_expected), ("sdd", STAGE.SDD), ("templates", STAGE.TEMPLATES)):
@@ -122,9 +124,19 @@ def main() -> None:
     with tempfile.TemporaryDirectory(prefix="p4-stage-custody-") as temporary:
         root = Path(temporary); args = fixture(root); value = json.loads(args.preparation_artifact.read_text()); value["digest"] = "sha256:" + "0" * 64; write_json(args.preparation_artifact, value)
         refusal(lambda: STAGE.assemble(args), "artifact custody differs")
+    for label in ("preparation_archive", "sdd_archive", "templates_archive"):
+        with tempfile.TemporaryDirectory(prefix=f"p4-stage-{label}-digest-") as temporary:
+            root = Path(temporary); args = fixture(root)
+            with getattr(args, label).open("ab") as archive: archive.write(b"changed archive bytes")
+            refusal(lambda: STAGE.assemble(args), "producer archive digest differs")
+            assert not args.output.exists()
+            assert not any(path.name.startswith(".output-") for path in root.iterdir())
     with tempfile.TemporaryDirectory(prefix="p4-stage-source-") as temporary:
         root = Path(temporary); args = fixture(root)
         with zipfile.ZipFile(args.preparation_archive, "a") as archive: archive.writestr("../escape", b"bad")
+        changed_digest = "sha256:" + STAGE.digest(args.preparation_archive)
+        value = json.loads(args.preparation_artifact.read_text()); value["digest"] = changed_digest
+        write_json(args.preparation_artifact, value); args.preparation_artifact_digest = changed_digest
         refusal(lambda: STAGE.assemble(args), "unsafe or repeated")
         assert not args.output.exists()
         assert not any(path.name.startswith(".output-") for path in root.iterdir())

@@ -80,8 +80,20 @@ def validate_custody(run: dict[str, object], artifact: dict[str, object], expect
     return {key: expected[key] for key in ("repository", "runId", "runAttempt", "workflow", "headSha", "artifactId", "artifactDigest")}
 
 
+def validate_archive(path: Path, expected_digest: object) -> None:
+    metadata = path.lstat()
+    if (not stat.S_ISREG(metadata.st_mode) or metadata.st_size <= 0
+            or metadata.st_size > 640 * 1024 * 1024
+            or not isinstance(expected_digest, str)
+            or not re.fullmatch(r"sha256:[0-9a-f]{64}", expected_digest)
+            or "sha256:" + digest(path) != expected_digest):
+        raise ValueError("producer archive digest differs")
+
+
 def safe_extract(archive: Path, target: Path, *, total_limit: int = 640 * 1024 * 1024) -> None:
-    if target.exists() or archive.stat().st_size > 640 * 1024 * 1024:
+    metadata = archive.lstat()
+    if (target.exists() or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_size > 640 * 1024 * 1024):
         raise ValueError("artifact target or archive size refused")
     target.mkdir(mode=0o700)
     try:
@@ -220,12 +232,21 @@ def assemble(args: argparse.Namespace) -> None:
     }
     roots: list[Path] = []
     try:
+        p_run, p_artifact = load(args.preparation_run), load(args.preparation_artifact)
+        sdd_run, sdd_artifact = load(args.sdd_run), load(args.sdd_artifact)
+        templates_run, templates_artifact = load(args.templates_run), load(args.templates_artifact)
+        validate_custody(p_run, p_artifact, p_expected)
+        validate_custody(sdd_run, sdd_artifact, SDD)
+        validate_custody(templates_run, templates_artifact, TEMPLATES)
+        validate_archive(args.preparation_archive, p_artifact.get("digest"))
+        validate_archive(args.sdd_archive, sdd_artifact.get("digest"))
+        validate_archive(args.templates_archive, templates_artifact.get("digest"))
         for archive in (args.preparation_archive, args.sdd_archive, args.templates_archive):
             root = args.output.parent / f".{args.output.name}-{len(roots)}"
             safe_extract(archive, root); roots.append(root)
-        p_custody, p_members = preparation(p_expected, load(args.preparation_run), load(args.preparation_artifact), roots[0])
-        sdd_custody = validate_custody(load(args.sdd_run), load(args.sdd_artifact), SDD)
-        templates_custody = validate_custody(load(args.templates_run), load(args.templates_artifact), TEMPLATES)
+        p_custody, p_members = preparation(p_expected, p_run, p_artifact, roots[0])
+        sdd_custody = validate_custody(sdd_run, sdd_artifact, SDD)
+        templates_custody = validate_custody(templates_run, templates_artifact, TEMPLATES)
         sdd_package = unique(roots[1], SDD["package"]); templates_package = unique(roots[2], TEMPLATES["package"])
         if digest(sdd_package) != SDD["packageSha256"] or digest(templates_package) != TEMPLATES["packageSha256"]:
             raise ValueError("receiver package digest differs")

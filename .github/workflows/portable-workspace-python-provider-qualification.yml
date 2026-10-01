@@ -134,9 +134,9 @@ jobs:
           ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
-      - name: Acquire exact public producer records and archives
+      - name: Reserve exclusive public staging root
+        id: stage-reservation
         env:
-          GH_TOKEN: ${{ github.token }}
           P_ARTIFACT: ${{ inputs.preparation_artifact_id }}
           P_RUN: ${{ inputs.preparation_run_id }}
           P_ATTEMPT: ${{ inputs.preparation_run_attempt }}
@@ -152,6 +152,19 @@ jobs:
           test "$(git rev-parse "$P_SOURCE^{tree}")" = "$P_TREE"
           test ! -e "$STAGE_ROOT"; test ! -e "$STAGE_OUTPUT"
           install -d -m 0700 "$STAGE_ROOT"
+          printf 'stage_root_owned=true\n' >> "$GITHUB_OUTPUT"
+      - name: Acquire exact public producer records and archives
+        env:
+          GH_TOKEN: ${{ github.token }}
+          P_ARTIFACT: ${{ inputs.preparation_artifact_id }}
+          P_RUN: ${{ inputs.preparation_run_id }}
+          P_ATTEMPT: ${{ inputs.preparation_run_attempt }}
+          P_SOURCE: ${{ inputs.preparation_source_revision }}
+          P_TREE: ${{ inputs.preparation_source_tree }}
+          P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+        run: |
+          set -euo pipefail
+          umask 077
           gh api "repos/FS-GG/FS.GG.Coordination/actions/runs/$P_RUN" > "$STAGE_ROOT/preparation-run.json"
           gh api "repos/FS-GG/FS.GG.Coordination/actions/artifacts/$P_ARTIFACT" > "$STAGE_ROOT/preparation-artifact.json"
           gh api "repos/FS-GG/FS.GG.Coordination/actions/artifacts/$P_ARTIFACT/zip" > "$STAGE_ROOT/preparation.zip"
@@ -196,9 +209,14 @@ jobs:
           cmp "$STAGE_OUTPUT/provider-input.json" "$STAGE_ROOT/validated-join.json"
       - name: Remove downloaded producer archives
         if: always()
+        env:
+          STAGE_ROOT_OWNED: ${{ steps.stage-reservation.outputs.stage_root_owned }}
         run: |
           set -euo pipefail
           test "$STAGE_ROOT" = "/tmp/p4-public-stage-$GITHUB_RUN_ID-$GITHUB_RUN_ATTEMPT"
+          if test "$STAGE_ROOT_OWNED" != true; then
+            exit 0
+          fi
           test ! -L "$STAGE_ROOT"
           if test -d "$STAGE_ROOT"; then
             find "$STAGE_ROOT" -type f -delete
