@@ -4,10 +4,9 @@
 publication and receiver qualification. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** P1 source, local CLI integration and installed-package qualification are complete on the isolated
-branch. P2 remains open after review found that the first local executor did not enforce its source or OCI
-image binding. The corrected source and actual pinned-image qualification are in progress. Hosted qualification,
-protected source merge, publication, receiver adoption and P3–P5 remain pending.
+**Status:** P1 and P2 are complete. The exact 0.2.0 producer candidate was prepared and qualified from protected
+source. Its publication workflow is pinned to the retained candidate and independently verified digests; P3
+publication remains pending. Receiver pins and adoption remain pending, as do P4 and P5.
 
 ## Authority and compatibility
 
@@ -31,7 +30,7 @@ or noncanonical fields fail closed.
   execution pins. Integrate the shared CLI registrations, run repository checks, pack the existing tool and prove
   the installed command works with the source checkout absent. Source merge and installed behavior are recorded
   separately; no publication is claimed by P1.
-- [ ] **P2 — Bounded executable binding.** Bind one real fixed-operation executor to the prepared source revision,
+- [x] **P2 — Bounded executable binding.** Bind one real fixed-operation executor to the prepared source revision,
   immutable toolchain image, reviewed operation identity, working directory, finite runtime/output limits and
   verification identity. Exercise actual Python component build/test and a minimal TypeScript frontend with Python
   backend build/test plus frontend-to-backend journey in isolated fixtures. Distinguish cancellation request from
@@ -103,8 +102,48 @@ The coherent repair window is:
    journey in the pinned image. Qualify source/image drift, hostile environment, timeout, output overflow,
    concurrent/restarted duplicates and recovery. Fake-runtime tests establish source decisions only.
 
-P2 closes after native source delivery and actual supported-runtime qualification. Source repair may land
-while runtime qualification remains pending; publication and adoption retain P3–P5's existing boundaries.
+P2 closed after native source delivery and actual supported-runtime qualification. Publication and adoption
+retain P3–P5's existing boundaries.
+
+## P2 protected qualification evidence
+
+The protected producer is commit `d25b9eaec991c94593adcecda6869d07dabdfb43`, tree
+`169b7df260ee6668b8b28d43857183ad669b0e12`. Preparation run `36794564231` completed successfully and retained
+artifact `11133062598`, named `callable-cli-d25b9eaec991c94593adcecda6869d07dabdfb43`, through 2026-10-15. The
+186,566,428-byte archive has SHA-256
+`27c52b6cc7aeb415be0c313fda40165c83daf1e30b5fe8e89d16cb9828824aa9`.
+
+Independent bounded inspection established the following exact candidate identities:
+
+- package `FS.GG.Coordination.Cli.0.2.0.nupkg`:
+  `8ee67f83cecb3898eee12fd69f54cad0e3d1e232b3c88c18c434e3969019ab13`;
+- callable package manifest: `88d1dcf0922328a7c31161a67c505ec7ec926778a07cd1704242e56758d86ee4`;
+- portable bundle: `c4ccc949ba02d67eba27302dfdffa258ecd4a55b628315fff82c26b2e4566abc`;
+- Linux amd64 OCI archive: `24dfd6fbf5e5d86b664963e5bcf896f2bbaba8803fdd9125c343a9389d6295b6`;
+- portable release manifest: `bd08411e277c77f0f607716c510cc487ac438e4aeeff766b6b76e8a63e49d390`;
+- image manifest: `349fe0b3339ce25467842603bf79ac2a41d420a458c633f19dfde1ce23f4e7e4`;
+- image qualification: `98f3b09aafe4f2f34c55620471c789ab18a5f8632ac4002479d8ebed9e9a5234`;
+- executor evidence: `5855f5d18fbdb62c9dd69c1b56b8ce2b0f32ffb91a6ae1d0ed8838625ed706dc`;
+- packaged qualification receipt: `1f2a09a06aa19a036fdb34430b69e725820073b8b6ed80f163e5617802350f23`.
+
+The package-bound qualification passed all six operations with zero failures, zero unknown outcomes and zero
+remaining execution roots. The receipt binds embedded execution assembly
+`d02f6f1e5fc58afd17fe2363a26e81b3f201be3e1c007488b466c7db47595aa5` and Akka assembly
+`1ef266d80a923b25db758987a15e4db99acaa05863a236871bac4dbd6315c5b7`. The release manifest retains source,
+image, manifest and custody identities while setting publication, tag and activation authorization to false.
+
+## P3 qualified publication pins
+
+The 0.2.0 publication workflow is pinned to the exact protected source, tree, package, bundle, OCI archive,
+portable manifest, successful preparation run, retained artifact and artifact archive listed above. It rechecks
+the live immutable preparation identities, reproduces the package, reruns all six packaged operations, requires
+zero remaining execution roots, observes collisions, verifies provenance, publishes the same package bytes to
+GitHub Packages before nuget.org, reads both feeds back and creates the tag and release only after both feeds
+settle. Publication is **PENDING**; pinning this source performs no feed, tag, release or activation effect.
+
+The open P4 work at PR #905, head `c6d423d795ac3857c354be8f2c6055c667056a9e`, is excluded from the frozen
+0.2.0 bytes. Its independently compiled successor remains reserved for version 0.2.1 and cannot enter this
+candidate under the 0.2.0 identity.
 
 ## Workspace impact
 
