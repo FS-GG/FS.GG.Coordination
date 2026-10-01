@@ -81,6 +81,28 @@ def main() -> None:
     assert 'test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d\' \' -f1)" = "$EXPECTED_SHA256"' in text
     assert 'verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE"' in text
 
+    anonymous = text[
+        text.index("- name: Anonymous public install and schema readback") :
+        text.index("- name: Record dual-feed and portable-asset readback")
+    ]
+    require_in_order(
+        anonymous,
+        [
+            "installed=false",
+            "for attempt in {1..60}; do",
+            'rm -rf -- "$RUNNER_TEMP/public-tool"',
+            'install_log="$READBACK_OUTPUT/public-install-$attempt.log"',
+            'dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION"',
+            'grep -F "Version $PACKAGE_VERSION of package ${PACKAGE_ID,,} is not found in NuGet feeds https://api.nuget.org/v3/index.json."',
+            'test "$attempt" != 60',
+            "sleep 10",
+            'test "$installed" = true',
+        ],
+    )
+    assert anonymous.count("dotnet tool install") == 1
+    assert "--configfile \"$config\" --no-cache" in anonymous
+    assert "|| true" not in anonymous
+
     assert "PACKAGE_VERSION: 0.2.0" in text
     assert "PACKAGE_FILE: FS.GG.Coordination.Cli.0.2.0.nupkg" in text
     assert "PORTABLE_BUNDLE: portable-workspace-v1-0.2.0.zip" in text
