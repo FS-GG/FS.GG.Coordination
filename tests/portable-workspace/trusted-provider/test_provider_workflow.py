@@ -21,6 +21,12 @@ SPEC = importlib.util.spec_from_file_location("provider_input", VALIDATOR_PATH)
 assert SPEC and SPEC.loader
 VALIDATOR = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(VALIDATOR)
+FACTS_SPEC = importlib.util.spec_from_file_location("provider_facts", Path(__file__).with_name("provider_facts.py"))
+assert FACTS_SPEC and FACTS_SPEC.loader
+FACTS = importlib.util.module_from_spec(FACTS_SPEC); FACTS_SPEC.loader.exec_module(FACTS)
+STAGE_SPEC = importlib.util.spec_from_file_location("stage_provider_input", Path(__file__).with_name("stage_provider_input.py"))
+assert STAGE_SPEC and STAGE_SPEC.loader
+STAGE = importlib.util.module_from_spec(STAGE_SPEC); STAGE_SPEC.loader.exec_module(STAGE)
 
 
 def digest(path: Path) -> str:
@@ -80,6 +86,9 @@ def main() -> None:
     assert "gh release" not in workflow
     assert "nuget push" not in workflow
     assert "docker push" not in workflow
+    policy = (ROOT / "src/FS.GG.Coordination.Cli/PortableWorkspacePythonHelloPolicy.fs").read_text()
+    assert FACTS.IMAGE == STAGE.IMAGE_REFERENCE and FACTS.IMAGE in policy
+    assert STAGE.IMAGE_CONFIG_DIGEST.removeprefix("sha256:") in policy
 
     reservation = workflow_shell(workflow, "Reserve exclusive public staging root")
     cleanup = workflow_shell(workflow, "Remove downloaded producer archives")
@@ -308,6 +317,35 @@ exec /usr/bin/mkdir "$@"
             facts_root, auth_root, upstream, join_path, receiver_archive, profile_path, candidate_path,
             "f" * 40, "e" * 40, root / "validated-facts.json", root / "validated-grant.json"
         )
+        changed_facts = json.loads((facts_root / "provider-facts.json").read_text())
+        changed_facts["image"]["archiveSha256"] = "e" * 64
+        write(facts_root / "provider-facts.json", (json.dumps(changed_facts) + "\n").encode())
+        changed_authority = dict(authority); changed_authority["providerFactsSha256"] = digest(facts_root / "provider-facts.json")
+        write(auth_root / "authorization.json", (json.dumps(changed_authority) + "\n").encode())
+        try:
+            VALIDATOR.validate_authorization(
+                facts_root, auth_root, upstream, join_path, receiver_archive, profile_path, candidate_path,
+                "f" * 40, "e" * 40, root / "changed-archive-facts.json", root / "changed-archive-grant.json"
+            )
+            raise AssertionError("changed image archive was accepted without matching grant admission")
+        except ValueError as error:
+            assert "exact image custody facts" in str(error)
+        write(facts_root / "provider-facts.json", (json.dumps(facts) + "\n").encode())
+        changed_grant = json.loads((auth_root / "python-hello-v1.json").read_text())
+        changed_grant["image"]["recipeSha256"] = "e" * 64
+        write(auth_root / "python-hello-v1.json", (json.dumps(changed_grant) + "\n").encode())
+        changed_authority = dict(authority); changed_authority["grantSha256"] = digest(auth_root / "python-hello-v1.json")
+        write(auth_root / "authorization.json", (json.dumps(changed_authority) + "\n").encode())
+        try:
+            VALIDATOR.validate_authorization(
+                facts_root, auth_root, upstream, join_path, receiver_archive, profile_path, candidate_path,
+                "f" * 40, "e" * 40, root / "changed-receipt-facts.json", root / "changed-receipt-grant.json"
+            )
+            raise AssertionError("changed image receipt was accepted without matching facts admission")
+        except ValueError as error:
+            assert "exact image custody facts" in str(error)
+        write(auth_root / "python-hello-v1.json", (json.dumps(grant) + "\n").encode())
+        write(auth_root / "authorization.json", (json.dumps(authority) + "\n").encode())
         receiver_archive.write_bytes(b"changed receiver")
         try:
             VALIDATOR.validate_authorization(

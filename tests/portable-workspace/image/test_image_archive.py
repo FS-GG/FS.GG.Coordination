@@ -35,6 +35,23 @@ def add(archive: tarfile.TarFile, name: str, payload: bytes) -> None:
     archive.addfile(info, io.BytesIO(payload))
 
 
+def assert_fixed_build_inputs(containerfile: str, builder: str, inputs: dict[str, object]) -> None:
+    copies = [line.split()[1] for line in containerfile.splitlines() if line.startswith("COPY ")]
+    assert copies == ["node-v24.8.0-linux-x64.tar.gz", "typescript-5.9.2.tgz"]
+    assert "SOURCE_REVISION" not in containerfile and "policy" not in containerfile.lower()
+    prepare_source = builder.split("def prepare(", 1)[1].split("def _archive_json", 1)[0]
+    assert "--build-arg" not in prepare_source and '"--label"' not in prepare_source
+    assert {
+        "Containerfile": hashlib.sha256(containerfile.encode()).hexdigest(),
+        inputs["node"]["archive"]: inputs["node"]["sha256"],
+        inputs["typescript"]["archive"]: inputs["typescript"]["sha256"],
+    } == {
+        "Containerfile": "dc9edf5d99d93649dd2fa80bdef25b8a1ab6463db381ba34c5384d38b3513c10",
+        "node-v24.8.0-linux-x64.tar.gz": "daf68404b478b4c3616666580d02500a24148c0f439e4d0134d65ce70e90e655",
+        "typescript-5.9.2.tgz": "67a3bc82e822b8f45f653a80fc3a9730d23214d36c83ba85dd7f5abebee82062",
+    }
+
+
 def archive(path: Path, *, corrupt_layer: bool = False, user: str = "32768:32768") -> tuple[str, str]:
     config = canonical({"architecture": "amd64", "os": "linux", "config": {"User": user}})
     layer = b"qualified-layer"
@@ -58,6 +75,20 @@ def archive(path: Path, *, corrupt_layer: bool = False, user: str = "32768:32768
 
 def main() -> None:
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
+    containerfile = (ROOT / "tests/portable-workspace/image/Containerfile").read_text()
+    inputs = json.loads((ROOT / "tests/portable-workspace/image/inputs.json").read_text())
+    assert hashlib.sha256(source.encode()).hexdigest() == "6c8ba5829097590d47231774b87f85de6aec16cc42fceb2c70ac3552ad9808c2"
+    assert_fixed_build_inputs(containerfile, source, inputs)
+    for changed in (
+        containerfile + "\nCOPY src/FS.GG.Coordination.Cli/PortableWorkspacePythonHelloPolicy.fs /policy\n",
+        containerfile + "\nLABEL org.opencontainers.image.revision=$SOURCE_REVISION\n",
+    ):
+        refused = False
+        try:
+            assert_fixed_build_inputs(changed, source, inputs)
+        except AssertionError:
+            refused = True
+        assert refused, "source-dependent image context was accepted"
     assert '["save", "--format=oci-archive", "--output", str(candidate), IMAGE_NAME]' in source
     assert '["save", "--format=oci-archive", "--output", str(candidate), build_reference]' not in source
     workflow = (ROOT / ".github/workflows/portable-workspace-executor-qualification.yml").read_text()

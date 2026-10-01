@@ -60,22 +60,21 @@ module PortableWorkspacePythonHelloPolicy =
 
     [<Literal>]
     let QualifiedImage =
-        "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e"
+        "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2@sha256:e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
 
     [<Literal>]
-    let ImageArchiveSha256 = "24dfd6fbf5e5d86b664963e5bcf896f2bbaba8803fdd9125c343a9389d6295b6"
+    let ImageManifestDigest = "e76e01afa06a325beb74f7f55c32ed13aebe140c82a37e17c67f2d3217da4c3e"
 
     [<Literal>]
-    let ImageManifestDigest = "a994814516fa02d8ac537eed0bdade80db979ac22a415b9f55e73f931c2a7e0e"
-
-    [<Literal>]
-    let ImageConfigDigest = "5d43c46ca296264cc0ca455195aea2adab6e736d11b3114119a8741fe34a011a"
+    let ImageConfigDigest = "b9390f800c77e35aa2d1d124f4b416142270a6f1063aa80543077275e0a52c53"
 
     [<Literal>]
     let VerificationSha256 = "2ed645adefe2c23308832036a3b5163dc39faaf152c2c9d1d3afb3bd637f146a"
 
-    [<Literal>]
-    let RecipeSha256 = "349fe0b3339ce25467842603bf79ac2a41d420a458c633f19dfde1ce23f4e7e4"
+    let private validSha256 (value: string) =
+        not (isNull value)
+        && value.Length = 64
+        && (value |> Seq.forall (fun character -> character >= '0' && character <= '9' || character >= 'a' && character <= 'f'))
 
     let portableClock () =
         let value = DateTimeOffset.UtcNow
@@ -135,10 +134,10 @@ module PortableWorkspacePythonHelloPolicy =
         if grant.EnrollmentId <> EnrollmentId then
             Error "portable-runtime-enrollment-not-found"
         elif grant.QualifiedImage <> QualifiedImage
-             || grant.ImageArchiveSha256 <> ImageArchiveSha256
              || grant.ImageManifestDigest <> ImageManifestDigest
              || grant.ImageConfigDigest <> ImageConfigDigest
-             || grant.ImageRecipeSha256 <> RecipeSha256 then
+             || not (validSha256 grant.ImageArchiveSha256)
+             || not (validSha256 grant.ImageRecipeSha256) then
             Error "portable-runtime-image-binding-refused"
         else
             let profile = profile grant.WorkspaceScope grant.ReceiverCommit
@@ -164,7 +163,7 @@ module PortableWorkspacePythonHelloPolicy =
                         VerificationIdentity = "python-test-v1"
                         VerificationPath = "python-test.json"
                         VerificationSha256 = VerificationSha256
-                        RecipeSha256 = RecipeSha256
+                        RecipeSha256 = grant.ImageRecipeSha256
                     }
 
                 Ok
