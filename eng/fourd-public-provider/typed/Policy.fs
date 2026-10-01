@@ -24,6 +24,7 @@ type Observation =
     | Invalidate of identity: string * cost: int
     | BeginEffect of resource: string * acknowledged: bool * cost: int
     | ObserveSuccess of cost: int
+    | BeginCleanup of cancelled: bool * cost: int
     | Cancel of cost: int
     | Close of resource: string * cost: int
     | Finish of cost: int
@@ -36,7 +37,7 @@ module Policy =
         Cancelled = false; BudgetRemaining = budget
     }
 
-    let private validToken value =
+    let validToken value =
         not (System.String.IsNullOrWhiteSpace value) && value.Length <= 256
         && value |> Seq.forall (fun c -> c >= '!' && c <= '~')
 
@@ -47,7 +48,7 @@ module Policy =
     let reduce state observation =
         let cost = match observation with
                    | Acquire(_,_,c) | Validate(_,c) | Admit(_,c) | Invalidate(_,c)
-                   | BeginEffect(_,_,c) | ObserveSuccess c | Cancel c | Close(_,c) | Finish c -> c
+                   | BeginEffect(_,_,c) | ObserveSuccess c | BeginCleanup(_,c) | Cancel c | Close(_,c) | Finish c -> c
         match spend cost state with
         | Error reason -> Error reason
         | Ok next ->
@@ -57,13 +58,15 @@ module Policy =
                                     CurrentIdentity = Some identity; Owned = state.Owned.Add resource }
             | Validate(identity, _) when state.Phase = Acquired && Some identity = state.CurrentIdentity ->
                 Ok { next with Phase = Validated; ValidatedIdentity = Some identity }
-            | Admit(identity, _) when state.Phase = Validated && Some identity = state.ValidatedIdentity
+            | Admit(identity, _) when state.Phase = Validated && validToken identity && Some identity = state.ValidatedIdentity
                                                    && Some identity = state.CurrentIdentity ->
                 Ok { next with Phase = Admitted; AdmittedIdentity = Some identity }
             | Invalidate(identity, _) when (state.Phase = Validated || state.Phase = Admitted)
                                            && validToken identity && Some identity <> state.CurrentIdentity ->
                 Ok { next with Phase = Validated; CurrentIdentity = Some identity; AdmittedIdentity = None }
             | BeginEffect(resource, acknowledged, _) when state.Phase = Admitted
+                                                           && state.AdmittedIdentity.IsSome
+                                                           && state.CurrentIdentity.IsSome
                                                            && state.AdmittedIdentity = state.CurrentIdentity
                                                            && validToken resource ->
                 Ok { next with Phase = Effect; EffectAcknowledged = acknowledged;
@@ -71,6 +74,9 @@ module Policy =
                                     Owned = state.Owned.Add resource }
             | ObserveSuccess _ when state.Phase = Effect && state.Outcome = Unknown ->
                 Ok { next with EffectAcknowledged = true; Outcome = Success }
+            | BeginCleanup(cancelled, _) when state.Phase <> Cleanup && state.Phase <> Finished && state.Phase <> CleanupFailed ->
+                Ok { next with Phase = Cleanup; Cancelled = cancelled;
+                                    Outcome = (if state.Outcome = Success then Success else Unknown) }
             | Cancel _ when state.Phase <> Finished && state.Phase <> CleanupFailed ->
                 Ok { next with Phase = Cleanup; Cancelled = true;
                                     Outcome = (if state.Outcome = Success then Success else Unknown) }
@@ -81,5 +87,20 @@ module Policy =
             | _ -> Error "transition-refused"
 
     let cleanupComplete state = state.Phase = Finished && state.Closed = state.Owned
-    let effectEligible state = state.Phase = Admitted && state.AdmittedIdentity = state.CurrentIdentity
+    let effectEligible state = state.Phase = Admitted && state.AdmittedIdentity.IsSome
+                               && state.CurrentIdentity.IsSome && state.AdmittedIdentity = state.CurrentIdentity
     let successful state = state.Outcome = Success && state.EffectAcknowledged && cleanupComplete state
+
+    let validateState state =
+        let identitiesValid = [state.AcquiredIdentity;state.ValidatedIdentity;state.AdmittedIdentity;state.CurrentIdentity]
+                              |> List.forall (Option.forall validToken)
+        let identityChain =
+            match state.Phase with
+            | Admitted | Effect | Cleanup | Finished | CleanupFailed ->
+                state.AcquiredIdentity.IsSome && state.ValidatedIdentity.IsSome && state.CurrentIdentity.IsSome
+                && (state.Phase = CleanupFailed || state.AdmittedIdentity.IsSome)
+            | _ -> true
+        identitiesValid && identityChain && state.BudgetRemaining >= 0 && state.BudgetRemaining <= 2700
+        && Set.isSubset state.Closed state.Owned
+        && (state.Outcome <> Success || state.EffectAcknowledged)
+        && (state.Phase <> Finished || state.Closed = state.Owned)

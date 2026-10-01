@@ -1,6 +1,7 @@
 open System
 open FsQuint
 open FS.GG.FourD.Typed
+open System.Text.Json.Nodes
 
 let fail message = raise (InvalidOperationException message)
 let policyOk (result: Result<'a, string>) = match result with Ok value -> value | Error reason -> fail reason
@@ -10,18 +11,29 @@ let text value = QuintReplayValue.Text value
 let boolean value = QuintReplayValue.Boolean value
 let integer value = QuintReplayValue.Integer(string value)
 
+let identityNumber = function None -> 0 | Some "id-a" -> 1 | Some "id-b" -> 2 | Some _ -> 3
+let phaseText = function
+    | Idle -> "idle" | Acquired -> "acquired" | Validated -> "validated" | Admitted -> "admitted"
+    | Effect -> "effect" | Cleanup -> "cleanup" | Finished -> "finished" | CleanupFailed -> "cleanup-failed"
+let outcomeText = function NoneObserved -> "none" | Unknown -> "unknown" | Success -> "success" | Refused -> "refused"
+
 let project state =
     let draft = {
         Identity = String.replicate 64 "0"
         Bindings = [
-            "phase", text (string state.Phase)
-            "identity", text (state.CurrentIdentity |> Option.defaultValue "")
-            "effectAcknowledged", boolean state.EffectAcknowledged
-            "outcome", text (string state.Outcome)
-            "owned", integer state.Owned.Count
-            "closed", integer state.Closed.Count
-            "cancelled", boolean state.Cancelled
-            "budget", integer state.BudgetRemaining
+            "state", QuintReplayValue.Record [
+                "acquiredIdentity", integer (identityNumber state.AcquiredIdentity)
+                "admittedIdentity", integer (identityNumber state.AdmittedIdentity)
+                "budget", integer state.BudgetRemaining
+                "cancelled", boolean state.Cancelled
+                "closed", integer state.Closed.Count
+                "currentIdentity", integer (identityNumber state.CurrentIdentity)
+                "effectAcknowledged", boolean state.EffectAcknowledged
+                "outcome", text (outcomeText state.Outcome)
+                "owned", integer state.Owned.Count
+                "phase", text (phaseText state.Phase)
+                "validatedIdentity", integer (identityNumber state.ValidatedIdentity)
+            ]
         ]
     }
     { draft with Identity = QuintReplay.stateFingerprint draft |> replayOk }
@@ -33,36 +45,53 @@ let apply (name: string) observation (states: State list, observations: QuintRep
     let observed = { Index = index; Action = name; Source = source name; Actual = actual }
     states @ [next], observations @ [observed]
 
+let start = ([Policy.initial 12], [])
+let success = start |> apply "acquire" (Acquire("id-a","plaintext",1)) |> apply "validate" (Validate("id-a",1))
+              |> apply "admit" (Admit("id-a",1)) |> apply "beginEffect" (BeginEffect("effect",false,1))
+              |> apply "observeSuccess" (ObserveSuccess 1) |> apply "beginCleanup" (BeginCleanup(false,1))
+              |> apply "closePlaintext" (Close("plaintext",1)) |> apply "closeEffect" (Close("effect",1)) |> apply "finish" (Finish 1)
+let scenario = Environment.GetEnvironmentVariable "FSGG_FOURD_QUINT_SCENARIO"
 let states, observations =
-    ([Policy.initial 12], [])
-    |> apply "acquire" (Acquire("id-a", "plaintext", 1))
-    |> apply "validate" (Validate("id-a", 1))
-    |> apply "admit" (Admit("id-a", 1))
-    |> apply "beginEffect" (BeginEffect("effect", false, 1))
-    |> apply "observeSuccess" (ObserveSuccess 1)
-    |> apply "cancel" (Cancel 1)
-    |> apply "closePlaintext" (Close("plaintext", 1))
-    |> apply "closeEffect" (Close("effect", 1))
-    |> apply "finish" (Finish 1)
+    match scenario with
+    | "success" -> success
+    | "stale" -> start |> apply "acquire" (Acquire("id-a","plaintext",1)) |> apply "validate" (Validate("id-a",1))
+                       |> apply "admit" (Admit("id-a",1)) |> apply "invalidate" (Invalidate("id-b",1))
+    | "cancelled" -> start |> apply "acquire" (Acquire("id-a","plaintext",1)) |> apply "cancel" (BeginCleanup(true,1))
+                           |> apply "closePlaintext" (Close("plaintext",1)) |> apply "finish" (Finish 1)
+    | "unknown" -> start |> apply "acquire" (Acquire("id-a","plaintext",1)) |> apply "validate" (Validate("id-a",1))
+                         |> apply "admit" (Admit("id-a",1)) |> apply "beginEffect" (BeginEffect("effect",false,1))
+                         |> apply "beginCleanup" (BeginCleanup(false,1)) |> apply "closePlaintext" (Close("plaintext",1))
+                         |> apply "closeEffect" (Close("effect",1)) |> apply "finish" (Finish 1)
+    | "cleanup-failure" -> start |> apply "acquire" (Acquire("id-a","plaintext",1)) |> apply "validate" (Validate("id-a",1))
+                                 |> apply "admit" (Admit("id-a",1)) |> apply "beginEffect" (BeginEffect("effect",false,1))
+                                 |> apply "beginCleanup" (BeginCleanup(false,1)) |> apply "closePlaintext" (Close("plaintext",1))
+                                 |> apply "finish" (Finish 1)
+    | _ -> fail "FSGG_FOURD_QUINT_SCENARIO is required"
 
-let steps = observations |> List.map (fun item -> {
-    Index = item.Index; Action = item.Action; Source = item.Source; Expected = item.Actual })
 let environment = {
     Seed = "20261001"; Bounds = ["steps", 12L]; ToolFingerprint = String.replicate 64 "1"
     ProfileFingerprint = String.replicate 64 "2"; ContractFingerprint = String.replicate 64 "3"
     AdapterFingerprint = String.replicate 64 "4"; ImplementationFingerprint = String.replicate 64 "5"
 }
-let initial = project states.Head
-let draft = { SchemaVersion = 1; TraceIdentity = String.replicate 64 "0"; Environment = environment; Initial = initial; Steps = steps }
-let trace = { draft with TraceIdentity = QuintReplay.traceFingerprint draft |> replayOk }
+let bindings = observations |> List.map (fun item -> { Index=item.Index; Action=item.Action; Source=item.Source })
+let trace =
+    let path = Environment.GetEnvironmentVariable "FSGG_FOURD_QUINT_ITF"
+    if String.IsNullOrWhiteSpace path then fail "FSGG_FOURD_QUINT_ITF is required"
+    let context = { Environment=environment; Steps=bindings }
+    let root = JsonNode.Parse(IO.File.ReadAllText(path)).AsObject()
+    let metadata = root["#meta"].AsObject()
+    metadata.Remove("description") |> ignore
+    metadata.Remove("timestamp") |> ignore
+    root.ToJsonString() |> QuintReplay.decodeItf context |> replayOk
 
 match QuintReplay.compare trace observations with
 | Ok QuintReplayResult.Equivalent -> ()
 | value -> fail $"FsQuint correspondence failed: %A{value}"
 
-if not (Policy.successful (List.last states)) then fail "acknowledged effect with complete cleanup was not successful"
+if scenario="success" && not (Policy.successful (List.last states)) then fail "acknowledged effect with complete cleanup was not successful"
 
-let admitted = states[3]
+let successStates,_ = success
+let admitted = successStates[3]
 match Policy.reduce admitted (Invalidate("id-b", 1)) with
 | Ok stale when Policy.effectEligible stale -> fail "stale identity remained eligible"
 | Ok _ -> ()

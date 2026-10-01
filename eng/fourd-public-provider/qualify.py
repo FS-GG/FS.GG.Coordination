@@ -1124,6 +1124,28 @@ def validate_native(p2_path: pathlib.Path, binding_path: pathlib.Path) -> dict[s
     return image
 
 
+def settle_typed_failure(*, runner: Effects, public_source: pathlib.Path, work: pathlib.Path,
+                         state: Mapping[str, object] | None, cleanup_complete: bool) -> bool:
+    if state is None:
+        return cleanup_complete
+    try:
+        current=dict(state)
+        if current.get("phase") not in {"cleanup","finished","cleanup-failed"}:
+            current=typed_module().transition(runner=runner,source_root=public_source,work=work,name="failure-cleanup",
+                observation={"kind":"begin-cleanup","cancelled":bool(runner.cancelled)},state=current)
+        if cleanup_complete and current.get("phase")=="cleanup":
+            for resource in tuple(current.get("owned",())):
+                if resource not in set(current.get("closed",())):
+                    current=typed_module().transition(runner=runner,source_root=public_source,work=work,
+                        name="failure-close-"+str(resource),observation={"kind":"close","resource":resource},state=current)
+        if current.get("phase")=="cleanup":
+            current=typed_module().transition(runner=runner,source_root=public_source,work=work,name="failure-finish",
+                observation={"kind":"finish"},state=current)
+        return cleanup_complete and current.get("cleanupComplete") is True
+    except Exception:
+        return False
+
+
 def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, effects: Effects | None = None) -> int:
     """Run the only process that receives the source-recipient private key."""
     env = environ if environ is not None else dict(os.environ)
@@ -1131,6 +1153,7 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
     public.mkdir(mode=0o700, parents=True, exist_ok=False)
     result = base_result(env, "failed"); runner = effects or Effects(); private = pathlib.Path(args.private_root)
     private_identity: tuple[int, int] | None = None; prepared = False
+    typed_state: dict[str, object] | None = None; typed_work: pathlib.Path | None = None
     old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     for sig in old_handlers: signal.signal(sig, runner.request_cancel)
     try:
@@ -1144,6 +1167,18 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
             result["outcome"] = "awaiting-exact-admission"; write_result(output, result); return 0
         _private_dir(private); private_stat = private.lstat(); private_identity = (private_stat.st_dev, private_stat.st_ino)
         (private / "home").mkdir(mode=0o700)
+        typed_work = public / "typed-acquisition"; _private_dir(typed_work)
+        try:
+            typed_state = typed_module().admit(runner=runner, source_root=public_source, work=typed_work,
+                                               admission=admitted, placement_sha=placement_sha,
+                                               run_id=str(admitted["runId"]), run_attempt=str(admitted["runAttempt"]),
+                                               source_sha=FOURD_SHA, source_tree=FOURD_TREE,
+                                               inventory_sha256=FOURD_INVENTORY)
+            typed_state = typed_module().transition(
+                runner=runner, source_root=public_source, work=typed_work, name="begin-source-effect",
+                observation={"kind":"begin-effect", "resource":"source-acquisition"}, state=typed_state)
+        except Exception as error:
+            raise Refusal("typed-policy-admission-refused") from error
         source = acquire_source(key or b"", admitted, private, pathlib.Path(args.known_hosts), runner, env)
         safe_env = {"PATH":"/usr/bin:/bin", "HOME":str(private / "home"), "LANG":"C.UTF-8"}
         validate_checkout(source, runner, safe_env, private / "capture")
@@ -1151,26 +1186,41 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
             raise Refusal("source-binding-refused")
         if not runner.settle(): raise Refusal("child-scope-refused")
         try:
-            typed_state = typed_module().admit(runner=runner, source_root=public_source,
-                                               work=private / "capture", admission=admitted,
-                                               placement_sha=placement_sha, run_id=str(admitted["runId"]),
-                                               run_attempt=str(admitted["runAttempt"]), source_sha=FOURD_SHA,
-                                               source_tree=FOURD_TREE, inventory_sha256=FOURD_INVENTORY)
+            typed_state = typed_module().transition(runner=runner, source_root=public_source, work=typed_work,
+                name="observe-source-success", observation={"kind":"observe-success"}, state=typed_state)
+            typed_state = typed_module().transition(runner=runner, source_root=public_source, work=typed_work,
+                name="begin-source-cleanup", observation={"kind":"begin-cleanup", "cancelled":False}, state=typed_state)
+            for resource,name in (("source-join","close-source-join"),("source-acquisition","close-source-acquisition")):
+                typed_state=typed_module().transition(runner=runner,source_root=public_source,work=typed_work,name=name,
+                    observation={"kind":"close","resource":resource},state=typed_state)
+            typed_state=typed_module().transition(runner=runner,source_root=public_source,work=typed_work,name="finish-source",
+                observation={"kind":"finish"},state=typed_state)
         except Exception as error:
-            raise Refusal("typed-policy-admission-refused") from error
+            raise Refusal("typed-policy-cleanup-refused") from error
+        if typed_state.get("successful") is not True or typed_state.get("cleanupComplete") is not True:
+            raise Refusal("typed-policy-cleanup-refused")
         _write_new(private / "typed-operation-state.json",
                    json.dumps(typed_state, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
         _write_new(private / "admitted-route.json",
                    json.dumps(admitted, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
         prepared = True
+        shutil.rmtree(typed_work); typed_work = None
         return 0
     except Refusal as error:
         cleanup_ok = remove_owned_root(private, private_identity)
+        if typed_work is not None:
+            cleanup_ok=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
+                                            state=typed_state,cleanup_complete=cleanup_ok)
+        if typed_work is not None: shutil.rmtree(typed_work, ignore_errors=True)
         result["outcome"] = "refused"; result["failureCode"] = str(error) if len(str(error)) <= 64 else "qualification-refused"
         if not cleanup_ok: result["failureCode"] = "source-cleanup-refused"
         write_result(output, result); return 2
     except Exception:
         cleanup_ok = remove_owned_root(private, private_identity)
+        if typed_work is not None:
+            cleanup_ok=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
+                                            state=typed_state,cleanup_complete=cleanup_ok)
+        if typed_work is not None: shutil.rmtree(typed_work, ignore_errors=True)
         result["outcome"] = "failed"; result["failureCode"] = "qualification-refused" if cleanup_ok else "source-cleanup-refused"
         write_result(output, result); return 2
     finally:
@@ -1219,6 +1269,7 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
     if public.is_symlink() or public.stat().st_uid != os.getuid() or public.stat().st_mode & 0o777 != 0o700:
         return 2
     result = base_result(env, "failed"); runner = effects or Effects(); private: pathlib.Path | None = None
+    typed_state: dict[str, object] | None = None; typed_work: pathlib.Path | None = None
     old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     for sig in old_handlers: signal.signal(sig, runner.request_cancel)
     try:
@@ -1235,9 +1286,6 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         verify_public_tools(public_source, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source))
         private = pathlib.Path(args.private_root)
         admitted, source = load_prepared(private, env)
-        typed_state = load_owned_json(private / "typed-operation-state.json")
-        if typed_state.get("effectEligible") is not True:
-            raise Refusal("typed-policy-admission-refused")
         safe_env = {"PATH": "/usr/bin:/bin", "HOME": str(private / "home"), "LANG": "C.UTF-8"}
         head_result = runner.run(["/usr/bin/git", "rev-parse", "HEAD"], cwd=source, env=safe_env, timeout=30,
                                  capture=private / "capture/head.json")
@@ -1254,8 +1302,13 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         if private_inventory.returncode or private_inventory.stdout.decode("ascii", "strict").strip() != FOURD_INVENTORY:
             raise Refusal("source-private-inventory-refused")
         try:
+            typed_work=private/"typed-native";_private_dir(typed_work)
+            typed_state=typed_module().admit(runner=runner,source_root=public_source,work=typed_work,
+                admission=admitted,placement_sha=placement_sha,run_id=str(admitted["runId"]),
+                run_attempt=str(admitted["runAttempt"]),source_sha=head,source_tree=tree,
+                inventory_sha256=FOURD_INVENTORY)
             typed_state = typed_module().transition(
-                runner=runner, source_root=public_source, work=private / "capture", name="begin-effect",
+                runner=runner, source_root=public_source, work=typed_work, name="begin-effect",
                 observation={"kind":"begin-effect", "resource":"native-route", "acknowledged":False, "cost":1},
                 state=typed_state)
         except Exception as error:
@@ -1263,7 +1316,7 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         archive, evidence, binding = run_private_route(source, private, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source), admitted, runner, result)
         try:
             typed_state = typed_module().transition(
-                runner=runner, source_root=public_source, work=private / "capture", name="observe-success",
+                runner=runner, source_root=public_source, work=typed_work, name="observe-success",
                 observation={"kind":"observe-success", "cost":1}, state=typed_state)
         except Exception as error:
             raise Refusal("typed-policy-outcome-refused") from error
@@ -1302,19 +1355,46 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         except BaseException:
             shutil.rmtree(sealed, ignore_errors=True)
             raise
+        try:
+            typed_state = typed_module().transition(
+                runner=runner, source_root=public_source, work=typed_work, name="begin-cleanup",
+                observation={"kind":"begin-cleanup", "cancelled":False, "cost":1}, state=typed_state)
+            for resource, name in (("source-join", "close-source-join"), ("native-route", "close-native-route")):
+                typed_state = typed_module().transition(
+                    runner=runner, source_root=public_source, work=typed_work, name=name,
+                    observation={"kind":"close", "resource":resource, "cost":1}, state=typed_state)
+            typed_state = typed_module().transition(
+                runner=runner, source_root=public_source, work=typed_work, name="finish",
+                observation={"kind":"finish", "cost":1}, state=typed_state)
+        except Exception as error:
+            shutil.rmtree(sealed, ignore_errors=True)
+            raise Refusal("typed-policy-cleanup-refused") from error
+        if typed_state.get("successful") is not True or typed_state.get("cleanupComplete") is not True:
+            shutil.rmtree(sealed, ignore_errors=True)
+            raise Refusal("typed-policy-cleanup-refused")
         result.update(outcome="sealed-native-evidence", custodyOutcome=verified.outcome, archiveComplete=True,
                       manifestSha256=verified.manifestSha256, qualified=True)
         return 0
     except Refusal as error:
+        typed_cleanup=runner.settle()
+        if typed_work is not None:
+            typed_cleanup=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
+                                               state=typed_state,cleanup_complete=typed_cleanup)
         result["failureCode"] = str(error) if str(error) in {
             "admission-missing", "admission-partial", "admission-binding-refused", "admission-time-refused",
             "capacity-refused", "public-tool-source-refused", "known-host-refused", "rootless-preflight-failed",
             "source-acquisition-refused", "source-binding-refused", "native-acceptance-refused", "native-cleanup-failed",
             "custody-module-refused", "custody-verification-refused", "cancelled"} else "qualification-refused"
+        if not typed_cleanup: result["failureCode"]="cleanup-refused"
         result["outcome"] = "refused" if not result["rootlessPreflightPassed"] else "failed"
         return 2
     except Exception:
+        typed_cleanup=runner.settle()
+        if typed_work is not None:
+            typed_cleanup=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
+                                               state=typed_state,cleanup_complete=typed_cleanup)
         result["failureCode"] = "qualification-refused"
+        if not typed_cleanup: result["failureCode"]="cleanup-refused"
         result["outcome"] = "failed"
         return 2
     finally:
