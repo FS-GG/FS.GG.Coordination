@@ -624,10 +624,14 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("Shutting down Apalache server", validator)
     Assert.Contains("successfulExitAfterParserWithoutResult", validator)
     Assert.Contains("APALACHE_EXECUTION_TIMEOUT", validator)
+    Assert.Contains("let maxApalacheStartupRetries = 2", validator)
+    Assert.Contains("let rec invokeWithStartupRetries retriesRemaining", validator)
+    Assert.Contains("Some failureClass when retriesRemaining > 0", validator)
+    Assert.Contains("invokeWithStartupRetries (retriesRemaining - 1)", validator)
+    Assert.Contains("invokeWithStartupRetries maxApalacheStartupRetries", validator)
     Assert.Contains("let runMeasured timeoutMs", validator)
     Assert.Contains("child.Kill(true)", validator)
     Assert.Contains("let boundedVerify = isQuint && List.tryHead arguments = Some \"verify\"", validator)
-    Assert.Contains("retryExit, retryOutput, retryError, retryElapsed, retryPeak", validator)
     Assert.Contains("PASS #0: SanyParser", validator)
     Assert.Contains("states generated", validator)
     Assert.Contains("Invariant violated", validator)
@@ -640,7 +644,14 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Equal(
         2,
         System.Text.RegularExpressions.Regex
-            .Matches(validator, "classifyTransientApalacheStartupFailure firstExit firstOutput firstError")
+            .Matches(validator, "let rec invokeWithStartupRetries retriesRemaining")
+            .Count
+    )
+
+    Assert.Equal(
+        2,
+        System.Text.RegularExpressions.Regex
+            .Matches(validator, "invokeWithStartupRetries maxApalacheStartupRetries")
             .Count
     )
 

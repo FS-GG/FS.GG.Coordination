@@ -76,6 +76,9 @@ let mutable apalacheStartupRetryCount = 0
 let mutable apalacheVerifyStartupRetryCount = 0
 let mutable apalacheReflectionRetryCount = 0
 let mutable apalacheEarlyLifecycleRetryCount = 0
+// Hosted Apalache has produced the recognized parser-only lifecycle exit twice in
+// succession. Keep the recovery finite while allowing one further isolated start.
+let maxApalacheStartupRetries = 2
 
 let apalacheEndpointBase =
     match Environment.GetEnvironmentVariable "FSGG_APALACHE_PORT_BASE" with
@@ -323,19 +326,22 @@ let run workingDirectory (executable: string) arguments environment =
         output.Result.Trim(),
         (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim()
 
-    let firstExit, firstOutput, firstError = invoke ()
+    let rec invokeWithStartupRetries retriesRemaining =
+        let exitCode, output, error = invoke ()
 
-    let exitCode, output, error =
         match
             if isQuint && List.tryHead arguments = Some "verify" then
-                classifyTransientApalacheStartupFailure firstExit firstOutput firstError
+                classifyTransientApalacheStartupFailure exitCode output error
             else
                 None
         with
-        | Some failureClass ->
+        | Some failureClass when retriesRemaining > 0 ->
             recordApalacheStartupRetry (List.head arguments) failureClass
-            invoke ()
-        | None -> firstExit, firstOutput, firstError
+            invokeWithStartupRetries (retriesRemaining - 1)
+        | _ -> exitCode, output, error
+
+    let exitCode, output, error =
+        invokeWithStartupRetries maxApalacheStartupRetries
 
     if isQuint && exitCode <> 0 then
         Interlocked.Increment(&quintRejectedProcessCount) |> ignore
@@ -441,20 +447,22 @@ let runMeasured timeoutMs workingDirectory (executable: string) arguments enviro
         clock.ElapsedMilliseconds,
         int (Math.Ceiling(float peakBytes / 1048576.0))
 
-    let firstExit, firstOutput, firstError, firstElapsed, firstPeak = invoke ()
+    let rec invokeWithStartupRetries retriesRemaining =
+        let exitCode, output, error, elapsed, peak = invoke ()
 
-    let exitCode, output, error, elapsed, peak =
         match
             if isQuint && List.tryHead arguments = Some "verify" then
-                classifyTransientApalacheStartupFailure firstExit firstOutput firstError
+                classifyTransientApalacheStartupFailure exitCode output error
             else
                 None
         with
-        | Some failureClass ->
+        | Some failureClass when retriesRemaining > 0 ->
             recordApalacheStartupRetry (List.head arguments) failureClass
-            let retryExit, retryOutput, retryError, retryElapsed, retryPeak = invoke ()
-            retryExit, retryOutput, retryError, retryElapsed, retryPeak
-        | None -> firstExit, firstOutput, firstError, firstElapsed, firstPeak
+            invokeWithStartupRetries (retriesRemaining - 1)
+        | _ -> exitCode, output, error, elapsed, peak
+
+    let exitCode, output, error, elapsed, peak =
+        invokeWithStartupRetries maxApalacheStartupRetries
 
     if isQuint && exitCode <> 0 then
         Interlocked.Increment(&quintRejectedProcessCount) |> ignore
