@@ -32,8 +32,9 @@ def write(path: Path, value: bytes = b"candidate") -> None:
 
 def main() -> None:
     workflow = WORKFLOW.read_text(encoding="utf-8")
-    assert workflow.index("source-contract:") < workflow.index("candidate-facts:")
-    assert workflow.count("needs: source-contract") == 1
+    assert workflow.index("source-contract:") < workflow.index("stage-inputs:") < workflow.index("candidate-facts:")
+    assert workflow.count("needs: source-contract") == 2
+    assert "inputs.phase == 'stage-inputs'" in workflow
     assert "inputs.phase == 'candidate-facts'" in workflow
     assert "authorized-qualification" not in workflow
     for forbidden in ("native_admission", "environment:", "sudo ", "useradd", "podman ",
@@ -41,6 +42,15 @@ def main() -> None:
         assert forbidden not in workflow
     assert "run-id: ${{ inputs.upstream_run_id }}" in workflow
     assert "provider_runtime.py artifact-custody" in workflow
+    assert "stage_provider_input.py" in workflow
+    assert "test_provider_facts_runtime_bounds.py" in workflow
+    staging_helper = (ROOT / "tests/portable-workspace/trusted-provider/stage_provider_input.py").read_text(encoding="utf-8")
+    assert "callable-cli-release-prepare.yml" in staging_helper
+    assert "fsgg.portable-python-provider-staging-provenance/1" in staging_helper
+    assert "portable-python-provider-input-${{ github.sha }}" in workflow
+    assert "FS.GG.Coordination.Cli.0.2.0.nupkg" not in workflow
+    assert "dotnet-runtime-10.0.12-linux-x64.tar.gz" in workflow
+    assert "8458f4cef855fcebd139d9853e47fb0a5d86ab65d4aa101ea158a11e036c0fa4" not in workflow  # assembler owns the checksum
     assert workflow.index("cleanup-paths") < workflow.index("Upload bounded unauthorized public facts after cleanup")
     assert "nativeExecutionAuthorized" in workflow
     assert "required-external" in workflow
