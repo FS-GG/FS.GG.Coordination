@@ -15,6 +15,17 @@ let private sha256 (bytes: byte array) =
 
 let private fileSha (path: string) = File.ReadAllBytes path |> sha256
 let private utf8 (text: string) = Encoding.UTF8.GetBytes text
+let private canonicalSourceRevision = "a1310e14a60d1d025dd3fa9f404970890503d092"
+let private canonicalModuleSha256 = "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+
+let private canonicalModuleInput (path: string) =
+    let info = FileInfo path
+    info.Exists
+    && Path.IsPathFullyQualified path
+    && Path.GetFullPath(path) = path
+    && Path.GetFileName(path) = "learn_01_native_source.py"
+    && isNull info.LinkTarget
+    && fileSha path = canonicalModuleSha256
 
 let private writePrivate (path: string) (bytes: byte array) =
     File.WriteAllBytes(path, bytes)
@@ -26,6 +37,23 @@ let private writeJson path value =
 let private privateDirectory path =
     Directory.CreateDirectory path |> ignore
     File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+
+let private verifyCanonicalInputRefusals canonicalModule =
+    let root = Path.Combine(Path.GetTempPath(), "native-collector-v3-source-" + Guid.NewGuid().ToString("N"))
+    privateDirectory root
+    try
+        let wrongName = Path.Combine(root, "renamed.py")
+        File.Copy(canonicalModule, wrongName)
+        let changed = Path.Combine(root, "learn_01_native_source.py")
+        File.WriteAllText(changed, "changed canonical source")
+        let linkedRoot = Path.Combine(root, "linked")
+        privateDirectory linkedRoot
+        let linked = Path.Combine(linkedRoot, "learn_01_native_source.py")
+        File.CreateSymbolicLink(linked, canonicalModule) |> ignore
+        if canonicalModuleInput wrongName || canonicalModuleInput changed || canonicalModuleInput linked then
+            fail "canonical native verifier source inversions were accepted"
+    finally
+        if Directory.Exists root then Directory.Delete(root, true)
 
 type private Fixture =
     {
@@ -69,7 +97,7 @@ let private runtimeManifestBytes runtime modulePath extraEntries =
     JsonSerializer.SerializeToUtf8Bytes
         {|
             schema = "fsgg.telemetry.native-verifier-runtime/1"
-            sourceRevision = "02bfd323ba8f272d668e30f77964281b3c8c9184"
+            sourceRevision = canonicalSourceRevision
             runtimeImageDigest = "sha256:" + sha256 (utf8 "disposable-manager-fixture-not-qualified-production")
             runtimeExecutablePath = runtime
             modulePath = modulePath
@@ -90,6 +118,9 @@ let private sourceReferenceBytes codexHome developmentTarget readerProfileSha ma
         |}
 
 let private prepareFixture root canonicalModule =
+    if not (canonicalModuleInput canonicalModule) then
+        fail "canonical native verifier source custody differs"
+
     if Directory.Exists root || File.Exists root then
         fail ("fixture root already exists: " + root)
 
@@ -122,7 +153,7 @@ let private prepareFixture root canonicalModule =
 
     let moduleSha = fileSha modulePath
 
-    if moduleSha <> "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba" then
+    if moduleSha <> canonicalModuleSha256 then
         fail "canonical native verifier module digest differs"
 
     writePrivate profile (utf8 "{\"schema\":\"fsgg.learn.disposable-reader-profile-fixture/1\"}\n")
@@ -353,6 +384,9 @@ let private verifyPositive manager fixture =
 
     let verifier = sidecar.GetProperty("NativeVerifier")
 
+    use manifestDocument = JsonDocument.Parse(File.ReadAllBytes fixture.RuntimeManifest)
+    let manifest = manifestDocument.RootElement
+
     exactNames
         [
             "RuntimeExecutablePath"
@@ -368,6 +402,8 @@ let private verifyPositive manager fixture =
         sidecar.GetProperty("Schema").GetString()
         <> "fsgg.telemetry.native-collector-installation/3"
         || verifier.GetProperty("ModuleSha256").GetString() <> fixture.ModuleSha
+        || manifest.GetProperty("sourceRevision").GetString() <> canonicalSourceRevision
+        || manifest.GetProperty("modulePath").GetString() <> fixture.Module
     then
         fail "v3 sidecar binding differs"
 
@@ -522,6 +558,7 @@ let main arguments =
             let manager = Path.GetFullPath arguments[0]
             let canonicalModule = Path.GetFullPath arguments[1]
             let frozenRoot = Path.GetFullPath arguments[2]
+            verifyCanonicalInputRefusals canonicalModule
             let fixture = prepareFixture frozenRoot canonicalModule
             let managerReceipt = verifyPositive manager fixture
             verifyRefusals manager fixture

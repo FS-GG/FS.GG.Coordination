@@ -15,3 +15,11 @@ tests/telemetry-native-collector-installation/run-v3.sh \
 ```
 
 The fixture identifies itself as `disposable-fixture-not-qualified-production`. Its runtime image identity and executable exist only to exercise manager custody. They are not production runtime qualification, publication, installation, or activation evidence.
+
+The required bootstrap `compiler-and-tests` gate fetches the canonical module
+from protected public `.github` revision
+`a1310e14a60d1d025dd3fa9f404970890503d092` without credentials, verifies SHA-256
+`8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba`,
+runs this v3 harness and the legacy seven-case harness, and removes its synthetic
+fixture tree. The runtime manifest remains a disposable mechanics fixture and
+does not qualify a production runtime image.

@@ -1888,3 +1888,22 @@ let ``evidence rejects malformed manifests and contract digests`` () =
         let malformedExit, _, malformedError = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, malformedExit)
         Assert.Contains("rule=evidence-unreadable", malformedError))
+
+[<Fact>]
+let ``compiler gate owns pinned native collector manager behavior`` () =
+    let runner =
+        File.ReadAllText(Path.Combine(repositoryRoot, "eng/bootstrap-gates/compiler-and-tests.sh"))
+
+    let valid (text: string) =
+        [ "a1310e14a60d1d025dd3fa9f404970890503d092"
+          "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+          "raw.githubusercontent.com/FS-GG/.github/$native_source_revision/tools/learn_01_native_source.py"
+          "sha256sum --check --strict"
+          "tests/telemetry-native-collector-installation/run-v3.sh"
+          "tests/telemetry-native-collector-installation/run.py" ]
+        |> List.forall text.Contains
+
+    Assert.True(valid runner)
+    Assert.False(valid (runner.Replace("a1310e14a60d1d025dd3fa9f404970890503d092", String.replicate 40 "0")))
+    Assert.False(valid (runner.Replace("tests/telemetry-native-collector-installation/run-v3.sh", "missing-v3")))
+    Assert.False(valid (runner.Replace("tests/telemetry-native-collector-installation/run.py", "missing-legacy")))
