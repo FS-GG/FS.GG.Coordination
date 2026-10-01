@@ -1,0 +1,110 @@
+name: FourD public provider qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      phase:
+        description: Fixed qualification phase
+        required: true
+        type: choice
+        options:
+          - capacity
+          - qualification
+
+permissions:
+  contents: read
+
+concurrency:
+  group: fourd-public-provider-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  fixed-public-provider:
+    if: >-
+      github.repository == 'FS-GG/FS.GG.Coordination' &&
+      github.event_name == 'workflow_dispatch' &&
+      github.ref == 'refs/heads/qualification/fourd-native-20261001'
+    environment: fourd-native-private-source
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      RESULT_ROOT: /tmp/fsgg-fourd-capacity-${{ github.run_id }}-${{ github.run_attempt }}
+      STATE_ROOT: /tmp/fsgg-fourd-capacity-state-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out the exact registered placement without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 1
+          persist-credentials: false
+
+      - name: Refuse source drift and unexpected credential material
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'FS-GG/FS.GG.Coordination'
+          test "$GITHUB_REF" = 'refs/heads/qualification/fourd-native-20261001'
+          test "$GITHUB_EVENT_NAME" = 'workflow_dispatch'
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          test -z "$(git status --porcelain)"
+          test -z "${FSGG_FOURD_PUBLIC_PROVIDER_ADMISSION_JSON_B64-}"
+          test -z "${FSGG_FOURD_READONLY_DEPLOY_KEY_B64-}"
+          install -d -m 0700 "$RESULT_ROOT"
+
+      - name: Measure credential-free public capacity
+        if: inputs.phase == 'capacity'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 eng/fourd-public-provider/capacity.py screen \
+            --output "$RESULT_ROOT/result.json" \
+            --state "$STATE_ROOT"
+
+      - name: Refuse the unimplemented private qualification phase
+        if: inputs.phase == 'qualification'
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 eng/fourd-public-provider/capacity.py qualification-unimplemented \
+            --output "$RESULT_ROOT/result.json"
+
+      - name: Retain only the bounded typed capacity result
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        with:
+          name: fourd-public-provider-capacity-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.RESULT_ROOT }}/result.json
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+
+      - name: Enforce the selected phase verdict
+        if: always()
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f "$RESULT_ROOT/result.json"
+          test "$(stat --format=%a "$RESULT_ROOT/result.json")" = 600
+          test "$(stat --format=%s "$RESULT_ROOT/result.json")" -le 8192
+          if [[ '${{ inputs.phase }}' == capacity ]]; then
+            python3 - "$RESULT_ROOT/result.json" <<'PY'
+          import json,sys
+          value=json.load(open(sys.argv[1],encoding='utf-8'))
+          assert value['schema']=='fsgg.fourd.public-provider-capacity/1'
+          assert value['phase']=='capacity'
+          assert value['qualified'] is False
+          assert value['capacityScreenPassed'] is True
+          assert value['failureCode'] is None
+          PY
+          else
+            python3 - "$RESULT_ROOT/result.json" <<'PY'
+          import json,sys
+          value=json.load(open(sys.argv[1],encoding='utf-8'))
+          assert value['schema']=='fsgg.fourd.public-provider-capacity/1'
+          assert value['phase']=='qualification'
+          assert value['qualified'] is False
+          assert value['capacityScreenPassed'] is False
+          assert value['failureCode']=='qualification-phase-unimplemented'
+          raise SystemExit(1)
+          PY
+          fi
