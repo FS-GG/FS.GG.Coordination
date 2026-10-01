@@ -107,6 +107,20 @@ def source_module():
     return module
 
 
+def typed_module():
+    name = "fsgg_fourd_typed_policy"
+    if name in __import__("sys").modules:
+        return __import__("sys").modules[name]
+    path = pathlib.Path(__file__).with_name("typed_policy.py")
+    spec = importlib.util.spec_from_file_location(name, path)
+    if spec is None or spec.loader is None:
+        raise Refusal("typed-policy-module-refused")
+    module = importlib.util.module_from_spec(spec)
+    __import__("sys").modules[name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
 @dataclass(frozen=True)
 class RunResult:
     returncode: int
@@ -1136,6 +1150,16 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         if git_inventory(source, runner, safe_env, private / "capture/inventory.json") != FOURD_INVENTORY:
             raise Refusal("source-binding-refused")
         if not runner.settle(): raise Refusal("child-scope-refused")
+        try:
+            typed_state = typed_module().admit(runner=runner, source_root=public_source,
+                                               work=private / "capture", admission=admitted,
+                                               placement_sha=placement_sha, run_id=str(admitted["runId"]),
+                                               run_attempt=str(admitted["runAttempt"]), source_sha=FOURD_SHA,
+                                               source_tree=FOURD_TREE, inventory_sha256=FOURD_INVENTORY)
+        except Exception as error:
+            raise Refusal("typed-policy-admission-refused") from error
+        _write_new(private / "typed-operation-state.json",
+                   json.dumps(typed_state, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
         _write_new(private / "admitted-route.json",
                    json.dumps(admitted, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
         prepared = True
@@ -1211,6 +1235,9 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         verify_public_tools(public_source, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source))
         private = pathlib.Path(args.private_root)
         admitted, source = load_prepared(private, env)
+        typed_state = load_owned_json(private / "typed-operation-state.json")
+        if typed_state.get("effectEligible") is not True:
+            raise Refusal("typed-policy-admission-refused")
         safe_env = {"PATH": "/usr/bin:/bin", "HOME": str(private / "home"), "LANG": "C.UTF-8"}
         head_result = runner.run(["/usr/bin/git", "rev-parse", "HEAD"], cwd=source, env=safe_env, timeout=30,
                                  capture=private / "capture/head.json")
@@ -1226,7 +1253,22 @@ def execute(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
                                        cwd=source, env=safe_env, timeout=300, capture=private / "capture/private-inventory.json")
         if private_inventory.returncode or private_inventory.stdout.decode("ascii", "strict").strip() != FOURD_INVENTORY:
             raise Refusal("source-private-inventory-refused")
+        try:
+            typed_state = typed_module().transition(
+                runner=runner, source_root=public_source, work=private / "capture", name="begin-effect",
+                observation={"kind":"begin-effect", "resource":"native-route", "acknowledged":False, "cost":1},
+                state=typed_state)
+        except Exception as error:
+            raise Refusal("typed-policy-effect-refused") from error
         archive, evidence, binding = run_private_route(source, private, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source), admitted, runner, result)
+        try:
+            typed_state = typed_module().transition(
+                runner=runner, source_root=public_source, work=private / "capture", name="observe-success",
+                observation={"kind":"observe-success", "cost":1}, state=typed_state)
+        except Exception as error:
+            raise Refusal("typed-policy-outcome-refused") from error
+        if typed_state.get("outcome") != "success" or typed_state.get("effectAcknowledged") is not True:
+            raise Refusal("typed-policy-outcome-refused")
         result["nativeAccepted"] = True
         if not runner.settle(): raise Refusal("child-scope-refused")
         custody_path = public_source / "eng/fourd-public-provider/custody.py"
