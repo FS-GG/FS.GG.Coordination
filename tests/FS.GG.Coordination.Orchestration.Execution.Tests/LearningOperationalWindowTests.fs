@@ -231,6 +231,41 @@ type LearningOperationalWindowTests() =
         )
 
     [<Fact>]
+    member _.``assigned target is readable for the post-bind fence but cannot create an initial window``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        let assigned =
+            { census with
+                Members =
+                    census.Members
+                    |> List.map (fun memberValue ->
+                        if memberValue.ItemId = key.OriginalItemId then
+                            { memberValue with
+                                State = "assigned"
+                                NativeUsageSha256 = Some(digest "8")
+                                SharedCostSha256 = Some(digest "9")
+                            }
+                        else
+                            memberValue)
+            }
+
+        let current =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                assigned
+            |> Result.defaultWith failwith
+
+        Assert.False(current.Evidence.UnassignedSharedAllocation)
+        Assert.Equal(
+            Error "learning-operational-window-readiness-incomplete",
+            LearningOperationalWindow.prepare assignedAt current.Request current.Evidence
+        )
+
+    [<Fact>]
     member _.``empty or partial authoritative census never certifies coverage``() =
         let key, authority, cohort, census = authoritativeRecords ()
 

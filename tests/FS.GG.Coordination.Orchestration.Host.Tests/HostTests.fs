@@ -1239,6 +1239,29 @@ let ``serve configuration requires private files loopback and explicit identitie
             |]
 
         Assert.True(HostConfiguration.parseServe arguments |> Result.isOk)
+        Assert.True(
+            HostConfiguration.parseServe arguments
+            |> Result.toOption
+            |> Option.bind _.LearningOperational
+            |> Option.isNone
+        )
+
+        let learningOptions =
+            [|
+                "--learning-observer-id"; "observer-learning-owner"
+                "--learning-maximum-evidence-seconds"; "300"
+                "--learning-installed-host-config"; "/owned/telemetry-host.json"
+                "--learning-installed-owner-uid"; "32768"
+                "--learning-installed-executable-owner-uid"; "32768"
+                "--learning-maximum-capability-seconds"; "300"
+            |]
+
+        let learningConfigured = HostConfiguration.parseServe (Array.append arguments learningOptions)
+        Assert.True(learningConfigured |> Result.toOption |> Option.bind _.LearningOperational |> Option.isSome)
+        Assert.Equal(
+            Error "incomplete-learning-operational-configuration",
+            HostConfiguration.parseServe (Array.append arguments learningOptions[.. learningOptions.Length - 3])
+        )
 
         Assert.Equal(
             Error "duplicate-option",
@@ -1464,6 +1487,7 @@ let ``linux wildcard prefix starts accepts loopback request and stops`` () =
                     WorkItemId = Fixture.permit.SubjectId
                     GitHub = None
                     LocalExecutor = Some local
+                    LearningOperational = None
                     RequestTimeout = TimeSpan.FromSeconds 1.
                     MaximumConcurrentRequests = 2
                 }
@@ -1502,6 +1526,7 @@ let ``http host bounds malformed and slow control requests without stopping stat
                 WorkItemId = Fixture.permit.SubjectId
                 GitHub = None
                 LocalExecutor = None
+                LearningOperational = None
                 RequestTimeout = TimeSpan.FromMilliseconds 150.
                 MaximumConcurrentRequests = 2
             }
@@ -1778,6 +1803,7 @@ let ``local child mode exposes no legacy runner HTTP route`` () =
                 WorkItemId = Fixture.permit.SubjectId
                 GitHub = None
                 LocalExecutor = Some local
+                LearningOperational = None
                 RequestTimeout = TimeSpan.FromSeconds 1.
                 MaximumConcurrentRequests = 2
             }

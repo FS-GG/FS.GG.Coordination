@@ -15,6 +15,10 @@
     <Compile Include="CompatibilityDiagnosticTests.fs" />
     <Compile Include="FixedNativeCapabilityDiagnosticTests.fs" />
     <Compile Include="HostTests.fs" />
+    <Compile Include="LearningInstalledReadinessSourceTests.fs" />
+    <Compile Include="LearningJournalReadinessSourceTests.fs" />
+    <Compile Include="LearningTelemetryReadinessSourceTests.fs" />
+    <Compile Include="LearningHostCompositionTests.fs" />
     <Compile Include="LearningRuntimeCorrespondenceTests.fs" />
     <Compile Include="ChoreoProductionReplayTests.fs" />
   </ItemGroup>

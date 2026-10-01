@@ -13,5 +13,6 @@ module HostInitialization =
             let! backupIdentity = PostgreSqlSchema.migrate source cancellationToken
             do! PostgreSqlPilotSchema.migrate source cancellationToken
             do! PostgreSqlExecutionSchema.migrate source cancellationToken
+            do! PostgreSqlObserverSchema.migrate source cancellationToken
             return backupIdentity
         }

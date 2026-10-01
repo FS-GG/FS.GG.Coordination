@@ -133,6 +133,35 @@ module LearningMainAdmission =
             return
                 match current with
                 | Error _ -> Error "learning-main-admission-operational-readiness-unavailable"
+                | Ok current when not current.Evidence.UnassignedSharedAllocation ->
+                    if
+                        current.Request.WindowId <> expected.Binding.WindowId
+                        || current.Request.SeedReferenceSha256 <> expected.Binding.SeedReferenceSha256
+                        || current.Request.Repository <> expected.Binding.Repository
+                        || current.Request.CalendarAdmissionBlock <> expected.Binding.CalendarAdmissionBlock
+                        || current.Request.OriginalItemId <> expected.Binding.OriginalItemId
+                        || current.Request.AuthorityId <> expected.Binding.AuthorityId
+                        || current.Request.AuthorityRevision <> expected.Binding.AuthorityRevision
+                        || current.Request.AuthoritySha256 <> expected.Binding.AuthoritySha256
+                        || current.Request.OptedInAt <> expected.Binding.OptedInAt
+                        || current.Request.EnrollmentOpensAt <> expected.Binding.EnrollmentOpensAt
+                        || current.Request.EnrollmentClosesAt <> expected.Binding.EnrollmentClosesAt
+                        || current.Evidence.Schema <> LearningOperationalWindow.readinessSchema
+                        || current.Evidence.WindowId <> expected.Binding.WindowId
+                        || current.Evidence.Repository <> expected.Binding.Repository
+                        || current.Evidence.WorkClassId <> expected.Binding.WorkClassId
+                        || current.Evidence.OriginalItemId <> expected.Binding.OriginalItemId
+                        || current.Evidence.AcceptedPlanSha256 <> expected.Binding.AcceptedPlanSha256
+                        || current.Evidence.CanonicalWorkItemSha256 <> expected.Binding.CanonicalWorkItemSha256
+                        || current.Evidence.CoverageRosterSha256 <> expected.Binding.CoverageRosterSha256
+                        || not current.Evidence.CompleteNativeUsage
+                        || current.Evidence.ObservedAt > clock.GetUtcNow()
+                        || current.Evidence.ExpiresAt <= clock.GetUtcNow()
+                    then
+                        Error "learning-main-admission-operational-readiness-changed"
+                    else
+                        LearningOperationalWindow.validateCurrent (clock.GetUtcNow()) expected.Binding
+                        |> Result.map ignore
                 | Ok current ->
                     match
                         LearningOperationalWindow.prepare expected.Binding.AssignedAt current.Request current.Evidence
@@ -164,8 +193,9 @@ module LearningMainAdmission =
                 | Ok snapshot ->
                     let planSource = request.AcceptedProposal.ContextManifest |> Option.map _.PlanSource
 
-                    let observationSha =
-                        request.SourceState.Observation |> Option.map Observer.observationSha256
+                    let observationRevision =
+                        request.SourceState.Observation
+                        |> Option.map (fun observation -> string (Id.revisionValue observation.WorkflowRevision))
 
                     if
                         snapshot.Request.WindowId <> windowKey.WindowId
@@ -173,7 +203,7 @@ module LearningMainAdmission =
                         || snapshot.Evidence.WindowId <> windowKey.WindowId
                         || snapshot.Evidence.OriginalItemId <> windowKey.OriginalItemId
                         || planSource |> Option.map _.Sha256 <> Some snapshot.Evidence.AcceptedPlanSha256
-                        || observationSha <> Some snapshot.Evidence.CanonicalWorkItemSha256
+                        || observationRevision <> Some snapshot.Request.AuthorityRevision
                     then
                         return Error "learning-operational-assignment-readiness-refused"
                     else

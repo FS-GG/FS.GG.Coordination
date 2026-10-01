@@ -672,7 +672,7 @@ let ``operational admission requires a durable pre-assignment window before laun
                 treatment.Arm
                 request
                 planSha256
-                treatment.SourceObservationSha256
+                (String.replicate 64 "9")
 
         let producerWindows = ExactOperationalWindowStore(Some window.Binding)
         let producerReadiness = ExactOperationalReadinessSource(Some readinessSnapshot)
@@ -755,6 +755,28 @@ let ``operational admission requires a durable pre-assignment window before laun
         Assert.Equal(LearningExecutionBinding.operationalSchema, admitted.Binding.Schema)
         Assert.False(admitted.Binding.QualificationOnly)
         Assert.Equal(Some window.Binding, admitted.Binding.OperationalWindow)
+
+        let assignedEvidence =
+            { readinessSnapshot.Evidence with
+                DispatchCensusSha256 = String.replicate 64 "a"
+                NativeDeliverySha256 = String.replicate 64 "b"
+                SharedCostRosterSha256 = String.replicate 64 "c"
+                UnassignedSharedAllocation = false
+            }
+
+        let assignedReadiness =
+            SequencedOperationalReadinessSource(
+                readinessSnapshot,
+                { readinessSnapshot with Evidence = assignedEvidence }
+            )
+
+        let! acceptedAfterAssignment, assignedAttempts, _, assignedBindings, _ =
+            runWithReadiness true (Some window.Binding) assignedReadiness (Fixture.FixedClock())
+
+        Assert.True(acceptedAfterAssignment |> Result.isOk)
+        Assert.Equal(2, assignedReadiness.Reads)
+        Assert.Equal(1, assignedAttempts)
+        Assert.True(assignedBindings.BeforeIntent)
 
         Assert.Equal(
             (match treatment.Arm with

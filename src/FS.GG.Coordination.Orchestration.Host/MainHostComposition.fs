@@ -9,6 +9,7 @@ open Akka.Pattern
 open FS.GG.Coordination.Core.Orchestration
 open FS.GG.Coordination.Core.OrchestrationPersistence
 open FS.GG.Coordination.Orchestration.Execution
+open FS.GG.Coordination.Orchestration.Observer
 open FS.GG.Coordination.Orchestration.PostgreSql
 
 type MainHostComposition =
@@ -34,10 +35,76 @@ type RunningProductionMainHost =
         Transport: IAuthenticatedExecutorTransport
     }
 
+type LearningOperationalHostComposition =
+    {
+        Readiness: ILearningOperationalReadinessSource
+        InstalledReadiness: ILearningInstalledReadinessSource
+        UnavailableProducerFacts: string list
+    }
+
 [<RequireQualifiedAccess>]
 module MainHostComposition =
     let private normalInterval = TimeSpan.FromMilliseconds 250.
     let private externalObservationBackoff = TimeSpan.FromSeconds 15.
+
+    let learningOperational
+        (clock: TimeProvider)
+        (configuration: LearningOperationalHostConfiguration option)
+        (observerStore: IObserverJournalStore)
+        =
+        match configuration with
+        | None -> None
+        | Some selected ->
+            let journal = LearningJournalReadinessSource(observerStore, selected.ObserverId)
+
+            let installedReceipt =
+                { new ILearningInstalledProducerReceiptSource with
+                    member _.ReadLearningInstalledProducerReceipt(_, _) =
+                        Task.FromResult(Error "learning-installed-origin-receipt-producer-unavailable")
+                }
+
+            let installed =
+                LearningInstalledReadinessSource(
+                    clock,
+                    {
+                        Enabled = true
+                        HostConfigPath = selected.InstalledHostConfigPath
+                        ExpectedOwnerUid = selected.InstalledOwnerUid
+                        ExpectedExecutableOwnerUid = selected.InstalledExecutableOwnerUid
+                        MaximumCapabilityAge = selected.MaximumCapabilityAge
+                    },
+                    installedReceipt
+                )
+                :> ILearningInstalledReadinessSource
+
+            let census =
+                { new ILearningOperationalCensusSource with
+                    member _.ReadLearningOperationalCensus(_, _) =
+                        Task.FromResult(Error "learning-native-work-item-window-route-binding-unavailable")
+                }
+
+            let readiness =
+                LearningMainAdmission.authoritativeOperationalReadiness
+                    clock
+                    {
+                        Enabled = true
+                        MaximumEvidenceAge = selected.MaximumEvidenceAge
+                    }
+                    (journal :> ILearningOperationalAuthoritySource)
+                    (journal :> ILearningOperationalCohortSource)
+                    census
+                |> Result.defaultWith invalidOp
+
+            Some
+                {
+                    Readiness = readiness
+                    InstalledReadiness = installed
+                    UnavailableProducerFacts =
+                        [
+                            "learning-installed-origin-receipt-producer-unavailable"
+                            "learning-native-work-item-window-route-binding-unavailable"
+                        ]
+                }
 
     let private pacing results =
         if

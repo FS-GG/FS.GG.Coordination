@@ -556,13 +556,10 @@ module LearningOperationalWindow =
             Error "learning-operational-readiness-accounting-unknown"
         elif
             targetCensus
-            |> Option.exists (fun target ->
-                target.State = "prospective"
-                && target.NativeUsageSha256.IsNone
-                && target.SharedCostSha256.IsNone)
+            |> Option.exists (fun target -> target.State = "prospective" || target.State = "assigned")
             |> not
         then
-            Error "learning-operational-readiness-target-already-assigned"
+            Error "learning-operational-readiness-target-state-refused"
         elif cohort.AppliedAt > observedAt || expiresAt <= now then
             Error "learning-operational-readiness-order-refused"
         else
@@ -631,7 +628,8 @@ module LearningOperationalWindow =
                     ObservedAt = observedAt
                     ExpiresAt = expiresAt
                     CompleteNativeUsage = true
-                    UnassignedSharedAllocation = true
+                    UnassignedSharedAllocation =
+                        targetCensus |> Option.exists (fun target -> target.State = "prospective")
                     Provenance =
                         [
                             authority.Source.ProducerId
