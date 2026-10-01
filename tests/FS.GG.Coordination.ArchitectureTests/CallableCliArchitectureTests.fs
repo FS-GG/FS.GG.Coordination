@@ -22,9 +22,9 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.2.0</Version>"
-            "<PackageVersion>0.2.0</PackageVersion>"
-            "<PackageReleaseNotes>Adds the portable workspace v1 contract and packaged executor assembly while preserving all published source profiles.</PackageReleaseNotes>"
+            "<Version>0.2.1</Version>"
+            "<PackageVersion>0.2.1</PackageVersion>"
+            "<PackageReleaseNotes>Adds the source-qualified Python portable workspace resolver while preserving the portable workspace v1 contract and published source profiles.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =
@@ -63,7 +63,7 @@ let ``callable CLI release preparation binds reviewed version project and tag`` 
     let script = read "eng/callable-cli-release.fsx"
     for expected in
         [
-            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\" ]"
+            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\"; \"0.2.1\" ]"
             "projectPackageVersion () = version"
             "let tag = $\"v{version}\""
             "root.GetProperty(\"tag\").GetString() = tag"
@@ -77,7 +77,7 @@ let ``portable release preparation binds explicit package image and qualificatio
     let script = read "eng/portable-workspace-release.fsx"
     for expected in
         [
-            "only reviewed portable release version 0.2.0 may be prepared"
+            "only reviewed portable release versions 0.2.0 and 0.2.1 may be prepared"
             "--package-manifest"
             "--image-archive"
             "--image-manifest"

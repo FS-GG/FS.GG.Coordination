@@ -4,7 +4,7 @@
 plans by default; advancement remains guarded by the authoritative epoch, exact sealed plan, protected journal,
 and explicit receiver/provider selection. Installing this package does not enable a production writer.
 
-Version 0.2.0 also packages the portable workspace v1 schemas, examples, command surface and the
+Version 0.2.1 preserves the portable workspace v1 schemas, examples, command surface and the
 `FS.GG.Coordination.Orchestration.Execution` assembly. `workspace-contract` can export and validate the frozen
 contract bytes or prepare one previously reviewed fixed operation. Preparation remains read-only: it supplies
 no execution authority, starts no process and does not select an image or receiver. The executor assembly is a

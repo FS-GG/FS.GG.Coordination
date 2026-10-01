@@ -10,7 +10,7 @@ on:
       version:
         description: Proposed package version (preparation only)
         required: true
-        default: 0.2.0
+        default: 0.2.1
         type: string
 
 permissions:
@@ -61,7 +61,7 @@ jobs:
         run: |
           set -euo pipefail
           [[ "$CANDIDATE_SOURCE" =~ ^[0-9a-f]{40}$ ]]
-          test "$CANDIDATE_VERSION" = 0.2.0
+          test "$CANDIDATE_VERSION" = 0.2.1
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
           test -z "$(git status --porcelain)"
           test -f eng/callable-cli-release.fsx

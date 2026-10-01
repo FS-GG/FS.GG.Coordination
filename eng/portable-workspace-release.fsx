@@ -152,7 +152,7 @@ let argv = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 let command, options =
     match argv with
     | command :: rest -> command, parse rest
-    | [] -> fail "usage: portable-workspace-release.fsx <prepare|verify> --source SHA --version 0.2.0 --package FILE --package-manifest FILE --image-archive FILE --image-manifest FILE --image-qualification FILE --executor-evidence FILE --output DIRECTORY"
+    | [] -> fail "usage: portable-workspace-release.fsx <prepare|verify> --source SHA --version <0.2.0|0.2.1> --package FILE --package-manifest FILE --image-archive FILE --image-manifest FILE --image-qualification FILE --executor-evidence FILE --output DIRECTORY"
 
 let source = required "--source" options
 let version = required "--version" options
@@ -172,7 +172,7 @@ let retainedImagePath = Path.Combine(output, imageName)
 let releaseManifestPath = Path.Combine(output, manifestName)
 
 let validateInputs () =
-    require (version = "0.2.0") "only reviewed portable release version 0.2.0 may be prepared"
+    require (version = "0.2.0" || version = "0.2.1") "only reviewed portable release versions 0.2.0 and 0.2.1 may be prepared"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (Path.GetFileName packagePath = packageName) "package filename changed"
     for path in [ packagePath; packageManifestPath; imageArchivePath; imageManifestPath; imageQualificationPath; executorEvidencePath ] do
