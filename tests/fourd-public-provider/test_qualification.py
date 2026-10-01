@@ -124,6 +124,63 @@ class AdmissionTests(unittest.TestCase):
 
 
 class SilentProcessTests(unittest.TestCase):
+    def test_reused_pid_is_old_identity_dead_and_new_process_is_never_signalled(self):
+        old = qualify.ProcessIdentity(4242, 10)
+        with mock.patch.object(qualify, "_process_observation",
+                               return_value=("live", qualify.ProcessIdentity(4242, 11))), \
+             mock.patch.object(qualify.os, "kill") as sent:
+            self.assertEqual("dead", qualify.Effects._state(old))
+            qualify.Effects._signal(old, __import__("signal").SIGTERM)
+            sent.assert_not_called()
+
+    def test_unreadable_or_malformed_owned_identity_is_unknown_and_never_signalled(self):
+        for observation in ("permission", "malformed"):
+            with self.subTest(observation=observation), tempfile.TemporaryDirectory() as temporary:
+                child = subprocess.Popen(["sleep", "30"], start_new_session=True)
+                try:
+                    effects = qualify.Effects(); identity = qualify._process_identity(child.pid)
+                    self.assertIsNotNone(identity); effects.owned[child.pid] = identity
+                    original = pathlib.Path.read_text
+                    def read_text(path, *args, **kwargs):
+                        if str(path) == f"/proc/{child.pid}/stat":
+                            if observation == "permission": raise PermissionError("fixture")
+                            return "malformed"
+                        return original(path, *args, **kwargs)
+                    with mock.patch.object(pathlib.Path, "read_text", read_text), \
+                         mock.patch.object(qualify, "TERM_SETTLE_SECONDS", 0.02), \
+                         mock.patch.object(qualify, "KILL_SETTLE_SECONDS", 0.02), \
+                         mock.patch.object(qualify.os, "kill") as sent:
+                        self.assertFalse(effects.settle())
+                        sent.assert_not_called()
+                    self.assertIsNone(child.poll())
+                    self.assertIn(child.pid, effects.owned)
+                    self.assertTrue(effects.settle())
+                finally:
+                    if child.poll() is None: child.terminate()
+                    child.wait(timeout=2)
+
+    def test_total_deadline_refuses_before_launch_when_settlement_reserve_is_missing(self):
+        with tempfile.TemporaryDirectory() as temporary, mock.patch.object(qualify.subprocess, "Popen") as launched:
+            with self.assertRaisesRegex(qualify.Refusal, "child-total-deadline"):
+                qualify.Effects().run(["/bin/true"], cwd=pathlib.Path(temporary), env={"PATH":"/usr/bin:/bin"},
+                                      timeout=1, total_timeout=20, termination_grace=10, capture=None)
+            launched.assert_not_called()
+
+    def test_continuous_output_cannot_starve_total_deadline(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary); started = __import__("time").monotonic()
+            with mock.patch.object(qualify, "TERM_SETTLE_SECONDS", 0.05), \
+                 mock.patch.object(qualify, "KILL_SETTLE_SECONDS", 0.05), \
+                 mock.patch.object(qualify, "WAIT_SECONDS", 0.05), \
+                 mock.patch.object(qualify, "DRAIN_SECONDS", 0.05):
+                result = qualify.Effects().run(
+                    ["/usr/bin/python3", "-c", "import os; b=b'x'*65536\nwhile True: os.write(1,b)"],
+                    cwd=root, env={"PATH":"/usr/bin:/bin"}, timeout=0.15, total_timeout=1.3,
+                    termination_grace=0.05, capture=root / "capture.json")
+            self.assertNotEqual(0, result.returncode)
+            self.assertLess(__import__("time").monotonic() - started, 1.5)
+            self.assertLessEqual(len(result.stdout), qualify.MAX_CAPTURE)
+
     def test_private_canary_is_hashed_not_copied_to_capture_or_exception(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary); capture = root / "capture.json"
@@ -239,6 +296,9 @@ class ExecuteTests(unittest.TestCase):
             native_calls = [kwargs for argv, kwargs in effects.calls if "preflight" in argv or "cleanup" in argv]
             self.assertTrue(native_calls)
             self.assertTrue(all(call["termination_grace"] >= 240 for call in native_calls))
+            reserve = (qualify.NATIVE_SUPERVISOR_GRACE + qualify.TERM_SETTLE_SECONDS
+                       + qualify.KILL_SETTLE_SECONDS + qualify.WAIT_SECONDS + qualify.DRAIN_SECONDS)
+            self.assertTrue(all(call["total_timeout"] >= call["timeout"] + reserve for call in native_calls))
 
     def test_private_route_success_uses_real_native_validator_and_receipt_custody(self):
         class FakeEffects:

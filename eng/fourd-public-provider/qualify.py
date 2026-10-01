@@ -57,6 +57,10 @@ MAX_KEY = 16 * 1024
 MAX_CAPTURE = 128 * 1024
 MAX_RESULT = 8 * 1024
 NATIVE_SUPERVISOR_GRACE = 240
+TERM_SETTLE_SECONDS = 5
+KILL_SETTLE_SECONDS = 10
+WAIT_SECONDS = 1
+DRAIN_SECONDS = 5
 HEX40 = re.compile(r"[0-9a-f]{40}\Z")
 HEX64 = re.compile(r"[0-9a-f]{64}\Z")
 DECIMAL = re.compile(r"[1-9][0-9]*\Z")
@@ -267,23 +271,41 @@ class ProcessIdentity:
     start_ticks: int
 
 
-def _process_identity(pid: int) -> ProcessIdentity | None:
+def _process_observation(pid: int) -> tuple[str, ProcessIdentity | None]:
     try:
         raw = pathlib.Path(f"/proc/{pid}/stat").read_text()
-        fields = raw[raw.rfind(")") + 2:].split()
-        if len(fields) < 20 or fields[0] == "Z":
-            return None
-        return ProcessIdentity(pid, int(fields[19]))
-    except (FileNotFoundError, PermissionError, ValueError):
-        return None
+    except (FileNotFoundError, ProcessLookupError):
+        return "dead", None
+    except (PermissionError, OSError):
+        return "unknown", None
+    close = raw.rfind(")")
+    if close < 1:
+        return "unknown", None
+    fields = raw[close + 2:].split()
+    if len(fields) < 20:
+        return "unknown", None
+    if fields[0] == "Z":
+        return "dead", None
+    try:
+        return "live", ProcessIdentity(pid, int(fields[19]))
+    except ValueError:
+        return "unknown", None
 
 
-def _child_pids(pid: int) -> tuple[int, ...]:
+def _process_identity(pid: int) -> ProcessIdentity | None:
+    state, identity = _process_observation(pid)
+    return identity if state == "live" else None
+
+
+def _child_pids(pid: int) -> tuple[int, ...] | None:
     try:
         raw = pathlib.Path(f"/proc/{pid}/task/{pid}/children").read_text().strip()
-        return tuple(int(value) for value in raw.split()) if raw else ()
-    except (FileNotFoundError, PermissionError, ValueError):
+    except (FileNotFoundError, ProcessLookupError):
         return ()
+    except (PermissionError, OSError):
+        return None
+    try: return tuple(int(value) for value in raw.split()) if raw else ()
+    except ValueError: return None
 
 
 class Effects:
@@ -292,7 +314,10 @@ class Effects:
         self.cancelled = False
         self.owner_pid = os.getpid()
         self.owned: dict[int, ProcessIdentity] = {}
-        self._baseline = {identity for pid in _child_pids(self.owner_pid)
+        self.topology_unknown = False
+        initial_children = _child_pids(self.owner_pid)
+        if initial_children is None: raise Refusal("child-topology-refused")
+        self._baseline = {identity for pid in initial_children
                           if (identity := _process_identity(pid)) is not None}
         libc = ctypes.CDLL(None, use_errno=True)
         if libc.prctl(36, 1, 0, 0, 0) != 0:  # PR_SET_CHILD_SUBREAPER
@@ -302,20 +327,26 @@ class Effects:
         self.cancelled = True
 
     @staticmethod
-    def _alive(identity: ProcessIdentity) -> bool:
-        return _process_identity(identity.pid) == identity
+    def _state(identity: ProcessIdentity) -> str:
+        state, current = _process_observation(identity.pid)
+        if state != "live": return state
+        return "live" if current == identity else "dead"
 
     @staticmethod
     def _signal(identity: ProcessIdentity, selected: signal.Signals) -> None:
-        if Effects._alive(identity):
+        if Effects._state(identity) == "live":
             try: os.kill(identity.pid, selected)
             except ProcessLookupError: pass
 
     def _discover(self, root_pid: int | None = None) -> None:
         queue: list[int] = []
         if root_pid is not None: queue.append(root_pid)
-        queue.extend(identity.pid for identity in tuple(self.owned.values()) if self._alive(identity))
-        for pid in _child_pids(self.owner_pid):
+        queue.extend(identity.pid for identity in tuple(self.owned.values()) if self._state(identity) == "live")
+        owner_children = _child_pids(self.owner_pid)
+        if owner_children is None:
+            self.topology_unknown = True
+            owner_children = ()
+        for pid in owner_children:
             identity = _process_identity(pid)
             if identity is not None and identity not in self._baseline:
                 queue.append(pid)
@@ -330,47 +361,57 @@ class Effects:
             if prior is not None and prior != identity:
                 raise Refusal("child-identity-refused")
             self.owned[pid] = identity
-            queue.extend(_child_pids(pid))
+            children = _child_pids(pid)
+            if children is None: self.topology_unknown = True
+            else: queue.extend(children)
         self._forget_dead()
 
     def _forget_dead(self) -> None:
         for pid, identity in tuple(self.owned.items()):
-            if self._alive(identity): continue
-            self.owned.pop(pid, None)
+            if self._state(identity) == "dead": self.owned.pop(pid, None)
 
-    def _living(self) -> tuple[ProcessIdentity, ...]:
+    def _unresolved(self) -> tuple[ProcessIdentity, ...]:
         self._discover()
-        return tuple(identity for identity in self.owned.values() if self._alive(identity))
+        return tuple(identity for identity in self.owned.values() if self._state(identity) != "dead")
 
-    def _terminate(self, root: ProcessIdentity, grace: float, pump) -> bool:
+    def _scope_clear(self) -> bool:
+        return not self._unresolved() and not self.topology_unknown
+
+    def _terminate(self, root: ProcessIdentity, grace: float, pump, total_deadline: float) -> bool:
         # The coordinating parent receives TERM first and retains its admitted
         # cleanup grace. Descendants are observed continuously, then boundedly
         # terminated only if that protocol did not settle them.
         self._signal(root, signal.SIGTERM)
-        deadline = time.monotonic() + max(0.0, grace)
+        deadline = min(total_deadline, time.monotonic() + max(0.0, grace))
         while time.monotonic() < deadline:
             self._discover(root.pid); pump()
-            if not self._living(): return True
+            if self._scope_clear(): return True
             time.sleep(0.02)
-        for identity in self._living(): self._signal(identity, signal.SIGTERM)
-        term_deadline = time.monotonic() + 5
+        for identity in self._unresolved(): self._signal(identity, signal.SIGTERM)
+        term_deadline = min(total_deadline, time.monotonic() + TERM_SETTLE_SECONDS)
         while time.monotonic() < term_deadline:
             self._discover(); pump()
-            if not self._living(): return True
+            if self._scope_clear(): return True
             time.sleep(0.02)
-        for identity in self._living(): self._signal(identity, signal.SIGKILL)
-        kill_deadline = time.monotonic() + 10
+        for identity in self._unresolved(): self._signal(identity, signal.SIGKILL)
+        kill_deadline = min(total_deadline, time.monotonic() + KILL_SETTLE_SECONDS)
         while time.monotonic() < kill_deadline:
             self._discover(); pump()
-            if not self._living(): return True
+            if self._scope_clear(): return True
             time.sleep(0.02)
-        return not self._living()
+        return self._scope_clear()
 
     def run(self, argv: Sequence[str], *, cwd: pathlib.Path, env: Mapping[str, str], timeout: float,
             capture: pathlib.Path | None, allow_cancelled: bool = False,
-            termination_grace: float = 10) -> RunResult:
+            termination_grace: float = 10, total_timeout: float | None = None) -> RunResult:
         if self.cancelled and not allow_cancelled:
             raise Refusal("cancelled")
+        reserve = termination_grace + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS + WAIT_SECONDS + DRAIN_SECONDS
+        started = time.monotonic()
+        if total_timeout is not None and total_timeout < reserve + 1:
+            raise Refusal("child-total-deadline-refused")
+        total_deadline = started + (total_timeout if total_timeout is not None else timeout + reserve)
+        execution_deadline = min(started + timeout, total_deadline - reserve)
         before = set(self.owned.values())
         process = subprocess.Popen(list(argv), cwd=cwd, env=dict(env), stdin=subprocess.DEVNULL,
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE, start_new_session=True,
@@ -389,42 +430,43 @@ class Effects:
             selector.register(stream, selectors.EVENT_READ, slot)
 
         def pump(wait: float = 0.0) -> None:
-            for key, _mask in selector.select(wait):
+            remaining = 256 * 1024
+            for key, _mask in selector.select(wait)[:2]:
                 slot = key.data
-                while True:
+                while remaining > 0:
                     try: chunk = os.read(key.fileobj.fileno(), 65536)
                     except BlockingIOError: break
                     if not chunk:
                         try: selector.unregister(key.fileobj)
                         except KeyError: pass
                         break
+                    remaining -= len(chunk)
                     totals[slot] += len(chunk); digests[slot].update(chunk)
                     buffers[slot].extend(chunk)
                     if len(buffers[slot]) > MAX_CAPTURE:
                         del buffers[slot][:-MAX_CAPTURE]
 
-        deadline = time.monotonic() + timeout
         forced = False
         settled = True
-        while process.poll() is None and time.monotonic() < deadline and (allow_cancelled or not self.cancelled):
+        while process.poll() is None and time.monotonic() < execution_deadline and (allow_cancelled or not self.cancelled):
             self._discover(root.pid); pump(0.02)
         self._discover(root.pid); pump()
         if process.poll() is None:
             forced = True
-            settled = self._terminate(root, termination_grace, pump)
+            settled = self._terminate(root, termination_grace, pump, total_deadline - WAIT_SECONDS - DRAIN_SECONDS)
         else:
             # A direct parent can exit after starting a new session. The
             # subreaper adopts it; sample briefly before declaring success.
             discovery_deadline = time.monotonic() + 0.25
             while time.monotonic() < discovery_deadline:
                 self._discover(root.pid); pump(0.02)
-            living = tuple(identity for identity in self._living() if identity != root)
-            if living:
+            unresolved = tuple(identity for identity in self._unresolved() if identity != root)
+            if unresolved:
                 forced = True
-                settled = self._terminate(root, 0, pump)
-        try: process.wait(timeout=1)
+                settled = self._terminate(root, 0, pump, total_deadline - WAIT_SECONDS - DRAIN_SECONDS)
+        try: process.wait(timeout=max(0, min(WAIT_SECONDS, total_deadline - DRAIN_SECONDS - time.monotonic())))
         except subprocess.TimeoutExpired: settled = False
-        drain_deadline = time.monotonic() + 5
+        drain_deadline = min(total_deadline, time.monotonic() + DRAIN_SECONDS)
         while selector.get_map() and time.monotonic() < drain_deadline:
             pump(0.05)
         if selector.get_map(): settled = False
@@ -435,8 +477,8 @@ class Effects:
         selector.close()
         self._discover()
         survivors = tuple(identity for identity in self.owned.values()
-                          if identity not in before and self._alive(identity))
-        if survivors: settled = False
+                          if identity not in before and self._state(identity) != "dead")
+        if survivors or self.topology_unknown: settled = False
         payload = json.dumps({
             "returncode": process.returncode,
             "stdoutTruncated": totals[0] > MAX_CAPTURE, "stderrTruncated": totals[1] > MAX_CAPTURE,
@@ -451,10 +493,11 @@ class Effects:
         return RunResult(process.returncode or 0, bytes(buffers[0]), bytes(buffers[1]))
 
     def settle(self, grace: float = 0) -> bool:
-        living = self._living()
-        if not living: return True
-        root = living[0]
-        return self._terminate(root, grace, lambda: None) and not self._living()
+        unresolved = self._unresolved()
+        if not unresolved: return not self.topology_unknown
+        root = unresolved[0]
+        total = time.monotonic() + grace + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS
+        return self._terminate(root, grace, lambda: None, total) and self._scope_clear()
 
 def verify_capacity(path: pathlib.Path) -> None:
     value = json.loads(path.read_bytes())
@@ -666,11 +709,17 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
                 "PYTHONDONTWRITEBYTECODE": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_NOLOGO": "1"}
     for name in ("HTTPS_PROXY", "HTTP_PROXY", "NO_PROXY", "RUNNER_TEMP", "RUNNER_TOOL_CACHE", "GITHUB_ENV", "GITHUB_PATH"):
         if name in os.environ: base_env[name] = os.environ[name]
-    qualification_deadline = time.monotonic() + 5400
-    def budget(stage_limit: int) -> float:
-        remaining = qualification_deadline - time.monotonic()
+    qualification_deadline = time.monotonic() + 6300
+    def budget(stage_limit: int, reserve_after: float = 900) -> float:
+        remaining = qualification_deadline - time.monotonic() - reserve_after
         if remaining < 1: raise Refusal("qualification-deadline-refused")
         return min(float(stage_limit), remaining)
+    def native_budget(stage_limit: int, reserve_after: float = 900) -> tuple[float, float]:
+        total = budget(stage_limit, reserve_after)
+        reserve = (NATIVE_SUPERVISOR_GRACE + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS
+                   + WAIT_SECONDS + DRAIN_SECONDS)
+        if total < reserve + 1: raise Refusal("qualification-deadline-refused")
+        return total - reserve, total
     commands = [
         (["/usr/bin/python3", "tests/portable-workspace/validate-source-preparation.py"], "source-validator"),
         (["/usr/bin/python3", "tests/portable-workspace/test_native_image.py"], "source-tests"),
@@ -687,9 +736,10 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
     archive = state / "build" / f"fsgg-fourd-portable-{FOURD_SHA}.oci.tar"
     binding = state / "native-image-binding.json"
     try:
+        preflight_execution, preflight_total = native_budget(900)
         preflight = effects.run(["/usr/bin/python3", str(native), "preflight", *locations], cwd=source, env=base_env,
-                                timeout=budget(900), capture=capture / "preflight.json",
-                                termination_grace=NATIVE_SUPERVISOR_GRACE)
+                                timeout=preflight_execution, total_timeout=preflight_total,
+                                capture=capture / "preflight.json", termination_grace=NATIVE_SUPERVISOR_GRACE)
         _require_success(preflight, "rootless-preflight-failed")
         try: preflight_value = json.loads(preflight.stdout)
         except json.JSONDecodeError as error: raise Refusal("rootless-preflight-output-refused") from error
@@ -711,9 +761,11 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
         for argv, name in ((["/usr/bin/dotnet", "restore", str(project), "--locked-mode"], "p2-restore"),
                            (["/usr/bin/dotnet", "build", str(project), "--configuration", "Release", "--no-restore", "--warnaserror"], "p2-build")):
             _require_success(effects.run(argv, cwd=p2, env=base_env, timeout=budget(900), capture=capture / f"{name}.json"), f"{name}-failed")
+        fresh_execution, fresh_total = native_budget(5400)
         _require_success(effects.run(["/usr/bin/python3", str(native), "fresh-load", *locations, "--timeout", "4200"],
-                                     cwd=source, env=base_env, timeout=budget(5400), capture=capture / "fresh-load.json",
-                                     termination_grace=NATIVE_SUPERVISOR_GRACE), "fresh-load-failed")
+                                     cwd=source, env=base_env, timeout=fresh_execution, total_timeout=fresh_total,
+                                     capture=capture / "fresh-load.json", termination_grace=NATIVE_SUPERVISOR_GRACE),
+                         "fresh-load-failed")
         dll = p2 / "src/FS.GG.Coordination.Orchestration.Execution/bin/Release/net10.0/FS.GG.Coordination.Orchestration.Execution.dll"
         akka = private / "home/.nuget/packages/akka/1.5.71/lib/net6.0/Akka.dll"
         p2_result = evidence / "p2-result.json"
@@ -732,10 +784,12 @@ def run_private_route(source: pathlib.Path, private: pathlib.Path, setup: pathli
                 archive_owned_tree(journal, evidence / "p2-journal.tar")
         except BaseException as error:
             snapshot_failure = error
+        cleanup_execution, cleanup_total = native_budget(900, 0)
         cleanup = effects.run(["/usr/bin/python3", str(native), "cleanup", "--state", str(state), "--podman", "/usr/bin/podman",
                                "--build-runroot", f"/tmp/f4b-{run_id}-{attempt}", "--fresh-runroot", f"/tmp/f4f-{run_id}-{attempt}",
                                "--image-tmpdir", f"/dev/shm/f4t-{run_id}-{attempt}"],
-                              cwd=source, env=base_env, timeout=900, capture=capture / "cleanup.json", allow_cancelled=True,
+                              cwd=source, env=base_env, timeout=cleanup_execution, total_timeout=cleanup_total,
+                              capture=capture / "cleanup.json", allow_cancelled=True,
                               termination_grace=NATIVE_SUPERVISOR_GRACE)
         if cleanup.returncode: raise Refusal("native-cleanup-failed") from route_failure
         try: cleanup_value = json.loads(cleanup.stdout)
