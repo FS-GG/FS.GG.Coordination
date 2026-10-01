@@ -3,6 +3,7 @@ import importlib.util
 import json
 import os
 import pathlib
+import signal
 import tempfile
 import unittest
 from unittest import mock
@@ -14,56 +15,88 @@ capacity = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(capacity)
 WORKFLOW = ROOT / ".github/workflows/fourd-public-provider-qualification.yml"
+HELPER = ROOT / "eng/fourd-public-provider/capacity.py"
 
 
 class CapacityFactsTests(unittest.TestCase):
-    def test_memory_floor_keeps_private_refusal_and_does_not_credit_swap(self):
+    def test_memory_floor_exact_threshold_one_byte_short_and_no_swap_credit(self):
         self.assertEqual(7_516_192_768, capacity.MEMORY_FLOOR)
         meminfo = capacity.read_meminfo(
-            "MemTotal:       8128876 kB\nMemAvailable:    7016936 kB\n"
+            "MemTotal:       16777216 kB\nMemAvailable:    7340032 kB\n"
             "SwapTotal:      1048576 kB\nSwapFree:       1048576 kB\n")
-        self.assertEqual(7_185_342_464, meminfo["MemAvailable"])
+        self.assertEqual(capacity.MEMORY_FLOOR, meminfo["MemAvailable"])
         unlimited = {"minimumFiniteHeadroomBytes": None}
-        self.assertLess(capacity.effective_memory(meminfo, unlimited), capacity.MEMORY_FLOOR)
-        threshold = dict(meminfo, MemAvailable=capacity.MEMORY_FLOOR)
-        self.assertEqual(capacity.MEMORY_FLOOR, capacity.effective_memory(threshold, unlimited))
+        self.assertEqual(capacity.MEMORY_FLOOR, capacity.effective_memory(meminfo, unlimited))
         constrained = {"minimumFiniteHeadroomBytes": capacity.MEMORY_FLOOR - 1}
         self.assertEqual(capacity.MEMORY_FLOOR - 1,
-                         capacity.effective_memory(threshold, constrained))
+                         capacity.effective_memory(meminfo, constrained))
+        self.assertGreater(meminfo["SwapFree"], 0)
 
-    def test_cgroup_v2_ancestor_accounting_is_complete_and_fail_closed(self):
+    def test_true_hierarchy_root_may_omit_files_and_ancestor_high_limits_headroom(self):
         with tempfile.TemporaryDirectory() as temporary:
             mount = pathlib.Path(temporary) / "cgroup"
-            leaf = mount / "actions" / "job"
+            parent = mount / "actions"
+            leaf = parent / "job"
             leaf.mkdir(parents=True)
-            for directory, maximum, current in (
-                (mount, "max", "100"),
-                (mount / "actions", "8589934592", "1073741824"),
-                (leaf, "8053063680", "268435456"),
+            for directory, maximum, high, current in (
+                (parent, "max", str(capacity.MEMORY_FLOOR + 100), "100"),
+                (leaf, str(12 * 1024**3), "max", str(1024**3)),
             ):
                 (directory / "memory.max").write_text(maximum)
+                (directory / "memory.high").write_text(high)
                 (directory / "memory.current").write_text(current)
-            result = capacity.cgroup_accounting(mount, leaf)
-            self.assertEqual((3, 2, 7_516_192_768, True),
-                             (result["ancestorCount"], result["finiteLimitCount"],
-                              result["minimumFiniteHeadroomBytes"], result["accountingKnown"]))
+            result = capacity.cgroup_accounting(mount, leaf, True)
+            self.assertEqual(3, result["ancestorCount"])
+            self.assertEqual(2, result["finiteLimitCount"])
+            self.assertEqual(capacity.MEMORY_FLOOR, result["minimumFiniteHeadroomBytes"])
+            self.assertTrue(result["ancestors"][-1]["hierarchyRoot"])
+            self.assertIsNone(result["ancestors"][-1]["currentBytes"])
+
+    def test_mounted_subtree_root_requires_complete_accounting(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            mount = pathlib.Path(temporary) / "cgroup"
+            mount.mkdir()
+            for name, value in (("memory.max", "max"), ("memory.high", "8053063680"),
+                                ("memory.current", "536870912")):
+                (mount / name).write_text(value)
+            result = capacity.cgroup_accounting(mount, mount, False)
+            self.assertEqual(7_516_192_768, result["minimumFiniteHeadroomBytes"])
+            (mount / "memory.current").unlink()
+            with self.assertRaisesRegex(capacity.Refusal, "capacity-cgroup-refused"):
+                capacity.cgroup_accounting(mount, mount, False)
+
+    def test_missing_partial_and_unknown_accounting_refuse(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            mount = pathlib.Path(temporary) / "cgroup"
+            leaf = mount / "job"
+            leaf.mkdir(parents=True)
+            (leaf / "memory.max").write_text("max")
+            (leaf / "memory.high").write_text("max")
+            with self.assertRaisesRegex(capacity.Refusal, "capacity-cgroup-refused"):
+                capacity.cgroup_accounting(mount, leaf, True)
             (leaf / "memory.current").write_text("unknown")
             with self.assertRaisesRegex(capacity.Refusal, "capacity-cgroup-refused"):
-                capacity.cgroup_accounting(mount, leaf)
-            (leaf / "memory.current").write_text("900")
-            (leaf / "memory.max").write_text("800")
+                capacity.cgroup_accounting(mount, leaf, True)
+            (leaf / "memory.current").write_text("101")
+            (leaf / "memory.max").write_text("100")
             with self.assertRaisesRegex(capacity.Refusal, "capacity-cgroup-refused"):
-                capacity.cgroup_accounting(mount, leaf)
+                capacity.cgroup_accounting(mount, leaf, True)
 
-    def test_cgroup_mount_membership_requires_one_v2_route(self):
+    def test_mount_identity_rejects_traversal_ambiguity_and_outside_membership(self):
         mountinfo = "36 25 0:32 / /sys/fs/cgroup rw - cgroup2 cgroup rw\n"
-        self.assertEqual((pathlib.Path("/sys/fs/cgroup"), pathlib.Path("/sys/fs/cgroup/actions/job")),
-                         capacity.cgroup_location(mountinfo, "0::/actions/job\n"))
-        for bad_mounts, bad_membership in (("", "0::/actions/job\n"),
-                                            (mountinfo, "1:name=/bad\n"),
-                                            (mountinfo + mountinfo, "0::/actions/job\n")):
-            with self.assertRaisesRegex(capacity.Refusal, "capacity-cgroup-refused"):
-                capacity.cgroup_location(bad_mounts, bad_membership)
+        self.assertEqual(
+            (pathlib.Path("/sys/fs/cgroup"), pathlib.Path("/sys/fs/cgroup/actions/job"), True),
+            capacity.cgroup_location(mountinfo, "0::/actions/job\n"))
+        bad = (
+            (mountinfo, "0::/../../outside\n"),
+            ("36 25 0:32 /tenant /sys/fs/cgroup rw - cgroup2 cgroup rw\n", "0::/other/job\n"),
+            (mountinfo + mountinfo, "0::/actions/job\n"),
+            (mountinfo, "0::/actions/job\n0::/other\n"),
+        )
+        for mounts, membership in bad:
+            with self.subTest(membership=membership):
+                with self.assertRaisesRegex(capacity.Refusal, "capacity-cgroup-refused"):
+                    capacity.cgroup_location(mounts, membership)
 
 
 class ScreenTests(unittest.TestCase):
@@ -83,63 +116,96 @@ class ScreenTests(unittest.TestCase):
             "ImageVersion": "20261001.1",
         }
 
-    def test_screen_passes_only_capacity_and_removes_owned_state(self):
+    def common_facts(self):
+        meminfo = {"MemTotal": 16 * 1024**3, "MemAvailable": 12 * 1024**3,
+                   "SwapTotal": 4 * 1024**3, "SwapFree": 4 * 1024**3}
+        cgroup = {"version": 2, "ancestorCount": 2, "finiteLimitCount": 1,
+                  "minimumFiniteHeadroomBytes": 10 * 1024**3, "accountingKnown": True}
+        filesystem = {"mountDevice": "0:1", "filesystemType": "ext4", "statDevice": 1,
+                      "freeBytes": 10 * 1024**3, "freeInodes": 1000}
+        return meminfo, cgroup, filesystem
+
+    def test_screen_is_read_only_and_reports_rootless_capability_unmeasured(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
-            output, state = root / "output/result.json", root / "state"
-            meminfo = {"MemTotal": 16 * 1024**3, "MemAvailable": 12 * 1024**3,
-                       "SwapTotal": 4 * 1024**3, "SwapFree": 4 * 1024**3}
-            cgroup = {"version": 2, "ancestorCount": 2, "finiteLimitCount": 1,
-                      "minimumFiniteHeadroomBytes": 10 * 1024**3, "accountingKnown": True}
-            filesystem = {"mountDevice": "0:1", "filesystemType": "ext4", "statDevice": 1,
-                          "freeBytes": 10 * 1024**3, "freeInodes": 1000}
+            output = root / "result.json"
+            meminfo, cgroup, filesystem = self.common_facts()
             with mock.patch.dict(os.environ, self.environment(), clear=True), \
                  mock.patch.object(capacity.platform, "machine", return_value="x86_64"), \
                  mock.patch.object(capacity, "read_meminfo", return_value=meminfo), \
-                 mock.patch.object(capacity, "cgroup_location", return_value=(root, root)), \
+                 mock.patch.object(capacity, "cgroup_location", return_value=(root, root, True)), \
                  mock.patch.object(capacity, "cgroup_accounting", return_value=cgroup), \
                  mock.patch.object(capacity, "filesystem_fact", return_value=filesystem), \
-                 mock.patch.object(capacity, "podman_fact", return_value={
-                     "version": "4.9.3", "rootless": True, "graphDriver": "vfs",
-                     "containers": 0, "images": 0, "ownedState": True}), \
+                 mock.patch.object(capacity.shutil, "which", return_value="/usr/bin/podman"), \
                  mock.patch.object(pathlib.Path, "read_text", return_value="fixture"):
-                self.assertTrue(capacity.screen(output, state))
+                self.assertTrue(capacity.screen(output))
             result = json.loads(output.read_text())
             self.assertTrue(result["capacityScreenPassed"])
             self.assertFalse(result["qualified"])
             self.assertEqual(0, result["facts"]["memory"]["swapCreditedBytes"])
-            self.assertTrue(result["facts"]["cleanup"]["ownedStateCreated"])
-            self.assertTrue(result["facts"]["cleanup"]["ownedStateRemoved"])
-            self.assertFalse(state.exists())
+            self.assertEqual(10 * 1024**3, result["facts"]["filesystems"]["runnerTemp"]["freeBytes"])
+            self.assertEqual(1000, result["facts"]["filesystems"]["runnerTemp"]["freeInodes"])
+            self.assertEqual({"binaryAvailable": True, "version": None,
+                              "rootlessCapability": "unmeasured", "probeExecuted": False},
+                             result["facts"]["podman"])
             self.assertLessEqual(output.stat().st_size, capacity.MAX_OUTPUT)
             self.assertEqual(0o600, output.stat().st_mode & 0o777)
+            self.assertEqual(["result.json"], sorted(item.name for item in root.iterdir()))
 
-    def test_memory_refusal_prevents_filesystem_and_podman_effects(self):
+    def test_one_byte_memory_refusal_prevents_later_measurements(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = pathlib.Path(temporary)
-            output, state = root / "output/result.json", root / "state"
-            meminfo = {"MemTotal": 8_323_969_024, "MemAvailable": 7_185_342_464,
-                       "SwapTotal": 1, "SwapFree": 1}
-            cgroup = {"version": 2, "ancestorCount": 1, "finiteLimitCount": 0,
-                      "minimumFiniteHeadroomBytes": None, "accountingKnown": True}
+            output = root / "result.json"
+            meminfo = {"MemTotal": 16 * 1024**3,
+                       "MemAvailable": capacity.MEMORY_FLOOR - 1,
+                       "SwapTotal": 8 * 1024**3, "SwapFree": 8 * 1024**3}
+            cgroup = {"minimumFiniteHeadroomBytes": None, "accountingKnown": True}
             with mock.patch.dict(os.environ, self.environment(), clear=True), \
                  mock.patch.object(capacity.platform, "machine", return_value="x86_64"), \
                  mock.patch.object(capacity, "read_meminfo", return_value=meminfo), \
-                 mock.patch.object(capacity, "cgroup_location", return_value=(root, root)), \
+                 mock.patch.object(capacity, "cgroup_location", return_value=(root, root, True)), \
                  mock.patch.object(capacity, "cgroup_accounting", return_value=cgroup), \
                  mock.patch.object(capacity, "filesystem_fact") as filesystem, \
-                 mock.patch.object(capacity, "podman_fact") as podman, \
+                 mock.patch.object(capacity, "podman_static_fact") as podman, \
                  mock.patch.object(pathlib.Path, "read_text", return_value="fixture"):
-                self.assertFalse(capacity.screen(output, state))
+                self.assertFalse(capacity.screen(output))
             result = json.loads(output.read_text())
             self.assertEqual("capacity-memory-refused", result["failureCode"])
-            self.assertFalse(result["capacityScreenPassed"])
-            self.assertFalse(result["qualified"])
             filesystem.assert_not_called()
             podman.assert_not_called()
-            self.assertFalse(state.exists())
 
-    def test_context_refuses_credentials_before_any_capacity_work(self):
+    def test_sigterm_retains_bounded_typed_cancellation(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            output = pathlib.Path(temporary) / "result.json"
+
+            def cancel_read(*_args, **_kwargs):
+                os.kill(os.getpid(), signal.SIGTERM)
+                return "unreachable"
+
+            with mock.patch.dict(os.environ, self.environment(), clear=True), \
+                 mock.patch.object(capacity.platform, "machine", return_value="x86_64"), \
+                 mock.patch.object(pathlib.Path, "read_text", side_effect=cancel_read):
+                self.assertFalse(capacity.screen(output))
+            result = json.loads(output.read_text())
+            self.assertEqual("capacity-cancelled", result["failureCode"])
+            self.assertFalse(result["capacityScreenPassed"])
+            self.assertFalse(result["qualified"])
+            self.assertLessEqual(output.stat().st_size, capacity.MAX_OUTPUT)
+
+    def test_preexisting_output_is_never_replaced(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = pathlib.Path(temporary)
+            output = root / "result.json"
+            output.write_bytes(b"owner-data\n")
+            before = output.stat()
+            with self.assertRaises(FileExistsError):
+                capacity.write_result(output, capacity.base_result("capacity"))
+            after = output.stat()
+            self.assertEqual(b"owner-data\n", output.read_bytes())
+            self.assertEqual((before.st_ino, before.st_mode), (after.st_ino, after.st_mode))
+            self.assertEqual(["result.json"], sorted(item.name for item in root.iterdir()))
+
+    def test_context_refuses_credentials_before_capacity_work(self):
         environment = self.environment()
         environment[capacity.FORBIDDEN_CREDENTIALS[1]] = "unexpected-private-key"
         with mock.patch.dict(os.environ, environment, clear=True):
@@ -162,6 +228,7 @@ class ScreenTests(unittest.TestCase):
 class WorkflowSourceTests(unittest.TestCase):
     def test_workflow_is_manual_fixed_public_capacity_without_credentials_or_effects(self):
         text = WORKFLOW.read_text()
+        helper = HELPER.read_text()
         self.assertIn("workflow_dispatch:", text)
         self.assertNotIn("pull_request:", text)
         self.assertNotIn("push:", text)
@@ -174,10 +241,10 @@ class WorkflowSourceTests(unittest.TestCase):
         self.assertNotIn("custody.py", text)
         self.assertNotIn("git clone", text.lower())
         self.assertNotIn("ssh-agent", text.lower())
-        self.assertNotIn("podman pull", text)
-        self.assertNotIn("podman build", text)
-        for absent in ("dotnet", "npm ", "native-image", "image save", "image load", "p2 result"):
-            self.assertNotIn(absent, text.lower())
+        for absent in ("podman version", "podman info", "podman pull", "podman build",
+                       "subprocess", "--state", "state_root", "native-image", "image save",
+                       "image load", "p2 result"):
+            self.assertNotIn(absent, (text + helper).lower())
         self.assertNotIn("workflow_call", text)
         self.assertEqual(1, text.count("path: ${{ env.RESULT_ROOT }}/result.json"))
         self.assertIn("qualification-phase-unimplemented", text)
