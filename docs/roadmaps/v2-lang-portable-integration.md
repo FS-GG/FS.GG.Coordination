@@ -4,10 +4,11 @@
 publication and receiver qualification. The accepted programme plan remains
 [`FS-GG/.github`'s language-independent workspace amendment](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/2026-09-29-language-independent-workspaces-and-agent-integration.md).
 
-**Status:** P1 and P2 are complete. The exact 0.2.0 producer is published and independently read back from both
-feeds and its immutable GitHub release. P3 remains open until SDD and Templates land their exact receiver pins.
-P4 source is reserved under the independent 0.2.1 successor identity; installed receiver qualification,
-explicit fresh adoption and P5 remain pending.
+**Status:** P1, P2 and P3 are complete. The exact 0.2.0 producer is published and independently read back from
+both feeds and its immutable GitHub release; SDD and Templates have landed the same closed receiver pin with
+adoption disabled. P4 has a selected source and trusted-provider route under the independent 0.2.1 successor
+identity. Its provider grant, runtime-only installed qualification, public readback and explicit fresh adoption,
+and all of P5 remain pending.
 
 ## Authority and compatibility
 
@@ -38,12 +39,15 @@ or noncanonical fields fail closed.
   observed termination, make duplicate delivery idempotent, preserve interrupted execution as unknown until exact
   reconciliation, and refuse unsupported toolchains, foreign scope, stale generations and arbitrary command
   injection before process launch.
-- [ ] **P3 — Publish exact producer artifacts.** Publish the accepted Coordination tool and contract artifacts,
+- [x] **P3 — Publish exact producer artifacts.** Publish the accepted Coordination tool and contract artifacts,
   then have SDD/Templates pin those exact versions and digests. Preserve the existing fixed-operation and execution
   authorization boundaries.
 - [ ] **P4 — First workspace adoption.** Change fresh creation only after the published producer is available.
   Adopt one selected non-.NET route explicitly, prove a clean creation and local-only operation, and keep retained
   workspace upgrade handling separate. This is the first milestone allowed to change generated workspace behavior.
+  - [x] Select the fixed Python source window and production trusted-provider route under 0.2.1.
+  - [ ] Obtain the exact provider grant and qualify the installed candidate through a runtime-only view.
+  - [ ] Publish and read back the exact successor artifacts, then prove fresh public creation with adoption explicit.
 - [ ] **P5 — Qualification matrix and closure.** Qualify retained adoption, mixed components, component and composed
   journeys, cancellation, duplicate delivery, recovery, unsupported toolchain refusal and the declared language
   population against exact installed artifacts. Record supported and unresolved routes before closing .2.
@@ -68,6 +72,17 @@ This is source preparation only. The accepted fixture constructor remains test s
 enrollment source. No administrator grant was provisioned, no container ran, and frozen `0.2.0` does not contain
 this capability. P4 stays open for the receiver fixture/provider join, successor package identity, installed
 runtime-only qualification, public readback and fresh explicit adoption.
+
+The selected provider route is one opt-in Python product projected from a single Coordination-owned fixture into
+Templates. Templates owns the generic provider descriptor and product template; SDD's existing generic scaffold
+route remains the receiver unless real composition proves a generic defect. Qualification uses the production
+resolver and installed CLI in a fresh hosted Linux VM, with a dedicated non-root account, root-owned immutable
+grant, verified complete package and OCI custody, fixed rootless Podman/VFS operation, and a runtime-only view that
+hides SDK and provisioning sources. Source preparation may add the fixture projection and installed-candidate
+workflow, but it cannot create grant authority. Missing runtime isolation, UID mapping, custody, capacity or cleanup
+evidence refuses the native stage. Publication follows exact installed-candidate qualification; a fresh public
+creation and its own receiver-bound grant are a separate adoption boundary. Retained workspace upgrade handling
+continues to P5.
 
 ## P1 evidence
 
@@ -167,15 +182,22 @@ root readback receipt has SHA-256 `0b28f16f45a52d7d8f7176c83d5eceb94b889b353c996
 The release API's `target_commitish` metadata says `main`, while the actual immutable tag readback binds the
 required frozen commit. Producer publication is **CLOSED**. Installation or activation is not implied.
 
-SDD and Templates receiver pin candidates bind version 0.2.0, the frozen source and tree, release/run identities,
-and exact package, contract bundle, OCI archive and portable manifest digests. Both candidates keep adoption
-disabled and require separate installed qualification. P3 remains open until those receiver pins land on their
-protected branches and are read back.
+SDD PR #1085 landed protected commit `388e4e0` with tree
+`ce034535cca217bf717e46aed428f598e38b5f39`; Templates PR #658 landed protected commit `86122a5` with tree
+`2470a07b432834e00d6da522a34ed71e9c62619e`. Both receivers bind version 0.2.0, the frozen producer source/tree,
+publication run `36813849644`, release `400643766`, and exact package, contract bundle, OCI archive and portable
+manifest identities through byte-identical pin files whose SHA-256 is
+`ca7f4b1f688e1fd9e2f4b9c8df4716fe669bcc91e7b9656d9a0984bc4430258c`. Both retain `adoption.enabled=false` and
+require separate installed qualification. Protected producer and receiver readbacks therefore close P3 without
+claiming installation or adoption.
 
 The accepted P4 source from PR #905, exact candidate `2933d7e4dd77fb321c001aeee4b78efa0eb63346` and protected
-merge `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, is excluded from the frozen 0.2.0 bytes. The current producer
-source assigns that successor package version 0.2.1 and restricts future preparation to 0.2.1. This is source
-preparation only: no 0.2.1 package, image, tag or release is claimed, and P4 remains open.
+merge `e70d41fd9e48896e863bdf1ba33822ad6f09ee6b`, is excluded from the frozen 0.2.0 bytes. PR #909 landed protected
+commit `daaa195ca08b46456282449ae17bf12bf4d80de4`, tree
+`8df888f0ad6d0627a863ffe8494450e8513e929a`, after coherent run `36816634327`; it assigns the successor package
+version 0.2.1 and restricts future preparation to 0.2.1. Unified Roadmap follow-up #4036 is protected at
+`e4ffe40d6edcb5fca58b8cf52b3255b0a83dc903`. These are source and planning readbacks only: no 0.2.1 package,
+image, tag, release, valid provider grant, installed qualification or adoption is claimed, and P4 remains open.
 
 ## Workspace impact
 
