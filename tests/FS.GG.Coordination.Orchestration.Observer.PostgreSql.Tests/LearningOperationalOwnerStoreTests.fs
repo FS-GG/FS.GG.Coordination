@@ -16,8 +16,15 @@ module private OwnerFixture =
         | null | "" -> fallback
         | value -> value
 
+    let mode = environment "FSGG_PG_MODE" "binary"
+
     let root =
-        environment "FSGG_PG_ROOT" (File.ReadAllText("/tmp/o0-postgresql-current-path").Trim())
+        match Environment.GetEnvironmentVariable "FSGG_PG_ROOT" with
+        | null
+        | "" when mode = "binary" -> File.ReadAllText("/tmp/o0-postgresql-current-path").Trim()
+        | null
+        | "" -> "/tmp"
+        | value -> value
 
     let host = environment "FSGG_PG_HOST" (Path.Combine(root, "socket"))
     let port = environment "FSGG_PG_PORT" "55439"
@@ -88,7 +95,7 @@ let ``owner admission append is idempotent and recovers exact roster after resta
             }
 
         let budget =
-            { TokenLimit = 100L; RuntimeSecondsLimit = 100L; CostMicrosLimit = 100L; Deadline = now.AddHours 1. }
+            { TokenLimit = 100L; RuntimeSecondsLimit = 600L; CostMicrosLimit = 100L; Deadline = now.AddHours 1. }
 
         do! append (OpenSession(session, project, budget))
 
@@ -116,7 +123,7 @@ let ``owner admission append is idempotent and recovers exact roster after resta
 
         let observation = { observation0 with ObservationSha256 = Observer.observationSha256 observation0 }
         do! append (RecordProjectObservation observation)
-        do! append (StartPlanningAttempt(attempt, { Tokens = 10L; RuntimeSeconds = 10L; CostMicros = 10L }, now.AddMinutes -4.))
+        do! append (StartPlanningAttempt(attempt, { Tokens = 10L; RuntimeSeconds = 300L; CostMicros = 10L }, now.AddMinutes -4.))
 
         let proposalInput =
             {
