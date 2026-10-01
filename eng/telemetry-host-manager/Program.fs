@@ -293,6 +293,139 @@ let private atomicPrivateWrite (path: string) (bytes: byte array) =
         if File.Exists temporary then
             File.Delete temporary
 
+let private exactJsonProperties (expected: Set<string>) (element: JsonElement) =
+    if element.ValueKind <> JsonValueKind.Object then false
+    else
+        let names = element.EnumerateObject() |> Seq.map _.Name |> Seq.toArray
+        names.Length = expected.Count && Set.ofArray names = expected
+
+let private nonzeroSha256 value = hex64 value && value |> Seq.exists ((<>) '0')
+
+let private canonicalAbsolutePath (path: string) =
+    Path.IsPathFullyQualified path && Path.GetFullPath path = path
+
+let private safeOwnedArtifactFile uid executable path =
+    let info = FileInfo path
+    let mode = if info.Exists then File.GetUnixFileMode path else enum 0
+    let executableMode = mode &&& (UnixFileMode.UserExecute ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherExecute)
+    info.Exists
+    && canonicalAbsolutePath path
+    && isNull info.LinkTarget
+    && noLinkedAncestor path
+    && ownedByHostOrRoot uid path
+    && (mode &&& (UnixFileMode.GroupWrite ||| UnixFileMode.OtherWrite)) = enum 0
+    && (not executable || executableMode <> enum 0)
+
+let private boundedFileBytes maximum label path =
+    let info = FileInfo path
+    if not info.Exists || info.Length < 0L || info.Length > int64 maximum then fail (label + " exceeds its byte bound")
+    let bytes = File.ReadAllBytes path
+    if int64 bytes.Length <> info.Length then fail (label + " changed while read")
+    bytes
+
+let private fileSha256 path =
+    use stream = File.OpenRead path
+    Convert.ToHexString(SHA256.HashData stream).ToLowerInvariant()
+
+let private stringJsonProperty (label: string) (name: string) (element: JsonElement) =
+    let mutable property = Unchecked.defaultof<JsonElement>
+    if not (element.TryGetProperty(name, &property))
+       || property.ValueKind <> JsonValueKind.String
+       || String.IsNullOrWhiteSpace(property.GetString()) then fail (label + " " + name + " is invalid")
+    property.GetString()
+
+let private verifyNativeVerifierManifest uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest =
+    let canonicalModuleSha256 = "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+    if not (safeOwnedArtifactFile uid true runtime) then fail "native verifier runtime executable is unsafe"
+    if not (safeOwnedArtifactFile uid false modulePath) then fail "native verifier module is unsafe"
+    if not (safeOwnedArtifactFile uid false manifestPath) then fail "native verifier runtime manifest is unsafe"
+    if not (nonzeroSha256 runtimeDigest && nonzeroSha256 moduleDigest && nonzeroSha256 manifestDigest) then
+        fail "native verifier SHA-256 must be lowercase nonzero hex"
+    if moduleDigest <> canonicalModuleSha256 then fail "native verifier module is not the canonical qualified module"
+    if fileSha256 runtime <> runtimeDigest then fail "native verifier runtime SHA-256 differs"
+    if fileSha256 modulePath <> moduleDigest then fail "native verifier module SHA-256 differs"
+    let manifestBytes = boundedFileBytes (1024 * 1024) "native verifier runtime manifest" manifestPath
+    if sha256 manifestBytes <> manifestDigest then fail "native verifier runtime manifest SHA-256 differs"
+    use document = JsonDocument.Parse manifestBytes
+    let root = document.RootElement
+    if not (exactJsonProperties (Set.ofList [ "schema"; "sourceRevision"; "runtimeImageDigest"; "runtimeExecutablePath"; "modulePath"; "files" ]) root)
+       || stringJsonProperty "native verifier runtime manifest" "schema" root <> "fsgg.telemetry.native-verifier-runtime/1" then
+        fail "native verifier runtime manifest is not closed schema v1"
+    let sourceRevision = stringJsonProperty "native verifier runtime manifest" "sourceRevision" root
+    let imageDigest = stringJsonProperty "native verifier runtime manifest" "runtimeImageDigest" root
+    let declaredRuntime = stringJsonProperty "native verifier runtime manifest" "runtimeExecutablePath" root
+    let declaredModule = stringJsonProperty "native verifier runtime manifest" "modulePath" root
+    if not (sha40 sourceRevision) then fail "native verifier source revision is invalid"
+    if not (imageDigest.StartsWith("sha256:", StringComparison.Ordinal))
+       || not (nonzeroSha256 (imageDigest.Substring("sha256:".Length))) then fail "native verifier runtime image digest is invalid"
+    if declaredRuntime <> runtime || declaredModule <> modulePath then fail "native verifier runtime manifest paths differ"
+    let mutable files = Unchecked.defaultof<JsonElement>
+    if not (root.TryGetProperty("files", &files)) || files.ValueKind <> JsonValueKind.Array then
+        fail "native verifier runtime manifest files are invalid"
+    let entries = files.EnumerateArray() |> Seq.toArray
+    if entries.Length = 0 || entries.Length > 4096 then fail "native verifier runtime manifest file count exceeds its bound"
+    let mutable previous = null
+    let mutable total = 0L
+    let mutable runtimeSeen = false
+    let mutable moduleSeen = false
+    for entry in entries do
+        if not (exactJsonProperties (Set.ofList [ "path"; "bytes"; "sha256" ]) entry) then
+            fail "native verifier runtime manifest file entry is not closed"
+        let path = stringJsonProperty "native verifier runtime manifest file" "path" entry
+        let digest = stringJsonProperty "native verifier runtime manifest file" "sha256" entry
+        let mutable declaredBytes = 0L
+        let mutable bytesProperty = Unchecked.defaultof<JsonElement>
+        if not (entry.TryGetProperty("bytes", &bytesProperty))
+           || not (bytesProperty.TryGetInt64(&declaredBytes))
+           || declaredBytes <= 0L then fail "native verifier runtime manifest file bytes are invalid"
+        if not (canonicalAbsolutePath path) || not (nonzeroSha256 digest) then
+            fail "native verifier runtime manifest file identity is invalid"
+        if not (isNull previous) && StringComparer.Ordinal.Compare(previous, path) >= 0 then
+            fail "native verifier runtime manifest files must be sorted and unique"
+        if total > 512L * 1024L * 1024L - declaredBytes then fail "native verifier runtime closure exceeds its byte bound"
+        total <- total + declaredBytes
+        previous <- path
+        if not (safeOwnedArtifactFile uid (path = runtime) path) then fail "native verifier runtime manifest file is unsafe"
+        let info = FileInfo path
+        if info.Length <> declaredBytes || fileSha256 path <> digest then fail "native verifier runtime manifest file differs"
+        if path = runtime then
+            runtimeSeen <- true
+            if digest <> runtimeDigest then fail "native verifier runtime inventory binding differs"
+        if path = modulePath then
+            moduleSeen <- true
+            if digest <> moduleDigest then fail "native verifier module inventory binding differs"
+    if not runtimeSeen || not moduleSeen then fail "native verifier runtime inventory omits required code"
+    manifestBytes
+
+let private verifyNativeSourceReference uid custodyAnchor codexHome evidenceRoot manifestDigest =
+    let sourceReferencePath = Path.Combine(custodyAnchor, "source-reference.json")
+    if not (privateFile uid sourceReferencePath) then fail "native source reference must be an owner-private regular file"
+    let sourceReferenceBytes = boundedFileBytes 65536 "native source reference" sourceReferencePath
+    use document = JsonDocument.Parse sourceReferenceBytes
+    let root = document.RootElement
+    if not (exactJsonProperties (Set.ofList [ "schema"; "profileSha256"; "nativeSourceVolume"; "developmentTarget"; "collectorReadOnlyTarget"; "readerProfileSha256"; "captureQualified"; "verifierRuntimeManifestSha256" ]) root)
+       || stringJsonProperty "native source reference" "schema" root <> "fsgg.telemetry.persistent-source-references/3" then
+        fail "native source reference is not closed schema v3"
+    let profileSha = stringJsonProperty "native source reference" "profileSha256" root
+    let readerProfileSha = stringJsonProperty "native source reference" "readerProfileSha256" root
+    let sourceVolume = stringJsonProperty "native source reference" "nativeSourceVolume" root
+    let developmentTarget = stringJsonProperty "native source reference" "developmentTarget" root
+    let collectorTarget = stringJsonProperty "native source reference" "collectorReadOnlyTarget" root
+    let declaredManifest = stringJsonProperty "native source reference" "verifierRuntimeManifestSha256" root
+    let mutable captureQualified = Unchecked.defaultof<JsonElement>
+    if not (nonzeroSha256 profileSha && nonzeroSha256 readerProfileSha)
+       || declaredManifest <> manifestDigest
+       || not (Regex.IsMatch(sourceVolume, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"))
+       || not (canonicalAbsolutePath developmentTarget)
+       || collectorTarget <> codexHome
+       || not (root.TryGetProperty("captureQualified", &captureQualified))
+       || captureQualified.ValueKind <> JsonValueKind.False then fail "native source reference binding differs"
+    let readerProfilePath = Path.Combine(evidenceRoot, "fixed-native-capability-profile.json")
+    if not (privateFile uid readerProfilePath) then fail "native reader profile must be an owner-private regular file"
+    let readerProfileBytes = boundedFileBytes (1024 * 1024) "native reader profile" readerProfilePath
+    if sha256 readerProfileBytes <> readerProfileSha then fail "native source reference reader profile SHA-256 differs"
+    sourceReferenceBytes
+
 let private installNativeCollector values =
     only
         (Set.ofList
@@ -307,6 +440,12 @@ let private installNativeCollector values =
                 "--effort"
                 "--installation-version"
                 "--executable-sha256"
+                "--verifier-runtime"
+                "--verifier-runtime-sha256"
+                "--verifier-module"
+                "--verifier-module-sha256"
+                "--verifier-runtime-manifest"
+                "--verifier-runtime-manifest-sha256"
             ])
         values
 
@@ -321,16 +460,35 @@ let private installNativeCollector values =
     let evidenceRoot = required "--evidence-root" values |> Path.GetFullPath
     let installationVersion = values |> Map.tryFind "--installation-version" |> Option.defaultValue "1"
 
-    if installationVersion <> "1" && installationVersion <> "2" then
-        fail "installation version must be 1 or 2"
+    if installationVersion <> "1" && installationVersion <> "2" && installationVersion <> "3" then
+        fail "installation version must be 1, 2, or 3"
+
+    let verifierOptionNames =
+        [ "--verifier-runtime"; "--verifier-runtime-sha256"; "--verifier-module"; "--verifier-module-sha256"; "--verifier-runtime-manifest"; "--verifier-runtime-manifest-sha256" ]
+    let suppliedVerifierOptions = verifierOptionNames |> List.filter (fun name -> values |> Map.containsKey name)
+    if installationVersion = "3" && suppliedVerifierOptions.Length <> verifierOptionNames.Length then
+        fail "installation version must be 1 or 2 unless all version 3 native verifier options are supplied"
+    if installationVersion <> "3" && not suppliedVerifierOptions.IsEmpty then
+        fail "native verifier options are valid only for installation version 3"
+    let verifierOptions =
+        if installationVersion = "3" then
+            Some(required "--verifier-runtime" values |> Path.GetFullPath,
+                 required "--verifier-runtime-sha256" values,
+                 required "--verifier-module" values |> Path.GetFullPath,
+                 required "--verifier-module-sha256" values,
+                 required "--verifier-runtime-manifest" values |> Path.GetFullPath,
+                 required "--verifier-runtime-manifest-sha256" values)
+        else None
 
     let executablePin =
         match installationVersion, Map.tryFind "--executable-sha256" values with
         | "1", None -> None
-        | "1", Some _ -> fail "executable SHA-256 is valid only for installation version 2"
-        | "2", None -> fail "missing --executable-sha256"
+        | "1", Some _ -> fail "executable SHA-256 is valid only for installation version 2 or 3"
+        | ("2" | "3"), None -> fail "missing --executable-sha256"
         | "2", Some value when hex64 value -> Some value
         | "2", Some _ -> fail "executable SHA-256 must be lowercase hex"
+        | "3", Some value when nonzeroSha256 value -> Some value
+        | "3", Some _ -> fail "executable SHA-256 must be lowercase nonzero hex"
         | _ -> None
 
     let bounded name value =
@@ -363,7 +521,7 @@ let private installNativeCollector values =
     if not (executableFile executable) then
         fail "Codex executable is unsafe"
 
-    if installationVersion = "2" && not (ownedByHostOrRoot uid executable) then
+    if (installationVersion = "2" || installationVersion = "3") && not (ownedByHostOrRoot uid executable) then
         fail "Codex executable must be owned by the Host account or root"
 
     let executableDigest =
@@ -376,7 +534,7 @@ let private installNativeCollector values =
 
     let custodyAnchor = Path.GetDirectoryName hostConfig
 
-    if installationVersion = "2" && not (privateDescendantDirectory uid custodyAnchor codexHome) then
+    if (installationVersion = "2" || installationVersion = "3") && not (privateDescendantDirectory uid custodyAnchor codexHome) then
         fail "Codex home must be a private descendant of the Host configuration parent"
 
     let evidenceParent = Path.GetDirectoryName evidenceRoot
@@ -385,7 +543,7 @@ let private installNativeCollector values =
         fail "evidence parent must be an owner-private directory"
 
     if
-        installationVersion = "2"
+        (installationVersion = "2" || installationVersion = "3")
         && Path.TrimEndingDirectorySeparator evidenceParent <> Path.TrimEndingDirectorySeparator custodyAnchor
         && not (privateDescendantDirectory uid custodyAnchor evidenceParent)
     then
@@ -404,8 +562,16 @@ let private installNativeCollector values =
             UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
         )
 
-    if installationVersion = "2" && not (privateDescendantDirectory uid custodyAnchor evidenceRoot) then
+    if (installationVersion = "2" || installationVersion = "3") && not (privateDescendantDirectory uid custodyAnchor evidenceRoot) then
         fail "evidence root must be a private descendant of the Host configuration parent"
+
+    let verifierEvidence =
+        match verifierOptions with
+        | Some(runtime, runtimeDigest, modulePath, moduleDigest, manifestPath, manifestDigest) ->
+            verifyNativeVerifierManifest uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest |> ignore
+            let sourceReferenceBytes = verifyNativeSourceReference uid custodyAnchor codexHome evidenceRoot manifestDigest
+            Some(runtime, runtimeDigest, modulePath, moduleDigest, manifestPath, manifestDigest, sourceReferenceBytes)
+        | None -> None
 
     let configBytes = File.ReadAllBytes hostConfig
 
@@ -508,7 +674,30 @@ let private installNativeCollector values =
     let receiptPath = hostConfig + ".native-collector.receipt.json"
 
     let sidecarBytes =
-        if installationVersion = "2" then
+        if installationVersion = "3" then
+            let runtime, runtimeDigest, modulePath, moduleDigest, manifestPath, manifestDigest, _ = verifierEvidence.Value
+            JsonSerializer.SerializeToUtf8Bytes
+                {|
+                    Schema = "fsgg.telemetry.native-collector-installation/3"
+                    CredentialReference = credentialReference
+                    ExecutablePath = executable
+                    CodexHome = codexHome
+                    EvidenceRoot = evidenceRoot
+                    Provider = provider
+                    Model = model
+                    Effort = effort
+                    ExecutableSha256 = executableDigest
+                    NativeVerifier =
+                        {|
+                            RuntimeExecutablePath = runtime
+                            RuntimeExecutableSha256 = runtimeDigest
+                            ModulePath = modulePath
+                            ModuleSha256 = moduleDigest
+                            RuntimeManifestPath = manifestPath
+                            RuntimeManifestSha256 = manifestDigest
+                        |}
+                |}
+        elif installationVersion = "2" then
             JsonSerializer.SerializeToUtf8Bytes
                 {|
                     Schema = "fsgg.telemetry.native-collector-installation/2"
@@ -535,25 +724,49 @@ let private installNativeCollector values =
                 |}
 
     let receiptBytes =
-        JsonSerializer.SerializeToUtf8Bytes
-            {|
-                schema = "fsgg.telemetry.native-collector-installation-receipt/" + installationVersion
-                status = "installed"
-                ownerUid = uid
-                hostConfigSha256 = sha256 configBytes
-                sidecarSha256 = sha256 sidecarBytes
-                executableSha256 = executableDigest
-                credentialReference = credentialReference
-                workspaceId = workspace
-                producerId = producer
-                streamId = stream
-                grantId = grantId
-                grantGeneration = generation
-                sourceVerification = "unknown"
-                snapshotOrigin = "unknown"
-                sharedCostCompleteness = "unknown"
-                activationAuthorized = false
-            |}
+        if installationVersion = "3" then
+            let _, _, _, _, _, manifestDigest, sourceReferenceBytes = verifierEvidence.Value
+            JsonSerializer.SerializeToUtf8Bytes
+                {|
+                    schema = "fsgg.telemetry.native-collector-installation-receipt/3"
+                    status = "installed"
+                    ownerUid = uid
+                    hostConfigSha256 = sha256 configBytes
+                    sidecarSha256 = sha256 sidecarBytes
+                    executableSha256 = executableDigest
+                    credentialReference = credentialReference
+                    workspaceId = workspace
+                    producerId = producer
+                    streamId = stream
+                    grantId = grantId
+                    grantGeneration = generation
+                    sourceVerification = "unknown"
+                    snapshotOrigin = "unknown"
+                    sharedCostCompleteness = "unknown"
+                    activationAuthorized = false
+                    sourceReferenceSha256 = sha256 sourceReferenceBytes
+                    verifierRuntimeManifestSha256 = manifestDigest
+                |}
+        else
+            JsonSerializer.SerializeToUtf8Bytes
+                {|
+                    schema = "fsgg.telemetry.native-collector-installation-receipt/" + installationVersion
+                    status = "installed"
+                    ownerUid = uid
+                    hostConfigSha256 = sha256 configBytes
+                    sidecarSha256 = sha256 sidecarBytes
+                    executableSha256 = executableDigest
+                    credentialReference = credentialReference
+                    workspaceId = workspace
+                    producerId = producer
+                    streamId = stream
+                    grantId = grantId
+                    grantGeneration = generation
+                    sourceVerification = "unknown"
+                    snapshotOrigin = "unknown"
+                    sharedCostCompleteness = "unknown"
+                    activationAuthorized = false
+                |}
 
     let installExact path bytes =
         if File.Exists path then
@@ -562,7 +775,7 @@ let private installNativeCollector values =
         else
             atomicPrivateWrite path bytes
 
-    if installationVersion = "2" && File.Exists sidecar && privateFile uid sidecar then
+    if (installationVersion = "2" || installationVersion = "3") && File.Exists sidecar && privateFile uid sidecar then
         use installed = JsonDocument.Parse(File.ReadAllBytes sidecar)
         let mutable installedSchema = Unchecked.defaultof<JsonElement>
 
@@ -570,9 +783,10 @@ let private installNativeCollector values =
             installed.RootElement.ValueKind = JsonValueKind.Object
             && installed.RootElement.TryGetProperty("Schema", &installedSchema)
             && installedSchema.ValueKind = JsonValueKind.String
-            && installedSchema.GetString() = "fsgg.telemetry.native-collector-installation/1"
+            && ((installationVersion = "2" && installedSchema.GetString() = "fsgg.telemetry.native-collector-installation/1")
+                || (installationVersion = "3" && installedSchema.GetString() <> "fsgg.telemetry.native-collector-installation/3"))
         then
-            fail "installation version 1 cannot be promoted in place; choose prospective custody paths"
+            fail "native collector installation cannot be promoted in place; choose prospective custody paths"
 
     installExact sidecar sidecarBytes
     installExact receiptPath receiptBytes
