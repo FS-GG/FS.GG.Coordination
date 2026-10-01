@@ -191,6 +191,23 @@ type ILearningOperationalCohortSource =
     abstract ReadLearningOperationalCohort:
         LearningOperationalWindowKey * CancellationToken -> Task<Result<LearningOperationalCohortRecord, string>>
 
+/// Exact admitted roster identity recovered from the Observer journal.  This is
+/// an owner record consumed by later joins, not a caller-authored cohort digest.
+type LearningOperationalRosterIdentity =
+    {
+        Key: LearningOperationalWindowKey
+        Source: LearningOperationalProducerIdentity
+        AdmittedAt: DateTimeOffset
+        AcceptedPlanSha256: string
+        CanonicalWorkItemSha256: string
+        Members: LearningOperationalCohortMember list
+    }
+
+type ILearningOperationalRosterIdentitySource =
+    abstract ReadLearningOperationalRosterIdentity:
+        LearningOperationalWindowKey * CancellationToken ->
+            Task<Result<LearningOperationalRosterIdentity, string>>
+
 type ILearningOperationalCensusSource =
     abstract ReadLearningOperationalCensus:
         LearningOperationalWindowKey * CancellationToken -> Task<Result<LearningOperationalCensusRecord, string>>

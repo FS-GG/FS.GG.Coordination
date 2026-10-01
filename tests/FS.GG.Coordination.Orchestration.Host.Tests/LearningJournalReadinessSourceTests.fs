@@ -51,14 +51,20 @@ let ``reader maps recovered owner event with exact source revision and all roles
     let source = LearningJournalReadinessSource(store, "observer-session-v1-owner")
     let! authority = (source :> ILearningOperationalAuthoritySource).ReadLearningOperationalAuthority(key, CancellationToken.None)
     let! cohort = (source :> ILearningOperationalCohortSource).ReadLearningOperationalCohort(key, CancellationToken.None)
+    let! roster = (source :> ILearningOperationalRosterIdentitySource).ReadLearningOperationalRosterIdentity(key, CancellationToken.None)
     let authority = authority |> Result.defaultWith failwith
     let cohort = cohort |> Result.defaultWith failwith
+    let roster = roster |> Result.defaultWith failwith
     Assert.True(authority.Enabled); Assert.True(Option.isNone authority.RevokedAt)
     Assert.Equal("observer-session-v1-owner:1", authority.Source.Revision)
     Assert.True([ "child"; "repair"; "rescue"; "retry"; "review"; "root" ] = (cohort.Members |> List.map _.Role |> List.sort))
     Assert.Equal(window.AcceptedPlanSha256, cohort.AcceptedPlanSha256)
     Assert.Equal(window.CanonicalWorkItemSha256, cohort.CanonicalWorkItemSha256)
-    Assert.Equal(2, store.Reads)
+    Assert.Equal("10000000000000000000000000000001", roster.Source.RecordId)
+    Assert.Equal("observer-session-v1-owner:1", roster.Source.Revision)
+    Assert.Equal(window.AdmittedAt, roster.AdmittedAt)
+    Assert.True([ "child"; "repair"; "rescue"; "retry"; "review"; "root" ] = (roster.Members |> List.map _.Role |> List.sort))
+    Assert.Equal(3, store.Reads)
 }
 
 [<Fact>]

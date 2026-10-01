@@ -124,3 +124,28 @@ type LearningJournalReadinessSource(store: IObserverJournalStore, observerId: st
                                     })
                         })
             }
+
+    interface ILearningOperationalRosterIdentitySource with
+        member _.ReadLearningOperationalRosterIdentity(key, token) =
+            task {
+                let! recovered = LearningJournalReadinessMapping.recover store observerId key token
+
+                return
+                    recovered
+                    |> Result.map (fun ((eventValue, window), _revocation) ->
+                        {
+                            Key = key
+                            Source = LearningJournalReadinessMapping.identity eventValue
+                            AdmittedAt = window.AdmittedAt
+                            AcceptedPlanSha256 = window.AcceptedPlanSha256
+                            CanonicalWorkItemSha256 = window.CanonicalWorkItemSha256
+                            Members =
+                                window.Members
+                                |> List.map (fun memberValue ->
+                                    {
+                                        ItemId = memberValue.ItemId
+                                        OriginalItemId = memberValue.OriginalItemId
+                                        Role = LearningJournalReadinessMapping.role memberValue.Role
+                                    })
+                        })
+            }
