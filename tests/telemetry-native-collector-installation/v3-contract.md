@@ -1,0 +1,26 @@
+# Native collector installation v3 manager contract
+
+Installation v3 is prospective. The manager consumes an owner-private `source-reference.json` adjacent to the Host configuration and never promotes or rewrites a v1/v2 installation or source reference.
+
+The v3 source reference has exactly the v2 fields plus `verifierRuntimeManifestSha256`, keeps `captureQualified` false, binds `collectorReadOnlyTarget` to the configured Codex home, and binds `readerProfileSha256` to `EvidenceRoot/fixed-native-capability-profile.json`.
+
+The runtime manifest is closed schema `fsgg.telemetry.native-verifier-runtime/1`. It is limited to 1 MiB, 4096 sorted unique files, and 512 MiB of declared closure bytes. The manager rereads every declared regular file, checks its size and SHA-256, requires the runtime and canonical verifier module in the inventory, and derives the receipt hashes from the bytes it consumed. The canonical module SHA-256 is `8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba`.
+
+Run the F# behavioral harness against the canonical module and a new disposable path:
+
+```console
+tests/telemetry-native-collector-installation/run-v3.sh \
+  /absolute/path/to/.github/tools/learn_01_native_source.py \
+  /absolute/new/disposable-fixture-root
+```
+
+The fixture identifies itself as `disposable-fixture-not-qualified-production`. Its runtime image identity and executable exist only to exercise manager custody. They are not production runtime qualification, publication, installation, or activation evidence.
+
+The required bootstrap `compiler-and-tests` gate fetches the canonical module
+from protected public `.github` revision with a 10-second connection deadline,
+60-second aggregate deadline, and no retries,
+`a1310e14a60d1d025dd3fa9f404970890503d092` without credentials, verifies SHA-256
+`8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba`,
+runs this v3 harness and the legacy seven-case harness, and removes its synthetic
+fixture tree. The runtime manifest remains a disposable mechanics fixture and
+does not qualify a production runtime image.

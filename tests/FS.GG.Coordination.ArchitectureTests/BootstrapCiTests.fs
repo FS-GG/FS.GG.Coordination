@@ -1888,3 +1888,35 @@ let ``evidence rejects malformed manifests and contract digests`` () =
         let malformedExit, _, malformedError = runEvidence root exactHead artifacts manifest
         Assert.NotEqual(0, malformedExit)
         Assert.Contains("rule=evidence-unreadable", malformedError))
+
+[<Fact>]
+let ``compiler gate owns pinned native collector manager behavior`` () =
+    let resolve relative =
+        let builtLocation = Path.Combine(repositoryRoot, relative)
+        if File.Exists builtLocation then builtLocation
+        else
+            match Environment.GetEnvironmentVariable "FSGG_REPOSITORY_ROOT" with
+            | root when not (String.IsNullOrWhiteSpace root) && Path.IsPathFullyQualified root ->
+                Path.Combine(root, relative)
+            | _ -> Path.Combine(Directory.GetCurrentDirectory(), relative)
+    let runner = File.ReadAllText(resolve "eng/bootstrap-gates/compiler-and-tests.sh")
+    let harness = File.ReadAllText(resolve "tests/telemetry-native-collector-installation/run-ci.sh")
+
+    let valid (gate: string) (testOwner: string) =
+        gate.Contains("bash tests/telemetry-native-collector-installation/run-ci.sh")
+        &&
+        [ "a1310e14a60d1d025dd3fa9f404970890503d092"
+          "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+          "raw.githubusercontent.com/FS-GG/.github/$native_source_revision/tools/learn_01_native_source.py"
+          "--connect-timeout 10 --max-time 60 --retry 0"
+          "sha256sum --check --strict"
+          "tests/telemetry-runtime-receiver/run.sh"
+          "tests/telemetry-native-collector-installation/run-v3.sh"
+          "tests/telemetry-native-collector-installation/run.py" ]
+        |> List.forall testOwner.Contains
+
+    Assert.True(valid runner harness)
+    Assert.False(valid (runner.Replace("run-ci.sh", "missing-ci.sh")) harness)
+    Assert.False(valid runner (harness.Replace("a1310e14a60d1d025dd3fa9f404970890503d092", String.replicate 40 "0")))
+    Assert.False(valid runner (harness.Replace("tests/telemetry-native-collector-installation/run-v3.sh", "missing-v3")))
+    Assert.False(valid runner (harness.Replace("tests/telemetry-native-collector-installation/run.py", "missing-legacy")))
