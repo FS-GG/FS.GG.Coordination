@@ -88,6 +88,11 @@ class Refusal(RuntimeError):
     pass
 
 
+class AcquisitionRefusal(Refusal):
+    def __init__(self, code: str, original_failure: str, cleanup_complete: bool):
+        super().__init__(code); self.original_failure = original_failure; self.cleanup_complete = cleanup_complete
+
+
 def source_module():
     name = "fsgg_fourd_source_capsule"
     if name in __import__("sys").modules:
@@ -115,6 +120,24 @@ class HeldFile:
     fd: int
     device: int
     inode: int
+
+    @classmethod
+    def create(cls, path: pathlib.Path, data: bytes) -> "HeldFile":
+        fd = os.open(path, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
+        try:
+            view = memoryview(data)
+            while view:
+                written = os.write(fd, view)
+                if written <= 0: raise Refusal("private-write-refused")
+                view = view[written:]
+            os.fsync(fd); os.lseek(fd, 0, os.SEEK_SET)
+            value = os.fstat(fd); os.set_inheritable(fd, True)
+            return cls(path, fd, value.st_dev, value.st_ino)
+        except BaseException:
+            os.close(fd)
+            try: path.unlink()
+            except OSError: pass
+            raise
 
     @classmethod
     def open(cls, path: pathlib.Path) -> "HeldFile":
@@ -668,37 +691,62 @@ def verify_public_checkout(root: pathlib.Path, environ: Mapping[str, str], effec
     return values[0], values[1]
 
 
+class StrictRedirect(urllib.request.HTTPRedirectHandler):
+    def __init__(self, hosts: set[str]): super().__init__(); self.hosts = hosts; self.count = 0
+    def redirect_request(self, request, fp, code, msg, headers, newurl):
+        parsed = urllib.parse.urlparse(newurl)
+        self.count += 1
+        if self.count > 4 or parsed.scheme != "https" or parsed.hostname not in self.hosts:
+            raise Refusal("source-download-redirect-refused")
+        return super().redirect_request(request, fp, code, msg, headers, newurl)
+
+
+def bounded_public_read(request: urllib.request.Request, *, limit: int, deadline: float,
+                        hosts: set[str], effects: Effects) -> tuple[bytes, str]:
+    remaining = deadline - time.monotonic()
+    if remaining <= 0 or effects.cancelled: raise Refusal("source-download-timeout")
+    redirect = StrictRedirect(hosts); opener = urllib.request.build_opener(redirect)
+    try:
+        with opener.open(request, timeout=min(15.0, remaining)) as response:
+            final = urllib.parse.urlparse(response.geturl())
+            if final.scheme != "https" or final.hostname not in hosts: raise Refusal("source-download-redirect-refused")
+            value = bytearray()
+            while len(value) <= limit:
+                if time.monotonic() >= deadline or effects.cancelled: raise Refusal("source-download-timeout")
+                block = response.read(min(65536, limit + 1 - len(value)))
+                if not block: return bytes(value), response.geturl()
+                value.extend(block)
+    except Refusal: raise
+    except Exception as error: raise Refusal("source-download-refused") from error
+    raise Refusal("source-download-overflow")
+
+
 def acquire_source(key: bytes, admission_value: Mapping[str, object], private: pathlib.Path,
                    _known_hosts: pathlib.Path, effects: Effects, env: Mapping[str, str]) -> pathlib.Path:
+    deadline = time.monotonic() + 600
     credentials, source, capture = private / "credentials", private / "source", private / "capture"
     _private_dir(credentials); _private_dir(capture)
     key_path = credentials / "source-recipient.pem"
     capsule_path = credentials / "source.capsule.json"
     plaintext_path = credentials / "source.snapshot.json"
-    _write_new(key_path, key)
-    held: list[HeldFile] = [HeldFile.open(key_path)]
+    held: list[HeldFile] = []
     safe_env = {"PATH": "/usr/bin:/bin", "HOME": str(private / "home"), "LANG": "C.UTF-8",
                 "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}
     capsule = admission_value["sourceCapsule"]
+    original: BaseException | None = None
+    receipt: dict[str, object] | None = None
     try:
-        public = effects.run(["/usr/bin/openssl", "pkey", "-in", f"/proc/self/fd/{held[0].fd}", "-pubout"], cwd=private,
-                             env=safe_env, timeout=15, capture=capture / "source-key-readback.json",
-                             pass_fds=(held[0].fd,))
+        key_file = HeldFile.create(key_path, key); held.append(key_file)
+        public = effects.run(["/usr/bin/openssl", "pkey", "-in", f"/proc/self/fd/{key_file.fd}", "-pubout"], cwd=private,
+                             env=safe_env, timeout=min(15, max(1, deadline-time.monotonic())),
+                             capture=capture / "source-key-readback.json", pass_fds=(key_file.fd,))
         if public.returncode or hashlib.sha256(public.stdout).hexdigest() != capsule["recipientPublicKeySha256"]:
             raise Refusal("source-recipient-key-refused")
-        metadata_url = ("https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/"
-                        + capsule["releaseId"])
+        metadata_url = "https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/" + capsule["releaseId"]
         metadata_request = urllib.request.Request(metadata_url, headers={"Accept":"application/vnd.github+json",
             "User-Agent":"fsgg-fourd-source-acquisition/1", "X-GitHub-Api-Version":"2022-11-28"})
-        try:
-            with urllib.request.urlopen(metadata_request, timeout=15) as response:
-                final_metadata = urllib.parse.urlparse(response.geturl())
-                if final_metadata.scheme != "https" or final_metadata.hostname != "api.github.com":
-                    raise Refusal("source-release-readback-refused")
-                metadata_raw = response.read(256 * 1024 + 1)
-        except Refusal: raise
-        except Exception as error: raise Refusal("source-release-readback-refused") from error
-        if len(metadata_raw) > 256 * 1024: raise Refusal("source-release-readback-refused")
+        metadata_raw, _ = bounded_public_read(metadata_request, limit=256 * 1024, deadline=deadline,
+                                               hosts={"api.github.com"}, effects=effects)
         try: metadata = json.loads(metadata_raw)
         except json.JSONDecodeError as error: raise Refusal("source-release-readback-refused") from error
         assets = metadata.get("assets") if isinstance(metadata, dict) else None
@@ -707,62 +755,80 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
                 or len(matching) != 1 or matching[0].get("name") != capsule["name"]
                 or matching[0].get("size") != capsule["ciphertextBytes"]):
             raise Refusal("source-release-binding-refused")
-        url = ("https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/assets/" + capsule["assetId"])
-        request = urllib.request.Request(url, headers={"Accept":"application/octet-stream",
+        asset_url = "https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/assets/" + capsule["assetId"]
+        request = urllib.request.Request(asset_url, headers={"Accept":"application/octet-stream",
             "User-Agent":"fsgg-fourd-source-acquisition/1", "X-GitHub-Api-Version":"2022-11-28"})
-        try:
-            with urllib.request.urlopen(request, timeout=30) as response:
-                final = urllib.parse.urlparse(response.geturl())
-                if final.scheme != "https" or final.hostname not in {
-                    "api.github.com", "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"
-                }:
-                    raise Refusal("source-download-redirect-refused")
-                raw = response.read(24 * 1024 * 1024 + 1)
-        except Refusal: raise
-        except Exception as error: raise Refusal("source-download-refused") from error
-        if (len(raw) != capsule["ciphertextBytes"]
-                or hashlib.sha256(raw).hexdigest() != capsule["ciphertextSha256"]):
+        raw, _ = bounded_public_read(request, limit=24 * 1024 * 1024, deadline=deadline,
+            hosts={"api.github.com", "github.com", "release-assets.githubusercontent.com", "objects.githubusercontent.com"},
+            effects=effects)
+        if len(raw) != capsule["ciphertextBytes"] or hashlib.sha256(raw).hexdigest() != capsule["ciphertextSha256"]:
             raise Refusal("source-download-binding-refused")
         module = source_module()
         descriptor_raw = json.dumps(capsule["descriptor"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
         profile = hashlib.sha256(descriptor_raw).hexdigest()
         module.validate_outer_capsule(raw, str(admission_value["runNonce"]) + "-source", FOURD_SHA, profile)
-        _write_new(capsule_path, raw)
-        capsule_file = HeldFile.open(capsule_path); held.append(capsule_file)
-        unseal = effects.run(["/usr/bin/node", str(pathlib.Path(__file__).with_name("seal_native_custody.mjs")),
-                              "unseal", f"/proc/self/fd/{capsule_file.fd}", f"/proc/self/fd/{held[0].fd}", str(plaintext_path),
-                              str(admission_value["runNonce"]) + "-source", FOURD_SHA, profile],
-                             cwd=private, env=safe_env, timeout=120, capture=capture / "source-unseal.json",
-                             pass_fds=(capsule_file.fd, held[0].fd))
-        plaintext_file = HeldFile.open(plaintext_path) if plaintext_path.exists() else None
-        if plaintext_file is not None: held.append(plaintext_file)
-        if unseal.returncode or plaintext_file is None: raise Refusal("source-unseal-refused")
+        capsule_file = HeldFile.create(capsule_path, raw); held.append(capsule_file)
+        unseal_failure: BaseException | None = None
+        try:
+            remaining = deadline - time.monotonic()
+            if remaining <= 46: raise Refusal("source-acquisition-timeout")
+            unseal = effects.run(["/usr/bin/node", str(pathlib.Path(__file__).with_name("seal_native_custody.mjs")),
+                                  "unseal", f"/proc/self/fd/{capsule_file.fd}", f"/proc/self/fd/{key_file.fd}", str(plaintext_path),
+                                  str(admission_value["runNonce"]) + "-source", FOURD_SHA, profile],
+                                 cwd=private, env=safe_env, timeout=min(120, remaining-26),
+                                 total_timeout=remaining, capture=capture / "source-unseal.json",
+                                 pass_fds=(capsule_file.fd, key_file.fd))
+            if unseal.returncode: raise Refusal("source-unseal-refused")
+        except BaseException as error:
+            unseal_failure = error
+        if plaintext_path.exists():
+            try: held.append(HeldFile.open(plaintext_path))
+            except BaseException as error:
+                if unseal_failure is None: unseal_failure = error
+        if unseal_failure is not None: raise unseal_failure
+        plaintext_file = held[-1]
+        if plaintext_file.path != plaintext_path: raise Refusal("source-plaintext-refused")
         plaintext = plaintext_file.read(16 * 1024 * 1024)
         descriptor = capsule["descriptor"]
-        if (len(plaintext) != descriptor["plaintextBytes"]
-                or hashlib.sha256(plaintext).hexdigest() != descriptor["plaintextSha256"]):
+        if len(plaintext) != descriptor["plaintextBytes"] or hashlib.sha256(plaintext).hexdigest() != descriptor["plaintextSha256"]:
             raise Refusal("source-plaintext-binding-refused")
+        reserve = NATIVE_SUPERVISOR_GRACE + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS + WAIT_SECONDS + DRAIN_SECONDS
+        def reconstruction_runner(argv: list[str], cwd: pathlib.Path, _timeout: float) -> bytes:
+            remaining = deadline - time.monotonic()
+            if remaining <= reserve + 1 or effects.cancelled: raise module.CapsuleRefusal("git-reconstruction-timeout")
+            result = effects.run(argv, cwd=cwd, env=safe_env, timeout=min(30, remaining-reserve),
+                                 total_timeout=remaining, capture=None)
+            if result.returncode or len(result.stdout) > 65536: raise module.CapsuleRefusal("git-reconstruction-refused")
+            return result.stdout
         module.reconstruct(plaintext, source, {"sourceSha":FOURD_SHA, "sourceTree":FOURD_TREE,
-                                              "inventorySha256":FOURD_INVENTORY})
+                           "inventorySha256":FOURD_INVENTORY}, runner=reconstruction_runner,
+                           deadline_monotonic=deadline)
+        if not effects.settle(): raise Refusal("child-scope-refused")
         receipt = {"schema":"fsgg.fourd.source-acquisition-receipt/1", "sourceSha":FOURD_SHA,
                    "sourceTree":FOURD_TREE, "inventorySha256":FOURD_INVENTORY,
-                   "descriptorSha256":capsule["descriptorSha256"],
-                   "ciphertextSha256":capsule["ciphertextSha256"], "assetId":capsule["assetId"],
-                   "keyProcessExited":True, "sourceKeyAbsent":True}
+                   "descriptorSha256":capsule["descriptorSha256"], "ciphertextSha256":capsule["ciphertextSha256"],
+                   "assetId":capsule["assetId"], "preparationComplete":True, "sourceKeyAbsent":True}
+    except BaseException as error:
+        original = error
     finally:
-        cleanup_complete = True
+        try: scope_settled = effects.settle()
+        except BaseException: scope_settled = False
+        if plaintext_path.exists() and all(item.path != plaintext_path for item in held):
+            try: held.append(HeldFile.open(plaintext_path))
+            except BaseException: pass
+        cleanup_complete = scope_settled
         for item in reversed(held):
             if not item.wipe_close(): cleanup_complete = False
         try: credentials.rmdir()
         except OSError: cleanup_complete = False
-        if isinstance(env, dict):
-            env.pop(ADMISSION_SECRET, None); env.pop(KEY_SECRET, None)
+        if isinstance(env, dict): env.pop(ADMISSION_SECRET, None); env.pop(KEY_SECRET, None)
         os.environ.pop(ADMISSION_SECRET, None); os.environ.pop(KEY_SECRET, None)
         key = b""  # noqa: F841
     if not cleanup_complete or credentials.exists():
-        raise Refusal("source-key-cleanup-refused")
-    _write_new(private / "source-acquisition.json",
-               json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n")
+        raise AcquisitionRefusal("source-key-cleanup-refused", str(original or "none"), False) from original
+    if original is not None: raise original
+    assert receipt is not None
+    _write_new(private / "source-acquisition.json", json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n")
     return source
 
 def git_inventory(source: pathlib.Path, effects: Effects, env: Mapping[str, str], capture: pathlib.Path) -> str:
@@ -825,6 +891,15 @@ def require_owned_file(path: pathlib.Path, code: str) -> None:
     if (not path.is_file() or path.is_symlink() or value.st_uid != os.getuid()
             or value.st_nlink != 1 or value.st_mode & 0o777 != 0o600):
         raise Refusal(code)
+
+
+def remove_owned_root(path: pathlib.Path, identity: tuple[int, int] | None) -> bool:
+    if identity is None: return True
+    try:
+        value = path.lstat()
+        if path.is_symlink() or value.st_uid != os.getuid() or (value.st_dev, value.st_ino) != identity: return False
+        shutil.rmtree(path); return not path.exists()
+    except OSError: return False
 
 
 def archive_owned_tree(source: pathlib.Path, output_path: pathlib.Path) -> None:
@@ -1041,6 +1116,7 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
     output = pathlib.Path(args.output); public = output.parent
     public.mkdir(mode=0o700, parents=True, exist_ok=False)
     result = base_result(env, "failed"); runner = effects or Effects(); private = pathlib.Path(args.private_root)
+    private_identity: tuple[int, int] | None = None; prepared = False
     old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     for sig in old_handlers: signal.signal(sig, runner.request_cancel)
     try:
@@ -1052,7 +1128,8 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         admitted, key = admission(env)
         if admitted is None:
             result["outcome"] = "awaiting-exact-admission"; write_result(output, result); return 0
-        _private_dir(private); (private / "home").mkdir(mode=0o700)
+        _private_dir(private); private_stat = private.lstat(); private_identity = (private_stat.st_dev, private_stat.st_ino)
+        (private / "home").mkdir(mode=0o700)
         source = acquire_source(key or b"", admitted, private, pathlib.Path(args.known_hosts), runner, env)
         safe_env = {"PATH":"/usr/bin:/bin", "HOME":str(private / "home"), "LANG":"C.UTF-8"}
         validate_checkout(source, runner, safe_env, private / "capture")
@@ -1061,16 +1138,22 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         if not runner.settle(): raise Refusal("child-scope-refused")
         _write_new(private / "admitted-route.json",
                    json.dumps(admitted, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n")
+        prepared = True
         return 0
     except Refusal as error:
+        cleanup_ok = remove_owned_root(private, private_identity)
         result["outcome"] = "refused"; result["failureCode"] = str(error) if len(str(error)) <= 64 else "qualification-refused"
+        if not cleanup_ok: result["failureCode"] = "source-cleanup-refused"
         write_result(output, result); return 2
     except Exception:
-        result["outcome"] = "failed"; result["failureCode"] = "qualification-refused"; write_result(output, result); return 2
+        cleanup_ok = remove_owned_root(private, private_identity)
+        result["outcome"] = "failed"; result["failureCode"] = "qualification-refused" if cleanup_ok else "source-cleanup-refused"
+        write_result(output, result); return 2
     finally:
         env.pop(ADMISSION_SECRET, None); env.pop(KEY_SECRET, None)
         os.environ.pop(ADMISSION_SECRET, None); os.environ.pop(KEY_SECRET, None)
-        runner.settle()
+        settled = runner.settle()
+        if not settled and prepared: remove_owned_root(private, private_identity)
         for sig, handler in old_handlers.items(): signal.signal(sig, handler)
 
 
@@ -1100,7 +1183,7 @@ def load_prepared(private: pathlib.Path, env: Mapping[str, str]) -> tuple[dict[s
         "sourceTree":FOURD_TREE, "inventorySha256":FOURD_INVENTORY,
         "descriptorSha256":admitted["sourceCapsule"]["descriptorSha256"],
         "ciphertextSha256":admitted["sourceCapsule"]["ciphertextSha256"],
-        "assetId":admitted["sourceCapsule"]["assetId"], "keyProcessExited":True, "sourceKeyAbsent":True}
+        "assetId":admitted["sourceCapsule"]["assetId"], "preparationComplete":True, "sourceKeyAbsent":True}
     if receipt != expected_receipt or not source.is_dir(): raise Refusal("source-receipt-refused")
     return admitted, source
 

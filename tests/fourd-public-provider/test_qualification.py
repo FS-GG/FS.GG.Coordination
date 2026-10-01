@@ -360,7 +360,7 @@ class ExecuteTests(unittest.TestCase):
                 "sourceTree":qualify.FOURD_TREE, "inventorySha256":qualify.FOURD_INVENTORY,
                 "descriptorSha256":admitted["sourceCapsule"]["descriptorSha256"],
                 "ciphertextSha256":admitted["sourceCapsule"]["ciphertextSha256"],
-                "assetId":admitted["sourceCapsule"]["assetId"], "keyProcessExited":True, "sourceKeyAbsent":True}
+                "assetId":admitted["sourceCapsule"]["assetId"], "preparationComplete":True, "sourceKeyAbsent":True}
             for name,value in (("admitted-route.json",admitted),("source-acquisition.json",receipt)):
                 path=private/name; path.write_text(json.dumps(value)); path.chmod(0o600)
             self.assertEqual((admitted,source),qualify.load_prepared(private,context()))
@@ -378,6 +378,59 @@ class ExecuteTests(unittest.TestCase):
             os.link(path,original); path.unlink(); path.write_bytes(b"replacement"); path.chmod(0o600)
             self.assertFalse(held.wipe_close())
             self.assertEqual(b"replacement",path.read_bytes()); self.assertEqual(b"\0"*6,original.read_bytes())
+
+    def test_unseal_child_creates_plaintext_then_raises_and_all_secret_files_are_retired(self):
+        now=dt.datetime.now(dt.timezone.utc); _env, admitted, _key=valid_admission(now)
+        descriptor_raw=json.dumps(admitted["sourceCapsule"]["descriptor"],sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()+b"\n"
+        profile=__import__("hashlib").sha256(descriptor_raw).hexdigest(); run=admitted["runNonce"]+"-source"
+        aad=__import__("hashlib").sha256(f"fsgg-native-custody/1\0{run}\0{qualify.FOURD_SHA}\0{profile}".encode()).hexdigest()
+        outer={"schema":"fsgg.telemetry.native-custody-capsule/1","algorithm":"AES-256-GCM+RSA-OAEP-SHA256",
+            "runNonce":run,"sourceSha":qualify.FOURD_SHA,"profileSha256":profile,"aadSha256":aad,
+            "nonce":base64.b64encode(b"n"*12).decode(),"tag":base64.b64encode(b"t"*16).decode(),
+            "wrappedKey":base64.b64encode(b"w"*384).decode(),"ciphertext":base64.b64encode(b"{}\n").decode()}
+        raw=json.dumps(outer,sort_keys=True,separators=(",",":")).encode()+b"\n"
+        admitted["sourceCapsule"]["ciphertextBytes"]=len(raw); admitted["sourceCapsule"]["ciphertextSha256"]=__import__("hashlib").sha256(raw).hexdigest()
+        metadata=json.dumps({"id":int(admitted["sourceCapsule"]["releaseId"]),"tag_name":admitted["sourceCapsule"]["tag"],
+            "assets":[{"id":int(admitted["sourceCapsule"]["assetId"]),"name":admitted["sourceCapsule"]["name"],"size":len(raw)}]}).encode()
+        class Response:
+            def __init__(self,data,url): self.data=data; self.url=url; self.offset=0
+            def __enter__(self): return self
+            def __exit__(self,*_): return None
+            def geturl(self): return self.url
+            def read(self,n): value=self.data[self.offset:self.offset+n];self.offset+=len(value);return value
+        class Opener:
+            def __init__(self): self.values=[Response(metadata,"https://api.github.com/meta"),Response(raw,"https://release-assets.githubusercontent.com/asset")]
+            def open(self,*_args,**_kwargs): return self.values.pop(0)
+        public=b"synthetic-public-pem\n"; admitted["sourceCapsule"]["recipientPublicKeySha256"]=__import__("hashlib").sha256(public).hexdigest()
+        class FakeEffects:
+            cancelled=False
+            def run(self,argv,**_kwargs):
+                if argv[0]=="/usr/bin/openssl": return qualify.RunResult(0,public,b"")
+                if "unseal" in argv:
+                    pathlib.Path(argv[5]).write_bytes(b"private plaintext");pathlib.Path(argv[5]).chmod(0o600)
+                    raise qualify.Refusal("cancelled")
+                raise AssertionError(argv)
+            def settle(self): return True
+        with tempfile.TemporaryDirectory() as temporary:
+            private=pathlib.Path(temporary)/"private";private.mkdir(mode=0o700);(private/"home").mkdir(mode=0o700)
+            env={qualify.ADMISSION_SECRET:"secret",qualify.KEY_SECRET:"secret"}
+            with mock.patch.object(qualify.urllib.request,"build_opener",return_value=Opener()):
+                with self.assertRaisesRegex(qualify.Refusal,"cancelled"):
+                    qualify.acquire_source(b"-----BEGIN PRIVATE KEY-----\nx\n-----END PRIVATE KEY-----\n",admitted,private,
+                                           ROOT/"eng/fourd-public-provider/github-known-hosts",FakeEffects(),env)
+            self.assertFalse((private/"credentials").exists());self.assertFalse((private/"source-acquisition.json").exists())
+            self.assertNotIn(qualify.ADMISSION_SECRET,env);self.assertNotIn(qualify.KEY_SECRET,env)
+
+    def test_redirect_is_refused_before_follow_and_cancelled_transfer_never_opens(self):
+        handler=qualify.StrictRedirect({"api.github.com"})
+        request=qualify.urllib.request.Request("https://api.github.com/source")
+        with self.assertRaisesRegex(qualify.Refusal,"redirect"):
+            handler.redirect_request(request,None,302,"found",{},"https://evil.invalid/private")
+        cancelled=type("Cancelled",(),{"cancelled":True})()
+        with mock.patch.object(qualify.urllib.request,"build_opener") as opener, self.assertRaisesRegex(qualify.Refusal,"timeout"):
+            qualify.bounded_public_read(request,limit=10,deadline=__import__("time").monotonic()+10,
+                                        hosts={"api.github.com"},effects=cancelled)
+        opener.assert_not_called()
 
     def test_private_route_success_uses_real_native_validator_and_receipt_custody(self):
         class FakeEffects:

@@ -12,7 +12,8 @@ import pathlib
 import re
 import stat
 import subprocess
-from typing import Mapping
+import time
+from typing import Callable, Mapping
 
 SNAPSHOT_SCHEMA = "fsgg.fourd.source-snapshot/1"
 DESCRIPTOR_SCHEMA = "fsgg.fourd.source-capsule-descriptor/1"
@@ -169,12 +170,15 @@ def validate_snapshot(raw: bytes, expected: Mapping[str, str]) -> tuple[dict[str
     return value, records, commit
 
 
-def _run(argv: list[str], cwd: pathlib.Path, stdin: bytes | None = None) -> bytes:
+CommandRunner = Callable[[list[str], pathlib.Path, float], bytes]
+
+
+def _run(argv: list[str], cwd: pathlib.Path, timeout: float) -> bytes:
     safe = {"PATH": "/usr/bin:/bin", "HOME": "/nonexistent", "LANG": "C.UTF-8",
             "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}
     try:
-        result = subprocess.run(argv, cwd=cwd, env=safe, input=stdin, stdout=subprocess.PIPE,
-                                stderr=subprocess.PIPE, timeout=30, check=False)
+        result = subprocess.run(argv, cwd=cwd, env=safe, stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+                                stderr=subprocess.PIPE, timeout=timeout, check=False, start_new_session=True)
     except (OSError, subprocess.TimeoutExpired) as error:
         raise CapsuleRefusal("git-reconstruction-refused") from error
     if result.returncode or len(result.stdout) > 65536 or len(result.stderr) > 65536:
@@ -182,42 +186,63 @@ def _run(argv: list[str], cwd: pathlib.Path, stdin: bytes | None = None) -> byte
     return result.stdout
 
 
-def reconstruct(raw: bytes, target: pathlib.Path, expected: Mapping[str, str]) -> pathlib.Path:
+def _write_private(path: pathlib.Path, content: bytes, mode: int) -> None:
+    path.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+    if path.parent.is_symlink(): raise CapsuleRefusal("git-worktree-refused")
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, mode)
+    try:
+        view = memoryview(content)
+        while view:
+            written = os.write(fd, view)
+            if written <= 0: raise CapsuleRefusal("git-worktree-refused")
+            view = view[written:]
+        os.fsync(fd)
+    finally: os.close(fd)
+    os.chmod(path, mode)
+
+
+def reconstruct(raw: bytes, target: pathlib.Path, expected: Mapping[str, str], *,
+                runner: CommandRunner | None = None, deadline_monotonic: float | None = None) -> pathlib.Path:
     _value, records, commit = validate_snapshot(raw, expected)
+    deadline = deadline_monotonic if deadline_monotonic is not None else time.monotonic() + 300
+    command = runner or _run
+    def invoke(argv: list[str]) -> bytes:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0: raise CapsuleRefusal("git-reconstruction-timeout")
+        return command(argv, target, min(30.0, remaining))
     target.mkdir(mode=0o700, parents=False, exist_ok=False)
-    _run(["/usr/bin/git", "init", "--quiet", "--template="], target)
-    _run(["/usr/bin/git", "config", "core.hooksPath", "/dev/null"], target)
-    _run(["/usr/bin/git", "config", "core.autocrlf", "false"], target)
+    invoke(["/usr/bin/git", "init", "--quiet", "--template="])
+    invoke(["/usr/bin/git", "config", "core.hooksPath", "/dev/null"])
+    invoke(["/usr/bin/git", "config", "core.autocrlf", "false"])
     for name, mode, expected_blob, content in records:
-        blob = _run(["/usr/bin/git", "hash-object", "--no-filters", "-w", "--stdin"], target, content).decode("ascii").strip()
+        private_mode = 0o700 if mode == "100755" else 0o600
+        _write_private(target / name, content, private_mode)
+        blob = invoke(["/usr/bin/git", "hash-object", "--no-filters", "-w", "--", name]).decode("ascii").strip()
         if blob != expected_blob:
             raise CapsuleRefusal("git-blob-refused")
-        _run(["/usr/bin/git", "update-index", "--add", "--cacheinfo", mode, blob, name], target)
-    tree = _run(["/usr/bin/git", "write-tree"], target).decode("ascii").strip()
+        invoke(["/usr/bin/git", "update-index", "--add", "--cacheinfo", mode, blob, name])
+    tree = invoke(["/usr/bin/git", "write-tree"]).decode("ascii").strip()
     if tree != expected["sourceTree"]:
         raise CapsuleRefusal("git-tree-refused")
-    commit_oid = _run(["/usr/bin/git", "hash-object", "-t", "commit", "-w", "--stdin"], target, commit).decode("ascii").strip()
+    if not commit.startswith(("tree " + tree + "\n").encode()): raise CapsuleRefusal("git-commit-tree-refused")
+    commit_input = target / ".git/fsgg-original-commit"
+    _write_private(commit_input, commit, 0o600)
+    try:
+        commit_oid = invoke(["/usr/bin/git", "hash-object", "-t", "commit", "-w", "--", ".git/fsgg-original-commit"]).decode("ascii").strip()
+    finally: commit_input.unlink(missing_ok=True)
     if commit_oid != expected["sourceSha"]:
         raise CapsuleRefusal("git-commit-refused")
-    commit_tree = _run(["/usr/bin/git", "show", "-s", "--format=%T", commit_oid], target).decode("ascii").strip()
-    if commit_tree != tree:
-        raise CapsuleRefusal("git-commit-tree-refused")
     shallow = target / ".git/shallow"
-    fd = os.open(shallow, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
-    try:
-        os.write(fd, (commit_oid + "\n").encode()); os.fsync(fd)
-    finally:
-        os.close(fd)
-    (target / ".git/index").unlink(missing_ok=True)
-    _run(["/usr/bin/git", "checkout", "--quiet", "--detach", commit_oid], target)
-    if _run(["/usr/bin/git", "status", "--porcelain", "--untracked-files=all"], target):
+    _write_private(shallow, (commit_oid + "\n").encode(), 0o600)
+    head = target / ".git/HEAD"; head.unlink(); _write_private(head, (commit_oid + "\n").encode(), 0o600)
+    if invoke(["/usr/bin/git", "status", "--porcelain", "--untracked-files=all"]):
         raise CapsuleRefusal("git-cleanliness-refused")
     for name, mode, _blob, _content in records:
         entry = target / name
         actual = entry.lstat()
         if not stat.S_ISREG(actual.st_mode) or actual.st_nlink != 1:
             raise CapsuleRefusal("git-worktree-refused")
-        expected_mode = 0o755 if mode == "100755" else 0o644
+        expected_mode = 0o700 if mode == "100755" else 0o600
         if stat.S_IMODE(actual.st_mode) != expected_mode:
             raise CapsuleRefusal("git-worktree-refused")
     return target
