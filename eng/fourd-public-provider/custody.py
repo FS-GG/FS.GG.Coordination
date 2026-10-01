@@ -57,6 +57,14 @@ class DirectoryLease:
     device: int
     inode: int
 
+@dataclass(frozen=True)
+class FileLease:
+    name: str
+    fd: int
+    device: int
+    inode: int
+    bytes: int
+
 def canonical(v):
     try:
         return (json.dumps(v, sort_keys=True, separators=(',', ':'), ensure_ascii=True) + '\n').encode('ascii')
@@ -160,16 +168,66 @@ def acquire_dir(p):
         refuse('custody-path-refused')
     return DirectoryLease(p, fd, s.st_dev, s.st_ino)
 
+def open_dir(p):
+    fd = None
+    try:
+        fd = os.open(p, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW | os.O_DIRECTORY)
+        held = os.fstat(fd)
+        current = p.stat(follow_symlinks=False)
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        refuse('custody-path-refused')
+    if (not stat.S_ISDIR(held.st_mode) or held.st_uid != os.getuid()
+            or stat.S_IMODE(held.st_mode) != 448
+            or (held.st_dev, held.st_ino) != (current.st_dev, current.st_ino)):
+        os.close(fd)
+        refuse('custody-path-refused')
+    return DirectoryLease(p, fd, held.st_dev, held.st_ino)
+
+def require_current_path(lease, code):
+    try:
+        held = os.fstat(lease.fd)
+        current = lease.path.stat(follow_symlinks=False)
+    except OSError:
+        refuse(code)
+    if (not stat.S_ISDIR(held.st_mode) or not stat.S_ISDIR(current.st_mode)
+            or (held.st_dev, held.st_ino) != (lease.device, lease.inode)
+            or (current.st_dev, current.st_ino) != (lease.device, lease.inode)):
+        refuse(code)
+
 def open_owned(p, lo, hi):
+    fd = None
     try:
         fd = os.open(p, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
         s = os.fstat(fd)
     except OSError:
+        if fd is not None:
+            os.close(fd)
         refuse('custody-source-refused')
     if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1 or (stat.S_IMODE(s.st_mode) != 384) or (not lo <= s.st_size <= hi):
         os.close(fd)
         refuse('custody-source-refused')
     return (fd, s)
+
+def open_pinned(p, mode, expected_sha):
+    fd = None
+    try:
+        fd = os.open(p, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+        s = os.fstat(fd)
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        refuse('custody-source-refused')
+    if (not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1
+            or stat.S_IMODE(s.st_mode) != mode):
+        os.close(fd)
+        refuse('custody-source-refused')
+    digest, size = fdhash(fd, 1024 * 1024)
+    if digest != expected_sha:
+        os.close(fd)
+        refuse('custody-source-refused')
+    return fd, s, size
 
 def fdhash(fd, limit, deadline=None):
     h = hashlib.sha256()
@@ -194,25 +252,81 @@ def stable(fd, s):
 
 def space(p, n, i):
     try:
-        s = os.statvfs(p)
+        s = os.fstatvfs(p.fd) if isinstance(p, DirectoryLease) else os.statvfs(p)
     except OSError:
         refuse('custody-capacity-refused')
     if s.f_bavail * s.f_frsize < n or s.f_favail < i:
         refuse('custody-capacity-refused')
 
-def write_new(p, b):
-    try:
-        fd = os.open(p, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW, 384)
-        try:
-            v = memoryview(b)
-            while v:
-                w = os.write(fd, v)
-                v = v[w:]
-            os.fsync(fd)
-        finally:
-            os.close(fd)
-    except OSError:
+def _fixed_name(name):
+    if not isinstance(name, str) or re.fullmatch('[a-z0-9][a-z0-9.-]{0,63}', name) is None:
         refuse('custody-path-refused')
+
+def write_new_at(directory, name, b):
+    _fixed_name(name)
+    fd = None
+    try:
+        fd = os.open(name, os.O_RDWR | os.O_CREAT | os.O_EXCL | os.O_CLOEXEC | os.O_NOFOLLOW,
+                     384, dir_fd=directory.fd)
+        s = os.fstat(fd)
+        if (not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1
+                or stat.S_IMODE(s.st_mode) != 384 or s.st_size != 0):
+            refuse('custody-path-refused')
+        v = memoryview(b)
+        while v:
+            w = os.write(fd, v)
+            v = v[w:]
+        os.fsync(fd)
+        after = os.fstat(fd)
+        if ((after.st_dev, after.st_ino) != (s.st_dev, s.st_ino)
+                or after.st_size != len(b)):
+            refuse('custody-path-refused')
+        return FileLease(name, fd, s.st_dev, s.st_ino, len(b))
+    except CustodyRefusal:
+        if fd is not None:
+            os.close(fd)
+        raise
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        refuse('custody-path-refused')
+
+def open_file_at(directory, name, maximum):
+    _fixed_name(name)
+    fd = None
+    try:
+        fd = os.open(name, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW, dir_fd=directory.fd)
+        s = os.fstat(fd)
+    except OSError:
+        if fd is not None:
+            os.close(fd)
+        refuse('custody-staging-refused')
+    if (not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1
+            or stat.S_IMODE(s.st_mode) != 384 or not 1 <= s.st_size <= maximum):
+        os.close(fd)
+        refuse('custody-staging-refused')
+    return FileLease(name, fd, s.st_dev, s.st_ino, s.st_size)
+
+def read_file(lease, maximum):
+    if lease.bytes > maximum:
+        refuse('custody-size-refused')
+    data = bytearray()
+    offset = 0
+    while offset < lease.bytes:
+        block = os.pread(lease.fd, min(1024 * 1024, lease.bytes - offset), offset)
+        if not block:
+            refuse('custody-file-changed')
+        data.extend(block)
+        offset += len(block)
+    current = os.fstat(lease.fd)
+    if ((current.st_dev, current.st_ino, current.st_size)
+            != (lease.device, lease.inode, lease.bytes)):
+        refuse('custody-file-changed')
+    return bytes(data)
+
+def proc_file(directory, name):
+    _fixed_name(name)
+    return f'/proc/self/fd/{directory.fd}/{name}'
 
 def desc(ident, role, fullsha, fullbytes, p, count, plainsha):
     v = {'schema': 'fsgg.fourd.sealed-chunk/1', 'role': role, 'seriesId': ident['runNonce'], 'runId': ident['runId'], 'runAttempt': ident['runAttempt'], 'fourdSourceSha': ident['fourdSourceSha'], 'fourdSourceTree': ident['fourdSourceTree'], 'nativePolicySha256': ident['nativePolicySha256'], 'fullSha256': fullsha, 'fullBytes': fullbytes, 'index': p.index, 'count': count, 'offset': p.offset, 'bytes': p.bytes, 'plaintextSha256': plainsha}
@@ -230,9 +344,8 @@ def nonce(ident, role, index):
 def aad(n, s, p):
     return shab(f'fsgg-native-custody/1\x00{n}\x00{s}\x00{p}'.encode())
 
-def parse_capsule(path, draw, d, ident):
+def parse_capsule(raw, draw, d, ident):
     try:
-        raw = path.read_bytes()
         v = json.loads(raw)
     except Exception:
         refuse('custody-capsule-refused')
@@ -247,32 +360,54 @@ def parse_capsule(path, draw, d, ident):
     if (len(x['nonce']), len(x['tag']), len(x['wrappedKey']), len(x['ciphertext'])) != (12, 16, 384, d['bytes']):
         refuse('custody-capsule-refused')
 
-def wipe(p):
+def wipe(lease, directory):
+    cleanup_refused = False
     try:
-        if p.exists() and p.is_file() and (not p.is_symlink()):
-            n = p.stat().st_size
-            with p.open('r+b', buffering=0) as f:
-                z = b'\x00' * min(1024 * 1024, max(1, n))
-                while n:
-                    w = min(n, len(z))
-                    f.write(z[:w])
-                    n -= w
-                f.flush()
-                os.fsync(f.fileno())
-            p.unlink()
+        held = os.fstat(lease.fd)
+        if ((held.st_dev, held.st_ino, held.st_size)
+                != (lease.device, lease.inode, lease.bytes)):
+            refuse('custody-cleanup-refused')
+        zero = b'\x00' * min(1024 * 1024, max(1, lease.bytes))
+        offset = 0
+        while offset < lease.bytes:
+            count = min(len(zero), lease.bytes - offset)
+            written = os.pwrite(lease.fd, zero[:count], offset)
+            if written != count:
+                refuse('custody-cleanup-refused')
+            offset += written
+        os.fsync(lease.fd)
+        entry = os.stat(lease.name, dir_fd=directory.fd, follow_symlinks=False)
+        if ((entry.st_dev, entry.st_ino) != (lease.device, lease.inode)
+                or not stat.S_ISREG(entry.st_mode)):
+            cleanup_refused = True
+        else:
+            os.unlink(lease.name, dir_fd=directory.fd)
+    except CustodyRefusal:
+        cleanup_refused = True
     except OSError:
+        cleanup_refused = True
+    finally:
+        try:
+            os.close(lease.fd)
+        except OSError:
+            cleanup_refused = True
+    if cleanup_refused:
         refuse('custody-cleanup-refused')
 
 def clean_dir(lease):
     p = lease.path
     try:
         held = os.fstat(lease.fd)
-        before = p.stat(follow_symlinks=False)
         if ((held.st_dev, held.st_ino) != (lease.device, lease.inode)
-                or not stat.S_ISDIR(before.st_mode) or before.st_uid != os.getuid()
-                or stat.S_IMODE(before.st_mode) != 448
-                or (before.st_dev, before.st_ino) != (lease.device, lease.inode)):
+                or not stat.S_ISDIR(held.st_mode) or held.st_uid != os.getuid()
+                or stat.S_IMODE(held.st_mode) != 448):
             refuse('custody-cleanup-refused')
+        try:
+            before = p.stat(follow_symlinks=False)
+            path_matches = (stat.S_ISDIR(before.st_mode)
+                            and (before.st_dev, before.st_ino) == (lease.device, lease.inode))
+        except OSError:
+            path_matches = False
         for name in os.listdir(lease.fd):
             if not isinstance(name, str) or name in ('', '.', '..') or '/' in name:
                 refuse('custody-cleanup-refused')
@@ -281,9 +416,12 @@ def clean_dir(lease):
                 refuse('custody-cleanup-refused')
             os.unlink(name, dir_fd=lease.fd)
         held_after = os.fstat(lease.fd)
+        if (held_after.st_dev, held_after.st_ino) != (lease.device, lease.inode):
+            refuse('custody-cleanup-refused')
+        if not path_matches:
+            refuse('custody-cleanup-refused')
         after = p.stat(follow_symlinks=False)
-        if ((held_after.st_dev, held_after.st_ino) != (lease.device, lease.inode)
-                or (after.st_dev, after.st_ino) != (lease.device, lease.inode)):
+        if (after.st_dev, after.st_ino) != (lease.device, lease.inode):
             refuse('custody-cleanup-refused')
         p.rmdir()
     except CustodyRefusal:
@@ -291,32 +429,52 @@ def clean_dir(lease):
     except OSError:
         refuse('custody-cleanup-refused')
 
-def seal_one(fd, p, role, fullsha, fullbytes, count, ident, scratch, output, deadline):
+def seal_one(fd, p, role, fullsha, fullbytes, count, ident, scratch, output,
+             sealer_fd, key_fd, deadline):
     plain = os.pread(fd, p.bytes, p.offset)
     if len(plain) != p.bytes:
         refuse('custody-file-changed')
     d, draw = desc(ident, role, fullsha, fullbytes, p, count, shab(plain))
     name = f'oci-{p.index:04d}.capsule.json' if role == 'oci' else 'evidence.capsule.json'
-    chunk = scratch / 'plaintext.chunk'
-    capsule = output / name
-    write_new(chunk, plain)
+    chunk = write_new_at(scratch, 'plaintext.chunk', plain)
+    capsule = None
     try:
         left = deadline - time.monotonic()
         if left <= 0:
             refuse('custody-deadline-refused')
         try:
-            r = subprocess.run([str(NODE), str(SEALER), 'seal', str(chunk), str(PUBLIC_KEY), str(capsule), nonce(ident, role, p.index), ident['fourdSourceSha'], shab(draw)], stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=min(60, left), env={'PATH': '/usr/bin:/bin'})
+            r = subprocess.run(
+                [str(NODE), f'/proc/self/fd/{sealer_fd}', 'seal',
+                 f'/proc/self/fd/{chunk.fd}', f'/proc/self/fd/{key_fd}',
+                 proc_file(output, name), nonce(ident, role, p.index),
+                 ident['fourdSourceSha'], shab(draw)],
+                stdin=subprocess.DEVNULL, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                timeout=min(60, left), env={'PATH': '/usr/bin:/bin'},
+                pass_fds=(chunk.fd, output.fd, sealer_fd, key_fd))
         except subprocess.TimeoutExpired:
             refuse('custody-deadline-refused')
         except OSError:
             refuse('custody-child-refused')
-        if r.returncode or len(r.stdout) > 65536 or len(r.stderr) > 65536 or (not capsule.is_file()):
+        if r.returncode or len(r.stdout) > 65536 or len(r.stderr) > 65536:
             refuse('custody-child-refused')
-        parse_capsule(capsule, draw, d, ident)
+        capsule = open_file_at(output, name, cap_budget(p.bytes))
+        raw = read_file(capsule, cap_budget(p.bytes))
+        parse_capsule(raw, draw, d, ident)
+        h, n = shab(raw), len(raw)
     finally:
         plain = b''
-        wipe(chunk)
-    h, n = shap(capsule, cap_budget(p.bytes))
+        wipe_refused = False
+        try:
+            wipe(chunk, scratch)
+        except CustodyRefusal:
+            wipe_refused = True
+        if capsule is not None:
+            try:
+                os.close(capsule.fd)
+            except OSError:
+                wipe_refused = True
+        if wipe_refused:
+            refuse('custody-cleanup-refused')
     return {'descriptor': d, 'capsuleName': name, 'capsuleBytes': n, 'capsuleSha256': h}
 
 def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, object], deadline_monotonic):
@@ -328,12 +486,15 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
             or scratch.is_symlink() or output.is_symlink()):
         refuse('custody-path-refused')
     own_dir(scratch.parent)
-    if shap(SEALER)[0] != SEALER_SHA256 or shap(PUBLIC_KEY)[0] != PUBLIC_KEY_SHA256 or (not NODE.is_file()):
+    if not NODE.is_file():
         refuse('custody-source-refused')
-    afd = efd = None
+    afd = efd = sealer_fd = key_fd = None
+    sealer_status = key_status = None
     scratch_lease = output_lease = None
     success = False
     try:
+        sealer_fd, sealer_status, _ = open_pinned(SEALER, 493, SEALER_SHA256)
+        key_fd, key_status, _ = open_pinned(PUBLIC_KEY, 420, PUBLIC_KEY_SHA256)
         scratch_lease = acquire_dir(scratch)
         output_lease = acquire_dir(output)
         efd, es = open_owned(evidence, 2, MAX_EVIDENCE_BYTES)
@@ -346,14 +507,20 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
             afd, ast = open_owned(archive, 2, MAX_ARCHIVE_BYTES)
             ah, ab = fdhash(afd, MAX_ARCHIVE_BYTES, deadline_monotonic)
             plans = plan_chunks(ab)
-        space(output, required_staging_bytes(ab, eb), len(plans) + 4)
+        space(output_lease, required_staging_bytes(ab, eb), len(plans) + 4)
         records = []
         sizes = [p.bytes for p in plans] + [eb]
         for i, p in enumerate(plans):
-            space(output, sum((cap_budget(x) for x in sizes[i:])) + CHUNK_BYTES + MAX_MANIFEST_BYTES + STAGING_RESERVE, len(sizes) - i + 3)
-            records.append(seal_one(afd, p, 'oci', ah, ab, len(plans), ident, scratch, output, deadline_monotonic))
-        space(output, cap_budget(eb) + CHUNK_BYTES + MAX_MANIFEST_BYTES + STAGING_RESERVE, 4)
-        records.append(seal_one(efd, ChunkPlan(0, 0, eb), 'evidence', eh, eb, 1, ident, scratch, output, deadline_monotonic))
+            space(output_lease, sum((cap_budget(x) for x in sizes[i:])) + CHUNK_BYTES + MAX_MANIFEST_BYTES + STAGING_RESERVE, len(sizes) - i + 3)
+            records.append(seal_one(afd, p, 'oci', ah, ab, len(plans), ident,
+                                    scratch_lease, output_lease, sealer_fd, key_fd,
+                                    deadline_monotonic))
+            require_current_path(output_lease, 'custody-staging-refused')
+        space(output_lease, cap_budget(eb) + CHUNK_BYTES + MAX_MANIFEST_BYTES + STAGING_RESERVE, 4)
+        records.append(seal_one(efd, ChunkPlan(0, 0, eb), 'evidence', eh, eb, 1, ident,
+                                scratch_lease, output_lease, sealer_fd, key_fd,
+                                deadline_monotonic))
+        require_current_path(output_lease, 'custody-staging-refused')
         stable(efd, es)
         if fdhash(efd, MAX_EVIDENCE_BYTES, deadline_monotonic) != (eh, eb):
             refuse('custody-file-changed')
@@ -361,12 +528,16 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
             stable(afd, ast)
         if afd is not None and fdhash(afd, MAX_ARCHIVE_BYTES, deadline_monotonic) != (ah, ab):
             refuse('custody-file-changed')
+        stable(sealer_fd, sealer_status)
+        stable(key_fd, key_status)
         manifest = {'schema': 'fsgg.fourd.sealed-archive-series/1', 'identity': ident, 'archive': None if archive is None else {'sha256': ah, 'bytes': ab, 'chunkCount': len(plans)}, 'evidence': {'sha256': eh, 'bytes': eb}, 'files': records}
         raw = canonical(manifest)
         if len(raw) > MAX_MANIFEST_BYTES:
             refuse('custody-manifest-refused')
-        write_new(output / 'manifest.json', raw)
-        result = verify_staging(output, ident)
+        manifest_lease = write_new_at(output_lease, 'manifest.json', raw)
+        os.close(manifest_lease.fd)
+        result = _verify_staging(output_lease, ident)
+        require_current_path(output_lease, 'custody-staging-refused')
         success = True
         return result
     except CustodyRefusal:
@@ -378,6 +549,10 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
             os.close(afd)
         if efd is not None:
             os.close(efd)
+        if sealer_fd is not None:
+            os.close(sealer_fd)
+        if key_fd is not None:
+            os.close(key_fd)
         cleanup_failed = False
         if scratch_lease is not None:
             try:
@@ -398,11 +573,13 @@ def seal_series(*, archive, evidence, scratch, output, identity: Mapping[str, ob
         if cleanup_failed:
             refuse('custody-cleanup-refused')
 
-def verify_staging(output, expected_identity):
+def _verify_staging(output, expected_identity):
     try:
-        own_dir(output)
-        mp = output / 'manifest.json'
-        raw = mp.read_bytes()
+        manifest_lease = open_file_at(output, 'manifest.json', MAX_MANIFEST_BYTES)
+        try:
+            raw = read_file(manifest_lease, MAX_MANIFEST_BYTES)
+        finally:
+            os.close(manifest_lease.fd)
         if not 1 <= len(raw) <= MAX_MANIFEST_BYTES:
             refuse('custody-manifest-refused')
         m = json.loads(raw)
@@ -439,21 +616,23 @@ def verify_staging(output, expected_identity):
             if item['capsuleName'] != name or name in names:
                 refuse('custody-manifest-refused')
             names.add(name)
-            cap = output / name
-            s = cap.stat(follow_symlinks=False)
-            if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1 or (stat.S_IMODE(s.st_mode) != 384) or (s.st_size != item['capsuleBytes']):
-                refuse('custody-staging-refused')
-            h, n = shap(cap, cap_budget(p.bytes))
+            capsule = open_file_at(output, name, cap_budget(p.bytes))
+            try:
+                capsule_raw = read_file(capsule, cap_budget(p.bytes))
+            finally:
+                os.close(capsule.fd)
+            h, n = shab(capsule_raw), len(capsule_raw)
             if (h, n) != (item['capsuleSha256'], item['capsuleBytes']):
                 refuse('custody-capsule-refused')
-            parse_capsule(cap, canonical(d), d, ident)
+            parse_capsule(capsule_raw, canonical(d), d, ident)
             total += n
         actual = set()
-        for p in output.iterdir():
-            s = p.stat(follow_symlinks=False)
+        for name in os.listdir(output.fd):
+            _fixed_name(name)
+            s = os.stat(name, dir_fd=output.fd, follow_symlinks=False)
             if not stat.S_ISREG(s.st_mode) or s.st_uid != os.getuid() or s.st_nlink != 1 or (stat.S_IMODE(s.st_mode) != 384):
                 refuse('custody-staging-refused')
-            actual.add(p.name)
+            actual.add(name)
         if actual != names:
             refuse('custody-staging-refused')
         return CustodyResult('sealed-complete' if present else 'sealed-evidence-only', present, 'manifest.json', shab(raw), len(actual), total)
@@ -461,3 +640,12 @@ def verify_staging(output, expected_identity):
         raise
     except Exception:
         refuse('custody-staging-refused')
+
+def verify_staging(output, expected_identity):
+    lease = None
+    try:
+        lease = open_dir(output)
+        return _verify_staging(lease, expected_identity)
+    finally:
+        if lease is not None:
+            os.close(lease.fd)

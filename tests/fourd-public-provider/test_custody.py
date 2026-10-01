@@ -101,6 +101,59 @@ class SealingTests(unittest.TestCase):
                 other = output if replaced == 'scratch' else scratch
                 self.assertFalse(other.exists())
 
+    def test_child_failure_wipes_leased_plaintext_not_replacement_path(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            a, e, i, scratch, output = setup(root)
+            acquired = root / 'acquired-scratch'
+            witness = root / 'plaintext-witness'
+            replacement = b'replacement-plaintext-is-not-owned'
+            replacement_inode = None
+
+            def interpose(*_args, **_kwargs):
+                nonlocal replacement_inode
+                scratch.rename(acquired)
+                os.link(acquired / 'plaintext.chunk', witness)
+                scratch.mkdir(mode=0o700)
+                owned(scratch / 'plaintext.chunk', replacement)
+                replacement_inode = (scratch / 'plaintext.chunk').stat().st_ino
+                return subprocess.CompletedProcess([], 9, b'', b'fixed-child-failure')
+
+            with mock.patch.object(custody.subprocess, 'run', side_effect=interpose):
+                with self.assertRaisesRegex(custody.CustodyRefusal, 'custody-cleanup-refused'):
+                    custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                        identity=i, deadline_monotonic=time.monotonic() + 20)
+            replacement_file = scratch / 'plaintext.chunk'
+            self.assertEqual(replacement, replacement_file.read_bytes())
+            self.assertEqual(replacement_inode, replacement_file.stat().st_ino)
+            self.assertEqual(b'\0' * 2, witness.read_bytes())
+            self.assertEqual([], list(acquired.iterdir()))
+            self.assertFalse(output.exists())
+
+    def test_successful_sealer_uses_leased_output_and_replacement_is_ineligible(self):
+        with tempfile.TemporaryDirectory() as d:
+            root = pathlib.Path(d)
+            a, e, i, scratch, output = setup(root, None)
+            acquired = root / 'acquired-output'
+            replacement = b'replacement-output-is-not-owned'
+            real_run = subprocess.run
+
+            def interpose(argv, **kwargs):
+                output.rename(acquired)
+                output.mkdir(mode=0o700)
+                owned(output / 'unowned', replacement)
+                self.assertTrue(all('/proc/self/fd/' in argv[index] for index in (1, 3, 4, 5)))
+                self.assertEqual(set(kwargs['pass_fds']), {int(argv[index].split('/')[4]) for index in (1, 3, 4, 5)})
+                return real_run(argv, **kwargs)
+
+            with mock.patch.object(custody.subprocess, 'run', side_effect=interpose):
+                with self.assertRaisesRegex(custody.CustodyRefusal, 'custody-cleanup-refused'):
+                    custody.seal_series(archive=a, evidence=e, scratch=scratch, output=output,
+                                        identity=i, deadline_monotonic=time.monotonic() + 30)
+            self.assertEqual(replacement, (output / 'unowned').read_bytes())
+            self.assertEqual([], list(acquired.iterdir()))
+            self.assertFalse(scratch.exists())
+
     def test_actual_two_byte_archive_and_evidence_only_are_closed(self):
         for has_archive in (True, False):
             with self.subTest(has_archive=has_archive), tempfile.TemporaryDirectory() as d:
