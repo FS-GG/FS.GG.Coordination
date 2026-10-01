@@ -263,7 +263,7 @@ let operations =
             [ "build.py" ]
             "python-build-v1"
             "python/app.pyc"
-            "ab89c3c1b5404d87622387ba576e44ffb6e089b768a19f268886fc5b42ac3f93"
+            "fa24f499efed4a2edaf770742fa63e4fc0ac4c40f1805ad64d12b76b1cde02c7"
         reviewed
             "python-test"
             "test"

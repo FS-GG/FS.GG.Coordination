@@ -10,6 +10,7 @@ import json
 from pathlib import Path
 import tarfile
 import tempfile
+import shutil
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -65,6 +66,30 @@ def main() -> None:
     assert 'value["image"]["reference"] == result["buildImageReference"]' in workflow
     assert 'evidence["imageReference"] == qualification["buildImageReference"]' in workflow
     assert 'exported["image"]["reference"] == result["imageReference"]' in workflow
+    expected_python = {
+        "python-test.json": "2ed645adefe2c23308832036a3b5163dc39faaf152c2c9d1d3afb3bd637f146a",
+        "python/app.pyc": "fa24f499efed4a2edaf770742fa63e4fc0ac4c40f1805ad64d12b76b1cde02c7",
+    }
+    assert IMAGE.PYTHON_EXPECTED_OUTPUTS == expected_python
+    assert all(IMAGE.EXPECTED_OUTPUTS[path] == digest for path, digest in expected_python.items())
+    executor = (ROOT / "eng" / "portable-workspace-executor-qualification.fsx").read_text()
+    assert executor.count(expected_python["python/app.pyc"]) == 1
+    fixture_roots = (
+        ROOT / "tests" / "portable-workspace" / "image" / "fixture" / "python",
+        ROOT / "tests" / "portable-workspace" / "executor-qualification" / "fixture" / "python",
+        ROOT / "tests" / "portable-workspace" / "executor" / "python",
+    )
+    for fixture_root in fixture_roots:
+        assert IMAGE.require_python_fixture_oracle(fixture_root) == expected_python
+    with tempfile.TemporaryDirectory(prefix="portable-python-oracle-") as temporary:
+        changed = Path(temporary) / "python"
+        shutil.copytree(fixture_roots[0], changed)
+        (changed / "app.py").write_text((changed / "app.py").read_text() + "# drift\n")
+        try:
+            IMAGE.require_python_fixture_oracle(changed)
+            raise AssertionError("changed canonical Python fixture was accepted")
+        except RuntimeError as error:
+            assert "canonical Python fixture digest mismatch" in str(error)
     with tempfile.TemporaryDirectory(prefix="portable-image-archive-") as temporary:
         root = Path(temporary)
         candidate = root / "candidate.oci.tar"
