@@ -114,6 +114,7 @@ jobs:
           python3 tests/portable-workspace/trusted-provider/test_stage_provider_input.py
           python3 tests/portable-workspace/trusted-provider/test_provider_facts_runtime_bounds.py
           python3 tests/portable-workspace/trusted-provider/test_provider_runtime.py
+          dotnet fsi --exec tests/portable-workspace/trusted-provider/test_private_input_manifest.fsx
           dotnet restore tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --locked-mode
           dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj \
             --no-restore \
