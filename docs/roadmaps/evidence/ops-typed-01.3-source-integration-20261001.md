@@ -1,0 +1,11 @@
+# OPS-TYPED-01.3 FourD typed source integration
+
+Source qualification only; native acquisition and provider acceptance remain open.
+
+The independent source reviews accepted the compiled F# source/profile/admission join, Quint lifecycle and real FsQuint correspondence after repairing circular observations, malformed states, missing acquisition acknowledgement, cancellation and identity joins. Final cleanup delta `9d61c410956fab035b8355f7711d2e6f67571dc7` was independently accepted by review SHA256 `7da94064b286931122e408b83ed16b983da841a58b8405ff59d9ddf56bb2efe2`. Its real production negative demonstrates that settled local children cannot close the native resource without observed native cleanup. Unknown outcome and truthful complete cleanup can coexist; failed cleanup stays incomplete.
+
+The source integration preserves all nine P4 changes from protected `b06c18722b422213fe1c7cdd11cda1732605466f` and prior W6 paths. The public workflow provisions pinned .NET SDK10.0.400 and builds the nonpackable F# producer with locked dependencies before any admission or source-key secret is supplied. A source-bound manifest hashes its apphost, DLL, deps, runtimeconfig and FSharp.Core. A no-argument probe executes the apphost under the actual stripped consumer environment and requires the defined exit2 with no output. Native acquisition and execution consume that exact binding.
+
+Root focused verification: locked restore/publish; actual stripped-environment apphost probe; workflow YAML and every embedded Bash script; five existing workflow/capacity/preservation regressions; immutable execution-pin validation. The final workflow bytes and pinned setup action are recorded in the shared execution registry. These checks supplement the accepted source tests and bounded Quint runs; they are not exhaustive verification or native qualification.
+
+Actual operation gates remain fresh protected placement/capacity/reservation, a rebuilt protected producer/root packet, exact observed admission and source-capsule custody, and genuine acquisition/native evidence with cleanup and credential retirement. Existing disabled deploy keys are not retried. Original private source, accepted P2, result key, capacity floor and generated-workspace defaults remain unchanged.

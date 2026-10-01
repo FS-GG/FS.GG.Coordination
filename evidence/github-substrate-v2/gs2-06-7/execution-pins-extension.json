@@ -229,9 +229,10 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/fourd-public-provider-qualification.yml",
-      "sha256": "9677075eba5bbba8ed19437fdbaf6f993f3c0788abddd30ab65a934366786b41",
+      "sha256": "03e2c515ca58c045892135c2dc53fa8826fb2c0489af68ff49bd9a53dfc59d80",
       "externalReferences": [
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
