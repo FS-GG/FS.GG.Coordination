@@ -5,6 +5,7 @@ open System.Data
 open System.IO
 open System.Reflection
 open System.Security.Cryptography
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open Npgsql
@@ -35,6 +36,7 @@ type private StoredExecutorCommand =
         CommandId: Guid
         BodySha256: string
         Kind: string
+        WorkItemPersistenceId: string
         AssignmentId: Guid
         AttemptId: Guid
         Generation: int64
@@ -61,6 +63,7 @@ module private StoredExecutorCommand =
                     CommandId = value.CommandId
                     BodySha256 = value.BodySha256
                     Kind = value.Kind
+                    WorkItemPersistenceId = value.WorkItemPersistenceId
                     AssignmentId = value.AssignmentId
                     AttemptId = value.AttemptId
                     Generation = value.Generation
@@ -84,6 +87,7 @@ module private StoredExecutorCommand =
                         CommandId = value.CommandId
                         BodySha256 = value.BodySha256
                         Kind = value.Kind
+                        WorkItemPersistenceId = value.WorkItemPersistenceId
                         AssignmentId = value.AssignmentId
                         AttemptId = value.AttemptId
                         Generation = value.Generation
@@ -159,6 +163,32 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
     let sha (bytes: byte array) =
         SHA256.HashData bytes |> Convert.ToHexString |> _.ToLowerInvariant()
+
+    let durableDispatchDigest
+        (kind: string)
+        (assignmentId: Guid)
+        (attemptId: Guid)
+        (generation: int64)
+        (revision: int64)
+        (identity: string)
+        (payload: byte array)
+        =
+        // Versioned, line-framed ASCII owner fields followed by the exact
+        // retained payload bytes. UUIDs and integers use invariant canonical
+        // renderings; payload is last so arbitrary bytes cannot change framing.
+        let owner =
+            String.concat
+                "\n"
+                [ "fsgg.learning-execution-first-dispatch/1"
+                  kind
+                  assignmentId.ToString("D")
+                  attemptId.ToString("D")
+                  generation.ToString(Globalization.CultureInfo.InvariantCulture)
+                  revision.ToString(Globalization.CultureInfo.InvariantCulture)
+                  identity ]
+            + "\n"
+
+        Array.concat [ Encoding.ASCII.GetBytes owner; payload ] |> sha
 
     let gateLearning
         (connection: NpgsqlConnection)
@@ -382,6 +412,430 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                             Ok value
                         else
                             Error "learning-execution-binding-corrupt")
+        }
+
+    let readLearningExecutionOwners
+        (roster: LearningOperationalRosterIdentity)
+        (cancellationToken: CancellationToken)
+        =
+        task {
+            // One deadline covers the complete population scan, including all
+            // per-attempt owner lookups.  Individual command timeouts alone
+            // would allow a large population to multiply the observation time.
+            use queryDeadline = CancellationTokenSource.CreateLinkedTokenSource cancellationToken
+            queryDeadline.CancelAfter(TimeSpan.FromSeconds 30.)
+            let queryToken = queryDeadline.Token
+            let rosterMembers = roster.Members |> List.map _.ItemId
+            let expectedRoles = set [ "root"; "child"; "retry"; "review"; "rescue"; "repair" ]
+            let roles = roster.Members |> List.map _.Role
+            let boundedText maximum (value: string) =
+                not (String.IsNullOrWhiteSpace value) && value.Length <= maximum
+            let isSha256 (value: string) =
+                not (isNull value)
+                && value.Length = 64
+                && value |> Seq.forall (fun c -> Char.IsAsciiHexDigit c && not (Char.IsUpper c))
+
+            if
+                not (boundedText 256 roster.Key.WindowId)
+                || not (boundedText 512 roster.Key.OriginalItemId)
+                || not (boundedText 128 roster.Source.ProducerId)
+                || not (boundedText 512 roster.Source.RecordId)
+                || not (boundedText 128 roster.Source.Revision)
+                || rosterMembers.Length <> 6
+                || (Set.ofList rosterMembers).Count <> rosterMembers.Length
+                || (Set.ofList roles).Count <> roles.Length
+                || Set.ofList roles <> expectedRoles
+                || not (isSha256 roster.AcceptedPlanSha256)
+                || not (isSha256 roster.CanonicalWorkItemSha256)
+                || roster.Members |> List.exists (fun memberValue -> memberValue.OriginalItemId <> roster.Key.OriginalItemId)
+            then
+                return Error "learning-execution-owner-roster-refused"
+            else
+                use! connection = dataSource.OpenConnectionAsync queryToken
+
+                use! transaction =
+                    connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, queryToken)
+
+                do! gateLearning connection transaction false queryToken
+
+                use metadata =
+                    new NpgsqlCommand(
+                        "SELECT generation_fence,transaction_timestamp() FROM fsgg_orchestration.store_metadata WHERE singleton",
+                        connection,
+                        transaction
+                    )
+
+                metadata.CommandTimeout <- 30
+                use! metadataRow = metadata.ExecuteReaderAsync queryToken
+                let! metadataFound = metadataRow.ReadAsync queryToken
+
+                if not metadataFound then
+                    return Error "learning-execution-owner-metadata-refused"
+                else
+                    let generationFence = metadataRow.GetInt64 0
+                    let observedAt = metadataRow.GetFieldValue<DateTimeOffset> 1
+                    do! metadataRow.CloseAsync()
+
+                    use bindings =
+                        new NpgsqlCommand(
+                            "SELECT assignment_id,attempt_id,generation,binding_sha256,treatment_assignment_sha256,payload_bytes,cumulative_bytes,ordinal,CASE WHEN ordinal <= 256 AND payload_bytes <= 32768 AND cumulative_bytes <= 8388608 THEN payload END FROM (SELECT assignment_id,attempt_id,generation,binding_sha256,treatment_assignment_sha256,payload,octet_length(payload)::bigint AS payload_bytes,sum(octet_length(payload)::bigint) OVER (ORDER BY created_at,assignment_id,attempt_id) AS cumulative_bytes,row_number() OVER (ORDER BY created_at,assignment_id,attempt_id) AS ordinal,created_at FROM fsgg_orchestration.learning_execution_binding ORDER BY created_at,assignment_id,attempt_id LIMIT 257) bounded ORDER BY created_at,assignment_id,attempt_id",
+                            connection,
+                            transaction
+                        )
+
+                    bindings.CommandTimeout <- 30
+                    use! bindingRows = bindings.ExecuteReaderAsync queryToken
+                    let decoded = ResizeArray<LearningExecutionBinding>()
+                    let mutable bindingCount = 0
+                    let mutable bindingFailure = None
+                    let mutable reading = true
+
+                    while reading do
+                        let! more = bindingRows.ReadAsync queryToken
+                        reading <- more
+
+                        if more then
+                            bindingCount <- bindingCount + 1
+                            let assignmentId = bindingRows.GetGuid 0
+                            let attemptId = bindingRows.GetGuid 1
+                            let generation = bindingRows.GetInt64 2
+                            let expected = bindingRows.GetString 3
+                            let treatmentAssignment = bindingRows.GetString 4
+                            let payloadBytes = bindingRows.GetInt64 5
+                            let cumulativeBytes = bindingRows.GetInt64 6
+                            if
+                                bindingCount > 256
+                                || payloadBytes > 32768L
+                                || cumulativeBytes > 8L * 1024L * 1024L
+                                || bindingRows.GetInt64 7 > 256L
+                                || bindingRows.IsDBNull 8
+                            then
+                                bindingFailure <- Some "learning-execution-owner-population-overflow"
+                                reading <- false
+                            elif bindingFailure.IsNone then
+                                let payload = bindingRows.GetFieldValue<byte array> 8
+
+                                match LearningExecutionBinding.decode payload with
+                                | Ok value when
+                                    value.BindingSha256 = expected
+                                    && value.AssignmentId = assignmentId
+                                    && value.AttemptId = attemptId
+                                    && value.Generation = generation
+                                    && value.TreatmentAssignmentSha256 = treatmentAssignment
+                                    -> decoded.Add value
+                                | _ ->
+                                    bindingFailure <- Some "learning-execution-owner-binding-corrupt"
+                                    reading <- false
+
+                    do! bindingRows.CloseAsync()
+
+                    match bindingFailure with
+                    | Some reason -> return Error reason
+                    | None ->
+                        let selected =
+                            decoded
+                            |> Seq.filter (fun binding ->
+                                binding.OperationalWindow
+                                |> Option.exists (fun window ->
+                                    window.WindowId = roster.Key.WindowId
+                                    && window.OriginalItemId = roster.Key.OriginalItemId))
+                            |> Seq.toList
+
+                        let records = ResizeArray<LearningExecutionOwnerRecord>()
+                        let mutable ownerFailure = None
+
+                        for binding in selected do
+                            if ownerFailure.IsNone then
+                                use route =
+                                    new NpgsqlCommand(
+                                        "SELECT generation,binding_sha256,octet_length(payload)::bigint,CASE WHEN octet_length(payload) <= 32768 THEN payload END FROM fsgg_orchestration.execution_route_binding WHERE assignment_id=$1 AND attempt_id=$2",
+                                        connection,
+                                        transaction
+                                    )
+
+                                route.CommandTimeout <- 30
+                                add route binding.AssignmentId
+                                add route binding.AttemptId
+                                use! routeRow = route.ExecuteReaderAsync queryToken
+                                let! routeFound = routeRow.ReadAsync queryToken
+
+                                let routeDigest =
+                                    if
+                                        routeFound
+                                        && routeRow.GetInt64 0 = binding.Generation
+                                        && routeRow.GetInt64 2 <= 32768L
+                                        && not (routeRow.IsDBNull 3)
+                                    then
+                                        let expected = routeRow.GetString 1
+                                        let payload = routeRow.GetFieldValue<byte array> 3
+
+                                        match ExecutorWire.parseRouteBinding payload with
+                                        | Ok value when
+                                            value.BindingSha256 = expected
+                                            && value.AssignmentId = binding.AssignmentId
+                                            && value.AttemptId = binding.AttemptId
+                                            && value.Generation = binding.Generation
+                                            && value.WorkItemPersistenceId = binding.ItemId
+                                            -> Some expected
+                                        | _ -> None
+                                    else
+                                        None
+
+                                do! routeRow.CloseAsync()
+
+                                use stream =
+                                    new NpgsqlCommand(
+                                        "SELECT last_revision,generation FROM fsgg_orchestration.execution_stream WHERE assignment_id=$1 AND attempt_id=$2",
+                                        connection,
+                                        transaction
+                                    )
+
+                                stream.CommandTimeout <- 30
+                                add stream binding.AssignmentId
+                                add stream binding.AttemptId
+                                use! streamRow = stream.ExecuteReaderAsync queryToken
+                                let! streamFound = streamRow.ReadAsync queryToken
+
+                                let streamRevision =
+                                    if streamFound && not (streamRow.IsDBNull 1) && streamRow.GetInt64 1 = binding.Generation then
+                                        Some(streamRow.GetInt64 0)
+                                    else
+                                        None
+
+                                do! streamRow.CloseAsync()
+
+                                use events =
+                                    new NpgsqlCommand(
+                                        "SELECT revision,event_identity,payload_bytes,cumulative_bytes,ordinal,CASE WHEN ordinal <= 256 AND payload_bytes <= 262144 AND cumulative_bytes <= 4194304 THEN payload END FROM (SELECT revision,event_identity,payload,octet_length(payload)::bigint AS payload_bytes,sum(octet_length(payload)::bigint) OVER (ORDER BY revision) AS cumulative_bytes,row_number() OVER (ORDER BY revision) AS ordinal FROM fsgg_orchestration.execution_event WHERE assignment_id=$1 AND attempt_id=$2 ORDER BY revision LIMIT 257) bounded ORDER BY revision",
+                                        connection,
+                                        transaction
+                                    )
+
+                                events.CommandTimeout <- 30
+                                add events binding.AssignmentId
+                                add events binding.AttemptId
+                                use! eventRows = events.ExecuteReaderAsync queryToken
+                                let observedEvents = ResizeArray<int64 * string * SessionEvent * string>()
+                                let mutable eventFailure = None
+                                let mutable eventCount = 0
+                                let mutable readEvents = true
+
+                                while readEvents do
+                                    let! more = eventRows.ReadAsync queryToken
+                                    readEvents <- more
+
+                                    if more then
+                                        eventCount <- eventCount + 1
+                                        let revision = eventRows.GetInt64 0
+                                        let identity = eventRows.GetString 1
+                                        let payloadBytes = eventRows.GetInt64 2
+                                        let cumulativeBytes = eventRows.GetInt64 3
+                                        if
+                                            eventCount > 256
+                                            || payloadBytes > 262144L
+                                            || cumulativeBytes > 4L * 1024L * 1024L
+                                            || eventRows.GetInt64 4 > 256L
+                                            || eventRows.IsDBNull 5
+                                        then
+                                            eventFailure <- Some "learning-execution-owner-event-overflow"
+                                            readEvents <- false
+                                        elif eventFailure.IsNone then
+                                            let payload = eventRows.GetFieldValue<byte array> 5
+
+                                            match SessionEventCodec.decode payload with
+                                            | Ok value when SessionEventCodec.identity value = identity ->
+                                                let dispatch =
+                                                    durableDispatchDigest
+                                                        "event"
+                                                        binding.AssignmentId
+                                                        binding.AttemptId
+                                                        binding.Generation
+                                                        revision
+                                                        identity
+                                                        payload
+
+                                                observedEvents.Add((revision, identity, value, dispatch))
+                                            | _ ->
+                                                eventFailure <- Some "learning-execution-owner-event-corrupt"
+                                                readEvents <- false
+
+                                do! eventRows.CloseAsync()
+
+                                use commands =
+                                    new NpgsqlCommand(
+                                        "SELECT command_id,body_sha256,generation,durable_revision,payload_bytes,ordinal,CASE WHEN ordinal <= 256 AND payload_bytes <= 32768 THEN payload END FROM (SELECT command_id,body_sha256,generation,durable_revision,payload,octet_length(payload)::bigint AS payload_bytes,row_number() OVER (ORDER BY durable_revision,created_at,command_id) AS ordinal,created_at FROM fsgg_orchestration.executor_command WHERE assignment_id=$1 AND attempt_id=$2 AND visible ORDER BY durable_revision,created_at,command_id LIMIT 257) bounded ORDER BY durable_revision,created_at,command_id",
+                                        connection,
+                                        transaction
+                                    )
+
+                                commands.CommandTimeout <- 30
+                                add commands binding.AssignmentId
+                                add commands binding.AttemptId
+                                use! commandRows = commands.ExecuteReaderAsync queryToken
+                                let commandDigests = ResizeArray<string * string>()
+                                let mutable commandFailure = None
+                                let mutable readCommands = true
+
+                                while readCommands do
+                                    let! more = commandRows.ReadAsync queryToken
+                                    readCommands <- more
+
+                                    if more then
+                                        if commandDigests.Count >= 256 then
+                                            commandFailure <- Some "learning-execution-owner-command-overflow"
+                                            readCommands <- false
+                                        elif commandRows.GetInt64 2 <> binding.Generation then
+                                            commandFailure <- Some "learning-execution-owner-generation-refused"
+                                            readCommands <- false
+                                        elif commandRows.GetInt64 4 > 32768L || commandRows.GetInt64 5 > 256L || commandRows.IsDBNull 6 then
+                                            commandFailure <- Some "learning-execution-owner-command-overflow"
+                                            readCommands <- false
+                                        else
+                                            let commandId = commandRows.GetGuid 0
+                                            let expected = commandRows.GetString 1
+                                            let durableRevision = commandRows.GetInt64 3
+                                            let payload = commandRows.GetFieldValue<byte array> 6
+
+                                            match StoredExecutorCommand.parse payload with
+                                            | Ok value when
+                                                value.BodySha256 = expected
+                                                && value.CommandId = commandId
+                                                && value.WorkItemPersistenceId = binding.ItemId
+                                                && value.AssignmentId = binding.AssignmentId
+                                                && value.AttemptId = binding.AttemptId
+                                                && value.Generation = binding.Generation
+                                                ->
+                                                let dispatch =
+                                                    durableDispatchDigest
+                                                        "command"
+                                                        binding.AssignmentId
+                                                        binding.AttemptId
+                                                        binding.Generation
+                                                        durableRevision
+                                                        (commandId.ToString("D") + ":" + expected)
+                                                        payload
+
+                                                commandDigests.Add((expected, dispatch))
+                                            | _ ->
+                                                commandFailure <- Some "learning-execution-owner-command-corrupt"
+                                                readCommands <- false
+
+                                do! commandRows.CloseAsync()
+
+                                match eventFailure, commandFailure with
+                                | Some reason, _
+                                | _, Some reason -> ownerFailure <- Some reason
+                                | None, None ->
+                                    let eventList = List.ofSeq observedEvents
+                                    let revisionsComplete =
+                                        match streamRevision with
+                                        | Some revision ->
+                                            revision = int64 eventList.Length
+                                            && (eventList
+                                                |> List.mapi (fun index (actual, _, _, _) -> actual = int64 index + 1L)
+                                                |> List.forall id)
+                                        | None -> false
+
+                                    let intentMatches =
+                                        eventList
+                                        |> List.tryHead
+                                        |> Option.exists (fun (_, _, eventValue, _) ->
+                                            match eventValue with
+                                            | LaunchIntentRecorded intent ->
+                                                intent.Key.AssignmentId = binding.AssignmentId
+                                                && intent.Key.AttemptId = binding.AttemptId
+                                                && intent.Key.Generation = binding.Generation
+                                            | _ -> false)
+
+                                    let attemptDigest =
+                                        eventList
+                                        |> List.tryPick (fun (_, _, eventValue, dispatch) ->
+                                            match eventValue with
+                                            | LaunchAttemptRecorded _ -> Some dispatch
+                                            | _ -> None)
+
+                                    let latestObservation =
+                                        eventList
+                                        |> List.rev
+                                        |> List.tryPick (fun (_, identity, eventValue, _) ->
+                                            match eventValue with
+                                            | StartObserved observation
+                                            | ObservationRecorded observation -> Some(identity, observation)
+                                            | _ -> None)
+
+                                    let commandDigest = commandDigests |> Seq.tryHead |> Option.map fst
+                                    let commandDispatch = commandDigests |> Seq.tryHead |> Option.map snd
+
+                                    let phase =
+                                        match routeDigest, revisionsComplete, intentMatches, latestObservation with
+                                        | Some _, true, true, Some(_, observation) when attemptDigest.IsSome || commandDigest.IsSome ->
+                                            match observation.Lifecycle with
+                                            | Succeeded
+                                            | Failed
+                                            | Cancelled
+                                            | DeadlineExceeded
+                                            | OutcomeUnknown -> LearningExecutionOwnerPhase.Terminal
+                                            | _ -> LearningExecutionOwnerPhase.Started
+                                        | Some _, true, true, None when attemptDigest.IsSome || commandDigest.IsSome ->
+                                            LearningExecutionOwnerPhase.LaunchCommittedUnknown
+                                        | Some _, true, true, None -> LearningExecutionOwnerPhase.AssignedUnlaunched
+                                        | _ -> LearningExecutionOwnerPhase.EvidenceUnavailable
+
+                                    records.Add
+                                        {
+                                            ItemId = binding.ItemId
+                                            OriginalItemId = binding.OriginalItemId
+                                            Role =
+                                                roster.Members
+                                                |> List.tryFind (fun memberValue -> memberValue.ItemId = binding.ItemId)
+                                                |> Option.map _.Role
+                                            Binding = Some binding
+                                            BindingSha256 = Some binding.BindingSha256
+                                            RouteBindingSha256 = routeDigest
+                                            SessionRevision = streamRevision
+                                            FirstDispatchSha256 =
+                                                attemptDigest
+                                                |> Option.orElse commandDispatch
+                                            CommandSha256 = commandDigest
+                                            Phase = phase
+                                        }
+
+                        match ownerFailure with
+                        | Some reason -> return Error reason
+                        | None ->
+                            for memberValue in roster.Members do
+                                if selected |> List.exists (fun binding -> binding.ItemId = memberValue.ItemId) |> not then
+                                    records.Add
+                                        {
+                                            ItemId = memberValue.ItemId
+                                            OriginalItemId = memberValue.OriginalItemId
+                                            Role = Some memberValue.Role
+                                            Binding = None
+                                            BindingSha256 = None
+                                            RouteBindingSha256 = None
+                                            SessionRevision = None
+                                            FirstDispatchSha256 = None
+                                            CommandSha256 = None
+                                            Phase = LearningExecutionOwnerPhase.Prospective
+                                        }
+
+                            do! transaction.CommitAsync queryToken
+
+                            return
+                                Ok
+                                    {
+                                        Key = roster.Key
+                                        RosterSource = roster.Source
+                                        StoreGenerationFence = generationFence
+                                        ObservedAt = observedAt
+                                        Records =
+                                            records
+                                            |> Seq.sortBy (fun record ->
+                                                record.ItemId,
+                                                record.Binding |> Option.map _.AssignmentId |> Option.defaultValue Guid.Empty,
+                                                record.Binding |> Option.map _.AttemptId |> Option.defaultValue Guid.Empty)
+                                            |> Seq.toList
+                                    }
         }
 
     let gate
@@ -1497,6 +1951,10 @@ ORDER BY c.created_at,c.command_id LIMIT $1
 
         member _.ReadLearningExecution(assignmentId, attemptId, cancellationToken) =
             readLearningExecution assignmentId attemptId cancellationToken
+
+    interface ILearningExecutionOwnerSource with
+        member _.ReadLearningExecutionOwners(roster, cancellationToken) =
+            readLearningExecutionOwners roster cancellationToken
 
     interface ILearningOperationalWindowStore with
         member _.BindLearningOperationalWindow(binding, cancellationToken) =
