@@ -49,6 +49,28 @@ module LearningMainAdmission =
         | Descendant parent -> "descendant", Some parent
         | Retry parent -> "retry", Some parent
 
+    let authoritativeOperationalReadiness
+        (clock: TimeProvider)
+        (options: LearningOperationalAdmissionOptions)
+        (authority: ILearningOperationalAuthoritySource)
+        (cohort: ILearningOperationalCohortSource)
+        (census: ILearningOperationalCensusSource)
+        =
+        if not options.Enabled then
+            Error "learning-operational-readiness-composition-disabled"
+        elif options.MaximumEvidenceAge <= TimeSpan.Zero then
+            Error "learning-operational-readiness-composition-age-refused"
+        else
+            AuthoritativeLearningOperationalReadinessSource(
+                clock,
+                options.MaximumEvidenceAge,
+                authority,
+                cohort,
+                census
+            )
+            :> ILearningOperationalReadinessSource
+            |> Ok
+
     let private treatmentMatches (prepared: PreparedLearningTreatment) (treatment: DurableLearningTreatment) =
         let input = prepared.Input
 
@@ -103,6 +125,7 @@ module LearningMainAdmission =
         (source: ILearningOperationalReadinessSource)
         (key: LearningOperationalWindowKey)
         (expected: PreparedLearningOperationalWindow)
+        (expectedUnlaunched: ExecutionKey option)
         (token: CancellationToken)
         =
         task {
@@ -111,6 +134,53 @@ module LearningMainAdmission =
             return
                 match current with
                 | Error _ -> Error "learning-main-admission-operational-readiness-unavailable"
+                | Ok current when expectedUnlaunched.IsSome && current.Evidence.UnassignedSharedAllocation ->
+                    Error "learning-main-admission-assigned-execution-unavailable"
+                | Ok current when not current.Evidence.UnassignedSharedAllocation ->
+                    let executionMatches =
+                        match expectedUnlaunched, current.SelectedExecution with
+                        | None, _ -> true
+                        | Some expectedExecution, Some actual ->
+                            actual.AssignmentId = expectedExecution.AssignmentId
+                            && actual.AttemptId = expectedExecution.AttemptId
+                            && actual.Generation = expectedExecution.Generation
+                            && actual.Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                            && actual.FirstDispatchSha256.IsNone
+                        | Some _, None -> false
+
+                    if
+                        current.Evidence.ObservedAt > clock.GetUtcNow()
+                        || current.Evidence.ExpiresAt <= clock.GetUtcNow()
+                    then
+                        Error "learning-operational-window-readiness-stale"
+                    elif
+                        not executionMatches
+                        ||
+                        current.Request.WindowId <> expected.Binding.WindowId
+                        || current.Request.SeedReferenceSha256 <> expected.Binding.SeedReferenceSha256
+                        || current.Request.Repository <> expected.Binding.Repository
+                        || current.Request.CalendarAdmissionBlock <> expected.Binding.CalendarAdmissionBlock
+                        || current.Request.OriginalItemId <> expected.Binding.OriginalItemId
+                        || current.Request.AuthorityId <> expected.Binding.AuthorityId
+                        || current.Request.AuthorityRevision <> expected.Binding.AuthorityRevision
+                        || current.Request.AuthoritySha256 <> expected.Binding.AuthoritySha256
+                        || current.Request.OptedInAt <> expected.Binding.OptedInAt
+                        || current.Request.EnrollmentOpensAt <> expected.Binding.EnrollmentOpensAt
+                        || current.Request.EnrollmentClosesAt <> expected.Binding.EnrollmentClosesAt
+                        || current.Evidence.Schema <> LearningOperationalWindow.readinessSchema
+                        || current.Evidence.WindowId <> expected.Binding.WindowId
+                        || current.Evidence.Repository <> expected.Binding.Repository
+                        || current.Evidence.WorkClassId <> expected.Binding.WorkClassId
+                        || current.Evidence.OriginalItemId <> expected.Binding.OriginalItemId
+                        || current.Evidence.AcceptedPlanSha256 <> expected.Binding.AcceptedPlanSha256
+                        || current.Evidence.CanonicalWorkItemSha256 <> expected.Binding.CanonicalWorkItemSha256
+                        || current.Evidence.CoverageRosterSha256 <> expected.Binding.CoverageRosterSha256
+                        || not current.Evidence.CompleteNativeUsage
+                    then
+                        Error "learning-main-admission-operational-readiness-changed"
+                    else
+                        LearningOperationalWindow.validateCurrent (clock.GetUtcNow()) expected.Binding
+                        |> Result.map (fun _ -> current)
                 | Ok current ->
                     match
                         LearningOperationalWindow.prepare expected.Binding.AssignedAt current.Request current.Evidence
@@ -120,7 +190,7 @@ module LearningMainAdmission =
                         Error "learning-main-admission-operational-readiness-changed"
                     | Ok preparedCurrent ->
                         LearningOperationalWindow.validateCurrent (clock.GetUtcNow()) preparedCurrent.Binding
-                        |> Result.map ignore
+                        |> Result.map (fun _ -> current)
         }
 
     let prepareOperationalAssignment
@@ -142,8 +212,9 @@ module LearningMainAdmission =
                 | Ok snapshot ->
                     let planSource = request.AcceptedProposal.ContextManifest |> Option.map _.PlanSource
 
-                    let observationSha =
-                        request.SourceState.Observation |> Option.map Observer.observationSha256
+                    let observationRevision =
+                        request.SourceState.Observation
+                        |> Option.map (fun observation -> string (Id.revisionValue observation.WorkflowRevision))
 
                     if
                         snapshot.Request.WindowId <> windowKey.WindowId
@@ -151,7 +222,7 @@ module LearningMainAdmission =
                         || snapshot.Evidence.WindowId <> windowKey.WindowId
                         || snapshot.Evidence.OriginalItemId <> windowKey.OriginalItemId
                         || planSource |> Option.map _.Sha256 <> Some snapshot.Evidence.AcceptedPlanSha256
-                        || observationSha <> Some snapshot.Evidence.CanonicalWorkItemSha256
+                        || observationRevision <> Some snapshot.Request.AuthorityRevision
                     then
                         return Error "learning-operational-assignment-readiness-refused"
                     else
@@ -206,7 +277,10 @@ module LearningMainAdmission =
         (treatment: DurableLearningTreatment)
         (subject: DurableLearningTreatmentBinding)
         (operationalWindow: PreparedLearningOperationalWindow option)
-        (operationalReadiness: (ILearningOperationalReadinessSource * LearningOperationalWindowKey) option)
+        (operationalReadiness:
+            (ILearningOperationalReadinessSource
+                * LearningOperationalWindowKey
+                * LearningOperationalReadinessSnapshot) option)
         (capabilityQuery: LearningSelectionQuery)
         (capabilityEvidence: LearningSelectionEvidence)
         (token: CancellationToken)
@@ -242,7 +316,6 @@ module LearningMainAdmission =
                 && window.AssignedAt = treatment.AssignedAt
                 && window.AuthorityId = principal
                 && window.AuthorityRevision = string (Id.revisionValue treatment.WorkflowRevision)
-                && window.AuthoritySha256 = request.RouteEvidenceSha256
 
         if not durableMatches then
             Task.FromResult(Error "learning-main-admission-treatment-refused")
@@ -261,8 +334,23 @@ module LearningMainAdmission =
                         let! readinessResult =
                             match operationalWindow, operationalReadiness with
                             | None, None -> Task.FromResult(Ok())
-                            | Some expected, Some(source, key) ->
-                                validateOperationalReadiness clock source key expected cancellationToken
+                            | Some expected, Some(source, key, baseline) ->
+                                task {
+                                    let! validated =
+                                        validateOperationalReadiness
+                                            clock
+                                            source
+                                            key
+                                            expected
+                                            (if subject.Relation = Original then Some launch.Key else None)
+                                            cancellationToken
+
+                                    return
+                                        match validated with
+                                        | Ok current when current = baseline -> Ok()
+                                        | Ok _ -> Error "learning-main-admission-operational-readiness-changed"
+                                        | Error reason -> Error reason
+                                }
                             | _ -> Task.FromResult(Error "learning-main-admission-operational-readiness-refused")
 
                         if Result.isError readinessResult then
@@ -506,11 +594,25 @@ module LearningMainAdmission =
                         }
 
                     let! readinessCurrent =
-                        validateOperationalReadiness clock operationalReadiness key operationalWindow token
+                        validateOperationalReadiness
+                            clock
+                            operationalReadiness
+                            key
+                            operationalWindow
+                            (if subject.Relation = Original then
+                                 Some
+                                     {
+                                         AssignmentId = request.ProcessOperationId
+                                         AttemptId = request.AttemptId
+                                         Generation = Id.generationValue prepared.CurrentGeneration
+                                     }
+                             else
+                                 None)
+                            token
 
                     match readinessCurrent with
                     | Error reason -> return Error reason
-                    | Ok() ->
+                    | Ok readinessBaseline ->
                         let observerId =
                             ObserverJournal.learningTreatmentObserverId prepared.Input.OriginalItemId
 
@@ -549,7 +651,7 @@ module LearningMainAdmission =
                                         treatment
                                         subject
                                         (Some operationalWindow)
-                                        (Some(operationalReadiness, key))
+                                        (Some(operationalReadiness, key, readinessBaseline))
                                         capabilityQuery
                                         capabilityEvidence
                                         token

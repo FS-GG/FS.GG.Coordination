@@ -3430,6 +3430,7 @@ finally:
                     WorkItemId = workItem
                     GitHub = None
                     LocalExecutor = None
+                    LearningOperational = None
                     RequestTimeout = TimeSpan.FromSeconds 10.
                     MaximumConcurrentRequests = 4
                 }

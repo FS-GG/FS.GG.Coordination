@@ -1,6 +1,7 @@
 namespace FS.GG.Coordination.Orchestration.Execution.Tests
 
 open System
+open System.Threading.Tasks
 open Xunit
 open FS.GG.Coordination.Orchestration.Execution
 
@@ -43,6 +44,112 @@ type LearningOperationalWindowTests() =
             UnassignedSharedAllocation = true
             Provenance = "controlled-owner-readiness"
         }
+
+    let source producer record observedAt =
+        {
+            ProducerId = producer
+            Revision = "revision-1"
+            RecordId = record
+            ObservedAt = observedAt
+        }
+
+    let authoritativeRecords () =
+        let key =
+            {
+                WindowId = "learn-01.4-window-001"
+                OriginalItemId = "LEARN-01.4-test"
+            }
+
+        let members =
+            [
+                "LEARN-01.4-test", "root"
+                "LEARN-01.4-child", "child"
+                "LEARN-01.4-retry", "retry"
+                "LEARN-01.4-review", "review"
+                "LEARN-01.4-rescue", "rescue"
+                "LEARN-01.4-repair", "repair"
+            ]
+
+        let authority =
+            {
+                Key = key
+                Source = source "durable-scheduler" "authority-1" (assignedAt.AddMinutes -4.)
+                Enabled = true
+                Repository = LearningOperationalWindow.policyRepository
+                CalendarAdmissionBlock = "2026-W40"
+                SeedReferenceSha256 = digest "a"
+                AuthorityId = "unified-roadmap-owner"
+                AuthorityRevision = "revision-1"
+                OptedInAt = assignedAt.AddMinutes -10.
+                EnrollmentOpensAt = assignedAt.AddDays -1.
+                EnrollmentClosesAt = assignedAt.AddDays 27.
+                RevokedAt = None
+            }
+
+        let cohort =
+            {
+                Key = key
+                Source = source "durable-cohort" "cohort-1" (assignedAt.AddMinutes -3.)
+                AppliedAt = assignedAt.AddMinutes -6.
+                AcceptedPlanSha256 = digest "c"
+                CanonicalWorkItemSha256 = digest "d"
+                Members =
+                    members
+                    |> List.map (fun (itemId, role) ->
+                        {
+                            ItemId = itemId
+                            OriginalItemId = key.OriginalItemId
+                            Role = role
+                        })
+            }
+
+        let states =
+            [ "prospective"; "completed"; "failed"; "cancelled"; "unfinished"; "assigned" ]
+
+        let census =
+            {
+                Key = key
+                Source = source "utel-native-census" "census-1" (assignedAt.AddMinutes -2.)
+                InstalledCustody = Some(source "installed-collector-owner" "custody-1" (assignedAt.AddMinutes -2.))
+                ProviderCapability = Some(source "installed-provider-owner" "capability-1" (assignedAt.AddMinutes -2.))
+                NativeDeliveryRevision = "capture-2"
+                Members =
+                    List.map2
+                        (fun (index, (itemId, role)) state ->
+                            let actual = state <> "prospective"
+
+                            {
+                                ItemId = itemId
+                                OriginalItemId = key.OriginalItemId
+                                Role = role
+                                State = state
+                                Source = source "utel-native-census" ("input-" + itemId) (assignedAt.AddMinutes -2.)
+                                NativeUsageSha256 = if actual then Some(digest "e") else None
+                                SharedCostSha256 = if actual then Some(digest "f") else None
+                                Execution =
+                                    if not actual then
+                                        None
+                                    else
+                                        Some
+                                            {
+                                                AssignmentId = Guid.Parse($"10000000-0000-0000-0000-00000000000{index + 1}")
+                                                AttemptId = Guid.Parse($"20000000-0000-0000-0000-00000000000{index + 1}")
+                                                Generation = 3L
+                                                Phase =
+                                                    match state with
+                                                    | "completed"
+                                                    | "cancelled"
+                                                    | "failed" -> LearningOperationalExecutionPhase.Terminal
+                                                    | _ -> LearningOperationalExecutionPhase.Started
+                                                FirstDispatchSha256 = Some(digest "7")
+                                                Source = source "execution-journal" ($"execution-{index}") (assignedAt.AddMinutes -2.)
+                                            }
+                            })
+                        (members |> List.indexed)
+                        states
+            }
+
+        key, authority, cohort, census
 
     let executionBinding schema qualificationOnly operational =
         let value0 =
@@ -105,6 +212,401 @@ type LearningOperationalWindowTests() =
         match LearningOperationalWindow.prepare assignedAt (request false) evidence with
         | Error reason -> Assert.Equal("learning-operational-window-disabled", reason)
         | Ok _ -> failwith "disabled window unexpectedly prepared"
+
+    [<Fact>]
+    member _.``authoritative composition hashes complete durable producers and permits unborn target``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        let first =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                census
+            |> Result.defaultWith failwith
+
+        let second =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                census
+            |> Result.defaultWith failwith
+
+        Assert.Equal(first, second)
+        Assert.True(first.Evidence.CompleteNativeUsage)
+        Assert.True(first.Evidence.UnassignedSharedAllocation)
+        Assert.Equal(assignedAt.AddMinutes 6., first.Evidence.ExpiresAt)
+        Assert.Equal("durable-scheduler+durable-cohort+utel-native-census", first.Evidence.Provenance)
+
+        Assert.True(
+            LearningOperationalWindow.prepare assignedAt first.Request first.Evidence
+            |> Result.isOk
+        )
+
+    [<Fact>]
+    member _.``assigned target is readable for the post-bind fence but cannot create an initial window``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        let assigned =
+            { census with
+                Members =
+                    census.Members
+                    |> List.map (fun memberValue ->
+                        if memberValue.ItemId = key.OriginalItemId then
+                            { memberValue with
+                                State = "assigned"
+                                NativeUsageSha256 = None
+                                SharedCostSha256 = None
+                                Execution =
+                                    Some
+                                        {
+                                            AssignmentId = Guid.Parse "10000000-0000-0000-0000-000000000001"
+                                            AttemptId = Guid.Parse "20000000-0000-0000-0000-000000000001"
+                                            Generation = 3L
+                                            Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                                            FirstDispatchSha256 = None
+                                            Source = source "execution-journal" "assigned-root" (assignedAt.AddMinutes -1.)
+                                        }
+                            }
+                        else
+                            memberValue)
+            }
+
+        let current =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                assigned
+            |> Result.defaultWith failwith
+
+        Assert.False(current.Evidence.UnassignedSharedAllocation)
+        Assert.Equal(
+            Error "learning-operational-window-readiness-incomplete",
+            LearningOperationalWindow.prepare assignedAt current.Request current.Evidence
+        )
+
+    [<Fact>]
+    member _.``assigned execution phase never manufactures future accounting``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+        let root = census.Members |> List.find (fun value -> value.Role = "root")
+
+        let execution =
+            {
+                AssignmentId = Guid.Parse "10000000-0000-0000-0000-000000000001"
+                AttemptId = Guid.Parse "20000000-0000-0000-0000-000000000001"
+                Generation = 3L
+                Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                FirstDispatchSha256 = None
+                Source = source "execution-journal" "assigned-root" (assignedAt.AddMinutes -1.)
+            }
+
+        let censusWith replacement =
+            { census with
+                Members = census.Members |> List.map (fun value -> if value.Role = "root" then replacement else value)
+            }
+
+        let compose replacement =
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                (censusWith replacement)
+
+        let missingPhase =
+            { root with State = "assigned"; Execution = None }
+
+        let earlyCounter =
+            { root with
+                State = "assigned"
+                Execution = Some execution
+                NativeUsageSha256 = Some(digest "8")
+            }
+
+        let startedWithoutCounters =
+            { root with
+                State = "assigned"
+                Execution =
+                    Some
+                        { execution with
+                            Phase = LearningOperationalExecutionPhase.Started
+                            FirstDispatchSha256 = Some(digest "7")
+                        }
+            }
+
+        for replacement in [ missingPhase; earlyCounter; startedWithoutCounters ] do
+            Assert.Equal(Error "learning-operational-readiness-accounting-unknown", compose replacement)
+
+    [<Fact>]
+    member _.``assigned execution authority is current and follows durable owner and cohort observations``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+        let root = census.Members |> List.find (fun value -> value.Role = "root")
+
+        let execution observedAt =
+            {
+                AssignmentId = Guid.Parse "10000000-0000-0000-0000-000000000001"
+                AttemptId = Guid.Parse "20000000-0000-0000-0000-000000000001"
+                Generation = 3L
+                Phase = LearningOperationalExecutionPhase.AssignedUnlaunched
+                FirstDispatchSha256 = None
+                Source = source "execution-journal" "assigned-root" observedAt
+            }
+
+        let compose observedAt =
+            let assigned =
+                { root with
+                    State = "assigned"
+                    NativeUsageSha256 = None
+                    SharedCostSha256 = None
+                    Execution = Some(execution observedAt)
+                }
+
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                { census with
+                    Members =
+                        census.Members
+                        |> List.map (fun value -> if value.Role = "root" then assigned else value)
+                }
+
+        Assert.True(compose (assignedAt.AddMinutes -1.) |> Result.isOk)
+
+        Assert.Equal(
+            Error "learning-operational-readiness-census-refused",
+            compose (assignedAt.AddDays 1.)
+        )
+
+        Assert.Equal(
+            Error "learning-operational-readiness-roster-order-refused",
+            compose (cohort.AppliedAt.AddDays -1.)
+        )
+
+    [<Fact>]
+    member _.``empty or partial authoritative census never certifies coverage``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        let empty = { census with Members = [] }
+
+        let partial =
+            { census with
+                Members = census.Members |> List.tail
+            }
+
+        Assert.Equal(
+            Error "learning-operational-readiness-census-refused",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                empty
+        )
+
+        Assert.Equal(
+            Error "learning-operational-readiness-census-refused",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                partial
+        )
+
+    [<Fact>]
+    member _.``missing installed custody or provider capability stays ineligible``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        for incomplete in
+            [
+                { census with InstalledCustody = None }
+                { census with
+                    ProviderCapability = None
+                }
+            ] do
+            Assert.Equal(
+                Error "learning-operational-readiness-census-refused",
+                LearningOperationalWindow.composeAuthoritativeReadiness
+                    assignedAt
+                    (TimeSpan.FromMinutes 10.)
+                    key
+                    authority
+                    cohort
+                    incomplete
+            )
+
+    [<Fact>]
+    member _.``revocation and missing actual counters remain unknown``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        let revoked =
+            { authority with
+                RevokedAt = Some(assignedAt.AddMinutes -1.)
+            }
+
+        let missingActual =
+            { census with
+                Members =
+                    census.Members
+                    |> List.map (fun memberValue ->
+                        if memberValue.State = "failed" then
+                            { memberValue with
+                                NativeUsageSha256 = None
+                            }
+                        else
+                            memberValue)
+            }
+
+        Assert.Equal(
+            Error "learning-operational-readiness-authority-refused",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                revoked
+                cohort
+                census
+        )
+
+        Assert.Equal(
+            Error "learning-operational-readiness-accounting-unknown",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                missingActual
+        )
+
+        Assert.Equal(
+            Error "learning-operational-readiness-order-refused",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                (assignedAt.AddMinutes 7.)
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                census
+        )
+
+    [<Fact>]
+    member _.``fixed roster must precede observation and role joins cannot drift``() =
+        let key, authority, cohort, census = authoritativeRecords ()
+
+        let late =
+            { cohort with
+                AppliedAt = assignedAt.AddMinutes -1.
+            }
+
+        let drift =
+            { census with
+                Members =
+                    census.Members
+                    |> List.map (fun memberValue ->
+                        if memberValue.Role = "child" then
+                            { memberValue with Role = "review" }
+                        else
+                            memberValue)
+            }
+
+        Assert.Equal(
+            Error "learning-operational-readiness-roster-order-refused",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                late
+                census
+        )
+
+        Assert.Equal(
+            Error "learning-operational-readiness-census-refused",
+            LearningOperationalWindow.composeAuthoritativeReadiness
+                assignedAt
+                (TimeSpan.FromMinutes 10.)
+                key
+                authority
+                cohort
+                drift
+        )
+
+    [<Fact>]
+    member _.``authoritative source reads owners and never promotes an unavailable producer``() =
+        task {
+            let key, authorityRecord, cohortRecord, censusRecord = authoritativeRecords ()
+
+            let authority =
+                { new ILearningOperationalAuthoritySource with
+                    member _.ReadLearningOperationalAuthority(_, _) = Task.FromResult(Ok authorityRecord)
+                }
+
+            let cohort =
+                { new ILearningOperationalCohortSource with
+                    member _.ReadLearningOperationalCohort(_, _) = Task.FromResult(Ok cohortRecord)
+                }
+
+            let census =
+                { new ILearningOperationalCensusSource with
+                    member _.ReadLearningOperationalCensus(_, _) = Task.FromResult(Ok censusRecord)
+                }
+
+            let clock =
+                { new TimeProvider() with
+                    override _.GetUtcNow() = assignedAt
+                }
+
+            let source =
+                AuthoritativeLearningOperationalReadinessSource(
+                    clock,
+                    TimeSpan.FromMinutes 10.,
+                    authority,
+                    cohort,
+                    census
+                )
+                :> ILearningOperationalReadinessSource
+
+            let! composed =
+                source.ReadLearningOperationalReadiness(key, Threading.CancellationToken.None)
+
+            Assert.True(composed |> Result.isOk)
+
+            let missingCohort =
+                { new ILearningOperationalCohortSource with
+                    member _.ReadLearningOperationalCohort(_, _) =
+                        Task.FromResult(Error "owner-unavailable")
+                }
+
+            let unavailable =
+                AuthoritativeLearningOperationalReadinessSource(
+                    clock,
+                    TimeSpan.FromMinutes 10.,
+                    authority,
+                    missingCohort,
+                    census
+                )
+                :> ILearningOperationalReadinessSource
+
+            let! refused =
+                unavailable.ReadLearningOperationalReadiness(key, Threading.CancellationToken.None)
+
+            Assert.Equal(Error "learning-operational-readiness-cohort-unavailable", refused)
+        }
 
     [<Fact>]
     member _.``frozen assignment is derived before treatment and binds fixed contract``() =

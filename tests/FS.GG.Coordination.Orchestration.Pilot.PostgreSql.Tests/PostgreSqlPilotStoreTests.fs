@@ -869,6 +869,7 @@ type PostgreSqlPilotStoreTests() =
                     WorkItemId = Fixture.subject
                     GitHub = None
                     LocalExecutor = None
+                    LearningOperational = None
                     RequestTimeout = TimeSpan.FromSeconds 1.
                     MaximumConcurrentRequests = 1
                 }

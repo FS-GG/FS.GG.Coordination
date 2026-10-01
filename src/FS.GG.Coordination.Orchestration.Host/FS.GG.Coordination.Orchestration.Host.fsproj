@@ -30,6 +30,10 @@
     <Compile Include="MainRouteAdmission.fs" />
     <Compile Include="MainTerminalEvidence.fs" />
     <Compile Include="MainAdmissionPreparer.fs" />
+    <Compile Include="FixedNativeCapabilityDiagnostic.fs" />
+    <Compile Include="LearningInstalledReadinessSource.fs" />
+    <Compile Include="LearningJournalReadinessSource.fs" />
+    <Compile Include="LearningTelemetryReadinessSource.fs" />
     <Compile Include="LearningMainAdmission.fs" />
     <Compile Include="InstalledAdoptionVerification.fs" />
     <Compile Include="MainRouteWorkflow.fs" />
@@ -37,7 +41,6 @@
     <Compile Include="MainHostComposition.fs" />
     <Compile Include="RunnerWireRuntime.fs" />
     <Compile Include="HostRuntime.fs" />
-    <Compile Include="FixedNativeCapabilityDiagnostic.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
