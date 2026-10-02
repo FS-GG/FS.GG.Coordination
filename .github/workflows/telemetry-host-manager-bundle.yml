@@ -64,7 +64,7 @@ jobs:
           DOTNET_ROLL_FORWARD: Disable
         run: |
           set -euo pipefail
-          SOURCE_TREE="$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
           dotnet build eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj -c Release --no-restore
           dotnet build eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
           dotnet exec --fx-version "$RUNTIME_VERSION" eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
@@ -96,7 +96,7 @@ jobs:
           DOTNET_ROLL_FORWARD: Disable
         run: |
           set -euo pipefail
-          SOURCE_TREE="$(git rev-parse HEAD^{tree})"
+          SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
           cmp "$BUNDLE_OUTPUT/manifest.json" "$SERVED_OUTPUT/manifest.json"
           cmp "$BUNDLE_OUTPUT/prepared.json" "$SERVED_OUTPUT/prepared.json"
           dotnet exec --fx-version "$RUNTIME_VERSION" eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
