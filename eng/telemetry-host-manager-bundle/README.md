@@ -6,40 +6,64 @@ a package, image, release, or durable public channel.
 
 The F# boundary owns the closed archive semantics. It binds:
 
-- the exact protected Coordination commit and tree;
-- the manager project and lockfile;
-- pinned .NET SDK 10.0.400;
-- selected Microsoft.NETCore.App and hostfxr 10.0.12 closure;
-- every file emitted by `dotnet publish`;
-- `TelemetryHostManager.dll` as the entrypoint and the fixed runtime argv.
+- the exact protected Coordination commit, tree, manager project and lockfile;
+- a separate build SDK from `mcr.microsoft.com/dotnet/sdk` at linux/amd64 manifest
+  `sha256:1aabdb4843de1c426d3676bf1220bc040e540f82a765320b3eb2c693e8d0a7dd`,
+  config `sha256:690de8d26a94a08b03190ccabf1906ac4025172267a1584255f062869caf8242`,
+  SDK 10.0.400 and canonical tree SHA-256
+  `c51a26bcd972e5f1b2944a912ca57cab9878fa88a2d8110fa0300c54ba0afcb0`;
+- the target `mcr.microsoft.com/dotnet/aspnet` linux/amd64 manifest
+  `sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072`,
+  config `sha256:d84f2a8aca8b8dbf142dd6bb1ffa7a1c051085c55bf36fc2f7fa1b1f17820932`
+  and canonical hardened tree SHA-256
+  `ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2`;
+- the complete target `/usr/share/dotnet` inventory, including hostfxr,
+  Microsoft.NETCore.App 10.0.12 and Microsoft.AspNetCore.App 10.0.12;
+- every file emitted by `dotnet publish`, `TelemetryHostManager.dll` as the entrypoint,
+  and fixed target argv rooted at `/usr/share/dotnet`.
 
-The verifier rejects missing, extra, changed, duplicate, traversal, linked, oversized, stale
-source, and unsupported runtime inputs. The workflow uploads one archive plus its canonical
-manifest and prepared receipt, downloads them into a fresh directory, compares the served
-receipt bytes, and validates the downloaded archive. Actions retention is 90 days; root must
-retain verified bytes under approved custody before expiration.
+The workflow pulls both OCI inputs by manifest digest and checks their config digest and
+linux/amd64 platform. It extracts two target trees independently. Each private target tree is
+normalized to directories `0555`, `dotnet` `0555`, and all other files `0444` before the F#
+producer sees it. The build uses only the separately extracted SDK executable. Assembly runs
+in a disposable, network-disabled namespace with the target tree mounted at its final
+`/usr/share/dotnet` path. Verification reconstructs the same canonical bundle/1 manifest from
+the second target tree and requires exact path, byte and mode equality.
 
-The runtime inventory is the selected dotnet host, hostfxr version directory, and
-Microsoft.NETCore.App version directory. It is not an inventory of external operating-system
-libraries. The determinism check repeats archive assembly from the same published payload;
-independent publish reproducibility remains a later qualification boundary.
+The selected target contains 337 files and 109,735,192 bytes after normalization. The selected
+SDK contains 4,907 files and 640,105,059 bytes. These inventory digests are part of the closed
+selection, so a caller cannot attach the approved OCI label to changed extracted bytes. Changing
+an image, platform, config, SDK executable/tree, target path, file, or mode requires a reviewed
+source change to this producer.
 
-## Local check
+The verifier also rejects missing, extra, changed, duplicate, traversal, linked, oversized,
+stale-source and unsupported-runtime inputs. The archive contains the manager payload and
+manifest. It does not duplicate the target runtime because the immutable OCI manifest plus the
+canonical inventory reacquires the exact tree. Actions retention is 90 days; root must retain
+verified manager bytes under approved custody before expiration.
 
-Use the repository pinned SDK and installed runtime 10.0.12:
+## Focused local check
+
+Supply two independently extracted copies of the selected target and one extracted copy of the
+selected SDK. Normalize both target copies as described above, then run:
 
 ```console
 dotnet restore eng/telemetry-host-manager/TelemetryHostManager.fsproj --locked-mode
-dotnet restore eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj --locked-mode
 dotnet restore eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj --locked-mode
 dotnet publish eng/telemetry-host-manager/TelemetryHostManager.fsproj -c Release --no-restore -o /tmp/telemetry-host-manager-publish
 dotnet build eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
-THMB_SOURCE_ROOT="$PWD" THMB_MANAGER_PUBLISH=/tmp/telemetry-host-manager-publish THMB_RUNTIME_ROOT=/usr/share/dotnet \
-  DOTNET_ROLL_FORWARD=Disable dotnet exec --fx-version 10.0.12 \
+THMB_SOURCE_ROOT="$PWD" \
+THMB_MANAGER_PUBLISH=/tmp/telemetry-host-manager-publish \
+THMB_RUNTIME_ROOT=/tmp/target-runtime-a \
+THMB_VERIFY_RUNTIME_ROOT=/tmp/target-runtime-b \
+THMB_SDK_ROOT=/tmp/build-sdk \
+THMB_SDK_EXECUTABLE=/tmp/build-sdk/dotnet \
+  /tmp/build-sdk/dotnet exec --fx-version 10.0.11 \
   eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll
 ```
 
-The pipeline is a single linear build, assemble, upload, fresh download, and verification
-chain. Static workflow bindings and actual archive mutation tests provide the useful preflight.
-There is no retry, shared CAS, fan-out, or new lifecycle state, so a separate Quint model would
-add a parallel plan without covering another stateful risk.
+The focused suite runs the positive producer and fresh-tree verifier and refuses stale digest,
+wrong base identity, platform, root and source, changed SDK or target bytes, changed hostfxr,
+missing files, writable `0777` target content and changed modes before any manifest or archive is
+written. It retains the existing archive mutation coverage. This selection is stateless input
+validation, so it introduces no lifecycle state or parallel formal model.

@@ -18,24 +18,27 @@ concurrency:
 jobs:
   build-upload-readback:
     if: github.ref == 'refs/heads/main'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 30
     env:
       MANAGER_OUTPUT: /tmp/fsgg-${{ github.run_id }}-manager-publish
       BUNDLE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-manager-bundle
       SERVED_OUTPUT: /tmp/fsgg-${{ github.run_id }}-manager-served
+      SDK_ROOT: /tmp/fsgg-${{ github.run_id }}-sdk
+      TARGET_RUNTIME_ROOT: /tmp/fsgg-${{ github.run_id }}-target-runtime
+      VERIFY_RUNTIME_ROOT: /tmp/fsgg-${{ github.run_id }}-verify-runtime
       RUNTIME_VERSION: 10.0.12
+      TARGET_PLATFORM: linux/amd64
+      RUNTIME_IMAGE: mcr.microsoft.com/dotnet/aspnet@sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072
+      RUNTIME_CONFIG_DIGEST: sha256:d84f2a8aca8b8dbf142dd6bb1ffa7a1c051085c55bf36fc2f7fa1b1f17820932
+      SDK_IMAGE: mcr.microsoft.com/dotnet/sdk@sha256:1aabdb4843de1c426d3676bf1220bc040e540f82a765320b3eb2c693e8d0a7dd
+      SDK_CONFIG_DIGEST: sha256:690de8d26a94a08b03190ccabf1906ac4025172267a1584255f062869caf8242
     steps:
       - name: Check out exact protected source
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           ref: ${{ github.sha }}
           fetch-depth: 0
-      - name: Set up pinned .NET SDK
-        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
-        with:
-          dotnet-version: 10.0.400
-          global-json-file: global.json
       - name: Bind protected-main source
         shell: bash
         env:
@@ -48,33 +51,84 @@ jobs:
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
-      - name: Restore locked manager and bundle projects
+      - name: Acquire immutable build SDK and two target runtime trees
+        shell: bash
         run: |
-          dotnet restore eng/telemetry-host-manager/TelemetryHostManager.fsproj --locked-mode
-          dotnet restore eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj --locked-mode
-          dotnet restore eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj --locked-mode
-      - name: Publish actual framework-dependent manager
+          set -euo pipefail
+          docker pull --platform "$TARGET_PLATFORM" "$SDK_IMAGE"
+          docker pull --platform "$TARGET_PLATFORM" "$RUNTIME_IMAGE"
+          test "$(docker image inspect --format '{{.Id}}' "$SDK_IMAGE")" = "$SDK_CONFIG_DIGEST"
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$SDK_IMAGE")" = "$TARGET_PLATFORM"
+          test "$(docker image inspect --format '{{.Id}}' "$RUNTIME_IMAGE")" = "$RUNTIME_CONFIG_DIGEST"
+          test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$RUNTIME_IMAGE")" = "$TARGET_PLATFORM"
+          sdk_container="$(docker create --platform "$TARGET_PLATFORM" "$SDK_IMAGE")"
+          target_container="$(docker create --platform "$TARGET_PLATFORM" "$RUNTIME_IMAGE")"
+          verify_container="$(docker create --platform "$TARGET_PLATFORM" "$RUNTIME_IMAGE")"
+          cleanup() {
+            docker rm -f "$sdk_container" "$target_container" "$verify_container" >/dev/null
+          }
+          trap cleanup EXIT
+          mkdir -p "$SDK_ROOT" "$TARGET_RUNTIME_ROOT" "$VERIFY_RUNTIME_ROOT"
+          docker cp "$sdk_container:/usr/share/dotnet/." "$SDK_ROOT"
+          docker cp "$target_container:/usr/share/dotnet/." "$TARGET_RUNTIME_ROOT"
+          docker cp "$verify_container:/usr/share/dotnet/." "$VERIFY_RUNTIME_ROOT"
+          test -z "$(find "$SDK_ROOT" "$TARGET_RUNTIME_ROOT" "$VERIFY_RUNTIME_ROOT" -type l -print -quit)"
+          for root in "$TARGET_RUNTIME_ROOT" "$VERIFY_RUNTIME_ROOT"; do
+            find "$root" -type d -exec chmod 0555 {} +
+            find "$root" -type f -exec chmod 0444 {} +
+            chmod 0555 "$root/dotnet"
+          done
+          test "$("$SDK_ROOT/dotnet" --version)" = "10.0.400"
+          test "$("$TARGET_RUNTIME_ROOT/dotnet" --list-runtimes | grep -c '^Microsoft.NETCore.App 10.0.12 ')" = 1
+          test "$("$TARGET_RUNTIME_ROOT/dotnet" --list-runtimes | grep -c '^Microsoft.AspNetCore.App 10.0.12 ')" = 1
+      - name: Restore and build with the selected immutable SDK tree
         env:
+          DOTNET_ROOT: ${{ env.SDK_ROOT }}
           DOTNET_ROLL_FORWARD: Disable
-        run: >-
-          dotnet publish eng/telemetry-host-manager/TelemetryHostManager.fsproj
-          -c Release --no-restore -o "$MANAGER_OUTPUT"
-      - name: Build and validate exact manager archive
+        run: |
+          set -euo pipefail
+          "$SDK_ROOT/dotnet" restore eng/telemetry-host-manager/TelemetryHostManager.fsproj --locked-mode
+          "$SDK_ROOT/dotnet" restore eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj --locked-mode
+          "$SDK_ROOT/dotnet" restore eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj --locked-mode
+          "$SDK_ROOT/dotnet" publish eng/telemetry-host-manager/TelemetryHostManager.fsproj -c Release --no-restore -o "$MANAGER_OUTPUT"
+          "$SDK_ROOT/dotnet" build eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj -c Release --no-restore
+          "$SDK_ROOT/dotnet" build eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
+      - name: Assemble and verify against independently acquired target trees
         env:
           DOTNET_ROLL_FORWARD: Disable
         run: |
           set -euo pipefail
           SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
-          dotnet build eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj -c Release --no-restore
-          dotnet build eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
-          dotnet exec --fx-version "$RUNTIME_VERSION" eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
-            assemble --source-root "$GITHUB_WORKSPACE" --publish "$MANAGER_OUTPUT" --runtime-root "$DOTNET_ROOT" \
-            --source-revision "$GITHUB_SHA" --source-tree "$SOURCE_TREE" --runtime-version "$RUNTIME_VERSION" --output "$BUNDLE_OUTPUT"
-          THMB_SOURCE_ROOT="$GITHUB_WORKSPACE" THMB_MANAGER_PUBLISH="$MANAGER_OUTPUT" THMB_RUNTIME_ROOT="$DOTNET_ROOT" \
-            dotnet exec --fx-version "$RUNTIME_VERSION" eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll
-          dotnet exec --fx-version "$RUNTIME_VERSION" eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
-            verify --source-root "$GITHUB_WORKSPACE" --runtime-root "$DOTNET_ROOT" --expected-revision "$GITHUB_SHA" \
-            --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json"
+          common=(
+            --runtime-image mcr.microsoft.com/dotnet/aspnet
+            --runtime-manifest-digest sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072
+            --runtime-config-digest "$RUNTIME_CONFIG_DIGEST" --runtime-os linux --runtime-architecture amd64
+            --runtime-canonical-root /usr/share/dotnet
+            --sdk-image mcr.microsoft.com/dotnet/sdk
+            --sdk-manifest-digest sha256:1aabdb4843de1c426d3676bf1220bc040e540f82a765320b3eb2c693e8d0a7dd
+            --sdk-config-digest "$SDK_CONFIG_DIGEST" --sdk-os linux --sdk-architecture amd64
+            --sdk-root "$SDK_ROOT" --sdk-executable "$SDK_ROOT/dotnet"
+          )
+          mkdir -p "$BUNDLE_OUTPUT"
+          docker run --rm --network none --platform "$TARGET_PLATFORM" --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" --volume "$MANAGER_OUTPUT:$MANAGER_OUTPUT:ro" \
+            --volume "$BUNDLE_OUTPUT:$BUNDLE_OUTPUT" --volume "$SDK_ROOT:$SDK_ROOT:ro" \
+            --volume "$TARGET_RUNTIME_ROOT:/usr/share/dotnet:ro" --workdir "$GITHUB_WORKSPACE" \
+            "$SDK_IMAGE" /usr/share/dotnet/dotnet exec --fx-version "$RUNTIME_VERSION" \
+            eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
+            assemble --source-root "$GITHUB_WORKSPACE" --publish "$MANAGER_OUTPUT" --runtime-root /usr/share/dotnet \
+            --source-revision "$GITHUB_SHA" --source-tree "$SOURCE_TREE" --runtime-version "$RUNTIME_VERSION" --output "$BUNDLE_OUTPUT" "${common[@]}"
+          THMB_SOURCE_ROOT="$GITHUB_WORKSPACE" THMB_MANAGER_PUBLISH="$MANAGER_OUTPUT" THMB_RUNTIME_ROOT="$TARGET_RUNTIME_ROOT" \
+            THMB_VERIFY_RUNTIME_ROOT="$VERIFY_RUNTIME_ROOT" THMB_SDK_ROOT="$SDK_ROOT" THMB_SDK_EXECUTABLE="$SDK_ROOT/dotnet" \
+            DOTNET_ROOT="$SDK_ROOT" "$SDK_ROOT/dotnet" exec --fx-version 10.0.11 \
+            eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll
+          docker run --rm --network none --platform "$TARGET_PLATFORM" --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" --volume "$BUNDLE_OUTPUT:$BUNDLE_OUTPUT:ro" \
+            --volume "$SDK_ROOT:$SDK_ROOT:ro" --volume "$VERIFY_RUNTIME_ROOT:/usr/share/dotnet:ro" --workdir "$GITHUB_WORKSPACE" \
+            "$SDK_IMAGE" /usr/share/dotnet/dotnet exec --fx-version "$RUNTIME_VERSION" \
+            eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
+            verify --source-root "$GITHUB_WORKSPACE" --runtime-root /usr/share/dotnet --expected-revision "$GITHUB_SHA" \
+            --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json" "${common[@]}"
       - name: Upload exact manager archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -99,7 +153,16 @@ jobs:
           SOURCE_TREE="$(git rev-parse 'HEAD^{tree}')"
           cmp "$BUNDLE_OUTPUT/manifest.json" "$SERVED_OUTPUT/manifest.json"
           cmp "$BUNDLE_OUTPUT/prepared.json" "$SERVED_OUTPUT/prepared.json"
-          dotnet exec --fx-version "$RUNTIME_VERSION" eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
-            verify --source-root "$GITHUB_WORKSPACE" --runtime-root "$DOTNET_ROOT" --expected-revision "$GITHUB_SHA" \
-            --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json" \
+          docker run --rm --network none --platform "$TARGET_PLATFORM" --user "$(id -u):$(id -g)" \
+            --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" --volume "$BUNDLE_OUTPUT:$BUNDLE_OUTPUT:ro" \
+            --volume "$SERVED_OUTPUT:$SERVED_OUTPUT:ro" --volume "$SDK_ROOT:$SDK_ROOT:ro" \
+            --volume "$VERIFY_RUNTIME_ROOT:/usr/share/dotnet:ro" --workdir "$GITHUB_WORKSPACE" \
+            "$SDK_IMAGE" /usr/share/dotnet/dotnet exec --fx-version "$RUNTIME_VERSION" \
+            eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
+            verify --source-root "$GITHUB_WORKSPACE" --runtime-root /usr/share/dotnet --runtime-canonical-root /usr/share/dotnet \
+            --runtime-image mcr.microsoft.com/dotnet/aspnet --runtime-manifest-digest sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072 \
+            --runtime-config-digest "$RUNTIME_CONFIG_DIGEST" --runtime-os linux --runtime-architecture amd64 \
+            --sdk-image mcr.microsoft.com/dotnet/sdk --sdk-manifest-digest sha256:1aabdb4843de1c426d3676bf1220bc040e540f82a765320b3eb2c693e8d0a7dd \
+            --sdk-config-digest "$SDK_CONFIG_DIGEST" --sdk-os linux --sdk-architecture amd64 --sdk-root "$SDK_ROOT" --sdk-executable "$SDK_ROOT/dotnet" \
+            --expected-revision "$GITHUB_SHA" --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json" \
             --archive "$SERVED_OUTPUT/telemetry-host-manager-net10.0-$GITHUB_SHA.zip"
