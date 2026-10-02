@@ -142,7 +142,7 @@ class SourceCapsuleTests(unittest.TestCase):
             transport={"releaseId":"30","assetId":"31","tag":"fourd-source-12345-02","name":"fourd-source-run-12345-02.capsule.json",
                 "ciphertextBytes":sealed.stat().st_size,"ciphertextSha256":hashlib.sha256(sealed.read_bytes()).hexdigest(),
                 "descriptor":descriptor,"descriptorSha256":profile,"recipientPublicKeySha256":hashlib.sha256(public_key.read_bytes()).hexdigest()}
-            admitted={"runNonce":run,"sourceCapsule":transport}
+            admitted={"runId":"12345","runAttempt":"2","runNonce":run,"sourceCapsule":transport}
             metadata=json.dumps({"id":30,"tag_name":transport["tag"],"assets":[{"id":31,"name":transport["name"],"size":transport["ciphertextBytes"]}]}).encode()
             class Response:
                 def __init__(self,data,url):self.data=data;self.url=url;self.offset=0
@@ -159,6 +159,33 @@ class SourceCapsuleTests(unittest.TestCase):
             self.assertEqual(expected["sourceSha"],subprocess.check_output(["git","rev-parse","HEAD"],cwd=source,text=True).strip())
             self.assertFalse((private/"credentials").exists());self.assertTrue((private/"source-acquisition.json").is_file())
             self.assertNotIn(qualify.ADMISSION_SECRET,env);self.assertNotIn(qualify.KEY_SECRET,env)
+
+            class TypedFixture:
+                def admit(self,**_kwargs): return {"phase":"admitted","successful":False,"cleanupComplete":False}
+                def transition(self,*,name,state,**_kwargs):
+                    if name=="finish-source": return {**state,"phase":"finished","successful":True,"cleanupComplete":True}
+                    return state
+            route=root/"route";route.mkdir();capacity=route/"capacity.json"
+            capacity.write_text(json.dumps({"schema":"fsgg.fourd.public-provider-capacity/1","phase":"capacity",
+                "capacityScreenPassed":True,"qualified":False}))
+            args=type("Args",(),{"output":str(route/"public/result.json"),"capacity_result":str(capacity),
+                "public_source":str(ROOT),"setup_dotnet":str(route/"setup"),"p2_source":str(route/"p2"),
+                "known_hosts":str(ROOT/"eng/fourd-public-provider/github-known-hosts"),"private_root":str(route/"private")})()
+            route_env={"GITHUB_RUN_ID":"12345","GITHUB_RUN_ATTEMPT":"2"}
+            with mock.patch.multiple(qualify,FOURD_SHA=expected["sourceSha"],FOURD_TREE=expected["sourceTree"],FOURD_INVENTORY=expected["inventorySha256"]), \
+                 mock.patch.object(qualify.urllib.request,"build_opener",return_value=Opener()), \
+                 mock.patch.object(qualify,"verify_public_checkout",return_value=("a"*40,"b"*40)), \
+                 mock.patch.object(qualify,"verify_public_tools"),mock.patch.object(qualify,"verify_fixed_tools"), \
+                 mock.patch.object(qualify,"admission",return_value=(admitted,private_key.read_bytes())), \
+                 mock.patch.object(qualify,"typed_module",return_value=TypedFixture()), \
+                 mock.patch.object(qualify,"validate_checkout"), \
+                 mock.patch.object(qualify,"git_inventory",return_value=expected["inventorySha256"]):
+                status=qualify.acquire(args,route_env,qualify.Effects())
+                detail=(route/"public/result.json").read_text() if (route/"public/result.json").exists() else "no-result"
+                self.assertEqual(0,status,detail)
+            acquired=route/"private/source"
+            self.assertEqual(expected["sourceSha"],subprocess.check_output(["git","rev-parse","HEAD"],cwd=acquired,text=True).strip())
+            self.assertTrue((route/"private/source-acquisition.json").is_file())
 
 
 if __name__ == "__main__": unittest.main()

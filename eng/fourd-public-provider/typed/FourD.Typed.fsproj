@@ -8,6 +8,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="FourDOperationModel.fs" />
+    <Compile Include="FailureDiagnostic.fs" />
     <Compile Include="Join.fs" />
     <Compile Include="Policy.fs" />
     <Compile Include="RunObservation.fs" />

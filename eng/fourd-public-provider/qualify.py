@@ -8,6 +8,7 @@ import base64
 import binascii
 import ctypes
 import datetime as dt
+import errno
 import hashlib
 import json
 import os
@@ -88,9 +89,12 @@ class Refusal(RuntimeError):
     pass
 
 
-class AcquisitionRefusal(Refusal):
-    def __init__(self, code: str, original_failure: str, cleanup_complete: bool):
-        super().__init__(code); self.original_failure = original_failure; self.cleanup_complete = cleanup_complete
+class AcquisitionRefusal(RuntimeError):
+    def __init__(self, callsite: str, original: BaseException, cleanup_complete: bool):
+        super().__init__("source-acquisition-refused")
+        self.callsite = callsite
+        self.original = original
+        self.cleanup_complete = cleanup_complete
 
 
 def source_module():
@@ -119,6 +123,66 @@ def typed_module():
     __import__("sys").modules[name] = module
     spec.loader.exec_module(module)
     return module
+
+
+def _os_category(error: OSError) -> str:
+    if isinstance(error, FileNotFoundError) or error.errno == errno.ENOENT: return "os-not-found"
+    if isinstance(error, PermissionError) or error.errno in (errno.EACCES, errno.EPERM): return "os-permission"
+    if isinstance(error, TimeoutError) or error.errno == errno.ETIMEDOUT: return "os-timeout"
+    return "os-io"
+
+
+def _failure_observation(error: BaseException, callsite: str, cleanup_complete: bool) -> tuple[str, str, str | None, bool]:
+    if isinstance(error, AcquisitionRefusal):
+        return _failure_observation(error.original, error.callsite, cleanup_complete and error.cleanup_complete)
+    if isinstance(error, Refusal):
+        return callsite, "closed-refusal", str(error), cleanup_complete
+    capsule_type = getattr(source_module(), "CapsuleRefusal", ())
+    if isinstance(error, capsule_type):
+        return callsite, "capsule-refusal", str(error), cleanup_complete
+    if isinstance(error, OSError):
+        return callsite, _os_category(error), None, cleanup_complete
+    return callsite, "unexpected", None, cleanup_complete
+
+
+def project_failure(*, runner, public_source: pathlib.Path, public: pathlib.Path, name: str,
+                    error: BaseException, callsite: str, cleanup_complete: bool) -> tuple[str, bool]:
+    observed_callsite, category, token, observed_cleanup = _failure_observation(error, callsite, cleanup_complete)
+    work = public / ("typed-failure-" + name)
+    try:
+        _private_dir(work)
+        value = typed_module().project_failure(runner=runner, source_root=public_source, work=work, name=name,
+            callsite=observed_callsite, category=category, token=token, cleanup_complete=observed_cleanup)
+        code = value.get("failureCode")
+        if value.get("ready") is not False or not isinstance(code, str) or not code or len(code) > 64:
+            raise Refusal("typed-failure-projection-refused")
+        return code, value.get("cleanupComplete") is True
+    except Exception:
+        return "qualification-refused", observed_cleanup
+    finally:
+        shutil.rmtree(work, ignore_errors=True)
+
+
+def verify_fixed_tools(*, runner, public_source: pathlib.Path, public: pathlib.Path) -> None:
+    for name, path in (("git", pathlib.Path("/usr/bin/git")), ("node", pathlib.Path("/usr/bin/node")),
+                       ("openssl", pathlib.Path("/usr/bin/openssl"))):
+        category = "available"
+        try:
+            if not path.is_file(): category = "os-not-found"
+            elif not os.access(path, os.X_OK): category = "os-permission"
+        except OSError as error:
+            category = _os_category(error)
+        work = public / ("typed-tool-" + name)
+        try:
+            _private_dir(work)
+            value = typed_module().project_failure(runner=runner, source_root=public_source, work=work,
+                name="tool-"+name, callsite="tool-"+name, category=category, token=None,
+                cleanup_complete=True)
+            if value.get("ready") is not True:
+                code=value.get("failureCode")
+                raise Refusal(code if isinstance(code,str) and code else "qualification-refused")
+        finally:
+            shutil.rmtree(work, ignore_errors=True)
 
 
 @dataclass(frozen=True)
@@ -748,6 +812,7 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
                 "GIT_CONFIG_NOSYSTEM": "1", "GIT_CONFIG_GLOBAL": "/dev/null", "GIT_TERMINAL_PROMPT": "0"}
     capsule = admission_value["sourceCapsule"]
     original: BaseException | None = None
+    failure_callsite = "source-recipient"
     receipt: dict[str, object] | None = None
     try:
         key_file = HeldFile.create(key_path, key); held.append(key_file)
@@ -756,6 +821,7 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
                              capture=capture / "source-key-readback.json", pass_fds=(key_file.fd,))
         if public.returncode or hashlib.sha256(public.stdout).hexdigest() != capsule["recipientPublicKeySha256"]:
             raise Refusal("source-recipient-key-refused")
+        failure_callsite = "source-release-metadata"
         metadata_url = "https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/" + capsule["releaseId"]
         metadata_request = urllib.request.Request(metadata_url, headers={"Accept":"application/vnd.github+json",
             "User-Agent":"fsgg-fourd-source-acquisition/1", "X-GitHub-Api-Version":"2022-11-28"})
@@ -763,12 +829,14 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
                                                hosts={"api.github.com"}, effects=effects)
         try: metadata = json.loads(metadata_raw)
         except json.JSONDecodeError as error: raise Refusal("source-release-readback-refused") from error
-        assets = metadata.get("assets") if isinstance(metadata, dict) else None
+        if not isinstance(metadata, dict): raise Refusal("source-release-readback-refused")
+        assets = metadata.get("assets")
         matching = [item for item in assets or [] if isinstance(item, dict) and str(item.get("id")) == capsule["assetId"]]
         if (str(metadata.get("id")) != capsule["releaseId"] or metadata.get("tag_name") != capsule["tag"]
                 or len(matching) != 1 or matching[0].get("name") != capsule["name"]
                 or matching[0].get("size") != capsule["ciphertextBytes"]):
             raise Refusal("source-release-binding-refused")
+        failure_callsite = "source-download"
         asset_url = "https://api.github.com/repos/FS-GG/FS.GG.Coordination/releases/assets/" + capsule["assetId"]
         request = urllib.request.Request(asset_url, headers={"Accept":"application/octet-stream",
             "User-Agent":"fsgg-fourd-source-acquisition/1", "X-GitHub-Api-Version":"2022-11-28"})
@@ -777,11 +845,13 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
             effects=effects)
         if len(raw) != capsule["ciphertextBytes"] or hashlib.sha256(raw).hexdigest() != capsule["ciphertextSha256"]:
             raise Refusal("source-download-binding-refused")
+        failure_callsite = "source-outer-capsule"
         module = source_module()
         descriptor_raw = json.dumps(capsule["descriptor"], sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
         profile = hashlib.sha256(descriptor_raw).hexdigest()
         module.validate_outer_capsule(raw, str(admission_value["runNonce"]) + "-source", FOURD_SHA, profile)
         capsule_file = HeldFile.create(capsule_path, raw); held.append(capsule_file)
+        failure_callsite = "source-unseal"
         unseal_failure: BaseException | None = None
         try:
             remaining = deadline - time.monotonic()
@@ -800,6 +870,7 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
             except BaseException as error:
                 if unseal_failure is None: unseal_failure = error
         if unseal_failure is not None: raise unseal_failure
+        failure_callsite = "source-plaintext"
         plaintext_file = held[-1]
         if plaintext_file.path != plaintext_path: raise Refusal("source-plaintext-refused")
         plaintext = plaintext_file.read(16 * 1024 * 1024)
@@ -807,6 +878,7 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
         if len(plaintext) != descriptor["plaintextBytes"] or hashlib.sha256(plaintext).hexdigest() != descriptor["plaintextSha256"]:
             raise Refusal("source-plaintext-binding-refused")
         reserve = NATIVE_SUPERVISOR_GRACE + TERM_SETTLE_SECONDS + KILL_SETTLE_SECONDS + WAIT_SECONDS + DRAIN_SECONDS
+        failure_callsite = "source-reconstruction"
         def reconstruction_runner(argv: list[str], cwd: pathlib.Path, _timeout: float) -> bytes:
             remaining = deadline - time.monotonic()
             if remaining <= reserve + 1 or effects.cancelled: raise module.CapsuleRefusal("git-reconstruction-timeout")
@@ -839,8 +911,9 @@ def acquire_source(key: bytes, admission_value: Mapping[str, object], private: p
         os.environ.pop(ADMISSION_SECRET, None); os.environ.pop(KEY_SECRET, None)
         key = b""  # noqa: F841
     if not cleanup_complete or credentials.exists():
-        raise AcquisitionRefusal("source-key-cleanup-refused", str(original or "none"), False) from original
-    if original is not None: raise original
+        raise AcquisitionRefusal(failure_callsite, original or Refusal("source-cleanup-refused"), False) from original
+    if isinstance(original, Refusal): raise original
+    if original is not None: raise AcquisitionRefusal(failure_callsite, original, True) from original
     assert receipt is not None
     _write_new(private / "source-acquisition.json", json.dumps(receipt, sort_keys=True, separators=(",", ":")).encode() + b"\n")
     return source
@@ -1164,20 +1237,26 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
     result = base_result(env, "failed"); runner = effects or Effects(); private = pathlib.Path(args.private_root)
     private_identity: tuple[int, int] | None = None; prepared = False
     typed_state: dict[str, object] | None = None; typed_work: pathlib.Path | None = None
+    failure_callsite = "capacity"; public_source = pathlib.Path(args.public_source)
     old_handlers = {sig: signal.getsignal(sig) for sig in (signal.SIGINT, signal.SIGTERM)}
     for sig in old_handlers: signal.signal(sig, runner.request_cancel)
     try:
         verify_capacity(pathlib.Path(args.capacity_result)); result["capacityPassed"] = True
-        public_source = pathlib.Path(args.public_source); capture = public / "placement-capture"; _private_dir(capture)
+        failure_callsite = "public-placement"
+        capture = public / "placement-capture"; _private_dir(capture)
         placement_sha, placement_tree = verify_public_checkout(public_source, env, runner, capture)
         shutil.rmtree(capture); result.update(placementSha=placement_sha, placementTree=placement_tree)
+        failure_callsite = "public-tools"
         verify_public_tools(public_source, pathlib.Path(args.setup_dotnet), pathlib.Path(args.p2_source))
+        failure_callsite = "admission"
         admitted, key = admission(env)
         if admitted is None:
             result["outcome"] = "awaiting-exact-admission"; write_result(output, result); return 0
+        verify_fixed_tools(runner=runner, public_source=public_source, public=public)
         _private_dir(private); private_stat = private.lstat(); private_identity = (private_stat.st_dev, private_stat.st_ino)
         (private / "home").mkdir(mode=0o700)
         typed_work = public / "typed-acquisition"; _private_dir(typed_work)
+        failure_callsite = "typed-admission"
         try:
             typed_state = typed_module().admit(runner=runner, source_root=public_source, work=typed_work,
                                                admission=admitted, placement_sha=placement_sha,
@@ -1189,7 +1268,9 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
                 observation={"kind":"begin-effect", "resource":"source-acquisition", "acknowledged":False}, state=typed_state)
         except Exception as error:
             raise Refusal("typed-policy-admission-refused") from error
+        failure_callsite = "source-recipient"
         source = acquire_source(key or b"", admitted, private, pathlib.Path(args.known_hosts), runner, env)
+        failure_callsite = "source-validation"
         safe_env = {"PATH":"/usr/bin:/bin", "HOME":str(private / "home"), "LANG":"C.UTF-8"}
         validate_checkout(source, runner, safe_env, private / "capture")
         if git_inventory(source, runner, safe_env, private / "capture/inventory.json") != FOURD_INVENTORY:
@@ -1220,22 +1301,18 @@ def acquire(args: argparse.Namespace, environ: dict[str, str] | None = None, eff
         prepared = True
         shutil.rmtree(typed_work); typed_work = None
         return 0
-    except Refusal as error:
+    except Exception as error:
         cleanup_ok = remove_owned_root(private, private_identity)
+        if isinstance(error, AcquisitionRefusal): cleanup_ok = cleanup_ok and error.cleanup_complete
         if typed_work is not None:
-            cleanup_ok=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
+            cleanup_ok=settle_typed_failure(runner=runner,public_source=public_source,work=typed_work,
                                             state=typed_state,cleanup_complete=cleanup_ok)
         if typed_work is not None: shutil.rmtree(typed_work, ignore_errors=True)
-        result["outcome"] = "refused"; result["failureCode"] = str(error) if len(str(error)) <= 64 else "qualification-refused"
-        if not cleanup_ok: result["failureCode"] = "source-cleanup-refused"
-        write_result(output, result); return 2
-    except Exception:
-        cleanup_ok = remove_owned_root(private, private_identity)
-        if typed_work is not None:
-            cleanup_ok=settle_typed_failure(runner=runner,public_source=pathlib.Path(args.public_source),work=typed_work,
-                                            state=typed_state,cleanup_complete=cleanup_ok)
-        if typed_work is not None: shutil.rmtree(typed_work, ignore_errors=True)
-        result["outcome"] = "failed"; result["failureCode"] = "qualification-refused" if cleanup_ok else "source-cleanup-refused"
+        code, _observed_cleanup = project_failure(runner=runner, public_source=public_source, public=public,
+            name="acquire", error=error, callsite=failure_callsite, cleanup_complete=cleanup_ok)
+        original = error.original if isinstance(error, AcquisitionRefusal) else error
+        result["outcome"] = "refused" if isinstance(original, Refusal) else "failed"
+        result["failureCode"] = code
         write_result(output, result); return 2
     finally:
         env.pop(ADMISSION_SECRET, None); env.pop(KEY_SECRET, None)

@@ -24,6 +24,34 @@ def identity(admission: Mapping[str, object]) -> str:
     return hashlib.sha256(raw).hexdigest()
 
 
+def project_failure(*, runner, source_root: pathlib.Path, work: pathlib.Path, name: str,
+                    callsite: str, category: str, token: str | None,
+                    cleanup_complete: bool) -> dict[str, object]:
+    request = {"schema":"fsgg.fourd.failure-diagnostic-request/1", "callsite":callsite,
+               "category":category, "token":token, "cleanupComplete":cleanup_complete}
+    raw = json.dumps(request, sort_keys=True, separators=(",", ":"), ensure_ascii=True).encode() + b"\n"
+    if len(raw) > MAX_POLICY_BYTES:
+        raise TypedPolicyRefusal("typed-failure-input-refused")
+    input_path, output_path = work / f"failure-{name}.request.json", work / f"failure-{name}.result.json"
+    input_path.write_bytes(raw); os.chmod(input_path, 0o600)
+    result = runner.run([str(executable(source_root)), "project-failure", str(input_path), str(output_path)],
+                        cwd=source_root, env={"PATH":"/usr/bin:/bin", "LANG":"C.UTF-8"}, timeout=30,
+                        capture=work / f"failure-{name}.process.json", allow_cancelled=True)
+    if result.returncode != 0:
+        raise TypedPolicyRefusal("typed-failure-projection-refused")
+    try:
+        encoded = output_path.read_bytes(); value = json.loads(encoded)
+    except (OSError, json.JSONDecodeError) as error:
+        raise TypedPolicyRefusal("typed-failure-projection-refused") from error
+    expected = {"schema","accepted","ready","failureCode","cleanupComplete"}
+    if (len(encoded) > MAX_POLICY_BYTES or not isinstance(value, dict) or set(value) != expected
+            or value.get("schema") != "fsgg.fourd.failure-diagnostic/1" or value.get("accepted") is not True
+            or type(value.get("ready")) is not bool or type(value.get("cleanupComplete")) is not bool
+            or (value.get("failureCode") is not None and not isinstance(value.get("failureCode"), str))):
+        raise TypedPolicyRefusal("typed-failure-projection-refused")
+    return value
+
+
 def executable(source_root: pathlib.Path) -> pathlib.Path:
     configured = os.environ.get("FSGG_FOURD_TYPED_POLICY", "")
     value = pathlib.Path(configured) if configured else source_root / "eng/fourd-public-provider/typed/publish/FourD.Typed"
