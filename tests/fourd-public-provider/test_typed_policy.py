@@ -9,6 +9,7 @@ import tempfile
 import unittest
 import datetime as dt
 import hashlib
+import base64
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location("typed_policy", ROOT / "eng/fourd-public-provider/typed_policy.py")
@@ -72,6 +73,64 @@ class ActualRunner:
         pathlib.Path(capture).write_text(json.dumps({"returncode":process.returncode}))
         return Result(process)
 
+def run_expected(identity="a"*64):
+    return {"rootJoinIdentity":identity,"repository":"FS-GG/FS.GG.Coordination","repositoryId":1346720714,
+            "runId":12345,"workflowPath":".github/workflows/fourd-public-provider-qualification.yml",
+            "event":"workflow_dispatch","headBranch":"qualification/fourd-native-20261001","headSha":"b"*40,
+            "originalActorId":17,"triggeringActorId":17,"producerSha256":"c"*64,"packetManifestSha256":"d"*64}
+
+def run_snapshot(attempt,status,conclusion,**changes):
+    value=dict(run_expected());value.pop("rootJoinIdentity");value.update(
+        attempt=attempt,status=status,conclusion=conclusion)
+    value.update(changes);return value
+
+def observe_run(work,index,lifecycle,run_state,event,expected=None,accepted=True):
+    event=dict(event)
+    if event["kind"] in ("observe-current","observe-target") and "snapshot" in event:
+        value=event.pop("snapshot"); status=event.pop("httpStatus")
+        raw=None if value is None else {"repository":{"full_name":value["repository"],"id":value["repositoryId"]},
+            "id":value["runId"],"run_attempt":value["attempt"],"path":value["workflowPath"],"event":value["event"],
+            "head_branch":value["headBranch"],"head_sha":value["headSha"],"actor":{"id":value["originalActorId"]},
+            "triggering_actor":{"id":value["triggeringActorId"]},"status":value["status"],"conclusion":value["conclusion"]}
+        body=json.dumps(raw,separators=(",",":"),sort_keys=True).encode()
+        event["response"]={"httpStatus":status,"bodyBase64":base64.b64encode(body).decode(),"linkHeaders":[],
+                           "endpointRunId":12345,"endpointAttempt":0 if event["kind"]=="observe-current" else 2}
+    if event["kind"]=="observe-jobs" and "jobs" in event:
+        value=event.pop("jobs");status=event.pop("httpStatus")
+        raw={"total_count":value["totalCount"],"jobs":[dict(id=j["id"],run_id=12345,run_attempt=2,
+             head_sha="b"*40,name=j["name"],status=j["status"],conclusion=j["conclusion"]) for j in value["jobs"]]}
+        body=json.dumps(raw,separators=(",",":"),sort_keys=True).encode()
+        event["response"]={"httpStatus":status,"bodyBase64":base64.b64encode(body).decode(),"linkHeaders":[],"endpointRunId":12345,"endpointAttempt":2}
+    if event["kind"]=="enter-cleanup":event.setdefault("signalCancelled",False)
+    if event["kind"]=="record-resources-retired" and "allClosed" in event:
+        closed=event.pop("allClosed")
+        event["facts"]={"secretCount":0 if closed else 1,"releaseCount":0,"assetStatus":"404","releaseStatus":"404",
+                        "tagStatus":"404","privateKeyAbsent":True,"publicKeyAbsent":True,"failureCount":0 if closed else 1}
+    request={"schema":"fsgg.fourd.root-run-request/1","lifecycleState":lifecycle,"runState":run_state,
+             "expected":expected or run_expected(),"event":event}
+    source=work/f"observe-{index}.json";output=work/f"observe-{index}.out"
+    source.write_text(json.dumps(request,sort_keys=True,separators=(",",":")))
+    process=subprocess.run([str(EXE),"observe-run",str(source),str(output)],check=False,capture_output=True)
+    if accepted:
+        if process.returncode != 0: raise AssertionError(process.stderr)
+        return json.loads(output.read_text())
+    if process.returncode == 0: raise AssertionError("typed observation unexpectedly accepted")
+    return None
+
+def effect_lifecycle(work):
+    runner=ActualRunner();identity="a"*64
+    state=typed.transition(runner=runner,source_root=ROOT,work=work,name="run-acquire",
+        observation={"kind":"acquire","identity":identity,"resource":"transport-intent","cost":0},budget=2700)
+    state=typed.transition(runner=runner,source_root=ROOT,work=work,name="run-validate",
+        observation={"kind":"validate","identity":identity,"cost":0},state=state)
+    state=typed.transition(runner=runner,source_root=ROOT,work=work,name="run-admit",
+        observation={"kind":"admit","identity":identity,"cost":0},state=state)
+    state=typed.transition(runner=runner,source_root=ROOT,work=work,name="run-effect",
+        observation={"kind":"begin-effect","resource":"remote-operation","acknowledged":False,"cost":0},state=state)
+    # Run protocol fixtures start their explicit absolute monotonic trace at zero.
+    state["budgetRemaining"]=2700
+    return state
+
 class TypedPolicyTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -97,6 +156,131 @@ class TypedPolicyTests(unittest.TestCase):
                         observation={"kind":"begin-effect", "resource":"native", "acknowledged":False, "cost":1}, state=stale)
             finally:
                 os.environ.pop("FSGG_FOURD_TYPED_POLICY", None)
+
+    def test_root_run_stale_attempt_then_exact_target_success_requires_full_settlement(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work=pathlib.Path(temporary);os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                lifecycle=effect_lifecycle(work);state=None
+                events=[
+                    {"kind":"record-rerun-intent","elapsedSeconds":1},
+                    {"kind":"record-rerun-result","elapsedSeconds":2,"acknowledged":True},
+                    {"kind":"observe-current","elapsedSeconds":3,"sequence":1,"httpStatus":200,"snapshot":run_snapshot(1,"queued",None)},
+                    {"kind":"observe-current","elapsedSeconds":23,"sequence":2,"httpStatus":200,"snapshot":run_snapshot(2,"in_progress",None)},
+                    {"kind":"observe-current","elapsedSeconds":43,"sequence":3,"httpStatus":200,"snapshot":run_snapshot(2,"completed","success")},
+                    {"kind":"observe-target","elapsedSeconds":44,"sequence":4,"httpStatus":200,"snapshot":run_snapshot(2,"completed","success")},
+                    {"kind":"observe-jobs","elapsedSeconds":45,"sequence":5,"httpStatus":200,"jobs":{"totalCount":2,"pageCount":1,"hasNextPage":False,"jobs":[
+                        {"id":1,"name":"capacity","status":"completed","conclusion":"skipped"},
+                        {"id":2,"name":"qualification","status":"completed","conclusion":"success"}]}},
+                    {"kind":"observe-current","elapsedSeconds":46,"sequence":6,"httpStatus":200,"snapshot":run_snapshot(2,"completed","success")},
+                    {"kind":"enter-cleanup","elapsedSeconds":47},
+                    {"kind":"record-resources-retired","elapsedSeconds":48,"allClosed":True},
+                    {"kind":"record-result-readback","elapsedSeconds":49,"sealedEvidence":True,"acknowledged":True}]
+                actions=[]
+                for index,event in enumerate(events):
+                    decision=observe_run(work,index,lifecycle,state,event);actions.append(decision["action"])
+                    lifecycle,state=decision["lifecycleState"],decision["runState"]
+                self.assertEqual(["issue-rerun","observe-current","wait","wait","observe-target-and-jobs",
+                                  "observe-target-and-jobs","observe-current","retire-resources",
+                                  "retire-resources","continue-result-readback","complete"],actions)
+                self.assertEqual("settled",state["settlement"]);self.assertTrue(state["resultAccepted"])
+                self.assertIn("remote-operation",lifecycle["closed"]);self.assertEqual("success",lifecycle["outcome"])
+                signal=observe_run(work,"late-signal",lifecycle,state,{"kind":"record-signal-cancellation","elapsedSeconds":49})
+                self.assertFalse(signal["runState"]["resultAccepted"]);self.assertTrue(signal["runState"]["stickyCancelled"])
+                self.assertEqual("finish-refused",signal["action"])
+                replay=observe_run(work,"late-signal-replay",signal["lifecycleState"],signal["runState"],
+                                   {"kind":"record-signal-cancellation","elapsedSeconds":49})
+                self.assertEqual("finish-refused",replay["action"]);self.assertFalse(replay["runState"]["resultAccepted"])
+            finally:os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
+    def test_root_run_poll_clock_identity_attempt_and_partial_jobs_refuse(self):
+        cases=[]
+        with tempfile.TemporaryDirectory() as temporary:
+            work=pathlib.Path(temporary);os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                lifecycle=effect_lifecycle(work)
+                first=observe_run(work,0,lifecycle,None,{"kind":"record-rerun-intent","elapsedSeconds":1})
+                second=observe_run(work,1,first["lifecycleState"],first["runState"],{"kind":"record-rerun-result","elapsedSeconds":2,"acknowledged":True})
+                stale=observe_run(work,2,second["lifecycleState"],second["runState"],{"kind":"observe-current","elapsedSeconds":3,"sequence":1,"httpStatus":200,"snapshot":run_snapshot(1,"completed","success")})
+                observe_run(work,"early",stale["lifecycleState"],stale["runState"],{"kind":"observe-current","elapsedSeconds":22,"sequence":2,"httpStatus":200,"snapshot":run_snapshot(2,"in_progress",None)},accepted=False)
+                for label,snapshot in (("attempt3",run_snapshot(3,"completed","success")),
+                                       ("actor",run_snapshot(2,"in_progress",None,originalActorId=99)),
+                                       ("source",run_snapshot(2,"in_progress",None,headSha="c"*40)),
+                                       ("ref",run_snapshot(2,"in_progress",None,headBranch="other")),
+                                       ("workflow",run_snapshot(2,"in_progress",None,workflowPath="other.yml")),
+                                       ("completed-null",run_snapshot(2,"completed",None)),
+                                       ("active-success",run_snapshot(2,"in_progress","success"))):
+                    decision=observe_run(work,label,stale["lifecycleState"],stale["runState"],{"kind":"observe-current","elapsedSeconds":23,"sequence":2,"httpStatus":200,"snapshot":snapshot})
+                    self.assertEqual("refuse",decision["action"]);self.assertFalse(decision["runState"]["resourcesRetired"])
+            finally:os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
+    def test_cancel_refusal_never_settles_but_later_exact_failure_census_can_close(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work=pathlib.Path(temporary);os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                lifecycle=effect_lifecycle(work);state=None
+                events=[
+                    {"kind":"record-rerun-intent","elapsedSeconds":1},
+                    {"kind":"record-rerun-result","elapsedSeconds":2,"acknowledged":True},
+                    {"kind":"observe-current","elapsedSeconds":3,"sequence":1,"httpStatus":200,"snapshot":run_snapshot(2,"in_progress",None)},
+                    {"kind":"enter-cleanup","elapsedSeconds":23},
+                    {"kind":"observe-current","elapsedSeconds":24,"sequence":2,"httpStatus":200,"snapshot":run_snapshot(2,"in_progress",None)},
+                    {"kind":"record-cancel-result","elapsedSeconds":25,"accepted":False},
+                    {"kind":"record-resources-retired","elapsedSeconds":26,"allClosed":True},
+                    {"kind":"observe-current","elapsedSeconds":46,"sequence":3,"httpStatus":200,"snapshot":run_snapshot(2,"completed","failure")},
+                    {"kind":"observe-target","elapsedSeconds":47,"sequence":4,"httpStatus":200,"snapshot":run_snapshot(2,"completed","failure")},
+                    {"kind":"observe-jobs","elapsedSeconds":48,"sequence":5,"httpStatus":200,"jobs":{"totalCount":2,"pageCount":1,"hasNextPage":False,"jobs":[
+                        {"id":1,"name":"capacity","status":"completed","conclusion":"skipped"},
+                        {"id":2,"name":"qualification","status":"completed","conclusion":"failure"}]}},
+                    {"kind":"observe-current","elapsedSeconds":49,"sequence":6,"httpStatus":200,"snapshot":run_snapshot(2,"completed","failure")}]
+                actions=[]
+                for index,event in enumerate(events):
+                    decision=observe_run(work,index,lifecycle,state,event);actions.append(decision["action"])
+                    lifecycle,state=decision["lifecycleState"],decision["runState"]
+                self.assertEqual("observe-current",actions[3]);self.assertEqual("cancel-once",actions[4]);self.assertEqual("retire-resources",actions[5])
+                self.assertEqual("finish-refused",actions[-1]);self.assertEqual("settled",state["settlement"])
+                self.assertEqual("refused",state["cancel"]);self.assertIn("remote-operation",lifecycle["closed"])
+                self.assertNotEqual("success",lifecycle["outcome"])
+            finally:os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
+    def test_cleanup_after_exact_terminal_candidate_does_not_issue_cancel(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work=pathlib.Path(temporary);os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                lifecycle=effect_lifecycle(work)
+                one=observe_run(work,0,lifecycle,None,{"kind":"record-rerun-intent","elapsedSeconds":1})
+                two=observe_run(work,1,one["lifecycleState"],one["runState"],{"kind":"record-rerun-result","elapsedSeconds":2,"acknowledged":True})
+                terminal=observe_run(work,2,two["lifecycleState"],two["runState"],{"kind":"observe-current","elapsedSeconds":3,"sequence":1,"httpStatus":200,"snapshot":run_snapshot(2,"completed","failure")})
+                cleanup=observe_run(work,3,terminal["lifecycleState"],terminal["runState"],{"kind":"enter-cleanup","elapsedSeconds":4})
+                self.assertEqual("retire-resources",cleanup["action"]);self.assertEqual("none",cleanup["runState"]["cancel"])
+            finally:os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
+    def test_serialized_impossible_state_duplicate_body_and_next_link_are_refused(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work=pathlib.Path(temporary);lifecycle=effect_lifecycle(work)
+            one=observe_run(work,0,lifecycle,None,{"kind":"record-rerun-intent","elapsedSeconds":1})
+            two=observe_run(work,1,one["lifecycleState"],one["runState"],{"kind":"record-rerun-result","elapsedSeconds":2,"acknowledged":True})
+            forged=dict(two["runState"],rerun="not-issued",seenTarget2=True,latestSequence=0,
+                        targetConclusion="success",settlement="settled",resourcesRetired=True)
+            observe_run(work,"forged",two["lifecycleState"],forged,
+                        {"kind":"record-result-readback","elapsedSeconds":3,"sealedEvidence":True,"acknowledged":True},accepted=False)
+            duplicate=b'{"id":12345,"id":12345}'
+            response={"httpStatus":200,"bodyBase64":base64.b64encode(duplicate).decode(),"linkHeaders":[],
+                      "endpointRunId":12345,"endpointAttempt":0}
+            observe_run(work,"duplicate",two["lifecycleState"],two["runState"],
+                        {"kind":"observe-current","elapsedSeconds":3,"sequence":1,"response":response},accepted=False)
+            terminal=observe_run(work,2,two["lifecycleState"],two["runState"],
+                {"kind":"observe-current","elapsedSeconds":3,"sequence":1,"httpStatus":200,"snapshot":run_snapshot(2,"completed","failure")})
+            target=observe_run(work,3,terminal["lifecycleState"],terminal["runState"],
+                {"kind":"observe-target","elapsedSeconds":4,"sequence":2,"httpStatus":200,"snapshot":run_snapshot(2,"completed","failure")})
+            raw={"total_count":2,"jobs":[{"id":1,"run_id":12345,"run_attempt":2,"head_sha":"b"*40,"name":"capacity","status":"completed","conclusion":"skipped"},{"id":2,"run_id":12345,"run_attempt":2,"head_sha":"b"*40,"name":"qualification","status":"completed","conclusion":"failure"}]}
+            body=json.dumps(raw,separators=(",",":")).encode();response={"httpStatus":200,"bodyBase64":base64.b64encode(body).decode(),
+                "linkHeaders":["<https://api.github.com/x?page=2>; rel=\"next\""],"endpointRunId":12345,"endpointAttempt":2}
+            decision=observe_run(work,4,target["lifecycleState"],target["runState"],{"kind":"observe-jobs","elapsedSeconds":5,"sequence":3,"response":response})
+            self.assertEqual("run-jobs-census-refused",decision["runState"]["refusal"])
+            response=dict(response,endpointRunId=99999,linkHeaders=[])
+            observe_run(work,"wrong-endpoint",target["lifecycleState"],target["runState"],
+                        {"kind":"observe-jobs","elapsedSeconds":5,"sequence":3,"response":response},accepted=False)
 
     def test_unacknowledged_effect_and_incomplete_cleanup_never_succeed(self):
         with tempfile.TemporaryDirectory() as temporary:
@@ -236,7 +420,8 @@ class TypedPolicyTests(unittest.TestCase):
                     "capacityRunConclusion":"success","capacityArtifactId":"200","capacityArtifactDigest":"4"*64,
                     "secretCount":0,"releaseCount":0}
                 request={"schema":"fsgg.fourd.typed-root-join-request/1","context":context,"observed":observed,
-                         "placementSha":"a"*40,"placementTree":tree,"runId":"12345"}
+                         "placementSha":"a"*40,"placementTree":tree,"runId":"12345",
+                         "producerSha256":"c"*64,"packetManifestSha256":"d"*64}
                 source=root/f"root-{index}.json";output=root/f"root-{index}.out"
                 source.write_text(json.dumps(request,sort_keys=True,separators=(",",":")))
                 self.assertEqual(0,subprocess.run([str(EXE),"validate-root",str(source),str(output)],check=False).returncode)
