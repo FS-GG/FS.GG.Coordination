@@ -157,6 +157,28 @@ class TypedPolicyTests(unittest.TestCase):
             finally:
                 os.environ.pop("FSGG_FOURD_TYPED_POLICY", None)
 
+    def test_failure_diagnostic_projects_only_closed_observations(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            work=pathlib.Path(temporary);os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)
+            try:
+                cases=(("capsule","source-reconstruction","capsule-refusal","snapshot-binding-refused",True,"snapshot-binding-refused"),
+                       ("node","tool-node","os-not-found",None,True,"source-node-tool-refused"),
+                       ("cleanup","source-reconstruction","capsule-refusal","git-tree-refused",False,"git-tree-refused"),
+                       ("unknown","admission","unexpected",None,True,"qualification-refused"))
+                for name,callsite,category,token,cleanup,code in cases:
+                    value=typed.project_failure(runner=ActualRunner(),source_root=ROOT,work=work,name=name,
+                        callsite=callsite,category=category,token=token,cleanup_complete=cleanup)
+                    self.assertFalse(value["ready"]);self.assertEqual(code,value["failureCode"])
+                    self.assertEqual(cleanup,value["cleanupComplete"])
+                ready=typed.project_failure(runner=ActualRunner(),source_root=ROOT,work=work,name="git-ready",
+                    callsite="tool-git",category="available",token=None,cleanup_complete=True)
+                self.assertTrue(ready["ready"]);self.assertIsNone(ready["failureCode"])
+                with self.assertRaisesRegex(typed.TypedPolicyRefusal,"typed-failure-projection-refused"):
+                    typed.project_failure(runner=ActualRunner(),source_root=ROOT,work=work,name="raw",
+                        callsite="source-reconstruction",category="capsule-refusal",token="private raw detail",
+                        cleanup_complete=True)
+            finally: os.environ.pop("FSGG_FOURD_TYPED_POLICY",None)
+
     def test_root_run_stale_attempt_then_exact_target_success_requires_full_settlement(self):
         with tempfile.TemporaryDirectory() as temporary:
             work=pathlib.Path(temporary);os.environ["FSGG_FOURD_TYPED_POLICY"]=str(EXE)

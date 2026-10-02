@@ -342,11 +342,93 @@ class ExecuteTests(unittest.TestCase):
                                              "GITHUB_SHA":"a"*40},clear=False), \
                  mock.patch.object(qualify,"verify_public_checkout",return_value=("a"*40,"b"*40)), \
                  mock.patch.object(qualify,"verify_public_tools"), \
-                 mock.patch.object(qualify,"acquire_source",side_effect=qualify.Refusal("probe-stop")) as acquire:
+                 mock.patch.object(qualify,"acquire_source",side_effect=qualify.Refusal("source-download-refused")) as acquire:
                 self.assertEqual(2,qualify.acquire(args,env,qualify.Effects()))
             acquire.assert_called_once()
             result=json.loads((root/"public/result.json").read_text())
-            self.assertEqual("probe-stop",result["failureCode"])
+            self.assertEqual("source-download-refused",result["failureCode"])
+            self.assertFalse((root/"private").exists())
+
+    def test_actual_compiled_acquisition_projects_closed_failures_and_preserves_original_on_cleanup_failure(self):
+        executable=ROOT/"eng/fourd-public-provider/typed/publish/FourD.Typed"
+        subprocess.run(["dotnet","publish",str(ROOT/"eng/fourd-public-provider/typed/FourD.Typed.fsproj"),
+                        "-c","Release","-o",str(executable.parent)],check=True,stdout=subprocess.DEVNULL)
+        names=("FourD.Typed","FourD.Typed.dll","FourD.Typed.deps.json","FourD.Typed.runtimeconfig.json","FSharp.Core.dll")
+        binding_path=executable.parent/"typed-policy-binding.json"
+        binding_path.write_text(json.dumps({"schema":"fsgg.fourd.typed-policy-binding/1","sourceSha":"a"*40,
+            "files":{name:__import__("hashlib").sha256((executable.parent/name).read_bytes()).hexdigest() for name in names}}));binding_path.chmod(0o600)
+        source_capsule=qualify.source_module()
+        cases=(("capsule",source_capsule.CapsuleRefusal("snapshot-binding-refused"),True,"failed","snapshot-binding-refused"),
+               ("cleanup",source_capsule.CapsuleRefusal("git-tree-refused"),False,"failed","git-tree-refused"))
+        for label,failure,cleanup,outcome,code in cases:
+            with self.subTest(label=label),tempfile.TemporaryDirectory() as temporary:
+                root=pathlib.Path(temporary);args=self.args(root)
+                (root/"capacity.json").write_text(json.dumps({"schema":"fsgg.fourd.public-provider-capacity/1",
+                    "phase":"capacity","capacityScreenPassed":True,"qualified":False}))
+                env,_admitted,_key=valid_admission(dt.datetime.now(dt.timezone.utc))
+                patches=(mock.patch.dict(os.environ,{"FSGG_FOURD_TYPED_POLICY":str(executable),
+                    "FSGG_FOURD_TYPED_POLICY_BINDING":str(binding_path),"GITHUB_SHA":"a"*40},clear=False),
+                    mock.patch.object(qualify,"verify_public_checkout",return_value=("a"*40,"b"*40)),
+                    mock.patch.object(qualify,"verify_public_tools"),
+                    mock.patch.object(qualify,"verify_fixed_tools"),
+                    mock.patch.object(qualify,"acquire_source",side_effect=failure),
+                    mock.patch.object(qualify,"remove_owned_root",return_value=cleanup))
+                with patches[0],patches[1],patches[2],patches[3],patches[4],patches[5]:
+                    self.assertEqual(2,qualify.acquire(args,env,qualify.Effects()))
+                result=json.loads((root/"public/result.json").read_text())
+                self.assertEqual(outcome,result["outcome"]);self.assertEqual(code,result["failureCode"])
+                self.assertFalse(result["qualified"]);self.assertFalse(result["rootlessPreflightPassed"])
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);args=self.args(root)
+            (root/"capacity.json").write_text(json.dumps({"schema":"fsgg.fourd.public-provider-capacity/1",
+                "phase":"capacity","capacityScreenPassed":True,"qualified":False}))
+            env,admitted,_key=valid_admission(dt.datetime.now(dt.timezone.utc))
+            public=b"synthetic-public-key\n";public_sha=__import__("hashlib").sha256(public).hexdigest()
+            admitted["sourceCapsule"]["recipientPublicKeySha256"]=public_sha
+            admitted["sourceCapsule"]["descriptor"]["recipientPublicKeySha256"]=public_sha
+            descriptor_raw=json.dumps(admitted["sourceCapsule"]["descriptor"],sort_keys=True,separators=(",",":"),ensure_ascii=True).encode()+b"\n"
+            admitted["sourceCapsule"]["descriptorSha256"]=__import__("hashlib").sha256(descriptor_raw).hexdigest()
+            env[qualify.ADMISSION_SECRET]=base64.b64encode(json.dumps(admitted).encode()).decode()
+            class MetadataEffects(qualify.Effects):
+                def run(self,argv,**kwargs):
+                    if argv[0]=="/usr/bin/openssl": return qualify.RunResult(0,public,b"")
+                    return super().run(argv,**kwargs)
+            with mock.patch.dict(os.environ,{"FSGG_FOURD_TYPED_POLICY":str(executable),
+                    "FSGG_FOURD_TYPED_POLICY_BINDING":str(binding_path),"GITHUB_SHA":"a"*40},clear=False), \
+                 mock.patch.object(qualify,"verify_public_checkout",return_value=("a"*40,"b"*40)), \
+                 mock.patch.object(qualify,"verify_public_tools"),mock.patch.object(qualify,"verify_fixed_tools"), \
+                 mock.patch.object(qualify,"bounded_public_read",return_value=(b"[]","https://api.github.com/release")):
+                self.assertEqual(2,qualify.acquire(args,env,MetadataEffects()))
+            result=json.loads((root/"public/result.json").read_text())
+            self.assertEqual("refused",result["outcome"])
+            self.assertEqual("source-release-readback-refused",result["failureCode"])
+            self.assertFalse((root/"private").exists())
+
+    def test_actual_compiled_missing_fixed_tool_refuses_before_private_source(self):
+        executable=ROOT/"eng/fourd-public-provider/typed/publish/FourD.Typed"
+        subprocess.run(["dotnet","publish",str(ROOT/"eng/fourd-public-provider/typed/FourD.Typed.fsproj"),
+                        "-c","Release","-o",str(executable.parent)],check=True,stdout=subprocess.DEVNULL)
+        names=("FourD.Typed","FourD.Typed.dll","FourD.Typed.deps.json","FourD.Typed.runtimeconfig.json","FSharp.Core.dll")
+        binding_path=executable.parent/"typed-policy-binding.json"
+        binding_path.write_text(json.dumps({"schema":"fsgg.fourd.typed-policy-binding/1","sourceSha":"a"*40,
+            "files":{name:__import__("hashlib").sha256((executable.parent/name).read_bytes()).hexdigest() for name in names}}));binding_path.chmod(0o600)
+        original_is_file=pathlib.Path.is_file
+        def observed_is_file(path):
+            return False if str(path)=="/usr/bin/node" else original_is_file(path)
+        with tempfile.TemporaryDirectory() as temporary:
+            root=pathlib.Path(temporary);args=self.args(root)
+            (root/"capacity.json").write_text(json.dumps({"schema":"fsgg.fourd.public-provider-capacity/1",
+                "phase":"capacity","capacityScreenPassed":True,"qualified":False}))
+            env,_admitted,_key=valid_admission(dt.datetime.now(dt.timezone.utc))
+            with mock.patch.dict(os.environ,{"FSGG_FOURD_TYPED_POLICY":str(executable),
+                    "FSGG_FOURD_TYPED_POLICY_BINDING":str(binding_path),"GITHUB_SHA":"a"*40},clear=False), \
+                 mock.patch.object(qualify,"verify_public_checkout",return_value=("a"*40,"b"*40)), \
+                 mock.patch.object(qualify,"verify_public_tools"), \
+                 mock.patch.object(pathlib.Path,"is_file",observed_is_file), \
+                 mock.patch.object(qualify,"acquire_source") as source:
+                self.assertEqual(2,qualify.acquire(args,env,qualify.Effects()))
+            source.assert_not_called();result=json.loads((root/"public/result.json").read_text())
+            self.assertEqual("source-node-tool-refused",result["failureCode"])
             self.assertFalse((root/"private").exists())
 
     def test_actual_compiled_final_cancellation_projection_revokes_success(self):

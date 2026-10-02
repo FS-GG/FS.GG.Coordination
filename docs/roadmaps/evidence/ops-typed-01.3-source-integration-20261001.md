@@ -42,3 +42,22 @@ The canonical literate model uses the same terminal-observation guard in its gen
 The isolated successor of `475705a620075d46b641e5ea7c51b57bd14bda8b` closes D1–D3 from independent review without changing the authority split or time bounds. A late `RecordSignalCancellation` revokes `ResultAccepted`, leaves settled cleanup evidence intact, changes lifecycle success to unknown and emits a state accepted by the same F# validator. The serialized accepted response is replayed unchanged through the actual CLI and remains valid. If resources are retired while the owned run is unsettled, sticky cancellation returns the bounded wait/current action instead of finishing; the actual caller continues from a signal at elapsed2480 to terminal census at2500 without another delete or rerun.
 
 Canonical `freshCleanup` now matches production: sticky signal cancellation disqualifies success but does not prevent the one cancellation of a freshly observed active owned attempt2. Three generated Quint/FsQuint traces cover signal-requested cancellation, a signal after a retired active observation, and a signal after accepted readback. The general model permits a signal transition from `resultAccepted`, revokes that authority, and preserves its invariant. A direct actual reducer negative verifies that a cancellation result without typed cancellation intent is rejected; this causal guard control supplements the retained projection mutation checks.
+
+## Closed source-failure observability selection (2026-10-02)
+
+Protected-source integration selects reviewed successor `62f6d289b40d63539ffa23bf57191e01a89fc79e` and independent review SHA-256 `618df923fd8751559f53bca22e991d8774a4964cbc7d2198b1bf9cffd94e4193`. The following Git blobs are the complete selected implementation and regression inventory:
+
+| Path | Reviewed Git blob |
+| --- | --- |
+| `eng/fourd-public-provider/qualify.py` | `8cb2fbab877b7dabf3ff1e61ef5a03847e123a98` |
+| `eng/fourd-public-provider/typed/FailureDiagnostic.fs` | `082e9fa11796c0989b34c80bc2124c41665e4489` |
+| `eng/fourd-public-provider/typed/FourD.Typed.fsproj` | `34fdba0a33af3bca8f2584cbdeb3daf4192dc1b0` |
+| `eng/fourd-public-provider/typed/Program.fs` | `622381abb51d94223116330bc30b56552f8eaad4` |
+| `eng/fourd-public-provider/typed_policy.py` | `53e54ea51e58c797eca5393136db501954367369` |
+| `tests/fourd-public-provider/test_qualification.py` | `95d30cc4c71ea8629f46935e9e3096b63be1a90e` |
+| `tests/fourd-public-provider/test_source_capsule.py` | `31edaac4e78926116b2c32602c3aea6fbc2f1818` |
+| `tests/fourd-public-provider/test_typed_policy.py` | `f399e0d3ed7673d0829dc8fac3b5e77b5585b480` |
+
+`FailureDiagnostic.fs` owns a closed, stateless projection from bounded callsite, category, token and cleanup facts to the existing public failure-code field. The Python boundary supplies only closed refusal tokens, `OSError` categories and cleanup truth; it does not forward exception messages or transport, credential, source or payload bytes. Fixed Git, Node and OpenSSL executable observations pass through the same F# projection before source effects. Cleanup failure retains the first closed source failure while reporting cleanup truth separately.
+
+This selection prepares protected qualification and native build only. The historical native failure cause remains unknown, and this source does not establish that admission or the typed join completed. The existing canonical lifecycle model, reducer and correspondence inputs are unchanged. Protected CI, provider admission and any genuine operation remain separate root-owned gates.
