@@ -42,8 +42,39 @@ module Policy =
         && value |> Seq.forall (fun c -> c >= '!' && c <= '~')
 
     let private spend cost state =
-        if cost <= 0 || cost > state.BudgetRemaining then Error "aggregate-budget-refused"
+        // A measured monotonic interval may be shorter than one whole second.  Zero is
+        // therefore a truthful charge; negative costs and renewal remain impossible.
+        if cost < 0 || cost > state.BudgetRemaining then Error "aggregate-budget-refused"
         else Ok { state with BudgetRemaining = state.BudgetRemaining - cost }
+
+    /// Composition seam for protocols that share this operation's single aggregate budget.
+    let charge cost state = spend cost state
+
+    /// A typed child protocol may close an already-owned lifecycle resource after proving its
+    /// own closure. The child event has already been charged through `charge`.
+    let closeComposedResource resource state =
+        if state.Phase = Cleanup && state.Owned.Contains resource then
+            Ok { state with Closed = state.Closed.Add resource }
+        else Error "composed-close-refused"
+
+    /// A typed child protocol may acknowledge success only after its result proof is accepted.
+    /// The proof event has already been charged through `charge`.
+    let acknowledgeComposedSuccess state =
+        if (state.Phase = Effect || state.Phase = Cleanup) && state.Outcome = Unknown then
+            Ok { state with EffectAcknowledged = true; Outcome = Success }
+        else Error "composed-success-refused"
+
+    let beginComposedCleanup cancelled state =
+        if state.Phase <> Cleanup && state.Phase <> Finished && state.Phase <> CleanupFailed then
+            Ok { state with Phase = Cleanup; Cancelled = cancelled
+                            Outcome = (if state.Outcome = Success then Success else Unknown) }
+        elif state.Phase = Cleanup then Ok state
+        else Error "composed-cleanup-refused"
+
+    /// Signals are sticky lifecycle evidence even when they arrive after cleanup began.
+    let markComposedCancellation state =
+        if state.Phase = Finished || state.Phase = CleanupFailed then Error "composed-cancel-refused"
+        else Ok { state with Cancelled = true; Outcome = (if state.Outcome = Success then Unknown else state.Outcome) }
 
     let reduce state observation =
         let cost = match observation with
