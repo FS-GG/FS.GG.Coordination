@@ -117,8 +117,26 @@ let int64Property (name: string) (value: JsonElement) =
 let fullDirectory (path: string) (code: string) =
     let full = Path.GetFullPath path
     require (Path.IsPathFullyQualified full && Directory.Exists full) code "directory is absent"
-    require ((File.GetAttributes full &&& FileAttributes.ReparsePoint) = enum 0) code "directory is a link"
+    let rec verifyAncestors (current: string) =
+        require ((File.GetAttributes current &&& FileAttributes.ReparsePoint) = enum 0) code "directory or ancestor is a link"
+        let parent = Directory.GetParent current
+        if not(isNull parent) then verifyAncestors parent.FullName
+    verifyAncestors full
     full
+
+let regularFiles (root: string) code =
+    let root = fullDirectory root code
+    let rec visit (directory: string) = seq {
+        require ((File.GetAttributes directory &&& FileAttributes.ReparsePoint) = enum 0) code "directory is a link"
+        for path in Directory.EnumerateFileSystemEntries directory do
+            let attributes = File.GetAttributes path
+            require ((attributes &&& FileAttributes.ReparsePoint) = enum 0) "THMB-LINK" "source tree contains a link"
+            if (attributes &&& FileAttributes.Directory) <> enum 0 then
+                yield! visit path
+            else
+                yield path
+    }
+    visit root
 
 let safeRelative (value: string) =
     require (not(String.IsNullOrWhiteSpace value) && not(Path.IsPathRooted value) && not(value.Contains '\\') && not(value.Contains ':')) "THMB-PATH" "path is not portable relative form"
@@ -129,7 +147,7 @@ let safeRelative (value: string) =
 let enumerateFiles root prefix =
     let values = ResizeArray<FileBinding>()
     let mutable total = 0L
-    for path in Directory.EnumerateFiles(root,"*",SearchOption.AllDirectories) do
+    for path in regularFiles root "THMB-PAYLOAD" do
         require (values.Count < maxFiles) "THMB-LIMIT" "file count exceeds 4096"
         let attributes = File.GetAttributes path
         require ((attributes &&& FileAttributes.ReparsePoint) = enum 0) "THMB-LINK" "source file is a link"
@@ -156,7 +174,7 @@ let runtimeBinding (runtimeRoot: string) (path: string) =
 let runtimeFiles (runtimeRoot: string) (directory: string) =
     let values = ResizeArray<FileBinding>()
     let mutable total = 0L
-    for path in Directory.EnumerateFiles(directory,"*",SearchOption.AllDirectories) do
+    for path in regularFiles directory "THMB-RUNTIME" do
         require (values.Count < maxFiles) "THMB-LIMIT" "runtime file count exceeds 4096"
         let value = runtimeBinding runtimeRoot path
         total <- total + value.bytes
@@ -178,6 +196,18 @@ let sourceFacts sourceRoot revision tree =
     let actualRevision = run "git" ["rev-parse";"HEAD"] sourceRoot
     let actualTree = run "git" ["rev-parse";"HEAD^{tree}"] sourceRoot
     require (actualRevision = revision && actualTree = tree) "THMB-SOURCE" "source revision or tree differs"
+    let managerRelative = "eng/telemetry-host-manager"
+    let buildInputs =
+        [| "global.json"; "Directory.Build.props"; "Directory.Build.targets"; "Directory.Build.local.props"; "Directory.Packages.props"
+           "eng/Directory.Build.props"; "eng/Directory.Build.targets"; "eng/Directory.Packages.props"
+           managerRelative+"/Directory.Build.props"; managerRelative+"/Directory.Build.targets"; managerRelative+"/Directory.Packages.props"
+           managerRelative+"/Program.fs"; managerRelative+"/TelemetryHostManager.fsproj"; managerRelative+"/packages.lock.json" |]
+    let existingInputs = buildInputs |> Array.filter(fun relative -> File.Exists(Path.Combine(sourceRoot,relative)))
+    let trackedInputs = run "git" (["ls-files";"--"] @ Array.toList buildInputs) sourceRoot
+    let tracked = trackedInputs.Split('\n',StringSplitOptions.RemoveEmptyEntries) |> Set.ofArray
+    require (existingInputs |> Array.forall tracked.Contains) "THMB-SOURCE" "untracked manager build input is present"
+    let sourceStatus = run "git" (["status";"--porcelain=v1";"--untracked-files=all";"--"] @ Array.toList buildInputs) sourceRoot
+    require (String.IsNullOrEmpty sourceStatus) "THMB-SOURCE" "tracked manager build input differs from the declared tree"
     let projectRelative = "eng/telemetry-host-manager/TelemetryHostManager.fsproj"
     let lockRelative = "eng/telemetry-host-manager/packages.lock.json"
     let project = Path.Combine(sourceRoot,projectRelative)

@@ -19,6 +19,11 @@ manifest and prepared receipt, downloads them into a fresh directory, compares t
 receipt bytes, and validates the downloaded archive. Actions retention is 90 days; root must
 retain verified bytes under approved custody before expiration.
 
+The runtime inventory is the selected dotnet host, hostfxr version directory, and
+Microsoft.NETCore.App version directory. It is not an inventory of external operating-system
+libraries. The determinism check repeats archive assembly from the same published payload;
+independent publish reproducibility remains a later qualification boundary.
+
 ## Local check
 
 Use the repository pinned SDK and installed runtime 10.0.12:

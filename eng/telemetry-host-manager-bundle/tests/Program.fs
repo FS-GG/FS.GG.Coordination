@@ -104,6 +104,31 @@ let main _ =
         File.Delete dependency
         File.CreateSymbolicLink(dependency,Path.Combine(publishRoot,"TelemetryHostManager.deps.json")) |> ignore
         expectRefusal "linked payload" (fun () -> Bundle.prepare sourceRoot linked runtimeRoot revision tree Bundle.supportedRuntime (Path.Combine(root,"linked-output")) |> ignore)
+        let linkedDirectory = Path.Combine(root,"linked-directory")
+        copyDirectory publishRoot linkedDirectory
+        let foreign = Path.Combine(root,"foreign")
+        Directory.CreateDirectory foreign |> ignore
+        File.WriteAllText(Path.Combine(foreign,"unowned.bin"),"outside declared publish root")
+        Directory.CreateSymbolicLink(Path.Combine(linkedDirectory,"linked-child"),foreign) |> ignore
+        expectRefusal "linked payload directory" (fun () -> Bundle.prepare sourceRoot linkedDirectory runtimeRoot revision tree Bundle.supportedRuntime (Path.Combine(root,"linked-directory-output")) |> ignore)
+        let runtimeParent = Path.Combine(root,"runtime-parent")
+        Directory.CreateDirectory runtimeParent |> ignore
+        let linkedRuntime = Path.Combine(runtimeParent,"selected-runtime")
+        Directory.CreateSymbolicLink(linkedRuntime,Path.Combine(runtimeRoot,"shared/Microsoft.NETCore.App",Bundle.supportedRuntime)) |> ignore
+        expectRefusal "linked selected runtime directory" (fun () -> Bundle.runtimeFiles runtimeParent linkedRuntime |> ignore)
+        let ancestorTarget = Path.Combine(runtimeParent,"ancestor-target")
+        let selectedBelowAncestor = Path.Combine(ancestorTarget,"selected")
+        Directory.CreateDirectory selectedBelowAncestor |> ignore
+        File.WriteAllText(Path.Combine(selectedBelowAncestor,"runtime.bin"),"ordinary selected runtime bytes")
+        let linkedAncestor = Path.Combine(runtimeParent,"linked-ancestor")
+        Directory.CreateSymbolicLink(linkedAncestor,ancestorTarget) |> ignore
+        expectRefusal "linked runtime ancestor" (fun () -> Bundle.runtimeFiles runtimeParent (Path.Combine(linkedAncestor,"selected")) |> ignore)
+        let dirtySource = Path.Combine(root,"dirty-source")
+        Bundle.run "git" ["clone";"--quiet";"--no-hardlinks";sourceRoot;dirtySource] root |> ignore
+        Bundle.run "git" ["checkout";"--quiet";revision] dirtySource |> ignore
+        File.AppendAllText(Path.Combine(dirtySource,"eng/telemetry-host-manager/Program.fs"),"\n// causal tracked-source drift witness\n")
+        expectRefusal "dirty source assembly" (fun () -> Bundle.prepare dirtySource publishRoot runtimeRoot revision tree Bundle.supportedRuntime (Path.Combine(root,"dirty-assembly-output")) |> ignore)
+        expectRefusal "dirty source verification" (fun () -> Bundle.verify dirtySource runtimeRoot revision tree (Path.Combine(first,"prepared.json")) None)
         printfn "TELEMETRY_HOST_MANAGER_BUNDLE_TESTS_OK actualPayloadFiles=%d archiveSha256=%s" (Bundle.enumerateFiles publishRoot Bundle.archiveRoot).Length (Bundle.shaFile firstArchive)
         0
     finally
