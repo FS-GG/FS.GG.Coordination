@@ -1,5 +1,33 @@
 # LEARN-01.4 — Installed fixed-context window preparation
 
+## C2 P2-B manager archive source window, 2026-10-02
+
+The container replacement's [C2 owning plan](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/learn-c2-persistent-receiver-v3.md)
+selects a dedicated Actions archive for the existing telemetry Host manager.
+This source window adds the stateless F# builder/verifier and
+`telemetry-host-manager-bundle.yml`. It preserves manager production behavior,
+the native Python verifier and existing orchestration workflows. No new state
+transition is introduced, so it needs no additional Quint model.
+
+Candidate `078c9bab37398f0b2474d1a587848c4886d532b8` passed actual compiled
+assembly, verification and fresh-copy readback controls. Independent review
+reproduced the archive and verified linked-directory/ancestor and modified
+tracked-source refusals. All helper, test and declared manager launches select
+runtime 10.0.12 explicitly with roll-forward disabled. The inventory covers
+191 selected .NET files and 19 manager payloads; external OS libraries and
+the final container placement remain separate gates. Determinism here means
+repeated archive assembly from identical inputs, not independent publish or
+image reproducibility.
+
+Required coherent CI and protected merge must qualify the integrated source.
+Then root dispatches the new workflow at the exact protected revision, checks
+its authenticated artifact identity and expiration, downloads fresh bytes,
+and verifies them before container adoption. Actions retention is 90 days;
+this archive is not a stable release or an installed manager. Genuine
+collector grants, private storage, native capture, restart/recovery and C3
+acceptance remain open. Main has no action. This source window changes no
+fresh-workspace default, installed runtime or experimental enrollment.
+
 Status: W1–W3 source preparation and W8's selected technical window are delivered and qualified, 2026-09-29; **LEARN-01.4 remains open**. Feature/original/item: **LEARN-01 / LEARN-01.4 / LEARN-01.4**. Implementation attempt: `learn-installed-window-integration-20260929`; accepted planning attempt: `learn-installed-window-plan-20260929`; parent: `unified-finish-20260928`. Stage: E0 controlled comparison with selected E1 context support. Route: routine. [#887](https://github.com/FS-GG/FS.GG.Coordination/pull/887) merged the disabled source path as `c6e378e1d00e49eda5ee372bc50cd294460be04a`, tree `344a4bd42b2938ce5cc062246bd36bdac7637e53`. Native PostgreSQL 18.6, canonical formal and coherent CI passed on qualified head `6558949469f7a58872201f67a3a2f231a254339e`; exact-main Host and runner candidates then passed served-byte qualification. No release promotion, installation, enrollment or live experiment action has occurred; installed provider support, native capture completeness and usage remain unknown.
 
 Durable home: `FS-GG.Coordination/docs/roadmaps/learn-01-installed-window.md`, landed with [#887](https://github.com/FS-GG/FS.GG.Coordination/pull/887). Coordination owns the delivered source path; `.github` retains policy/analysis and telemetry authority; the selected independent container receiver owns installed custody and adoption. Backlink: [Unified §9.8](https://github.com/FS-GG/.github/blob/71973603810563def3af098f93f33740dae83b97/docs/2026-09-07-154210-fs-gg-unified-development-roadmap.md#98-feature-parts-and-subroadmap-index). Preserve the [accepted LEARN design](https://github.com/FS-GG/.github/blob/71973603810563def3af098f93f33740dae83b97/docs/roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md) and existing `.3` source plan.
