@@ -1,0 +1,95 @@
+name: Telemetry Host manager bundle
+
+on:
+  workflow_dispatch:
+    inputs:
+      expected_sha:
+        description: Exact protected-main manager bundle source
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: telemetry-host-manager-bundle-${{ github.sha }}
+  cancel-in-progress: false
+
+jobs:
+  build-upload-readback:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      MANAGER_OUTPUT: /tmp/fsgg-${{ github.run_id }}-manager-publish
+      BUNDLE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-manager-bundle
+      SERVED_OUTPUT: /tmp/fsgg-${{ github.run_id }}-manager-served
+      RUNTIME_VERSION: 10.0.12
+    steps:
+      - name: Check out exact protected source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+      - name: Set up pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          dotnet-version: 10.0.400
+          global-json-file: global.json
+      - name: Bind protected-main source
+        shell: bash
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+        run: |
+          set -euo pipefail
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          test "$GITHUB_REF" = "refs/heads/main"
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          git merge-base --is-ancestor "$GITHUB_SHA" refs/remotes/origin/main
+      - name: Restore locked manager and bundle projects
+        run: |
+          dotnet restore eng/telemetry-host-manager/TelemetryHostManager.fsproj --locked-mode
+          dotnet restore eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj --locked-mode
+          dotnet restore eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj --locked-mode
+      - name: Publish actual framework-dependent manager
+        env:
+          DOTNET_ROLL_FORWARD: Disable
+        run: >-
+          dotnet publish eng/telemetry-host-manager/TelemetryHostManager.fsproj
+          -c Release --no-restore -o "$MANAGER_OUTPUT"
+      - name: Build and validate exact manager archive
+        env:
+          DOTNET_ROLL_FORWARD: Disable
+        run: |
+          set -euo pipefail
+          SOURCE_TREE="$(git rev-parse HEAD^{tree})"
+          dotnet run --project eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj -c Release --no-restore --             assemble --source-root "$GITHUB_WORKSPACE" --publish "$MANAGER_OUTPUT" --runtime-root "$DOTNET_ROOT"             --source-revision "$GITHUB_SHA" --source-tree "$SOURCE_TREE" --runtime-version "$RUNTIME_VERSION" --output "$BUNDLE_OUTPUT"
+          THMB_SOURCE_ROOT="$GITHUB_WORKSPACE" THMB_MANAGER_PUBLISH="$MANAGER_OUTPUT" THMB_RUNTIME_ROOT="$DOTNET_ROOT"             dotnet run --project eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
+          dotnet run --project eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj -c Release --no-build --             verify --source-root "$GITHUB_WORKSPACE" --runtime-root "$DOTNET_ROOT" --expected-revision "$GITHUB_SHA"             --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json"
+      - name: Upload exact manager archive
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: telemetry-host-manager-net10.0-${{ github.sha }}
+          path: |
+            ${{ env.BUNDLE_OUTPUT }}/telemetry-host-manager-net10.0-${{ github.sha }}.zip
+            ${{ env.BUNDLE_OUTPUT }}/manifest.json
+            ${{ env.BUNDLE_OUTPUT }}/prepared.json
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+      - name: Download into a fresh directory
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: telemetry-host-manager-net10.0-${{ github.sha }}
+          path: ${{ env.SERVED_OUTPUT }}
+      - name: Verify freshly served archive bytes
+        env:
+          DOTNET_ROLL_FORWARD: Disable
+        run: |
+          set -euo pipefail
+          SOURCE_TREE="$(git rev-parse HEAD^{tree})"
+          cmp "$BUNDLE_OUTPUT/manifest.json" "$SERVED_OUTPUT/manifest.json"
+          cmp "$BUNDLE_OUTPUT/prepared.json" "$SERVED_OUTPUT/prepared.json"
+          dotnet run --project eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj -c Release --no-build --             verify --source-root "$GITHUB_WORKSPACE" --runtime-root "$DOTNET_ROOT" --expected-revision "$GITHUB_SHA"             --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json"             --archive "$SERVED_OUTPUT/telemetry-host-manager-net10.0-$GITHUB_SHA.zip"
