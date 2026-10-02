@@ -236,6 +236,18 @@
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
       ],
       "localReferences": []
+    },
+    {
+      "kind": "workflow",
+      "path": ".github/workflows/telemetry-host-manager-bundle.yml",
+      "sha256": "b04278dcc43887eece657a8dba42a06c2757f3c248eb8ce55d0869cb0655f187",
+      "externalReferences": [
+        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
+        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
+        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
+      ],
+      "localReferences": []
     }
   ]
 }
