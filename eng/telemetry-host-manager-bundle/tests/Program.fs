@@ -10,6 +10,10 @@ let require condition message = if not condition then failwith message
 let expectRefusal name action =
     try action(); failwith (name+" was accepted")
     with :? InvalidOperationException -> ()
+let expectRefusalCode name code action =
+    try action(); failwith (name+" was accepted")
+    with
+    | :? InvalidOperationException as error -> require (error.Message.StartsWith(code+" ",StringComparison.Ordinal)) (name+" refused with "+error.Message)
 
 let copyDirectory (source: string) (target: string) =
     Directory.CreateDirectory target |> ignore
@@ -98,12 +102,14 @@ let main _ =
     let tree = Bundle.run "git" ["rev-parse";"HEAD^{tree}"] sourceRoot
     let workflow = File.ReadAllText(Path.Combine(sourceRoot,".github/workflows/telemetry-host-manager-bundle.yml"))
     let occurrences (needle: string) = workflow.Split(needle,StringSplitOptions.None).Length-1
-    for required in ["permissions:\n  contents: read";"github.ref == 'refs/heads/main'";"runs-on: ubuntu-24.04";Bundle.selectedRuntimeManifestDigest;Bundle.selectedRuntimeConfigDigest;Bundle.selectedSdkManifestDigest;Bundle.selectedSdkConfigDigest;"RUNTIME_VERSION: 10.0.12";"TARGET_PLATFORM: linux/amd64";"docker pull --platform \"$TARGET_PLATFORM\" \"$SDK_IMAGE\"";"--volume \"$TARGET_RUNTIME_ROOT:/usr/share/dotnet:ro\"";"--volume \"$VERIFY_RUNTIME_ROOT:/usr/share/dotnet:ro\"";"docker run --rm --network none";"compression-level: 0";"retention-days: 90";"cmp \"$BUNDLE_OUTPUT/manifest.json\" \"$SERVED_OUTPUT/manifest.json\""] do
+    for required in ["permissions:\n  contents: read";"github.ref == 'refs/heads/main'";"runs-on: ubuntu-24.04";Bundle.selectedRuntimeManifestDigest;Bundle.selectedRuntimeConfigDigest;Bundle.selectedSdkManifestDigest;Bundle.selectedSdkConfigDigest;"RUNTIME_VERSION: 10.0.12";"TARGET_PLATFORM: linux/amd64";"docker pull --platform \"$TARGET_PLATFORM\" \"$SDK_IMAGE\"";"--volume \"$TARGET_RUNTIME_ROOT:/usr/share/dotnet:ro\"";"--volume \"$VERIFY_RUNTIME_ROOT:/usr/share/dotnet:ro\"";"docker run --rm --network none";"assemble-v2 --source-root";"verify-v2 --source-root";"focused-tests.log";"compression-level: 0";"retention-days: 90";"cmp \"$BUNDLE_OUTPUT/manifest.json\" \"$SERVED_OUTPUT/manifest.json\""] do
         require (workflow.Contains(required,StringComparison.Ordinal)) ("workflow binding absent: "+required)
     require (occurrences "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" = 1) "upload action count differs"
     require (occurrences "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" = 1) "download action count differs"
     for forbidden in ["packages: write";"contents: write";"id-token: write";"actions/setup-dotnet";"ubuntu-latest";"apt-get";"pip install";"gh release";"docker push"] do
         require (not(workflow.Contains(forbidden,StringComparison.Ordinal))) ("workflow contains unsupported effect: "+forbidden)
+    require (workflow.IndexOf("trap cleanup EXIT",StringComparison.Ordinal) < workflow.IndexOf("sdk_container=\"$(docker create",StringComparison.Ordinal)) "cleanup trap is installed after acquisition starts"
+    require (workflow.IndexOf("test \"$SDK_TREE_SHA256\"",StringComparison.Ordinal) < workflow.IndexOf("\"$SDK_ROOT/dotnet\" restore",StringComparison.Ordinal)) "selected SDK executes before workflow tree admission"
     let root = Path.Combine(Path.GetTempPath(),"telemetry-host-manager-bundle-tests-"+Guid.NewGuid().ToString("N"))
     Directory.CreateDirectory root |> ignore
     try
@@ -113,7 +119,7 @@ let main _ =
         Directory.CreateDirectory served |> ignore
         let rejectBeforeOutput name candidate candidateRevision candidateTree =
             let output = Path.Combine(root,"refused-"+name)
-            expectRefusal name (fun () -> Bundle.prepare sourceRoot publishRoot candidate candidateRevision candidateTree Bundle.supportedRuntime output |> ignore)
+            expectRefusal name (fun () -> Bundle.prepareV2 sourceRoot publishRoot candidate candidateRevision candidateTree Bundle.supportedRuntime output |> ignore)
             require (not(Directory.Exists output)) (name+" wrote output before selection refusal")
         rejectBeforeOutput "stale-runtime-digest" {selection with runtime={selection.runtime with manifestDigest="sha256:"+String.replicate 64 "0"}} revision tree
         rejectBeforeOutput "wrong-platform" {selection with runtime={selection.runtime with architecture="arm64"}} revision tree
@@ -122,6 +128,15 @@ let main _ =
         rejectBeforeOutput "wrong-runtime-path" {selection with runtimeRoot=Path.Combine(runtimeRoot,"shared")} revision tree
         rejectBeforeOutput "wrong-source" selection (String.replicate 40 "0") tree
         rejectBeforeOutput "stale-sdk-digest" {selection with sdk={selection.sdk with manifestDigest="sha256:"+String.replicate 64 "0"}} revision tree
+        let marker = Path.Combine(root,"changed-sdk-executed.marker")
+        let fakeSdk = Path.Combine(root,"changed-sdk")
+        Directory.CreateDirectory fakeSdk |> ignore
+        let fakeExecutable = Path.Combine(fakeSdk,"dotnet")
+        File.WriteAllText(fakeExecutable,"#!/bin/sh\nprintf changed > '"+marker+"'\nprintf '10.0.400\\n'\n")
+        File.SetUnixFileMode(fakeExecutable,UnixFileMode.UserRead ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute)
+        let fakeSelection = {selection with sdkRoot=fakeSdk;sdkExecutable=fakeExecutable}
+        rejectBeforeOutput "changed-sdk-executable-before-run" fakeSelection revision tree
+        require (not(File.Exists marker)) "changed SDK executable ran before tree admission"
         let sdkLicense = Path.Combine(sdkRoot,"LICENSE.txt")
         let sdkLicenseBytes = File.ReadAllBytes sdkLicense
         let sdkLicenseMode = File.GetUnixFileMode sdkLicense
@@ -159,41 +174,47 @@ let main _ =
         File.Move(missingHostfxr,hostfxr)
         File.SetUnixFileMode(fxrDirectory,UnixFileMode.UserRead ||| UnixFileMode.UserExecute ||| UnixFileMode.GroupRead ||| UnixFileMode.GroupExecute ||| UnixFileMode.OtherRead ||| UnixFileMode.OtherExecute)
 
-        let firstArchive = Bundle.prepare sourceRoot publishRoot selection revision tree Bundle.supportedRuntime first
-        let secondArchive = Bundle.prepare sourceRoot publishRoot selection revision tree Bundle.supportedRuntime second
+        let firstArchive = Bundle.prepareV2 sourceRoot publishRoot selection revision tree Bundle.supportedRuntime first
+        let secondArchive = Bundle.prepareV2 sourceRoot publishRoot selection revision tree Bundle.supportedRuntime second
         require (File.ReadAllBytes firstArchive = File.ReadAllBytes secondArchive) "repeated actual assembly differs"
         use manifestDocument = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(first,"manifest.json")))
         let fixedArgv = manifestDocument.RootElement.GetProperty("fixedArgv").EnumerateArray() |> Seq.map _.GetString() |> Seq.toArray
         require (fixedArgv = [|Bundle.canonicalRuntimeRoot+"/dotnet";"exec";"--fx-version";Bundle.supportedRuntime;Bundle.installationRoot+"/TelemetryHostManager.dll"|]) "fixed runtime argv differs"
-        Bundle.verify sourceRoot verifySelection revision tree (Path.Combine(first,"prepared.json")) None
+        Bundle.verifyV2 sourceRoot verifySelection revision tree (Path.Combine(first,"prepared.json")) None
         let servedArchive = Path.Combine(served,Path.GetFileName firstArchive)
         File.Copy(firstArchive,servedArchive)
         require (File.ReadAllBytes firstArchive = File.ReadAllBytes servedArchive) "served archive copy differs"
-        Bundle.verify sourceRoot verifySelection revision tree (Path.Combine(first,"prepared.json")) (Some servedArchive)
+        Bundle.verifyV2 sourceRoot verifySelection revision tree (Path.Combine(first,"prepared.json")) (Some servedArchive)
+        let legacy = Path.Combine(root,"legacy-v1")
+        let legacyArchive = Bundle.prepareV1 sourceRoot publishRoot runtimeRoot revision tree Bundle.supportedRuntime legacy
+        Bundle.verifyV1 sourceRoot runtimeRoot revision tree (Path.Combine(legacy,"prepared.json")) None
+        expectRefusalCode "legacy prepared against v2" "THMB-PREPARED" (fun () -> Bundle.verifyV2 sourceRoot selection revision tree (Path.Combine(legacy,"prepared.json")) (Some legacyArchive))
+        expectRefusalCode "v2 prepared against legacy" "THMB-PREPARED" (fun () -> Bundle.verifyV1 sourceRoot runtimeRoot revision tree (Path.Combine(first,"prepared.json")) (Some firstArchive))
+        expectRefusalCode "legacy decoded then wrong runtime path" "THMB-MANIFEST" (fun () -> Bundle.verifyV1 sourceRoot verifyRuntimeRoot revision tree (Path.Combine(legacy,"prepared.json")) (Some legacyArchive))
         let manifest = File.ReadAllBytes(Path.Combine(first,"manifest.json"))
         for mutation in [Missing;Extra;Changed;Traversal;Duplicate;Link] do
             let path = Path.Combine(root,"mutated-"+mutation.ToString()+".zip")
             mutateArchive firstArchive path mutation
             expectRefusal (mutation.ToString()) (fun () -> Bundle.validateArchive path manifest |> ignore)
-        expectRefusal "source drift" (fun () -> Bundle.verify sourceRoot verifySelection (String.replicate 40 "0") tree (Path.Combine(first,"prepared.json")) None)
-        expectRefusal "unsupported runtime" (fun () -> Bundle.runtimeFacts selection "10.0.11" |> ignore)
+        expectRefusal "source drift" (fun () -> Bundle.verifyV2 sourceRoot verifySelection (String.replicate 40 "0") tree (Path.Combine(first,"prepared.json")) None)
+        expectRefusal "unsupported runtime" (fun () -> Bundle.runtimeFactsV2 selection "10.0.11" |> ignore)
         let missing = Path.Combine(root,"missing")
         copyDirectory publishRoot missing
         File.Delete(Path.Combine(missing,"TelemetryHostManager.dll"))
-        expectRefusal "missing entrypoint" (fun () -> Bundle.prepare sourceRoot missing selection revision tree Bundle.supportedRuntime (Path.Combine(root,"missing-output")) |> ignore)
+        expectRefusal "missing entrypoint" (fun () -> Bundle.prepareV2 sourceRoot missing selection revision tree Bundle.supportedRuntime (Path.Combine(root,"missing-output")) |> ignore)
         let linked = Path.Combine(root,"linked")
         copyDirectory publishRoot linked
         let dependency = Path.Combine(linked,"TelemetryHostManager.deps.json")
         File.Delete dependency
         File.CreateSymbolicLink(dependency,Path.Combine(publishRoot,"TelemetryHostManager.deps.json")) |> ignore
-        expectRefusal "linked payload" (fun () -> Bundle.prepare sourceRoot linked selection revision tree Bundle.supportedRuntime (Path.Combine(root,"linked-output")) |> ignore)
+        expectRefusal "linked payload" (fun () -> Bundle.prepareV2 sourceRoot linked selection revision tree Bundle.supportedRuntime (Path.Combine(root,"linked-output")) |> ignore)
         let linkedDirectory = Path.Combine(root,"linked-directory")
         copyDirectory publishRoot linkedDirectory
         let foreign = Path.Combine(root,"foreign")
         Directory.CreateDirectory foreign |> ignore
         File.WriteAllText(Path.Combine(foreign,"unowned.bin"),"outside declared publish root")
         Directory.CreateSymbolicLink(Path.Combine(linkedDirectory,"linked-child"),foreign) |> ignore
-        expectRefusal "linked payload directory" (fun () -> Bundle.prepare sourceRoot linkedDirectory selection revision tree Bundle.supportedRuntime (Path.Combine(root,"linked-directory-output")) |> ignore)
+        expectRefusal "linked payload directory" (fun () -> Bundle.prepareV2 sourceRoot linkedDirectory selection revision tree Bundle.supportedRuntime (Path.Combine(root,"linked-directory-output")) |> ignore)
         let runtimeParent = Path.Combine(root,"runtime-parent")
         Directory.CreateDirectory runtimeParent |> ignore
         let linkedRuntime = Path.Combine(runtimeParent,"selected-runtime")
@@ -210,8 +231,8 @@ let main _ =
         Bundle.run "git" ["clone";"--quiet";"--no-hardlinks";sourceRoot;dirtySource] root |> ignore
         Bundle.run "git" ["checkout";"--quiet";revision] dirtySource |> ignore
         File.AppendAllText(Path.Combine(dirtySource,"eng/telemetry-host-manager/Program.fs"),"\n// causal tracked-source drift witness\n")
-        expectRefusal "dirty source assembly" (fun () -> Bundle.prepare dirtySource publishRoot selection revision tree Bundle.supportedRuntime (Path.Combine(root,"dirty-assembly-output")) |> ignore)
-        expectRefusal "dirty source verification" (fun () -> Bundle.verify dirtySource verifySelection revision tree (Path.Combine(first,"prepared.json")) None)
+        expectRefusal "dirty source assembly" (fun () -> Bundle.prepareV2 dirtySource publishRoot selection revision tree Bundle.supportedRuntime (Path.Combine(root,"dirty-assembly-output")) |> ignore)
+        expectRefusal "dirty source verification" (fun () -> Bundle.verifyV2 dirtySource verifySelection revision tree (Path.Combine(first,"prepared.json")) None)
         printfn "TELEMETRY_HOST_MANAGER_BUNDLE_TESTS_OK actualPayloadFiles=%d archiveSha256=%s" (Bundle.enumerateFiles publishRoot Bundle.archiveRoot).Length (Bundle.shaFile firstArchive)
         0
     finally

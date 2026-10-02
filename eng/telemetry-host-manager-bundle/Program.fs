@@ -31,6 +31,8 @@ type SelectionInput =
 
 let schema = "fsgg.coordination.telemetry-host-manager-bundle/1"
 let preparedSchema = "fsgg.coordination.telemetry-host-manager-bundle-prepared/1"
+let schemaV2 = "fsgg.coordination.telemetry-host-manager-bundle/2"
+let preparedSchemaV2 = "fsgg.coordination.telemetry-host-manager-bundle-prepared/2"
 let repository = "FS-GG/FS.GG.Coordination"
 let archiveRoot = "telemetry-host-manager-net10.0"
 let manifestPath = archiveRoot + "/manifest.json"
@@ -289,8 +291,6 @@ let sdkFacts sourceRoot (selection: SelectionInput) =
     require (Path.GetFullPath selection.sdkExecutable = expectedExecutable && File.Exists expectedExecutable) "THMB-SDK" "SDK executable is not the selected tree host"
     require ((File.GetAttributes expectedExecutable &&& FileAttributes.ReparsePoint) = enum 0) "THMB-SDK" "SDK executable is a link"
     validateNonWritableTree sdkRoot
-    let sdk = run expectedExecutable ["--version"] sourceRoot
-    require (sdk = supportedSdk) "THMB-SDK" "SDK version is unsupported"
     let rows = ResizeArray<FileBinding>()
     let mutable total = 0L
     for path in regularFiles sdkRoot "THMB-SDK" do
@@ -304,11 +304,15 @@ let sdkFacts sourceRoot (selection: SelectionInput) =
     let treeSha256 = canonical rows |> shaBytes
     require (treeSha256 = selectedSdkTreeSha256) "THMB-SDK" "SDK tree differs from the selected immutable input"
     let executable = runtimeBinding sdkRoot expectedExecutable
+    require (runtimeBinding sdkRoot expectedExecutable = executable) "THMB-SDK" "SDK executable changed before version readback"
+    let sdk = run expectedExecutable ["--version"] sourceRoot
+    require (runtimeBinding sdkRoot expectedExecutable = executable) "THMB-SDK" "SDK executable changed during version readback"
+    require (sdk = supportedSdk) "THMB-SDK" "SDK version is unsupported"
     {| source=selection.sdk;canonicalRoot=canonicalRuntimeRoot;canonicalExecutable=canonicalRuntimeRoot+"/dotnet"
        version=sdk;executable=executable;fileCount=rows.Length;bytes=total
        treeSha256=treeSha256 |}
 
-let runtimeFacts (selection: SelectionInput) runtimeVersion =
+let runtimeFactsV2 (selection: SelectionInput) runtimeVersion =
     require (runtimeVersion = supportedRuntime) "THMB-RUNTIME" "runtime version is unsupported"
     validateOci selectedRuntimeImage selectedRuntimeManifestDigest selectedRuntimeConfigDigest selection.runtime
     require (selection.runtimeCanonicalRoot = canonicalRuntimeRoot) "THMB-RUNTIME" "canonical runtime root differs"
@@ -339,13 +343,49 @@ let validatePayloadRequirements (rows: FileBinding array) =
         require (names.Contains(archiveRoot+"/"+name)) "THMB-PAYLOAD" (name+" is absent")
     require (rows |> Array.exists(fun row -> row.path = entrypoint && row.mode = "0444")) "THMB-PAYLOAD" "entrypoint DLL differs"
 
-let makeManifest sourceRoot revision tree (selection: SelectionInput) runtimeVersion payloads =
+// The bundle/1 functions and CLI route intentionally retain the original wire shape and
+// reconstruction behavior for historical artifacts. Hardened production uses bundle/2.
+let runtimeFactsV1 sourceRoot runtimeRoot runtimeVersion =
+    require (runtimeVersion = supportedRuntime) "THMB-RUNTIME" "runtime version is unsupported"
+    let sdk = run "dotnet" ["--version"] sourceRoot
+    require (sdk = supportedSdk) "THMB-RUNTIME" "SDK version is unsupported"
+    let host = Path.Combine(runtimeRoot,"dotnet")
+    let fxrRoot = Path.Combine(runtimeRoot,"host/fxr",runtimeVersion)
+    let frameworkRoot = Path.Combine(runtimeRoot,"shared/Microsoft.NETCore.App",runtimeVersion)
+    require (File.Exists host && Directory.Exists fxrRoot && Directory.Exists frameworkRoot) "THMB-RUNTIME" "runtime closure is incomplete"
+    let runtimeRows =
+        Array.concat [|
+            [|runtimeBinding runtimeRoot host|]
+            runtimeFiles runtimeRoot fxrRoot
+            runtimeFiles runtimeRoot frameworkRoot
+        |]
+        |> Array.sortBy _.path
+    require (runtimeRows.Length <= maxFiles && (runtimeRows |> Array.sumBy _.bytes) <= maxTotalBytes) "THMB-LIMIT" "runtime closure exceeds bounds"
+    require (runtimeRows |> Array.exists(fun row -> row.path = "host/fxr/"+runtimeVersion+"/libhostfxr.so")) "THMB-RUNTIME" "hostfxr is absent"
+    for name in ["libhostpolicy.so";"libcoreclr.so";"libclrjit.so";"System.Private.CoreLib.dll"] do
+        require (runtimeRows |> Array.exists(fun row -> row.path = "shared/Microsoft.NETCore.App/"+runtimeVersion+"/"+name)) "THMB-RUNTIME" (name+" is absent")
+    {| dotnetRoot=runtimeRoot; sdkVersion=sdk; framework="Microsoft.NETCore.App"; frameworkVersion=runtimeVersion; rollForward="Disable"; files=runtimeRows |}
+
+let runtimeFacts sourceRoot runtimeRoot runtimeVersion = runtimeFactsV1 sourceRoot runtimeRoot runtimeVersion
+
+let makeManifestV1 sourceRoot revision tree runtimeRoot runtimeVersion payloads =
+    validatePayloadRequirements payloads
+    let source = sourceFacts sourceRoot revision tree
+    let runtime = runtimeFactsV1 sourceRoot runtimeRoot runtimeVersion
+    let fixedArgv = [|runtimeRoot+"/dotnet";"exec";"--fx-version";runtimeVersion;installationRoot+"/TelemetryHostManager.dll"|]
+    {| schema=schema; source=source; runtime=runtime; archiveRoot=archiveRoot; installationRoot=installationRoot
+       entrypoint=entrypoint; fixedArgv=fixedArgv; payloads=payloads |}
+
+let makeManifest sourceRoot revision tree runtimeRoot runtimeVersion payloads =
+    makeManifestV1 sourceRoot revision tree runtimeRoot runtimeVersion payloads
+
+let makeManifestV2 sourceRoot revision tree (selection: SelectionInput) runtimeVersion payloads =
     validatePayloadRequirements payloads
     let source = sourceFacts sourceRoot revision tree
     let sdk = sdkFacts sourceRoot selection
-    let runtime = runtimeFacts selection runtimeVersion
+    let runtime = runtimeFactsV2 selection runtimeVersion
     let fixedArgv = [|canonicalRuntimeRoot+"/dotnet";"exec";"--fx-version";runtimeVersion;installationRoot+"/TelemetryHostManager.dll"|]
-    {| schema=schema; source=source;buildSdk=sdk;runtime=runtime; archiveRoot=archiveRoot; installationRoot=installationRoot
+    {| schema=schemaV2; source=source;buildSdk=sdk;runtime=runtime; archiveRoot=archiveRoot; installationRoot=installationRoot
        entrypoint=entrypoint; fixedArgv=fixedArgv; payloads=payloads |}
 
 let zipMode mode =
@@ -421,13 +461,13 @@ let validateArchive archivePath expectedManifest =
     require (payloads = declared) "THMB-PAYLOAD" "archive content differs from manifest"
     payloads
 
-let prepare sourceRoot publishRoot (selection: SelectionInput) revision tree runtimeVersion output =
+let prepareV1 sourceRoot publishRoot runtimeRoot revision tree runtimeVersion output =
     let sourceRoot = fullDirectory sourceRoot "THMB-SOURCE"
     let publishRoot = fullDirectory publishRoot "THMB-PAYLOAD"
+    let runtimeRoot = fullDirectory runtimeRoot "THMB-RUNTIME"
     validateRuntimeConfig publishRoot
     let payloads = enumerateFiles publishRoot archiveRoot
-    let manifest = makeManifest sourceRoot revision tree selection runtimeVersion payloads
-    let manifestBytes = canonical manifest
+    let manifestBytes = makeManifestV1 sourceRoot revision tree runtimeRoot runtimeVersion payloads |> canonical
     require (manifestBytes.Length <= maxManifestBytes) "THMB-MANIFEST" "manifest exceeds 1 MiB"
     Directory.CreateDirectory output |> ignore
     let archiveName = "telemetry-host-manager-net10.0-"+revision+".zip"
@@ -438,18 +478,69 @@ let prepare sourceRoot publishRoot (selection: SelectionInput) revision tree run
     require (observed = payloads) "THMB-PAYLOAD" "archive payload differs"
     File.WriteAllBytes(Path.Combine(output,"manifest.json"),manifestBytes)
     let receipt = {|schema=preparedSchema;archive={|file=archiveName;bytes=FileInfo(archivePath).Length;sha256=shaFile archivePath|}
+                    manifestSha256=shaBytes manifestBytes;sourceRevision=revision;sourceTree=tree|} |> canonical
+    File.WriteAllBytes(Path.Combine(output,"prepared.json"),receipt)
+    archivePath
+
+let prepare sourceRoot publishRoot runtimeRoot revision tree runtimeVersion output =
+    prepareV1 sourceRoot publishRoot runtimeRoot revision tree runtimeVersion output
+
+let prepareV2 sourceRoot publishRoot (selection: SelectionInput) revision tree runtimeVersion output =
+    let sourceRoot = fullDirectory sourceRoot "THMB-SOURCE"
+    let publishRoot = fullDirectory publishRoot "THMB-PAYLOAD"
+    validateRuntimeConfig publishRoot
+    let payloads = enumerateFiles publishRoot archiveRoot
+    let manifest = makeManifestV2 sourceRoot revision tree selection runtimeVersion payloads
+    let manifestBytes = canonical manifest
+    require (manifestBytes.Length <= maxManifestBytes) "THMB-MANIFEST" "manifest exceeds 1 MiB"
+    Directory.CreateDirectory output |> ignore
+    let archiveName = "telemetry-host-manager-net10.0-"+revision+".zip"
+    let archivePath = Path.Combine(output,archiveName)
+    require (not(File.Exists archivePath)) "THMB-OUTPUT" "archive already exists"
+    writeArchive archivePath publishRoot payloads manifestBytes
+    let observed = validateArchive archivePath manifestBytes
+    require (observed = payloads) "THMB-PAYLOAD" "archive payload differs"
+    File.WriteAllBytes(Path.Combine(output,"manifest.json"),manifestBytes)
+    let receipt = {|schema=preparedSchemaV2;archive={|file=archiveName;bytes=FileInfo(archivePath).Length;sha256=shaFile archivePath|}
                     manifestSha256=shaBytes manifestBytes;runtimeManifestDigest=selection.runtime.manifestDigest
                     sdkManifestDigest=selection.sdk.manifestDigest;sourceRevision=revision;sourceTree=tree|} |> canonical
     File.WriteAllBytes(Path.Combine(output,"prepared.json"),receipt)
     archivePath
 
-let verify sourceRoot (selection: SelectionInput) expectedRevision expectedTree preparedPath archiveOverride =
+let verifyV1 sourceRoot runtimeRoot expectedRevision expectedTree preparedPath archiveOverride =
+    let sourceRoot = fullDirectory sourceRoot "THMB-SOURCE"
+    let runtimeRoot = fullDirectory runtimeRoot "THMB-RUNTIME"
+    let preparedBytes = File.ReadAllBytes preparedPath
+    use prepared = parseCanonical maxManifestBytes preparedBytes
+    let root = prepared.RootElement
+    requireShape ["archive";"manifestSha256";"schema";"sourceRevision";"sourceTree"] root "THMB-PREPARED"
+    require (stringProperty "schema" root = preparedSchema && stringProperty "sourceRevision" root = expectedRevision && stringProperty "sourceTree" root = expectedTree) "THMB-PREPARED" "prepared identity differs"
+    let archiveBinding = root.GetProperty "archive"
+    requireShape ["bytes";"file";"sha256"] archiveBinding "THMB-PREPARED"
+    let archiveName = stringProperty "file" archiveBinding
+    require (archiveName = "telemetry-host-manager-net10.0-"+expectedRevision+".zip") "THMB-PREPARED" "archive name differs"
+    let archivePath = defaultArg archiveOverride (Path.Combine(Path.GetDirectoryName preparedPath,archiveName))
+    let archiveInfo = FileInfo archivePath
+    require (archiveInfo.Exists && archiveInfo.Length = int64Property "bytes" archiveBinding && shaFile archivePath = stringProperty "sha256" archiveBinding) "THMB-PREPARED" "archive bytes differ"
+    let manifestFile = Path.Combine(Path.GetDirectoryName preparedPath,"manifest.json")
+    let manifestBytes = File.ReadAllBytes manifestFile
+    require (shaBytes manifestBytes = stringProperty "manifestSha256" root) "THMB-PREPARED" "manifest digest differs"
+    use manifestDocument = parseCanonical maxManifestBytes manifestBytes
+    requireShape ["archiveRoot";"entrypoint";"fixedArgv";"installationRoot";"payloads";"runtime";"schema";"source"] manifestDocument.RootElement "THMB-MANIFEST"
+    let archivedPayloads = validateArchive archivePath manifestBytes
+    let reconstructed = makeManifestV1 sourceRoot expectedRevision expectedTree runtimeRoot supportedRuntime archivedPayloads |> canonical
+    require (reconstructed = manifestBytes) "THMB-MANIFEST" "source, runtime, or payload binding differs"
+
+let verify sourceRoot runtimeRoot expectedRevision expectedTree preparedPath archiveOverride =
+    verifyV1 sourceRoot runtimeRoot expectedRevision expectedTree preparedPath archiveOverride
+
+let verifyV2 sourceRoot (selection: SelectionInput) expectedRevision expectedTree preparedPath archiveOverride =
     let sourceRoot = fullDirectory sourceRoot "THMB-SOURCE"
     let preparedBytes = File.ReadAllBytes preparedPath
     use prepared = parseCanonical maxManifestBytes preparedBytes
     let root = prepared.RootElement
     requireShape ["archive";"manifestSha256";"runtimeManifestDigest";"schema";"sdkManifestDigest";"sourceRevision";"sourceTree"] root "THMB-PREPARED"
-    require (stringProperty "schema" root = preparedSchema && stringProperty "sourceRevision" root = expectedRevision && stringProperty "sourceTree" root = expectedTree) "THMB-PREPARED" "prepared identity differs"
+    require (stringProperty "schema" root = preparedSchemaV2 && stringProperty "sourceRevision" root = expectedRevision && stringProperty "sourceTree" root = expectedTree) "THMB-PREPARED" "prepared identity differs"
     require (stringProperty "runtimeManifestDigest" root = selection.runtime.manifestDigest && stringProperty "sdkManifestDigest" root = selection.sdk.manifestDigest) "THMB-PREPARED" "selected OCI input differs"
     let archiveBinding = root.GetProperty "archive"
     requireShape ["bytes";"file";"sha256"] archiveBinding "THMB-PREPARED"
@@ -464,7 +555,8 @@ let verify sourceRoot (selection: SelectionInput) expectedRevision expectedTree 
     use manifestDocument = parseCanonical maxManifestBytes manifestBytes
     requireShape ["archiveRoot";"buildSdk";"entrypoint";"fixedArgv";"installationRoot";"payloads";"runtime";"schema";"source"] manifestDocument.RootElement "THMB-MANIFEST"
     let archivedPayloads = validateArchive archivePath manifestBytes
-    let reconstructed = makeManifest sourceRoot expectedRevision expectedTree selection supportedRuntime archivedPayloads |> canonical
+    require (stringProperty "schema" manifestDocument.RootElement = schemaV2) "THMB-MANIFEST" "manifest schema differs"
+    let reconstructed = makeManifestV2 sourceRoot expectedRevision expectedTree selection supportedRuntime archivedPayloads |> canonical
     require (reconstructed = manifestBytes) "THMB-MANIFEST" "source, runtime, or payload binding differs"
 
 let parseArguments (argv: string array) =
@@ -510,16 +602,26 @@ let main argv =
         let command,values = parseArguments argv
         match command with
         | "assemble" ->
-            let expected = Set.union selectionOptionNames (Set ["--source-root";"--publish";"--source-revision";"--source-tree";"--runtime-version";"--output"])
-            require (Set.ofSeq values.Keys = expected) "THMB-ARGUMENT" "assemble options differ"
-            let archive = prepare (required "--source-root" values) (required "--publish" values) (selectionFrom values) (required "--source-revision" values) (required "--source-tree" values) (required "--runtime-version" values) (required "--output" values)
+            require (Set.ofSeq values.Keys = Set ["--source-root";"--publish";"--runtime-root";"--source-revision";"--source-tree";"--runtime-version";"--output"]) "THMB-ARGUMENT" "assemble options differ"
+            let archive = prepareV1 (required "--source-root" values) (required "--publish" values) (required "--runtime-root" values) (required "--source-revision" values) (required "--source-tree" values) (required "--runtime-version" values) (required "--output" values)
             printfn "TELEMETRY_HOST_MANAGER_BUNDLE_PREPARED archive=%s sha256=%s" (Path.GetFileName archive) (shaFile archive)
         | "verify" ->
+            let allowed = Set ["--source-root";"--runtime-root";"--expected-revision";"--expected-tree";"--prepared";"--archive"]
+            require (Set.isSubset (Set.ofSeq values.Keys) allowed) "THMB-ARGUMENT" "verify options differ"
+            let archive = match values.TryGetValue "--archive" with | true,value -> Some value | _ -> None
+            verifyV1 (required "--source-root" values) (required "--runtime-root" values) (required "--expected-revision" values) (required "--expected-tree" values) (required "--prepared" values) archive
+            printfn "TELEMETRY_HOST_MANAGER_BUNDLE_VERIFIED"
+        | "assemble-v2" ->
+            let expected = Set.union selectionOptionNames (Set ["--source-root";"--publish";"--source-revision";"--source-tree";"--runtime-version";"--output"])
+            require (Set.ofSeq values.Keys = expected) "THMB-ARGUMENT" "assemble options differ"
+            let archive = prepareV2 (required "--source-root" values) (required "--publish" values) (selectionFrom values) (required "--source-revision" values) (required "--source-tree" values) (required "--runtime-version" values) (required "--output" values)
+            printfn "TELEMETRY_HOST_MANAGER_BUNDLE_PREPARED archive=%s sha256=%s" (Path.GetFileName archive) (shaFile archive)
+        | "verify-v2" ->
             let allowed = Set.union selectionOptionNames (Set ["--source-root";"--expected-revision";"--expected-tree";"--prepared";"--archive"])
             require (Set.isSubset (Set.ofSeq values.Keys) allowed) "THMB-ARGUMENT" "verify options differ"
             require (Set.isSubset (Set.remove "--archive" allowed) (Set.ofSeq values.Keys)) "THMB-ARGUMENT" "verify options are incomplete"
             let archive = match values.TryGetValue "--archive" with | true,value -> Some value | _ -> None
-            verify (required "--source-root" values) (selectionFrom values) (required "--expected-revision" values) (required "--expected-tree" values) (required "--prepared" values) archive
+            verifyV2 (required "--source-root" values) (selectionFrom values) (required "--expected-revision" values) (required "--expected-tree" values) (required "--prepared" values) archive
             printfn "TELEMETRY_HOST_MANAGER_BUNDLE_VERIFIED"
         | _ -> refuse "THMB-ARGUMENT" "command differs"
         0

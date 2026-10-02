@@ -4,7 +4,11 @@ This helper builds the framework-dependent telemetry Host manager into one deter
 Actions artifact. It is a source and served-byte qualification boundary; it does not publish
 a package, image, release, or durable public channel.
 
-The F# boundary owns the closed archive semantics. It binds:
+The F# boundary owns two explicit formats. `bundle/1` and `bundle-prepared/1` keep
+their original shapes, reconstruction behavior, and `assemble`/`verify` CLI grammar for
+historical artifacts. Hardened production uses `bundle/2`, `bundle-prepared/2`, and the
+closed `assemble-v2`/`verify-v2` grammar. Version dispatch never treats one format as the
+other. The v2 boundary binds:
 
 - the exact protected Coordination commit, tree, manager project and lockfile;
 - a separate build SDK from `mcr.microsoft.com/dotnet/sdk` at linux/amd64 manifest
@@ -27,7 +31,7 @@ linux/amd64 platform. It extracts two target trees independently. Each private t
 normalized to directories `0555`, `dotnet` `0555`, and all other files `0444` before the F#
 producer sees it. The build uses only the separately extracted SDK executable. Assembly runs
 in a disposable, network-disabled namespace with the target tree mounted at its final
-`/usr/share/dotnet` path. Verification reconstructs the same canonical bundle/1 manifest from
+`/usr/share/dotnet` path. Verification reconstructs the same canonical bundle/2 manifest from
 the second target tree and requires exact path, byte and mode equality.
 
 The selected target contains 337 files and 109,735,192 bytes after normalization. The selected
@@ -36,7 +40,7 @@ selection, so a caller cannot attach the approved OCI label to changed extracted
 an image, platform, config, SDK executable/tree, target path, file, or mode requires a reviewed
 source change to this producer.
 
-The verifier also rejects missing, extra, changed, duplicate, traversal, linked, oversized,
+The v2 verifier also rejects missing, extra, changed, duplicate, traversal, linked, oversized,
 stale-source and unsupported-runtime inputs. The archive contains the manager payload and
 manifest. It does not duplicate the target runtime because the immutable OCI manifest plus the
 canonical inventory reacquires the exact tree. Actions retention is 90 days; root must retain
@@ -65,5 +69,8 @@ THMB_SDK_EXECUTABLE=/tmp/build-sdk/dotnet \
 The focused suite runs the positive producer and fresh-tree verifier and refuses stale digest,
 wrong base identity, platform, root and source, changed SDK or target bytes, changed hostfxr,
 missing files, writable `0777` target content and changed modes before any manifest or archive is
-written. It retains the existing archive mutation coverage. This selection is stateless input
+written. A changed SDK executable fixture proves the executable is never invoked before its
+complete tree is admitted. The suite also creates and verifies an actual legacy v1 bundle,
+checks that a decoded v1 prepared document reaches the later runtime mismatch predicate, and
+checks cross-version refusals. It retains the existing archive mutation coverage. This selection is stateless input
 validation, so it introduces no lifecycle state or parallel formal model.

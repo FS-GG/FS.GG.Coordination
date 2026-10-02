@@ -61,13 +61,20 @@ jobs:
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$SDK_IMAGE")" = "$TARGET_PLATFORM"
           test "$(docker image inspect --format '{{.Id}}' "$RUNTIME_IMAGE")" = "$RUNTIME_CONFIG_DIGEST"
           test "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$RUNTIME_IMAGE")" = "$TARGET_PLATFORM"
+          sdk_container=""
+          target_container=""
+          verify_container=""
+          cleanup() {
+            for container in "$verify_container" "$target_container" "$sdk_container"; do
+              if test -n "$container"; then
+                docker rm -f "$container" >/dev/null || true
+              fi
+            done
+          }
+          trap cleanup EXIT
           sdk_container="$(docker create --platform "$TARGET_PLATFORM" "$SDK_IMAGE")"
           target_container="$(docker create --platform "$TARGET_PLATFORM" "$RUNTIME_IMAGE")"
           verify_container="$(docker create --platform "$TARGET_PLATFORM" "$RUNTIME_IMAGE")"
-          cleanup() {
-            docker rm -f "$sdk_container" "$target_container" "$verify_container" >/dev/null
-          }
-          trap cleanup EXIT
           mkdir -p "$SDK_ROOT" "$TARGET_RUNTIME_ROOT" "$VERIFY_RUNTIME_ROOT"
           docker cp "$sdk_container:/usr/share/dotnet/." "$SDK_ROOT"
           docker cp "$target_container:/usr/share/dotnet/." "$TARGET_RUNTIME_ROOT"
@@ -78,9 +85,28 @@ jobs:
             find "$root" -type f -exec chmod 0444 {} +
             chmod 0555 "$root/dotnet"
           done
-          test "$("$SDK_ROOT/dotnet" --version)" = "10.0.400"
-          test "$("$TARGET_RUNTIME_ROOT/dotnet" --list-runtimes | grep -c '^Microsoft.NETCore.App 10.0.12 ')" = 1
-          test "$("$TARGET_RUNTIME_ROOT/dotnet" --list-runtimes | grep -c '^Microsoft.AspNetCore.App 10.0.12 ')" = 1
+          SDK_TREE_SHA256="$(python3 - "$SDK_ROOT" <<'PY'
+          import hashlib, json, os, stat, sys
+          root = os.path.realpath(sys.argv[1])
+          rows = []
+          for base, directories, files in os.walk(root):
+              directories.sort()
+              files.sort()
+              for name in files:
+                  path = os.path.join(base, name)
+                  digest = hashlib.sha256()
+                  with open(path, "rb") as stream:
+                      while chunk := stream.read(1024 * 1024):
+                          digest.update(chunk)
+                  rows.append({"path": os.path.relpath(path, root).replace(os.sep, "/"),
+                               "bytes": os.path.getsize(path), "sha256": digest.hexdigest(),
+                               "mode": format(stat.S_IMODE(os.stat(path).st_mode), "04o")})
+          rows.sort(key=lambda row: row["path"])
+          canonical = (json.dumps(rows, sort_keys=True, separators=(",", ":")) + "\n").encode()
+          print(hashlib.sha256(canonical).hexdigest())
+          PY
+          )"
+          test "$SDK_TREE_SHA256" = "c51a26bcd972e5f1b2944a912ca57cab9878fa88a2d8110fa0300c54ba0afcb0"
       - name: Restore and build with the selected immutable SDK tree
         env:
           DOTNET_ROOT: ${{ env.SDK_ROOT }}
@@ -116,19 +142,22 @@ jobs:
             --volume "$TARGET_RUNTIME_ROOT:/usr/share/dotnet:ro" --workdir "$GITHUB_WORKSPACE" \
             "$SDK_IMAGE" /usr/share/dotnet/dotnet exec --fx-version "$RUNTIME_VERSION" \
             eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
-            assemble --source-root "$GITHUB_WORKSPACE" --publish "$MANAGER_OUTPUT" --runtime-root /usr/share/dotnet \
-            --source-revision "$GITHUB_SHA" --source-tree "$SOURCE_TREE" --runtime-version "$RUNTIME_VERSION" --output "$BUNDLE_OUTPUT" "${common[@]}"
+            assemble-v2 --source-root "$GITHUB_WORKSPACE" --publish "$MANAGER_OUTPUT" --runtime-root /usr/share/dotnet \
+            --source-revision "$GITHUB_SHA" --source-tree "$SOURCE_TREE" --runtime-version "$RUNTIME_VERSION" --output "$BUNDLE_OUTPUT" "${common[@]}" \
+            | tee "$BUNDLE_OUTPUT/assembly.log"
           THMB_SOURCE_ROOT="$GITHUB_WORKSPACE" THMB_MANAGER_PUBLISH="$MANAGER_OUTPUT" THMB_RUNTIME_ROOT="$TARGET_RUNTIME_ROOT" \
             THMB_VERIFY_RUNTIME_ROOT="$VERIFY_RUNTIME_ROOT" THMB_SDK_ROOT="$SDK_ROOT" THMB_SDK_EXECUTABLE="$SDK_ROOT/dotnet" \
-            DOTNET_ROOT="$SDK_ROOT" "$SDK_ROOT/dotnet" exec --fx-version 10.0.11 \
-            eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll
+            DOTNET_ROOT="$SDK_ROOT" PATH="$SDK_ROOT:$PATH" "$SDK_ROOT/dotnet" exec --fx-version 10.0.11 \
+            eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll \
+            | tee "$BUNDLE_OUTPUT/focused-tests.log"
           docker run --rm --network none --platform "$TARGET_PLATFORM" --user "$(id -u):$(id -g)" \
             --volume "$GITHUB_WORKSPACE:$GITHUB_WORKSPACE:ro" --volume "$BUNDLE_OUTPUT:$BUNDLE_OUTPUT:ro" \
             --volume "$SDK_ROOT:$SDK_ROOT:ro" --volume "$VERIFY_RUNTIME_ROOT:/usr/share/dotnet:ro" --workdir "$GITHUB_WORKSPACE" \
             "$SDK_IMAGE" /usr/share/dotnet/dotnet exec --fx-version "$RUNTIME_VERSION" \
             eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
-            verify --source-root "$GITHUB_WORKSPACE" --runtime-root /usr/share/dotnet --expected-revision "$GITHUB_SHA" \
-            --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json" "${common[@]}"
+            verify-v2 --source-root "$GITHUB_WORKSPACE" --runtime-root /usr/share/dotnet --expected-revision "$GITHUB_SHA" \
+            --expected-tree "$SOURCE_TREE" --prepared "$BUNDLE_OUTPUT/prepared.json" "${common[@]}" \
+            | tee "$BUNDLE_OUTPUT/verification.log"
       - name: Upload exact manager archive
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
@@ -137,6 +166,9 @@ jobs:
             ${{ env.BUNDLE_OUTPUT }}/telemetry-host-manager-net10.0-${{ github.sha }}.zip
             ${{ env.BUNDLE_OUTPUT }}/manifest.json
             ${{ env.BUNDLE_OUTPUT }}/prepared.json
+            ${{ env.BUNDLE_OUTPUT }}/assembly.log
+            ${{ env.BUNDLE_OUTPUT }}/focused-tests.log
+            ${{ env.BUNDLE_OUTPUT }}/verification.log
           if-no-files-found: error
           retention-days: 90
           compression-level: 0
@@ -159,7 +191,7 @@ jobs:
             --volume "$VERIFY_RUNTIME_ROOT:/usr/share/dotnet:ro" --workdir "$GITHUB_WORKSPACE" \
             "$SDK_IMAGE" /usr/share/dotnet/dotnet exec --fx-version "$RUNTIME_VERSION" \
             eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll \
-            verify --source-root "$GITHUB_WORKSPACE" --runtime-root /usr/share/dotnet --runtime-canonical-root /usr/share/dotnet \
+            verify-v2 --source-root "$GITHUB_WORKSPACE" --runtime-root /usr/share/dotnet --runtime-canonical-root /usr/share/dotnet \
             --runtime-image mcr.microsoft.com/dotnet/aspnet --runtime-manifest-digest sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072 \
             --runtime-config-digest "$RUNTIME_CONFIG_DIGEST" --runtime-os linux --runtime-architecture amd64 \
             --sdk-image mcr.microsoft.com/dotnet/sdk --sdk-manifest-digest sha256:1aabdb4843de1c426d3676bf1220bc040e540f82a765320b3eb2c693e8d0a7dd \

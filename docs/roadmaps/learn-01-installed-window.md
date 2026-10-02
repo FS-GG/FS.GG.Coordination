@@ -4,9 +4,10 @@
 
 The owning C2 container horizon selects a corrected Coordination producer before any new v3
 recipe or image qualification. This source window closes the producer's ambient-runtime gap.
-The existing bundle/1 archive and strict byte, path and mode reconstruction remain the manager
-payload authority; the manager implementation, native verifier and historical served archive
-are unchanged.
+The existing bundle/1 and prepared/1 shapes, CLI grammar, and strict byte, path and mode
+reconstruction remain available for historical artifacts. Hardened production is an explicit
+bundle/2 and prepared/2 successor with separate CLI dispatch; neither version accepts the
+other. The manager implementation, native verifier and historical served archive are unchanged.
 
 The selected target is the official `mcr.microsoft.com/dotnet/aspnet` linux/amd64 manifest
 `sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072`
@@ -32,8 +33,10 @@ window adds no duplicate runtime export.
 Focused compiled acceptance covers the selected target and refuses stale digest, wrong base
 identity, architecture, root and source, changed SDK tree, changed target or hostfxr bytes,
 missing files, `0777` content and changed modes before any manifest or archive write. Existing
-archive mutation and strict served-byte checks remain. The selection is stateless construction
-policy and adds no lifecycle model.
+archive mutation and strict served-byte checks remain. A marker-producing changed SDK
+executable is rejected before invocation. Actual v1 production/verification, a decoded v1
+later runtime mismatch, and both cross-version refusals preserve the historical boundary.
+The selection is stateless construction policy and adds no lifecycle model.
 
 Status: coherent source candidate prepared for one routine PR; protected source qualification,
 the newly served corrected archive, v3 recipe, dual build, container qualification and all
