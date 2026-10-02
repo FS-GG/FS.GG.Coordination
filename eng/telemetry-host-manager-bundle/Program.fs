@@ -144,7 +144,7 @@ let enumerateFiles root prefix =
         values.Add({path=archivePath;bytes=info.Length;sha256=shaFile path;mode=mode})
     values |> Seq.sortBy _.path |> Seq.toArray
 
-let runtimeBinding runtimeRoot path =
+let runtimeBinding (runtimeRoot: string) (path: string) =
     let attributes = File.GetAttributes path
     require ((attributes &&& FileAttributes.ReparsePoint) = enum 0) "THMB-LINK" "runtime file is a link"
     let info = FileInfo path
@@ -153,7 +153,7 @@ let runtimeBinding runtimeRoot path =
     let mode = Convert.ToString(int(File.GetUnixFileMode path),8).PadLeft(4,'0')
     {path=relative;bytes=info.Length;sha256=shaFile path;mode=mode}
 
-let runtimeFiles runtimeRoot directory =
+let runtimeFiles (runtimeRoot: string) (directory: string) =
     let values = ResizeArray<FileBinding>()
     let mutable total = 0L
     for path in Directory.EnumerateFiles(directory,"*",SearchOption.AllDirectories) do
