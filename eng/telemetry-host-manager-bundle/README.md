@@ -33,8 +33,10 @@ dotnet restore eng/telemetry-host-manager/TelemetryHostManager.fsproj --locked-m
 dotnet restore eng/telemetry-host-manager-bundle/TelemetryHostManagerBundle.fsproj --locked-mode
 dotnet restore eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj --locked-mode
 dotnet publish eng/telemetry-host-manager/TelemetryHostManager.fsproj -c Release --no-restore -o /tmp/telemetry-host-manager-publish
+dotnet build eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
 THMB_SOURCE_ROOT="$PWD" THMB_MANAGER_PUBLISH=/tmp/telemetry-host-manager-publish THMB_RUNTIME_ROOT=/usr/share/dotnet \
-  dotnet run --project eng/telemetry-host-manager-bundle/tests/TelemetryHostManagerBundle.Tests.fsproj -c Release --no-restore
+  DOTNET_ROLL_FORWARD=Disable dotnet exec --fx-version 10.0.12 \
+  eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll
 ```
 
 The pipeline is a single linear build, assemble, upload, fresh download, and verification

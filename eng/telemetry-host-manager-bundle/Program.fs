@@ -249,7 +249,7 @@ let makeManifest sourceRoot revision tree runtimeRoot runtimeVersion payloads =
     validatePayloadRequirements payloads
     let source = sourceFacts sourceRoot revision tree
     let runtime = runtimeFacts sourceRoot runtimeRoot runtimeVersion
-    let fixedArgv = [|runtimeRoot+"/dotnet";installationRoot+"/TelemetryHostManager.dll"|]
+    let fixedArgv = [|runtimeRoot+"/dotnet";"exec";"--fx-version";runtimeVersion;installationRoot+"/TelemetryHostManager.dll"|]
     {| schema=schema; source=source; runtime=runtime; archiveRoot=archiveRoot; installationRoot=installationRoot
        entrypoint=entrypoint; fixedArgv=fixedArgv; payloads=payloads |}
 

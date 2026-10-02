@@ -3,6 +3,7 @@ module TelemetryHostManagerBundleTests
 open System
 open System.IO
 open System.IO.Compression
+open System.Text.Json
 open FS.GG.Telemetry.Host.Manager
 
 let require condition message = if not condition then failwith message
@@ -66,7 +67,7 @@ let main _ =
     let tree = Bundle.run "git" ["rev-parse";"HEAD^{tree}"] sourceRoot
     let workflow = File.ReadAllText(Path.Combine(sourceRoot,".github/workflows/telemetry-host-manager-bundle.yml"))
     let occurrences (needle: string) = workflow.Split(needle,StringSplitOptions.None).Length-1
-    for required in ["permissions:\n  contents: read";"github.ref == 'refs/heads/main'";"dotnet-version: 10.0.400";"RUNTIME_VERSION: 10.0.12";"compression-level: 0";"retention-days: 90";"cmp \"$BUNDLE_OUTPUT/manifest.json\" \"$SERVED_OUTPUT/manifest.json\""] do
+    for required in ["permissions:\n  contents: read";"github.ref == 'refs/heads/main'";"dotnet-version: 10.0.400";"RUNTIME_VERSION: 10.0.12";"compression-level: 0";"retention-days: 90";"dotnet exec --fx-version \"$RUNTIME_VERSION\" eng/telemetry-host-manager-bundle/bin/Release/net10.0/TelemetryHostManagerBundle.dll";"dotnet exec --fx-version \"$RUNTIME_VERSION\" eng/telemetry-host-manager-bundle/tests/bin/Release/net10.0/TelemetryHostManagerBundle.Tests.dll";"cmp \"$BUNDLE_OUTPUT/manifest.json\" \"$SERVED_OUTPUT/manifest.json\""] do
         require (workflow.Contains(required,StringComparison.Ordinal)) ("workflow binding absent: "+required)
     require (occurrences "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" = 1) "upload action count differs"
     require (occurrences "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c" = 1) "download action count differs"
@@ -82,6 +83,9 @@ let main _ =
         let firstArchive = Bundle.prepare sourceRoot publishRoot runtimeRoot revision tree Bundle.supportedRuntime first
         let secondArchive = Bundle.prepare sourceRoot publishRoot runtimeRoot revision tree Bundle.supportedRuntime second
         require (File.ReadAllBytes firstArchive = File.ReadAllBytes secondArchive) "repeated actual assembly differs"
+        use manifestDocument = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(first,"manifest.json")))
+        let fixedArgv = manifestDocument.RootElement.GetProperty("fixedArgv").EnumerateArray() |> Seq.map _.GetString() |> Seq.toArray
+        require (fixedArgv = [|runtimeRoot+"/dotnet";"exec";"--fx-version";Bundle.supportedRuntime;Bundle.installationRoot+"/TelemetryHostManager.dll"|]) "fixed runtime argv differs"
         Bundle.verify sourceRoot runtimeRoot revision tree (Path.Combine(first,"prepared.json")) None
         let servedArchive = Path.Combine(served,Path.GetFileName firstArchive)
         File.Copy(firstArchive,servedArchive)
