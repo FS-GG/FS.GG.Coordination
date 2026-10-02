@@ -1,5 +1,49 @@
 # LEARN-01.4 — Installed fixed-context window preparation
 
+## C2 P2-C.1 — Portable hardened manager runtime source window, 2026-10-02
+
+The owning C2 container horizon selects a corrected Coordination producer before any new v3
+recipe or image qualification. This source window closes the producer's ambient-runtime gap.
+The existing bundle/1 and prepared/1 shapes, CLI grammar, and strict byte, path and mode
+reconstruction remain available for historical artifacts. Hardened production is an explicit
+bundle/2 and prepared/2 successor with separate CLI dispatch; neither version accepts the
+other. The manager implementation, native verifier and historical served archive are unchanged.
+
+The selected target is the official `mcr.microsoft.com/dotnet/aspnet` linux/amd64 manifest
+`sha256:ed6a2d26633ddcd3d42a1d9f9866214ecbbc11ba6ac5e0e843da02c13da24072`
+with config `sha256:d84f2a8aca8b8dbf142dd6bb1ffa7a1c051085c55bf36fc2f7fa1b1f17820932`.
+The producer binds its complete hardened `/usr/share/dotnet` inventory, including Core and
+ASP.NET 10.0.12, to canonical tree SHA-256
+`ead4ece42719198be9607d18415e428e3a6fcaadf50b88dc6e93894c47bec4c2`.
+Directories and the `dotnet` host are `0555`; other target files are `0444`. The separate
+official SDK 10.0.400 input is linux/amd64 manifest
+`sha256:1aabdb4843de1c426d3676bf1220bc040e540f82a765320b3eb2c693e8d0a7dd`,
+config `sha256:690de8d26a94a08b03190ccabf1906ac4025172267a1584255f062869caf8242`,
+and canonical tree SHA-256
+`c51a26bcd972e5f1b2944a912ca57cab9878fa88a2d8110fa0300c54ba0afcb0`.
+
+The workflow acquires both inputs by digest, checks actual config and platform metadata, uses
+the selected SDK executable for locked build work, and extracts two independent target trees.
+It normalizes both target copies before manifest construction. Assembly runs in a disposable,
+network-disabled namespace with the selected target mounted at its final
+`/usr/share/dotnet` path; compiled verification reconstructs the same manifest against the
+second copy. The OCI input plus canonical inventory is independently reacquirable, so this
+window adds no duplicate runtime export.
+
+Focused compiled acceptance covers the selected target and refuses stale digest, wrong base
+identity, architecture, root and source, changed SDK tree, changed target or hostfxr bytes,
+missing files, `0777` content and changed modes before any manifest or archive write. Existing
+archive mutation and strict served-byte checks remain. A marker-producing changed SDK
+executable is rejected before invocation. Actual v1 production/verification, a decoded v1
+later runtime mismatch, and both cross-version refusals preserve the historical boundary.
+The selection is stateless construction policy and adds no lifecycle model.
+
+Status: coherent source candidate prepared for one routine PR; protected source qualification,
+the newly served corrected archive, v3 recipe, dual build, container qualification and all
+activation or installed-runtime claims remain pending their owning later windows. Historical
+artifact `11209647998` remains valid evidence of its hosted bundle and retains its local target
+refusal; it is not rewritten or adopted.
+
 ## C2 P2-B manager archive source window, 2026-10-02
 
 The container replacement's [C2 owning plan](https://github.com/FS-GG/.github/blob/main/docs/roadmaps/learn-c2-persistent-receiver-v3.md)
