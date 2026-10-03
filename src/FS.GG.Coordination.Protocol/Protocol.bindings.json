@@ -325,6 +325,23 @@
           "column": 4
         }
       }
+    },
+    {
+      "id": "EXPORT-PreparedAttemptContract",
+      "module": "CoordinationProtocol",
+      "declaration": "preflightContractVersion",
+      "promoteCatalogueRows": false,
+      "source": {
+        "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
+        "start": {
+          "line": 1162,
+          "column": 1
+        },
+        "end": {
+          "line": 1162,
+          "column": 4
+        }
+      }
     }
   ],
   "actions": [

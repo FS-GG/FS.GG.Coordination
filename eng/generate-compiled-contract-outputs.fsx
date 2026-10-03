@@ -16,7 +16,12 @@ let sha256Bytes (bytes: byte array) =
 
 let sha256File path = File.ReadAllBytes path |> sha256Bytes
 
-let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
+// Direct invocation of the owned FSI DLL retains the script-argument separator.
+// Consume only that leading boundary; embedded separators remain unknown arguments.
+let arguments =
+    match fsi.CommandLineArgs |> Array.skip 1 |> Array.toList with
+    | "--" :: remaining -> remaining
+    | remaining -> remaining
 
 let rec parse root output remaining =
     match remaining with
@@ -142,7 +147,7 @@ let sourceVersion, extractorVersion, quintVersion, profileVersion, schemaVersion
 if sourceVersion <> "fsgg.quint.literate-source/1" then
     fail "SOURCE-VERSION" sourceVersion
 
-if extractorVersion <> "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0" then
+if extractorVersion <> "quint-specification-v1@FS.GG.SDD.Artifacts/2.1.0" then
     fail "EXTRACTOR-VERSION" extractorVersion
 
 if
@@ -162,7 +167,7 @@ if authority.GetProperty("backend").GetString() <> "quint-specification-v1" then
 
 if
     authority.GetProperty("packageIdentity").GetString()
-    <> "FS.GG.SDD.Artifacts/1.5.0"
+    <> "FS.GG.SDD.Artifacts/2.1.0"
 then
     fail "AUTHORITY-PACKAGE" "wrong"
 

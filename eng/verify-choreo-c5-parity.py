@@ -2,7 +2,8 @@
 """Compare actual Quint legacy runs with the retained Choreo ITF milestones.
 
 This is an observation projection, never a transition implementation. C2 first
-regenerates all eight Choreo fixtures against the exact source and binary.
+regenerates all eight Choreo fixtures against unchanged current model bytes and
+the exact binary, while their manifest retains its historical source identity.
 """
 import hashlib
 import json
@@ -25,6 +26,8 @@ def require(condition, detail):
 
 
 def export_legacy(directory):
+    subprocess.run(['dotnet', 'fsi', str(ROOT / 'eng/validate-choreo-trace-source.fsx'),
+                    '--', '--root', str(ROOT)], cwd=ROOT, check=True)
     quint = os.environ.get('FSGG_QUINT_BIN') or shutil.which('quint')
     require(quint is not None, 'Quint executable missing')
     require(hashlib.sha256(Path(quint).read_bytes()).hexdigest() == QUINT_SHA,
@@ -125,9 +128,6 @@ def relative_retry(states, operation, initial_stage):
 
 def main():
     manifest = json.loads((FIXTURES / 'manifest.json').read_text())
-    source = ROOT / manifest['source']['path']
-    require(hashlib.sha256(source.read_bytes()).hexdigest() == manifest['source']['sha256'],
-            'protocol source identity differs')
     with tempfile.TemporaryDirectory(prefix='fsgg-choreo-parity-') as temporary:
         directory = Path(temporary)
         export_legacy(directory)

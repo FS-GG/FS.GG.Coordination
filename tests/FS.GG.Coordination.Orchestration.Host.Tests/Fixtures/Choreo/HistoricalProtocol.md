@@ -1,0 +1,7395 @@
+# GS2-03.1 canonical coordination protocol
+
+This document is the sole authored source for the coordination protocol baseline. Every behavioral
+fact is inside a named Quint block. The generated `.qnt`, compiled contract, and F# bindings are
+projections and must never be edited independently.
+
+GS2-02.1 established vocabulary and stable integration identities; GS2-02.2 added the closed,
+revision-aware authority catalogue; GS2-02.3 added observation outcomes and knowledge semantics.
+GS2-02.4 added lifecycle intent and derived status; GS2-02.5 added native relation algebra; GS2-02.6
+added typed retained protocol streams; GS2-02.7 added the closed mutation algebra; GS2-02.8 added
+ordered resumable durable plans. This unit adds closed desired-state families and pure inspect, plan,
+apply-intent, and verify classification for GitHub configuration. This unit adds a closed catalogue
+of deterministic compiled-contract output families and typed qualification of their identity,
+content, completeness, support, freshness, and order. This unit binds canonical typed-effect behavior
+to an exact five-part version tuple and stable semantic-diff projection. GS2-03.1 adds the closed
+qualification-manifest identity and its candidate, input-set, freshness, independence, result, and
+review bindings. GS2-03.10 replaces comment authority with fenced Git journals, snapshot epochs, shared reconciliation, and observe-before-contract cutover. No network writer or production mutation authority is defined here.
+
+```quint protocol.qnt +=
+module CoordinationProtocol {
+  type VocabularyEntry = { id: str, kind: str, family: str }
+  type PropertyEntry = { id: str, kind: str, subjects: Set[str] }
+  type RelationshipEntry = { id: str, kind: str, fromId: str, toId: str }
+  type VerificationEntry = {
+    id: str,
+    kind: str,
+    verificationKind: str,
+    subjectIds: Set[str],
+    boundIds: Set[str],
+  }
+  type BoundEntry = { id: str, kind: str, minimum: int, maximum: int }
+  type CompatibilityEntry = { id: str, kind: str, surface: str, requirement: str, detail: str }
+  type AuthorityBinding = {
+    id: str,
+    kind: str,
+    family: str,
+    revisionKind: str,
+    revisionValue: str,
+    completenessContract: str,
+    evidenceRelationship: str,
+  }
+  type ObservationOutcome = {
+    id: str,
+    kind: str,
+    knowledgeClass: str,
+    retryClass: str,
+    terminal: bool,
+  }
+  type AuthorityObservation = {
+    outcomeId: str,
+    authorityId: str,
+    family: str,
+    revisionKind: str,
+    revisionValue: str,
+    completenessContract: str,
+    evidenceRelationship: str,
+    complete: bool,
+    contradictory: bool,
+    retryAfterPresent: bool,
+  }
+  type LifecycleIntent = {
+    id: str,
+    kind: str,
+    schedulingClass: str,
+    terminal: bool,
+  }
+  type LifecycleFacts = {
+    claimOutcomeId: str,
+    claimPresent: bool,
+    blockerOutcomeId: str,
+    blocked: bool,
+    pullRequestOutcomeId: str,
+    pullRequestOpen: bool,
+    reviewOutcomeId: str,
+    reviewAccepted: bool,
+    deliveryOutcomeId: str,
+    delivered: bool,
+  }
+  type NativeRelationKind = { id: str, kind: str, direction: str }
+  type NativeRelationEdge = { relationKindId: str, sourceId: str, targetId: str }
+  type ProtocolStreamKind = { id: str, kind: str, family: str }
+  type ProtocolPayloadKind = {
+    id: str,
+    kind: str,
+    streamKindId: str,
+    retentionClass: str,
+    durableCheckpoint: bool,
+  }
+  type ProtocolEnvelope = {
+    streamKindId: str,
+    streamId: str,
+    subjectId: str,
+    generation: int,
+    sequence: int,
+    eventId: str,
+    predecessorEventId: str,
+    payloadKindId: str,
+    retentionClass: str,
+    durableCheckpoint: bool,
+  }
+  type MutationKind = {
+    id: str,
+    kind: str,
+    targetKind: str,
+    payloadKind: str,
+    revisionRequirement: str,
+  }
+  type MutationOutcome = {
+    id: str,
+    kind: str,
+    finality: str,
+    effectClass: str,
+    retryClass: str,
+  }
+  type MutationIntent = {
+    operationId: str,
+    subjectId: str,
+    mutationKindId: str,
+    targetKind: str,
+    payloadKind: str,
+    expectedRevision: int,
+    idempotencyKey: str,
+    payloadDigest: str,
+    compensatesOperationId: str,
+  }
+  type MutationResult = {
+    intent: MutationIntent,
+    outcomeId: str,
+    resultingRevision: int,
+  }
+  type DurablePlanStep = {
+    planId: str,
+    stepId: str,
+    predecessorStepId: str,
+    sequence: int,
+    causationId: str,
+    correlationId: str,
+    compensationBoundaryId: str,
+    intent: MutationIntent,
+  }
+  pure val vocabularyCatalogue = Set(
+    { id: "SubjectVocabulary", kind: "subject", family: "subjects" },
+    { id: "AuthorityVocabulary", kind: "authority", family: "authorities" },
+    { id: "CodecVocabulary", kind: "codec", family: "codecs" },
+    { id: "CommandVocabulary", kind: "command", family: "commands" },
+    { id: "EventVocabulary", kind: "event", family: "events" },
+    { id: "MutationVocabulary", kind: "mutation", family: "mutations" },
+    { id: "ProjectionVocabulary", kind: "projection", family: "projections" },
+    { id: "ObservationPlanVocabulary", kind: "observationPlan", family: "observation-plans" },
+    { id: "SettingsProfileVocabulary", kind: "settingsProfile", family: "settings-profiles" },
+    { id: "EvidenceObligationVocabulary", kind: "evidence", family: "evidence-obligations" },
+    { id: "VersionIdentityVocabulary", kind: "versionIdentity", family: "version-identities" }
+  )
+
+  pure val authorityCatalogue = Set(
+    { id: "AUTH-NativeGitHub", kind: "authorityBinding", family: "native-github", revisionKind: "github-object-version", revisionValue: "node-id-and-updated-at", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-NativeGitHub-Evidence" },
+    { id: "AUTH-RepositoryRegistry", kind: "authorityBinding", family: "repository-registry", revisionKind: "registry-document-sha256", revisionValue: "canonical-document-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-RepositoryRegistry-Evidence" },
+    { id: "AUTH-ProtocolStream", kind: "authorityBinding", family: "protected-sharded-git-journal", revisionKind: "git-expected-parent-and-generation", revisionValue: "journal-commit-and-fencing-generation", completenessContract: "complete-ancestry-snapshot-and-terminal-checkpoint", evidenceRelationship: "REL-AUTH-ProtocolStream-Evidence" },
+    { id: "AUTH-GitLedger", kind: "authorityBinding", family: "git-ledger", revisionKind: "git-commit-sha", revisionValue: "commit-object-id", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-GitLedger-Evidence" },
+    { id: "AUTH-Actions", kind: "authorityBinding", family: "actions", revisionKind: "workflow-run-attempt", revisionValue: "run-id-and-attempt", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-Actions-Evidence" },
+    { id: "AUTH-PackageFeed", kind: "authorityBinding", family: "package-feed", revisionKind: "package-content-sha256", revisionValue: "package-bytes-digest", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-PackageFeed-Evidence" },
+    { id: "AUTH-ClassifiedExternal", kind: "authorityBinding", family: "classified-external", revisionKind: "classified-external-revision", revisionValue: "declared-source-revision", completenessContract: "complete-required-fields", evidenceRelationship: "REL-AUTH-ClassifiedExternal-Evidence" }
+  )
+
+  pure val observationOutcomeCatalogue = Set(
+    { id: "OBS-Observed", kind: "observationOutcome", knowledgeClass: "positive", retryClass: "none", terminal: true },
+    { id: "OBS-ProvenAbsent", kind: "observationOutcome", knowledgeClass: "negative", retryClass: "none", terminal: true },
+    { id: "OBS-Contradictory", kind: "observationOutcome", knowledgeClass: "contradictory", retryClass: "resolve-contradiction", terminal: false },
+    { id: "OBS-Unreadable", kind: "observationOutcome", knowledgeClass: "none", retryClass: "repair-read", terminal: false },
+    { id: "OBS-Unsupported", kind: "observationOutcome", knowledgeClass: "none", retryClass: "none", terminal: true },
+    { id: "OBS-Unauthorized", kind: "observationOutcome", knowledgeClass: "none", retryClass: "repair-authorization", terminal: false },
+    { id: "OBS-Incomplete", kind: "observationOutcome", knowledgeClass: "none", retryClass: "complete-evidence", terminal: false },
+    { id: "OBS-Stale", kind: "observationOutcome", knowledgeClass: "none", retryClass: "refresh-revision", terminal: false },
+    { id: "OBS-RateLimited", kind: "observationOutcome", knowledgeClass: "none", retryClass: "authority-window", terminal: false }
+  )
+
+  pure val lifecycleIntentCatalogue = Set(
+    { id: "INTENT-Backlog", kind: "lifecycleIntent", schedulingClass: "backlog", terminal: false },
+    { id: "INTENT-Ready", kind: "lifecycleIntent", schedulingClass: "ready", terminal: false },
+    { id: "INTENT-Paused", kind: "lifecycleIntent", schedulingClass: "paused", terminal: false },
+    { id: "INTENT-Cancelled", kind: "lifecycleIntent", schedulingClass: "cancelled", terminal: true }
+  )
+
+  pure val nativeRelationKindCatalogue = Set(
+    { id: "REL-ParentChild", kind: "nativeRelationKind", direction: "parent-to-child" },
+    { id: "REL-Blocks", kind: "nativeRelationKind", direction: "blocker-to-blocked" }
+  )
+
+  pure val protocolStreamKindCatalogue = Set(
+    { id: "STREAM-Claim", kind: "protocolStreamKind", family: "journal-cas-claim-lease-touch-set-fenced" },
+    { id: "STREAM-OperationLock", kind: "protocolStreamKind", family: "journal-cas-operation-election-fenced" },
+    { id: "STREAM-Review", kind: "protocolStreamKind", family: "journal-cas-full-snapshot-review-epoch" },
+    { id: "STREAM-Delivery", kind: "protocolStreamKind", family: "delivery" },
+    { id: "STREAM-OperationReceipt", kind: "protocolStreamKind", family: "operation-receipt" }
+  )
+
+  pure val protocolPayloadKindCatalogue = Set(
+    { id: "PAYLOAD-Claim", kind: "protocolPayloadKind", streamKindId: "STREAM-Claim", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-Lease", kind: "protocolPayloadKind", streamKindId: "STREAM-Claim", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-TouchSet", kind: "protocolPayloadKind", streamKindId: "STREAM-Claim", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-OperationLock", kind: "protocolPayloadKind", streamKindId: "STREAM-OperationLock", retentionClass: "ephemeral", durableCheckpoint: false },
+    { id: "PAYLOAD-Election", kind: "protocolPayloadKind", streamKindId: "STREAM-OperationLock", retentionClass: "durable", durableCheckpoint: true },
+    { id: "PAYLOAD-Review", kind: "protocolPayloadKind", streamKindId: "STREAM-Review", retentionClass: "durable", durableCheckpoint: true },
+    { id: "PAYLOAD-Delivery", kind: "protocolPayloadKind", streamKindId: "STREAM-Delivery", retentionClass: "durable", durableCheckpoint: true },
+    { id: "PAYLOAD-OperationReceipt", kind: "protocolPayloadKind", streamKindId: "STREAM-OperationReceipt", retentionClass: "durable", durableCheckpoint: true }
+  )
+
+  pure val mutationKindCatalogue = Set(
+    { id: "MUT-Create", kind: "mutationKind", targetKind: "subject", payloadKind: "create", revisionRequirement: "absent" },
+    { id: "MUT-Append", kind: "mutationKind", targetKind: "stream", payloadKind: "append", revisionRequirement: "exact" },
+    { id: "MUT-AddEdge", kind: "mutationKind", targetKind: "relation", payloadKind: "edge", revisionRequirement: "exact" },
+    { id: "MUT-RemoveEdge", kind: "mutationKind", targetKind: "relation", payloadKind: "edge", revisionRequirement: "exact" },
+    { id: "MUT-Set", kind: "mutationKind", targetKind: "field", payloadKind: "scalar", revisionRequirement: "exact" },
+    { id: "MUT-Clear", kind: "mutationKind", targetKind: "field", payloadKind: "scalar", revisionRequirement: "exact" },
+    { id: "MUT-Transition", kind: "mutationKind", targetKind: "lifecycle", payloadKind: "transition", revisionRequirement: "exact" },
+    { id: "MUT-Compensate", kind: "mutationKind", targetKind: "mutation", payloadKind: "compensation", revisionRequirement: "exact" }
+  )
+
+  pure val mutationOutcomeCatalogue = Set(
+    { id: "MOUT-Applied", kind: "mutationOutcome", finality: "terminal", effectClass: "applied", retryClass: "none" },
+    { id: "MOUT-Idempotent", kind: "mutationOutcome", finality: "terminal", effectClass: "no-op", retryClass: "none" },
+    { id: "MOUT-Rejected", kind: "mutationOutcome", finality: "terminal", effectClass: "refused", retryClass: "new-authority-or-intent" },
+    { id: "MOUT-RevisionConflict", kind: "mutationOutcome", finality: "terminal", effectClass: "conflict", retryClass: "refresh-and-new-intent" },
+    { id: "MOUT-RateLimited", kind: "mutationOutcome", finality: "uncertain", effectClass: "unknown", retryClass: "authority-window" },
+    { id: "MOUT-Unavailable", kind: "mutationOutcome", finality: "uncertain", effectClass: "unknown", retryClass: "availability-window" },
+    { id: "MOUT-TimedOut", kind: "mutationOutcome", finality: "uncertain", effectClass: "unknown", retryClass: "observe-or-exact-replay" },
+    { id: "MOUT-Incomplete", kind: "mutationOutcome", finality: "uncertain", effectClass: "unknown", retryClass: "complete-observation" }
+  )
+
+  pure val durablePlanDispositionCatalogue = Set(
+    { id: "PDISP-Advance", kind: "durablePlanDisposition", receiptClass: "terminal-success", nextAction: "next-step" },
+    { id: "PDISP-ReceiptReread", kind: "durablePlanDisposition", receiptClass: "uncertain", nextAction: "reread-receipt" },
+    { id: "PDISP-Replan", kind: "durablePlanDisposition", receiptClass: "terminal-refusal-no-applied-boundary", nextAction: "compile-new-plan" },
+    { id: "PDISP-Compensate", kind: "durablePlanDisposition", receiptClass: "terminal-refusal-applied-boundary", nextAction: "compensate-reverse" }
+  )
+
+  pure val desiredStateSpecificationCatalogue = Set(
+    { id: "DSTATE-Specification", kind: "desiredStateSpecification", authorityClass: "revision-bound",
+      executionClass: "pure-intent-no-writer",
+      issueSchemaContract: "issue-type|issue-field|field-type|allowed-value",
+      repositoryPropertiesContract: "property-schema|property-value",
+      projectsContract: "project-field|project-view|project-workflow|project-visibility|project-membership-policy",
+      repositoryProfileContract: "ruleset|merge-queue|merge-policy|actions-policy|branch-deletion-policy",
+      workflowPinsContract: "reusable-workflow-pin|action-pin",
+      releasesContract: "release-environment|immutable-release|tag-protection|trusted-publisher",
+      permissionsContract: "repository-visibility|team-access|workflow-permission|environment-protection",
+      securitySupplyChainContract: "vulnerability-policy|secret-policy|dependency-policy|sbom-policy|attestation-policy",
+      phaseContract: "DSPH-Inspect>DSPH-Plan>(DSPH-Apply|DSPH-Verify)>DSPH-Verify",
+      phaseAuthorityContract: "subject|profile|family|content|authority-revision|plan-outcome|apply-receipt",
+      refusalContract: "unsupported|unauthorized|incomplete|stale|identity-mismatch" }
+  )
+
+  pure val compiledOutputSpecificationCatalogue = Set(
+    { id: "COUT-Specification", kind: "compiledOutputSpecification",
+      familyContract: "1:schemas|2:command-metadata|3:permission-census|4:mutation-census|5:settings-plans|6:projection-views|7:semantic-diff|8:diagrams|9:model-test-inventory",
+      identityContract: "family|ordinal|source|behavior|source-version|extractor-version|quint-version|profile-version|schema-version|contract|content",
+      qualificationContract: "supported|complete|fresh|qualification-manifest:candidate|input-set|environment|results|reviewers|independent-cases|independent-review",
+      projectionViewFormats: "markdown|json", normalizationAuthority: "typed-effect-json",
+      refusalContract: "missing|duplicate|substituted|unsupported|incomplete|reordered|stale", versionContract: "fsgg.quint.literate-source/1|quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0|sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f|fsgg-quint-profile/2|fsgg.quint.compiled-contract/v2", semanticDiffContract: "ordinal|json-pointer|value-sha256" }
+  )
+
+  pure val relationshipCatalogue = Set(
+    { id: "REL-Subject-Evidence", kind: "verifiedBy", fromId: "SubjectVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-Authority-Evidence", kind: "verifiedBy", fromId: "AuthorityVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-Codec-Evidence", kind: "verifiedBy", fromId: "CodecVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-Command-Evidence", kind: "verifiedBy", fromId: "CommandVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-Event-Evidence", kind: "verifiedBy", fromId: "EventVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-Mutation-Evidence", kind: "verifiedBy", fromId: "MutationVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-Projection-Evidence", kind: "verifiedBy", fromId: "ProjectionVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-ObservationPlan-Evidence", kind: "verifiedBy", fromId: "ObservationPlanVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-SettingsProfile-Evidence", kind: "verifiedBy", fromId: "SettingsProfileVocabulary", toId: "EvidenceObligationVocabulary" },
+    { id: "REL-VersionIdentity-Evidence", kind: "verifiedBy", fromId: "VersionIdentityVocabulary", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-NativeGitHub-Evidence", kind: "verifiedBy", fromId: "AUTH-NativeGitHub", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-RepositoryRegistry-Evidence", kind: "verifiedBy", fromId: "AUTH-RepositoryRegistry", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-ProtocolStream-Evidence", kind: "verifiedBy", fromId: "AUTH-ProtocolStream", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-GitLedger-Evidence", kind: "verifiedBy", fromId: "AUTH-GitLedger", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-Actions-Evidence", kind: "verifiedBy", fromId: "AUTH-Actions", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-PackageFeed-Evidence", kind: "verifiedBy", fromId: "AUTH-PackageFeed", toId: "EvidenceObligationVocabulary" }
+    ,{ id: "REL-AUTH-ClassifiedExternal-Evidence", kind: "verifiedBy", fromId: "AUTH-ClassifiedExternal", toId: "EvidenceObligationVocabulary" }
+  )
+
+  pure val boundCatalogue = Set(
+    { id: "BOUND-VocabularyCardinality", kind: "bound", minimum: 11, maximum: 11 },
+    { id: "BOUND-AuthorityCardinality", kind: "bound", minimum: 7, maximum: 7 },
+    { id: "BOUND-ObservationOutcomeCardinality", kind: "bound", minimum: 9, maximum: 9 },
+    { id: "BOUND-LifecycleIntentCardinality", kind: "bound", minimum: 4, maximum: 4 },
+    { id: "BOUND-NativeRelationKindCardinality", kind: "bound", minimum: 2, maximum: 2 },
+    { id: "BOUND-ProtocolStreamKindCardinality", kind: "bound", minimum: 5, maximum: 5 },
+    { id: "BOUND-ProtocolPayloadKindCardinality", kind: "bound", minimum: 8, maximum: 8 },
+    { id: "BOUND-MutationKindCardinality", kind: "bound", minimum: 8, maximum: 8 },
+    { id: "BOUND-MutationOutcomeCardinality", kind: "bound", minimum: 8, maximum: 8 },
+    { id: "BOUND-DurablePlanDispositionCardinality", kind: "bound", minimum: 4, maximum: 4 },
+    { id: "BOUND-TraceSteps", kind: "bound", minimum: 0, maximum: 4 }
+  )
+
+  pure val verificationCatalogue = Set(
+    { id: "VERIFY-VocabularyBaseline", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "SubjectVocabulary", "AuthorityVocabulary", "CodecVocabulary", "CommandVocabulary",
+        "EventVocabulary", "MutationVocabulary", "ProjectionVocabulary", "ObservationPlanVocabulary",
+        "SettingsProfileVocabulary", "EvidenceObligationVocabulary", "VersionIdentityVocabulary"
+      ), boundIds: Set("BOUND-VocabularyCardinality", "BOUND-TraceSteps") },
+    { id: "VERIFY-AuthorityBindings", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "AUTH-NativeGitHub", "AUTH-RepositoryRegistry", "AUTH-ProtocolStream", "AUTH-GitLedger",
+        "AUTH-Actions", "AUTH-PackageFeed", "AUTH-ClassifiedExternal"
+      ), boundIds: Set("BOUND-AuthorityCardinality", "BOUND-TraceSteps") },
+    { id: "VERIFY-ObservationOutcomes", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "OBS-Observed", "OBS-ProvenAbsent", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported",
+        "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ), boundIds: Set("BOUND-ObservationOutcomeCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-LifecycleIntent", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+      ), boundIds: Set("BOUND-LifecycleIntentCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-NativeRelations", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "REL-ParentChild", "REL-Blocks"
+      ), boundIds: Set("BOUND-NativeRelationKindCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-ProtocolStreams", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "STREAM-Claim", "STREAM-OperationLock", "STREAM-Review", "STREAM-Delivery", "STREAM-OperationReceipt",
+        "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock", "PAYLOAD-Election",
+        "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+      ), boundIds: Set("BOUND-ProtocolStreamKindCardinality", "BOUND-ProtocolPayloadKindCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-MutationAlgebra", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "MUT-Create", "MUT-Append", "MUT-AddEdge", "MUT-RemoveEdge", "MUT-Set", "MUT-Clear", "MUT-Transition", "MUT-Compensate",
+        "MOUT-Applied", "MOUT-Idempotent", "MOUT-Rejected", "MOUT-RevisionConflict",
+        "MOUT-RateLimited", "MOUT-Unavailable", "MOUT-TimedOut", "MOUT-Incomplete"
+      ), boundIds: Set("BOUND-MutationKindCardinality", "BOUND-MutationOutcomeCardinality", "BOUND-TraceSteps") }
+    ,{ id: "VERIFY-DurablePlans", kind: "verification", verificationKind: "bounded-invariant-and-witness", subjectIds: Set(
+        "PDISP-Advance", "PDISP-ReceiptReread", "PDISP-Replan", "PDISP-Compensate",
+        "PAYLOAD-OperationReceipt", "MUT-Compensate"
+      ), boundIds: Set("BOUND-DurablePlanDispositionCardinality", "BOUND-TraceSteps") }
+  )
+
+  pure val compatibilityCatalogue = Set(
+    { id: "COMPAT-Profile2", kind: "compatibility", surface: "fsgg-quint-profile/2", requirement: "exact", detail: "Consumer-defined structural profile; GS2-03.10 replaces comment authority with protected sharded Git-journal CAS, and GS2-08.1 freezes fsgg.github-substrate.epoch-wire/1 for fleet-cutover:fs-gg-production with OperatingV1>Preparing>FreezeRequested>Frozen>SwitchedV2>VerifiedV2>OpenV2>ObservingV2>ContractingV1>OperatingV2 plus closed pre-open RollingBack; profile 1 remains frozen." }
+  )
+
+  pure val propertyCatalogue = Set(
+    { id: "AcceptedVocabularyIsQualified", kind: "invariant", subjects: Set("EvidenceObligationVocabulary") },
+    { id: "VocabularyCanBeAccepted", kind: "example", subjects: Set("SubjectVocabulary") },
+    { id: "AuthorityCatalogueIsClosed", kind: "invariant", subjects: Set("AuthorityVocabulary") },
+    { id: "AcceptedAuthoritiesAreQualified", kind: "invariant", subjects: Set("AuthorityVocabulary", "EvidenceObligationVocabulary") },
+    { id: "AuthorityCanBeAccepted", kind: "example", subjects: Set("AUTH-NativeGitHub") },
+    { id: "ObservationOutcomeCatalogueIsClosed", kind: "invariant", subjects: Set("ObservationPlanVocabulary") },
+    { id: "AcceptedObservationKnowledgeIsQualified", kind: "invariant", subjects: Set("ObservationPlanVocabulary", "EvidenceObligationVocabulary") },
+    { id: "ProvenAbsenceCanBeAccepted", kind: "example", subjects: Set("OBS-ProvenAbsent") },
+    { id: "FailureOutcomesDoNotBecomeAbsence", kind: "invariant", subjects: Set(
+        "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) },
+    { id: "LifecycleIntentCatalogueIsClosed", kind: "invariant", subjects: Set(
+        "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+      ) },
+    { id: "HumanIntentIsObservationIndependent", kind: "invariant", subjects: Set(
+        "INTENT-Backlog", "INTENT-Ready", "ObservationPlanVocabulary"
+      ) },
+    { id: "LifecycleStatusIsDerived", kind: "invariant", subjects: Set(
+        "INTENT-Ready", "OBS-Observed", "OBS-ProvenAbsent"
+      ) },
+    { id: "UnknownLifecycleFactsFailClosed", kind: "invariant", subjects: Set(
+        "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) }
+    ,{ id: "NativeRelationKindCatalogueIsClosed", kind: "invariant", subjects: Set("REL-ParentChild", "REL-Blocks") }
+    ,{ id: "NativeRelationEdgesAreValid", kind: "invariant", subjects: Set("REL-ParentChild", "REL-Blocks") }
+    ,{ id: "RelationChangesPreserveUnrelatedEdges", kind: "invariant", subjects: Set("REL-ParentChild", "REL-Blocks") }
+    ,{ id: "RelationChangesPreserveLifecycleIntent", kind: "invariant", subjects: Set(
+        "REL-ParentChild", "REL-Blocks", "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+      ) }
+    ,{ id: "RelationObservationFailuresDoNotBecomeAbsence", kind: "invariant", subjects: Set(
+        "REL-ParentChild", "REL-Blocks", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) }
+    ,{ id: "ProtocolStreamCataloguesAreClosed", kind: "invariant", subjects: Set(
+        "STREAM-Claim", "STREAM-OperationLock", "STREAM-Review", "STREAM-Delivery", "STREAM-OperationReceipt"
+      ) }
+    ,{ id: "ProtocolEnvelopesAreValidAndOrdered", kind: "invariant", subjects: Set(
+        "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock", "PAYLOAD-Election",
+        "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+      ) }
+    ,{ id: "DurableProtocolCheckpointsArePreserved", kind: "invariant", subjects: Set(
+        "PAYLOAD-Election", "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+      ) }
+    ,{ id: "ProtocolStreamChangesPreservePriorSemantics", kind: "invariant", subjects: Set(
+        "STREAM-Claim", "INTENT-Backlog", "REL-ParentChild", "REL-Blocks"
+      ) }
+    ,{ id: "ProtocolStreamObservationFailuresDoNotBecomeAbsence", kind: "invariant", subjects: Set(
+        "AUTH-ProtocolStream", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported", "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+      ) }
+    ,{ id: "MutationCataloguesAreClosed", kind: "invariant", subjects: Set(
+        "MutationVocabulary"
+      ) }
+    ,{ id: "MutationResultsAreBound", kind: "invariant", subjects: Set(
+        "MutationVocabulary", "MOUT-Applied", "MOUT-Idempotent", "MOUT-Rejected", "MOUT-RevisionConflict"
+      ) }
+    ,{ id: "UncertainMutationOutcomesStayUnknown", kind: "invariant", subjects: Set(
+        "MOUT-RateLimited", "MOUT-Unavailable", "MOUT-TimedOut", "MOUT-Incomplete"
+      ) }
+    ,{ id: "CompensationRequiresAppliedPredecessor", kind: "invariant", subjects: Set(
+        "MUT-Compensate", "MOUT-Applied"
+      ) }
+    ,{ id: "DurablePlansAreOrderedAndResumable", kind: "invariant", subjects: Set(
+        "PDISP-Advance", "PDISP-ReceiptReread", "PDISP-Replan", "PDISP-Compensate", "PAYLOAD-OperationReceipt"
+      ) }
+    ,{ id: "DurablePlanCompensationIsBoundaryBound", kind: "invariant", subjects: Set(
+        "MUT-Compensate", "PDISP-Compensate"
+      ) }
+  )
+
+  pure val nativeGitHubObservation = {
+    outcomeId: "OBS-Observed",
+    authorityId: "AUTH-NativeGitHub",
+    family: "native-github",
+    revisionKind: "github-object-version",
+    revisionValue: "node-id-and-updated-at",
+    completenessContract: "complete-required-fields",
+    evidenceRelationship: "REL-AUTH-NativeGitHub-Evidence",
+    complete: true,
+    contradictory: false,
+    retryAfterPresent: false,
+  }
+
+  pure def observationAuthorityShapeIsBound(observation: AuthorityObservation): bool =
+    authorityCatalogue.exists(binding => and {
+      binding.id == observation.authorityId,
+      binding.family == observation.family,
+      binding.revisionKind == observation.revisionKind,
+      binding.completenessContract == observation.completenessContract,
+      binding.evidenceRelationship == observation.evidenceRelationship,
+    })
+
+  pure def authorityObservationEvidenceIsQualified(observation: AuthorityObservation): bool = and {
+    observation.complete,
+    not(observation.contradictory),
+    observationAuthorityShapeIsBound(observation),
+    authorityCatalogue.exists(binding => binding.id == observation.authorityId and binding.revisionValue == observation.revisionValue),
+  }
+
+  pure def observationHasOutcome(observation: AuthorityObservation, outcomeId: str): bool =
+    observation.outcomeId == outcomeId and observationOutcomeCatalogue.exists(outcome => outcome.id == outcomeId)
+
+  pure def observationContributesPositiveKnowledge(observation: AuthorityObservation): bool = and {
+    observationHasOutcome(observation, "OBS-Observed"),
+    authorityObservationEvidenceIsQualified(observation),
+    not(observation.retryAfterPresent),
+  }
+
+  pure def observationContributesNegativeKnowledge(observation: AuthorityObservation): bool = and {
+    observationHasOutcome(observation, "OBS-ProvenAbsent"),
+    authorityObservationEvidenceIsQualified(observation),
+    not(observation.retryAfterPresent),
+  }
+
+  pure def observationContributesKnowledge(observation: AuthorityObservation): bool =
+    observationContributesPositiveKnowledge(observation) or observationContributesNegativeKnowledge(observation)
+
+  pure def observationIsRetryableFailure(observation: AuthorityObservation): bool = and {
+    observationAuthorityShapeIsBound(observation),
+    observation.retryAfterPresent,
+    observationOutcomeCatalogue.exists(outcome => and {
+      outcome.id == observation.outcomeId,
+      outcome.knowledgeClass == "none",
+      outcome.retryClass != "none",
+      not(outcome.terminal),
+    }),
+  }
+
+  pure def authorityObservationIsQualified(observation: AuthorityObservation): bool =
+    observationContributesPositiveKnowledge(observation)
+
+  pure val emptyLifecycleFacts = {
+    claimOutcomeId: "OBS-ProvenAbsent",
+    claimPresent: false,
+    blockerOutcomeId: "OBS-ProvenAbsent",
+    blocked: false,
+    pullRequestOutcomeId: "OBS-ProvenAbsent",
+    pullRequestOpen: false,
+    reviewOutcomeId: "OBS-ProvenAbsent",
+    reviewAccepted: false,
+    deliveryOutcomeId: "OBS-ProvenAbsent",
+    delivered: false,
+  }
+
+  pure val claimedLifecycleFacts = {
+    ...emptyLifecycleFacts,
+    claimOutcomeId: "OBS-Observed",
+    claimPresent: true,
+  }
+
+  pure def lifecycleFactIsKnowledge(outcomeId: str, present: bool): bool =
+    if (outcomeId == "OBS-Observed") present else outcomeId == "OBS-ProvenAbsent" and not(present)
+
+  pure def lifecycleFactsAreKnowledge(facts: LifecycleFacts): bool = and {
+    lifecycleFactIsKnowledge(facts.claimOutcomeId, facts.claimPresent),
+    lifecycleFactIsKnowledge(facts.blockerOutcomeId, facts.blocked),
+    lifecycleFactIsKnowledge(facts.pullRequestOutcomeId, facts.pullRequestOpen),
+    lifecycleFactIsKnowledge(facts.reviewOutcomeId, facts.reviewAccepted),
+    lifecycleFactIsKnowledge(facts.deliveryOutcomeId, facts.delivered),
+  }
+
+  pure def lifecycleIntentExists(intentId: str): bool =
+    lifecycleIntentCatalogue.exists(intent => intent.id == intentId)
+
+  pure def deriveLifecycleStatus(intentId: str, facts: LifecycleFacts): str =
+    if (not(lifecycleIntentExists(intentId)) or not(lifecycleFactsAreKnowledge(facts))) "indeterminate"
+    else if (intentId == "INTENT-Cancelled") "cancelled"
+    else if (facts.delivered) "delivered"
+    else if (facts.reviewAccepted) "accepted"
+    else if (facts.blocked) "blocked"
+    else if (facts.pullRequestOpen) "in-review"
+    else if (facts.claimPresent) "claimed"
+    else if (intentId == "INTENT-Ready") "ready"
+    else if (intentId == "INTENT-Paused") "paused"
+    else "backlog"
+
+  pure def nativeRelationKindExists(relationKindId: str): bool =
+    nativeRelationKindCatalogue.exists(relationKind => relationKind.id == relationKindId)
+
+  pure def nativeRelationEdgeIsValid(edge: NativeRelationEdge): bool = and {
+    nativeRelationKindExists(edge.relationKindId),
+    edge.sourceId != edge.targetId,
+  }
+
+  pure def relationObservationContributesKnowledge(outcomeId: str, edges: Set[NativeRelationEdge]): bool =
+    if (outcomeId == "OBS-Observed") edges.forall(nativeRelationEdgeIsValid)
+    else outcomeId == "OBS-ProvenAbsent" and edges == Set()
+
+  pure val parentChildEdge = { relationKindId: "REL-ParentChild", sourceId: "subject-parent", targetId: "subject-child" }
+  pure val blockingEdge = { relationKindId: "REL-Blocks", sourceId: "subject-blocker", targetId: "subject-blocked" }
+
+  pure def protocolStreamKindExists(streamKindId: str): bool =
+    protocolStreamKindCatalogue.exists(streamKind => streamKind.id == streamKindId)
+
+  pure def protocolPayloadMatchesEnvelope(envelope: ProtocolEnvelope): bool =
+    protocolPayloadKindCatalogue.exists(payload => and {
+      payload.id == envelope.payloadKindId,
+      payload.streamKindId == envelope.streamKindId,
+      payload.retentionClass == envelope.retentionClass,
+      payload.durableCheckpoint == envelope.durableCheckpoint,
+    })
+
+  pure def protocolEnvelopeShapeIsValid(envelope: ProtocolEnvelope): bool = and {
+    protocolStreamKindExists(envelope.streamKindId),
+    protocolPayloadMatchesEnvelope(envelope),
+    envelope.streamId != "",
+    envelope.subjectId != "",
+    envelope.generation > 0,
+    envelope.sequence > 0,
+    envelope.eventId != "",
+    envelope.predecessorEventId != envelope.eventId,
+    if (envelope.sequence == 1) envelope.predecessorEventId == "" else envelope.predecessorEventId != "",
+  }
+
+  pure def protocolAppendHasPredecessor(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    if (envelope.sequence == 1) {
+      if (envelope.generation == 1) true
+      else events.exists(previous => and {
+        previous.streamKindId == envelope.streamKindId,
+        previous.streamId == envelope.streamId,
+        previous.subjectId == envelope.subjectId,
+        previous.generation == envelope.generation - 1,
+        previous.durableCheckpoint,
+      })
+    } else events.exists(previous => and {
+      previous.streamKindId == envelope.streamKindId,
+      previous.streamId == envelope.streamId,
+      previous.subjectId == envelope.subjectId,
+      previous.generation == envelope.generation,
+      previous.sequence == envelope.sequence - 1,
+      previous.eventId == envelope.predecessorEventId,
+    })
+
+  pure def retainedProtocolEnvelopeHasPredecessor(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    if (envelope.sequence == 1) {
+      if (envelope.generation == 1) true
+      else events.exists(previous => and {
+        previous.streamKindId == envelope.streamKindId,
+        previous.streamId == envelope.streamId,
+        previous.subjectId == envelope.subjectId,
+        previous.generation == envelope.generation - 1,
+        previous.durableCheckpoint,
+      })
+    } else or {
+      events.exists(previous => and {
+        previous.streamKindId == envelope.streamKindId,
+        previous.streamId == envelope.streamId,
+        previous.subjectId == envelope.subjectId,
+        previous.generation == envelope.generation,
+        previous.sequence == envelope.sequence - 1,
+        previous.eventId == envelope.predecessorEventId,
+      }),
+      envelope.durableCheckpoint or events.exists(checkpoint => and {
+        checkpoint.streamKindId == envelope.streamKindId,
+        checkpoint.streamId == envelope.streamId,
+        checkpoint.subjectId == envelope.subjectId,
+        checkpoint.generation == envelope.generation,
+        checkpoint.sequence > envelope.sequence,
+        checkpoint.durableCheckpoint,
+      }),
+    }
+
+  pure def protocolEnvelopeIdentityIsConsistent(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    events.filter(existing => existing.eventId == envelope.eventId).forall(existing => existing == envelope)
+
+  pure def protocolEnvelopeSequenceIsUnique(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    events.filter(existing => and {
+      existing.streamKindId == envelope.streamKindId,
+      existing.streamId == envelope.streamId,
+      existing.subjectId == envelope.subjectId,
+      existing.generation == envelope.generation,
+      existing.sequence == envelope.sequence,
+    }).forall(existing => existing == envelope)
+
+  pure def protocolEnvelopeIsOrdered(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool = and {
+    retainedProtocolEnvelopeHasPredecessor(envelope, events),
+    protocolEnvelopeIdentityIsConsistent(envelope, events),
+    protocolEnvelopeSequenceIsUnique(envelope, events),
+  }
+
+  pure def protocolAppendIsValid(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool =
+    if (events.contains(envelope)) true
+    else and {
+      protocolEnvelopeShapeIsValid(envelope),
+      events.forall(existing => existing.eventId != envelope.eventId),
+      events.forall(existing => not(and {
+        existing.streamKindId == envelope.streamKindId,
+        existing.streamId == envelope.streamId,
+        existing.subjectId == envelope.subjectId,
+        existing.generation == envelope.generation,
+        existing.sequence == envelope.sequence,
+      })),
+      protocolAppendHasPredecessor(envelope, events),
+      if (envelope.sequence == 1) events.forall(existing => not(and {
+        existing.streamKindId == envelope.streamKindId,
+        existing.streamId == envelope.streamId,
+        existing.subjectId == envelope.subjectId,
+        existing.generation >= envelope.generation,
+      })) else true,
+    }
+
+  pure def ephemeralEnvelopeMayBeCompacted(envelope: ProtocolEnvelope, events: Set[ProtocolEnvelope]): bool = and {
+    envelope.retentionClass == "ephemeral",
+    not(envelope.durableCheckpoint),
+    events.exists(checkpoint => and {
+      checkpoint.streamKindId == envelope.streamKindId,
+      checkpoint.streamId == envelope.streamId,
+      checkpoint.subjectId == envelope.subjectId,
+      checkpoint.generation == envelope.generation,
+      checkpoint.sequence > envelope.sequence,
+      checkpoint.durableCheckpoint,
+      checkpoint.retentionClass == "durable",
+    }),
+  }
+
+  pure def protocolStreamObservationContributesKnowledge(outcomeId: str, events: Set[ProtocolEnvelope]): bool =
+    if (outcomeId == "OBS-Observed") events.forall(event => and {
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, events),
+    }) else outcomeId == "OBS-ProvenAbsent" and events == Set()
+
+  pure val claimEnvelope = {
+    streamKindId: "STREAM-Claim", streamId: "claim:subject-work", subjectId: "subject-work",
+    generation: 1, sequence: 1, eventId: "claim-event-1", predecessorEventId: "",
+    payloadKindId: "PAYLOAD-Claim", retentionClass: "ephemeral", durableCheckpoint: false,
+  }
+
+  pure val leaseEnvelope = {
+    ...claimEnvelope,
+    sequence: 2, eventId: "lease-event-2", predecessorEventId: "claim-event-1", payloadKindId: "PAYLOAD-Lease",
+  }
+
+  pure val reviewCheckpointEnvelope = {
+    streamKindId: "STREAM-Review", streamId: "review:subject-work", subjectId: "subject-work",
+    generation: 1, sequence: 1, eventId: "review-event-1", predecessorEventId: "",
+    payloadKindId: "PAYLOAD-Review", retentionClass: "durable", durableCheckpoint: true,
+  }
+
+  pure val operationLockEnvelope = {
+    streamKindId: "STREAM-OperationLock", streamId: "operation-lock:receiver", subjectId: "subject-work",
+    generation: 1, sequence: 1, eventId: "operation-lock-event-1", predecessorEventId: "",
+    payloadKindId: "PAYLOAD-OperationLock", retentionClass: "ephemeral", durableCheckpoint: false,
+  }
+
+  pure val electionCheckpointEnvelope = {
+    ...operationLockEnvelope,
+    sequence: 2, eventId: "election-event-2", predecessorEventId: "operation-lock-event-1",
+    payloadKindId: "PAYLOAD-Election", retentionClass: "durable", durableCheckpoint: true,
+  }
+
+  pure def mutationOutcomeIsTerminal(outcomeId: str): bool =
+    mutationOutcomeCatalogue.exists(outcome => outcome.id == outcomeId and outcome.finality == "terminal")
+
+  pure def mutationOutcomeIsUncertain(outcomeId: str): bool =
+    mutationOutcomeCatalogue.exists(outcome => and {
+      outcome.id == outcomeId,
+      outcome.finality == "uncertain",
+      outcome.effectClass == "unknown",
+    })
+
+  pure def mutationKindMatchesIntent(intent: MutationIntent): bool =
+    mutationKindCatalogue.exists(mutationKind => and {
+      mutationKind.id == intent.mutationKindId,
+      mutationKind.targetKind == intent.targetKind,
+      mutationKind.payloadKind == intent.payloadKind,
+      if (mutationKind.revisionRequirement == "absent") intent.expectedRevision == 0
+      else intent.expectedRevision > 0,
+    })
+
+  pure def mutationIntentShapeIsValid(intent: MutationIntent): bool = and {
+    mutationKindMatchesIntent(intent),
+    intent.operationId != "",
+    intent.subjectId != "",
+    intent.idempotencyKey != "",
+    intent.payloadDigest != "",
+    if (intent.mutationKindId == "MUT-Compensate") and {
+      intent.compensatesOperationId != "",
+      intent.compensatesOperationId != intent.operationId,
+    } else and {
+      intent.compensatesOperationId == "",
+    },
+  }
+
+  pure def mutationResultOutcomeIsValid(result: MutationResult): bool = and {
+    if (result.outcomeId == "MOUT-Applied" or result.outcomeId == "MOUT-Idempotent")
+      result.resultingRevision > result.intent.expectedRevision
+    else if (result.outcomeId == "MOUT-Rejected" or result.outcomeId == "MOUT-RevisionConflict")
+      result.resultingRevision == result.intent.expectedRevision
+    else mutationOutcomeIsUncertain(result.outcomeId) and result.resultingRevision == 0,
+  }
+
+  pure def mutationIntentsConflict(left: MutationIntent, right: MutationIntent): bool = and {
+    left != right,
+    left.operationId == right.operationId or left.idempotencyKey == right.idempotencyKey,
+  }
+
+  pure def mutationResultMayFollow(previous: MutationResult, current: MutationResult): bool = and {
+    previous.intent == current.intent,
+    mutationResultOutcomeIsValid(previous),
+    mutationResultOutcomeIsValid(current),
+    if (mutationOutcomeIsTerminal(previous.outcomeId))
+      if (previous.outcomeId == "MOUT-Applied") and {
+        current.outcomeId == "MOUT-Idempotent",
+        current.resultingRevision == previous.resultingRevision,
+      } else previous == current
+    else mutationOutcomeIsUncertain(previous.outcomeId),
+  }
+
+  pure def compensationIntentIsValid(
+    intent: MutationIntent,
+    original: MutationResult,
+    existingCompensations: Set[MutationIntent],
+  ): bool = and {
+    intent.mutationKindId == "MUT-Compensate",
+    mutationIntentShapeIsValid(intent),
+    mutationIntentShapeIsValid(original.intent),
+    mutationResultOutcomeIsValid(original),
+    original.intent.operationId == intent.compensatesOperationId,
+    original.intent.subjectId == intent.subjectId,
+    original.intent.mutationKindId != "MUT-Compensate",
+    original.outcomeId == "MOUT-Applied",
+    original.resultingRevision == intent.expectedRevision,
+    not(existingCompensations.exists(existing => and {
+      existing.compensatesOperationId == intent.compensatesOperationId,
+      existing != intent,
+    })),
+  }
+
+  pure def mutationOutcomeForRevision(expectedRevision: int, observedRevision: int): str =
+    if (expectedRevision == observedRevision) "MOUT-Applied" else "MOUT-RevisionConflict"
+
+  pure val closedLifecycleIntentCatalogue = and {
+    lifecycleIntentCatalogue.map(intent => intent.id) == Set(
+      "INTENT-Backlog", "INTENT-Ready", "INTENT-Paused", "INTENT-Cancelled"
+    ),
+    lifecycleIntentCatalogue.filter(intent => intent.terminal).map(intent => intent.id) == Set("INTENT-Cancelled"),
+  }
+
+  pure val closedNativeRelationKindCatalogue = and {
+    nativeRelationKindCatalogue.map(relationKind => relationKind.id) == Set("REL-ParentChild", "REL-Blocks"),
+    nativeRelationKindCatalogue.map(relationKind => relationKind.direction) == Set("parent-to-child", "blocker-to-blocked"),
+  }
+
+  pure val closedProtocolStreamCatalogues = and {
+    protocolStreamKindCatalogue.map(streamKind => streamKind.id) == Set(
+      "STREAM-Claim", "STREAM-OperationLock", "STREAM-Review", "STREAM-Delivery", "STREAM-OperationReceipt"
+    ),
+    protocolPayloadKindCatalogue.map(payload => payload.id) == Set(
+      "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock", "PAYLOAD-Election",
+      "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+    ),
+    protocolPayloadKindCatalogue.filter(payload => payload.retentionClass == "ephemeral").map(payload => payload.id) == Set(
+      "PAYLOAD-Claim", "PAYLOAD-Lease", "PAYLOAD-TouchSet", "PAYLOAD-OperationLock"
+    ),
+    protocolPayloadKindCatalogue.filter(payload => payload.durableCheckpoint).map(payload => payload.id) == Set(
+      "PAYLOAD-Election", "PAYLOAD-Review", "PAYLOAD-Delivery", "PAYLOAD-OperationReceipt"
+    ),
+  }
+
+  pure val closedAuthorityCatalogue = and {
+    authorityCatalogue.map(binding => binding.id) == Set(
+      "AUTH-NativeGitHub", "AUTH-RepositoryRegistry", "AUTH-ProtocolStream", "AUTH-GitLedger",
+      "AUTH-Actions", "AUTH-PackageFeed", "AUTH-ClassifiedExternal"
+    ),
+    authorityCatalogue.map(binding => binding.family) == Set(
+      "native-github", "repository-registry", "protected-sharded-git-journal", "git-ledger",
+      "actions", "package-feed", "classified-external"
+    ),
+  }
+
+  pure val closedObservationOutcomeCatalogue = and {
+    observationOutcomeCatalogue.map(outcome => outcome.id) == Set(
+      "OBS-Observed", "OBS-ProvenAbsent", "OBS-Contradictory", "OBS-Unreadable", "OBS-Unsupported",
+      "OBS-Unauthorized", "OBS-Incomplete", "OBS-Stale", "OBS-RateLimited"
+    ),
+    observationOutcomeCatalogue.filter(outcome => outcome.knowledgeClass == "positive").map(outcome => outcome.id) == Set("OBS-Observed"),
+    observationOutcomeCatalogue.filter(outcome => outcome.knowledgeClass == "negative").map(outcome => outcome.id) == Set("OBS-ProvenAbsent"),
+    observationOutcomeCatalogue.filter(outcome => outcome.knowledgeClass == "contradictory").map(outcome => outcome.id) == Set("OBS-Contradictory"),
+  }
+
+
+  var evidenceObserved: bool
+  var acceptedVocabulary: Set[str]
+  var authorityObservation: AuthorityObservation
+  var authorityObservationAvailable: bool
+  var acceptedAuthorityObservations: Set[AuthorityObservation]
+  var acceptedObservationKnowledge: Set[AuthorityObservation]
+  var humanIntentId: str
+  var authorizedHumanIntentId: str
+  var lifecycleFacts: LifecycleFacts
+  var lifecycleStatus: str
+  var lifecycleStatusCurrent: bool
+  var nativeRelationEdges: Set[NativeRelationEdge]
+  var authorizedNativeRelationEdges: Set[NativeRelationEdge]
+  var protocolStreamEvents: Set[ProtocolEnvelope]
+  var authorizedDurableProtocolCheckpoints: Set[ProtocolEnvelope]
+
+  action init = all {
+    evidenceObserved' = false,
+    acceptedVocabulary' = Set(),
+    authorityObservation' = { ...nativeGitHubObservation, complete: false },
+    authorityObservationAvailable' = false,
+    acceptedAuthorityObservations' = Set(),
+    acceptedObservationKnowledge' = Set(),
+    humanIntentId' = "INTENT-Backlog",
+    authorizedHumanIntentId' = "INTENT-Backlog",
+    lifecycleFacts' = emptyLifecycleFacts,
+    lifecycleStatus' = "backlog",
+    lifecycleStatusCurrent' = true,
+    nativeRelationEdges' = Set(),
+    authorizedNativeRelationEdges' = Set(),
+    protocolStreamEvents' = Set(),
+    authorizedDurableProtocolCheckpoints' = Set(),
+  }
+
+  action observeProtocolEvidence: bool = all {
+    evidenceObserved' = true,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action acceptVocabularyIdentity(vocabularyId: str): bool = all {
+    vocabularyCatalogue.exists(entry => entry.id == vocabularyId),
+    evidenceObserved,
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary.union(Set(vocabularyId)),
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action observeAuthority(observation: AuthorityObservation): bool = all {
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = observation,
+    authorityObservationAvailable' = true,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action acceptObservedAuthority: bool = all {
+    authorityObservationAvailable,
+    authorityObservationIsQualified(authorityObservation),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations.union(Set(authorityObservation)),
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action acceptObservationKnowledge: bool = all {
+    authorityObservationAvailable,
+    observationContributesKnowledge(authorityObservation),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge.union(Set(authorityObservation)),
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action setHumanIntent(intentId: str): bool = all {
+    lifecycleIntentExists(intentId),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = intentId,
+    authorizedHumanIntentId' = intentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = false,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action observeLifecycleFacts(facts: LifecycleFacts): bool = all {
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = facts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = false,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action refreshLifecycleStatus: bool = all {
+    lifecycleFactsAreKnowledge(lifecycleFacts),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = deriveLifecycleStatus(humanIntentId, lifecycleFacts),
+    lifecycleStatusCurrent' = true,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action addNativeRelation(edge: NativeRelationEdge): bool = all {
+    nativeRelationEdgeIsValid(edge),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges.union(Set(edge)),
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges.union(Set(edge)),
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action removeNativeRelation(edge: NativeRelationEdge): bool = all {
+    nativeRelationEdgeIsValid(edge),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges.filter(existing => existing != edge),
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges.filter(existing => existing != edge),
+    protocolStreamEvents' = protocolStreamEvents,
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action appendProtocolEnvelope(envelope: ProtocolEnvelope): bool = all {
+    protocolAppendIsValid(envelope, protocolStreamEvents),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents.union(Set(envelope)),
+    authorizedDurableProtocolCheckpoints' =
+      if (envelope.durableCheckpoint) authorizedDurableProtocolCheckpoints.union(Set(envelope))
+      else authorizedDurableProtocolCheckpoints,
+  }
+
+  action compactEphemeralProtocolEnvelope(envelope: ProtocolEnvelope): bool = all {
+    protocolStreamEvents.contains(envelope),
+    ephemeralEnvelopeMayBeCompacted(envelope, protocolStreamEvents),
+    evidenceObserved' = evidenceObserved,
+    acceptedVocabulary' = acceptedVocabulary,
+    authorityObservation' = authorityObservation,
+    authorityObservationAvailable' = authorityObservationAvailable,
+    acceptedAuthorityObservations' = acceptedAuthorityObservations,
+    acceptedObservationKnowledge' = acceptedObservationKnowledge,
+    humanIntentId' = humanIntentId,
+    authorizedHumanIntentId' = authorizedHumanIntentId,
+    lifecycleFacts' = lifecycleFacts,
+    lifecycleStatus' = lifecycleStatus,
+    lifecycleStatusCurrent' = lifecycleStatusCurrent,
+    nativeRelationEdges' = nativeRelationEdges,
+    authorizedNativeRelationEdges' = authorizedNativeRelationEdges,
+    protocolStreamEvents' = protocolStreamEvents.filter(existing => existing != envelope),
+    authorizedDurableProtocolCheckpoints' = authorizedDurableProtocolCheckpoints,
+  }
+
+  action step = any {
+    observeProtocolEvidence,
+    acceptVocabularyIdentity("SubjectVocabulary"),
+    observeAuthority(nativeGitHubObservation),
+    acceptObservedAuthority,
+    acceptObservationKnowledge,
+    setHumanIntent("INTENT-Ready"),
+    observeLifecycleFacts(claimedLifecycleFacts),
+    refreshLifecycleStatus,
+    addNativeRelation(parentChildEdge),
+    addNativeRelation(blockingEdge),
+    removeNativeRelation(parentChildEdge),
+    appendProtocolEnvelope(claimEnvelope),
+    appendProtocolEnvelope(leaseEnvelope),
+    appendProtocolEnvelope(reviewCheckpointEnvelope),
+    appendProtocolEnvelope(operationLockEnvelope),
+    appendProtocolEnvelope(electionCheckpointEnvelope),
+    compactEphemeralProtocolEnvelope(operationLockEnvelope),
+  }
+
+  val acceptedVocabularyIsQualified = acceptedVocabulary == Set() or evidenceObserved
+  val acceptedAuthoritiesAreQualified = and {
+    closedAuthorityCatalogue,
+    closedObservationOutcomeCatalogue,
+    acceptedAuthorityObservations.forall(authorityObservationIsQualified),
+    acceptedObservationKnowledge.forall(observationContributesKnowledge),
+  }
+  val humanIntentIsObservationIndependent = and {
+    closedLifecycleIntentCatalogue,
+    lifecycleIntentExists(humanIntentId),
+    humanIntentId == authorizedHumanIntentId,
+  }
+  val lifecycleStatusIsDerived =
+    not(lifecycleStatusCurrent) or lifecycleStatus == deriveLifecycleStatus(humanIntentId, lifecycleFacts)
+  val nativeRelationEdgesAreValid = and {
+    closedNativeRelationKindCatalogue,
+    nativeRelationEdges.forall(nativeRelationEdgeIsValid),
+  }
+  val relationChangesPreserveUnrelatedEdges = nativeRelationEdges == authorizedNativeRelationEdges
+  val protocolEnvelopesAreValidAndOrdered = and {
+    closedProtocolStreamCatalogues,
+    protocolStreamEvents.forall(event => and {
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, protocolStreamEvents),
+    }),
+  }
+  val durableProtocolCheckpointsArePreserved =
+    protocolStreamEvents.filter(event => event.durableCheckpoint) == authorizedDurableProtocolCheckpoints
+
+  // O2 prospective protocol amendment. This is an inert authority model: it defines when a
+  // cooperating hosted route could receive a finite pilot permit, but it does not provide a host,
+  // provider writer, runner dispatcher, credential, or activation decision.
+  pure val pilotPermitSpecificationCatalogue = Set(
+    { id: "PILOT-PermitV1", kind: "pilotPermitSpecification",
+      schemaContract: "fsgg.coordination.pilot-permit/1",
+      scopeContract: "one-canonical-work-item|routine-implementation",
+      budgetContract: "finite-positive-no-automatic-renewal",
+      capacityContract: "finite-with-reserved-recovery-capacity",
+      ownershipContract: "stable-until-durable-transfer-acknowledgement-and-readback",
+      recoveryContract: "generation-current|readback-current|unknown-outcome-blocks-dispatch",
+      lifecycleContract: "StableOwned>TransferIntended>PilotOwned>(OutcomeUnknown|Paused|Revoked|ReturnIntended)>StableOwned",
+      trustContract: "trusted-cooperating-runner-supported-route-only",
+      activationContract: "inert-prospective-no-host-no-provider-writer" }
+  )
+
+  // O2 hosted-writer amendment. This closes one finite supported route; it does not grant a
+  // general command surface, expand the immutable subject, renew a permit, or activate Main.
+  pure val hostedWriterSpecificationCatalogue = Set(
+    { id: "HOSTED-WriterV1", kind: "hostedWriterSpecification",
+      schemaContract: "fsgg.coordination.hosted-writer/1",
+      scopeContract: "one-immutable-work-item|routine-documentation-delivery",
+      budgetContract: "finite-positive-no-renewal",
+      capacityContract: "one-ordinary-assignment",
+      startupContract: "manual-default-paused-no-automatic-resume",
+      runnerContract: "exact-enrolled-codex-exec-fingerprint|trusted-cooperating-runner",
+      operationContract: "stable-operation-id|intent-before-effect|unknown-blocks-replacement|retry-after-proven-absence",
+      candidateContract: "owner-controlled-content-addressed-bytes-before-branch-publication",
+      completionContract: "native-provider-merged-pr-and-exact-head-readback",
+      activationContract: "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit" }
+  )
+
+}
+```
+
+### Prospective trusted pilot permit (O2 source boundary)
+
+`PILOT-PermitV1` is an inert, versioned prerequisite for a future hosted pilot. It grants no
+GitHub, runner, listener, deployment, or credential capability. Its subject is one immutable
+canonical WorkItem identity; repository names, paths, board membership, and heartbeats cannot
+substitute for that identity. The stable route stays accountable through `TransferIntended` and
+ownership changes only after a durable acknowledgement plus current readback proves the stable
+route quiesced and excluded at the exact permit generation.
+
+`budgetUnits` counts admitted O0 attempts. Each admitted attempt must separately bind the O0 token
+budget and deadline and, when planning is used, the O1 planning-session token/runtime/cost budgets.
+The scalar bound is therefore a further finite admission ceiling; it does not replace or combine
+those dimensions. The typed pilot journal records the O0 reservation identity and deadline plus
+the optional O1 planning-budget digest on every assignment. Its token, runtime, and cost
+reservations are monotonic and checked with overflow-safe arithmetic against the finite permit.
+`capacityUnits` counts concurrent assignment slots and
+`recoveryCapacityUnits` reserves slots that ordinary dispatch cannot consume. Permits expire,
+start manually, and never renew or resume automatically.
+
+Heartbeat loss changes knowledge to `OutcomeUnknown`; it does not transfer ownership or release an
+assignment. Current trusted readback must reconcile the operation before capacity can be released.
+Readback values become authority only after the selected read-only capability returns them and the
+pilot boundary validates purpose, operation identity, immutable subject, generation, provenance,
+and freshness. A reconstructed process marks historical readback non-current and requires a fresh,
+durably recorded reconnect before another assignment can be admitted.
+Pause and revoke block new supported-route dispatch while preserving existing ownership and
+reservations. Return to the stable route requires a durable return intent, no active or unknown
+work, and a current return acknowledgement/readback. These cooperative fences do not contain a
+runner that independently holds broader credentials. OperatingV2, a hosted-writer amendment,
+qualified Main configuration, and authenticated pilot evidence remain separate activation gates.
+
+The executable witness records evidence before accepting the subject vocabulary identity. Removing
+the evidence guard must make the invariant red in the bounded negative control.
+
+### Hosted writer amendment (O2 source boundary)
+
+`HOSTED-WriterV1` accepts the separately recorded sequencing decision for one reversible mutation
+canary before OperatingV2. That decision admits only one immutable WorkItem and the
+`routine-documentation-delivery` job class. Capacity is one ordinary assignment. Permit, attempt,
+token, runtime, cost, and wall-clock bounds remain finite and cannot be renewed by restart,
+reconnect, image update, timer, or orchestration command. Startup and every replacement remain
+paused until the current permit generation, runner fingerprint, stable-route exclusion, and native
+provider readback are re-established.
+
+The subscription authority carries two immutable deadlines. The execution deadline is at most
+thirty minutes and binds the one model invocation and executor reservation. The delivery deadline
+is at most two hours from admission and bounds paused recovery, resume, and new GitHub effects.
+New admissions bind their GitHub claim lease to that delivery deadline, and every later mutation
+requires fresh observation of the same unexpired claim; lost ownership fails closed without renewal.
+Older serialized budgets have no delivery deadline and therefore fail closed after upgrade. The
+authenticated `/v1/main/recover` route binds the unchanged admission bytes, performs fresh native
+repository and issue identity readback, and records it while remaining paused; `/v1/resume` is a
+separate command. Observation of an already exposed operation remains permitted after expiry, but
+expiry never authorizes another model invocation, reservation, or provider mutation.
+
+The supported route has seven ordered external stages: claim, process creation, durable candidate
+storage, candidate-branch publication, pull-request creation, merge, and native delivery readback.
+Every stage uses a stable operation identity and records intent before invoking the effect. A lost
+response records `OutcomeUnknown` and blocks the next stage, replacement work, and a new operation
+identity for the same resource. The same operation can be retried only after current provider
+readback proves it absent. Applied readback advances the stage only when it comes from the selected
+provider capability and binds the immutable repository and pull request identities, exact candidate
+head, merge commit, workflow revision, permit generation, and observation time. Runner or adapter
+claims are diagnostic and cannot complete delivery.
+
+Candidate bytes are acknowledged in the owner-controlled content-addressed store before branch
+publication. A Git ref created before that acknowledgement is not durable candidate authority.
+Completion requires a provider-native merged pull-request observation whose head equals the stored
+candidate head. Telemetry remains advisory and cannot authorize, settle, or block an otherwise safe
+orchestration transition.
+
+This amendment defines source authority only. It does not install a provider credential, publish an
+artifact, activate the host, transfer a subject, or dispatch the canary. Qualified Main storage and
+service lifecycle, an exact released binary, explicit permit issuance/transfer/reconnect evidence,
+and the sealed provider adapter remain independent activation evidence.
+
+### Protected journal storage and mutation contract (GS2-03.10, amended by GS2-08.1)
+
+The journal is an append-only Git object graph; issues, pull-request comments, labels, workflow
+runs, and webhooks are projections or wake-up hints. An aggregate identifier is encoded as
+lower-case UTF-8, length-prefixed before hashing, and mapped to shard
+`lower-hex(sha256(canonicalAggregateId))[0..1]`. Journal authority lives in the dedicated public
+`FS-GG/FS.GG.Coordination.Authority` repository (GitHub repository id `1351660651`), whose only
+mutable protocol locators are branches named
+`refs/heads/fsgg/v2/journal/<journal-kind>/<shard>`. Aggregate records cannot move between shards and a
+collision in the canonical identifier digest is a hard integrity failure, never last-writer-wins.
+Two active branch rulesets target the exact fnmatch
+`refs/heads/fsgg/v2/journal/**/*`; the trailing `/**/*` is load-bearing because GitHub evaluates
+branch patterns with `File::FNM_PATHNAME` and `refs/heads/fsgg/v2/journal/**` does not match the
+required two-segment `<journal-kind>/<shard>` suffix. `v2-journal-writer` (ruleset `21872113`)
+restricts creation and update and grants always-bypass only to the
+`fs-gg-cross-repo-dispatch` GitHub App (App id `4166418`).
+`v2-journal-integrity` (ruleset `21872115`) separately rejects deletion and non-fast-forward updates
+and has no bypass actors, so the writer App cannot bypass history integrity. Administrators,
+workflow tokens, and personal tokens are absent from both bypass lists. Runtime qualification mints
+an App installation token limited to `FS.GG.Coordination.Authority`; the App's broader installation
+remains an administrative control-plane finding and is not treated as repository-scoped authority.
+Before production authority is enabled, GS2-08.2 must either replace it with a contents-only,
+selected-repository journal App or record an explicit security acceptance of the shared App boundary.
+Bootstrap and periodic audit read both rulesets and the branch's effective rules through GitHub's
+rules APIs and fail closed on drift. This split replaces the unenforceable earlier claim that one
+bypassed ruleset could both admit writer updates and constrain that same writer's deletion or rewrite.
+
+Each journal commit has exactly one parent except the documented shard root. Its tree contains
+`aggregates/<aggregate-digest>/head.json`, immutable
+`events/<generation>-<event-digest>.json`, and, at checkpoint generations,
+`snapshots/<generation>-<snapshot-digest>.json`. JSON is UTF-8, LF, recursively key-sorted, uses
+decimal integers without alternate spellings, and excludes insignificant whitespace. A head binds
+schema version, canonical aggregate id and digest, journal kind, shard, generation, event digest,
+snapshot digest, terminal flag, and prior head digest. The commit message binds the same head digest
+and writer operation id. A snapshot binds the complete event ancestry it replaces, the terminal
+high-water generation, and its content digest. Readers reject missing parents, duplicate
+generations, digest mismatch, shard mismatch, and unknown schema versions.
+
+Mutation is compare-and-swap: fetch the branch and aggregate head; construct blobs, tree, and a
+single-parent commit; then push the exact refspec with
+`--force-with-lease=<ref>:<observed-object-id>`. Git receive-pack compares the advertised old object
+id with the current ref before accepting the fast-forward update; the ruleset still rejects an
+actual non-fast-forward or forced history rewrite. A
+successful update assigns the committed aggregate generation as the fencing token. A rejected
+expected parent means no authority changed and the worker must reread. A transport failure or lost
+success response is ambiguous: reread the ref, accept success only when the exact operation id,
+commit/tree/head digests, and generation are present, otherwise retry from the newly observed parent.
+The worker never infers success from an issue comment or from object existence alone. Server
+outcomes are therefore `accepted`, `parent-conflict`, `definite-refusal`, and
+`response-unknown-requires-reread`.
+
+Every externally visible effect re-reads the authoritative aggregate head immediately before the
+effect and requires its grant's journal commit and generation to equal that head. Terminal heads
+reject new ordinary events. Compaction may append a terminal checkpoint but may not delete reachable
+history until the retention window and independent digest audit have passed; replay from either the
+full ancestry or the retained terminal snapshot must produce the same aggregate digest.
+
+GS2-08.1 reserves exactly one fleet aggregate, `fleet-cutover:fs-gg-production`, in the Authority
+repository. Its canonical lower-case 30-byte identity is framed as
+`30:fleet-cutover:fs-gg-production`; the resulting SHA-256 is
+`d546289f29b34a4967e27425acba1c9ad2feb4f4b2110f5db41a5544976cb363` and has shard `d5`, so the
+existing `Cutover` journal kind yields the only epoch ref
+`refs/heads/fsgg/v2/journal/cutover/d5`; phase tags are immutable descendants of
+`refs/tags/fsgg/v2/fleet-cutover/`. The root record binds schema `fsgg.github-substrate.epoch-wire/1`,
+fleet id, genesis commit, trust-anchor digest, and manifest digest. Every later record repeats that identity,
+has exactly one expected parent, increases generation by one, and carries the matching protected phase tag.
+Unknown or duplicate JSON fields, a missing parent/tag, a rewind, wrong manifest, unreadable, incomplete,
+stale, or contradictory authority are refusals (or explicitly indeterminate where no authoritative read can
+settle the result). A cache may schedule a fresh read but never authorize an effect.
+
+The complete state sequence is `OperatingV1`, `Preparing`, `FreezeRequested`, `Frozen`, `SwitchedV2`,
+`VerifiedV2`, `OpenV2`, `ObservingV2`, `ContractingV1`, and `OperatingV2`, plus the closed pre-open recovery
+state `RollingBack`. Legal forward edges follow that order, `ObservingV2` may append observation checkpoints,
+and `Preparing`, `FreezeRequested`, `Frozen`, `SwitchedV2`, or `VerifiedV2` may enter `RollingBack`, whose only
+successor is verified `OperatingV1`. `RollingBack` itself admits no ordinary effect. No post-`OpenV2` edge can
+restore v1, and the obsolete `RetiringV1` name is not on the wire.
+
+`OperatingV1` admits eligible new and incumbent v1 work. `Preparing` refuses new ordinary admission but may
+complete an eligible incumbent effect present in the immutable sealed cohort under the same manifest when the
+freshly read epoch, claim, and operation generations all match at the external effect boundary. One canonical
+protected `Operation` journal aggregate is the only v1 admission registry: `AdmitOperation`, `CloseAdmissions`, and
+`SealAdmissions` are expected-parent CAS appends on that aggregate. Closing is an explicit durable interval in
+which new admission refuses while cohort members drain. A crash cannot reopen it; only an explicit journaled
+new round after a seal may reopen admissions. The seal binds the exact round, manifest, cohort, journal commit,
+and generation, and the `Preparing` epoch-event/2 record references that immutable tuple. Legacy epoch-event/1
+genesis bytes remain readable as history and may admit a fresh operation only while a round is open; they are
+never sufficient proof for `Preparing`.
+
+An admission binds stable operation id and generation, actor and receiver, mutation kind and canonical target,
+typed claim generation or `NoClaimRequired`, intent and touch-set digests, and the originating epoch. Replacing
+an operation advances its generation and invalidates every prior handle. Before each provider mutation the same
+journal records a stable effect id, exact request digest and preconditions, and an `InFlight` dispatch owner.
+The owner refreshes epoch, admission, operation, claim, manifest, and seal authority immediately before send.
+Settlement is `Applied`, `ProvenAbsent`, `Partial`, or `Indeterminate`. A restored `InFlight` intent is recovery-only
+and grants no send transition, including to its recorded owner. `ProvenAbsent` authorizes a retry only when durable
+provider evidence binds the exact request and excludes a delayed original through provider idempotency, a conditional
+fence, or explicit retirement of the original request; an ordinary absent read is insufficient. That evidence plus a
+fresh epoch, claim, admission, operation, manifest, seal, and registry-head fence may create exactly one next attempt.
+Later effects refresh independently, and expanded scope requires a new admission.
+Read-only requests use a distinct outbound type and cannot carry a mutation. The authority reader validates
+the real Git commit, tree, `event.json`, `head.json`, ancestry, tag, trust, manifest, claim generations, and two
+identical ref reads. A 40-character Git object id and a 64-character SHA-256 digest are distinct wire types.
+The reader discovers no credential and performs no repair. `FreezeRequested` and every later
+phase refuse ordinary v1 effects. From `OpenV2`, ordinary v2 effects require the same fresh generation fence.
+A lost provider response never triggers blind replay: the client rereads the fleet aggregate and exact operation
+receipt, treats an exact matching known effect as applied, retries only proven absence, preserves partial as
+partial, and otherwise reports indeterminate. The control issue is generated only after this reread and carries
+the fleet, manifest, epoch commit, generation, phase, and source ref while explicitly declaring itself a
+non-authoritative projection.
+
+A command touching multiple aggregates first sorts `(journal-kind, shard, aggregate-digest)` and
+acquires grants in that total order. It persists the entire touch set and expected generations in
+the operation journal before the first effect. On conflict it releases unconsumed grants and appends
+idempotent compensations for already-applied effects in reverse order. Compensation is itself a
+fenced journal event and may not erase the original result. This is a saga with deterministic
+acquisition and compensation, not an atomic multi-ref transaction.
+
+The profile-2 compiler has a fixed 4,096-node typed graph ceiling. The executable suite therefore
+uses compact, independently named witnesses for every durable-plan law, while the validator separately
+inverts each material binding and preserves the earlier bounded invariants.
+
+```quint-test
+module CoordinationProtocolTests {
+  import CoordinationProtocol.*
+
+  pure val createIntent = {
+    operationId: "operation-create-1", subjectId: "subject-created", mutationKindId: "MUT-Create",
+    targetKind: "subject", payloadKind: "create", expectedRevision: 0,
+    idempotencyKey: "key-create-1", payloadDigest: "digest-create-1",
+    compensatesOperationId: "",
+  }
+
+  pure val createAppliedResult = {
+    intent: createIntent, outcomeId: "MOUT-Applied", resultingRevision: 1,
+  }
+
+  pure val compensateCreateIntent = {
+    operationId: "operation-compensate-1", subjectId: createIntent.subjectId, mutationKindId: "MUT-Compensate",
+    targetKind: "mutation", payloadKind: "compensation", expectedRevision: 1,
+    idempotencyKey: "key-compensate-1", payloadDigest: "digest-compensate-1",
+    compensatesOperationId: createIntent.operationId,
+  }
+
+
+  // GS2-03.10 keeps the amendment's executable architecture types adjacent to the independent tests.
+  // The compiled contract exposes the corresponding authority/retention strings without exceeding the
+  // profile-2 4,096-node projection ceiling.
+  type JournalHead = {
+    aggregateId: str, journalKind: str, commitSha: str, parentCommitSha: str,
+    generation: int, snapshotSha256: str, terminal: bool,
+  }
+  type FencedGrant = {
+    aggregateId: str, journalCommitSha: str, generation: int, ownerId: str, leaseActive: bool,
+  }
+  type ReviewEpoch = {
+    chainId: str, epochKey: str, snapshotSha256: str, criticSeat: str, verdict: str,
+  }
+  type ReconcileInput = {
+    subjectId: str, triggerKind: str, authorityComplete: bool, authorityFresh: bool,
+    observedSnapshotSha256: str, plannedSnapshotSha256: str, planSealed: bool,
+  }
+  type CutoverState = {
+    phase: str, successfulObservationDays: Set[int], freshObservationDays: Set[int],
+    currentSnapshotSha256: str, observationSnapshotSha256: str, observationClockDay: int,
+    v1WritersFenced: bool,
+    destructiveDeletionStarted: bool,
+  }
+  type FleetAdmission = {
+    operationId: str, operationGeneration: int, round: int, manifest: str,
+    actor: str, receiver: str, mutationKind: str, canonicalTarget: str,
+    claimGeneration: int, intentDigest: str, touchSetDigest: str,
+    originatingEpochGeneration: int,
+  }
+  type AdmissionRound = {
+    journalHead: str, journalGeneration: int, round: int, manifest: str,
+    state: str, cohort: Set[str], unsettledEffects: Set[str], sealDigest: str,
+  }
+
+  pure def journalHeadShapeIsValid(journal: JournalHead): bool = and {
+    journal.aggregateId != "",
+    Set("claim", "review", "operation", "cutover").contains(journal.journalKind),
+    journal.commitSha != "", journal.generation >= 1, journal.snapshotSha256 != "",
+  }
+  pure def journalAdvanceIsCas(current: JournalHead, proposed: JournalHead): bool = and {
+    journalHeadShapeIsValid(current), journalHeadShapeIsValid(proposed),
+    current.aggregateId == proposed.aggregateId, current.journalKind == proposed.journalKind,
+    not(current.terminal), proposed.parentCommitSha == current.commitSha,
+    proposed.commitSha != current.commitSha, proposed.generation == current.generation + 1,
+  }
+  pure def grantMatchesJournalHead(journal: JournalHead, grant: FencedGrant): bool = and {
+    journalHeadShapeIsValid(journal), grant.aggregateId == journal.aggregateId,
+    grant.journalCommitSha == journal.commitSha, grant.generation == journal.generation,
+    grant.ownerId != "", grant.leaseActive,
+  }
+  pure def legacyLeaseAndCommentOrderMayAuthorize(grant: FencedGrant): bool = and {
+    grant.ownerId != "", grant.leaseActive,
+  }
+  pure def reviewEpochMayAuthorize(
+    epoch: ReviewEpoch, currentSnapshotSha256: str, expectedCriticSeat: str): bool = and {
+    epoch.chainId != "", epoch.epochKey != "", epoch.snapshotSha256 == currentSnapshotSha256,
+    epoch.criticSeat == expectedCriticSeat, epoch.verdict == "pass",
+  }
+  pure def reconcileMayApply(input: ReconcileInput): bool = and {
+    input.subjectId != "", Set("command", "webhook", "audit").contains(input.triggerKind),
+    input.authorityComplete, input.authorityFresh, input.observedSnapshotSha256 != "",
+    input.observedSnapshotSha256 == input.plannedSnapshotSha256, input.planSealed,
+  }
+  pure def cutoverEvidenceIsValid(state: CutoverState): bool = and {
+    state.successfulObservationDays == state.freshObservationDays,
+    state.currentSnapshotSha256 != "",
+    state.observationSnapshotSha256 == state.currentSnapshotSha256,
+  }
+  pure def cutoverTransitionIsLegal(current: CutoverState, proposed: CutoverState): bool = or {
+    and { current.phase == "OperatingV1", proposed.phase == "Preparing",
+      not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "Preparing", proposed.phase == "FreezeRequested",
+      not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "FreezeRequested", proposed.phase == "Frozen",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "Frozen", proposed.phase == "SwitchedV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "SwitchedV2", proposed.phase == "VerifiedV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "VerifiedV2", proposed.phase == "OpenV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "OpenV2", proposed.phase == "ObservingV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      proposed.successfulObservationDays == Set(0), proposed.observationClockDay == 0,
+      cutoverEvidenceIsValid(proposed) },
+    and { current.phase == "ObservingV2", proposed.phase == "ObservingV2",
+      proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted),
+      cutoverEvidenceIsValid(proposed),
+      or {
+        proposed.successfulObservationDays == current.successfulObservationDays,
+        and { current.successfulObservationDays == Set(0), proposed.successfulObservationDays == Set(0, 7), proposed.observationClockDay == 7 },
+        and { current.successfulObservationDays == Set(0, 7), proposed.successfulObservationDays == Set(0, 7, 14), proposed.observationClockDay == 14 },
+        and { current.successfulObservationDays == Set(0, 7, 14), proposed.successfulObservationDays == Set(0, 7, 14, 30), proposed.observationClockDay == 30 },
+      } },
+    and { current.phase == "ObservingV2",
+      current.successfulObservationDays == Set(0, 7, 14, 30),
+      current.observationClockDay == 30, cutoverEvidenceIsValid(current),
+      proposed.phase == "ContractingV1", proposed.v1WritersFenced,
+      proposed.destructiveDeletionStarted },
+    and { current.phase == "ContractingV1", proposed.phase == "OperatingV2",
+      proposed.v1WritersFenced, proposed.destructiveDeletionStarted },
+    and { Set("Preparing", "FreezeRequested", "Frozen", "SwitchedV2", "VerifiedV2").contains(current.phase),
+      proposed.phase == "RollingBack", proposed.v1WritersFenced, not(proposed.destructiveDeletionStarted) },
+    and { current.phase == "RollingBack", proposed.phase == "OperatingV1",
+      not(proposed.v1WritersFenced), not(proposed.destructiveDeletionStarted) },
+  }
+  pure def v1EffectMayProceed(phase: str, newAdmission: bool, eligibleIncumbent: bool,
+      freshAuthority: bool, manifestMatches: bool, epochGenerationMatches: bool,
+      claimGenerationMatches: bool, operationGenerationMatches: bool): bool = and {
+    freshAuthority, manifestMatches, epochGenerationMatches, claimGenerationMatches, operationGenerationMatches,
+    or {
+      phase == "OperatingV1",
+      and { phase == "Preparing", not(newAdmission), eligibleIncumbent },
+    },
+  }
+  pure def fleetAdmissionMayAppend(current: AdmissionRound, admission: FleetAdmission,
+      expectedParent: str, currentEpochGeneration: int): bool = and {
+    current.state == "open", current.journalHead == expectedParent,
+    admission.round == current.round, admission.manifest == current.manifest,
+    admission.operationId != "", admission.operationGeneration >= 1,
+    admission.actor != "", admission.receiver != "", admission.mutationKind != "",
+    admission.canonicalTarget != "", admission.intentDigest != "",
+    admission.touchSetDigest != "",
+    admission.originatingEpochGeneration == currentEpochGeneration,
+  }
+  pure def admissionRoundMayClose(current: AdmissionRound, proposed: AdmissionRound): bool = and {
+    current.state == "open", proposed.state == "closing",
+    proposed.round == current.round, proposed.manifest == current.manifest,
+    proposed.cohort == current.cohort,
+    proposed.journalHead != current.journalHead,
+    proposed.journalGeneration == current.journalGeneration + 1,
+  }
+  pure def admissionRoundMaySeal(current: AdmissionRound, proposed: AdmissionRound): bool = and {
+    current.state == "closing", proposed.state == "sealed",
+    current.unsettledEffects == Set(), proposed.unsettledEffects == Set(),
+    proposed.round == current.round, proposed.manifest == current.manifest,
+    proposed.cohort == current.cohort, proposed.sealDigest != "",
+    proposed.journalHead != current.journalHead,
+    proposed.journalGeneration == current.journalGeneration + 1,
+  }
+  pure def admittedEffectMayDispatch(round: AdmissionRound, operationId: str,
+      requestDigest: str, inFlightPersisted: bool, singleOwner: bool,
+      epochFresh: bool, generationsFresh: bool, restoredInFlight: bool,
+      initialPermitFresh: bool): bool = and {
+    Set("open", "closing", "sealed").contains(round.state),
+    round.cohort.contains(operationId), requestDigest != "", inFlightPersisted,
+    singleOwner, epochFresh, generationsFresh, not(restoredInFlight), initialPermitFresh,
+  }
+  pure def effectRetryMayAppend(status: str, providerEvidenceKind: str,
+      exactRequestBound: bool, delayedOriginalExcluded: bool,
+      freshFence: bool, nextAttempt: bool): bool = and {
+    status == "proven-absent",
+    Set("provider-idempotency", "conditional-fence", "request-retirement").contains(providerEvidenceKind),
+    exactRequestBound, delayedOriginalExcluded, freshFence, nextAttempt,
+  }
+  pure def clientReadExternalEffectRaceRefuses(observedEpochGeneration: int,
+      currentEpochGeneration: int, inFlightPersisted: bool): bool = or {
+    observedEpochGeneration != currentEpochGeneration,
+    not(inFlightPersisted),
+  }
+  pure def fleetMayFreeze(round: AdmissionRound): bool = and {
+    round.state == "sealed",
+    round.unsettledEffects == Set(),
+  }
+
+  pure val claimJournalHead: JournalHead = {
+    aggregateId: "claim:subject-work", journalKind: "claim", commitSha: "commit-claim-1",
+    parentCommitSha: "commit-root", generation: 1, snapshotSha256: "snapshot-claim-1", terminal: false,
+  }
+  pure val successorClaimJournalHead: JournalHead = {
+    ...claimJournalHead, commitSha: "commit-claim-2", parentCommitSha: claimJournalHead.commitSha,
+    generation: 2,
+  }
+  pure val initialClaimGrant: FencedGrant = {
+    aggregateId: claimJournalHead.aggregateId, journalCommitSha: claimJournalHead.commitSha,
+    generation: claimJournalHead.generation, ownerId: "worker-a", leaseActive: true,
+  }
+  pure val successorClaimGrant: FencedGrant = {
+    ...initialClaimGrant, journalCommitSha: successorClaimJournalHead.commitSha,
+    generation: successorClaimJournalHead.generation, ownerId: "worker-b",
+  }
+  pure val acceptedReviewEpoch: ReviewEpoch = {
+    chainId: "review:subject-work", epochKey: "epoch:snapshot-a", snapshotSha256: "snapshot-a",
+    criticSeat: "critic-seat-a", verdict: "pass",
+  }
+  pure val webhookReconcileInput: ReconcileInput = {
+    subjectId: "subject-work", triggerKind: "webhook", authorityComplete: true, authorityFresh: true,
+    observedSnapshotSha256: "snapshot-a", plannedSnapshotSha256: "snapshot-a", planSealed: true,
+  }
+  pure val observingDay30: CutoverState = {
+    phase: "ObservingV2", successfulObservationDays: Set(0, 7, 14, 30),
+    freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
+    observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30, v1WritersFenced: true,
+    destructiveDeletionStarted: false,
+  }
+  pure val openAdmissionRound: AdmissionRound = {
+    journalHead: "admission-head-1", journalGeneration: 1, round: 1,
+    manifest: "manifest-a", state: "open", cohort: Set("operation-a"),
+    unsettledEffects: Set(), sealDigest: "",
+  }
+  pure val incumbentAdmission: FleetAdmission = {
+    operationId: "operation-a", operationGeneration: 1, round: 1,
+    manifest: "manifest-a", actor: "worker-a", receiver: "coordination",
+    mutationKind: "issue-edit", canonicalTarget: "FS-GG/example#17",
+    claimGeneration: 0, intentDigest: "intent-a", touchSetDigest: "touch-a",
+    originatingEpochGeneration: 1,
+  }
+
+  // GS2-03.4 independent black-box oracles. These expectations are deliberately hand-authored
+  // against public protocol behavior and invoke the canonical functions directly; they are not
+  // generated from the compiled contract or from the implementation of those functions.
+  run oracleClaimExclusion = and {
+    mutationIntentsConflict(createIntent, { ...createIntent, operationId: "operation-rival" }),
+    not(mutationIntentsConflict(createIntent, createIntent)),
+  }
+
+  run oracleStaleProjection = and {
+    deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts) == "claimed",
+    deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts) == "ready",
+  }
+
+  run oracleDependencyConcurrency = and {
+    mutationOutcomeForRevision(12, 13) == "MOUT-RevisionConflict",
+    mutationOutcomeForRevision(12, 12) == "MOUT-Applied",
+  }
+
+  run oraclePartialOperation = and {
+    durablePlanDispositionFor(planCreateStep, planUncertainCheckpoint.receipt, Set()) == "PDISP-ReceiptReread",
+    not(durablePlanMayAdvance(planUncertainCheckpoint)),
+  }
+
+  run oracleOldClientFencing = and {
+    not(deterministicVersionsAreSupported({ ...supportedDeterministicVersions,
+      sourceVersion: "fsgg.quint.literate-source/0" })),
+    deterministicVersionsAreSupported(supportedDeterministicVersions),
+  }
+
+  run oracleLedgerTamper = and {
+    not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope))),
+    retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(claimEnvelope, leaseEnvelope)),
+  }
+
+  run oracleExactHeadReview = and {
+    qualificationManifestIsBound(canonicalQualificationManifest),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewCandidateSha: "candidate-stale" })),
+  }
+
+  run oraclePostMergeVerification = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultCandidateSha: "merge-unverified" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultsComplete: false })),
+  }
+
+  run oracleDualFeedRecovery = and {
+    desiredStatePlanOutcomeFor(desiredReleases, desiredReleases) == "DSPLAN-NoChange",
+    desiredStatePlanOutcomeFor(desiredReleases,
+      { ...desiredReleases, contentDigest: "one-feed-only" }) == "DSPLAN-Ready",
+    desiredStateMayApply(desiredReleases,
+      { ...desiredReleases, contentDigest: "one-feed-only" }),
+  }
+
+  run oracleAbstractionEquivalence = and {
+    behavioralIdentityIsEquivalent(canonicalDeterministicIdentity, canonicalDeterministicIdentity),
+    not(behavioralIdentityIsEquivalent(canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, behavioralSha256: "abstract-drift" })),
+  }
+
+  run oracleScaleEnvelope = and {
+    boundCatalogue.forall(bound => and { bound.minimum >= 0, bound.maximum >= bound.minimum }),
+    boundCatalogue.map(bound => bound.id).size() == 11,
+  }
+
+  // GS2-03.10 architecture-amendment oracles. These name the failures that ordered comments and
+  // leases alone cannot exclude.
+  run testMutationJournalExpectedParentAndFencingRejectStaleOwner = and {
+    journalAdvanceIsCas(claimJournalHead, successorClaimJournalHead),
+    grantMatchesJournalHead(claimJournalHead, initialClaimGrant),
+    grantMatchesJournalHead(successorClaimJournalHead, successorClaimGrant),
+    not(grantMatchesJournalHead(successorClaimJournalHead, initialClaimGrant)),
+    legacyLeaseAndCommentOrderMayAuthorize(initialClaimGrant),
+    not(journalAdvanceIsCas(claimJournalHead,
+      { ...successorClaimJournalHead, parentCommitSha: "concurrent-sibling" })),
+  }
+
+  run testMutationReviewEpochRejectsPassAfterSnapshotOrSeatChange = and {
+    reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-a", "critic-seat-a"),
+    not(reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-b", "critic-seat-a")),
+    not(reviewEpochMayAuthorize(acceptedReviewEpoch, "snapshot-a", "critic-seat-b")),
+  }
+
+  run testMutationReconcilerRequiresFreshCompleteSealedSnapshot = and {
+    reconcileMayApply(webhookReconcileInput),
+    not(reconcileMayApply({ ...webhookReconcileInput, authorityComplete: false })),
+    not(reconcileMayApply({ ...webhookReconcileInput, authorityFresh: false })),
+    not(reconcileMayApply({ ...webhookReconcileInput, plannedSnapshotSha256: "snapshot-stale" })),
+    not(reconcileMayApply({ ...webhookReconcileInput, planSealed: false })),
+    reconcileMayApply({ ...webhookReconcileInput, triggerKind: "audit" }),
+  }
+
+  run testMutationCutoverObservesBeforeDestructiveContraction = and {
+    cutoverTransitionIsLegal(
+      { phase: "VerifiedV2", successfulObservationDays: Set(), v1WritersFenced: false,
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false },
+      { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false }),
+    cutoverTransitionIsLegal(
+      { phase: "OpenV2", successfulObservationDays: Set(), v1WritersFenced: true,
+        freshObservationDays: Set(), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "", observationClockDay: 0, destructiveDeletionStarted: false },
+      { phase: "ObservingV2", successfulObservationDays: Set(0), v1WritersFenced: true,
+        freshObservationDays: Set(0), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "cutover-snapshot", observationClockDay: 0,
+        destructiveDeletionStarted: false }),
+    not(cutoverTransitionIsLegal(
+      { ...observingDay30, successfulObservationDays: Set(30) },
+      { phase: "ContractingV1", successfulObservationDays: Set(30), v1WritersFenced: true,
+        freshObservationDays: Set(30), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "wrong-snapshot", observationClockDay: 30,
+        destructiveDeletionStarted: true })),
+    cutoverTransitionIsLegal(observingDay30,
+      { phase: "ContractingV1", successfulObservationDays: Set(0, 7, 14, 30), v1WritersFenced: true,
+        freshObservationDays: Set(0, 7, 14, 30), currentSnapshotSha256: "cutover-snapshot",
+        observationSnapshotSha256: "cutover-snapshot", observationClockDay: 30,
+        destructiveDeletionStarted: true }),
+    cutoverTransitionIsLegal(
+      { ...observingDay30, phase: "Preparing", successfulObservationDays: Set(), freshObservationDays: Set(),
+        observationSnapshotSha256: "", observationClockDay: 0 },
+      { ...observingDay30, phase: "RollingBack", successfulObservationDays: Set(), freshObservationDays: Set(),
+        observationSnapshotSha256: "", observationClockDay: 0 }),
+    not(cutoverTransitionIsLegal(
+      { ...observingDay30, phase: "OpenV2" },
+      { ...observingDay30, phase: "OperatingV1", v1WritersFenced: false })),
+  }
+
+  run testMutationEpochAdmissionAndGenerationFence = and {
+    v1EffectMayProceed("OperatingV1", true, true, true, true, true, true, true),
+    v1EffectMayProceed("Preparing", false, true, true, true, true, true, true),
+    not(v1EffectMayProceed("Preparing", true, true, true, true, true, true, true)),
+    not(v1EffectMayProceed("RollingBack", false, true, true, true, true, true, true)),
+    not(v1EffectMayProceed("FreezeRequested", false, true, true, true, true, true, true)),
+    not(v1EffectMayProceed("OperatingV1", true, true, false, true, true, true, true)),
+    not(v1EffectMayProceed("OperatingV1", true, true, true, true, true, false, true)),
+  }
+
+  run testMutationAdmissionCloseSealAndEffectOwnership = and {
+    fleetAdmissionMayAppend(openAdmissionRound, incumbentAdmission,
+      openAdmissionRound.journalHead, 1),
+    not(fleetAdmissionMayAppend({ ...openAdmissionRound, state: "closing" },
+      incumbentAdmission, openAdmissionRound.journalHead, 1)),
+    admissionRoundMayClose(openAdmissionRound,
+      { ...openAdmissionRound, journalHead: "admission-head-2",
+        journalGeneration: 2, state: "closing" }),
+    admissionRoundMaySeal(
+      { ...openAdmissionRound, journalHead: "admission-head-2",
+        journalGeneration: 2, state: "closing" },
+      { ...openAdmissionRound, journalHead: "admission-head-3",
+        journalGeneration: 3, state: "sealed", sealDigest: "cohort-digest" }),
+    not(admissionRoundMaySeal(
+      { ...openAdmissionRound, journalHead: "admission-head-2",
+        journalGeneration: 2, state: "closing", unsettledEffects: Set("effect-a") },
+      { ...openAdmissionRound, journalHead: "admission-head-3",
+        journalGeneration: 3, state: "sealed", sealDigest: "cohort-digest" })),
+    admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      true, true, true, true, false, true),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-b", "request-a",
+      true, true, true, true, false, true)),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      false, true, true, true, false, true)),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      true, true, true, true, true, true)),
+    not(admittedEffectMayDispatch(openAdmissionRound, "operation-a", "request-a",
+      true, true, true, true, false, false)),
+    effectRetryMayAppend("proven-absent", "conditional-fence", true, true, true, true),
+    not(effectRetryMayAppend("proven-absent", "ordinary-read", true, false, true, true)),
+    not(effectRetryMayAppend("indeterminate", "conditional-fence", true, true, true, true)),
+    not(clientReadExternalEffectRaceRefuses(1, 1, true)),
+    clientReadExternalEffectRaceRefuses(1, 2, true),
+    clientReadExternalEffectRaceRefuses(1, 1, false),
+    fleetMayFreeze({ ...openAdmissionRound, state: "sealed",
+      sealDigest: "cohort-digest" }),
+    not(fleetMayFreeze({ ...openAdmissionRound, state: "sealed",
+      unsettledEffects: Set("effect-a"), sealDigest: "cohort-digest" })),
+  }
+
+  type DeterministicVersionTuple = {
+    sourceVersion: str, extractorVersion: str, quintVersion: str,
+    profileVersion: str, schemaVersion: str,
+  }
+
+  type DeterministicIdentity = {
+    sourceSha256: str, behavioralSha256: str, contractSha256: str,
+    normalizationAuthority: str, versions: DeterministicVersionTuple,
+    semanticDiffRows: List[str], supported: bool, complete: bool, fresh: bool,
+  }
+
+  pure val supportedDeterministicVersions = {
+    sourceVersion: "fsgg.quint.literate-source/1",
+    extractorVersion: "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0",
+    quintVersion: "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+    profileVersion: "fsgg-quint-profile/2",
+    schemaVersion: "fsgg.quint.compiled-contract/v2",
+  }
+
+  pure def deterministicVersionsAreSupported(versions: DeterministicVersionTuple): bool =
+    versions == supportedDeterministicVersions
+
+  pure def deterministicIdentityIsQualified(identity: DeterministicIdentity): bool = and {
+    identity.sourceSha256 != "", identity.behavioralSha256 != "", identity.contractSha256 != "",
+    identity.normalizationAuthority == "typed-effect-json",
+    deterministicVersionsAreSupported(identity.versions), identity.supported, identity.complete, identity.fresh,
+  }
+
+  pure def behavioralIdentityIsEquivalent(left: DeterministicIdentity, right: DeterministicIdentity): bool = and {
+    deterministicIdentityIsQualified(left), deterministicIdentityIsQualified(right),
+    left.behavioralSha256 == right.behavioralSha256,
+    left.contractSha256 == right.contractSha256,
+    left.versions == right.versions,
+    left.semanticDiffRows == right.semanticDiffRows,
+  }
+
+  pure val canonicalDeterministicIdentity = {
+    sourceSha256: "source-canonical", behavioralSha256: "behavior-canonical",
+    contractSha256: "contract-canonical", normalizationAuthority: "typed-effect-json",
+    versions: supportedDeterministicVersions,
+    semanticDiffRows: List("1:/catalogue/0:row-a", "2:/properties/0:row-b"),
+    supported: true, complete: true, fresh: true,
+  }
+
+  type QualificationInputEntry = {
+    id: str, candidateSha: str, producer: str, digest: str, fresh: bool,
+  }
+
+  type QualificationManifest = {
+    schema: str, candidateSha: str, inputSetSha256: str, candidateProducer: str,
+    inputEntries: Set[QualificationInputEntry], generatedProducers: Set[str],
+    independentProducers: Set[str], resultProducers: Set[str], reviewerPrincipals: Set[str],
+    resultCandidateSha: str, resultInputSetSha256: str,
+    reviewCandidateSha: str, reviewInputSetSha256: str,
+    environmentClosed: bool, resultsComplete: bool, reviewsComplete: bool,
+  }
+
+  pure def qualificationManifestIsBound(manifest: QualificationManifest): bool = and {
+    manifest.schema == "fsgg.coordination.qualification-manifest/1",
+    manifest.candidateSha != "", manifest.inputSetSha256 != "",
+    manifest.inputEntries.size() > 0,
+    manifest.inputEntries.forall(entry => and {
+      entry.id != "", entry.digest != "", entry.fresh,
+      entry.candidateSha == manifest.candidateSha,
+    }),
+    manifest.resultCandidateSha == manifest.candidateSha,
+    manifest.reviewCandidateSha == manifest.candidateSha,
+    manifest.resultInputSetSha256 == manifest.inputSetSha256,
+    manifest.reviewInputSetSha256 == manifest.inputSetSha256,
+    manifest.independentProducers.size() > 0,
+    manifest.reviewerPrincipals.size() > 0,
+    manifest.independentProducers.forall(principal => and {
+      principal != manifest.candidateProducer,
+      not(manifest.generatedProducers.contains(principal)),
+    }),
+    manifest.reviewerPrincipals.forall(principal => and {
+      principal != manifest.candidateProducer,
+      not(manifest.resultProducers.contains(principal)),
+    }),
+    manifest.environmentClosed, manifest.resultsComplete, manifest.reviewsComplete,
+  }
+
+  pure val canonicalQualificationManifest = {
+    schema: "fsgg.coordination.qualification-manifest/1",
+    candidateSha: "candidate-a", inputSetSha256: "inputs-a", candidateProducer: "candidate-builder",
+    inputEntries: Set(
+      { id: "source", candidateSha: "candidate-a", producer: "candidate-builder", digest: "source-digest", fresh: true },
+      { id: "generated", candidateSha: "candidate-a", producer: "case-generator", digest: "generated-digest", fresh: true },
+      { id: "independent", candidateSha: "candidate-a", producer: "oracle-author", digest: "oracle-digest", fresh: true }
+    ),
+    generatedProducers: Set("case-generator"), independentProducers: Set("oracle-author"),
+    resultProducers: Set("gate-runner"), reviewerPrincipals: Set("independent-critic"),
+    resultCandidateSha: "candidate-a", resultInputSetSha256: "inputs-a",
+    reviewCandidateSha: "candidate-a", reviewInputSetSha256: "inputs-a",
+    environmentClosed: true, resultsComplete: true, reviewsComplete: true,
+  }
+
+  type CompiledOutputFamily = {
+    id: str, ordinal: int, contentContract: str, formats: Set[str],
+  }
+
+  pure val compiledOutputFamilyCatalogue = Set(
+    { id: "COUT-Schemas", ordinal: 1,
+      contentContract: "authority|observation|lifecycle|relation|stream|mutation|durable-plan|desired-state|compiled-output",
+      formats: Set("json-schema") },
+    { id: "COUT-CommandMetadata", ordinal: 2, contentContract: "inspect|plan|apply-intent|verify", formats: Set("json") },
+    { id: "COUT-PermissionCensus", ordinal: 3,
+      contentContract: "organization-administration|repository-administration|project-administration|actions-administration|release-administration|security-administration",
+      formats: Set("json") },
+    { id: "COUT-MutationCensus", ordinal: 4,
+      contentContract: "create|append|add-edge|remove-edge|set|clear|transition|compensate|applied|idempotent|rejected|revision-conflict|rate-limited|unavailable|timed-out|incomplete",
+      formats: Set("json") },
+    { id: "COUT-SettingsPlans", ordinal: 5,
+      contentContract: "issue-schema|repository-properties|projects|repository-profile|workflow-pins|releases|permissions|security-supply-chain|inspect|plan|apply|verify",
+      formats: Set("json") },
+    { id: "COUT-ProjectionViews", ordinal: 6,
+      contentContract: "catalogue|relationships|actions|verification|bounds|compatibility",
+      formats: Set("markdown", "json") },
+    { id: "COUT-SemanticDiff", ordinal: 7,
+      contentContract: "family|identity|content|support|completeness|freshness|order", formats: Set("json") },
+    { id: "COUT-Diagrams", ordinal: 8,
+      contentContract: "authority-map|phase-flow|mutation-flow|stream-flow", formats: Set("mermaid") },
+    { id: "COUT-ModelTestInventory", ordinal: 9,
+      contentContract: "invariant|witness|negative-control|bounded-verification", formats: Set("json") }
+  )
+
+  pure val closedCompiledOutputFamilyCatalogue = and {
+    compiledOutputFamilyCatalogue.map(family => family.id) == Set(
+      "COUT-Schemas", "COUT-CommandMetadata", "COUT-PermissionCensus", "COUT-MutationCensus",
+      "COUT-SettingsPlans", "COUT-ProjectionViews", "COUT-SemanticDiff", "COUT-Diagrams",
+      "COUT-ModelTestInventory"
+    ),
+    compiledOutputFamilyCatalogue.map(family => family.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    compiledOutputFamilyCatalogue.filter(family => family.id == "COUT-ProjectionViews")
+      .forall(family => family.formats == Set("markdown", "json")),
+  }
+
+  type CompiledOutput = {
+    familyId: str, ordinal: int, sourceIdentity: str, profileIdentity: str,
+    contractIdentity: str, contentContract: str, formats: Set[str], contentDigest: str,
+    supported: bool, complete: bool, fresh: bool,
+  }
+
+  type DesiredStateFact = {
+    authorityId: str, authorityRevision: str, subjectId: str, profileId: str,
+    familyId: str, targetKind: str, surfaceIds: Set[str], contentDigest: str, requiredPermission: str,
+    outcomeId: str, complete: bool, supported: bool, permissionGranted: bool,
+  }
+
+  type DesiredStatePhaseAuthority = {
+    subjectId: str, profileId: str, familyId: str, desiredContentDigest: str,
+    authorityRevision: str, planOutcomeId: str, applyReceiptOutcomeId: str,
+  }
+
+  pure def compiledOutput(
+    familyId: str, ordinal: int, contentContract: str, formats: Set[str], contentDigest: str
+  ): CompiledOutput = {
+    familyId: familyId, ordinal: ordinal, sourceIdentity: "literate-quint-authority",
+    profileIdentity: "fsgg-quint-profile/2", contractIdentity: "compiled-output-contract/v1",
+    contentContract: contentContract, formats: formats, contentDigest: contentDigest,
+    supported: true, complete: true, fresh: true,
+  }
+
+  pure val completeCompiledOutputs = Set(
+    compiledOutput("COUT-Schemas", 1,
+      "authority|observation|lifecycle|relation|stream|mutation|durable-plan|desired-state|compiled-output",
+      Set("json-schema"), "digest-schemas"),
+    compiledOutput("COUT-CommandMetadata", 2, "inspect|plan|apply-intent|verify", Set("json"), "digest-command-metadata"),
+    compiledOutput("COUT-PermissionCensus", 3,
+      "organization-administration|repository-administration|project-administration|actions-administration|release-administration|security-administration",
+      Set("json"), "digest-permission-census"),
+    compiledOutput("COUT-MutationCensus", 4,
+      "create|append|add-edge|remove-edge|set|clear|transition|compensate|applied|idempotent|rejected|revision-conflict|rate-limited|unavailable|timed-out|incomplete",
+      Set("json"), "digest-mutation-census"),
+    compiledOutput("COUT-SettingsPlans", 5,
+      "issue-schema|repository-properties|projects|repository-profile|workflow-pins|releases|permissions|security-supply-chain|inspect|plan|apply|verify",
+      Set("json"), "digest-settings-plans"),
+    compiledOutput("COUT-ProjectionViews", 6,
+      "catalogue|relationships|actions|verification|bounds|compatibility",
+      Set("markdown", "json"), "digest-projection-views"),
+    compiledOutput("COUT-SemanticDiff", 7, "family|identity|content|support|completeness|freshness|order",
+      Set("json"), "digest-semantic-diff"),
+    compiledOutput("COUT-Diagrams", 8, "authority-map|phase-flow|mutation-flow|stream-flow",
+      Set("mermaid"), "digest-diagrams"),
+    compiledOutput("COUT-ModelTestInventory", 9, "invariant|witness|negative-control|bounded-verification",
+      Set("json"), "digest-model-test-inventory")
+  )
+
+  pure def compiledOutputShapeIsQualified(output: CompiledOutput): bool = and {
+    output.sourceIdentity == "literate-quint-authority",
+    output.profileIdentity == "fsgg-quint-profile/2",
+    output.contractIdentity == "compiled-output-contract/v1",
+    output.contentDigest != "", output.supported, output.complete, output.fresh,
+    compiledOutputFamilyCatalogue.exists(family => and {
+      family.id == output.familyId, family.ordinal == output.ordinal,
+      family.contentContract == output.contentContract, family.formats == output.formats,
+    }),
+  }
+
+  pure def compiledOutputSetIsQualified(outputs: Set[CompiledOutput]): bool = and {
+    closedCompiledOutputFamilyCatalogue,
+    outputs.size() == compiledOutputFamilyCatalogue.size(),
+    outputs.map(output => output.familyId) == compiledOutputFamilyCatalogue.map(family => family.id),
+    outputs.map(output => output.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    outputs.forall(compiledOutputShapeIsQualified),
+  }
+
+  pure val desiredStateFamilyCatalogue = Set(
+    { id: "DSTATE-IssueSchema", targetKind: "organization-issue-schema", requiredPermission: "organization-administration",
+      surfaceIds: Set("issue-type", "issue-field", "field-type", "allowed-value") },
+    { id: "DSTATE-RepositoryProperties", targetKind: "repository-properties", requiredPermission: "repository-administration",
+      surfaceIds: Set("property-schema", "property-value") },
+    { id: "DSTATE-Projects", targetKind: "organization-project", requiredPermission: "project-administration",
+      surfaceIds: Set("project-field", "project-view", "project-workflow", "project-visibility", "project-membership-policy") },
+    { id: "DSTATE-RepositoryProfile", targetKind: "repository-profile", requiredPermission: "repository-administration",
+      surfaceIds: Set("ruleset", "merge-queue", "merge-policy", "actions-policy", "branch-deletion-policy") },
+    { id: "DSTATE-WorkflowPins", targetKind: "workflow-policy", requiredPermission: "actions-administration",
+      surfaceIds: Set("reusable-workflow-pin", "action-pin") },
+    { id: "DSTATE-Releases", targetKind: "release-policy", requiredPermission: "release-administration",
+      surfaceIds: Set("release-environment", "immutable-release", "tag-protection", "trusted-publisher") },
+    { id: "DSTATE-Permissions", targetKind: "permission-policy", requiredPermission: "organization-administration",
+      surfaceIds: Set("repository-visibility", "team-access", "workflow-permission", "environment-protection") },
+    { id: "DSTATE-SecuritySupplyChain", targetKind: "security-supply-chain", requiredPermission: "security-administration",
+      surfaceIds: Set("vulnerability-policy", "secret-policy", "dependency-policy", "sbom-policy", "attestation-policy") }
+  )
+  pure val desiredStatePhaseCatalogue = Set(
+    { id: "DSPH-Inspect" }, { id: "DSPH-Plan" }, { id: "DSPH-Apply" }, { id: "DSPH-Verify" }
+  )
+  pure val desiredStatePlanOutcomeCatalogue = Set(
+    { id: "DSPLAN-Ready" }, { id: "DSPLAN-NoChange" }, { id: "DSPLAN-Unsupported" },
+    { id: "DSPLAN-Unauthorized" }, { id: "DSPLAN-Incomplete" }, { id: "DSPLAN-Stale" },
+    { id: "DSPLAN-IdentityMismatch" }
+  )
+
+  pure def desiredStateFactShapeIsValid(fact: DesiredStateFact): bool = and {
+    fact.subjectId != "", fact.profileId != "", fact.contentDigest != "",
+    authorityCatalogue.exists(authority => and {
+      authority.id == fact.authorityId, authority.revisionValue == fact.authorityRevision,
+    }),
+    observationOutcomeCatalogue.exists(outcome => outcome.id == fact.outcomeId),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == fact.familyId, family.targetKind == fact.targetKind,
+      family.requiredPermission == fact.requiredPermission, family.surfaceIds == fact.surfaceIds,
+    }),
+  }
+
+  pure def desiredStateIdentityMatches(desired: DesiredStateFact, observed: DesiredStateFact): bool = and {
+    desired.authorityId == observed.authorityId,
+    desired.authorityRevision == observed.authorityRevision,
+    desired.subjectId == observed.subjectId, desired.profileId == observed.profileId,
+    desired.familyId == observed.familyId, desired.targetKind == observed.targetKind,
+    desired.surfaceIds == observed.surfaceIds, desired.requiredPermission == observed.requiredPermission,
+  }
+
+  pure def desiredStatePlanOutcomeFor(desired: DesiredStateFact, observed: DesiredStateFact): str =
+    if (not(desiredStateFactShapeIsValid(desired)) or not(desiredStateFactShapeIsValid(observed)))
+      "DSPLAN-IdentityMismatch"
+    else if (not(desiredStateIdentityMatches(desired, observed))) "DSPLAN-IdentityMismatch"
+    else if (not(observed.supported) or observed.outcomeId == "OBS-Unsupported") "DSPLAN-Unsupported"
+    else if (not(observed.permissionGranted) or observed.outcomeId == "OBS-Unauthorized") "DSPLAN-Unauthorized"
+    else if (not(observed.complete) or observed.outcomeId == "OBS-Incomplete") "DSPLAN-Incomplete"
+    else if (observed.outcomeId == "OBS-Stale") "DSPLAN-Stale"
+    else if (observed.outcomeId == "OBS-ProvenAbsent") "DSPLAN-Ready"
+    else if (observed.outcomeId == "OBS-Observed")
+      if (desired.contentDigest == observed.contentDigest) "DSPLAN-NoChange" else "DSPLAN-Ready"
+    else "DSPLAN-Incomplete"
+
+  pure def desiredStateMayApply(desired: DesiredStateFact, observed: DesiredStateFact): bool = and {
+    desired.complete, desired.supported, desired.permissionGranted,
+    desired.outcomeId == "OBS-Observed",
+    desiredStatePlanOutcomeFor(desired, observed) == "DSPLAN-Ready",
+  }
+
+  pure def desiredStatePhaseAuthorityMatches(
+    authority: DesiredStatePhaseAuthority, desired: DesiredStateFact, observed: DesiredStateFact
+  ): bool = and {
+    authority.subjectId == desired.subjectId, authority.subjectId == observed.subjectId,
+    authority.profileId == desired.profileId, authority.profileId == observed.profileId,
+    authority.familyId == desired.familyId, authority.familyId == observed.familyId,
+    authority.desiredContentDigest == desired.contentDigest,
+    authority.authorityRevision == desired.authorityRevision,
+    authority.authorityRevision == observed.authorityRevision,
+  }
+
+  pure def desiredStatePhaseMayAdvance(
+    fromPhaseId: str, toPhaseId: str, authority: DesiredStatePhaseAuthority,
+    desired: DesiredStateFact, observed: DesiredStateFact
+  ): bool = or {
+    and {
+      fromPhaseId == "DSPH-Inspect", toPhaseId == "DSPH-Plan",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      desiredStateFactShapeIsValid(desired), desiredStateFactShapeIsValid(observed),
+      desiredStateIdentityMatches(desired, observed), observed.complete, observed.supported,
+      observed.permissionGranted, Set("OBS-Observed", "OBS-ProvenAbsent").contains(observed.outcomeId),
+    },
+    and {
+      fromPhaseId == "DSPH-Plan", toPhaseId == "DSPH-Apply",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      authority.planOutcomeId == desiredStatePlanOutcomeFor(desired, observed),
+      desiredStateMayApply(desired, observed),
+    },
+    and {
+      fromPhaseId == "DSPH-Plan", toPhaseId == "DSPH-Verify",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      authority.planOutcomeId == "DSPLAN-NoChange",
+      authority.planOutcomeId == desiredStatePlanOutcomeFor(desired, observed),
+      desiredStateIsVerified(desired, observed),
+    },
+    and {
+      fromPhaseId == "DSPH-Apply", toPhaseId == "DSPH-Verify",
+      desiredStatePhaseAuthorityMatches(authority, desired, observed),
+      authority.planOutcomeId == "DSPLAN-Ready",
+      Set("MOUT-Applied", "MOUT-Idempotent").contains(authority.applyReceiptOutcomeId),
+      desiredStateIsVerified(desired, observed),
+    },
+  }
+
+  pure def desiredStateIsVerified(desired: DesiredStateFact, observed: DesiredStateFact): bool = and {
+    desiredStateFactShapeIsValid(desired), desiredStateFactShapeIsValid(observed),
+    desired.complete, desired.supported, desired.permissionGranted, desired.outcomeId == "OBS-Observed",
+    desiredStateIdentityMatches(desired, observed), observed.complete, observed.supported,
+    observed.permissionGranted, observed.outcomeId == "OBS-Observed",
+    desired.contentDigest == observed.contentDigest,
+  }
+
+  pure def desiredStateSpecificationIsComplete(facts: Set[DesiredStateFact]): bool = and {
+    facts.map(fact => fact.familyId) == desiredStateFamilyCatalogue.map(family => family.id),
+    facts.forall(fact => and {
+      desiredStateFactShapeIsValid(fact), fact.complete, fact.supported, fact.permissionGranted,
+      fact.outcomeId == "OBS-Observed",
+      facts.forall(peer => and {
+        peer.authorityId == fact.authorityId, peer.authorityRevision == fact.authorityRevision,
+        peer.subjectId == fact.subjectId, peer.profileId == fact.profileId,
+        if (peer.familyId == fact.familyId) peer == fact else true,
+      }),
+    }),
+  }
+
+  pure val closedDesiredStateCatalogues = and {
+    desiredStateFamilyCatalogue.map(family => family.id) == Set(
+      "DSTATE-IssueSchema", "DSTATE-RepositoryProperties", "DSTATE-Projects", "DSTATE-RepositoryProfile",
+      "DSTATE-WorkflowPins", "DSTATE-Releases", "DSTATE-Permissions", "DSTATE-SecuritySupplyChain"
+    ),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-IssueSchema",
+      family.surfaceIds == Set("issue-type", "issue-field", "field-type", "allowed-value"),
+    }),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-Projects",
+      family.surfaceIds == Set("project-field", "project-view", "project-workflow", "project-visibility", "project-membership-policy"),
+    }),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-RepositoryProfile",
+      family.surfaceIds == Set("ruleset", "merge-queue", "merge-policy", "actions-policy", "branch-deletion-policy"),
+    }),
+    desiredStateFamilyCatalogue.exists(family => and {
+      family.id == "DSTATE-SecuritySupplyChain",
+      family.surfaceIds == Set("vulnerability-policy", "secret-policy", "dependency-policy", "sbom-policy", "attestation-policy"),
+    }),
+    desiredStatePhaseCatalogue.map(phase => phase.id) == Set(
+      "DSPH-Inspect", "DSPH-Plan", "DSPH-Apply", "DSPH-Verify"
+    ),
+    desiredStatePlanOutcomeCatalogue.map(outcome => outcome.id) == Set(
+      "DSPLAN-Ready", "DSPLAN-NoChange", "DSPLAN-Unsupported", "DSPLAN-Unauthorized",
+      "DSPLAN-Incomplete", "DSPLAN-Stale", "DSPLAN-IdentityMismatch"
+    ),
+  }
+
+  type DurablePlanCheckpoint = {
+    step: DurablePlanStep,
+    receipt: MutationResult,
+    receiptReadId: str,
+    dispositionId: str,
+  }
+
+  type DurableAppliedStep = {
+    step: DurablePlanStep,
+    receipt: MutationResult,
+  }
+
+  pure def durableAppliedBoundaryHistoryIsValid(
+    current: DurablePlanStep, appliedHistory: Set[DurableAppliedStep],
+  ): bool = appliedHistory.forall(applied => and {
+    durablePlanStepShapeIsValid(applied.step), mutationResultOutcomeIsValid(applied.receipt),
+    applied.receipt.intent == applied.step.intent,
+    applied.receipt.outcomeId == "MOUT-Applied" or applied.receipt.outcomeId == "MOUT-Idempotent",
+    applied.step.planId == current.planId, applied.step.correlationId == current.correlationId,
+    applied.step.compensationBoundaryId == current.compensationBoundaryId,
+    applied.step.sequence < current.sequence,
+  })
+
+  pure def durablePlanDispositionFor(
+    step: DurablePlanStep, receipt: MutationResult, appliedHistory: Set[DurableAppliedStep],
+  ): str =
+    if (receipt.outcomeId == "MOUT-Applied" or receipt.outcomeId == "MOUT-Idempotent") "PDISP-Advance"
+    else if (mutationOutcomeIsUncertain(receipt.outcomeId)) "PDISP-ReceiptReread"
+    else if (receipt.outcomeId == "MOUT-Rejected" or receipt.outcomeId == "MOUT-RevisionConflict")
+      if (durableAppliedBoundaryHistoryIsValid(step, appliedHistory) and appliedHistory.size() > 0)
+        "PDISP-Compensate"
+      else "PDISP-Replan"
+    else ""
+
+  pure def durablePlanStepShapeIsValid(step: DurablePlanStep): bool = and {
+    step.planId != "", step.stepId != "", step.sequence > 0, step.causationId != "",
+    step.correlationId != "", step.compensationBoundaryId != "", mutationIntentShapeIsValid(step.intent),
+    if (step.sequence == 1) step.predecessorStepId == "" else step.predecessorStepId != "",
+  }
+
+  pure def durablePlanStepMayFollow(previous: DurablePlanStep, current: DurablePlanStep): bool = and {
+    durablePlanStepShapeIsValid(previous), durablePlanStepShapeIsValid(current),
+    previous.planId == current.planId, previous.correlationId == current.correlationId,
+    current.sequence == previous.sequence + 1, current.predecessorStepId == previous.stepId,
+    current.causationId == previous.intent.operationId, current.stepId != previous.stepId,
+    current.intent.operationId != previous.intent.operationId,
+  }
+
+  pure def durablePlanCheckpointIsBound(
+    checkpoint: DurablePlanCheckpoint, appliedHistory: Set[DurableAppliedStep],
+  ): bool = and {
+    durablePlanStepShapeIsValid(checkpoint.step), checkpoint.receiptReadId != "",
+    checkpoint.receipt.intent == checkpoint.step.intent, mutationResultOutcomeIsValid(checkpoint.receipt),
+    durableAppliedBoundaryHistoryIsValid(checkpoint.step, appliedHistory),
+    checkpoint.dispositionId == durablePlanDispositionFor(checkpoint.step, checkpoint.receipt, appliedHistory),
+    durablePlanDispositionCatalogue.exists(disposition => disposition.id == checkpoint.dispositionId),
+  }
+
+  pure def durablePlanMayAdvance(checkpoint: DurablePlanCheckpoint): bool = and {
+    durablePlanCheckpointIsBound(checkpoint, Set()), checkpoint.dispositionId == "PDISP-Advance",
+  }
+
+  pure def durablePlanCompensationIsValid(
+    compensation: DurablePlanStep, original: DurablePlanStep, originalReceipt: MutationResult,
+    appliedInBoundary: Set[DurablePlanStep], existingCompensations: Set[MutationIntent],
+  ): bool = and {
+    durablePlanStepMayFollow(original, compensation),
+    compensation.compensationBoundaryId == original.compensationBoundaryId,
+    originalReceipt.intent == original.intent,
+    originalReceipt.outcomeId == "MOUT-Applied",
+    compensationIntentIsValid(compensation.intent, originalReceipt, existingCompensations),
+    appliedInBoundary.contains(original),
+    appliedInBoundary.forall(applied => and {
+      applied.planId == original.planId, applied.compensationBoundaryId == original.compensationBoundaryId,
+      applied.sequence <= original.sequence,
+    }),
+  }
+
+  pure val appendIntent = {
+    operationId: "operation-append-2", subjectId: "subject-stream", mutationKindId: "MUT-Append",
+    targetKind: "stream", payloadKind: "append", expectedRevision: 1,
+    idempotencyKey: "key-append-2", payloadDigest: "digest-append-2", compensatesOperationId: "",
+  }
+  pure val planCreateStep = {
+    planId: "plan-1", stepId: "step-create-1", predecessorStepId: "", sequence: 1,
+    causationId: "decision-1", correlationId: "correlation-1", compensationBoundaryId: "boundary-1",
+    intent: createIntent,
+  }
+  pure val planAppendStep = {
+    planId: planCreateStep.planId, stepId: "step-append-2", predecessorStepId: planCreateStep.stepId, sequence: 2,
+    causationId: createIntent.operationId, correlationId: planCreateStep.correlationId,
+    compensationBoundaryId: planCreateStep.compensationBoundaryId, intent: appendIntent,
+  }
+  pure val planCompensationStep = {
+    planId: planCreateStep.planId, stepId: "step-compensate-2", predecessorStepId: planCreateStep.stepId, sequence: 2,
+    causationId: createIntent.operationId, correlationId: planCreateStep.correlationId,
+    compensationBoundaryId: planCreateStep.compensationBoundaryId, intent: compensateCreateIntent,
+  }
+  pure val planCreateCheckpoint = {
+    step: planCreateStep, receipt: createAppliedResult,
+    receiptReadId: "receipt-read-create-1", dispositionId: "PDISP-Advance",
+  }
+  pure val planUncertainCheckpoint = {
+    step: planCreateStep,
+    receipt: { intent: createIntent, outcomeId: "MOUT-RateLimited", resultingRevision: 0 },
+    receiptReadId: "receipt-read-create-uncertain", dispositionId: "PDISP-ReceiptReread",
+  }
+  pure val planCreateAppliedHistory = Set({ step: planCreateStep, receipt: createAppliedResult })
+
+  pure def desiredFact(
+    familyId: str, targetKind: str, surfaces: Set[str], permission: str, digest: str
+  ): DesiredStateFact = {
+    authorityId: "AUTH-NativeGitHub", authorityRevision: "node-id-and-updated-at",
+    subjectId: "FS-GG/example", profileId: "repository-profile-v2", familyId: familyId,
+    targetKind: targetKind, surfaceIds: surfaces, contentDigest: digest, requiredPermission: permission,
+    outcomeId: "OBS-Observed", complete: true, supported: true, permissionGranted: true,
+  }
+
+  pure def desiredPhaseAuthority(
+    desired: DesiredStateFact, planOutcomeId: str, applyReceiptOutcomeId: str
+  ): DesiredStatePhaseAuthority = {
+    subjectId: desired.subjectId, profileId: desired.profileId, familyId: desired.familyId,
+    desiredContentDigest: desired.contentDigest, authorityRevision: desired.authorityRevision,
+    planOutcomeId: planOutcomeId, applyReceiptOutcomeId: applyReceiptOutcomeId,
+  }
+
+  pure val desiredIssueSchema = desiredFact(
+    "DSTATE-IssueSchema", "organization-issue-schema",
+    Set("issue-type", "issue-field", "field-type", "allowed-value"),
+    "organization-administration", "digest-issue-schema"
+  )
+  pure val desiredRepositoryProperties = desiredFact(
+    "DSTATE-RepositoryProperties", "repository-properties", Set("property-schema", "property-value"),
+    "repository-administration", "digest-properties"
+  )
+  pure val desiredProjects = desiredFact(
+    "DSTATE-Projects", "organization-project",
+    Set("project-field", "project-view", "project-workflow", "project-visibility", "project-membership-policy"),
+    "project-administration", "digest-projects"
+  )
+  pure val desiredRepositoryProfile = desiredFact(
+    "DSTATE-RepositoryProfile", "repository-profile",
+    Set("ruleset", "merge-queue", "merge-policy", "actions-policy", "branch-deletion-policy"),
+    "repository-administration", "digest-repository-profile"
+  )
+  pure val desiredWorkflowPins = desiredFact(
+    "DSTATE-WorkflowPins", "workflow-policy", Set("reusable-workflow-pin", "action-pin"),
+    "actions-administration", "digest-workflow-pins"
+  )
+  pure val desiredReleases = desiredFact(
+    "DSTATE-Releases", "release-policy",
+    Set("release-environment", "immutable-release", "tag-protection", "trusted-publisher"),
+    "release-administration", "digest-releases"
+  )
+  pure val desiredPermissions = desiredFact(
+    "DSTATE-Permissions", "permission-policy",
+    Set("repository-visibility", "team-access", "workflow-permission", "environment-protection"),
+    "organization-administration", "digest-permissions"
+  )
+  pure val desiredSecuritySupplyChain = desiredFact(
+    "DSTATE-SecuritySupplyChain", "security-supply-chain",
+    Set("vulnerability-policy", "secret-policy", "dependency-policy", "sbom-policy", "attestation-policy"),
+    "security-administration", "digest-security"
+  )
+  pure val completeDesiredState = Set(
+    desiredIssueSchema, desiredRepositoryProperties, desiredProjects, desiredRepositoryProfile,
+    desiredWorkflowPins, desiredReleases, desiredPermissions, desiredSecuritySupplyChain
+  )
+
+  pure val closedDurablePlanDispositionCatalogue = and {
+    durablePlanDispositionCatalogue.map(disposition => disposition.id) == Set(
+      "PDISP-Advance", "PDISP-ReceiptReread", "PDISP-Replan", "PDISP-Compensate"
+    ),
+    durablePlanDispositionCatalogue.map(disposition => disposition.nextAction) == Set(
+      "next-step", "reread-receipt", "compile-new-plan", "compensate-reverse"
+    ),
+  }
+
+  run testUnrelatedCheckpointCannotCompactEphemeralHistory =
+    not(ephemeralEnvelopeMayBeCompacted(claimEnvelope, Set(claimEnvelope, reviewCheckpointEnvelope)))
+
+  run testUnrelatedCheckpointCannotExcuseMissingPredecessor =
+    not(retainedProtocolEnvelopeHasPredecessor(leaseEnvelope, Set(leaseEnvelope, reviewCheckpointEnvelope)))
+
+  run testMutationExactReplayIsIdempotent = and {
+    mutationResultMayFollow(createAppliedResult, { ...createAppliedResult, outcomeId: "MOUT-Idempotent" }),
+  }
+
+  run testMutationKindsBindPayloadAndTarget = and {
+    not(mutationIntentShapeIsValid({ ...createIntent, targetKind: "stream" })),
+    not(mutationIntentShapeIsValid({ ...createIntent, payloadKind: "append" })),
+    mutationKindCatalogue.exists(kind => and {
+      kind.id == "MUT-RemoveEdge", kind.payloadKind == "edge",
+    }),
+  }
+
+  run testMutationUncertainOutcomesRemainUnknown =
+    mutationOutcomeCatalogue.exists(outcome => and {
+      outcome.id == "MOUT-RateLimited", outcome.finality == "uncertain", outcome.effectClass == "unknown",
+    })
+
+  run testMutationIdempotencyBindingsRejectSubstitution = and {
+    mutationIntentsConflict(createIntent, {
+      ...createIntent, operationId: "operation-other", mutationKindId: "MUT-Append",
+      targetKind: "stream", payloadKind: "append", expectedRevision: 1,
+    }),
+    mutationIntentsConflict(createIntent, { ...createIntent, idempotencyKey: "key-other" }),
+  }
+
+  run testMutationStaleRevisionIsConflict =
+    mutationOutcomeForRevision(4, 5) == "MOUT-RevisionConflict"
+
+  run testMutationCompensationBoundary = and {
+    compensationIntentIsValid(compensateCreateIntent, createAppliedResult, Set()),
+    not(compensationIntentIsValid(
+      compensateCreateIntent,
+      { ...createAppliedResult, outcomeId: "MOUT-Idempotent" },
+      Set(),
+    )),
+    not(compensationIntentIsValid(
+      compensateCreateIntent,
+      { ...createAppliedResult, intent: { ...createIntent, mutationKindId: "MUT-Unknown" } },
+      Set(),
+    )),
+    not(compensationIntentIsValid(
+      { ...compensateCreateIntent, operationId: "operation-compensate-2", idempotencyKey: "key-compensate-2" },
+      createAppliedResult,
+      Set(compensateCreateIntent),
+    )),
+  }
+
+  run testDurablePlanOrderingBindsPredecessorAndIdentity = and {
+    closedDurablePlanDispositionCatalogue,
+    durablePlanStepMayFollow(planCreateStep, planAppendStep),
+    not(durablePlanStepMayFollow(planCreateStep, { ...planAppendStep, predecessorStepId: "step-other" })),
+    not(durablePlanStepMayFollow(planCreateStep, { ...planAppendStep, causationId: "operation-other" })),
+    not(durablePlanStepMayFollow(planCreateStep, { ...planAppendStep, correlationId: "correlation-other" })),
+  }
+
+  run testDurablePlanExactReceiptIsRequiredToAdvance = and {
+    durablePlanCheckpointIsBound(planCreateCheckpoint, Set()),
+    durablePlanMayAdvance(planCreateCheckpoint),
+    not(durablePlanCheckpointIsBound(
+      { ...planCreateCheckpoint,
+        receipt: { intent: appendIntent, outcomeId: "MOUT-Applied", resultingRevision: 2 } },
+      Set(),
+    )),
+  }
+
+  run testDurablePlanUncertaintyRequiresReceiptReread = and {
+    durablePlanCheckpointIsBound(planUncertainCheckpoint, Set()),
+    not(durablePlanMayAdvance(planUncertainCheckpoint)),
+    not(durablePlanCheckpointIsBound(
+      { ...planUncertainCheckpoint, dispositionId: "PDISP-Advance" },
+      Set(),
+    )),
+  }
+
+  run testDurablePlanCompensationIsBoundaryBoundAndReverseOrdered = and {
+    durablePlanCompensationIsValid(
+      planCompensationStep, planCreateStep, createAppliedResult, Set(planCreateStep), Set()
+    ),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, compensationBoundaryId: "boundary-other" },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      planCompensationStep, planCreateStep, createAppliedResult,
+      Set(planCreateStep, planAppendStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, predecessorStepId: "step-forged" },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, causationId: "operation-forged" },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, sequence: 99 },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+    not(durablePlanCompensationIsValid(
+      { ...planCompensationStep, stepId: planCreateStep.stepId },
+      planCreateStep, createAppliedResult, Set(planCreateStep), Set(),
+    )),
+  }
+
+  run testDurablePlanDispositionIsDerived = and {
+    durablePlanDispositionFor(planCreateStep, createAppliedResult, Set()) == "PDISP-Advance",
+    durablePlanDispositionFor(planCreateStep, planUncertainCheckpoint.receipt, Set()) == "PDISP-ReceiptReread",
+    durablePlanDispositionFor(
+      planAppendStep,
+      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, Set()
+    ) == "PDISP-Replan",
+    durablePlanDispositionFor(
+      planAppendStep,
+      { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 }, planCreateAppliedHistory
+    ) == "PDISP-Compensate",
+    not(durablePlanCheckpointIsBound(
+      { step: planAppendStep,
+        receipt: { intent: appendIntent, outcomeId: "MOUT-Rejected", resultingRevision: 1 },
+        receiptReadId: "receipt-read-append-rejected", dispositionId: "PDISP-Compensate" },
+      Set({ step: { ...planCreateStep, compensationBoundaryId: "boundary-forged" },
+            receipt: createAppliedResult }),
+    )),
+  }
+
+  run testDesiredStateCataloguesAndSpecificationAreClosed = and {
+    closedDesiredStateCatalogues,
+    desiredStateSpecificationIsComplete(completeDesiredState),
+    not(desiredStateSpecificationIsComplete(completeDesiredState.filter(
+      fact => fact.familyId != "DSTATE-Projects"
+    ))),
+    not(desiredStateSpecificationIsComplete(completeDesiredState.union(Set({
+      ...desiredWorkflowPins, contentDigest: "digest-conflicting-workflow-pins"
+    })))),
+    not(desiredStateFactShapeIsValid({
+      ...desiredWorkflowPins, surfaceIds: Set("reusable-workflow-pin")
+    })),
+  }
+
+  run testDesiredStatePlanBindsSubjectProfileAndContent = and {
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ) == "DSPLAN-Ready",
+    desiredStateMayApply(
+      desiredWorkflowPins, { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ),
+    desiredStatePlanOutcomeFor(desiredWorkflowPins, desiredWorkflowPins) == "DSPLAN-NoChange",
+    not(desiredStateMayApply(desiredWorkflowPins, desiredWorkflowPins)),
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, subjectId: "FS-GG/other" }
+    ) == "DSPLAN-IdentityMismatch",
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, profileId: "repository-profile-other" }
+    ) == "DSPLAN-IdentityMismatch",
+    desiredStatePlanOutcomeFor(
+      desiredWorkflowPins, { ...desiredWorkflowPins, surfaceIds: Set("reusable-workflow-pin") }
+    ) == "DSPLAN-IdentityMismatch",
+  }
+
+  run testDesiredStateUnsupportedAndPermissionOutcomesFailClosed = and {
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile,
+      { ...desiredRepositoryProfile, outcomeId: "OBS-Unsupported", supported: false }
+    ) == "DSPLAN-Unsupported",
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile,
+      { ...desiredRepositoryProfile, outcomeId: "OBS-Unauthorized", permissionGranted: false }
+    ) == "DSPLAN-Unauthorized",
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile,
+      { ...desiredRepositoryProfile, outcomeId: "OBS-Incomplete", complete: false }
+    ) == "DSPLAN-Incomplete",
+    desiredStatePlanOutcomeFor(
+      desiredRepositoryProfile, { ...desiredRepositoryProfile, outcomeId: "OBS-Stale" }
+    ) == "DSPLAN-Stale",
+  }
+
+  run testDesiredStateVerificationRejectsPolicySubstitution = and {
+    desiredStateIsVerified(desiredWorkflowPins, desiredWorkflowPins),
+    desiredStateIsVerified(desiredReleases, desiredReleases),
+    desiredStateIsVerified(desiredSecuritySupplyChain, desiredSecuritySupplyChain),
+    not(desiredStateIsVerified(
+      desiredWorkflowPins, { ...desiredWorkflowPins, contentDigest: "digest-floating-workflow-pin" }
+    )),
+    not(desiredStateIsVerified(
+      desiredReleases, { ...desiredReleases, contentDigest: "digest-mutable-release" }
+    )),
+    not(desiredStateIsVerified(
+      desiredSecuritySupplyChain, { ...desiredSecuritySupplyChain, contentDigest: "digest-missing-attestation" }
+    )),
+  }
+
+  run testDesiredStatePhaseTransitionsAreClosed = and {
+    desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Plan", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-NoChange", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      desiredWorkflowPins,
+      { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-NoChange", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    ),
+    desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
+      desiredWorkflowPins, desiredWorkflowPins
+    ),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Unauthorized", "MOUT-Incomplete"),
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      desiredWorkflowPins,
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Plan", "DSPH-Apply", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Incomplete"),
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false },
+      { ...desiredWorkflowPins, contentDigest: "digest-observed-old-pin" }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Inspect", "DSPH-Plan", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-NoChange", "MOUT-Incomplete"),
+      desiredWorkflowPins,
+      { ...desiredWorkflowPins, complete: false }
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
+      { ...desiredWorkflowPins, outcomeId: "OBS-Unauthorized", permissionGranted: false }, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify", desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-TimedOut"),
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+    not(desiredStatePhaseMayAdvance(
+      "DSPH-Apply", "DSPH-Verify",
+      { ...desiredPhaseAuthority(desiredWorkflowPins, "DSPLAN-Ready", "MOUT-Applied"),
+        desiredContentDigest: "digest-forged-workflow-pin" },
+      desiredWorkflowPins, desiredWorkflowPins
+    )),
+  }
+
+  run testCompiledOutputsAreCompleteAndDeterministic = and {
+    compiledOutputSetIsQualified(completeCompiledOutputs),
+    completeCompiledOutputs.map(output => output.familyId) == compiledOutputFamilyCatalogue.map(family => family.id),
+    completeCompiledOutputs.map(output => output.ordinal) == Set(1, 2, 3, 4, 5, 6, 7, 8, 9),
+    completeCompiledOutputs.filter(output => output.familyId == "COUT-ProjectionViews")
+      .forall(output => output.formats == Set("markdown", "json")),
+  }
+
+  run testCompiledOutputsRejectMissingDuplicateAndReorderedFamilies = and {
+    not(compiledOutputSetIsQualified(completeCompiledOutputs.filter(
+      output => output.familyId != "COUT-Diagrams"
+    ))),
+    not(compiledOutputSetIsQualified(completeCompiledOutputs.union(Set(
+      compiledOutput("COUT-Diagrams", 8, "authority-map|phase-flow|mutation-flow|stream-flow",
+        Set("mermaid"), "digest-conflicting-diagrams")
+    )))),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => and {
+        output.familyId != "COUT-SemanticDiff", output.familyId != "COUT-Diagrams"
+      }).union(Set(
+        compiledOutput("COUT-SemanticDiff", 8, "family|identity|content|support|completeness|freshness|order",
+          Set("json"), "digest-semantic-diff"),
+        compiledOutput("COUT-Diagrams", 7, "authority-map|phase-flow|mutation-flow|stream-flow",
+          Set("mermaid"), "digest-diagrams")
+      ))
+    )),
+  }
+
+  run testCompiledOutputsRejectSubstitutionAndUnqualifiedFacts = and {
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-Schemas").union(Set({
+        ...compiledOutput("COUT-Schemas", 1,
+          "authority|observation|lifecycle|relation|stream|mutation|durable-plan|desired-state|compiled-output",
+          Set("json-schema"), "digest-schemas"), sourceIdentity: "substituted-authority"
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-PermissionCensus").union(Set({
+        ...compiledOutput("COUT-PermissionCensus", 3,
+          "organization-administration|repository-administration|project-administration|actions-administration|release-administration|security-administration",
+          Set("json"), "digest-permission-census"), supported: false
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-SettingsPlans").union(Set({
+        ...compiledOutput("COUT-SettingsPlans", 5,
+          "issue-schema|repository-properties|projects|repository-profile|workflow-pins|releases|permissions|security-supply-chain|inspect|plan|apply|verify",
+          Set("json"), "digest-settings-plans"), complete: false
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-ModelTestInventory").union(Set({
+        ...compiledOutput("COUT-ModelTestInventory", 9, "invariant|witness|negative-control|bounded-verification",
+          Set("json"), "digest-model-test-inventory"), fresh: false
+      }))
+    )),
+    not(compiledOutputSetIsQualified(
+      completeCompiledOutputs.filter(output => output.familyId != "COUT-ProjectionViews").union(Set(
+        compiledOutput("COUT-ProjectionViews", 6, "catalogue|relationships|actions|verification|bounds|compatibility",
+          Set("json"), "digest-projection-views")
+      ))
+    )),
+  }
+
+  run testDeterministicIdentityEquivalentAuthoringFormsConverge = and {
+    behavioralIdentityIsEquivalent(
+      canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, sourceSha256: "source-equivalent-authoring" }
+    ),
+    behavioralIdentityIsEquivalent(
+      canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, sourceSha256: "source-prose-only" }
+    ),
+  }
+
+  run testDeterministicIdentitySemanticChangesRemainReviewable = and {
+    not(behavioralIdentityIsEquivalent(
+      canonicalDeterministicIdentity,
+      { ...canonicalDeterministicIdentity, behavioralSha256: "behavior-changed",
+        semanticDiffRows: List("1:/catalogue/0:row-changed", "2:/properties/0:row-b") }
+    )),
+    canonicalDeterministicIdentity.semanticDiffRows ==
+      List("1:/catalogue/0:row-a", "2:/properties/0:row-b"),
+  }
+
+  run testDeterministicIdentityUnsupportedVersionsFailClosed = and {
+    deterministicIdentityIsQualified(canonicalDeterministicIdentity),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, sourceVersion: "unsupported-source" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, extractorVersion: "unsupported-extractor" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, quintVersion: "unsupported-quint" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, profileVersion: "unsupported-profile" } })),
+    not(deterministicIdentityIsQualified({ ...canonicalDeterministicIdentity,
+      versions: { ...supportedDeterministicVersions, schemaVersion: "unsupported-schema" } })),
+  }
+
+  run testQualificationManifestBindsCandidateInputsResultsAndReview = and {
+    qualificationManifestIsBound(canonicalQualificationManifest),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      resultCandidateSha: "candidate-substituted" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewInputSetSha256: "inputs-substituted" })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      inputEntries: canonicalQualificationManifest.inputEntries
+        .filter(entry => entry.id != "source")
+        .union(Set({ id: "source", candidateSha: "candidate-substituted", producer: "candidate-builder",
+          digest: "source-digest", fresh: true })) })),
+  }
+
+  run testQualificationManifestRequiresIndependentCasesAndReviewers = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set("candidate-builder") })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      independentProducers: Set("case-generator") })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set("candidate-builder") })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      reviewerPrincipals: Set("gate-runner") })),
+  }
+
+  run testQualificationManifestOmissionsAndStaleInputsFailClosed = and {
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, inputEntries: Set() })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, environmentClosed: false })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, resultsComplete: false })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest, reviewsComplete: false })),
+    not(qualificationManifestIsBound({ ...canonicalQualificationManifest,
+      inputEntries: canonicalQualificationManifest.inputEntries
+        .filter(entry => entry.id != "generated")
+        .union(Set({ id: "generated", candidateSha: "candidate-a", producer: "case-generator",
+          digest: "generated-digest", fresh: false })) })),
+  }
+
+  // GS2-03.5 native formal scenarios share this canonical test module so Quint's bounded
+  // verifier observes the exact protocol definitions and fixtures without a parallel model.
+  var formalClaimStage: int
+  var formalClaimEvents: Set[ProtocolEnvelope]
+  var formalClaimValid: bool
+  action formalClaimInit = all {
+    formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
+  }
+  action formalClaimObserve = all {
+    formalClaimStage == 0, protocolAppendIsValid(operationLockEnvelope, formalClaimEvents),
+    formalClaimStage' = 1,
+    formalClaimEvents' = formalClaimEvents.union(Set(operationLockEnvelope)),
+    formalClaimValid' = true,
+  }
+  action formalClaimElect = all {
+    formalClaimStage == 1, protocolAppendIsValid(electionCheckpointEnvelope, formalClaimEvents),
+    formalClaimStage' = 2,
+    formalClaimEvents' = formalClaimEvents.union(Set(electionCheckpointEnvelope)),
+    formalClaimValid' = true,
+  }
+  action formalClaimHold = all {
+    formalClaimStage == 2, formalClaimStage' = formalClaimStage,
+    formalClaimEvents' = formalClaimEvents, formalClaimValid' = formalClaimValid,
+  }
+  action formalClaimStep = any { formalClaimObserve, formalClaimElect, formalClaimHold }
+  action formalClaimInvalid = all {
+    formalClaimStage' = 2, formalClaimEvents' = Set(electionCheckpointEnvelope),
+    formalClaimValid' = protocolAppendIsValid(electionCheckpointEnvelope, Set()),
+  }
+  val formalClaimSafety = formalClaimValid
+    and formalClaimEvents.forall(event => protocolEnvelopeIsOrdered(event, formalClaimEvents))
+  val formalClaimReached = formalClaimStage == 2
+    and formalClaimEvents.contains(electionCheckpointEnvelope)
+  temporal formalClaimProgress: bool = and {
+    formalClaimObserve.weakFair(Set(formalClaimStage)),
+    formalClaimElect.weakFair(Set(formalClaimStage)),
+  }.implies(eventually(formalClaimReached))
+  temporal formalClaimEventuallyReached: bool = eventually(formalClaimReached)
+  val formalClaimBlockedInvariant = formalClaimStage != 1
+  action formalClaimWithoutElection =
+    if (formalClaimStage == 0) formalClaimObserve else formalClaimStutter
+
+  var formalRelationStage: int
+  var formalRelationEdges: Set[NativeRelationEdge]
+  action formalRelationInit = all { formalRelationStage' = 0, formalRelationEdges' = Set() }
+  action formalRelationAdd = all {
+    formalRelationStage == 0, nativeRelationEdgeIsValid(parentChildEdge),
+    formalRelationStage' = 1, formalRelationEdges' = formalRelationEdges.union(Set(parentChildEdge)),
+  }
+  action formalRelationRemove = all {
+    formalRelationStage == 1, formalRelationStage' = 2,
+    formalRelationEdges' = formalRelationEdges.exclude(Set(parentChildEdge)),
+  }
+  action formalRelationHold = all {
+    formalRelationStage == 2, formalRelationStage' = formalRelationStage,
+    formalRelationEdges' = formalRelationEdges,
+  }
+  action formalRelationStep = any { formalRelationAdd, formalRelationRemove, formalRelationHold }
+  action formalRelationInvalid = all {
+    formalRelationStage' = 1,
+    formalRelationEdges' = Set({ ...parentChildEdge, targetId: parentChildEdge.sourceId }),
+  }
+  val formalRelationSafety = formalRelationEdges.forall(nativeRelationEdgeIsValid)
+  val formalRelationReached = formalRelationStage >= 1
+  temporal formalRelationProgress: bool = and {
+    formalRelationAdd.weakFair(Set(formalRelationStage)),
+    formalRelationRemove.weakFair(Set(formalRelationStage)),
+  }.implies(eventually(formalRelationStage == 2))
+  temporal formalRelationEventuallyRemoved: bool = eventually(formalRelationStage == 2)
+  val formalRelationBlockedInvariant = formalRelationStage != 1
+  action formalRelationWithoutRemove =
+    if (formalRelationStage == 0) formalRelationAdd else formalRelationStutter
+
+  pure val formalDeliveredLifecycleFacts: LifecycleFacts = {
+    ...claimedLifecycleFacts, deliveryOutcomeId: "OBS-Observed", delivered: true,
+  }
+  var formalLifecycleStage: int
+  var formalLifecycleStatus: str
+  action formalLifecycleInit = all {
+    formalLifecycleStage' = 0,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+  }
+  action formalLifecycleClaim = all {
+    formalLifecycleStage == 0, formalLifecycleStage' = 1,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts),
+  }
+  action formalLifecycleDeliver = all {
+    formalLifecycleStage == 1, formalLifecycleStage' = 2,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", formalDeliveredLifecycleFacts),
+  }
+  action formalLifecycleHold = all {
+    formalLifecycleStage == 2, formalLifecycleStage' = formalLifecycleStage,
+    formalLifecycleStatus' = formalLifecycleStatus,
+  }
+  action formalLifecycleStep = any { formalLifecycleClaim, formalLifecycleDeliver, formalLifecycleHold }
+  action formalLifecycleInvalid = all { formalLifecycleStage' = 2, formalLifecycleStatus' = "ready" }
+  val formalLifecycleSafety = formalLifecycleStatus ==
+    if (formalLifecycleStage == 0) "ready"
+    else if (formalLifecycleStage == 1) "claimed" else "delivered"
+  val formalLifecycleReached = formalLifecycleStage == 2 and formalLifecycleStatus == "delivered"
+  temporal formalLifecycleProgress: bool = and {
+    formalLifecycleClaim.weakFair(Set(formalLifecycleStage)),
+    formalLifecycleDeliver.weakFair(Set(formalLifecycleStage)),
+  }.implies(eventually(formalLifecycleReached))
+  temporal formalLifecycleEventuallyDelivered: bool = eventually(formalLifecycleReached)
+  val formalLifecycleBlockedInvariant = formalLifecycleStage != 1
+  action formalLifecycleWithoutDeliver =
+    if (formalLifecycleStage == 0) formalLifecycleClaim else formalLifecycleStutter
+
+  var formalSagaStage: int
+  var formalSagaValid: bool
+  action formalSagaInit = all { formalSagaStage' = 0, formalSagaValid' = true }
+  action formalSagaBegin = all {
+    formalSagaStage == 0, formalSagaStage' = 1,
+    formalSagaValid' = durablePlanStepShapeIsValid(planCreateStep),
+  }
+  action formalSagaAdvance = all {
+    formalSagaStage == 1, formalSagaStage' = 2,
+    formalSagaValid' = formalSagaValid and durablePlanStepMayFollow(planCreateStep, planAppendStep),
+  }
+  action formalSagaHold = all {
+    formalSagaStage == 2, formalSagaStage' = formalSagaStage,
+    formalSagaValid' = formalSagaValid,
+  }
+  action formalSagaStep = any { formalSagaBegin, formalSagaAdvance, formalSagaHold }
+  action formalSagaInvalid = all { formalSagaStage' = 2, formalSagaValid' = false }
+  val formalSagaSafety = formalSagaValid
+  val formalSagaReached = formalSagaStage == 2 and formalSagaValid
+  temporal formalSagaProgress: bool = and {
+    formalSagaBegin.weakFair(Set(formalSagaStage)),
+    formalSagaAdvance.weakFair(Set(formalSagaStage)),
+  }.implies(eventually(formalSagaReached))
+  temporal formalSagaEventuallyDisposed: bool = eventually(formalSagaReached)
+  val formalSagaBlockedInvariant = formalSagaStage != 1
+  action formalSagaWithoutAdvance =
+    if (formalSagaStage == 0) formalSagaBegin else formalSagaStutter
+
+  pure val formalNextEpochEnvelope: ProtocolEnvelope = {
+    ...operationLockEnvelope, generation: 2, eventId: "operation-lock-epoch-2",
+  }
+  var formalEpochStage: int
+  var formalEpochEvents: Set[ProtocolEnvelope]
+  var formalEpochValid: bool
+  action formalEpochInit = all {
+    formalEpochStage' = 0, formalEpochEvents' = Set(), formalEpochValid' = true,
+  }
+  action formalEpochBegin = all {
+    formalEpochStage == 0, formalEpochStage' = 1,
+    formalEpochValid' = protocolAppendIsValid(operationLockEnvelope, formalEpochEvents),
+    formalEpochEvents' = formalEpochEvents.union(Set(operationLockEnvelope)),
+  }
+  action formalEpochElect = all {
+    formalEpochStage == 1, formalEpochStage' = 2,
+    formalEpochValid' = formalEpochValid
+      and protocolAppendIsValid(electionCheckpointEnvelope, formalEpochEvents),
+    formalEpochEvents' = formalEpochEvents.union(Set(electionCheckpointEnvelope)),
+  }
+  action formalEpochAdvance = all {
+    formalEpochStage == 2, formalEpochStage' = 3,
+    formalEpochValid' = formalEpochValid
+      and protocolAppendIsValid(formalNextEpochEnvelope, formalEpochEvents),
+    formalEpochEvents' = formalEpochEvents.union(Set(formalNextEpochEnvelope)),
+  }
+  action formalEpochHold = all {
+    formalEpochStage == 3, formalEpochStage' = formalEpochStage,
+    formalEpochEvents' = formalEpochEvents, formalEpochValid' = formalEpochValid,
+  }
+  action formalEpochStep = any { formalEpochBegin, formalEpochElect, formalEpochAdvance, formalEpochHold }
+  action formalEpochInvalid = all {
+    formalEpochStage' = 4, formalEpochEvents' = Set(formalNextEpochEnvelope),
+    formalEpochValid' = protocolAppendIsValid(formalNextEpochEnvelope, Set()),
+  }
+  val formalEpochSafety = formalEpochValid
+    and (formalEpochStage >= 3 implies formalEpochEvents.contains(operationLockEnvelope))
+  val formalEpochReached = formalEpochStage == 3
+    and formalEpochEvents.contains(formalNextEpochEnvelope)
+  temporal formalEpochProgress: bool = and {
+    formalEpochBegin.weakFair(Set(formalEpochStage)),
+    formalEpochElect.weakFair(Set(formalEpochStage)),
+    formalEpochAdvance.weakFair(Set(formalEpochStage)),
+  }.implies(eventually(formalEpochReached))
+  temporal formalEpochEventuallyAdvanced: bool = eventually(formalEpochReached)
+  val formalEpochBlockedInvariant = formalEpochStage != 2
+  action formalEpochWithoutAdvance =
+    if (formalEpochStage == 0) formalEpochBegin
+    else if (formalEpochStage == 1) formalEpochElect
+    else formalEpochStutter
+
+  var formalRollbackStage: int
+  var formalRollbackValid: bool
+  action formalRollbackInit = all { formalRollbackStage' = 0, formalRollbackValid' = true }
+  action formalRollbackApply = all {
+    formalRollbackStage == 0, formalRollbackStage' = 1,
+    formalRollbackValid' = durablePlanStepShapeIsValid(planCreateStep),
+  }
+  action formalRollbackCompensate = all {
+    formalRollbackStage == 1, formalRollbackStage' = 2,
+    formalRollbackValid' = formalRollbackValid and durablePlanCompensationIsValid(
+      planCompensationStep, planCreateStep, createAppliedResult, Set(planCreateStep), Set()),
+  }
+  action formalRollbackHold = all {
+    formalRollbackStage == 2, formalRollbackStage' = formalRollbackStage,
+    formalRollbackValid' = formalRollbackValid,
+  }
+  action formalRollbackStep = any {
+    formalRollbackApply, formalRollbackCompensate, formalRollbackHold,
+  }
+  action formalRollbackInvalid = all { formalRollbackStage' = 2, formalRollbackValid' = false }
+  val formalRollbackSafety = formalRollbackValid
+  val formalRollbackReached = formalRollbackStage == 2 and formalRollbackValid
+  temporal formalRollbackProgress: bool = and {
+    formalRollbackApply.weakFair(Set(formalRollbackStage)),
+    formalRollbackCompensate.weakFair(Set(formalRollbackStage)),
+  }.implies(eventually(formalRollbackReached))
+  temporal formalRollbackEventuallyCompensated: bool = eventually(formalRollbackReached)
+  val formalRollbackBlockedInvariant = formalRollbackStage != 1
+  action formalRollbackWithoutCompensate =
+    if (formalRollbackStage == 0) formalRollbackApply else formalRollbackStutter
+
+  // TLC requires every variable in this legacy integration module to have a legal initial value.
+  // GS2-03.10's concurrency models are separate modules below, with independent state spaces.
+  action formalInit = all {
+    formalClaimStage' = 0, formalClaimEvents' = Set(), formalClaimValid' = true,
+    formalRelationStage' = 0, formalRelationEdges' = Set(),
+    formalLifecycleStage' = 0,
+    formalLifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+    formalSagaStage' = 0, formalSagaValid' = true,
+    formalEpochStage' = 0, formalEpochEvents' = Set(), formalEpochValid' = true,
+    formalRollbackStage' = 0, formalRollbackValid' = true,
+  }
+
+  action formalClaimStutter = all {
+    formalClaimStage' = formalClaimStage, formalClaimEvents' = formalClaimEvents,
+    formalClaimValid' = formalClaimValid,
+  }
+  action formalRelationStutter = all {
+    formalRelationStage' = formalRelationStage, formalRelationEdges' = formalRelationEdges,
+  }
+  action formalLifecycleStutter = all {
+    formalLifecycleStage' = formalLifecycleStage, formalLifecycleStatus' = formalLifecycleStatus,
+  }
+  action formalSagaStutter = all {
+    formalSagaStage' = formalSagaStage, formalSagaValid' = formalSagaValid,
+  }
+  action formalEpochStutter = all {
+    formalEpochStage' = formalEpochStage, formalEpochEvents' = formalEpochEvents,
+    formalEpochValid' = formalEpochValid,
+  }
+  action formalRollbackStutter = all {
+    formalRollbackStage' = formalRollbackStage, formalRollbackValid' = formalRollbackValid,
+  }
+
+  action formalClaimTlcStep = all {
+    formalClaimStep, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalClaimTlcInvalid = all {
+    formalClaimInvalid, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalRelationTlcStep = all {
+    formalRelationStep, formalClaimStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalRelationTlcInvalid = all {
+    formalRelationInvalid, formalClaimStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalLifecycleTlcStep = all {
+    formalLifecycleStep, formalClaimStutter, formalRelationStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalLifecycleTlcInvalid = all {
+    formalLifecycleInvalid, formalClaimStutter, formalRelationStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalSagaTlcStep = all {
+    formalSagaStep, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalSagaTlcInvalid = all {
+    formalSagaInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalEpochTlcStep = all {
+    formalEpochStep, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+  }
+  action formalEpochTlcInvalid = all {
+    formalEpochInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+  }
+  action formalRollbackTlcStep = all {
+    formalRollbackStep, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+  }
+  action formalRollbackTlcInvalid = all {
+    formalRollbackInvalid, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+  }
+  action formalClaimTlcWithoutElection = all {
+    formalClaimWithoutElection, formalRelationStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalRelationTlcWithoutRemove = all {
+    formalRelationWithoutRemove, formalClaimStutter, formalLifecycleStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalLifecycleTlcWithoutDeliver = all {
+    formalLifecycleWithoutDeliver, formalClaimStutter, formalRelationStutter,
+    formalSagaStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalSagaTlcWithoutAdvance = all {
+    formalSagaWithoutAdvance, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalEpochStutter, formalRollbackStutter,
+  }
+  action formalEpochTlcWithoutAdvance = all {
+    formalEpochWithoutAdvance, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalRollbackStutter,
+  }
+  action formalRollbackTlcWithoutCompensate = all {
+    formalRollbackWithoutCompensate, formalClaimStutter, formalRelationStutter,
+    formalLifecycleStutter, formalSagaStutter, formalEpochStutter,
+  }
+
+
+}
+
+// O2 prospective pilot-permit model. The state transitions refine the canonical predicates above.
+// Environment actions can expire a permit, advance the authority generation, or drop readback on
+// restart; none of them transfers ownership. Deliberate stutter exists only after stable return.
+module O2PilotPermitModel {
+  type PilotPermit = {
+    schemaVersion: int, permitId: str, subjectId: str, jobClass: str,
+    stableOwnerId: str, pilotOwnerId: str, generation: int, budgetUnits: int,
+    capacityUnits: int, recoveryCapacityUnits: int, expiresAt: int,
+    startupPolicy: str, autoResume: bool,
+  }
+  type PilotOwnershipState = {
+    permit: PilotPermit, phase: str, assignedOwnerId: str,
+    transferIntentDurable: bool, transferAcknowledgementObserved: bool,
+    returnIntentDurable: bool, returnAcknowledgementObserved: bool,
+    stableRouteQuiesced: bool, stableRouteExcluded: bool, authorityEvidenceGeneration: int,
+    readbackCurrent: bool, outcomeKnown: bool,
+    consumedBudgetUnits: int, activeAssignments: int,
+  }
+  pure def pilotPhaseExists(phase: str): bool = Set(
+    "StableOwned", "TransferIntended", "PilotOwned", "OutcomeUnknown",
+    "Paused", "Revoked", "ReturnIntended"
+  ).contains(phase)
+  pure def pilotPermitIsValid(p: PilotPermit): bool = and {
+    p.schemaVersion == 1, p.permitId != "", p.subjectId != "",
+    p.jobClass == "routine-implementation", p.stableOwnerId != "", p.pilotOwnerId != "",
+    p.stableOwnerId != p.pilotOwnerId, p.generation > 0,
+    p.budgetUnits > 0, p.budgetUnits <= 100,
+    p.capacityUnits > 1, p.capacityUnits <= 4,
+    p.recoveryCapacityUnits > 0, p.recoveryCapacityUnits < p.capacityUnits,
+    p.expiresAt > 0, p.startupPolicy == "manual", not(p.autoResume),
+  }
+  pure def pilotOwnershipStateIsValid(s: PilotOwnershipState): bool = and {
+    pilotPermitIsValid(s.permit), pilotPhaseExists(s.phase),
+    s.consumedBudgetUnits >= 0, s.consumedBudgetUnits <= s.permit.budgetUnits,
+    s.activeAssignments >= 0,
+    s.activeAssignments <= s.permit.capacityUnits - s.permit.recoveryCapacityUnits,
+    if (Set("StableOwned", "TransferIntended").contains(s.phase))
+      s.assignedOwnerId == s.permit.stableOwnerId
+    else s.assignedOwnerId == s.permit.pilotOwnerId,
+    if (s.phase == "TransferIntended") and {
+      s.transferIntentDurable, not(s.transferAcknowledgementObserved),
+      s.stableRouteQuiesced, s.stableRouteExcluded,
+      s.authorityEvidenceGeneration == s.permit.generation,
+    } else true,
+    if (s.phase == "PilotOwned") and {
+      s.transferIntentDurable, s.transferAcknowledgementObserved,
+    } else true,
+    if (s.phase == "OutcomeUnknown") not(s.outcomeKnown) else true,
+    if (s.phase == "ReturnIntended") and {
+      s.returnIntentDurable, not(s.returnAcknowledgementObserved),
+    } else true,
+  }
+  pure def pilotTransferFramePreserved(c: PilotOwnershipState, p: PilotOwnershipState): bool = and {
+    p.permit == c.permit,
+    p.transferIntentDurable == c.transferIntentDurable,
+    p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+    p.returnIntentDurable == c.returnIntentDurable,
+    p.returnAcknowledgementObserved == c.returnAcknowledgementObserved,
+    p.stableRouteQuiesced == c.stableRouteQuiesced,
+    p.stableRouteExcluded == c.stableRouteExcluded,
+    p.authorityEvidenceGeneration == c.authorityEvidenceGeneration,
+  }
+  pure def pilotOwnershipMayTransition(c: PilotOwnershipState, p: PilotOwnershipState): bool = and {
+    pilotOwnershipStateIsValid(c), pilotOwnershipStateIsValid(p), p.permit == c.permit,
+    p.consumedBudgetUnits == c.consumedBudgetUnits,
+    c.transferIntentDurable implies p.transferIntentDurable,
+    c.transferAcknowledgementObserved implies p.transferAcknowledgementObserved,
+    c.returnIntentDurable implies p.returnIntentDurable,
+    c.returnAcknowledgementObserved implies p.returnAcknowledgementObserved,
+    or {
+      and { c.phase == "StableOwned", p.phase == "TransferIntended",
+        p.transferIntentDurable, p.readbackCurrent, p.stableRouteQuiesced,
+        p.stableRouteExcluded, p.authorityEvidenceGeneration == c.permit.generation,
+        p.assignedOwnerId == c.permit.stableOwnerId,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+        p.returnIntentDurable == c.returnIntentDurable,
+        p.returnAcknowledgementObserved == c.returnAcknowledgementObserved },
+      and { c.phase == "TransferIntended", p.phase == "PilotOwned",
+        p.transferAcknowledgementObserved, p.readbackCurrent,
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        p.stableRouteQuiesced == c.stableRouteQuiesced,
+        p.stableRouteExcluded == c.stableRouteExcluded,
+        p.authorityEvidenceGeneration == c.authorityEvidenceGeneration,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        p.transferIntentDurable == c.transferIntentDurable,
+        p.returnIntentDurable == c.returnIntentDurable,
+        p.returnAcknowledgementObserved == c.returnAcknowledgementObserved },
+      and { c.phase == "PilotOwned", p.phase == "OutcomeUnknown", not(p.outcomeKnown),
+        p.assignedOwnerId == c.permit.pilotOwnerId, p.activeAssignments == c.activeAssignments,
+        pilotTransferFramePreserved(c, p) },
+      and { Set("PilotOwned", "OutcomeUnknown").contains(c.phase), p.phase == "Paused",
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        pilotTransferFramePreserved(c, p) },
+      and { Set("PilotOwned", "OutcomeUnknown", "Paused").contains(c.phase),
+        p.phase == "Revoked",
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        p.activeAssignments == c.activeAssignments, p.outcomeKnown == c.outcomeKnown,
+        pilotTransferFramePreserved(c, p) },
+      and { Set("PilotOwned", "OutcomeUnknown", "Paused", "Revoked").contains(c.phase),
+        p.phase == "ReturnIntended", p.returnIntentDurable,
+        p.assignedOwnerId == c.permit.pilotOwnerId,
+        c.activeAssignments == 0, p.activeAssignments == 0, c.outcomeKnown, p.outcomeKnown,
+        p.transferIntentDurable == c.transferIntentDurable,
+        p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+        p.returnAcknowledgementObserved == c.returnAcknowledgementObserved,
+        p.stableRouteQuiesced == c.stableRouteQuiesced,
+        p.stableRouteExcluded == c.stableRouteExcluded,
+        p.authorityEvidenceGeneration == c.authorityEvidenceGeneration },
+      and { c.phase == "ReturnIntended", p.phase == "StableOwned",
+        p.returnAcknowledgementObserved, p.readbackCurrent,
+        p.assignedOwnerId == c.permit.stableOwnerId,
+        p.activeAssignments == 0, p.outcomeKnown == c.outcomeKnown,
+        p.transferIntentDurable == c.transferIntentDurable,
+        p.transferAcknowledgementObserved == c.transferAcknowledgementObserved,
+        p.returnIntentDurable == c.returnIntentDurable,
+        p.stableRouteQuiesced == c.stableRouteQuiesced,
+        p.stableRouteExcluded == c.stableRouteExcluded,
+        p.authorityEvidenceGeneration == c.authorityEvidenceGeneration },
+    },
+  }
+  pure def pilotDispatchMayProceed(s: PilotOwnershipState, now: int, generation: int): bool = and {
+    pilotOwnershipStateIsValid(s), s.phase == "PilotOwned",
+    s.transferAcknowledgementObserved, s.readbackCurrent, s.outcomeKnown,
+    generation == s.permit.generation, now < s.permit.expiresAt,
+    s.consumedBudgetUnits < s.permit.budgetUnits,
+    s.activeAssignments < s.permit.capacityUnits - s.permit.recoveryCapacityUnits,
+  }
+  pure def pilotAssignmentMayStart(c: PilotOwnershipState, p: PilotOwnershipState,
+    now: int, generation: int): bool = and {
+    pilotDispatchMayProceed(c, now, generation), pilotOwnershipStateIsValid(p),
+    p.permit == c.permit, p.phase == c.phase, p.assignedOwnerId == c.assignedOwnerId,
+    pilotTransferFramePreserved(c, p), p.readbackCurrent == c.readbackCurrent,
+    p.consumedBudgetUnits == c.consumedBudgetUnits + 1,
+    p.activeAssignments == c.activeAssignments + 1, p.outcomeKnown == c.outcomeKnown,
+  }
+  pure def pilotAssignmentMaySettle(c: PilotOwnershipState, p: PilotOwnershipState): bool = and {
+    pilotOwnershipStateIsValid(c), pilotOwnershipStateIsValid(p),
+    c.assignedOwnerId == c.permit.pilotOwnerId, c.activeAssignments > 0,
+    p.permit == c.permit, p.phase == c.phase, p.assignedOwnerId == c.assignedOwnerId,
+    pilotTransferFramePreserved(c, p),
+    p.consumedBudgetUnits == c.consumedBudgetUnits,
+    p.activeAssignments == c.activeAssignments - 1, p.outcomeKnown,
+  }
+  pure def pilotOutcomeMayReconcile(c: PilotOwnershipState, p: PilotOwnershipState,
+    generation: int): bool = and {
+    pilotOwnershipStateIsValid(c), pilotOwnershipStateIsValid(p),
+    Set("OutcomeUnknown", "Paused", "Revoked").contains(c.phase), not(c.outcomeKnown),
+    generation == c.permit.generation, p.permit == c.permit,
+    p.phase == if (c.phase == "OutcomeUnknown") "PilotOwned" else c.phase,
+    p.assignedOwnerId == c.assignedOwnerId,
+    pilotTransferFramePreserved(c, p),
+    p.consumedBudgetUnits == c.consumedBudgetUnits,
+    p.activeAssignments == 0, p.outcomeKnown, p.readbackCurrent,
+  }
+
+
+  type PilotModelState = {
+    ownership: PilotOwnershipState,
+    now: int,
+    currentGeneration: int,
+    startedAssignments: int,
+    settledAssignments: int,
+    restarted: bool,
+    dispatched: bool,
+    settled: bool,
+    reconciled: bool,
+    paused: bool,
+    revoked: bool,
+    reconnected: bool,
+    staleGenerationObserved: bool,
+    deadlineObserved: bool,
+  }
+
+  pure val permit: PilotPermit = {
+    schemaVersion: 1, permitId: "permit-formal-1", subjectId: "MDU6SXNzdWUx",
+    jobClass: "routine-implementation", stableOwnerId: "stable-route",
+    pilotOwnerId: "pilot-route", generation: 1, budgetUnits: 2,
+    capacityUnits: 2, recoveryCapacityUnits: 1, expiresAt: 4,
+    startupPolicy: "manual", autoResume: false,
+  }
+  pure val initialOwnership: PilotOwnershipState = {
+    permit: permit, phase: "StableOwned", assignedOwnerId: "stable-route",
+    transferIntentDurable: false, transferAcknowledgementObserved: false,
+    returnIntentDurable: false, returnAcknowledgementObserved: false,
+    stableRouteQuiesced: false, stableRouteExcluded: false, authorityEvidenceGeneration: 0,
+    readbackCurrent: true, outcomeKnown: true, consumedBudgetUnits: 0, activeAssignments: 0,
+  }
+  pure val transferredOwnership: PilotOwnershipState = {
+    ...initialOwnership, phase: "PilotOwned", assignedOwnerId: "pilot-route",
+    transferIntentDurable: true, transferAcknowledgementObserved: true,
+    stableRouteQuiesced: true, stableRouteExcluded: true, authorityEvidenceGeneration: 1,
+  }
+  pure val frameForgeryRejected = not(pilotAssignmentMayStart(
+    transferredOwnership,
+    { ...transferredOwnership, consumedBudgetUnits: 1, activeAssignments: 1,
+      stableRouteExcluded: false }, 0, 1))
+  pure val reconciliationGenerationForgeryRejected = not(pilotOutcomeMayReconcile(
+    { ...transferredOwnership, phase: "OutcomeUnknown", outcomeKnown: false, activeAssignments: 1 },
+    { ...transferredOwnership, activeAssignments: 0, outcomeKnown: true }, 2))
+  pure val genericUnknownClearRejected = not(pilotOwnershipMayTransition(
+    { ...transferredOwnership, phase: "OutcomeUnknown", outcomeKnown: false, activeAssignments: 1 },
+    { ...transferredOwnership, activeAssignments: 0, outcomeKnown: true }))
+
+  var state: PilotModelState
+  action init = state' = {
+    ownership: initialOwnership, now: 0, currentGeneration: 1,
+    startedAssignments: 0, settledAssignments: 0, restarted: false,
+    dispatched: false, settled: false, reconciled: false,
+    paused: false, revoked: false, reconnected: false,
+    staleGenerationObserved: false, deadlineObserved: false,
+  }
+  action persistTransferIntent = all {
+    state.ownership.phase == "StableOwned",
+    val proposed = { ...state.ownership, phase: "TransferIntended",
+      transferIntentDurable: true, stableRouteQuiesced: true, stableRouteExcluded: true,
+      authorityEvidenceGeneration: state.currentGeneration }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action acknowledgeTransfer = all {
+    state.ownership.phase == "TransferIntended", state.currentGeneration == permit.generation,
+    val proposed = { ...state.ownership, phase: "PilotOwned", assignedOwnerId: "pilot-route",
+      transferAcknowledgementObserved: true, readbackCurrent: true }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action dispatch = all {
+    val proposed = { ...state.ownership,
+      consumedBudgetUnits: state.ownership.consumedBudgetUnits + 1,
+      activeAssignments: state.ownership.activeAssignments + 1 }
+    all {
+    pilotAssignmentMayStart(state.ownership, proposed, state.now, state.currentGeneration),
+    state' = { ...state, ownership: proposed, startedAssignments: state.startedAssignments + 1,
+      dispatched: true },    },
+  }
+  action settle = all {
+    val proposed = { ...state.ownership,
+      activeAssignments: state.ownership.activeAssignments - 1, outcomeKnown: true,
+      readbackCurrent: true }
+    all {
+    pilotAssignmentMaySettle(state.ownership, proposed),
+    state' = { ...state, ownership: proposed, settledAssignments: state.settledAssignments + 1,
+      settled: true },    },
+  }
+  action loseHeartbeat = all {
+    state.ownership.phase == "PilotOwned", state.ownership.assignedOwnerId == "pilot-route",
+    val proposed = { ...state.ownership, phase: "OutcomeUnknown", outcomeKnown: false }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action pause = all {
+    Set("PilotOwned", "OutcomeUnknown").contains(state.ownership.phase),
+    val proposed = { ...state.ownership, phase: "Paused" }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed, paused: true },    },
+  }
+  action revoke = all {
+    Set("PilotOwned", "OutcomeUnknown", "Paused").contains(state.ownership.phase),
+    val proposed = { ...state.ownership, phase: "Revoked" }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed, revoked: true },    },
+  }
+  action reconcileUnknown = all {
+    val proposed = { ...state.ownership,
+      phase: if (state.ownership.phase == "OutcomeUnknown") "PilotOwned" else state.ownership.phase,
+      activeAssignments: 0, outcomeKnown: true, readbackCurrent: true }
+    all {
+    pilotOutcomeMayReconcile(state.ownership, proposed, state.currentGeneration),
+    state' = { ...state, ownership: proposed,
+      settledAssignments: state.settledAssignments + state.ownership.activeAssignments,
+      reconciled: true },    },
+  }
+  action persistReturnIntent = all {
+    state.ownership.assignedOwnerId == "pilot-route",
+    state.ownership.activeAssignments == 0, state.ownership.outcomeKnown,
+    val proposed = { ...state.ownership, phase: "ReturnIntended", returnIntentDurable: true }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action acknowledgeReturn = all {
+    state.ownership.phase == "ReturnIntended", state.currentGeneration == permit.generation,
+    val proposed = { ...state.ownership, phase: "StableOwned", assignedOwnerId: "stable-route",
+      returnAcknowledgementObserved: true, readbackCurrent: true }
+    all {
+    pilotOwnershipMayTransition(state.ownership, proposed),
+    state' = { ...state, ownership: proposed },    },
+  }
+  action disconnectForRestart = all {
+    state.ownership.phase == "PilotOwned", state.ownership.readbackCurrent,
+    state' = { ...state, ownership: { ...state.ownership, readbackCurrent: false }, restarted: true },
+  }
+  action reconnectReadback = all {
+    state.restarted, not(state.ownership.readbackCurrent),
+    state.currentGeneration == permit.generation,
+    state' = { ...state, ownership: { ...state.ownership, readbackCurrent: true },
+      reconnected: true },
+  }
+  action advanceClockToExpiry = all {
+    state.now < permit.expiresAt,
+    state' = { ...state, now: permit.expiresAt, deadlineObserved: true },
+  }
+  action observeNewGeneration = all {
+    state.currentGeneration == permit.generation,
+    state' = { ...state, currentGeneration: permit.generation + 1,
+      staleGenerationObserved: true },
+  }
+  action terminalStutter = all {
+    state.ownership.phase == "StableOwned", state.ownership.returnAcknowledgementObserved,
+    state' = state,
+  }
+  action step = any {
+    persistTransferIntent, acknowledgeTransfer, dispatch, settle, loseHeartbeat,
+    pause, revoke, reconcileUnknown, persistReturnIntent, acknowledgeReturn,
+    disconnectForRestart, reconnectReadback, advanceClockToExpiry, observeNewGeneration,
+    terminalStutter,
+  }
+  action normalProgressStep = any {
+    persistTransferIntent, acknowledgeTransfer, persistReturnIntent,
+    acknowledgeReturn, terminalStutter,
+  }
+  action majorActionCoverageStep =
+    if (not(state.ownership.transferIntentDurable)) persistTransferIntent
+    else if (not(state.ownership.transferAcknowledgementObserved)) acknowledgeTransfer
+    else if (state.startedAssignments == 0) dispatch
+    else if (not(state.settled)) settle
+    else if (state.startedAssignments == 1) dispatch
+    else if (state.ownership.outcomeKnown and not(state.reconciled)) loseHeartbeat
+    else if (not(state.reconciled)) reconcileUnknown
+    else if (not(state.restarted)) disconnectForRestart
+    else if (not(state.reconnected)) reconnectReadback
+    else if (not(state.paused)) pause
+    else if (not(state.revoked)) revoke
+    else if (not(state.ownership.returnIntentDurable)) persistReturnIntent
+    else if (not(state.ownership.returnAcknowledgementObserved)) acknowledgeReturn
+    else terminalStutter
+  val safety = and {
+    frameForgeryRejected, reconciliationGenerationForgeryRejected, genericUnknownClearRejected,
+    pilotOwnershipStateIsValid(state.ownership),
+    state.startedAssignments == state.settledAssignments + state.ownership.activeAssignments,
+    state.startedAssignments == state.ownership.consumedBudgetUnits,
+    state.ownership.assignedOwnerId == "pilot-route" implies
+      state.ownership.transferAcknowledgementObserved,
+    state.ownership.phase == "TransferIntended" implies
+      state.ownership.assignedOwnerId == "stable-route",
+    state.ownership.phase == "OutcomeUnknown" implies not(state.ownership.outcomeKnown),
+    state.ownership.phase == "StableOwned" and state.ownership.returnAcknowledgementObserved implies
+      state.ownership.activeAssignments == 0,
+    state.deadlineObserved implies not(pilotDispatchMayProceed(
+      state.ownership, state.now, state.currentGeneration)),
+    state.staleGenerationObserved implies not(pilotDispatchMayProceed(
+      state.ownership, state.now, state.currentGeneration)),
+  }
+  val reached = state.ownership.phase == "StableOwned"
+    and state.ownership.returnAcknowledgementObserved
+  val transferIntentReached = state.ownership.transferIntentDurable
+  val pilotOwnershipReached = state.ownership.assignedOwnerId == "pilot-route"
+  val unknownReached = not(state.ownership.outcomeKnown)
+  val dispatchReached = state.dispatched
+  val settleReached = state.settled
+  val reconcileReached = state.reconciled
+  val pausedReached = state.paused
+  val revokedReached = state.revoked
+  val reconnectReached = state.reconnected
+  val majorActionCoverageReached = and {
+    state.dispatched, state.settled, state.reconciled,
+    state.paused, state.revoked, state.reconnected,
+  }
+  val returnIntentReached = state.ownership.returnIntentDurable
+  val restartRefusalReached = state.restarted and not(state.ownership.readbackCurrent)
+    and not(pilotDispatchMayProceed(state.ownership, state.now, state.currentGeneration))
+  val deadlineRefusalReached = state.deadlineObserved
+  val staleGenerationRefusalReached = state.staleGenerationObserved
+  temporal progress: bool = and {
+    persistTransferIntent.weakFair(Set(state)), acknowledgeTransfer.weakFair(Set(state)),
+    settle.weakFair(Set(state)), reconcileUnknown.weakFair(Set(state)),
+    reconnectReadback.weakFair(Set(state)), persistReturnIntent.weakFair(Set(state)),
+    acknowledgeReturn.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal faultSafety: bool = always(safety)
+  temporal majorCoverageProgress: bool = eventually(majorActionCoverageReached)
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = state.ownership.phase != "TransferIntended"
+  action withoutTransferAcknowledgement =
+    if (state.ownership.phase == "StableOwned") persistTransferIntent else terminalStutter
+  action unsafeTransferWithoutAcknowledgement = all {
+    state' = { ...state, ownership: { ...state.ownership,
+      phase: "PilotOwned", assignedOwnerId: "pilot-route",
+      transferAcknowledgementObserved: false } },
+  }
+}
+
+// O2 hosted-writer model. Seven is deliberately small and closed: claim, process, durable
+// candidate, branch, pull request, merge, and provider-native completion readback.
+module O2HostedWriterModel {
+  type HostedWriterState = {
+    subjectId: str, jobClass: str, capacity: int, activeAssignments: int,
+    budgetLimit: int, budgetUsed: int, permitGeneration: int, currentGeneration: int,
+    paused: bool, readbackCurrent: bool, restarted: bool, freshReadback: bool, claimCurrent: bool,
+    executionOpen: bool, deliveryOpen: bool,
+    stage: int, operationId: str, operationStatus: str,
+    routeId: str, attemptId: str, candidateId: str, repositoryId: str,
+    evidenceRouteId: str, evidenceAttemptId: str, evidenceCandidateId: str,
+    evidenceRepositoryId: str, evidenceGeneration: int,
+    candidateDurable: bool, branchPublished: bool, pullRequestObserved: bool,
+    mergeObserved: bool, nativeReadbackObserved: bool, adapterClaimedComplete: bool,
+    unknownObserved: bool, sameOperationRetried: bool,
+  }
+  pure def operationFor(stage: int): str =
+    if (stage == 0) "op-claim"
+    else if (stage == 1) "op-process"
+    else if (stage == 2) "op-candidate"
+    else if (stage == 3) "op-branch"
+    else if (stage == 4) "op-pr"
+    else if (stage == 5) "op-merge"
+    else if (stage == 6) "op-readback"
+    else ""
+  pure def statusExists(status: str): bool =
+    Set("none", "intent", "dispatching", "unknown", "absent").contains(status)
+  pure def writerStateIsValid(s: HostedWriterState): bool = and {
+    s.subjectId == "MDU6SXNzdWUx", s.jobClass == "routine-documentation-delivery",
+    s.capacity == 1, s.activeAssignments >= 0, s.activeAssignments <= s.capacity,
+    s.budgetLimit == 1, s.budgetUsed >= 0, s.budgetUsed <= s.budgetLimit,
+    s.permitGeneration == 1, s.currentGeneration >= s.permitGeneration,
+    s.stage >= 0, s.stage <= 7, statusExists(s.operationStatus),
+    s.routeId == "route-1", s.attemptId == "attempt-1",
+    s.candidateId == "candidate-1", s.repositoryId == "repository-1",
+    if (s.operationStatus == "none") s.operationId == ""
+      else s.operationId == operationFor(s.stage),
+    s.stage < 3 implies not(s.candidateDurable),
+    s.branchPublished implies s.candidateDurable,
+    s.pullRequestObserved implies s.branchPublished,
+    s.mergeObserved implies s.pullRequestObserved,
+    s.nativeReadbackObserved implies s.mergeObserved,
+    s.stage > 0 implies and {
+      s.evidenceRouteId == s.routeId, s.evidenceAttemptId == s.attemptId,
+      s.evidenceCandidateId == s.candidateId, s.evidenceRepositoryId == s.repositoryId,
+      s.evidenceGeneration == s.permitGeneration,
+    },
+    s.stage == 7 implies and { s.nativeReadbackObserved, s.activeAssignments == 0 },
+  }
+  pure def mayRecordIntent(s: HostedWriterState): bool = and {
+    writerStateIsValid(s), not(s.paused), s.readbackCurrent, s.deliveryOpen,
+    s.stage == 0 or s.claimCurrent,
+    s.stage > 1 or s.executionOpen,
+    s.currentGeneration == s.permitGeneration, s.stage < 7,
+    s.operationStatus == "none", s.activeAssignments == 1,
+    s.budgetUsed == 1,
+  }
+  pure def mayDispatch(s: HostedWriterState): bool = and {
+    writerStateIsValid(s), not(s.paused), s.readbackCurrent, s.deliveryOpen,
+    s.stage == 0 or s.claimCurrent,
+    s.currentGeneration == s.permitGeneration,
+    s.operationStatus == "intent", s.operationId == operationFor(s.stage),
+    s.stage > 1 or s.executionOpen,
+  }
+  pure def appliedStage(s: HostedWriterState): HostedWriterState = {
+    ...s, stage: s.stage + 1, operationId: "", operationStatus: "none",
+    candidateDurable: s.candidateDurable or s.stage == 2,
+    branchPublished: s.branchPublished or s.stage == 3,
+    pullRequestObserved: s.pullRequestObserved or s.stage == 4,
+    mergeObserved: s.mergeObserved or s.stage == 5,
+    nativeReadbackObserved: s.nativeReadbackObserved or s.stage == 6,
+    claimCurrent: s.claimCurrent or s.stage == 0,
+    evidenceRouteId: s.routeId, evidenceAttemptId: s.attemptId,
+    evidenceCandidateId: s.candidateId, evidenceRepositoryId: s.repositoryId,
+    evidenceGeneration: s.permitGeneration,
+    activeAssignments: if (s.stage == 6) 0 else s.activeAssignments,
+  }
+
+  var state: HostedWriterState
+  action init = state' = {
+    subjectId: "MDU6SXNzdWUx", jobClass: "routine-documentation-delivery",
+    capacity: 1, activeAssignments: 0, budgetLimit: 1, budgetUsed: 0,
+    permitGeneration: 1, currentGeneration: 1,
+    paused: true, readbackCurrent: true, restarted: false, freshReadback: false, claimCurrent: false,
+    executionOpen: true, deliveryOpen: true,
+    stage: 0, operationId: "", operationStatus: "none",
+    routeId: "route-1", attemptId: "attempt-1", candidateId: "candidate-1",
+    repositoryId: "repository-1", evidenceRouteId: "", evidenceAttemptId: "",
+    evidenceCandidateId: "", evidenceRepositoryId: "", evidenceGeneration: 0,
+    candidateDurable: false, branchPublished: false, pullRequestObserved: false,
+    mergeObserved: false, nativeReadbackObserved: false, adapterClaimedComplete: false,
+    unknownObserved: false, sameOperationRetried: false,
+  }
+  action manualStart = all {
+    state.paused, state.readbackCurrent, state.executionOpen, state.deliveryOpen,
+    state.activeAssignments == 0,
+    state.budgetUsed < state.budgetLimit,
+    state' = { ...state, paused: false, activeAssignments: 1, budgetUsed: state.budgetUsed + 1 },
+  }
+  action recordIntent = all {
+    mayRecordIntent(state),
+    state' = { ...state, operationId: operationFor(state.stage), operationStatus: "intent" },
+  }
+  action dispatch = all {
+    mayDispatch(state), state' = { ...state, operationStatus: "dispatching" },
+  }
+  action observeApplied = all {
+    state.operationStatus == "dispatching", state.stage < 7,
+    state' = appliedStage(state),
+  }
+  action loseResponse = all {
+    state.operationStatus == "dispatching",
+    state' = { ...state, operationStatus: "unknown", unknownObserved: true },
+  }
+  action reconcileApplied = all {
+    state.operationStatus == "unknown",
+    state.currentGeneration == state.permitGeneration,
+    state' = appliedStage(state),
+  }
+  action observeProvenAbsent = all {
+    state.operationStatus == "unknown",
+    state.currentGeneration == state.permitGeneration,
+    state' = { ...state, operationStatus: "absent" },
+  }
+  action retrySameOperation = all {
+    state.operationStatus == "absent", state.operationId == operationFor(state.stage),
+    state.deliveryOpen, state.claimCurrent, state.stage != 1 or state.executionOpen,
+    state' = { ...state, operationStatus: "intent", sameOperationRetried: true },
+  }
+  action adapterClaimsCompletion = all {
+    state.stage == 6, not(state.adapterClaimedComplete),
+    state' = { ...state, adapterClaimedComplete: true },
+  }
+  action restartPaused = all {
+    not(state.restarted), state.stage < 7,
+    state' = { ...state, paused: true, readbackCurrent: false, restarted: true },
+  }
+  action reconnect = all {
+    state.restarted, not(state.readbackCurrent),
+    state.currentGeneration == state.permitGeneration, state.deliveryOpen,
+    state' = { ...state, readbackCurrent: true, freshReadback: true },
+  }
+  action resume = all {
+    state.restarted, state.paused, state.readbackCurrent, state.freshReadback,
+    state.deliveryOpen,
+    state.currentGeneration == state.permitGeneration,
+    state' = { ...state, paused: false },
+  }
+  action expireExecution = all {
+    state.executionOpen,
+    state' = { ...state, executionOpen: false },
+  }
+  action expireDelivery = all {
+    state.deliveryOpen,
+    state' = { ...state, executionOpen: false, deliveryOpen: false },
+  }
+  action loseClaim = all {
+    state.claimCurrent, state.stage > 0,
+    state' = { ...state, claimCurrent: false },
+  }
+  action hold = state' = state
+  action step = any {
+    manualStart, recordIntent, dispatch, observeApplied, loseResponse,
+    reconcileApplied, observeProvenAbsent, retrySameOperation,
+    adapterClaimsCompletion, restartPaused, reconnect, resume,
+    expireExecution, expireDelivery, loseClaim, hold,
+  }
+  action normalProgressStep =
+    if (state.paused) manualStart
+    else if (state.stage == 7) hold
+    else if (state.operationStatus == "none") recordIntent
+    else if (state.operationStatus == "intent") dispatch
+    else observeApplied
+  action withoutNativeReadback =
+    if (state.paused) manualStart
+    else if (state.stage < 6 and state.operationStatus == "none") recordIntent
+    else if (state.stage < 6 and state.operationStatus == "intent") dispatch
+    else if (state.stage < 6) observeApplied
+    else if (not(state.adapterClaimedComplete)) adapterClaimsCompletion
+    else hold
+  action unsafeAdapterCompletion = all {
+    state' = { ...state, stage: 7, activeAssignments: 0,
+      mergeObserved: true, nativeReadbackObserved: false,
+      adapterClaimedComplete: true, operationId: "", operationStatus: "none" },
+  }
+  action unsafeOtherRouteReceipt = state' = {
+    ...state, paused: false, activeAssignments: 1, budgetUsed: 1, stage: 1,
+    evidenceRouteId: "route-other", evidenceAttemptId: state.attemptId,
+    evidenceCandidateId: state.candidateId, evidenceRepositoryId: state.repositoryId,
+    evidenceGeneration: state.permitGeneration,
+  }
+  val safety = and {
+    writerStateIsValid(state),
+    state.stage == 7 implies state.nativeReadbackObserved,
+    state.adapterClaimedComplete and not(state.nativeReadbackObserved) implies state.stage < 7,
+    state.operationStatus == "unknown" implies not(mayDispatch(state)),
+    state.restarted and not(state.readbackCurrent) implies state.paused,
+    state.executionOpen implies state.deliveryOpen,
+    state.restarted and not(state.freshReadback) implies state.paused,
+  }
+  val reached = state.stage == 7 and state.nativeReadbackObserved
+  val unknownReached = state.unknownObserved
+  // The removed-readback control must expose the attempted adapter substitution itself.
+  // Waiting for stage 7 would make the control vacuous because the safe model never advances
+  // beyond stage 6 without the native provider observation.
+  val blockedInvariant = not(state.adapterClaimedComplete)
+  temporal progress: bool = normalProgressStep.weakFair(Set(state)).implies(eventually(reached))
+  temporal faultSafety: bool = always(safety)
+  temporal eventuallyReached: bool = eventually(reached)
+}
+
+
+module O2HostedWriterLegacyScenarios {
+  import O2HostedWriterModel.*
+  action admitted = init.then(manualStart)
+  action complete = recordIntent.then(dispatch).then(observeApplied)
+  action throughClaim = admitted.then(complete)
+  action throughProcess = throughClaim.then(complete)
+  action throughCandidate = throughProcess.then(complete)
+  action throughBranch = throughCandidate.then(complete)
+  action throughPullRequest = throughBranch.then(complete)
+  action throughMerge = throughPullRequest.then(complete)
+  run happy = throughMerge.then(complete).expect(reached and safety)
+  run lostApplied = admitted.then(recordIntent).then(dispatch)
+    .then(loseResponse).then(reconcileApplied).expect(state.stage == 1 and safety)
+  run claimAbsent = admitted.then(recordIntent).then(dispatch)
+    .then(loseResponse).then(observeProvenAbsent)
+    .expect(state.operationStatus == "absent" and not(state.claimCurrent) and not(mayDispatch(state)) and safety)
+  run processRetry = throughClaim.then(recordIntent).then(dispatch)
+    .then(loseResponse).then(observeProvenAbsent).then(retrySameOperation)
+    .then(dispatch).then(observeApplied)
+    .expect(state.stage == 2 and state.sameOperationRetried and safety)
+  run restart = admitted.then(restartPaused).then(reconnect).then(resume)
+    .expect(not(state.paused) and state.freshReadback and safety)
+  run missingNative = throughMerge.then(adapterClaimsCompletion)
+    .expect(not(reached) and state.stage == 6 and safety)
+}
+
+// GS2-03.10 model 1: two workers race sibling commits on shard 0 while shard 1 progresses
+// independently. Expected-parent CAS chooses at most one sibling, retry advances generation,
+// and effect-time fencing rejects the superseded grant. The unsafe actions are semantic mutants:
+// they omit the production comparison or fence instead of assigning a generic failure flag.
+module GS20310JournalModel {
+  type JournalModelState = {
+    head0: int, generation0: int, head1: int, generation1: int,
+    observedA: int, observedB: int, proposalsReady: bool,
+    acceptedA: bool, acceptedB: bool, firstOwner: int,
+    conflictObserved: bool, retryAccepted: bool, currentOwner: int,
+    currentGrant: int, staleEffectAttempted: bool, effectOwner: int,
+    shard1Committed: bool,
+  }
+  var state: JournalModelState
+  action init = state' = {
+    head0: 10, generation0: 1, head1: 20, generation1: 1,
+    observedA: 0, observedB: 0, proposalsReady: false,
+    acceptedA: false, acceptedB: false, firstOwner: 0,
+    conflictObserved: false, retryAccepted: false, currentOwner: 0,
+    currentGrant: 0, staleEffectAttempted: false, effectOwner: 0,
+    shard1Committed: false,
+  }
+  action prepareSiblings = all {
+    not(state.proposalsReady),
+    state' = { ...state, observedA: state.head0, observedB: state.head0, proposalsReady: true },
+  }
+  action casA = all {
+    state.proposalsReady, state.firstOwner == 0, state.observedA == state.head0,
+    state' = { ...state, head0: 11, generation0: 2, acceptedA: true,
+      firstOwner: 1, currentOwner: 1, currentGrant: 2 },
+  }
+  action casB = all {
+    state.proposalsReady, state.firstOwner == 0, state.observedB == state.head0,
+    state' = { ...state, head0: 12, generation0: 2, acceptedB: true,
+      firstOwner: 2, currentOwner: 2, currentGrant: 2 },
+  }
+  action observeConflict = all {
+    state.firstOwner != 0, not(state.conflictObserved),
+    state' = { ...state, conflictObserved: true,
+      observedA: if (state.firstOwner == 2) state.head0 else state.observedA,
+      observedB: if (state.firstOwner == 1) state.head0 else state.observedB },
+  }
+  action retryLoser = all {
+    state.conflictObserved, not(state.retryAccepted),
+    if (state.firstOwner == 1) state.observedB == state.head0 else state.observedA == state.head0,
+    state' = { ...state, head0: state.head0 + 10, generation0: 3,
+      retryAccepted: true, currentOwner: if (state.firstOwner == 1) 2 else 1, currentGrant: 3 },
+  }
+  action attemptStaleEffect = all {
+    state.retryAccepted, not(state.staleEffectAttempted),
+    state' = { ...state, staleEffectAttempted: true,
+      effectOwner: if (state.currentGrant == 2) state.firstOwner else 0 },
+  }
+  action commitShard1 = all {
+    not(state.shard1Committed),
+    state' = { ...state, head1: 21, generation1: 2, shard1Committed: true },
+  }
+  action hold = state' = state
+  action step = any { prepareSiblings, casA, casB, observeConflict, retryLoser,
+    attemptStaleEffect, commitShard1, hold }
+  val safety = and {
+    not(state.acceptedA and state.acceptedB),
+    state.effectOwner == 0 or state.effectOwner == state.currentOwner,
+    state.currentGrant == 0 or state.currentGrant == state.generation0,
+    state.generation0 >= 1, state.generation1 >= 1,
+  }
+  val reached = and { state.retryAccepted, state.staleEffectAttempted,
+    state.effectOwner == 0, state.shard1Committed }
+  temporal progress: bool = and {
+    prepareSiblings.weakFair(Set(state)), casA.weakFair(Set(state)), casB.weakFair(Set(state)),
+    observeConflict.weakFair(Set(state)), retryLoser.weakFair(Set(state)),
+    attemptStaleEffect.weakFair(Set(state)), commitShard1.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = not(state.conflictObserved)
+  action withoutRetry =
+    if (not(state.proposalsReady)) prepareSiblings
+    else if (state.firstOwner == 0) casA
+    else if (not(state.conflictObserved)) observeConflict
+    else hold
+  val fencingReached = and { state.retryAccepted, state.staleEffectAttempted, state.effectOwner == 0 }
+  temporal fencingProgress: bool = and {
+    prepareSiblings.weakFair(Set(state)), casA.weakFair(Set(state)), casB.weakFair(Set(state)),
+    observeConflict.weakFair(Set(state)), retryLoser.weakFair(Set(state)),
+    attemptStaleEffect.weakFair(Set(state)),
+  }.implies(eventually(fencingReached))
+  temporal eventuallyFenced: bool = eventually(fencingReached)
+  val fencingBlockedInvariant = not(state.retryAccepted)
+  action withoutFence =
+    if (not(state.proposalsReady)) prepareSiblings
+    else if (state.firstOwner == 0) casA
+    else if (not(state.conflictObserved)) observeConflict
+    else if (not(state.retryAccepted)) retryLoser
+    else hold
+  action unsafeExpectedParent = all {
+    state' = { ...state, head0: 12, generation0: 2, proposalsReady: true,
+      observedA: 10, observedB: 10, acceptedA: true, acceptedB: true,
+      firstOwner: 2, currentOwner: 2, currentGrant: 2 },
+  }
+  action unsafeFence = all {
+    state' = { ...state, head0: 22, generation0: 3, proposalsReady: true,
+      acceptedA: true, firstOwner: 1, conflictObserved: true, retryAccepted: true,
+      currentOwner: 2, currentGrant: 3, staleEffectAttempted: true, effectOwner: 1 },
+  }
+}
+
+// GS2-03.10 model 2: webhook delivery is only an unordered hint. A shared audit reads both
+// authority pages, observes the terminal high-water mark, seals the exact derived snapshot,
+// and only then applies it. Duplicate/reordered hints cannot manufacture completeness.
+module GS20310ReconcileModel {
+  type ReconcileModelState = {
+    authorityVersion: int, page1: bool, page2: bool, terminal: bool,
+    highWater: int, sealedSnapshot: int, sealedHighWater: int,
+    projectionVersion: int, hintCount: int, page2WasFirst: bool,
+    authorityChangedDuringRead: bool,
+  }
+  var state: ReconcileModelState
+  action init = state' = {
+    authorityVersion: 1, page1: false, page2: false, terminal: false,
+    highWater: 0, sealedSnapshot: 0, sealedHighWater: 0,
+    projectionVersion: 0, hintCount: 0, page2WasFirst: false,
+    authorityChangedDuringRead: false,
+  }
+  action duplicateHint = all {
+    state.hintCount < 2,
+    state' = { ...state, hintCount: state.hintCount + 1 },
+  }
+  action readPage2 = all {
+    not(state.page2),
+    state' = { ...state, page2: true, terminal: true,
+      highWater: state.authorityVersion, page2WasFirst: not(state.page1) },
+  }
+  action readPage1 = all {
+    not(state.page1),
+    not(and { state.page2WasFirst, state.authorityVersion == 1,
+      not(state.authorityChangedDuringRead) }),
+    state' = { ...state, page1: true },
+  }
+  action changeAuthorityDuringRead = all {
+    state.authorityVersion == 1, state.page2WasFirst, state.page2, not(state.page1),
+    state' = { ...state, authorityVersion: 2, authorityChangedDuringRead: true },
+  }
+  action restartIncompleteAudit = all {
+    state.highWater != 0, state.highWater != state.authorityVersion,
+    state' = { ...state, page1: false, page2: false, terminal: false,
+      highWater: 0, sealedSnapshot: 0, sealedHighWater: 0 },
+  }
+  action sealPlan = all {
+    state.page1, state.page2, state.terminal, state.highWater == state.authorityVersion,
+    state' = { ...state, sealedSnapshot: state.authorityVersion,
+      sealedHighWater: state.highWater },
+  }
+  action applyPlan = all {
+    state.sealedSnapshot == state.authorityVersion,
+    state.sealedHighWater == state.authorityVersion,
+    state' = { ...state, projectionVersion: state.sealedSnapshot },
+  }
+  action hold = state' = state
+  action step = any { duplicateHint, readPage2, readPage1, changeAuthorityDuringRead,
+    restartIncompleteAudit, sealPlan, applyPlan, hold }
+  val safety = state.projectionVersion == 0 or and {
+    state.page1, state.page2, state.terminal,
+    state.highWater == state.authorityVersion,
+    state.sealedSnapshot == state.authorityVersion,
+    state.sealedHighWater == state.authorityVersion,
+  }
+  val reached = state.projectionVersion == state.authorityVersion
+  val reorderedWitness = and { reached, state.page2WasFirst,
+    state.authorityChangedDuringRead, state.hintCount == 0 }
+  temporal progress: bool = and {
+    readPage2.weakFair(Set(state)),
+    readPage1.weakFair(Set(state)), sealPlan.weakFair(Set(state)),
+    changeAuthorityDuringRead.weakFair(Set(state)), restartIncompleteAudit.weakFair(Set(state)),
+    applyPlan.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: the deterministic no-audit prefix must become terminally blocked.
+  val blockedInvariant = state.hintCount < 2
+  action withoutAudit = if (state.hintCount < 2) duplicateHint else hold
+  action unsafeIncompleteApply = state' = { ...state, projectionVersion: state.authorityVersion }
+}
+
+// GS2-03.10 model 3: an epoch and critic seat are derived from one complete, fresh authority
+// snapshot. A recorded pass is historical data; changing the authority snapshot makes it
+// inapplicable without deleting it, and an effect must revalidate the current epoch and seat.
+module GS20310ReviewEpochModel {
+  type ReviewModelState = {
+    authorityVersion: int, complete: bool, fresh: bool,
+    epochSnapshot: int, seat: int, verdictSnapshot: int, verdictSeat: int,
+    changedAfterVerdict: bool, effectVersion: int, effectWasCurrent: bool,
+    staleEffectRejected: bool, staleEffectAccepted: bool,
+  }
+  var state: ReviewModelState
+  pure def accepted(s: ReviewModelState): bool = and {
+    s.verdictSnapshot != 0, s.verdictSnapshot == s.authorityVersion,
+    s.verdictSnapshot == s.epochSnapshot, s.verdictSeat == s.seat,
+    s.complete, s.fresh,
+  }
+  action init = state' = {
+    authorityVersion: 1, complete: true, fresh: true,
+    epochSnapshot: 0, seat: 0, verdictSnapshot: 0, verdictSeat: 0,
+    changedAfterVerdict: false, effectVersion: 0, effectWasCurrent: false,
+    staleEffectRejected: false, staleEffectAccepted: false,
+  }
+  action openEpoch = all {
+    state.complete, state.fresh, state.epochSnapshot != state.authorityVersion,
+    not(state.changedAfterVerdict) or state.staleEffectRejected,
+    state' = { ...state, epochSnapshot: state.authorityVersion, seat: 0,
+      verdictSnapshot: 0, verdictSeat: 0 },
+  }
+  action grantSeat = all {
+    state.epochSnapshot == state.authorityVersion, state.seat == 0,
+    state' = { ...state, seat: if (state.authorityVersion == 1) 1 else 2 },
+  }
+  action recordPass = all {
+    state.epochSnapshot == state.authorityVersion, state.seat != 0,
+    state' = { ...state, verdictSnapshot: state.epochSnapshot, verdictSeat: state.seat },
+  }
+  action changeAuthority = all {
+    accepted(state), not(state.changedAfterVerdict), state.effectWasCurrent,
+    state' = { ...state, authorityVersion: state.authorityVersion + 1,
+      changedAfterVerdict: true },
+  }
+  action applyCurrentEffect = all {
+    accepted(state), not(state.effectWasCurrent),
+    state' = { ...state, effectVersion: state.authorityVersion, effectWasCurrent: true },
+  }
+  action rejectStaleEffect = all {
+    state.changedAfterVerdict, not(accepted(state)), not(state.staleEffectRejected),
+    state' = { ...state, staleEffectRejected: true },
+  }
+  action hold = state' = state
+  action step = any { openEpoch, grantSeat, recordPass, applyCurrentEffect,
+    changeAuthority, rejectStaleEffect, hold }
+  val safety = and { not(state.staleEffectAccepted),
+    state.effectVersion == 0 or state.effectWasCurrent }
+  val reached = and { state.changedAfterVerdict, not(accepted(state)),
+    state.effectWasCurrent, state.staleEffectRejected, not(state.staleEffectAccepted) }
+  temporal progress: bool = and {
+    openEpoch.weakFair(Set(state)), grantSeat.weakFair(Set(state)),
+    recordPass.weakFair(Set(state)), applyCurrentEffect.weakFair(Set(state)),
+    changeAuthority.weakFair(Set(state)), rejectStaleEffect.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: a pass can be recorded while snapshot-change progress is absent.
+  val blockedInvariant = not(state.effectWasCurrent)
+  action withoutSnapshotChange =
+    if (state.epochSnapshot == 0) openEpoch
+    else if (state.seat == 0) grantSeat
+    else if (state.verdictSnapshot == 0) recordPass
+    else if (not(state.effectWasCurrent)) applyCurrentEffect
+    else hold
+  action unsafeStaleReviewEffect = state' = {
+    authorityVersion: 2, complete: true, fresh: true,
+    epochSnapshot: 1, seat: 1, verdictSnapshot: 1, verdictSeat: 1,
+    changedAfterVerdict: true, effectVersion: 1, effectWasCurrent: false,
+    staleEffectRejected: false, staleEffectAccepted: true,
+  }
+}
+
+// GS2-03.10 model 4: destructive contraction is authorized by successful observations at
+// four ordered readings, not elapsed wall time. Day 30 alone is not evidence for days 0/7/14.
+module GS20310CutoverModel {
+  type CutoverModelState = {
+    clockDay: int, readings: Set[int], successful: Set[int], fresh: Set[int],
+    currentSnapshot: int, evidenceSnapshot: int,
+    failedRejected: bool, staleRejected: bool, wrongSnapshotRejected: bool,
+    v1Fenced: bool, contracted: bool,
+  }
+  var state: CutoverModelState
+  action init = state' = {
+    clockDay: 0, readings: Set(), successful: Set(), fresh: Set(),
+    currentSnapshot: 7, evidenceSnapshot: 7,
+    failedRejected: false, staleRejected: false, wrongSnapshotRejected: false,
+    v1Fenced: false, contracted: false,
+  }
+  action rejectFailed = all { not(state.failedRejected), state' = { ...state, failedRejected: true } }
+  action rejectStale = all { not(state.staleRejected), state' = { ...state, staleRejected: true } }
+  action rejectWrongSnapshot = all {
+    not(state.wrongSnapshotRejected), state' = { ...state, wrongSnapshotRejected: true },
+  }
+  action observe0 = all { state.clockDay == 0, not(state.readings.contains(0)),
+    state' = { ...state, readings: state.readings.union(Set(0)),
+      successful: state.successful.union(Set(0)), fresh: state.fresh.union(Set(0)) } }
+  action advance7 = all { state.readings.contains(0), state.clockDay == 0, state' = { ...state, clockDay: 7 } }
+  action observe7 = all { state.clockDay == 7, not(state.readings.contains(7)),
+    state' = { ...state, readings: state.readings.union(Set(7)),
+      successful: state.successful.union(Set(7)), fresh: state.fresh.union(Set(7)) } }
+  action advance14 = all { state.readings.contains(7), state.clockDay == 7, state' = { ...state, clockDay: 14 } }
+  action observe14 = all { state.clockDay == 14, not(state.readings.contains(14)),
+    state' = { ...state, readings: state.readings.union(Set(14)),
+      successful: state.successful.union(Set(14)), fresh: state.fresh.union(Set(14)) } }
+  action advance30 = all { state.readings.contains(14), state.clockDay == 14, state' = { ...state, clockDay: 30 } }
+  action observe30 = all { state.clockDay == 30, not(state.readings.contains(30)),
+    state' = { ...state, readings: state.readings.union(Set(30)),
+      successful: state.successful.union(Set(30)), fresh: state.fresh.union(Set(30)) } }
+  action fenceV1 = all { not(state.v1Fenced), state' = { ...state, v1Fenced: true } }
+  action contract = all {
+    state.v1Fenced, state.clockDay == 30,
+    state.readings == Set(0, 7, 14, 30), state.successful == state.readings,
+    state.fresh == state.readings, state.evidenceSnapshot == state.currentSnapshot,
+    state' = { ...state, contracted: true },
+  }
+  action hold = state' = state
+  action step = any { rejectFailed, rejectStale, rejectWrongSnapshot,
+    observe0, advance7, observe7, advance14, observe14, advance30, observe30,
+    fenceV1, contract, hold }
+  val safety = not(state.contracted) or and {
+    state.v1Fenced, state.clockDay == 30,
+    state.readings == Set(0, 7, 14, 30), state.successful == state.readings,
+    state.fresh == state.readings, state.evidenceSnapshot == state.currentSnapshot,
+  }
+  val reached = and { state.contracted, state.failedRejected,
+    state.staleRejected, state.wrongSnapshotRejected }
+  temporal progress: bool = and {
+    rejectFailed.weakFair(Set(state)), rejectStale.weakFair(Set(state)),
+    rejectWrongSnapshot.weakFair(Set(state)), observe0.weakFair(Set(state)),
+    advance7.weakFair(Set(state)), observe7.weakFair(Set(state)),
+    advance14.weakFair(Set(state)), observe14.weakFair(Set(state)),
+    advance30.weakFair(Set(state)), observe30.weakFair(Set(state)),
+    fenceV1.weakFair(Set(state)), contract.weakFair(Set(state)),
+  }.implies(eventually(reached))
+  temporal eventuallyReached: bool = eventually(reached)
+  // Projection-only assertion: fencing alone can occur while every observation is absent.
+  val blockedInvariant = not(state.v1Fenced)
+  action withoutObservations = if (not(state.v1Fenced)) fenceV1 else hold
+  action unsafeDay30Jump = state' = { ...state, clockDay: 30, readings: Set(30),
+    successful: Set(), fresh: Set(30), evidenceSnapshot: 8,
+    v1Fenced: true, contracted: true }
+}
+
+// O2-I4c administrative retirement: a lost private journal is never treated as a completed
+// execution. Native GitHub state can retire the abandoned subject only after independent
+// preservation, a complete native census, an exact permanent fence, an unambiguous PR outcome,
+// subject exclusion, issue settlement, and removal of the helper-owned temporary main hold.
+module O2AdministrativeRetirementModel {
+  type RetirementState = {
+    phase: int, nativeRevision: int, observedRevision: int,
+    archivePreserved: bool, initialCensusComplete: bool,
+    temporaryMainHold: bool, permanentBranchFence: bool, branchFenceHasBypass: bool,
+    retirementHeadInstalled: bool, pullRequestHead: int, // 0=H, 1=T
+    mergeAcceptedBeforeHold: bool, pullRequestDisposition: int, // 0=open, 1=closed-unmerged, 2=merged-exact, 3=merged-other
+    cachedMergeRequest: bool, cachedExpectedHead: int, mergeRequestReleased: bool,
+    nativeShaCompared: bool, mergeRequestRefused: bool, oldHostMutationApplied: bool,
+    responseLost: bool, helperRestarted: bool, settlementReconciled: bool,
+    subjectExcluded: bool, issueSettled: bool, oldHostReturned: bool,
+    originalCompletionFabricated: bool, retired: bool,
+  }
+  var state: RetirementState
+  action init = state' = {
+    phase: 0, nativeRevision: 0, observedRevision: 0,
+    archivePreserved: false, initialCensusComplete: false,
+    temporaryMainHold: false, permanentBranchFence: false, branchFenceHasBypass: false,
+    retirementHeadInstalled: false, pullRequestHead: 0,
+    mergeAcceptedBeforeHold: false, pullRequestDisposition: 0,
+    cachedMergeRequest: false, cachedExpectedHead: 0, mergeRequestReleased: false,
+    nativeShaCompared: false, mergeRequestRefused: false, oldHostMutationApplied: false,
+    responseLost: false, helperRestarted: false, settlementReconciled: false,
+    subjectExcluded: false, issueSettled: false, oldHostReturned: false,
+    originalCompletionFabricated: false, retired: false,
+  }
+  action preserveEvidence = all {
+    state.phase == 0,
+    state' = { ...state, phase: 1, archivePreserved: true,
+      initialCensusComplete: true, observedRevision: state.nativeRevision },
+  }
+  action preserveRaceEvidence = all {
+    state.phase == 0,
+    state' = { ...state, phase: 1, archivePreserved: true,
+      initialCensusComplete: true, observedRevision: state.nativeRevision,
+      cachedMergeRequest: true, cachedExpectedHead: 0, mergeAcceptedBeforeHold: true },
+  }
+  action cacheOldMergeRequest = all {
+    state.phase == 1, not(state.cachedMergeRequest), state.pullRequestHead == 0,
+    state' = { ...state, cachedMergeRequest: true, cachedExpectedHead: 0 },
+  }
+  action releaseCachedMergeRequest = all {
+    state.cachedMergeRequest, not(state.mergeRequestReleased),
+    (state.phase == 1 and state.mergeAcceptedBeforeHold) or state.phase == 9,
+    state' = { ...state, mergeRequestReleased: true },
+  }
+  action nativeCompareReleasedMerge = all {
+    state.mergeRequestReleased, not(state.nativeShaCompared),
+    (state.phase == 1 and state.mergeAcceptedBeforeHold) or state.phase == 9,
+    state' = { ...state, nativeShaCompared: true,
+      mergeRequestRefused: state.cachedExpectedHead != state.pullRequestHead,
+      oldHostReturned: true,
+      oldHostMutationApplied: state.cachedExpectedHead == state.pullRequestHead,
+      pullRequestDisposition: if (state.cachedExpectedHead == state.pullRequestHead) 2 else state.pullRequestDisposition,
+      nativeRevision: if (state.cachedExpectedHead == state.pullRequestHead) state.nativeRevision + 1 else state.nativeRevision,
+      responseLost: state.cachedExpectedHead == state.pullRequestHead },
+  }
+  action installTemporaryMainHold = all {
+    state.phase == 1, state.archivePreserved, state.initialCensusComplete,
+    state.cachedMergeRequest, not(state.temporaryMainHold),
+    not(state.mergeAcceptedBeforeHold) or and {
+      state.mergeRequestReleased, state.nativeShaCompared,
+      state.oldHostMutationApplied, state.pullRequestDisposition == 2,
+    },
+    state' = { ...state, phase: 2, temporaryMainHold: true,
+      nativeRevision: state.nativeRevision + 1,
+      observedRevision: if (state.responseLost) state.observedRevision else state.nativeRevision + 1 },
+  }
+  action advanceRetirementHead = all {
+    state.phase == 2, state.temporaryMainHold, not(state.mergeAcceptedBeforeHold),
+    state.pullRequestDisposition == 0, state.pullRequestHead == 0,
+    state' = { ...state, phase: 3, retirementHeadInstalled: true, pullRequestHead: 1,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action installPermanentFence = all {
+    state.temporaryMainHold, not(state.permanentBranchFence),
+    (state.phase == 3 and state.retirementHeadInstalled) or
+      (state.phase == 2 and state.mergeAcceptedBeforeHold),
+    state' = { ...state, phase: 4, permanentBranchFence: true,
+      branchFenceHasBypass: false, nativeRevision: state.nativeRevision + 1,
+      observedRevision: if (state.responseLost) state.observedRevision else state.nativeRevision + 1 },
+  }
+  action loseCloseResponse = all {
+    state.phase == 4, state.permanentBranchFence, state.retirementHeadInstalled,
+    state.pullRequestHead == 1, state.pullRequestDisposition == 0,
+    state' = { ...state, phase: 5, pullRequestDisposition: 1,
+      nativeRevision: state.nativeRevision + 1, responseLost: true,
+      settlementReconciled: false },
+  }
+  action mergeWinsRaceWithLostResponse = all {
+    state.phase == 4, state.temporaryMainHold, state.permanentBranchFence,
+    state.pullRequestHead == 0, state.pullRequestDisposition == 2,
+    state.mergeAcceptedBeforeHold, state.cachedMergeRequest,
+    state.mergeRequestReleased, state.nativeShaCompared,
+    state.oldHostMutationApplied, state.responseLost,
+    state' = { ...state, phase: 5, settlementReconciled: false },
+  }
+  action restartHelper = all {
+    state.phase == 5, state.responseLost, not(state.helperRestarted),
+    state' = { ...state, helperRestarted: true },
+  }
+  action reconcileSettlement = all {
+    state.phase == 5, state.responseLost, state.helperRestarted,
+    state.observedRevision != state.nativeRevision,
+    state.pullRequestDisposition == 1 or state.pullRequestDisposition == 2,
+    state' = { ...state, responseLost: false, settlementReconciled: true,
+      observedRevision: state.nativeRevision },
+  }
+  action excludeSubject = all {
+    state.phase == 5, state.settlementReconciled,
+    state.observedRevision == state.nativeRevision, not(state.subjectExcluded),
+    state' = { ...state, phase: 6, subjectExcluded: true,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action settleIssue = all {
+    state.phase == 6, state.subjectExcluded, not(state.issueSettled),
+    state' = { ...state, phase: 7, issueSettled: true,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action removeTemporaryMainHold = all {
+    state.phase == 7, state.permanentBranchFence, state.issueSettled,
+    state.temporaryMainHold,
+    state' = { ...state, phase: 8, temporaryMainHold: false,
+      nativeRevision: state.nativeRevision + 1, observedRevision: state.nativeRevision + 1 },
+  }
+  action retire = all {
+    state.phase == 8, state.archivePreserved, state.initialCensusComplete,
+    state.observedRevision == state.nativeRevision, state.settlementReconciled,
+    state.permanentBranchFence, not(state.branchFenceHasBypass),
+    state.subjectExcluded, state.issueSettled, not(state.temporaryMainHold),
+    (state.pullRequestDisposition == 1 and state.retirementHeadInstalled and
+      state.pullRequestHead == 1 and not(state.oldHostMutationApplied)) or
+      (state.pullRequestDisposition == 2 and state.mergeAcceptedBeforeHold and
+        state.pullRequestHead == 0 and state.oldHostMutationApplied),
+    state' = { ...state, phase: 9, retired: true },
+  }
+  action hold = state' = state
+  action step = any {
+    preserveEvidence, preserveRaceEvidence, cacheOldMergeRequest,
+    installTemporaryMainHold, advanceRetirementHead, installPermanentFence,
+    loseCloseResponse, mergeWinsRaceWithLostResponse, restartHelper,
+    reconcileSettlement, excludeSubject, settleIssue, removeTemporaryMainHold,
+    releaseCachedMergeRequest, nativeCompareReleasedMerge, retire, hold,
+  }
+  action closureStep = any {
+    preserveEvidence, cacheOldMergeRequest, installTemporaryMainHold,
+    advanceRetirementHead, installPermanentFence, loseCloseResponse,
+    restartHelper, reconcileSettlement, excludeSubject, settleIssue,
+    removeTemporaryMainHold, releaseCachedMergeRequest,
+    nativeCompareReleasedMerge, retire, hold,
+  }
+  action raceStep = any {
+    preserveRaceEvidence, releaseCachedMergeRequest, nativeCompareReleasedMerge,
+    installTemporaryMainHold, installPermanentFence,
+    mergeWinsRaceWithLostResponse, restartHelper, reconcileSettlement,
+    excludeSubject, settleIssue, removeTemporaryMainHold, retire, hold,
+  }
+  val safety = and {
+    not(state.originalCompletionFabricated), state.observedRevision <= state.nativeRevision,
+    not(state.mergeAcceptedBeforeHold) or state.phase < 2 or state.nativeShaCompared,
+    not(state.oldHostMutationApplied) or state.pullRequestDisposition == 2,
+    not(state.retired) or and {
+      state.phase == 9, state.archivePreserved, state.initialCensusComplete,
+      state.observedRevision == state.nativeRevision, state.settlementReconciled,
+      state.permanentBranchFence, not(state.branchFenceHasBypass),
+      state.subjectExcluded, state.issueSettled, not(state.temporaryMainHold),
+      (state.pullRequestDisposition == 1 and state.retirementHeadInstalled and
+        state.pullRequestHead == 1 and not(state.oldHostMutationApplied)) or
+        (state.pullRequestDisposition == 2 and state.pullRequestHead == 0 and
+          state.mergeAcceptedBeforeHold and state.oldHostMutationApplied),
+    },
+  }
+  val closureReached = and { state.retired, state.pullRequestDisposition == 1 }
+  val mergeRaceReached = and {
+    state.retired, state.pullRequestDisposition == 2,
+    state.mergeAcceptedBeforeHold, state.helperRestarted,
+  }
+  val restartReached = and { state.helperRestarted, state.settlementReconciled }
+  val oldHostRefusalReached = and {
+    state.oldHostReturned, state.mergeRequestReleased, state.nativeShaCompared,
+    state.mergeRequestRefused, not(state.oldHostMutationApplied),
+    state.retirementHeadInstalled, state.pullRequestHead == 1,
+  }
+  val cleanupReached = and { state.retired, not(state.temporaryMainHold) }
+  val closureEvidenceReached = and {
+    closureReached, restartReached, oldHostRefusalReached, cleanupReached,
+  }
+  val raceEvidenceReached = and {
+    mergeRaceReached, restartReached, state.oldHostMutationApplied, cleanupReached,
+  }
+  temporal closureProgress: bool = and {
+    preserveEvidence.weakFair(Set(state)), cacheOldMergeRequest.weakFair(Set(state)),
+    installTemporaryMainHold.weakFair(Set(state)), advanceRetirementHead.weakFair(Set(state)),
+    installPermanentFence.weakFair(Set(state)), loseCloseResponse.weakFair(Set(state)),
+    restartHelper.weakFair(Set(state)), reconcileSettlement.weakFair(Set(state)),
+    excludeSubject.weakFair(Set(state)), settleIssue.weakFair(Set(state)),
+    removeTemporaryMainHold.weakFair(Set(state)), releaseCachedMergeRequest.weakFair(Set(state)),
+    nativeCompareReleasedMerge.weakFair(Set(state)),
+    retire.weakFair(Set(state)),
+  }.implies(eventually(closureReached))
+  temporal raceProgress: bool = and {
+    preserveRaceEvidence.weakFair(Set(state)), releaseCachedMergeRequest.weakFair(Set(state)),
+    nativeCompareReleasedMerge.weakFair(Set(state)), installTemporaryMainHold.weakFair(Set(state)),
+    installPermanentFence.weakFair(Set(state)), mergeWinsRaceWithLostResponse.weakFair(Set(state)),
+    restartHelper.weakFair(Set(state)), reconcileSettlement.weakFair(Set(state)),
+    excludeSubject.weakFair(Set(state)), settleIssue.weakFair(Set(state)),
+    removeTemporaryMainHold.weakFair(Set(state)), retire.weakFair(Set(state)),
+  }.implies(eventually(mergeRaceReached))
+  temporal closureEventuallyReached: bool = eventually(closureEvidenceReached)
+  temporal raceEventuallyReached: bool = eventually(mergeRaceReached)
+  val blockedInvariant = not(state.retired)
+  action withoutPermanentFence = any {
+    preserveEvidence, cacheOldMergeRequest, installTemporaryMainHold,
+    unsafeTerminalWithoutFence, hold,
+  }
+  action unsafeTerminalWithoutFence = state' = {
+    ...state, phase: 9, archivePreserved: true, initialCensusComplete: true,
+    nativeRevision: 5, observedRevision: 5, temporaryMainHold: false,
+    permanentBranchFence: false, retirementHeadInstalled: false,
+    pullRequestHead: 0, pullRequestDisposition: 1,
+    cachedMergeRequest: true, cachedExpectedHead: 0,
+    mergeRequestReleased: true, nativeShaCompared: false,
+    mergeRequestRefused: false, oldHostMutationApplied: true,
+    responseLost: false, settlementReconciled: true,
+    subjectExcluded: true, issueSettled: true, oldHostReturned: true,
+    originalCompletionFabricated: true, retired: true,
+  }
+}
+
+// The superseded close-only plan is retained as an executable counterexample model.
+// It shows the supported old client caching H while OPEN, then releasing the same
+// SHA-bound request after closure and hold removal, where H still matches and merges.
+module O2AdministrativeRetirementOldPlanModel {
+  type OldPlanState = {
+    phase: int, cachedH: bool, hold: bool, permanentRefRule: bool,
+    closedAtH: bool, retired: bool, requestReleased: bool,
+    nativeShaCompared: bool, lateMergeApplied: bool,
+  }
+  var old: OldPlanState
+  action init = old' = { phase: 0, cachedH: false, hold: false,
+    permanentRefRule: false, closedAtH: false, retired: false,
+    requestReleased: false, nativeShaCompared: false, lateMergeApplied: false }
+  action preserveAndCacheH = all { old.phase == 0,
+    old' = { ...old, phase: 1, cachedH: true } }
+  action installHold = all { old.phase == 1, old.cachedH,
+    old' = { ...old, phase: 2, hold: true } }
+  action freezeH = all { old.phase == 2, old.hold,
+    old' = { ...old, phase: 3, permanentRefRule: true } }
+  action closeAtH = all { old.phase == 3, old.permanentRefRule,
+    old' = { ...old, phase: 4, closedAtH: true } }
+  action removeHoldAndRetire = all { old.phase == 4, old.closedAtH,
+    old' = { ...old, phase: 5, hold: false, retired: true } }
+  action releaseLateHMerge = all { old.phase == 5, old.retired, old.cachedH,
+    not(old.requestReleased),
+    old' = { ...old, phase: 6, requestReleased: true,
+      nativeShaCompared: true, lateMergeApplied: true } }
+  action holdState = old' = old
+  action oldPlanStep = any { preserveAndCacheH, installHold, freezeH,
+    closeAtH, removeHoldAndRetire, releaseLateHMerge, holdState }
+  val oldPlanTraceConsistent = not(old.lateMergeApplied) or and {
+    old.retired, old.closedAtH, old.cachedH, old.requestReleased,
+    old.nativeShaCompared, not(old.hold),
+  }
+  val oldPlanLateMergeReached = and { old.phase == 6, old.lateMergeApplied }
+  temporal oldPlanTraceProgress: bool = and {
+    preserveAndCacheH.weakFair(Set(old)), installHold.weakFair(Set(old)),
+    freezeH.weakFair(Set(old)), closeAtH.weakFair(Set(old)),
+    removeHoldAndRetire.weakFair(Set(old)), releaseLateHMerge.weakFair(Set(old)),
+  }.implies(eventually(oldPlanLateMergeReached))
+  temporal oldPlanLateMergeEventually: bool = eventually(oldPlanLateMergeReached)
+  action invalidOldPlanTrace = old' = { ...old, lateMergeApplied: true }
+  action oldPlanWithoutRelease = any { preserveAndCacheH, installHold,
+    freezeH, closeAtH, removeHoldAndRetire, holdState }
+  val oldPlanNotRetired = not(old.retired)
+}
+
+// LEARN-01.3-J3 is a bounded shared-state composition over the existing Observer treatment
+// authority and the planned Host execution binding. Dispositions are preparation guards; the
+// durable v1 treatment remains immutable, while every execution has a separate acyclic binding.
+// preparationVersion 1 denotes the opaque learn-01-assignment-preparation/1 command; raw legacy
+// commands have version 0 and cannot assert ReuseValidPlan, Planned, or DirectSmall.
+// Capability evidence is exact and fresh only in status 1 (supported). Status 0 is unknown and
+// status 2 is unsupported; neither may launch. This source model is partial until J4/J6 replay
+// these transitions through the production Host boundary.
+module LearningAdmissionModel {
+  type LearningState = {
+    generation: int,
+    treatmentDigest: int,
+    treatmentOwner: int,
+    preparationVersion: int,
+    disposition: int,
+    plannerPresent: bool,
+    contextPresent: bool,
+    rootManifest: int,
+    rootBindingIdentity: int,
+    childBound: bool,
+    childManifest: int,
+    childBindingIdentity: int,
+    childParentIdentity: int,
+    childTreatmentDigest: int,
+    executionBound: bool,
+    executionBindingIdentity: int,
+    executionSubjectIdentity: int,
+    executionTreatmentDigest: int,
+    executionReplayAccepted: bool,
+    capabilityStatus: int,
+    capabilityFresh: bool,
+    capabilityExact: bool,
+    launchIntent: bool,
+    launchCount: int,
+    activeCount: int,
+    budgetRemaining: int,
+    responseLost: bool,
+    replayAccepted: bool,
+    restarted: bool,
+    duplicateRejected: bool,
+    staleRejected: bool,
+    missingContextRejected: bool,
+    capabilityRejected: bool,
+    capacityRejected: bool,
+    budgetRejected: bool,
+    shadowAttempted: bool,
+    shadowEffectCount: int,
+    outcomeUnknown: bool,
+  }
+
+  var learning: LearningState
+
+  action init = learning' = {
+    generation: 1,
+    treatmentDigest: 0,
+    treatmentOwner: 0,
+    preparationVersion: 0,
+    disposition: 0,
+    plannerPresent: false,
+    contextPresent: false,
+    rootManifest: 0,
+    rootBindingIdentity: 0,
+    childBound: false,
+    childManifest: 0,
+    childBindingIdentity: 0,
+    childParentIdentity: 0,
+    childTreatmentDigest: 0,
+    executionBound: false,
+    executionBindingIdentity: 0,
+    executionSubjectIdentity: 0,
+    executionTreatmentDigest: 0,
+    executionReplayAccepted: false,
+    capabilityStatus: 0,
+    capabilityFresh: false,
+    capabilityExact: false,
+    launchIntent: false,
+    launchCount: 0,
+    activeCount: 0,
+    budgetRemaining: 1,
+    responseLost: false,
+    replayAccepted: false,
+    restarted: false,
+    duplicateRejected: false,
+    staleRejected: false,
+    missingContextRejected: false,
+    capabilityRejected: false,
+    capacityRejected: false,
+    budgetRejected: false,
+    shadowAttempted: false,
+    shadowEffectCount: 0,
+    outcomeUnknown: false,
+  }
+
+  action rejectMissingContext = all {
+    learning.treatmentDigest == 0,
+    learning' = { ...learning, missingContextRejected: true },
+  }
+
+  // ReuseValidPlan is disposition 1. It requires mandatory compiled context and no planner.
+  // The append is durable even when its caller loses the response.
+  action prepareKeepWithLostResponse = all {
+    learning.treatmentDigest == 0,
+    learning.missingContextRejected,
+    learning' = { ...learning,
+      treatmentDigest: 101,
+      treatmentOwner: 1,
+      preparationVersion: 1,
+      disposition: 1,
+      plannerPresent: false,
+      contextPresent: true,
+      rootManifest: 11,
+      rootBindingIdentity: 1,
+      responseLost: true },
+  }
+
+  // Planned and DirectSmall remain distinct legal preparation alternatives. They are included
+  // in the state closure even though the primary trace exercises Keep.
+  action preparePlanned = all {
+    learning.treatmentDigest == 0,
+    learning' = { ...learning,
+      treatmentDigest: 102,
+      treatmentOwner: 1,
+      preparationVersion: 1,
+      disposition: 2,
+      plannerPresent: true,
+      contextPresent: true,
+      rootManifest: 12,
+      rootBindingIdentity: 1 },
+  }
+  action prepareDirectSmall = all {
+    learning.treatmentDigest == 0,
+    learning' = { ...learning,
+      treatmentDigest: 103,
+      treatmentOwner: 1,
+      preparationVersion: 1,
+      disposition: 3,
+      plannerPresent: false,
+      contextPresent: true,
+      rootManifest: 13,
+      rootBindingIdentity: 1 },
+  }
+
+  action restartAfterTreatment = all {
+    learning.treatmentDigest != 0,
+    not(learning.restarted),
+    learning' = { ...learning, restarted: true },
+  }
+  action replayLostTreatment = all {
+    learning.responseLost,
+    learning.restarted,
+    not(learning.replayAccepted),
+    learning' = { ...learning, replayAccepted: true },
+  }
+  action rejectConcurrentDuplicate = all {
+    learning.treatmentDigest != 0,
+    not(learning.duplicateRejected),
+    learning' = { ...learning, duplicateRejected: true },
+  }
+  action rejectStaleGeneration = all {
+    learning.treatmentDigest != 0,
+    learning.generation == 1,
+    not(learning.staleRejected),
+    learning' = { ...learning, staleRejected: true },
+  }
+  action attemptShadowEffect = all {
+    not(learning.shadowAttempted),
+    learning' = { ...learning, shadowAttempted: true },
+  }
+
+  // Root and descendant bindings have distinct identities and both reference the immutable
+  // treatment. A descendant may reuse byte-identical compiled context. Execution binds either
+  // subject through another distinct identity; context content is not used as an acyclicity key.
+  action bindChild = all {
+    learning.treatmentDigest != 0,
+    not(learning.childBound),
+    learning' = { ...learning,
+      childBound: true,
+      childManifest: learning.rootManifest,
+      childBindingIdentity: 2,
+      childParentIdentity: learning.rootBindingIdentity,
+      childTreatmentDigest: learning.treatmentDigest },
+  }
+  action bindRootExecution = all {
+    learning.contextPresent,
+    not(learning.executionBound),
+    learning' = { ...learning,
+      executionBound: true,
+      executionBindingIdentity: 3,
+      executionSubjectIdentity: learning.rootBindingIdentity,
+      executionTreatmentDigest: learning.treatmentDigest },
+  }
+  action replayExecutionBinding = all {
+    learning.executionBound,
+    not(learning.executionReplayAccepted),
+    learning' = { ...learning, executionReplayAccepted: true },
+  }
+  action bindChildExecution = all {
+    learning.childBound,
+    learning.contextPresent,
+    not(learning.executionBound),
+    learning' = { ...learning,
+      executionBound: true,
+      executionBindingIdentity: 4,
+      executionSubjectIdentity: learning.childBindingIdentity,
+      executionTreatmentDigest: learning.treatmentDigest },
+  }
+
+  action rejectUnknownCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0,
+    learning.launchCount == 0,
+    not(learning.capabilityRejected),
+    learning' = { ...learning, capabilityRejected: true },
+  }
+  action rejectStaleCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0,
+    learning.launchCount == 0,
+    learning' = { ...learning,
+      capabilityStatus: 1, capabilityFresh: false, capabilityExact: true,
+      capabilityRejected: true },
+  }
+  action rejectUnsupportedCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0,
+    learning.launchCount == 0,
+    learning' = { ...learning,
+      capabilityStatus: 2, capabilityFresh: true, capabilityExact: true,
+      capabilityRejected: true },
+  }
+  action observeExactSupportedCapability = all {
+    learning.executionBound,
+    learning.capabilityStatus == 0 or not(learning.capabilityFresh),
+    learning' = { ...learning,
+      capabilityStatus: 1, capabilityFresh: true, capabilityExact: true },
+  }
+  action launch = all {
+    learning.executionBound,
+    learning.executionTreatmentDigest == learning.treatmentDigest,
+    learning.capabilityStatus == 1,
+    learning.capabilityFresh,
+    learning.capabilityExact,
+    learning.activeCount < 1,
+    learning.budgetRemaining > 0,
+    learning.launchCount == 0,
+    learning' = { ...learning,
+      launchIntent: true,
+      launchCount: 1,
+      activeCount: 1,
+      budgetRemaining: learning.budgetRemaining - 1 },
+  }
+  action rejectCapacity = all {
+    learning.activeCount == 1,
+    not(learning.capacityRejected),
+    learning' = { ...learning, capacityRejected: true },
+  }
+  action settleOutcomeUnknown = all {
+    learning.launchIntent,
+    learning.activeCount == 1,
+    not(learning.outcomeUnknown),
+    learning' = { ...learning, activeCount: 0, outcomeUnknown: true },
+  }
+  action rejectExhaustedBudget = all {
+    learning.outcomeUnknown,
+    learning.budgetRemaining == 0,
+    not(learning.budgetRejected),
+    learning' = { ...learning, budgetRejected: true },
+  }
+  action hold = learning' = learning
+
+  action step = any {
+    rejectMissingContext,
+    prepareKeepWithLostResponse,
+    preparePlanned,
+    prepareDirectSmall,
+    restartAfterTreatment,
+    replayLostTreatment,
+    rejectConcurrentDuplicate,
+    rejectStaleGeneration,
+    attemptShadowEffect,
+    bindChild,
+    bindRootExecution,
+    bindChildExecution,
+    replayExecutionBinding,
+    rejectUnknownCapability,
+    rejectStaleCapability,
+    rejectUnsupportedCapability,
+    observeExactSupportedCapability,
+    launch,
+    rejectCapacity,
+    settleOutcomeUnknown,
+    rejectExhaustedBudget,
+    hold,
+  }
+
+  val dispositionIsQualified = or {
+    learning.treatmentDigest == 0,
+    and { learning.preparationVersion == 1, learning.disposition == 1, not(learning.plannerPresent), learning.contextPresent },
+    and { learning.preparationVersion == 1, learning.disposition == 2, learning.plannerPresent, learning.contextPresent },
+    and { learning.preparationVersion == 1, learning.disposition == 3, not(learning.plannerPresent), learning.contextPresent },
+  }
+  val treatmentAndBindingAreAcyclic = and {
+    learning.treatmentDigest == 0 or learning.rootBindingIdentity != 0,
+    not(learning.childBound) or and {
+      learning.treatmentDigest != 0,
+      learning.childBindingIdentity != 0,
+      learning.childBindingIdentity != learning.rootBindingIdentity,
+      learning.childParentIdentity == learning.rootBindingIdentity,
+      learning.childParentIdentity != learning.childBindingIdentity,
+      learning.childTreatmentDigest == learning.treatmentDigest,
+    },
+    not(learning.executionBound) or and {
+      learning.executionBindingIdentity != 0,
+      learning.executionBindingIdentity != learning.executionSubjectIdentity,
+      learning.executionBindingIdentity != learning.rootBindingIdentity,
+      learning.executionBindingIdentity != learning.childBindingIdentity,
+      or {
+        and {
+          learning.executionSubjectIdentity == learning.rootBindingIdentity,
+          learning.executionBindingIdentity == 3,
+        },
+        and {
+          learning.childBound,
+          learning.executionSubjectIdentity == learning.childBindingIdentity,
+          learning.executionBindingIdentity == 4,
+        },
+      },
+      learning.executionTreatmentDigest == learning.treatmentDigest,
+    },
+  }
+  val launchIsQualified = learning.launchCount == 0 or and {
+    learning.executionBound,
+    learning.executionTreatmentDigest == learning.treatmentDigest,
+    learning.capabilityStatus == 1,
+    learning.capabilityFresh,
+    learning.capabilityExact,
+    learning.budgetRemaining == 0,
+  }
+  val safety = and {
+    dispositionIsQualified,
+    treatmentAndBindingAreAcyclic,
+    launchIsQualified,
+    learning.launchCount <= 1,
+    learning.activeCount <= 1,
+    learning.budgetRemaining >= 0,
+    learning.shadowEffectCount == 0,
+    not(learning.outcomeUnknown) or learning.activeCount == 0,
+  }
+  val reached = and {
+    learning.disposition == 1,
+    learning.replayAccepted,
+    learning.duplicateRejected,
+    learning.staleRejected,
+    learning.shadowAttempted,
+    learning.childBound,
+    learning.executionReplayAccepted,
+    learning.capabilityRejected,
+    learning.capacityRejected,
+    learning.outcomeUnknown,
+    learning.budgetRejected,
+    safety,
+  }
+
+  // Independent mutation controls used by the J3 oracle. Each bypasses an actual production
+  // transition guard and must violate the safety projection at first divergence.
+  action invalidLaunchWithoutTreatment = learning' = { ...learning,
+    launchIntent: true, launchCount: 1, activeCount: 1, budgetRemaining: 0 }
+  action invalidExecutionRebind = learning' = { ...learning,
+    executionBound: true, executionBindingIdentity: 3,
+    executionSubjectIdentity: learning.rootBindingIdentity,
+    executionTreatmentDigest: learning.treatmentDigest + 1 }
+  action invalidExecutionSelfBinding = learning' = { ...learning,
+    executionBound: true, executionBindingIdentity: learning.rootBindingIdentity,
+    executionSubjectIdentity: learning.rootBindingIdentity,
+    executionTreatmentDigest: learning.treatmentDigest }
+  action invalidChangedExecutionDuplicate = learning' = { ...learning,
+    executionBindingIdentity: 5 }
+  action invalidRawReuseValidPlan = learning' = { ...learning,
+    treatmentDigest: 104, treatmentOwner: 1, preparationVersion: 0, disposition: 1,
+    plannerPresent: false, contextPresent: true, rootManifest: 14 }
+}
+
+module LearningAdmissionTests {
+  import LearningAdmissionModel.*
+
+  run testKeepLostResponseRestartUnknown = init
+    .then(rejectMissingContext)
+    .then(prepareKeepWithLostResponse)
+    .then(restartAfterTreatment)
+    .then(replayLostTreatment)
+    .then(rejectConcurrentDuplicate)
+    .then(rejectStaleGeneration)
+    .then(attemptShadowEffect)
+    .then(bindChild)
+    .then(bindChildExecution)
+    .then(replayExecutionBinding)
+    .then(rejectUnknownCapability)
+    .then(rejectStaleCapability)
+    .then(observeExactSupportedCapability)
+    .then(launch)
+    .then(rejectCapacity)
+    .then(settleOutcomeUnknown)
+    .then(rejectExhaustedBudget)
+    .expect(reached)
+
+  run testPlannedDisposition = init
+    .then(preparePlanned)
+    .expect(safety and learning.disposition == 2 and learning.plannerPresent)
+
+  run testDirectSmallDisposition = init
+    .then(prepareDirectSmall)
+    .expect(safety and learning.disposition == 3 and not(learning.plannerPresent))
+
+  run testUnsupportedCapabilityNoLaunch = init
+    .then(rejectMissingContext)
+    .then(prepareKeepWithLostResponse)
+    .then(bindChild)
+    .then(bindChildExecution)
+    .then(rejectUnsupportedCapability)
+    .expect(safety and learning.capabilityRejected and learning.launchCount == 0)
+
+  run testLaunchWithoutTreatmentMutationFails = init
+    .then(invalidLaunchWithoutTreatment)
+    .expect(not(safety))
+
+  run testExecutionTreatmentMutationFails = init
+    .then(rejectMissingContext)
+    .then(prepareKeepWithLostResponse)
+    .then(bindChild)
+    .then(invalidExecutionRebind)
+    .expect(not(safety))
+
+  run testRootExecutionIsValid = init
+    .then(preparePlanned)
+    .then(bindRootExecution)
+    .expect(safety and learning.executionSubjectIdentity == learning.rootBindingIdentity and not(learning.childBound))
+
+  run testIdenticalContextChildIsValid = init
+    .then(prepareDirectSmall)
+    .then(bindChild)
+    .then(bindChildExecution)
+    .expect(safety and learning.childManifest == learning.rootManifest and learning.childBindingIdentity != learning.rootBindingIdentity)
+
+  run testExecutionSelfBindingMutationFails = init
+    .then(preparePlanned)
+    .then(invalidExecutionSelfBinding)
+    .expect(not(safety))
+
+  run testChangedExecutionDuplicateMutationFails = init
+    .then(preparePlanned)
+    .then(bindRootExecution)
+    .then(invalidChangedExecutionDuplicate)
+    .expect(not(safety))
+
+  run testRawReuseValidPlanMutationFails = init
+    .then(invalidRawReuseValidPlan)
+    .expect(not(safety))
+}
+
+// LEARN-01.4 adds a separate operational-window authority ahead of the retained v1 treatment.
+// It is shared durable state: one exact window is bound before compilation, treatment and child
+// executions retain its original/arm identity, and unknown capability cannot create a launch.
+// The established LearningAdmissionModel remains unchanged so its v1 trace bytes keep their
+// historical meaning; this module supplies distinct operational witnesses and red controls.
+module LearningOperationalWindowModel {
+  type OperationalLearningState = {
+    enabled: bool,
+    readinessComplete: bool,
+    sharedAllocationUnassigned: bool,
+    authorityExact: bool,
+    windowDigest: int,
+    originalIdentity: int,
+    assignedArm: int,
+    assignmentReplayAccepted: bool,
+    assignmentConflictRejected: bool,
+    treatmentDigest: int,
+    treatmentArm: int,
+    childBound: bool,
+    childTreatmentDigest: int,
+    childWindowDigest: int,
+    childCurrentContext: int,
+    executionBound: bool,
+    capabilitySupported: bool,
+    capabilityFresh: bool,
+    capabilityExact: bool,
+    capabilityRejected: bool,
+    launchCount: int,
+  }
+
+  var operational: OperationalLearningState
+
+  action init = operational' = {
+    enabled: false,
+    readinessComplete: false,
+    sharedAllocationUnassigned: false,
+    authorityExact: false,
+    windowDigest: 0,
+    originalIdentity: 0,
+    assignedArm: 0,
+    assignmentReplayAccepted: false,
+    assignmentConflictRejected: false,
+    treatmentDigest: 0,
+    treatmentArm: 0,
+    childBound: false,
+    childTreatmentDigest: 0,
+    childWindowDigest: 0,
+    childCurrentContext: 0,
+    executionBound: false,
+    capabilitySupported: false,
+    capabilityFresh: false,
+    capabilityExact: false,
+    capabilityRejected: false,
+    launchCount: 0,
+  }
+
+  action enableWithIndependentReadiness = all {
+    not(operational.enabled),
+    operational.windowDigest == 0,
+    operational' = { ...operational,
+      enabled: true,
+      readinessComplete: true,
+      sharedAllocationUnassigned: true,
+      authorityExact: true },
+  }
+
+  action bindFrozenWindow = all {
+    operational.enabled,
+    operational.readinessComplete,
+    operational.sharedAllocationUnassigned,
+    operational.authorityExact,
+    operational.windowDigest == 0,
+    operational' = { ...operational,
+      windowDigest: 201,
+      originalIdentity: 1,
+      assignedArm: 2 },
+  }
+
+  action replayFrozenWindow = all {
+    operational.windowDigest == 201,
+    not(operational.assignmentReplayAccepted),
+    operational' = { ...operational, assignmentReplayAccepted: true },
+  }
+
+  action rejectChangedWindow = all {
+    operational.windowDigest != 0,
+    not(operational.assignmentConflictRejected),
+    operational' = { ...operational, assignmentConflictRejected: true },
+  }
+
+  action compileAndBindTreatment = all {
+    operational.windowDigest == 201,
+    operational.treatmentDigest == 0,
+    operational' = { ...operational,
+      treatmentDigest: 301,
+      treatmentArm: operational.assignedArm },
+  }
+
+  action bindChildWithCurrentContext = all {
+    operational.treatmentDigest == 301,
+    not(operational.childBound),
+    operational' = { ...operational,
+      childBound: true,
+      childTreatmentDigest: operational.treatmentDigest,
+      childWindowDigest: operational.windowDigest,
+      childCurrentContext: 401 },
+  }
+
+  action bindExecution = all {
+    operational.treatmentDigest == 301,
+    not(operational.executionBound),
+    operational' = { ...operational, executionBound: true },
+  }
+
+  action rejectUnknownCapability = all {
+    operational.executionBound,
+    not(operational.capabilitySupported),
+    operational.launchCount == 0,
+    not(operational.capabilityRejected),
+    operational' = { ...operational, capabilityRejected: true },
+  }
+
+  action observeExactSupportedCapability = all {
+    operational.executionBound,
+    not(operational.capabilitySupported),
+    operational' = { ...operational,
+      capabilitySupported: true,
+      capabilityFresh: true,
+      capabilityExact: true },
+  }
+
+  action launch = all {
+    operational.executionBound,
+    operational.windowDigest == 201,
+    operational.treatmentDigest == 301,
+    operational.treatmentArm == operational.assignedArm,
+    operational.capabilitySupported,
+    operational.capabilityFresh,
+    operational.capabilityExact,
+    operational.launchCount == 0,
+    operational' = { ...operational, launchCount: 1 },
+  }
+
+  action hold = operational' = operational
+
+  action step = any {
+    enableWithIndependentReadiness,
+    bindFrozenWindow,
+    replayFrozenWindow,
+    rejectChangedWindow,
+    compileAndBindTreatment,
+    bindChildWithCurrentContext,
+    bindExecution,
+    rejectUnknownCapability,
+    observeExactSupportedCapability,
+    launch,
+    hold,
+  }
+
+  val safety = and {
+    operational.treatmentDigest == 0 or and {
+      operational.windowDigest == 201,
+      operational.originalIdentity == 1,
+      operational.treatmentArm == operational.assignedArm,
+    },
+    not(operational.childBound) or and {
+      operational.childTreatmentDigest == operational.treatmentDigest,
+      operational.childWindowDigest == operational.windowDigest,
+      operational.childCurrentContext != 0,
+    },
+    operational.launchCount == 0 or and {
+      operational.executionBound,
+      operational.windowDigest == 201,
+      operational.treatmentDigest == 301,
+      operational.capabilitySupported,
+      operational.capabilityFresh,
+      operational.capabilityExact,
+    },
+    operational.launchCount <= 1,
+  }
+
+  action invalidTreatmentWithoutWindow = operational' = { ...operational,
+    treatmentDigest: 301, treatmentArm: 2 }
+  action invalidArmRedraw = operational' = { ...operational,
+    treatmentDigest: 301, treatmentArm: 1 }
+  action invalidChildWindowRedraw = operational' = { ...operational,
+    childBound: true, childTreatmentDigest: operational.treatmentDigest,
+    childWindowDigest: 202, childCurrentContext: 401 }
+  action invalidUnknownCapabilityLaunch = operational' = { ...operational,
+    executionBound: true, launchCount: 1 }
+}
+
+module LearningOperationalWindowTests {
+  import LearningOperationalWindowModel.*
+
+  run testOperationalRootLaunch = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(replayFrozenWindow)
+    .then(rejectChangedWindow)
+    .then(compileAndBindTreatment)
+    .then(bindExecution)
+    .then(observeExactSupportedCapability)
+    .then(launch)
+    .expect(safety and operational.launchCount == 1)
+
+  run testOperationalChildKeepsAssignment = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(bindChildWithCurrentContext)
+    .expect(safety and operational.childWindowDigest == operational.windowDigest)
+
+  run testUnknownCapabilityHasNoLaunch = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(bindExecution)
+    .then(rejectUnknownCapability)
+    .expect(safety and operational.capabilityRejected and operational.launchCount == 0)
+
+  run testTreatmentWithoutWindowFails = init
+    .then(invalidTreatmentWithoutWindow)
+    .expect(not(safety))
+
+  run testArmRedrawFails = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(invalidArmRedraw)
+    .expect(not(safety))
+
+  run testChildWindowRedrawFails = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(invalidChildWindowRedraw)
+    .expect(not(safety))
+
+  run testUnknownCapabilityLaunchFails = init
+    .then(enableWithIndependentReadiness)
+    .then(bindFrozenWindow)
+    .then(compileAndBindTreatment)
+    .then(invalidUnknownCapabilityLaunch)
+    .expect(not(safety))
+}
+
+// GS2-03.4 bounded executable roots. Each root imports the canonical authority but exposes only
+// the actions and properties needed for one independently qualified closure. Quint flattening
+// therefore retains the used transitive closure instead of the all-actions integration root.
+module QualificationAuthorityRoot {
+  import CoordinationProtocol.mutationIntentsConflict
+  import CoordinationProtocolTests.createIntent
+
+  var attemptObserved: bool
+  var conflictDetected: bool
+  action init = all { attemptObserved' = false, conflictDetected' = false }
+  action observeRival = all {
+    attemptObserved' = true,
+    conflictDetected' = mutationIntentsConflict(createIntent,
+      { ...createIntent, operationId: "operation-rival" }),
+  }
+  action idle = all { attemptObserved' = attemptObserved, conflictDetected' = conflictDetected }
+  action rootStep = any { observeRival, idle }
+  // An exact replay is an invalid parameterization for the rival-claim transition.
+  action invalidStep = all {
+    attemptObserved' = true,
+    conflictDetected' = mutationIntentsConflict(createIntent, createIntent),
+  }
+  val rootSafety = not(attemptObserved) or conflictDetected
+  val positiveWitness = attemptObserved and conflictDetected
+  val adversarialWitness = not(attemptObserved) and not(conflictDetected)
+  val invalidParameterWitness = mutationIntentsConflict(createIntent, createIntent)
+  val qualificationInvariant = rootSafety
+}
+
+module QualificationLifecycleRoot {
+  import CoordinationProtocol.deriveLifecycleStatus
+  import CoordinationProtocol.emptyLifecycleFacts
+  import CoordinationProtocol.claimedLifecycleFacts
+
+  var claimPresent: bool
+  var lifecycleStatus: str
+  action init = all {
+    claimPresent' = false,
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+  }
+  action observeClaim = all {
+    claimPresent' = true,
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", claimedLifecycleFacts),
+  }
+  action idle = all { claimPresent' = claimPresent, lifecycleStatus' = lifecycleStatus }
+  action rootStep = any { observeClaim, idle }
+  // A claimed fact paired with the empty-facts projection must be rejected.
+  action invalidStep = all {
+    claimPresent' = true,
+    lifecycleStatus' = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts),
+  }
+  val expectedLifecycleStatus = deriveLifecycleStatus("INTENT-Ready",
+    if (claimPresent) claimedLifecycleFacts else emptyLifecycleFacts)
+  val rootSafety = lifecycleStatus == expectedLifecycleStatus
+  val positiveWitness = claimPresent and lifecycleStatus == "claimed"
+  val adversarialWitness = not(claimPresent) and lifecycleStatus == "ready"
+  val invalidParameterWitness = deriveLifecycleStatus("INTENT-Ready", emptyLifecycleFacts) == "claimed"
+  val qualificationInvariant = rootSafety
+}
+
+module QualificationRelationsRoot {
+  import CoordinationProtocol.NativeRelationEdge
+  import CoordinationProtocol.nativeRelationEdgeIsValid
+  import CoordinationProtocol.parentChildEdge
+  import CoordinationProtocol.blockingEdge
+
+  var nativeRelationEdges: Set[NativeRelationEdge]
+  action init = nativeRelationEdges' = Set()
+  action addParentChild = nativeRelationEdges' = nativeRelationEdges.union(Set(parentChildEdge))
+  action addBlocking = nativeRelationEdges' = nativeRelationEdges.union(Set(blockingEdge))
+  action removeParentChild = nativeRelationEdges' = nativeRelationEdges.exclude(Set(parentChildEdge))
+  action rootStep = any { addParentChild, addBlocking, removeParentChild }
+  // Self-relations are outside the canonical native-relation contract.
+  action invalidStep = all {
+    nativeRelationEdges' = nativeRelationEdges.union(Set({ ...parentChildEdge, targetId: "subject-parent" })),
+  }
+  val rootSafety = nativeRelationEdges.forall(nativeRelationEdgeIsValid)
+  val positiveWitness = nativeRelationEdges.contains(parentChildEdge)
+  val adversarialWitness = nativeRelationEdges.contains(blockingEdge)
+  val invalidParameterWitness = nativeRelationEdgeIsValid({ ...parentChildEdge, targetId: "subject-parent" })
+  val qualificationInvariant = rootSafety
+}
+
+module QualificationProtocolStreamsRoot {
+  import CoordinationProtocol.ProtocolEnvelope
+  import CoordinationProtocol.protocolEnvelopeShapeIsValid
+  import CoordinationProtocol.protocolEnvelopeIsOrdered
+  import CoordinationProtocol.claimEnvelope
+  import CoordinationProtocol.leaseEnvelope
+  import CoordinationProtocol.reviewCheckpointEnvelope
+
+  var protocolStreamEvents: Set[ProtocolEnvelope]
+  var durableProtocolCheckpoints: Set[ProtocolEnvelope]
+  action init = all { protocolStreamEvents' = Set(), durableProtocolCheckpoints' = Set() }
+  action appendClaim = all {
+    protocolStreamEvents' = protocolStreamEvents.union(Set(claimEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  action appendLease = all {
+    protocolStreamEvents.contains(claimEnvelope),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(leaseEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  action appendReview = all {
+    protocolStreamEvents.contains(claimEnvelope),
+    protocolStreamEvents.contains(leaseEnvelope),
+    protocolStreamEvents' = protocolStreamEvents.union(Set(reviewCheckpointEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints.union(Set(reviewCheckpointEnvelope)),
+  }
+  action rootStep = any { appendClaim, appendLease, appendReview }
+  // A lease without its retained claim predecessor is an invalid stream parameterization.
+  action invalidStep = all {
+    protocolStreamEvents' = protocolStreamEvents.union(Set(leaseEnvelope)),
+    durableProtocolCheckpoints' = durableProtocolCheckpoints,
+  }
+  val rootSafety = and {
+    durableProtocolCheckpoints.subseteq(protocolStreamEvents),
+    protocolStreamEvents.forall(event => and {
+      protocolEnvelopeShapeIsValid(event),
+      protocolEnvelopeIsOrdered(event, protocolStreamEvents),
+    }),
+  }
+  val positiveWitness = protocolStreamEvents.contains(reviewCheckpointEnvelope)
+  val adversarialWitness = protocolStreamEvents.contains(leaseEnvelope)
+  val invalidParameterWitness = protocolEnvelopeIsOrdered(leaseEnvelope, Set(leaseEnvelope))
+  val qualificationInvariant = rootSafety
+}
+
+// BEGIN PINNED quint-co/choreo spells/basicSpells.qnt
+/**
+ * This module collects definitions that are ubiquitous.
+ * One day they will become the standard library of Quint.
+ */
+module basicSpells {
+  /// Option type, which may hold some value or none
+  type Option[a] = Some(a) | None
+
+  /// An annotation for writing preconditions.
+  /// - @param cond condition to check
+  /// - @returns true if and only if cond evaluates to true
+  pure def require(cond: bool): bool = cond
+
+  run requireTest = all {
+    assert(require(4 > 3)),
+    assert(not(require(false))),
+  }
+
+  /// A convenience operator that returns a string error code,
+  ///  if the condition does not hold true.
+  ///
+  /// - @param cond condition to check
+  /// - @param error a non-empty error message
+  /// - @returns "", when cond holds true; otherwise error
+  pure def requires(cond: bool, error: str): str = {
+    if (cond) "" else error
+  }
+
+  run requiresTest = all {
+    assert(requires(4 > 3, "4 > 3") == ""),
+    assert(requires(4 < 3, "false: 4 < 3") == "false: 4 < 3"),
+  }
+
+
+  /// Compute the maximum of two integers.
+  ///
+  /// - @param i first integer
+  /// - @param j second integer
+  /// - @returns the maximum of i and j
+  pure def max(i: int, j: int): int = {
+    if (i > j) i else j
+  }
+
+  run maxTest = all {
+    assert(max(3, 4) == 4),
+    assert(max(6, 3) == 6),
+    assert(max(10, 10) == 10),
+    assert(max(-3, -5) == -3),
+    assert(max(-5, -3) == -3),
+  }
+
+  /// Compute the minimum of two integers.
+  ///
+  /// - @param i first integer
+  /// - @param j second integer
+  /// - @returns the minimum of i and j
+  pure def min(i: int, j: int): int = {
+    if (i < j) i else j
+  }
+
+  run minTest = all {
+    assert(min(3, 4) == 3),
+    assert(min(6, 3) == 3),
+    assert(min(10, 10) == 10),
+    assert(min(-3, -5) == -5),
+    assert(min(-5, -3) == -5),
+  }
+
+  /// Compute the absolute value of an integer
+  ///
+  /// - @param i : an integer whose absolute value we are interested in
+  /// - @returns |i|, the absolute value of i
+  pure def abs(i: int): int = {
+    if (i < 0) -i else i
+  }
+
+  run absTest = all {
+    assert(abs(3) == 3),
+    assert(abs(-3) == 3),
+    assert(abs(0) == 0),
+  }
+
+  /// Remove a set element.
+  ///
+  /// - @param s a set to remove an element from
+  /// - @param elem an element to remove
+  /// - @returns a new set that contains all elements of set but elem
+  pure def setRemove(s: Set[a], elem: a): Set[a] = {
+    s.exclude(Set(elem))
+  }
+
+  run setRemoveTest = all {
+    assert(Set(2, 4) == Set(2, 3, 4).setRemove(3)),
+    assert(Set() == Set().setRemove(3)),
+  }
+
+  /// Adds an element to a set.
+  ///
+  /// - @param s a set to add an element to
+  /// - @param elem an element to add
+  /// - @returns a new set that contains all elements of set and elem
+  pure def setAdd(s: Set[a], elem: a): Set[a] = {
+    s.union(Set(elem))
+  }
+
+  run setAddTest = all{
+    assert(Set(2, 3, 4) == Set(2, 4).setAdd(3)),
+    assert(Set(3) == Set().setAdd(3)),
+    assert(Set(2,4) == Set(2,4).setAdd(4)),
+  }
+
+  /// Test whether a key is present in a map
+  ///
+  /// - @param m a map to query
+  /// - @param key the key to look for
+  /// - @returns true if and only map has an entry associated with key
+  pure def has(m: a -> b, key: a): bool = {
+    m.keys().contains(key)
+  }
+
+  run hasTest = all {
+    assert(Map(2 -> 3, 4 -> 5).has(2)),
+    assert(not(Map(2 -> 3, 4 -> 5).has(6))),
+  }
+
+  /// Get the map value associated with a key, or the default,
+  /// if the key is not present.
+  ///
+  /// - @param m the map to query
+  /// - @param key the key to search for
+  /// - @returns the value associated with the key, if key is
+  ///   present in the map, and default otherwise
+  pure def getOrElse(m: a -> b, key: a, default: b): b = {
+    if (m.has(key)) {
+      m.get(key)
+    } else {
+      default
+    }
+  }
+
+  run getOrElseTest = all {
+    assert(Map(2 -> 3, 4 -> 5).getOrElse(2, 0) == 3),
+    assert(Map(2 -> 3, 4 -> 5).getOrElse(7, 11) == 11),
+  }
+
+  /// Remove a map entry.
+  ///
+  /// - @param m a map to remove an entry from
+  /// - @param key the key of an entry to remove
+  /// - @returns a new map that contains all entries of map
+  ///          that do not have the key key
+  pure def mapRemove(m: a -> b, key: a): a -> b = {
+    m.keys().setRemove(key).mapBy(k => m.get(k))
+  }
+
+  run mapRemoveTest = all {
+    assert(Map(3 -> 4, 7 -> 8) == Map(3 -> 4, 5 -> 6, 7 -> 8).mapRemove(5)),
+    assert(Map() == Map().mapRemove(3)),
+  }
+
+  /// Removes a set of map entries.
+  ///
+  /// - @param m a map to remove entries from
+  /// - @param ks a set of keys for entries to remove from the map
+  /// - @returns a new map that contains all entries of map
+  ///          that do not have a key in keys
+  pure def mapRemoveAll(m: a -> b, ks: Set[a]): a -> b = {
+      m.keys().exclude(ks).mapBy(k => m.get(k))
+  }
+
+  run mapRemoveAllTest =
+      val m = Map(3 -> 4, 5 -> 6, 7 -> 8)
+      all {
+          assert(m.mapRemoveAll(Set(5, 7)) == Map(3 -> 4)),
+          assert(m.mapRemoveAll(Set(5, 99999)) == Map(3 -> 4, 7 -> 8)),
+      }
+
+  /// Get the set of values of a map.
+  ///
+  /// - @param map a map from type a to type b
+  /// - @returns the set of all values in the map
+  pure def values(m: a -> b): Set[b] = {
+    m.keys().map(k => m.get(k))
+  }
+
+  run valuesTest = all {
+    assert(values(Map()) == Set()),
+    assert(values(Map(1 -> 2, 2 -> 3)) == Set(2, 3)),
+    assert(values(Map(1 -> 2, 2 -> 3, 3 -> 2)) == Set(2, 3)),
+  }
+
+  /// Whether a set is empty
+  ///
+  /// - @param s a set of any type
+  /// - @returns true iff the set is the empty set
+  pure def empty(s: Set[a]): bool = s == Set()
+
+  run emptyTest = all {
+    assert(empty(Set()) == true),
+    assert(empty(Set(1, 2)) == false),
+    assert(empty(Set(Set())) == false),
+  }
+
+  /// Sort a list, given the ordering operator.
+  ///
+  /// - @param list a list to sort
+  /// - @param lt a definition of "less than"
+  /// - @returns the sorted version of list
+  pure def sortList(list: List[a], lt: (a, a) => bool): List[a] = {
+    pure def insertInOrder(sortedList: List[a], num: a): List[a] = {
+      match range(0, sortedList.length()).findFirst(i => not(lt(sortedList[i], num))) {
+        | None => sortedList.append(num)
+        | Some(index) => sortedList.slice(0, index).append(num).concat(sortedList.slice(index, sortedList.length()))
+      }
+    }
+
+    list.foldl([], (sortedList, num) => insertInOrder(sortedList, num))
+  }
+
+  run listSortedTest = all {
+    assert([ 1, 3, 5 ] == sortList([ 5, 1, 3 ], (x, y) => x < y)),
+    assert([ 1, 1, 3, 5, 5 ] == sortList([ 5, 1, 3, 1, 5 ], (x, y) => x < y)),
+  }
+
+  /// Apply an operator to all values of a map
+  ///
+  /// - @param m: a map of any type
+  /// - @param f: an operator with one argument with the same type as the map's values
+  /// - @returns a map with same keys as m and f applied to the values
+  pure def transformValues(m: a -> b, f: (b) => c): a -> c = {
+    m.keys().mapBy(k => f(m.get(k)))
+  }
+
+  run transformValuesTest = {
+    pure val m = Map("a" -> 1, "b" -> 2)
+    assert(m.transformValues(x => x + 1) == Map("a" -> 2, "b" -> 3))
+  }
+
+  /// map a function over a list
+  ///
+  /// - @param l: a list of any type
+  /// - @param f: a function to apply to each element of the list
+  /// - @returns a list of the results of applying f to each element of l
+  pure def listMap(l: List[a], f: (a) => b): List[b] = {
+    range(0, l.length()).foldl([], (acc, i) => {
+      acc.append(f(l[i]))
+    })
+  }
+
+  run listMapTest = all {
+    assert(listMap([1, 2, 3], x => x + 1) == [2, 3, 4]),
+    assert(listMap([1, 2, 3], x => x > 1) == [false, true, true]),
+  }
+
+  /// The last element of a list
+  ///
+  /// - @param v: a list of any type
+  /// - @returns the last element of the list
+  pure def last(v: List[a]): a = {
+    v[v.length() - 1]
+  }
+
+  run lastTest = all {
+    assert(last([1, 2, 3]) == 3),
+    assert(last([1]) == 1),
+  }
+
+  /// `decreasingRange(i, j)` is the list of integers between `j` and `i`
+  /// both `i` and `j` are inclusive.
+  /// The behavior is undefined if `i < j`.
+  ///
+  /// - @param start: the first integer in the range
+  /// - @param end: the last integer in the range
+  pure def decreasingRange(start: int, end: int): List[int] = {
+    range(end, start + 1).foldl([], (acc, i) => {
+      List(i).concat(acc)
+    })
+  }
+
+  run decreasingRangeTest = all {
+    assert(decreasingRange(5, 1) == [5, 4, 3, 2, 1]),
+  }
+
+  /// `takeWhile(l, cond)` is the longest prefix of `l` such that all elements
+  /// satisfy the condition `cond`.
+  ///
+  /// - @param l: a list of any type
+  /// - @param cond: a function that takes an element of the list and returns a boolean
+  /// - @returns the longest prefix of `l` such that all elements satisfy `cond`
+  pure def takeWhile(l: List[a], cond: (a) => bool): List[a] = {
+    pure val result = l.foldl(([], true), (acc, e) => {
+      if (acc._2 and cond(e)) {
+        (acc._1.append(e), true)
+      } else {
+        (acc._1, false)
+      }
+    })
+
+    result._1
+  }
+
+  run takeWhileTest = all {
+    assert(takeWhile([1, 5, 4, 3], (x) => x % 2 == 1) == [1, 5]),
+  }
+
+  /// `isPrefixOf(l1, l2)` is true iff `l1` is a prefix of `l2`.
+  ///
+  /// - @param l1: a list of any type
+  /// - @param l2: a list of same type as `l1`
+  /// - @returns true iff `l1` is a prefix of `l2`
+  pure def isPrefixOf(l1: List[a], l2: List[a]): bool = {
+    if (l1.length() > l2.length()) {
+      false
+    } else {
+      l1.indices().forall(i => l1[i] == l2[i])
+    }
+  }
+
+  run isPrefixOfTest = all {
+    assert(isPrefixOf([1, 2], [1, 2, 3])),
+    assert(not(isPrefixOf([1, 2], [1, 3, 2]))),
+    assert(not(isPrefixOf([1, 2], [1]))),
+    assert(isPrefixOf([], [1, 2])),
+    assert(isPrefixOf([], [])),
+  }
+
+  /// `find(s, f)` is an element of `s` that satisfies the predicate `f`, or None
+  /// if no such element exists.
+  ///
+  /// - @param s: a set of any type
+  /// - @param f: a function that takes an element of the set and returns a boolean
+  /// - @returns an element of `s` that satisfies `f`, or None
+  pure def find(s, f) = s.fold(None, (a, i) => if (f(i)) Some(i) else a)
+
+  run findTest = all {
+    assert(find(Set(1, 2, 3), x => x == 2) == Some(2)),
+    assert(find(Set(1, 2, 3), x => x == 4) == None),
+  }
+
+  /// `findFirst(l, f)` is the first element of `l` that satisfies the predicate `f`, or None
+  /// if no such element exists.
+  ///
+  /// - @param l: a list of any type
+  /// - @param f: a function that takes an element of the list and returns a boolean
+  /// - @returns the first element of `l` that satisfies `f`, or None
+  pure def findFirst(l, f) = l.foldl(None, (a, i) => if (a == None and f(i)) Some(i) else a)
+
+  run findFirstTest = all {
+    assert(findFirst([1, 2, 3], x => x > 1) == Some(2)),
+    assert(findFirst([1, 2, 3], x => x == 4) == None),
+  }
+
+  /// `setByWithDefault(m, k, op, default)` is a map that is the same as `m` except that
+  /// the value associated with `k` is `op(m[k])` if `k` is present in `m`, and `op(default)` otherwise.
+  ///
+  /// - @param m: a map from type `a` to type `b`
+  /// - @param k: a key of type `a`
+  /// - @param op: a function to transform the value of the key
+  /// - @param default: the value to use if the key is not present in the map
+  /// - @returns a new map with the updated key.
+  pure def setByWithDefault(m: a -> b, k: a, op: (b) => b, default: b): a -> b = {
+    if (m.has(k))
+      m.setBy(k, op)
+    else
+      m.put(k, default).setBy(k, op)
+  }
+
+  run setByWithDefaultTest = all {
+    assert(setByWithDefault(Map(1 -> 2, 2 -> 3), 1, x => x + 1, 0) == Map(1 -> 3, 2 -> 3)),
+    assert(setByWithDefault(Map(1 -> 2, 2 -> 3), 3, x => x + 1, 0) == Map(1 -> 2, 2 -> 3, 3 -> 1)),
+  }
+
+  pure def unwrap(value: Option[a]): a = {
+    match value {
+      | None => Map().get(value)
+      | Some(x) => x
+    }
+  }
+
+  pure def filterMap(s: Set[a], f: (a) => Option[b]): Set[b] = {
+    s.fold(Set(), (acc, e) => {
+      match f(e) {
+        | Some(x) => acc.union(Set(x))
+        | None => acc
+      }
+    })
+  }
+}
+// END PINNED quint-co/choreo spells/basicSpells.qnt
+
+// BEGIN PINNED quint-co/choreo choreo.qnt
+
+/**
+ * Choreo: Choreograph distributed protocols in Quint
+ *
+ * Read the documentation: TODO LINK
+ *
+ * Gabriela Moreira, Josef Widder and Yassine Boukhari,
+ * Informal Systems, 2025
+ */
+
+module choreo {
+  import basicSpells.*
+
+  // TODO: try moving process id to local context
+  type LocalState[process_id, ext] = {
+    process_id: process_id
+    | ext
+  }
+
+  type Transition[p, s, m, e, ce] = {
+    post_state: LocalState[p, s],
+    effects: Set[Effect[p, m, e, ce]],
+  }
+
+  type GlobalContext[p, s, m, e, ext] = {
+    system: p -> LocalState[p, s],
+    messages: p -> Set[m],
+    events: p -> Set[e],
+    extensions: ext
+  }
+
+  type LocalContext[p, s, m, e, ext] = {
+    state: LocalState[p, s],
+    messages: Set[m],
+    events: Set[e],
+    extensions: ext
+  }
+
+  // This is the message routing to the # handler
+  type Listener[p, s, m, e, ce, ext] =
+    (LocalContext[p, s, m, e, ext]) => Set[Transition[p, s, m, e, ce]]
+
+  type DeterministicListener[p, s, m, e, ce, ext] =
+    (LocalContext[p, s, m, e, ext]) => Transition[p, s, m, e, ce]
+
+  // Only needed for micro_step
+  type Input[m, e] = Message(m) | Event(e)
+
+  // Only needed for micro_step
+  type MicroListener[p, s, m, e, ce, ext] =
+    (LocalContext[p, s, m, e, ext], Input[m, e]) => Set[Transition[p, s, m, e, ce]]
+
+  type EffectProcessor[p, s, m, e, ce, ext] =
+    (GlobalContext[p, s, m, e, ext], ce) => GlobalContext[p, s, m, e, ext]
+
+
+  type Effect[p, m, e, ce] =
+    | Broadcast(m)
+    | Send({ to: p, message: m })
+    | TriggerEvent(e)
+    | CustomEffect(ce)
+
+  /// A displayer is a function that takes a global context and returns a displayable representation of it.
+  /// This is used to visualize the state of the system for debugging or monitoring purposes.
+  /// After type instantiation, it should have the following signature:
+  /// ```
+  /// (Environment) => Display
+  /// ```
+  /// The display type can be anything.
+  type Displayer[p, s, m, e, ext, d] = (GlobalContext[p, s, m, e, ext]) => d
+
+  pure def apply_effect(
+    env: GlobalContext[p, s, m, e, ext],
+    v: p,
+    tr: Transition[p, s, m, e, ce],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, ext]
+  ): GlobalContext[p, s, m, e, ext] = {
+    val env1 = { ...env, system: env.system.setBy(v, s => tr.post_state) }
+
+    tr.effects.fold(env1, (e, effect) => {
+      match effect {
+        | Broadcast(m) => {
+          { ...e, messages: e.messages.transformValues(b => b.setAdd(m)) }
+        }
+        | Send(r) => {
+          { ...e, messages: e.messages.setBy(r.to, b => b.setAdd(r.message)) }
+        }
+        | TriggerEvent(ev) => {
+          { ...e, events: e.events.setBy(v, b => b.setAdd(ev)) }
+        }
+        | CustomEffect(ex) => {
+          apply_custom_effect(e, ex)
+        }
+      }
+    })
+  }
+
+  const processes: Set[p]
+  var s: GlobalContext[p, s, m, e, ext]
+  var display: d
+
+  pure def initialize(x: a, f: Option[(a) => Set[b]]): Set[b] = {
+    match f {
+      | Some(fun) => fun(x)
+      | None => Set()
+    }
+  }
+
+  pure def convert_context(
+    env: GlobalContext[p, s, m, e, ext],
+    v: p
+  ): LocalContext[p, s, m, e, ext] = {
+    {
+      state: env.system.get(v),
+      messages: env.messages.get(v),
+      events: env.events.get(v),
+      extensions: env.extensions
+    }
+  }
+
+  action process_transitions(
+    v: p,
+    transitions: Set[Transition[p, s, m, e, ce]],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions],
+  ): bool =
+    nondet transition = oneOf(transitions)
+    val post_env = apply_effect(s, v, transition, apply_custom_effect)
+    s' = post_env
+
+  action process_transitions_with_displayer(
+    v: p,
+    transitions: Set[Transition[p, s, m, e, ce]],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions],
+    displayer: Displayer[p, s, m, e, extensions, d],
+  ): bool =
+    nondet transition = oneOf(transitions)
+    val post_env = apply_effect(s, v, transition, apply_custom_effect)
+    all {
+      s' = post_env,
+      display' = displayer(post_env),
+    }
+
+  action init(ctx: GlobalContext[p, s, m , e, ext]): bool = {
+    s' = ctx
+  }
+
+  action init_with_displayer(
+    ctx: GlobalContext[p, s, m , e, ext],
+    displayer: Displayer[p, s, m, e, extensions, d],
+  ): bool = all {
+    s' = ctx,
+    display' = displayer(ctx)
+  }
+
+  action step(
+    listener: Listener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions]
+  ): bool = {
+    nondet v = oneOf(processes)
+    val input = convert_context(s, v)
+    val transitions = listener(input).filter(t => t.effects.size() > 0 or t.post_state != input.state)
+    process_transitions(v, transitions, apply_custom_effect)
+  }
+
+  action step_with_displayer(
+    listener: Listener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions],
+    displayer: Displayer[p, s, m, e, extensions, d]
+  ): bool = {
+    nondet v = oneOf(processes)
+    val input = convert_context(s, v)
+    val transitions = listener(input).filter(t => t.effects.size() > 0 or t.post_state != input.state)
+    process_transitions_with_displayer(v, transitions, apply_custom_effect, displayer)
+  }
+
+  action micro_step(
+    listener: MicroListener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions]
+  ): bool = {
+    nondet process = processes.oneOf()
+    val ctx = convert_context(s, process)
+    any {
+      nondet msg = s.messages.get(process).oneOf()
+      val transitions = listener(ctx, Message(msg))
+      process_transitions(process, transitions, apply_custom_effect),
+
+      nondet event = s.events.get(process).oneOf()
+      val transitions = listener(ctx, Event(event))
+      process_transitions(process, transitions, apply_custom_effect),
+    }
+  }
+
+  action step_with(
+    v: p,
+    listener: Listener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions]
+  ): bool = {
+    val input = convert_context(s, v)
+    val transitions = listener(input).filter(t => t.effects.size() > 0 or t.post_state != input.state)
+    process_transitions(v, transitions, apply_custom_effect)
+  }
+
+  action step_deterministic(
+    v: p,
+    listener: DeterministicListener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions]
+  ): bool = {
+    val input = convert_context(s, v)
+    val transitions = Set(listener(input)).filter(t => t.effects.size() > 0 or t.post_state != input.state)
+    process_transitions(v, transitions, apply_custom_effect)
+  }
+
+  action step_with_filter(
+    v: p,
+    listener: Listener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions],
+    f: (Transition[p, s, m, e, ce]) => bool
+  ): bool = {
+    val input = convert_context(s, v)
+    val transitions = listener(input).filter(t => t.effects.size() > 0 or t.post_state != input.state).filter(f)
+    process_transitions(v, transitions, apply_custom_effect)
+  }
+
+  action step_with_messages(
+    v: p,
+    listener: Listener[p, s, m, e, ce, extensions],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, extensions],
+    f: Set[m] => Set[m]
+  ): bool = {
+    val input = convert_context(s, v)
+    val input1 = { ...input, messages: f(input.messages) }
+    val transitions = listener(input1).filter(t => t.effects.size() > 0 or t.post_state != input.state)
+    process_transitions(v, transitions, apply_custom_effect)
+  }
+
+  action lose_messages(v: p, f: Set[m] => Set[m]): bool = {
+    val msgs = s.messages.get(v)
+    val new_msgs = msgs.exclude(f(msgs))
+    all {
+      s' = { ...s, messages: s.messages.set(v, new_msgs) }
+    }
+  }
+
+  pure def cue(
+    ctx: LocalContext[p, s, m, e, ext],
+    listen_fn: (LocalContext[p, s, m, e, ext]) => Set[r],
+    upon_fn: (LocalContext[p, s, m, e, ext], r) => Transition[p, s, m, e, ce]
+  ): Set[Transition[p, s, m, e, ce]] = {
+    val params = listen_fn(ctx)
+    params.map(param => upon_fn(ctx, param))
+  }
+
+  type CueResult[p, s, m, e, ext, r] = CueOk({ ctx: LocalContext[p, s, m, e, ext], params: r }) | NoCue
+
+  def with_cue(
+    process: p,
+    listen_fn: (LocalContext[p, s, m, e, ext]) => Set[r],
+    params: r
+  ): CueResult[p, s, m, e, ext, r] = {
+    val ctx = convert_context(s, process)
+    val valid_params = listen_fn(ctx)
+    val is_valid = valid_params.contains(params)
+    if (is_valid)
+      CueOk({ ctx: ctx, params: params })
+    else
+      NoCue
+  }
+
+  action perform(
+    cue_result: CueResult[p, s, m, e, ext, r],
+    upon_fn: (LocalContext[p, s, m, e, ext], r) => Transition[p, s, m, e, ce],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, ext],
+  ): bool = {
+    match cue_result {
+      | CueOk(cue) => process_transitions(cue.ctx.state.process_id, Set(upon_fn(cue.ctx, cue.params)), apply_custom_effect)
+      | NoCue => all { false, s' = s }
+    }
+  }
+
+  action perform_with_displayer(
+    cue_result: CueResult[p, s, m, e, ext, r],
+    upon_fn: (LocalContext[p, s, m, e, ext], r) => Transition[p, s, m, e, ce],
+    apply_custom_effect: EffectProcessor[p, s, m, e, ce, ext],
+    displayer: Displayer[p, s, m, e, extensions, d],
+  ): bool = {
+    match cue_result {
+      | CueOk(cue) => process_transitions_with_displayer(cue.ctx.state.process_id, Set(upon_fn(cue.ctx, cue.params)), apply_custom_effect, displayer)
+      | NoCue => all { false, s' = s, display' = display }
+    }
+  }
+}
+// END PINNED quint-co/choreo choreo.qnt
+
+// C2 hosted-writer boundary as four independently scheduled authorities. The model keeps
+// durable journal status separate from Host volatility, admits ambiguity only around an
+// already-dispatched external operation, and makes recovery/readback/resume distinct gates.
+module O2HostedWriterChoreoModel {
+  import basicSpells.*
+  import choreo(processes = PROCESSES) as choreo
+
+  // Choreo's pinned module is instantiated once per combined source. The C1 smoke uses
+  // string process identifiers, so the production-shaped model retains that carrier and
+  // closes it to these four typed constants.
+  type Process = str
+  type EffectKind = Claim | ProcessWork | Candidate | Branch | PullRequest | Merge | NativeReadback
+  type JournalStatus = JournalEmpty | Intent | Dispatching | Unknown | ProvenAbsent | Applied
+  type HostPhase =
+    | HostReady
+    | AwaitingIntent
+    | AwaitingDispatch
+    | AwaitingEffect
+    | AwaitingUnknown
+    | AwaitingReconcile
+    | AwaitingApplied
+    | HostPaused
+    | AwaitingAuthority
+    | AwaitingResume
+
+  type OperationRef = {
+    route: str,
+    attempt: str,
+    operation: str,
+    effectKind: EffectKind,
+    candidate: str,
+    repository: str,
+    generation: int,
+    session: str,
+    revision: int,
+  }
+
+  type HostState = {
+    phase: HostPhase,
+    current: Option[OperationRef],
+    completed: Set[EffectKind],
+    paused: bool,
+    journalRecovered: bool,
+    authorityFresh: bool,
+    resumeAuthenticated: bool,
+    unknownObserved: bool,
+    retryObserved: bool,
+    duplicateRejected: bool,
+    staleRejected: bool,
+    identityRejected: bool,
+    sequenceRejected: bool,
+    restartObserved: bool,
+    recoveredStatus: JournalStatus,
+  }
+
+  type JournalState = {
+    status: JournalStatus,
+    current: Option[OperationRef],
+    appendCount: int,
+    rejectionCount: int,
+  }
+
+  type RunnerState = {
+    applied: Set[EffectKind],
+    generation: int,
+    session: str,
+    revision: int,
+    lastResponse: Option[OperationRef],
+    applyCount: int,
+  }
+
+  type ProviderState = {
+    applied: Set[EffectKind],
+    lastResponse: Option[OperationRef],
+    applyCount: int,
+  }
+
+  type ProcessState =
+    | HostLocal(HostState)
+    | JournalLocal(JournalState)
+    | RunnerLocal(RunnerState)
+    | ProviderLocal(ProviderState)
+
+  type Message =
+    | RecordIntent(OperationRef)
+    | IntentRecorded(OperationRef)
+    | RecordDispatch(OperationRef)
+    | DispatchRecorded(OperationRef)
+    | RunEffect(OperationRef)
+    | PerformEffect(OperationRef)
+    | EffectApplied(OperationRef)
+    | EffectUnknown(OperationRef)
+    | RecordUnknown(OperationRef)
+    | UnknownRecorded(OperationRef)
+    | ReconcileEffect(OperationRef)
+    | ReconcileApplied(OperationRef)
+    | ReconcileAbsent(OperationRef)
+    | RecordAbsent(OperationRef)
+    | AbsentRecorded(OperationRef)
+    | RecordApplied(OperationRef)
+    | AppliedRecorded(OperationRef)
+    | RecoverJournal(())
+    | JournalRecovered({ operation: Option[OperationRef], status: JournalStatus })
+    | ReadAuthority(Option[OperationRef])
+    | AuthorityRead(Option[OperationRef])
+    | AppendRejected(OperationRef)
+
+  type MessageKey = {
+    tag: int,
+    operation: Option[OperationRef],
+    status: JournalStatus,
+  }
+
+  type CustomEffect = Consume({ at: Process, key: MessageKey })
+  type Event = ()
+  type Extension = ()
+  type StateFields = { local: ProcessState }
+
+  pure val HOST: Process = "Host"
+  pure val JOURNAL: Process = "Journal"
+  pure val RUNNER: Process = "Runner"
+  pure val GITHUB_PROVIDER: Process = "GitHubProvider"
+  pure val PROCESSES: Set[Process] = Set(HOST, JOURNAL, RUNNER, GITHUB_PROVIDER)
+  pure val EFFECTS: Set[EffectKind] =
+    Set(Claim, ProcessWork, Candidate, Branch, PullRequest, Merge, NativeReadback)
+
+  type LocalState = choreo::LocalState[Process, StateFields]
+  type LocalContext = choreo::LocalContext[Process, StateFields, Message, Event, Extension]
+  type Transition = choreo::Transition[Process, StateFields, Message, Event, CustomEffect]
+  type Effect = choreo::Effect[Process, Message, Event, CustomEffect]
+  type GlobalContext = choreo::GlobalContext[Process, StateFields, Message, Event, Extension]
+  pure val noTransitions: Set[Transition] = Set()
+
+  pure def operationName(effect: EffectKind): str = match effect {
+    | Claim => "op-claim"
+    | ProcessWork => "op-process"
+    | Candidate => "op-candidate"
+    | Branch => "op-branch"
+    | PullRequest => "op-pr"
+    | Merge => "op-merge"
+    | NativeReadback => "op-readback"
+  }
+
+  pure def operationFor(effect: EffectKind): OperationRef = {
+    route: "route-1",
+    attempt: "attempt-1",
+    operation: operationName(effect),
+    effectKind: effect,
+    candidate: "candidate-1",
+    repository: "repository-1",
+    generation: 1,
+    session: "session-1",
+    revision: 1,
+  }
+
+  pure def isNextRevision(previous: OperationRef, current: OperationRef): bool = and {
+    previous.route == current.route,
+    previous.attempt == current.attempt,
+    previous.operation == current.operation,
+    previous.effectKind == current.effectKind,
+    previous.candidate == current.candidate,
+    previous.repository == current.repository,
+    previous.generation == current.generation,
+    previous.session == current.session,
+    current.revision == previous.revision + 1,
+  }
+
+  pure def expectedEffect(completed: Set[EffectKind]): Option[EffectKind] =
+    if (not(completed.contains(Claim))) Some(Claim)
+    else if (not(completed.contains(ProcessWork))) Some(ProcessWork)
+    else if (not(completed.contains(Candidate))) Some(Candidate)
+    else if (not(completed.contains(Branch))) Some(Branch)
+    else if (not(completed.contains(PullRequest))) Some(PullRequest)
+    else if (not(completed.contains(Merge))) Some(Merge)
+    else if (not(completed.contains(NativeReadback))) Some(NativeReadback)
+    else None
+
+  pure val emptyHost: HostState = {
+    phase: HostReady,
+    current: None,
+    completed: Set(),
+    paused: false,
+    journalRecovered: true,
+    authorityFresh: true,
+    resumeAuthenticated: true,
+    unknownObserved: false,
+    retryObserved: false,
+    duplicateRejected: false,
+    staleRejected: false,
+    identityRejected: false,
+    sequenceRejected: false,
+    restartObserved: false,
+    recoveredStatus: JournalEmpty,
+  }
+  pure val emptyJournal: JournalState = {
+    status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0,
+  }
+  pure val emptyRunner: RunnerState = {
+    applied: Set(), generation: 1, session: "session-1", revision: 1,
+    lastResponse: None, applyCount: 0,
+  }
+  pure val emptyProvider: ProviderState = {
+    applied: Set(), lastResponse: None, applyCount: 0,
+  }
+
+  pure def isHostState(local: ProcessState): bool = match local {
+    | HostLocal(_) => true
+    | _ => false
+  }
+  pure def isJournalState(local: ProcessState): bool = match local {
+    | JournalLocal(_) => true
+    | _ => false
+  }
+  pure def isRunnerState(local: ProcessState): bool = match local {
+    | RunnerLocal(_) => true
+    | _ => false
+  }
+  pure def isProviderState(local: ProcessState): bool = match local {
+    | ProviderLocal(_) => true
+    | _ => false
+  }
+
+  pure def hostState(local: ProcessState): HostState = match local {
+    | HostLocal(value) => value
+    | _ => emptyHost
+  }
+  pure def journalState(local: ProcessState): JournalState = match local {
+    | JournalLocal(value) => value
+    | _ => emptyJournal
+  }
+  pure def runnerState(local: ProcessState): RunnerState = match local {
+    | RunnerLocal(value) => value
+    | _ => emptyRunner
+  }
+  pure def providerState(local: ProcessState): ProviderState = match local {
+    | ProviderLocal(value) => value
+    | _ => emptyProvider
+  }
+
+  pure def initialState(process: Process): LocalState = {
+    process_id: process,
+    local:
+      if (process == HOST) HostLocal(emptyHost)
+      else if (process == JOURNAL) JournalLocal(emptyJournal)
+      else if (process == RUNNER) RunnerLocal(emptyRunner)
+      else ProviderLocal(emptyProvider),
+  }
+
+  action init = choreo::init({
+    system: PROCESSES.mapBy(process => initialState(process)),
+    messages: PROCESSES.mapBy(_ => Set()),
+    events: PROCESSES.mapBy(_ => Set()),
+    extensions: (),
+  })
+
+  // The runner proof starts from the exact state produced by a settled Claim. Keeping
+  // this as a second initializer avoids replaying a deterministic nine-step prefix in
+  // every TLC state while preserving the real journal/provider facts at that boundary.
+  action initAfterClaim = choreo::init({
+    system: PROCESSES.mapBy(process => {
+      val state = initialState(process)
+      if (process == HOST) {
+        ...state,
+        local: HostLocal({ ...emptyHost, completed: Set(Claim) }),
+      }
+      else if (process == JOURNAL) {
+        ...state,
+        local: JournalLocal({
+          ...emptyJournal,
+          status: Applied,
+          current: Some(operationFor(Claim)),
+          appendCount: 3,
+        }),
+      }
+      else if (process == GITHUB_PROVIDER) {
+        ...state,
+        local: ProviderLocal({
+          ...emptyProvider,
+          applied: Set(Claim),
+          lastResponse: Some(operationFor(Claim)),
+          applyCount: 1,
+        }),
+      }
+      else state
+    }),
+    messages: PROCESSES.mapBy(_ => Set()),
+    events: PROCESSES.mapBy(_ => Set()),
+    extensions: (),
+  })
+
+  pure def messageKey(message: Message): MessageKey = match message {
+    | RecordIntent(operation) => { tag: 1, operation: Some(operation), status: JournalEmpty }
+    | IntentRecorded(operation) => { tag: 2, operation: Some(operation), status: JournalEmpty }
+    | RecordDispatch(operation) => { tag: 3, operation: Some(operation), status: JournalEmpty }
+    | DispatchRecorded(operation) => { tag: 4, operation: Some(operation), status: JournalEmpty }
+    | RunEffect(operation) => { tag: 5, operation: Some(operation), status: JournalEmpty }
+    | PerformEffect(operation) => { tag: 6, operation: Some(operation), status: JournalEmpty }
+    | EffectApplied(operation) => { tag: 7, operation: Some(operation), status: JournalEmpty }
+    | EffectUnknown(operation) => { tag: 8, operation: Some(operation), status: JournalEmpty }
+    | RecordUnknown(operation) => { tag: 9, operation: Some(operation), status: JournalEmpty }
+    | UnknownRecorded(operation) => { tag: 10, operation: Some(operation), status: JournalEmpty }
+    | ReconcileEffect(operation) => { tag: 11, operation: Some(operation), status: JournalEmpty }
+    | ReconcileApplied(operation) => { tag: 12, operation: Some(operation), status: JournalEmpty }
+    | ReconcileAbsent(operation) => { tag: 13, operation: Some(operation), status: JournalEmpty }
+    | RecordAbsent(operation) => { tag: 14, operation: Some(operation), status: JournalEmpty }
+    | AbsentRecorded(operation) => { tag: 15, operation: Some(operation), status: JournalEmpty }
+    | RecordApplied(operation) => { tag: 16, operation: Some(operation), status: JournalEmpty }
+    | AppliedRecorded(operation) => { tag: 17, operation: Some(operation), status: JournalEmpty }
+    | RecoverJournal(_) => { tag: 18, operation: None, status: JournalEmpty }
+    | JournalRecovered(recovered) => {
+        tag: 19, operation: recovered.operation, status: recovered.status,
+      }
+    | ReadAuthority(operation) => { tag: 20, operation: operation, status: JournalEmpty }
+    | AuthorityRead(operation) => { tag: 21, operation: operation, status: JournalEmpty }
+    | AppendRejected(operation) => { tag: 22, operation: Some(operation), status: JournalEmpty }
+  }
+
+  pure def consume(at: Process, message: Message): Effect =
+    choreo::CustomEffect(Consume({ at: at, key: messageKey(message) }))
+
+  pure def messagesWithTag(ctx: LocalContext, tag: int): Set[Message] =
+    ctx.messages.filter(message => messageKey(message).tag == tag)
+
+  pure def messageOperation(message: Message): OperationRef =
+    unwrap(messageKey(message).operation)
+
+  pure def applyCustomEffect(context: GlobalContext, effect: CustomEffect): GlobalContext =
+    match effect {
+      | Consume(record) => {
+          ...context,
+          messages: context.messages.setBy(
+            record.at,
+            messages => messages.filter(message => messageKey(message) != record.key)
+          ),
+        }
+    }
+
+  pure def beginEffect(ctx: LocalContext, effect: EffectKind): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) {
+          if (host.phase == HostReady
+              and not(host.paused)
+              and host.current == None
+              and expectedEffect(host.completed) == Some(effect)) {
+            val operation = operationFor(effect)
+            Set({
+              post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingIntent, current: Some(operation) }) },
+              effects: Set(choreo::Send({ to: JOURNAL, message: RecordIntent(operation) })),
+            })
+          } else noTransitions
+        }
+      else noTransitions
+    }
+
+  pure def journalRecordsIntent(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 1).map(message => {
+          val operation = messageOperation(message)
+              if ((journal.status == JournalEmpty or journal.status == Applied)
+                  or (journal.status == ProvenAbsent and match journal.current {
+                    | Some(previous) => isNextRevision(previous, operation)
+                    | None => false
+                  })) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Intent, current: Some(operation), appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: IntentRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostAcceptsIntent(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 2).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingIntent and host.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingDispatch }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: JOURNAL, message: RecordDispatch(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def journalRecordsDispatch(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 3).map(message => {
+          val operation = messageOperation(message)
+              if (journal.status == Intent and journal.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Dispatching, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: DispatchRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostDispatches(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 4).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingDispatch and host.current == Some(operation)) {
+                val request = if (operation.effectKind == ProcessWork) RunEffect(operation) else PerformEffect(operation)
+                val destination = if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingEffect }) },
+                  effects: Set(consume(HOST, message), choreo::Send({ to: destination, message: request })),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def runnerPerforms(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) messagesWithTag(ctx, 5).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind == ProcessWork
+                  and operation.generation == runner.generation
+                  and operation.session == runner.session
+                  and (operation.revision == runner.revision
+                    or operation.revision == runner.revision + 1)) {
+                Set({
+                  post_state: { ...ctx.state, local: RunnerLocal({
+                    ...runner,
+                    applied: runner.applied.setAdd(operation.effectKind),
+                    lastResponse: Some(operation),
+                    applyCount: runner.applyCount + 1,
+                    revision: operation.revision,
+                  }) },
+                  effects: Set(
+                    consume(RUNNER, message),
+                    choreo::Send({ to: HOST, message: EffectApplied(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def providerPerforms(ctx: LocalContext): Set[Transition] =
+    {
+      val provider = providerState(ctx.state.local)
+      if (isProviderState(ctx.state.local)) messagesWithTag(ctx, 6).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind != ProcessWork) {
+                Set({
+                  post_state: { ...ctx.state, local: ProviderLocal({
+                    ...provider,
+                    applied: provider.applied.setAdd(operation.effectKind),
+                    lastResponse: Some(operation),
+                    applyCount: provider.applyCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(GITHUB_PROVIDER, message),
+                    choreo::Send({ to: HOST, message: EffectApplied(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  // An external invocation may return an ambiguous outcome without claiming application.
+  // Reconciliation, never redispatch, decides whether the durable operation advances.
+  pure def externalOutcomeUnknown(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) messagesWithTag(ctx, 5).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind == ProcessWork
+                  and operation.generation == runner.generation
+                  and operation.session == runner.session
+                  and (operation.revision == runner.revision
+                    or operation.revision == runner.revision + 1)) {
+                Set({
+                  post_state: { ...ctx.state, local: RunnerLocal({
+                    ...runner, revision: operation.revision,
+                  }) },
+                  effects: Set(
+                    consume(RUNNER, message),
+                    choreo::Send({ to: HOST, message: EffectUnknown(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else if (isProviderState(ctx.state.local)) messagesWithTag(ctx, 6).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind != ProcessWork) {
+                Set({
+                  post_state: ctx.state,
+                  effects: Set(
+                    consume(GITHUB_PROVIDER, message),
+                    choreo::Send({ to: HOST, message: EffectUnknown(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostRecordsUnknown(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) ctx.messages
+        .filter(message => messageKey(message).tag == 7 or messageKey(message).tag == 8)
+        .map(message => {
+          val operation = messageOperation(message)
+          if (host.phase == AwaitingEffect and host.current == Some(operation)) {
+            Set({
+              post_state: { ...ctx.state, local: HostLocal({
+                ...host, phase: AwaitingUnknown, unknownObserved: true,
+              }) },
+              effects: Set(
+                consume(HOST, message),
+                choreo::Send({ to: JOURNAL, message: RecordUnknown(operation) })
+              ),
+            })
+          } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def journalRecordsUnknown(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 9).map(message => {
+          val operation = messageOperation(message)
+              if (journal.status == Dispatching and journal.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Unknown, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: UnknownRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostBeginsReconciliation(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 10).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingUnknown and host.current == Some(operation)) {
+                val destination = if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingReconcile }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: destination, message: ReconcileEffect(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def externalReconciles(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      val provider = providerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) messagesWithTag(ctx, 11).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind == ProcessWork
+                  and operation.generation == runner.generation
+                  and operation.session == runner.session
+                  and operation.revision == runner.revision) {
+                val response =
+                  if (runner.applied.contains(operation.effectKind)) ReconcileApplied(operation)
+                  else ReconcileAbsent(operation)
+                Set({
+                  post_state: ctx.state,
+                  effects: Set(consume(RUNNER, message), choreo::Send({ to: HOST, message: response })),
+                })
+              } else noTransitions
+        }).flatten()
+      else if (isProviderState(ctx.state.local)) messagesWithTag(ctx, 11).map(message => {
+          val operation = messageOperation(message)
+              if (operation.effectKind != ProcessWork) {
+                val response =
+                  if (provider.applied.contains(operation.effectKind)) ReconcileApplied(operation)
+                  else ReconcileAbsent(operation)
+                Set({
+                  post_state: ctx.state,
+                  effects: Set(
+                    consume(GITHUB_PROVIDER, message),
+                    choreo::Send({ to: HOST, message: response })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostAcceptsReconciliation(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) Set(
+        messagesWithTag(ctx, 12).map(message => {
+          val operation = messageOperation(message)
+          if (host.phase == AwaitingReconcile and host.current == Some(operation)) Set({
+            post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingApplied }) },
+            effects: Set(
+              consume(HOST, message),
+              choreo::Send({ to: JOURNAL, message: RecordApplied(operation) })
+            ),
+          }) else noTransitions
+        }).flatten(),
+        messagesWithTag(ctx, 13).map(message => {
+          val operation = messageOperation(message)
+          if (host.phase == AwaitingReconcile and host.current == Some(operation)) Set({
+            post_state: ctx.state,
+            effects: Set(
+              consume(HOST, message),
+              choreo::Send({ to: JOURNAL, message: RecordAbsent(operation) })
+            ),
+          }) else noTransitions
+        }).flatten()
+      ).flatten()
+      else noTransitions
+    }
+
+  pure def journalRecordsAbsent(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 14).map(message => {
+          val operation = messageOperation(message)
+              if (journal.status == Unknown and journal.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: ProvenAbsent, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: AbsentRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostRetriesProvenAbsent(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 15).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingReconcile and host.current == Some(operation)) {
+                val retried = { ...operation, revision: operation.revision + 1 }
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host, phase: AwaitingIntent, current: Some(retried), retryObserved: true,
+                  }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: JOURNAL, message: RecordIntent(retried) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def crashHost(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) {
+          if (not(host.paused)) Set({
+            post_state: { ...ctx.state, local: HostLocal({
+              ...host,
+              phase: HostPaused,
+              current: None,
+              paused: true,
+              journalRecovered: false,
+              authorityFresh: false,
+              resumeAuthenticated: false,
+            }) },
+            effects: Set(choreo::Send({ to: JOURNAL, message: RecoverJournal(()) })),
+          }) else noTransitions
+        }
+      else noTransitions
+    }
+
+  pure def journalRecovers(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 18).map(message =>
+          if (ctx.messages == Set(message)) Set({
+            post_state: ctx.state,
+            effects: Set(
+              consume(JOURNAL, message),
+              choreo::Send({
+                to: HOST,
+                message: JournalRecovered({ operation: journal.current, status: journal.status }),
+              })
+            ),
+          }) else noTransitions
+        ).flatten()
+      else noTransitions
+    }
+
+  pure def hostAcceptsRecovery(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 19).map(message => {
+              val recoveredOperation = messageKey(message).operation
+              val recoveredStatus = messageKey(message).status
+              if (host.paused and not(host.journalRecovered)) {
+                val destination = match recoveredOperation {
+                  | Some(operation) =>
+                      if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                  | None => GITHUB_PROVIDER
+                }
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host,
+                    phase: AwaitingAuthority,
+                    current: recoveredOperation,
+                    journalRecovered: true,
+                    recoveredStatus: recoveredStatus,
+                  }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: destination, message: ReadAuthority(recoveredOperation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def externalReadsAuthority(ctx: LocalContext): Set[Transition] =
+    if (isRunnerState(ctx.state.local)) ctx.messages
+        .filter(message => messageKey(message).tag == 20)
+        .map(message => {
+            val operation = messageKey(message).operation
+            Set({
+              post_state: ctx.state,
+              effects: Set(
+                consume(RUNNER, message),
+                choreo::Send({ to: HOST, message: AuthorityRead(operation) })
+              ),
+            })
+        }).flatten()
+    else if (isProviderState(ctx.state.local)) ctx.messages
+        .filter(message => messageKey(message).tag == 20)
+        .map(message => {
+            val operation = messageKey(message).operation
+            Set({
+              post_state: ctx.state,
+              effects: Set(
+                consume(GITHUB_PROVIDER, message),
+                choreo::Send({ to: HOST, message: AuthorityRead(operation) })
+              ),
+            })
+        }).flatten()
+    else noTransitions
+
+  pure def hostAcceptsAuthority(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 21).map(message => {
+          val operation = messageKey(message).operation
+              if (host.phase == AwaitingAuthority
+                  and host.journalRecovered
+                  and host.current == operation) {
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host, phase: AwaitingResume, authorityFresh: true,
+                  }) },
+                  effects: Set(consume(HOST, message)),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostAuthenticatesResume(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) {
+          if (host.phase == AwaitingResume
+              and host.paused
+              and host.journalRecovered
+              and host.authorityFresh
+              and not(host.resumeAuthenticated)) {
+            val nextPhase =
+              if (host.recoveredStatus == JournalEmpty or host.recoveredStatus == Applied) HostReady
+              else if (host.recoveredStatus == Intent) AwaitingDispatch
+              else if (host.recoveredStatus == ProvenAbsent) AwaitingIntent
+              else AwaitingReconcile
+            val nextEffects = match host.current {
+              | Some(operation) =>
+                  if (host.recoveredStatus == Intent)
+                    Set(choreo::Send({ to: JOURNAL, message: RecordDispatch(operation) }))
+                  else if (host.recoveredStatus == ProvenAbsent)
+                    Set(choreo::Send({ to: JOURNAL, message: RecordIntent(operation) }))
+                  else if (host.recoveredStatus == Dispatching or host.recoveredStatus == Unknown) {
+                    val destination =
+                      if (operation.effectKind == ProcessWork) RUNNER else GITHUB_PROVIDER
+                    Set(choreo::Send({ to: destination, message: ReconcileEffect(operation) }))
+                  } else Set()
+              | None => Set()
+            }
+            val nextCompleted = match host.current {
+              | Some(operation) =>
+                  if (host.recoveredStatus == Applied)
+                    host.completed.setAdd(operation.effectKind)
+                  else host.completed
+              | None => host.completed
+            }
+            Set({
+              post_state: { ...ctx.state, local: HostLocal({
+                ...host,
+                phase: nextPhase,
+                current: if (nextPhase == HostReady) None else host.current,
+                completed: nextCompleted,
+                paused: false,
+                resumeAuthenticated: true,
+                restartObserved: true,
+              }) },
+              effects: nextEffects,
+            })
+          } else noTransitions
+        }
+      else noTransitions
+    }
+
+  pure def externalRedelivers(ctx: LocalContext): Set[Transition] =
+    {
+      val runner = runnerState(ctx.state.local)
+      val provider = providerState(ctx.state.local)
+      if (isRunnerState(ctx.state.local)) match runner.lastResponse {
+          | Some(operation) => Set({
+              post_state: ctx.state,
+              effects: Set(choreo::Send({ to: HOST, message: EffectApplied(operation) })),
+            })
+          | None => noTransitions
+        }
+      else if (isProviderState(ctx.state.local)) match provider.lastResponse {
+          | Some(operation) => Set({
+              post_state: ctx.state,
+              effects: Set(choreo::Send({ to: HOST, message: EffectApplied(operation) })),
+            })
+          | None => noTransitions
+        }
+      else noTransitions
+    }
+
+  pure val staleOperation: OperationRef = { ...operationFor(Claim), generation: 0 }
+  pure val wrongIdentityOperation: OperationRef = {
+    ...operationFor(Claim), candidate: "candidate-other", repository: "repository-other",
+  }
+
+  pure def providerInjectsStale(ctx: LocalContext): Set[Transition] =
+    if (isProviderState(ctx.state.local)) Set({
+          post_state: ctx.state,
+          effects: Set(choreo::Send({ to: HOST, message: EffectApplied(staleOperation) })),
+        })
+    else noTransitions
+
+  pure def providerInjectsWrongIdentity(ctx: LocalContext): Set[Transition] =
+    if (isProviderState(ctx.state.local)) Set({
+          post_state: ctx.state,
+          effects: Set(choreo::Send({ to: HOST, message: EffectApplied(wrongIdentityOperation) })),
+        })
+    else noTransitions
+
+  pure def hostRejectsInvalidResponse(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 7).map(message => {
+          val operation = messageOperation(message)
+              if (operation.generation != 1) Set({
+                post_state: { ...ctx.state, local: HostLocal({ ...host, staleRejected: true }) },
+                effects: Set(consume(HOST, message)),
+              })
+              else if (operation != operationFor(operation.effectKind)) Set({
+                post_state: { ...ctx.state, local: HostLocal({ ...host, identityRejected: true }) },
+                effects: Set(consume(HOST, message)),
+              })
+              else if (host.phase != AwaitingEffect or host.current != Some(operation)) Set({
+                post_state: { ...ctx.state, local: HostLocal({ ...host, duplicateRejected: true }) },
+                effects: Set(consume(HOST, message)),
+              })
+              else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def journalRejectsInvalidAppend(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) Set(
+        messagesWithTag(ctx, 3).map(message => {
+          val operation = messageOperation(message)
+          if (journal.status != Intent or journal.current != Some(operation)) Set({
+            post_state: { ...ctx.state, local: JournalLocal({
+              ...journal, rejectionCount: journal.rejectionCount + 1,
+            }) },
+            effects: Set(
+              consume(JOURNAL, message),
+              choreo::Send({ to: HOST, message: AppendRejected(operation) })
+            ),
+          }) else noTransitions
+        }).flatten(),
+        messagesWithTag(ctx, 16).map(message => {
+          val operation = messageOperation(message)
+          if ((journal.status != Dispatching and journal.status != Unknown)
+              or journal.current != Some(operation)) Set({
+            post_state: { ...ctx.state, local: JournalLocal({
+              ...journal, rejectionCount: journal.rejectionCount + 1,
+            }) },
+            effects: Set(
+              consume(JOURNAL, message),
+              choreo::Send({ to: HOST, message: AppendRejected(operation) })
+            ),
+          }) else noTransitions
+        }).flatten()
+      ).flatten()
+      else noTransitions
+    }
+
+  pure def hostInjectsOutOfSequence(ctx: LocalContext): Set[Transition] =
+    if (isHostState(ctx.state.local)) Set({
+          post_state: ctx.state,
+          effects: Set(choreo::Send({
+            to: JOURNAL, message: RecordDispatch(operationFor(Claim)),
+          })),
+        })
+    else noTransitions
+
+  pure def hostAcceptsAppendRejection(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 22).map(message =>
+          Set({
+              post_state: { ...ctx.state, local: HostLocal({ ...host, sequenceRejected: true }) },
+              effects: Set(consume(HOST, message)),
+            })
+        ).flatten()
+      else noTransitions
+    }
+
+  pure def hostObservesApplied(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 7).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingEffect and host.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({ ...host, phase: AwaitingApplied }) },
+                  effects: Set(
+                    consume(HOST, message),
+                    choreo::Send({ to: JOURNAL, message: RecordApplied(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def journalRecordsApplied(ctx: LocalContext): Set[Transition] =
+    {
+      val journal = journalState(ctx.state.local)
+      if (isJournalState(ctx.state.local)) messagesWithTag(ctx, 16).map(message => {
+          val operation = messageOperation(message)
+              if ((journal.status == Dispatching or journal.status == Unknown)
+                  and journal.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: JournalLocal({
+                    ...journal, status: Applied, appendCount: journal.appendCount + 1,
+                  }) },
+                  effects: Set(
+                    consume(JOURNAL, message),
+                    choreo::Send({ to: HOST, message: AppliedRecorded(operation) })
+                  ),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def hostSettles(ctx: LocalContext): Set[Transition] =
+    {
+      val host = hostState(ctx.state.local)
+      if (isHostState(ctx.state.local)) messagesWithTag(ctx, 17).map(message => {
+          val operation = messageOperation(message)
+              if (host.phase == AwaitingApplied and host.current == Some(operation)) {
+                Set({
+                  post_state: { ...ctx.state, local: HostLocal({
+                    ...host,
+                    phase: HostReady,
+                    current: None,
+                    completed: host.completed.setAdd(operation.effectKind),
+                  }) },
+                  effects: Set(consume(HOST, message)),
+                })
+              } else noTransitions
+        }).flatten()
+      else noTransitions
+    }
+
+  pure def mainListener(ctx: LocalContext): Set[Transition] = Set(
+    EFFECTS.map(effect => beginEffect(ctx, effect)).flatten(),
+    journalRecordsIntent(ctx),
+    hostAcceptsIntent(ctx),
+    journalRecordsDispatch(ctx),
+    hostDispatches(ctx),
+    runnerPerforms(ctx),
+    providerPerforms(ctx),
+    externalOutcomeUnknown(ctx),
+    hostRecordsUnknown(ctx),
+    journalRecordsUnknown(ctx),
+    hostBeginsReconciliation(ctx),
+    externalReconciles(ctx),
+    hostAcceptsReconciliation(ctx),
+    journalRecordsAbsent(ctx),
+    hostRetriesProvenAbsent(ctx),
+    hostObservesApplied(ctx),
+    journalRecordsApplied(ctx),
+    hostSettles(ctx),
+    crashHost(ctx),
+    journalRecovers(ctx),
+    hostAcceptsRecovery(ctx),
+    externalReadsAuthority(ctx),
+    hostAcceptsAuthority(ctx),
+    hostAuthenticatesResume(ctx),
+    hostRejectsInvalidResponse(ctx),
+    journalRejectsInvalidAppend(ctx),
+    hostAcceptsAppendRejection(ctx)
+  ).flatten()
+
+  pure def nonFaultingListener(ctx: LocalContext): Set[Transition] = Set(
+    EFFECTS.map(effect => beginEffect(ctx, effect)).flatten(),
+    journalRecordsIntent(ctx),
+    hostAcceptsIntent(ctx),
+    journalRecordsDispatch(ctx),
+    hostDispatches(ctx),
+    runnerPerforms(ctx),
+    providerPerforms(ctx),
+    hostObservesApplied(ctx),
+    journalRecordsApplied(ctx),
+    hostSettles(ctx)
+  ).flatten()
+
+  action step = choreo::step(mainListener, applyCustomEffect)
+  action normalProgressStep = choreo::step(nonFaultingListener, applyCustomEffect)
+  action stepWith(process: Process, listener: LocalContext => Set[Transition]): bool =
+    choreo::step_with(process, listener, applyCustomEffect)
+  action start(effect: EffectKind): bool = stepWith(HOST, ctx => beginEffect(ctx, effect))
+  action externalApplies = any {
+    stepWith(RUNNER, runnerPerforms),
+    stepWith(GITHUB_PROVIDER, providerPerforms),
+  }
+
+  // C2 bounded verification explores one ambiguity retry and one crash/recovery
+  // cycle per operation. The production step above remains unrestricted; these
+  // listeners only bound the proof root so repeated equivalent cycles do not
+  // dominate the state space.
+  pure def firstProvenAbsentRetry(ctx: LocalContext): Set[Transition] = {
+    val host = hostState(ctx.state.local)
+    match host.current {
+      | Some(operation) =>
+          if (operation.revision == 1) hostRetriesProvenAbsent(ctx) else noTransitions
+      | None => noTransitions
+    }
+  }
+
+  pure def firstCrash(ctx: LocalContext): Set[Transition] = {
+    val host = hostState(ctx.state.local)
+    if (host.restartObserved) noTransitions else crashHost(ctx)
+  }
+
+  action boundedFaultStep(effect: EffectKind): bool = any {
+    start(effect),
+    stepWith(JOURNAL, journalRecordsIntent),
+    stepWith(HOST, hostAcceptsIntent),
+    stepWith(JOURNAL, journalRecordsDispatch),
+    stepWith(HOST, hostDispatches),
+    stepWith(RUNNER, runnerPerforms),
+    stepWith(GITHUB_PROVIDER, providerPerforms),
+    stepWith(RUNNER, externalOutcomeUnknown),
+    stepWith(GITHUB_PROVIDER, externalOutcomeUnknown),
+    stepWith(HOST, hostRecordsUnknown),
+    stepWith(JOURNAL, journalRecordsUnknown),
+    stepWith(HOST, hostBeginsReconciliation),
+    stepWith(RUNNER, externalReconciles),
+    stepWith(GITHUB_PROVIDER, externalReconciles),
+    stepWith(HOST, hostAcceptsReconciliation),
+    stepWith(JOURNAL, journalRecordsAbsent),
+    stepWith(HOST, firstProvenAbsentRetry),
+    stepWith(HOST, hostObservesApplied),
+    stepWith(JOURNAL, journalRecordsApplied),
+    stepWith(HOST, hostSettles),
+    stepWith(HOST, firstCrash),
+    stepWith(JOURNAL, journalRecovers),
+    stepWith(HOST, hostAcceptsRecovery),
+    stepWith(RUNNER, externalReadsAuthority),
+    stepWith(GITHUB_PROVIDER, externalReadsAuthority),
+    stepWith(HOST, hostAcceptsAuthority),
+    stepWith(HOST, hostAuthenticatesResume),
+    stepWith(HOST, hostRejectsInvalidResponse),
+    stepWith(JOURNAL, journalRejectsInvalidAppend),
+    stepWith(HOST, hostAcceptsAppendRejection),
+  }
+
+  action completeEffect(effect: EffectKind): bool = start(effect)
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(externalApplies)
+    .then(stepWith(HOST, hostObservesApplied))
+    .then(stepWith(JOURNAL, journalRecordsApplied))
+    .then(stepWith(HOST, hostSettles))
+
+  def hostCompleted(effect: EffectKind): bool = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.completed.contains(effect) and host.current == None and host.phase == HostReady
+    | _ => false
+  }
+
+  pure def messageAllowedAt(process: Process, message: Message): bool = {
+    if (process == HOST) match message {
+        | IntentRecorded(_) => true
+        | DispatchRecorded(_) => true
+        | EffectApplied(_) => true
+        | EffectUnknown(_) => true
+        | UnknownRecorded(_) => true
+        | ReconcileApplied(_) => true
+        | ReconcileAbsent(_) => true
+        | AbsentRecorded(_) => true
+        | AppliedRecorded(_) => true
+        | JournalRecovered(_) => true
+        | AuthorityRead(_) => true
+        | AppendRejected(_) => true
+        | _ => false
+      }
+    else if (process == JOURNAL) match message {
+        | RecordIntent(_) => true
+        | RecordDispatch(_) => true
+        | RecordUnknown(_) => true
+        | RecordAbsent(_) => true
+        | RecordApplied(_) => true
+        | RecoverJournal(_) => true
+        | _ => false
+      }
+    else if (process == RUNNER) match message {
+        | RunEffect(_) => true
+        | ReconcileEffect(_) => true
+        | ReadAuthority(_) => true
+        | _ => false
+      }
+    else match message {
+        | PerformEffect(_) => true
+        | ReconcileEffect(_) => true
+        | ReadAuthority(_) => true
+        | _ => false
+      }
+  }
+
+  val typedMessageSoup = PROCESSES.forall(process =>
+    choreo::s.messages.get(process).forall(message => messageAllowedAt(process, message)))
+
+  type LegacyProjection = {
+    stage: int,
+    operationId: str,
+    operationStatus: str,
+    paused: bool,
+    readbackCurrent: bool,
+    claimCurrent: bool,
+    candidateDurable: bool,
+    branchPublished: bool,
+    pullRequestObserved: bool,
+    mergeObserved: bool,
+    nativeReadbackObserved: bool,
+  }
+
+  pure def completedStage(completed: Set[EffectKind]): int =
+    if (completed.contains(NativeReadback)) 7
+    else if (completed.contains(Merge)) 6
+    else if (completed.contains(PullRequest)) 5
+    else if (completed.contains(Branch)) 4
+    else if (completed.contains(Candidate)) 3
+    else if (completed.contains(ProcessWork)) 2
+    else if (completed.contains(Claim)) 1
+    else 0
+
+  pure def projectedStatus(status: JournalStatus): str = match status {
+    | JournalEmpty => "none"
+    | Intent => "intent"
+    | Dispatching => "dispatching"
+    | Unknown => "unknown"
+    | ProvenAbsent => "absent"
+    | Applied => "none"
+  }
+
+  val legacyProjection: LegacyProjection = {
+    val host = match choreo::s.system.get(HOST).local {
+      | HostLocal(value) => value
+      | _ => {
+          phase: HostPaused, current: None, completed: Set(), paused: true,
+          journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
+          unknownObserved: false, retryObserved: false, duplicateRejected: false,
+          staleRejected: false, identityRejected: false, sequenceRejected: false,
+          restartObserved: false,
+          recoveredStatus: JournalEmpty,
+        }
+    }
+    val journal = match choreo::s.system.get(JOURNAL).local {
+      | JournalLocal(value) => value
+      | _ => {
+          status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0,
+        }
+    }
+    {
+      stage: completedStage(host.completed),
+      operationId: match journal.current {
+        | Some(operation) => if (journal.status == Applied) "" else operation.operation
+        | None => ""
+      },
+      operationStatus: projectedStatus(journal.status),
+      paused: host.paused,
+      readbackCurrent: host.authorityFresh,
+      claimCurrent: host.completed.contains(Claim),
+      candidateDurable: host.completed.contains(Candidate),
+      branchPublished: host.completed.contains(Branch),
+      pullRequestObserved: host.completed.contains(PullRequest),
+      mergeObserved: host.completed.contains(Merge),
+      nativeReadbackObserved: host.completed.contains(NativeReadback),
+    }
+  }
+
+  pure def completionPrefix(completed: Set[EffectKind]): bool = and {
+    completed.contains(ProcessWork) implies completed.contains(Claim),
+    completed.contains(Candidate) implies completed.contains(ProcessWork),
+    completed.contains(Branch) implies completed.contains(Candidate),
+    completed.contains(PullRequest) implies completed.contains(Branch),
+    completed.contains(Merge) implies completed.contains(PullRequest),
+    completed.contains(NativeReadback) implies completed.contains(Merge),
+  }
+
+  pure def appliedIsAuthorized(
+    effect: EffectKind,
+    host: HostState,
+    journal: JournalState
+  ): bool = host.completed.contains(effect) or match journal.current {
+    | Some(operation) => and {
+        operation.effectKind == effect,
+        Set(Dispatching, Unknown, Applied).contains(journal.status),
+      }
+    | None => false
+  }
+
+  val retainedProjectionSafety = and {
+    legacyProjection.stage >= 0,
+    legacyProjection.stage <= 7,
+    legacyProjection.branchPublished implies legacyProjection.candidateDurable,
+    legacyProjection.pullRequestObserved implies legacyProjection.branchPublished,
+    legacyProjection.mergeObserved implies legacyProjection.pullRequestObserved,
+    legacyProjection.nativeReadbackObserved implies legacyProjection.mergeObserved,
+    legacyProjection.stage == 7 implies legacyProjection.nativeReadbackObserved,
+    legacyProjection.operationStatus == "unknown" implies
+      choreo::s.messages.get(RUNNER).forall(message => match message {
+        | RunEffect(_) => false
+        | _ => true
+      }),
+    legacyProjection.operationStatus == "unknown" implies
+      choreo::s.messages.get(GITHUB_PROVIDER).forall(message => match message {
+        | PerformEffect(_) => false
+        | _ => true
+      }),
+  }
+
+  val safety = and {
+    typedMessageSoup,
+    retainedProjectionSafety,
+    match choreo::s.system.get(HOST).local {
+      | HostLocal(host) => and {
+          completionPrefix(host.completed),
+          not(host.journalRecovered) implies host.paused,
+          not(host.authorityFresh) implies host.paused,
+          not(host.resumeAuthenticated) implies host.paused,
+        }
+      | _ => false
+    },
+    match choreo::s.system.get(JOURNAL).local {
+      | JournalLocal(journal) => and {
+          journal.appendCount >= 0,
+          journal.rejectionCount >= 0,
+          journal.status == JournalEmpty implies journal.current == None,
+          journal.status != JournalEmpty implies journal.current != None,
+        }
+      | _ => false
+    },
+    {
+      val host = match choreo::s.system.get(HOST).local {
+        | HostLocal(value) => value
+        | _ => {
+            phase: HostPaused, current: None, completed: Set(), paused: true,
+            journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
+            unknownObserved: false, retryObserved: false, duplicateRejected: false,
+            staleRejected: false, identityRejected: false, sequenceRejected: false,
+            restartObserved: false,
+            recoveredStatus: JournalEmpty,
+          }
+      }
+      val journal = match choreo::s.system.get(JOURNAL).local {
+        | JournalLocal(value) => value
+        | _ => { status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0 }
+      }
+      match choreo::s.system.get(RUNNER).local {
+      | RunnerLocal(runner) => and {
+          runner.applied.forall(effect => effect == ProcessWork),
+          runner.applied.forall(effect => appliedIsAuthorized(effect, host, journal)),
+          runner.applyCount == runner.applied.size(),
+        }
+      | _ => false
+      }
+    },
+    {
+      val host = match choreo::s.system.get(HOST).local {
+        | HostLocal(value) => value
+        | _ => {
+            phase: HostPaused, current: None, completed: Set(), paused: true,
+            journalRecovered: false, authorityFresh: false, resumeAuthenticated: false,
+            unknownObserved: false, retryObserved: false, duplicateRejected: false,
+            staleRejected: false, identityRejected: false, sequenceRejected: false,
+            restartObserved: false,
+            recoveredStatus: JournalEmpty,
+          }
+      }
+      val journal = match choreo::s.system.get(JOURNAL).local {
+        | JournalLocal(value) => value
+        | _ => { status: JournalEmpty, current: None, appendCount: 0, rejectionCount: 0 }
+      }
+      match choreo::s.system.get(GITHUB_PROVIDER).local {
+      | ProviderLocal(provider) => and {
+          not(provider.applied.contains(ProcessWork)),
+          provider.applied.forall(effect => appliedIsAuthorized(effect, host, journal)),
+          provider.applyCount == provider.applied.size(),
+        }
+      | _ => false
+      }
+    },
+  }
+
+  def workflowCompleted: bool = hostCompleted(NativeReadback)
+  val unknownReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.unknownObserved
+    | _ => false
+  }
+  val retryReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.retryObserved
+    | _ => false
+  }
+  val restartGatesReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => and {
+        not(host.paused), host.journalRecovered, host.authorityFresh, host.resumeAuthenticated,
+      }
+    | _ => false
+  }
+  val duplicateRejected = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.duplicateRejected and host.completed.size() == 1
+    | _ => false
+  }
+  val staleGenerationRejectionReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.staleRejected and host.completed.size() == 0
+    | _ => false
+  }
+  val wrongIdentityRejectionReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.identityRejected and host.completed.size() == 0
+    | _ => false
+  }
+  val journalSequenceRejectionReached = match choreo::s.system.get(HOST).local {
+    | HostLocal(host) => host.sequenceRejected and host.completed.size() == 0
+    | _ => false
+  }
+
+  // Qualification-only controls: deliberately omit a real protocol obligation.
+  val externalApplicationPending = hostState(choreo::s.system.get(HOST).local).phase == AwaitingEffect
+  action qualificationUnsafeCompletion = {
+    val process = choreo::s.system.get(HOST)
+    val host = hostState(process.local)
+    choreo::s' = { ...choreo::s, system: choreo::s.system.set(HOST,
+      { ...process, local: HostLocal({ ...host, completed: Set(NativeReadback) }) }) }
+  }
+  action qualificationWithoutNativeReadback =
+    if (hostCompleted(Merge)) choreo::s' = choreo::s
+    else normalProgressStep
+  action qualificationWithoutExternalApplication(effect: EffectKind): bool =
+    if (externalApplicationPending) choreo::s' = choreo::s
+    else any {
+      start(effect), stepWith(JOURNAL, journalRecordsIntent),
+      stepWith(HOST, hostAcceptsIntent), stepWith(JOURNAL, journalRecordsDispatch),
+      stepWith(HOST, hostDispatches),
+    }
+
+  temporal progress: bool =
+    normalProgressStep.weakFair(Set(choreo::s)).implies(eventually(workflowCompleted))
+  temporal faultSafety: bool = always(safety)
+}
+
+// Separate modules keep Quint's init/step classification unambiguous while
+// checking both external authority implementations under the same fault schedule.
+module O2HostedWriterChoreoProviderBounded {
+  import O2HostedWriterChoreoModel as model
+
+  action init = model::init
+  action step = model::boundedFaultStep(model::Claim)
+  val safety = model::safety
+}
+
+module O2HostedWriterChoreoRunnerBounded {
+  import O2HostedWriterChoreoModel as model
+
+  action init = model::initAfterClaim
+  action step = model::boundedFaultStep(model::ProcessWork)
+  val safety = model::safety
+}
+
+module O2HostedWriterChoreoProgressQualification {
+  import O2HostedWriterChoreoModel as model
+  action init = model::init
+  action step = model::normalProgressStep
+  val safety = model::safety
+  val reached = model::workflowCompleted
+  temporal progress: bool = model::progress
+  temporal eventuallyReached: bool = eventually(reached)
+  val blockedInvariant = not(model::hostCompleted(model::Merge))
+  action withoutNativeReadback = model::qualificationWithoutNativeReadback
+  action unsafeCompletion = model::qualificationUnsafeCompletion
+}
+module O2HostedWriterChoreoFaultQualification {
+  import O2HostedWriterChoreoModel as model
+  var runnerLane: bool
+  action init = any {
+    all { model::init, runnerLane' = false },
+    all { model::initAfterClaim, runnerLane' = true },
+  }
+  val selectedEffect = if (runnerLane) model::ProcessWork else model::Claim
+  action step = all {
+    model::boundedFaultStep(selectedEffect), runnerLane' = runnerLane,
+  }
+  val safety = model::safety
+  val unknownReached = model::unknownReached
+  temporal faultSafety: bool = always(safety)
+  val blockedInvariant = not(model::externalApplicationPending)
+  temporal eventuallyReached: bool = eventually(model::hostCompleted(selectedEffect))
+  action withoutExternalApplication = all {
+    runnerLane' = runnerLane,
+    model::qualificationWithoutExternalApplication(selectedEffect),
+  }
+  action unsafeCompletion = all {
+    runnerLane' = runnerLane, model::qualificationUnsafeCompletion,
+  }
+}
+
+module O2HostedWriterChoreoTests {
+  import O2HostedWriterChoreoModel.*
+
+  action throughClaim = init.then(completeEffect(Claim))
+  action throughProcess = throughClaim.then(completeEffect(ProcessWork))
+  action throughCandidate = throughProcess.then(completeEffect(Candidate))
+  action throughBranch = throughCandidate.then(completeEffect(Branch))
+  action throughPullRequest = throughBranch.then(completeEffect(PullRequest))
+  action throughMerge = throughPullRequest.then(completeEffect(Merge))
+  action throughNativeReadback = throughMerge.then(completeEffect(NativeReadback))
+
+  action lostAppliedScenario = init
+    .then(start(Claim))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(stepWith(GITHUB_PROVIDER, providerPerforms))
+    .then(stepWith(HOST, hostRecordsUnknown))
+    .then(stepWith(JOURNAL, journalRecordsUnknown))
+    .then(stepWith(HOST, hostBeginsReconciliation))
+    .then(stepWith(GITHUB_PROVIDER, externalReconciles))
+    .then(stepWith(HOST, hostAcceptsReconciliation))
+    .then(stepWith(JOURNAL, journalRecordsApplied))
+    .then(stepWith(HOST, hostSettles))
+
+  action provenAbsentRetryScenario = init
+    .then(start(Claim))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(stepWith(GITHUB_PROVIDER, externalOutcomeUnknown))
+    .then(stepWith(HOST, hostRecordsUnknown))
+    .then(stepWith(JOURNAL, journalRecordsUnknown))
+    .then(stepWith(HOST, hostBeginsReconciliation))
+    .then(stepWith(GITHUB_PROVIDER, externalReconciles))
+    .then(stepWith(HOST, hostAcceptsReconciliation))
+    .then(stepWith(JOURNAL, journalRecordsAbsent))
+    .then(stepWith(HOST, hostRetriesProvenAbsent))
+    .then(stepWith(JOURNAL, journalRecordsIntent))
+    .then(stepWith(HOST, hostAcceptsIntent))
+    .then(stepWith(JOURNAL, journalRecordsDispatch))
+    .then(stepWith(HOST, hostDispatches))
+    .then(stepWith(GITHUB_PROVIDER, providerPerforms))
+    .then(stepWith(HOST, hostObservesApplied))
+    .then(stepWith(JOURNAL, journalRecordsApplied))
+    .then(stepWith(HOST, hostSettles))
+
+  run claimFoundation = throughClaim.expect(hostCompleted(Claim) and safety)
+  run processFoundation = throughProcess.expect(hostCompleted(ProcessWork) and safety)
+  run candidateFoundation = throughCandidate.expect(hostCompleted(Candidate) and safety)
+  run branchFoundation = throughBranch.expect(hostCompleted(Branch) and safety)
+  run pullRequestFoundation = throughPullRequest.expect(hostCompleted(PullRequest) and safety)
+  run mergeFoundation = throughMerge.expect(hostCompleted(Merge) and safety)
+  run nativeReadbackFoundation =
+    throughNativeReadback.expect(workflowCompleted and legacyProjection.stage == 7 and safety)
+  run lostAppliedReconciles =
+    lostAppliedScenario.expect(hostCompleted(Claim) and unknownReached and safety)
+  run provenAbsentRetriesSameOperation =
+    provenAbsentRetryScenario.expect(hostCompleted(Claim) and unknownReached and retryReached and safety)
+  run restartRequiresThreeGates = init
+    .then(stepWith(HOST, crashHost))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(JOURNAL, journalRecovers))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(HOST, hostAcceptsRecovery))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(GITHUB_PROVIDER, externalReadsAuthority))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(HOST, hostAcceptsAuthority))
+    .expect(not(restartGatesReached) and safety)
+    .then(stepWith(HOST, hostAuthenticatesResume))
+    .expect(restartGatesReached and safety)
+  run duplicateResponseRejected = throughClaim
+    .then(stepWith(GITHUB_PROVIDER, externalRedelivers))
+    .then(stepWith(HOST, hostRejectsInvalidResponse))
+    .expect(duplicateRejected and safety)
+  run staleGenerationRejected = init
+    .then(stepWith(GITHUB_PROVIDER, providerInjectsStale))
+    .then(stepWith(HOST, hostRejectsInvalidResponse))
+    .expect(staleGenerationRejectionReached and safety)
+  run wrongIdentityRejected = init
+    .then(stepWith(GITHUB_PROVIDER, providerInjectsWrongIdentity))
+    .then(stepWith(HOST, hostRejectsInvalidResponse))
+    .expect(wrongIdentityRejectionReached and safety)
+  run journalSequenceRejected = init
+    .then(stepWith(HOST, hostInjectsOutOfSequence))
+    .then(stepWith(JOURNAL, journalRejectsInvalidAppend))
+    .then(stepWith(HOST, hostAcceptsAppendRejection))
+    .expect(journalSequenceRejectionReached and safety)
+  run missingNativeReadbackCannotComplete =
+    throughMerge.expect(not(workflowCompleted) and legacyProjection.stage == 6 and safety)
+}
+
+module ChoreoSourcePinSmoke {
+  import O2HostedWriterChoreoModel.*
+  import O2HostedWriterChoreoTests.throughClaim
+
+  // C1's source-pin smoke now exercises the smallest complete C2 message path while
+  // retaining its stable manifest entry point.
+  run choreoSourcePinSmoke = throughClaim.expect(hostCompleted(Claim) and safety)
+}
+
+```

@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubReleaseHardeningQualification.fs"
 
 open System
@@ -15,6 +16,8 @@ let root =
     |> Array.tryFind Directory.Exists
     |> Option.map Path.GetFullPath
     |> Option.defaultValue defaultRoot
+
+FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.requireCurrent root
 
 let evidenceRoot = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-6")
 
@@ -345,7 +348,7 @@ else
         | ExactReleaseReplay -> GitHubReleaseHardeningQualification.verify report.Seal snapshot = Ok report
         | QuintReleaseUnchanged ->
             sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) =
-                "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+                FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
         | NoReleaseMutationSurface ->
             let surface =
                 File.ReadAllText(
@@ -472,9 +475,10 @@ else
                 |> Convert.ToHexString
                 |> _.ToLowerInvariant()
 
-            sha256File protocolPath = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+            sha256File protocolPath =
+                FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
             && alteredDigest
-               <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+               <> FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
         | NoReleaseMutationSurface, "forbidden-http-client-surface" ->
             let forbidden =
                 [

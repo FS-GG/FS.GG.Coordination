@@ -462,8 +462,8 @@ let ``descendant and retry keep immutable treatment while binding their actual c
     Assert.Equal(rootTreatment.ContextManifestSha256, childPrepared.Assignment.ContextManifestSha256)
     Assert.Equal(rootTreatment.WorkflowRevision, childPrepared.Assignment.ExpectedWorkflowRevision)
     Assert.Equal(rootTreatment.Generation, childPrepared.Assignment.ExpectedGeneration)
-    Assert.NotEqual(rootTreatment.ContextManifestSha256, childPrepared.PreparedTreatment.CurrentContextManifestSha256)
-    Assert.NotEqual(rootTreatment.ProposalSha256, childPrepared.PreparedTreatment.CurrentProposalSha256)
+    Assert.NotEqual<string>(rootTreatment.ContextManifestSha256, childPrepared.PreparedTreatment.CurrentContextManifestSha256)
+    Assert.NotEqual<string>(rootTreatment.ProposalSha256, childPrepared.PreparedTreatment.CurrentProposalSha256)
     Assert.Equal(Id.revision 18L, childPrepared.PreparedTreatment.CurrentWorkflowRevision)
     Assert.Equal(Id.generation 5L, childPrepared.PreparedTreatment.CurrentGeneration)
     Assert.Equal(sha256 childPrepared.PreparedTreatment.RenderedInput, childPrepared.PreparedTreatment.RenderedInputSha256)
@@ -488,7 +488,7 @@ let ``descendant and retry keep immutable treatment while binding their actual c
         Assert.Equal(rootTreatment, treatment)
         Assert.Equal(rootTreatment.AssignmentSha256, binding.AssignmentSha256)
         Assert.Equal(Retry childId, binding.Relation)
-        Assert.NotEqual(childPrepared.PreparedTreatment.CurrentContextManifestSha256, retryPrepared.PreparedTreatment.CurrentContextManifestSha256)
+        Assert.NotEqual<string>(childPrepared.PreparedTreatment.CurrentContextManifestSha256, retryPrepared.PreparedTreatment.CurrentContextManifestSha256)
     | other -> failwithf "retry treatment binding was not persisted: %A" other
 
     match LearningAssignmentAdapter.prepare { childRequest with InheritedDurableTreatment = None } with

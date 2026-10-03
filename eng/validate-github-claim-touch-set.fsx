@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.GitHub/ShardedJournalAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/ClaimTouchSetAdapter.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubClaimTouchSetQualification.fs"
@@ -12,6 +13,8 @@ open FS.GG.Coordination.Qualification.Contracts
 let fail code message = failwith $"{code}: {message}"
 let args = fsi.CommandLineArgs |> Array.skip 1
 let root = if args.Length = 0 then "." else args[0]
+
+FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.requireCurrent root
 
 let corpusPath =
     Path.Combine(root, "evidence/github-substrate-v2/gs2-05-5/corpus.json")
@@ -90,7 +93,10 @@ if
 then
     fail "GCTQ-PREDECESSOR-QUINT" "accepted GS2-05.4 Quint identity changed"
 
-if sha256 quintPath <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937" then
+if
+    sha256 quintPath
+    <> FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
+then
     fail "GCTQ-QUINT" "canonical Quint source changed"
 
 if generatedIds <> requiredIds || independentIds <> requiredIds then
@@ -174,7 +180,7 @@ let generatedMutation =
             }
     | GitHubClaimTouchSetControl.QuintAndPrerequisite ->
         sha256 receiptPath = "12b80b146b3c17d5090603dfe7bd8ee16d2fc5f7736fc7fc5ab98ccc0e43ab4e"
-        && sha256 quintPath = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+        && sha256 quintPath = FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
 
 // Independent producer: distinct assertions over the public boundary, not a call to generatedMutation.
 let independentMutation =

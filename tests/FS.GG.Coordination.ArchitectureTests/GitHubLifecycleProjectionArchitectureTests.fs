@@ -65,8 +65,10 @@ let ``lifecycle projection composes derived facts through the existing Project a
 
 [<Fact>]
 let ``lifecycle projection preserves canonical Quint source`` () =
+    Assert.True(FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.isCurrent root)
+
     Assert.Equal(
-        "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937",
+        FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256,
         sha256Text (read "src/FS.GG.Coordination.Protocol/Protocol.md")
     )
 

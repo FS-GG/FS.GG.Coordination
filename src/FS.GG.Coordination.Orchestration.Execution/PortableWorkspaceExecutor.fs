@@ -473,6 +473,12 @@ module PortableWorkspaceExecutor =
                     write path (PortableRunning(commandId, binding, containerName))
                     Choice2Of2())
 
+        member _.Abandon(workspaceScope, idempotencyId, binding) =
+            locked workspaceScope idempotencyId (fun path ->
+                match read path with
+                | Some(PortableRunning(_, existing, _)) when existing = binding -> File.Delete path; true
+                | _ -> false)
+
         member _.Settle(workspaceScope, idempotencyId, binding, receipt) =
             locked workspaceScope idempotencyId (fun path ->
                 match read path with
@@ -547,9 +553,35 @@ module PortableWorkspaceExecutor =
         else
             now.AddTicks duration.Ticks
 
-    type Executor(policy: PortableExecutorPolicy, runner: IPortableProcessRunner, ?clock: unit -> DateTimeOffset) =
-        let clock = defaultArg clock (fun () -> DateTimeOffset.UtcNow)
+    type Executor(policy: PortableExecutorPolicy, runner: IPortableProcessRunner, ?clock: unit -> DateTimeOffset,
+                  ?prerequisites: Map<string, PortablePrerequisiteRequirement>) =
+        let clock = defaultArg clock (fun () ->
+            let now = DateTimeOffset.UtcNow
+            DateTimeOffset(now.Ticks - now.Ticks % 10L, TimeSpan.Zero))
         let journal = DurableJournal policy.Runtime.StateRoot
+        let prerequisites = defaultArg prerequisites Map.empty
+
+        let attemptBinding profile command (operation: PortableReviewedOperation) =
+            let contract = bindingDigest profile command operation
+            // Bind the exact selected runner arguments and all execution configuration, not only recipe ID.
+            System.Text.Json.JsonSerializer.Serialize({| contract = contract; operation = operation; policy = policy |})
+            |> Encoding.UTF8.GetBytes |> sha256
+
+        let prepareAttemptAsync profile command operation deadline cancellationToken =
+            let binding = attemptBinding profile command operation
+            match Map.tryFind operation.EntryPoint prerequisites with
+            | Some PortablePrerequisiteRequirement.CapsuleUnavailable ->
+                Task.FromResult(Error "preparation-required-check-unavailable")
+            | Some(PortablePrerequisiteRequirement.CapsuleRequired spec) ->
+                PreparedAttempt.prepareAsync binding deadline spec cancellationToken
+            | None -> Task.FromResult(Ok(PreparedAttempt.prepareReviewedContract binding deadline))
+
+        let consumeAttempt profile command operation attempt =
+            let binding = attemptBinding profile command operation
+            match Map.tryFind operation.EntryPoint prerequisites with
+            | Some PortablePrerequisiteRequirement.CapsuleUnavailable -> Error "preparation-required-check-unavailable"
+            | Some(PortablePrerequisiteRequirement.CapsuleRequired spec) -> PreparedAttempt.validate (clock ()) binding spec attempt
+            | None -> PreparedAttempt.validateReviewedContract (clock ()) binding attempt
 
         let selectReviewedOperation (profile: PortableWorkspaceProfile) (command: PortableWorkspaceCommand) =
             PortableWorkspaceContract.validateProfile profile
@@ -931,43 +963,36 @@ module PortableWorkspaceExecutor =
                             | Some _ -> Some(Refused "portable-executor-idempotency-conflict")
                             | None -> None))
 
-                let preparation =
+                let! preparation = task {
                     match prior with
-                    | Error reason -> Error(Refused reason)
-                    | Ok(Some outcome) -> Error outcome
+                    | Error reason -> return Error(Refused reason)
+                    | Ok(Some outcome) -> return Error outcome
                     | Ok None ->
-                        refuseBeforeLaunch authority profile command
-                        |> Result.mapError Refused
-                        |> Result.bind (fun (prepared, operation, workingDirectory) ->
-                            let digest = bindingDigest profile command operation
-                            let containerName = "fsgg-portable-" + digest[..23]
-                            let launchObservedAt = clock ()
-
-                            if
-                                cancellationToken.IsCancellationRequested
-                                || prepared.Deadline <= launchObservedAt
-                            then
-                                Error(Refused "portable-executor-deadline-refused")
-                            else
-                                match
-                                    journal.Reserve(
-                                        prepared.WorkspaceScope,
-                                        prepared.IdempotencyId,
-                                        prepared.CommandId,
-                                        digest,
-                                        containerName
-                                    )
-                                with
-                                | Error _ -> Error(Refused "portable-journal-unavailable")
-                                | Ok(Choice1Of2(PortableRunning(commandId, existingDigest, _))) when
-                                    existingDigest = digest
-                                    ->
-                                    Error(PendingDuplicate commandId)
-                                | Ok(Choice1Of2(PortableSettled(existingDigest, receipt))) when existingDigest = digest ->
-                                    Error(Duplicate receipt)
-                                | Ok(Choice1Of2 _) -> Error(Refused "portable-executor-idempotency-conflict")
-                                | Ok(Choice2Of2()) ->
-                                    Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt))
+                        match refuseBeforeLaunch authority profile command with
+                        | Error reason -> return Error(Refused reason)
+                        | Ok(prepared, operation, workingDirectory) ->
+                            let! attempt = prepareAttemptAsync profile command operation prepared.Deadline cancellationToken
+                            match attempt with
+                            | Error reason -> return Error(Refused reason)
+                            | Ok attempt ->
+                                let digest = bindingDigest profile command operation
+                                let containerName = "fsgg-portable-" + digest[..23]
+                                match consumeAttempt profile command operation attempt |> Result.mapError (fun reason -> if reason = "preparation-deadline-refused" then "portable-executor-deadline-refused" else reason) with
+                                | Error reason -> return Error(Refused reason)
+                                | Ok () ->
+                                    let launchObservedAt = clock ()
+                                    if cancellationToken.IsCancellationRequested || prepared.Deadline <= launchObservedAt then
+                                        return Error(Refused "portable-executor-deadline-refused")
+                                    else
+                                        match journal.Reserve(prepared.WorkspaceScope, prepared.IdempotencyId, prepared.CommandId, digest, containerName) with
+                                        | Error _ -> return Error(Refused "portable-journal-unavailable")
+                                        | Ok(Choice1Of2(PortableRunning(commandId, existingDigest, _))) when existingDigest = digest ->
+                                            return Error(PendingDuplicate commandId)
+                                        | Ok(Choice1Of2(PortableSettled(existingDigest, receipt))) when existingDigest = digest ->
+                                            return Error(Duplicate receipt)
+                                        | Ok(Choice1Of2 _) -> return Error(Refused "portable-executor-idempotency-conflict")
+                                        | Ok(Choice2Of2()) -> return Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt, attempt)
+                }
 
                 match preparation with
                 | Error(Duplicate receipt) when not receipt.CleanupCompleted ->
@@ -981,7 +1006,7 @@ module PortableWorkspaceExecutor =
 
                         return Duplicate updated
                 | Error outcome -> return outcome
-                | Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt) ->
+                | Ok(prepared, operation, workingDirectory, digest, containerName, launchObservedAt, attempt) ->
                     let request: PortableProcessRequest =
                         {
                             Executable = operation.Executable
@@ -1001,46 +1026,51 @@ module PortableWorkspaceExecutor =
                             RecipeSha256 = operation.RecipeSha256
                         }
 
-                    let! observed =
-                        task {
-                            try
-                                return! runner.RunAsync(request, cancellationToken)
-                            with _ ->
-                                return
-                                    {
-                                        ExecutionStarted = true
-                                        ExitCode = None
-                                        StandardOutput = Array.empty
-                                        StandardError = Array.empty
-                                        CancellationRequested = cancellationToken.IsCancellationRequested
-                                        TerminationObserved = false
-                                        Interrupted = true
-                                        OutputLimitExceeded = false
-                                        OutputComplete = false
-                                        SourceTree = None
-                                        SnapshotSha256 = None
-                                        RuntimeIdentity = None
-                                        ContainerIdentity = None
-                                        VerificationObserved = false
-                                        VerificationOutput = None
-                                        VerificationCustodyLimitExceeded = false
-                                        Refusal = None
-                                    }
-                        }
+                    match consumeAttempt profile command operation attempt with
+                    | Error reason ->
+                        journal.Abandon(prepared.WorkspaceScope, prepared.IdempotencyId, digest) |> ignore
+                        return Refused reason
+                    | Ok () ->
+                        let! observed =
+                            task {
+                                try
+                                    return! runner.RunAsync(request, cancellationToken)
+                                with _ ->
+                                    return
+                                        {
+                                            ExecutionStarted = true
+                                            ExitCode = None
+                                            StandardOutput = Array.empty
+                                            StandardError = Array.empty
+                                            CancellationRequested = cancellationToken.IsCancellationRequested
+                                            TerminationObserved = false
+                                            Interrupted = true
+                                            OutputLimitExceeded = false
+                                            OutputComplete = false
+                                            SourceTree = None
+                                            SnapshotSha256 = None
+                                            RuntimeIdentity = None
+                                            ContainerIdentity = None
+                                            VerificationObserved = false
+                                            VerificationOutput = None
+                                            VerificationCustodyLimitExceeded = false
+                                            Refusal = None
+                                        }
+                            }
 
-                    let receipt = receiptFromObservation prepared operation observed
+                        let receipt = receiptFromObservation prepared operation observed
 
-                    if observed.ExecutionStarted && not observed.TerminationObserved then
-                        return Completed receipt
-                    else
-                        match journal.Settle(prepared.WorkspaceScope, prepared.IdempotencyId, digest, receipt) with
-                        | Ok true ->
-                            let! updated =
-                                cleanupReceipt profile command operation digest receipt cancellationToken
+                        if observed.ExecutionStarted && not observed.TerminationObserved then
+                            return Completed receipt
+                        else
+                            match journal.Settle(prepared.WorkspaceScope, prepared.IdempotencyId, digest, receipt) with
+                            | Ok true ->
+                                let! updated =
+                                    cleanupReceipt profile command operation digest receipt cancellationToken
 
-                            return Completed updated
-                        | _ -> return Refused "portable-journal-settlement-refused"
-            }
+                                return Completed updated
+                            | _ -> return Refused "portable-journal-settlement-refused"
+                }
 
         member _.RecoverAsync
             (profile: PortableWorkspaceProfile, command: PortableWorkspaceCommand, cancellationToken: CancellationToken)

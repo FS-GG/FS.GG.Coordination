@@ -1,0 +1,27 @@
+{
+  "schema": "fsgg.preflight-correspondence/1",
+  "sourceSha256": "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354",
+  "quintSha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+  "extractorSha256": "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10",
+  "profile": "fsgg-quint-profile/2",
+  "seed": 37,
+  "sampling": {
+    "samples": 100,
+    "steps": 12,
+    "exhaustive": false
+  },
+  "traces": [
+    {
+      "name": "PreflightArtifactReplay.itf.json",
+      "sha256": "a217ad4d199a6c6d0cfc66c98a94d1c8ae10e1e6a5c1798f241ed9b4549e5762"
+    },
+    {
+      "name": "PreflightObservationReplay.itf.json",
+      "sha256": "c869c09532758876b300140be24eeb19befda792560913a764904f013abf0a45"
+    }
+  ],
+  "replaySteps": {
+    "PreflightArtifactReplay": 8,
+    "PreflightObservationReplay": 18
+  }
+}

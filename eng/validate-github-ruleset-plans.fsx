@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.GitHub/RepositoryProfileAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/RequiredCheckCensusAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/RulesetPlanAdapter.fs"
@@ -13,6 +14,8 @@ open FS.GG.Coordination.GitHub
 open FS.GG.Coordination.Qualification.Contracts
 
 let root = Path.GetFullPath(Path.Combine(__SOURCE_DIRECTORY__, ".."))
+FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.requireCurrent root
+
 let evidenceRoot = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-3")
 
 let corpus =
@@ -575,9 +578,9 @@ else
             let bytes =
                 File.ReadAllBytes(Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md"))
 
-            sha256Bytes bytes = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+            sha256Bytes bytes = FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
             && sha256Bytes (Array.append bytes [| 0uy |])
-               <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+               <> FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
         | NoApplySurface ->
             let surface =
                 File.ReadAllText(Path.Combine(root, "src/FS.GG.Coordination.GitHub/RulesetPlanAdapter.fsi"))

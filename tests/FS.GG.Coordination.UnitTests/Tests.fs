@@ -16,7 +16,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg-quint-profile/2", CoordinationProtocolGenerated.Profile)
 
     Assert.Equal(
-        "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b",
+        "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64",
         CoordinationProtocolGenerated.ContractFingerprint
     )
 
@@ -161,7 +161,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Contains("typed-effect-json", CoordinationProtocolGenerated.CanonicalContractJson)
 
     Assert.Contains(
-        "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0",
+        "quint-specification-v1@FS.GG.SDD.Artifacts/2.1.0",
         CoordinationProtocolGenerated.CanonicalContractJson
     )
 
@@ -187,12 +187,12 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("fsgg.quint.compiled-output-manifest/1", outputRoot.GetProperty("schema").GetString())
 
     Assert.Equal(
-        "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937",
+        "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354",
         outputRoot.GetProperty("sourceSha256").GetString()
     )
 
     Assert.Equal(
-        "0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715",
+        "9d2581c99badfb89acdb359acceb0a1ba560322939d47944e58aa1fdcf10e05b",
         outputRoot.GetProperty("behavioralSha256").GetString()
     )
 
@@ -206,7 +206,7 @@ let ``generated protocol contract exposes stable profile-2 identities`` () =
     Assert.Equal("typed-effect-json", identity.GetProperty("normalizationAuthority").GetString())
     let versions = identity.GetProperty("versions")
     Assert.Equal("fsgg.quint.literate-source/1", versions.GetProperty("source").GetString())
-    Assert.Equal("quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0", versions.GetProperty("extractor").GetString())
+    Assert.Equal("quint-specification-v1@FS.GG.SDD.Artifacts/2.1.0", versions.GetProperty("extractor").GetString())
 
     Assert.Equal(
         "sha256:939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",

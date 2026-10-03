@@ -9,7 +9,7 @@ test -f "$base"
 jq -e '
   .schema == "fsgg.coordination.canonical-quint-qualification/1" and
   .q1Outcome == "passed" and .q2Outcome == "passed" and
-  .positiveInvariantCount == 8 and .negativeControlCount == 71 and
+  .positiveInvariantCount == 8 and .negativeControlCount == 79 and
   (.processCounts.external | type == "number") and (.processCounts.external >= 0) and
   (.processCounts.quintCli | type == "number") and (.processCounts.quintCli >= 0) and
   (.processCounts.apalacheVerify | type == "number") and (.processCounts.apalacheVerify >= 0) and

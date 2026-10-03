@@ -17,6 +17,8 @@ while (($#)); do
   esac
 done
 
+dotnet fsi "$repo_root/eng/validate-choreo-trace-source.fsx" -- --root "$repo_root"
+
 quint_sha="939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
 quint_bin="${FSGG_QUINT_BIN:-}"
 if [[ -z "$quint_bin" ]]; then quint_bin="$(command -v quint)"; fi
@@ -24,13 +26,6 @@ test -x "$quint_bin"
 printf '%s  %s\n' "$quint_sha" "$quint_bin" | sha256sum --check --status
 
 test "$(jq -r '.schema' "$manifest")" = "fsgg.quint.choreo-trace-manifest/1"
-expected_source_sha="$(jq -r '.source.sha256' "$manifest")"
-actual_source_sha="$(sha256sum "$repo_root/src/FS.GG.Coordination.Protocol/Protocol.md" | cut -d' ' -f1)"
-if [[ "$expected_source_sha" != "$actual_source_sha" ]]; then
-  printf 'CHOREO_C3_TRACE_REFUSED protocol source identity differs expected=%s actual=%s\n' \
-    "$expected_source_sha" "$actual_source_sha" >&2
-  exit 1
-fi
 test "$(jq -r '.quint.binarySha256' "$manifest")" = "$quint_sha"
 test "$(jq -r '.choreo.commit' "$manifest")" = "$(jq -r '.commit' "$repo_root/eng/choreo-source-pin.json")"
 

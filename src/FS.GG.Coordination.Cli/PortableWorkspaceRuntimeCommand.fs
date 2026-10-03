@@ -27,6 +27,10 @@ type PortableWorkspaceRuntimeEnrollment =
 type IPortableWorkspaceRuntimeEnrollmentSource =
     abstract Resolve: enrollmentId: string -> Result<PortableWorkspaceRuntimeEnrollment, string>
 
+/// Trusted enrollment owners declare capsule requirements; caller JSON is never readiness.
+type IPortableWorkspacePrerequisiteSource =
+    abstract Prerequisites: enrollmentId: string -> Result<Map<string, PortablePrerequisiteRequirement>, string>
+
 type PortableWorkspaceRuntimeCommandDependencies =
     {
         Enrollments: IPortableWorkspaceRuntimeEnrollmentSource
@@ -154,7 +158,18 @@ module PortableWorkspaceRuntimeCommand =
         =
         task {
             let runner = dependencies.CreateRunner enrollment.Policy.Runtime
-            let executor = PortableWorkspaceExecutor.Executor(enrollment.Policy, runner, dependencies.Clock)
+            let prerequisites =
+                match dependencies.Enrollments with
+                | :? IPortableWorkspacePrerequisiteSource as owner ->
+                    try owner.Prerequisites enrollment.EnrollmentId
+                    with _ -> Error "prerequisite-owner-unavailable"
+                | _ -> Ok Map.empty
+            // Unknown owner checks refuse new work, while recovery stays callable.
+            let requirements =
+                match prerequisites with
+                | Ok selected -> selected
+                | Error _ -> enrollment.Policy.Operations |> List.map (fun operation -> operation.EntryPoint, PortablePrerequisiteRequirement.CapsuleUnavailable) |> Map.ofList
+            let executor = PortableWorkspaceExecutor.Executor(enrollment.Policy, runner, dependencies.Clock, prerequisites = requirements)
 
             let! outcome =
                 if recover then

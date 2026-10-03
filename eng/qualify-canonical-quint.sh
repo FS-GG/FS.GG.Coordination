@@ -83,13 +83,16 @@ go="$runtime/go/bin/go"
 test -x "$go"
 
 dotnet tool install FS.GG.SDD.Cli \
-  --version 1.5.0 \
+  --version 2.1.0 \
   --tool-path "$tool_path" \
   --configfile "$nuget_config"
 
 : "${NUGET_PACKAGES:=$HOME/.nuget/packages}"
+# The locked Contracts dependency supplies this source. Its bytes are identical
+# to published SDD 2.1; verify that source before the pinned native build.
 lmt_source="$NUGET_PACKAGES/fs.gg.sdd.artifacts/1.5.0/quint/lmt/main.go"
 test -f "$lmt_source"
+printf '%s  %s\n' "88bc47acae2c26919ab96a5cafa80b12fac762092c57840a2baad1afcc7feda3" "$lmt_source" | sha256sum --check --status
 CGO_ENABLED=1 GO111MODULE=off "$go" build \
   -trimpath \
   -ldflags '-buildid=IvXAt1kJ-3iINki1alCT/Ut12KGabgkWIkwVpw-xO/c4zkZMLAubfWHvjZOY8o/8-oR_8tNNndNgfMVoD8F -B 0x03d1703027f57ed4dd2ba90b7cdfc8cdea2815da' \
@@ -118,6 +121,20 @@ if [[ "${FSGG_QUINT_PREPARE_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Regeneration normalizes bindings with this pinned formatter. Project restore
+# does not restore manifest-only tools into each consuming job's package root.
+: "${NUGET_PACKAGES:=$HOME/.nuget/packages}"
+formatter_restore="$qualification_root/formatter.csproj"
+printf '%s\n' \
+  '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><PackageDownload Include="Fantomas" Version="[8.0.0]" /></ItemGroup></Project>' \
+  > "$formatter_restore"
+dotnet restore "$formatter_restore" \
+  --packages "$NUGET_PACKAGES" \
+  --configfile "$nuget_config"
+formatter="$NUGET_PACKAGES/fantomas/8.0.0/tools/net10.0/any/fantomas.dll"
+test -f "$formatter"
+printf '%s  %s\n' "1bb5742abd5fd194575cea1a56f898dd6049bc9c88bf96d60568f66c0d336c70" "$formatter" | sha256sum --check --status
+
 export FSGG_QUINT_CACHE="$cache"
 export FSGG_QUINT_HOME="$quint_home"
 export FSGG_SDD_CLI="$tool_path/fsgg-sdd"
@@ -126,6 +143,10 @@ export HOME="$qualification_root/home"
 
 cd "$repo_root"
 qualification_receipt="${FSGG_QUINT_RECEIPT:-$repo_root/artifacts/canonical-quint/qualification.json}"
-dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output "$qualification_receipt"
-
-printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s receipt=%s\n' "$repo_root" "$qualification_receipt"
+if [[ -n "${FSGG_QUINT_MEASUREMENT_OUTPUT:-}" ]]; then
+  dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --measure-only "$FSGG_QUINT_MEASUREMENT_OUTPUT"
+  printf 'CANONICAL_QUINT_HOSTED_MEASUREMENT_OBSERVED disposition=unadmitted root=%s output=%s\n' "$repo_root" "$FSGG_QUINT_MEASUREMENT_OUTPUT"
+else
+  dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output "$qualification_receipt"
+  printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s receipt=%s\n' "$repo_root" "$qualification_receipt"
+fi

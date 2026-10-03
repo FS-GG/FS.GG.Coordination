@@ -1,0 +1,29 @@
+{
+  "schema": "fsgg.custody-bootstrap/1",
+  "profile": "linux-x64-no-process-descendants/1",
+  "architecture": "x86_64",
+  "sourceSha256": "4d2105f8223b2eceb89d8fee675b9ee41759c50a36a9d9c86d59a4c5978cd610",
+  "bootstrapSha256": "28c5c28bb6279f994606584e9fe930213c8848b7a0cf9366c03e150520974716",
+  "filterSha256": "53281c62a5db55e8b407aa45f11484bd564bc1907b6ffc6bd65acb950cedbbe1",
+  "bootstrapBytes": 772400,
+  "filterBytes": 264,
+  "compiler": "gcc (GCC) 16.2.1 20260810",
+  "flags": [
+    "-static",
+    "-Os",
+    "-s",
+    "-fstack-protector-strong",
+    "-D_FORTIFY_SOURCE=3",
+    "-Wl,--build-id=none",
+    "-Wall",
+    "-Wextra",
+    "-Werror"
+  ],
+  "staticExecutable": true,
+  "processPidfdFlags": 0,
+  "threadCloneRequired": "0x00010900",
+  "threadCloneAllowed": "0x013d0f00",
+  "processCreationAction": "KILL_PROCESS",
+  "clone3Action": "ENOSYS",
+  "ioUringAction": "ENOSYS"
+}

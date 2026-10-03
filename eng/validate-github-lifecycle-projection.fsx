@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.GitHub/IssueFields.fs"
 #load "../src/FS.GG.Coordination.GitHub/ProjectAdapter.fs"
 #load "../src/FS.GG.Coordination.GitHub/LifecycleProjectionAdapter.fs"
@@ -13,6 +14,8 @@ open FS.GG.Coordination.Qualification.Contracts
 let fail code message = failwith $"{code}: {message}"
 let args = fsi.CommandLineArgs |> Array.skip 1
 let root = if args.Length = 0 then "." else args[0]
+FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.requireCurrent root
+
 let evidenceRoot = Path.Combine(root, "evidence/github-substrate-v2/gs2-05-7")
 let corpusPath = Path.Combine(evidenceRoot, "corpus.json")
 let independentPath = Path.Combine(evidenceRoot, "independent-expectations.json")
@@ -88,7 +91,10 @@ if
 then
     fail "GLPQ-PREDECESSOR-QUINT" "accepted GS2-05.6 Quint identity changed"
 
-if sha256 quintPath <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937" then
+if
+    sha256 quintPath
+    <> FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
+then
     fail "GLPQ-QUINT" "canonical Quint source changed"
 
 if generatedIds <> requiredIds || independentIds <> requiredIds then
@@ -133,7 +139,7 @@ let generatedMutation =
             8
     | GitHubLifecycleProjectionControl.QuintAndPrerequisite ->
         receipt.RootElement.GetProperty("unitId").GetString() = "GS2-05.6"
-        && sha256 quintPath = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+        && sha256 quintPath = FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
 
 let independentMutation =
     function
