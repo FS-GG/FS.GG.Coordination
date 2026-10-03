@@ -31,13 +31,13 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+    "a6963369b7780a13d6360e1a0058594d643c39952d4e1ffedad36c87d43829ca"
 
 let expectedContract =
-    "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
+    "49800c920d1a5db3beb812d58a3b4523b054e980cee98b68d680d25ca0ceaf01"
 
 let expectedBehavior =
-    "0635606ecde88453acc7d25cdc03b24dda042ac39d9a2ce8afc8242b44ed5715"
+    "a75e17f802db0168f58d19ff8b30525b427a6cf278df2eede97453314678fda1"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
 let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
@@ -102,7 +102,9 @@ let argumentValue name arguments =
     |> Option.bind (fun index -> arguments |> List.tryItem (index + 1))
 
 let classifyInvocation isQuint arguments =
-    if not isQuint then
+    if isQuint && (argumentValue "--main" arguments |> Option.exists (fun main -> main.StartsWith("Preflight", StringComparison.Ordinal))) then
+        "quint/preflight-sampling"
+    elif not isQuint then
         "external/base"
     elif not formalInventoryReady then
         if List.tryHead arguments = Some "verify" then
@@ -628,6 +630,7 @@ let exerciseFormalShardProcessInventory mutation =
     let expected =
         [
             "external/base", 25
+            "quint/preflight-sampling", 9
             "quint/base-nonverify", 5
             "quint/base-verify", 0
             "quint/selected-root", 7
@@ -1773,6 +1776,35 @@ try
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] []
     |> ignore
 
+    // Consumer-owned, bounded preflight partitions use the published compiler's exact projection.
+    // Sampling and causal counterexamples are explicitly separate from native exhaustive obligations.
+    let preflightBound = [ "--max-samples"; "100"; "--max-steps"; "12"; "--seed"; "37"; "--verbosity"; "1" ]
+    for main in [ "PreflightArtifactModel"; "PreflightAdmissionModel"; "PreflightObservationModel" ] do
+        let output, _ = requireGreen "PREFLIGHT-SAMPLED-INVARIANT" scratch quint
+                            ([ "run"; q2Qnt; "--main"; main; "--invariant"; "safety"; "--witnesses"; "done" ] @ preflightBound) []
+        if not (Regex.IsMatch(output, @"done was witnessed in [1-9][0-9]* trace")) then
+            fail "PREFLIGHT-REACHABILITY" main
+    for main, step, invariant in
+        [ "PreflightArtifactModel", "mutantStep", "safety"
+          "PreflightArtifactModel", "invalidationMutantStep", "safety"
+          "PreflightAdmissionModel", "mutantStep", "safety"
+          "PreflightObservationModel", "mutantStep", "cleanupSafety" ] do
+        let code, output, error = run scratch quint
+                                    ([ "run"; q2Qnt; "--main"; main; "--step"; step; "--invariant"; invariant ] @ preflightBound) []
+        if code = 0 || not ((output + error).Contains("Invariant violated", StringComparison.Ordinal)) then
+            fail "PREFLIGHT-CAUSAL-MUTANT" (main + ":" + step)
+    for main, steps in [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "10" ] do
+        let actualTrace = Path.Combine(scratch, main + ".itf.json")
+        requireGreen "PREFLIGHT-REPLAY-TRACE" scratch quint
+            [ "run"; q2Qnt; "--main"; main; "--init"; "replayInit"; "--step"; "replayStep"; "--invariant"; "safety"
+              "--max-samples"; "1"; "--max-steps"; steps; "--seed"; "37"; "--verbosity"; "1"; "--out-itf"; actualTrace ] [] |> ignore
+        use actual = JsonDocument.Parse(File.ReadAllBytes actualTrace)
+        use retainedTrace = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "tests/FS.GG.Coordination.Orchestration.Execution.Tests/Fixtures/preflight", main + ".itf.json")))
+        // Tool timestamps are observations; causal states and their variables must match exactly.
+        for key in [ "vars"; "states" ] do
+            if actual.RootElement.GetProperty(key).GetRawText() <> retainedTrace.RootElement.GetProperty(key).GetRawText() then
+                fail "PREFLIGHT-REPLAY-DRIFT" (main + ":" + key)
+
     // The pinned Choreo modules are appended to the canonical Q2 source and are
     // compiled above as part of that source identity. Quint 0.32's TLC flattener,
     // however, resolves every later module while flattening an unrelated legacy
@@ -1879,6 +1911,7 @@ try
     for label, count in
         [
             "external/base", 25
+            "quint/preflight-sampling", 9
             "quint/base-nonverify", expectedBaseNonverifyCount
             "quint/base-verify", expectedBaseVerifyCount
             "quint/selected-root", selectedRootIds.Count
@@ -1891,9 +1924,9 @@ try
         expectedInvocationInventory[label] <- count
         actualInvocationInventory.TryAdd(label, 0) |> ignore
 
-    // The base qualification suite has 71 intentional red outcomes. Every formal scenario
+    // The base qualification suite has 71 established red outcomes plus four preflight mutants. Every formal scenario
     // contributes one safety mutant, two TLC reproductions, and two Rust projections.
-    let expectedRejectedProcessCount = 71 + 5 * declaredFormalTestCount
+    let expectedRejectedProcessCount = 75 + 5 * declaredFormalTestCount
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()

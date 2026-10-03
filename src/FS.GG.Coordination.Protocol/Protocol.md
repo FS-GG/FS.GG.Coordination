@@ -1159,6 +1159,7 @@ module CoordinationProtocol {
       activationContract: "accepted-sequencing-decision-or-OperatingV2|qualified-Main|separate-release-and-permit" }
   )
 
+  pure val preflightContractVersion = "fsgg.prepared-attempt/1"
 }
 ```
 
@@ -7392,4 +7393,155 @@ module ChoreoSourcePinSmoke {
   run choreoSourcePinSmoke = throughClaim.expect(hostCompleted(Claim) and safety)
 }
 
+module PreflightArtifactModel {
+  type Artifact = { identity: int, imports: bool, discovery: bool, prepared: int, importsAt: int, discoveryAt: int,
+                    effects: int, allowed: bool, cleanup: bool }
+  var artifact: Artifact
+  pure def initialArtifact = { identity: 0, imports: false, discovery: false, prepared: -1,
+                               effects: 0, allowed: true, cleanup: false, importsAt: -1, discoveryAt: -1 }
+  action init = artifact' = initialArtifact
+  action importCheck = artifact' = { ...artifact, imports: true, importsAt: artifact.identity,
+    prepared: if (artifact.discovery) artifact.identity else -1 }
+  action discoverCheck = artifact' = { ...artifact, discovery: true, discoveryAt: artifact.identity,
+    prepared: if (artifact.imports) artifact.identity else -1 }
+  action mutateInput = artifact' = { ...artifact, identity: artifact.identity + 1,
+    imports: false, discovery: false, prepared: -1 }
+  action consume = artifact' = { ...artifact,
+    effects: if (artifact.prepared == artifact.identity) artifact.effects + 1 else artifact.effects,
+    allowed: artifact.prepared != artifact.identity or (artifact.importsAt == artifact.identity and artifact.discoveryAt == artifact.identity) }
+  action cleanup = artifact' = { ...artifact, cleanup: artifact.effects > 0 }
+  action step = any { importCheck, discoverCheck, mutateInput, consume, cleanup }
+  val safety = artifact.allowed
+  val done = artifact.effects > 0 and artifact.cleanup
+  run completion = init.then(importCheck).then(discoverCheck).then(consume).then(cleanup).expect(done and safety)
+  run stale = init.then(importCheck).then(discoverCheck).then(mutateInput).then(consume).expect(artifact.effects == 0)
+  action bypassDiscovery = artifact' = { ...artifact, prepared: artifact.identity }
+  action dropInvalidation = artifact' = { ...artifact, identity: artifact.identity + 1, prepared: artifact.identity + 1 }
+  action mutantStep = any { step, bypassDiscovery }
+  action invalidationMutantStep = any { step, dropInvalidation }
+}
+
+module PreflightAdmissionModel {
+  type Admission = { time: int, expires: int, owned: bool, retired: bool, cleanup: bool, refused: bool }
+  var admission: Admission
+  action init = admission' = { time: 0, expires: 2, owned: true, retired: false, cleanup: false, refused: false }
+  // An invalid request never advances time or effects.
+  action invalid = admission' = admission
+  action validClockRefusal = admission' = { ...admission, time: 2, owned: false,
+    retired: true, cleanup: true, refused: true }
+  action step = any { invalid, validClockRefusal }
+  val safety = not(admission.refused) or (admission.retired and admission.cleanup and not(admission.owned))
+  val done = admission.refused and admission.cleanup
+  run completion = init.then(validClockRefusal).expect(done and safety)
+  action dropExpiryEffects = admission' = { ...admission, time: 2, refused: true }
+  action mutantStep = any { step, dropExpiryEffects }
+}
+
+module PreflightObservationModel {
+  type Observation = { time: int, identities: Set[str], owned: Set[str], events: int, bytes: int,
+                       pending: Set[str], cleaned: Set[str] }
+  var observation: Observation
+  var effects: List[str]
+  var refusal: str
+  pure def initialObservation = { time: 0, identities: Set(), owned: Set(), events: 0, bytes: 0,
+                                 pending: Set(), cleaned: Set() }
+  type Decision = { state: Observation, effects: List[str], refusal: str }
+  pure def observe(s: Observation, now: int, identity: str, bytes: int): Decision = {
+    if (identity == "" or bytes < 0 or now < s.time)
+      { state: s, effects: List(), refusal: "invalid" }
+    else {
+      val expired = if (now >= 3) s.owned else Set()
+      val current = { ...s, time: now, owned: s.owned.exclude(expired), pending: s.pending.union(expired) }
+      // The bounded fixture owns one process at expiry; ordering is retirement then cleanup.
+      val priorA = if (expired.contains("a")) List("retire:a", "cleanup:a") else List()
+      val priorB = if (expired.contains("b")) List("retire:b", "cleanup:b") else List()
+      val prior = priorA.concat(priorB)
+      val rejected = if (now >= 3) "deadline"
+                     else if (current.cleaned.contains(identity)) "closed"
+                     else if (not(current.identities.contains(identity)) and current.identities.size() >= 2) "distinct"
+                     else if (current.events >= 3) "events"
+                     else if (bytes > 3 - current.bytes) "bytes" else ""
+      if (rejected != "") { state: current, effects: prior, refusal: rejected }
+      else { state: { ...current, identities: current.identities.union(Set(identity)), owned: current.owned.union(Set(identity)),
+                     events: current.events + 1, bytes: current.bytes + bytes },
+             effects: prior.append(if (identity == "a") "observe:a" else if (identity == "b") "observe:b" else "observe:c"), refusal: "" }
+    }
+  }
+  action init = all { observation' = initialObservation, effects' = List(), refusal' = "" }
+  action observeWith(now: int, identity: str, bytes: int): bool = {
+    val decision = observe(observation, now, identity, bytes)
+    all { observation' = decision.state, effects' = decision.effects, refusal' = decision.refusal }
+  }
+  action first = observeWith(0, "a", 1)
+  action repeat = observeWith(0, "a", 1)
+  action second = observeWith(0, "b", 1)
+  action distinctOverflow = observeWith(0, "c", 0)
+  action eventOverflow = observeWith(0, "a", 0)
+  action byteOverflow = observeWith(0, "a", 4)
+  action expiry = observeWith(3, "c", 0)
+  action invalid = observeWith(3, "", 0)
+  action cleaned = all { observation.owned.contains("a") or observation.pending.contains("a"),
+    observation' = { ...observation, owned: observation.owned.exclude(Set("a")),
+                    pending: observation.pending.exclude(Set("a")), cleaned: observation.cleaned.union(Set("a")) },
+    effects' = List("cleaned:a"), refusal' = "" }
+  action step = any { first, repeat, second, distinctOverflow, eventOverflow, byteOverflow, expiry, invalid, cleaned }
+  val safety = observation.identities.size() <= 2 and observation.events <= 3 and observation.bytes <= 3
+  val done = observation.cleaned.contains("a")
+  run completion = init.then(first).then(repeat).then(cleaned).expect(done and observation.identities.size() == 1)
+  run refusedExpiryRetainsEffects = init.then(first).then(expiry).expect(refusal == "deadline" and effects == List("retire:a", "cleanup:a"))
+  run invalidUnchanged = init.then(first).then(invalid).expect(observation.time == 0 and effects == List())
+  action cleanedB = all { observation.owned.contains("b") or observation.pending.contains("b"),
+    observation' = { ...observation, owned: observation.owned.exclude(Set("b")),
+                    pending: observation.pending.exclude(Set("b")), cleaned: observation.cleaned.union(Set("b")) },
+    effects' = List("cleaned:b"), refusal' = "" }
+  action falseCleanup = all { observation' = { ...observation, cleaned: observation.cleaned.union(Set("a")) },
+    effects' = List("cleaned:a"), refusal' = "" }
+  val cleanupSafety = not(observation.cleaned.contains("a")) or not(observation.owned.contains("a"))
+  action mutantStep = any { step, falseCleanup }
+}
+
+module PreflightObservationReplay {
+  import PreflightObservationModel.*
+  var phase: int
+  action replayInit = all { init, phase' = 0 }
+  action replayStep = any {
+    all { phase == 0, first, phase' = 1 },
+    all { phase == 1, repeat, phase' = 2 },
+    all { phase == 2, invalid, phase' = 3 },
+    all { phase == 3, byteOverflow, phase' = 4 },
+    all { phase == 4, second, phase' = 5 },
+    all { phase == 5, distinctOverflow, phase' = 6 },
+    all { phase == 6, eventOverflow, phase' = 7 },
+    all { phase == 7, expiry, phase' = 8 },
+    all { phase == 8, cleaned, phase' = 9 },
+    all { phase == 9, cleanedB, phase' = 10 },
+    all { phase == 10, observation' = observation, effects' = effects, refusal' = refusal, phase' = phase }
+  }
+}
+module PreflightArtifactReplay {
+  import PreflightArtifactModel.*
+  var phase: int
+  action replayInit = all { init, phase' = 0 }
+  action replayStep = any {
+    all { phase == 0, importCheck, phase' = 1 },
+    all { phase == 1, discoverCheck, phase' = 2 },
+    all { phase == 2, mutateInput, phase' = 3 },
+    all { phase == 3, consume, phase' = 4 },
+    all { phase == 4, importCheck, phase' = 5 },
+    all { phase == 5, discoverCheck, phase' = 6 },
+    all { phase == 6, consume, phase' = 7 },
+    all { phase == 7, cleanup, phase' = 8 },
+    all { phase == 8, artifact' = artifact, phase' = phase }
+  }
+}
+
 ```
+
+## Typed prerequisite preparation
+
+These three bounded partitions describe the consumer-owned preflight contract. Import and discovery
+are separate observed transitions; mutation and consumption are separate transitions. Their abstract
+identities are projections of the actual assembled input and PID/start-time identities. The production
+`PreparedArtifact` and `PreparationObservation` reducers are replayed, including ordered effects.
+No native operation authority, kernel provenance or product supervisor is supplied by these models.
+Sampling bounds and completion witnesses are qualification evidence, never exhaustive proof.

@@ -1693,3 +1693,233 @@ else:
             finally
                 if Directory.Exists temporary then
                     Directory.Delete(temporary, true)
+
+module private CapsuleFixtures =
+    let create () =
+        let root = Path.Combine(Path.GetTempPath(), "fsgg-assembled-capsule-" + Guid.NewGuid().ToString("N"))
+        Directory.CreateDirectory root |> ignore
+        let files =
+            [ "capture_custody.py", "def prepare_capture(): return 'capture'\n"
+              "stock_entry.py", "from capture_custody import prepare_capture\n"
+              "test_capture.py", "import unittest\nfrom stock_entry import prepare_capture\nclass Capture(unittest.TestCase):\n def test_capture(self): raise RuntimeError('workload must never run during discovery')\n"
+              "check.py", "import sys,json,unittest\nif sys.argv[1]=='imports':\n import stock_entry\n names=['stock_entry','capture_custody']\nelse:\n def ids(s):\n  for t in s:\n   if isinstance(t,unittest.TestSuite): yield from ids(t)\n   else: yield t.id()\n names=list(ids(unittest.defaultTestLoader.discover('.',pattern='test_*.py')))\nprint(json.dumps({'schema':'fsgg.capsule-observation/1','checkId':sys.argv[1],'discovered':names}))\n" ]
+        files |> List.iter (fun (path, text) -> File.WriteAllText(Path.Combine(root,path),text))
+        let python = FileInfo("/usr/bin/python3").ResolveLinkTarget(true).FullName
+        let spec =
+            { Root = root; Inputs = files |> List.map fst |> List.sort
+              Checks =
+                [ { Id = "imports"; Kind = CapsuleCheckKind.Import; Executable = python
+                    Arguments = ["check.py"; "imports"]; ExpectedDiscoveries = ["stock_entry"; "capture_custody"] }
+                  { Id = "discovery"; Kind = CapsuleCheckKind.Discovery; Executable = python
+                    Arguments = ["check.py"; "discovery"]; ExpectedDiscoveries = ["test_capture.Capture.test_capture"] } ]
+              Environment = Map [ "PATH", "/usr/bin:/bin"; "LANG", "C.UTF-8" ]
+              MaximumInputBytes = 65536UL; MaximumOutputBytes = 4096UL; MaximumCheckSeconds = 2 }
+        new IsolatedFixture(root), spec
+
+    let prepare spec = PreparedAttempt.prepareAsync "runner-argv-config-source" (DateTimeOffset.UtcNow.AddSeconds 10.) spec CancellationToken.None
+    let valid result = match result with Ok value -> value | Error reason -> failwith reason
+
+    let executor spec (fake: FakeRunner) =
+        let selectedProfile = profile "fs-gg/checked-capsule" [fixtureComponent "app" "python" "python" "cpython" "3.14.0" "python-build" "python-test"]
+        let op = operation "python-build" "build" (Some "app") "python" ["cpython","3.14.0"] "python3" ["build.py"] "python-bytecode-v1"
+        let policy =
+            { WorkspaceRoot = spec.Root; WorkspaceScope = selectedProfile.WorkspaceScope
+              SourceRevision = sourceRevision; QualifiedImage = image; MaximumRuntimeSeconds = 30UL
+              MaximumOutputBytes = 65536UL; Operations = [op]; Runtime = runtimePolicy () }
+        let utc = DateTimeOffset.UtcNow
+        let current = DateTimeOffset(utc.Ticks - utc.Ticks % 10L, TimeSpan.Zero)
+        let auth = { authority selectedProfile.WorkspaceScope with ObservedAt = current.AddSeconds(-1.) }
+        let cmd = { command selectedProfile (Guid.NewGuid()) "build" (Some "app") with Deadline = current.AddMinutes 1. }
+        let ex = PortableWorkspaceExecutor.Executor(policy, fake, prerequisites = Map [op.EntryPoint, PortablePrerequisiteRequirement.CapsuleRequired spec])
+        ex, policy, auth, selectedProfile, cmd
+
+open CapsuleFixtures
+
+type PreparedAttemptTests() =
+    [<Fact>]
+    member _.``actual assembled import and discovery prepares without running discovered workload``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        let! result = prepare spec
+        let value = valid result
+        Assert.Equal(Ok (), PreparedAttempt.validate DateTimeOffset.UtcNow "runner-argv-config-source" spec value)
+        Assert.False(Directory.Exists(Path.Combine(fixture.Root,"__pycache__")))
+    }
+
+    [<Fact>]
+    member _.``opaque capability has no public constructor and cannot deserialize receipt``() =
+        Assert.Empty(typeof<PreparedAttempt>.GetConstructors())
+        Assert.Throws<NotSupportedException>(fun () -> JsonSerializer.Deserialize<PreparedAttempt>("{}") |> ignore) |> ignore
+
+    [<Fact>]
+    member _.``changed command configuration closure inode or deadline refuses consumption``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        let! result = prepare spec
+        let value = valid result
+        Assert.Equal(Error "preparation-binding-invalidated", PreparedAttempt.validate DateTimeOffset.UtcNow "changed-argv" spec value)
+        Assert.Equal(Error "preparation-binding-invalidated", PreparedAttempt.validate DateTimeOffset.UtcNow "runner-argv-config-source" {spec with Environment = Map.add "LANG" "C" spec.Environment} value)
+        Assert.Equal(Error "preparation-deadline-refused", PreparedAttempt.validate (DateTimeOffset.UtcNow.AddMinutes 1.) "runner-argv-config-source" spec value)
+        let outside = Path.Combine(Path.GetTempPath(),Guid.NewGuid().ToString("N"))
+        try
+            File.WriteAllText(outside,"unrelated")
+            Assert.Equal(Ok (), PreparedAttempt.validate DateTimeOffset.UtcNow "runner-argv-config-source" spec value)
+        finally File.Delete outside
+        let target = Path.Combine(fixture.Root,"capture_custody.py")
+        let content = File.ReadAllText target
+        File.Move(target,target+".prior")
+        File.WriteAllText(target,content)
+        File.Delete(target+".prior")
+        Assert.Equal(Error "preparation-input-invalidated", PreparedAttempt.validate DateTimeOffset.UtcNow "runner-argv-config-source" spec value)
+    }
+
+    [<Theory>]
+    [<InlineData("missing")>]
+    [<InlineData("empty")>]
+    [<InlineData("unexpected")>]
+    [<InlineData("malformed")>]
+    [<InlineData("failed")>]
+    [<InlineData("timeout")>]
+    [<InlineData("tool")>]
+    [<InlineData("output")>]
+    member _.``bad or unknown actual checks have zero workload launches``(scenario: string) = task {
+        let fixture, initial = create ()
+        use fixture = fixture
+        let mutable spec = initial
+        match scenario with
+        | "missing" ->
+            File.Delete(Path.Combine(fixture.Root,"capture_custody.py"))
+            spec <- {spec with Inputs = spec.Inputs |> List.filter ((<>) "capture_custody.py")}
+        | "empty" -> File.WriteAllText(Path.Combine(fixture.Root,"test_capture.py"),"import unittest\n")
+        | "unexpected" -> spec <- {spec with Checks = spec.Checks |> List.map (fun c -> if c.Kind = CapsuleCheckKind.Discovery then {c with ExpectedDiscoveries = ["wrong"]} else c)}
+        | "malformed" -> File.WriteAllText(Path.Combine(fixture.Root,"check.py"),"print('unknown')\n")
+        | "failed" -> File.WriteAllText(Path.Combine(fixture.Root,"check.py"),"raise RuntimeError('failed')\n")
+        | "timeout" -> File.WriteAllText(Path.Combine(fixture.Root,"check.py"),"import time\ntime.sleep(20)\n")
+        | "tool" -> spec <- {spec with Checks = spec.Checks |> List.map (fun c -> {c with Executable = "/absent/tool"})}
+        | "output" -> File.WriteAllText(Path.Combine(fixture.Root,"check.py"),"print('X'*10000)\n")
+        | _ -> failwith scenario
+        let fake = FakeRunner(fun _ -> successfulObservation)
+        let ex, _, auth, selectedProfile, cmd = executor spec fake
+        let! outcome = ex.ExecuteAsync(auth,selectedProfile,cmd,CancellationToken.None)
+        match outcome with Refused reason -> Assert.StartsWith("preparation-",reason) | other -> failwith $"unexpected launch {other}"
+        Assert.Equal(0,fake.Calls)
+        Assert.Equal(0,fake.CleanupCalls)
+    }
+
+    [<Fact>]
+    member _.``checked execution and settled cleanup remain available when new checks unavailable``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        let mutable canClean = false
+        let fake = FakeRunner((fun _ -> successfulObservation),cleanup = (fun _ -> canClean))
+        let ex, policy, auth, selectedProfile, cmd = executor spec fake
+        let! outcome = ex.ExecuteAsync(auth,selectedProfile,cmd,CancellationToken.None)
+        match outcome with Completed receipt -> Assert.False(receipt.CleanupCompleted) | other -> failwith $"unexpected {other}"
+        Assert.Equal(1,fake.Calls)
+        canClean <- true
+        let unavailable = PortableWorkspaceExecutor.Executor(policy,fake,prerequisites = Map ["python-build",PortablePrerequisiteRequirement.CapsuleUnavailable])
+        let! duplicate = unavailable.ExecuteAsync(auth,selectedProfile,cmd,CancellationToken.None)
+        match duplicate with Duplicate receipt -> Assert.True(receipt.CleanupCompleted) | other -> failwith $"unexpected {other}"
+        let! refused = unavailable.ExecuteAsync(auth,selectedProfile,{cmd with CommandId=Guid.NewGuid(); IdempotencyId="new-attempt"},CancellationToken.None)
+        Assert.Equal(Refused "preparation-required-check-unavailable",refused)
+        Assert.Equal(1,fake.Calls)
+        Assert.Equal(2,fake.CleanupCalls)
+    }
+
+module private ProbeControls =
+    [<System.Runtime.InteropServices.DllImport("libc", EntryPoint="pidfd_open", SetLastError=true)>]
+    extern int pidfdOpen(int pid, uint32 flags)
+    [<System.Runtime.InteropServices.DllImport("libc", EntryPoint="pidfd_send_signal", SetLastError=true)>]
+    extern int pidfdSignal(int descriptor, int signal, nativeint info, uint32 flags)
+
+    let readIdentity path =
+        use document = JsonDocument.Parse(File.ReadAllBytes path)
+        document.RootElement.GetProperty("pid").GetInt32(),document.RootElement.GetProperty("start").GetString()
+    let stopped path =
+        let pid,start = readIdentity path
+        try
+            let stat = File.ReadAllText($"/proc/{pid}/stat")
+            let fields = stat.Substring(stat.LastIndexOf(')')+2).Split(' ')
+            fields[19] <> start || fields[0] = "Z"
+        with :? FileNotFoundException | :? DirectoryNotFoundException -> true
+    let cleanup path =
+        if File.Exists path then
+            let pid,start = readIdentity path
+            let descriptor = pidfdOpen(pid,0u)
+            if descriptor >= 0 then
+                use handle = new Microsoft.Win32.SafeHandles.SafeFileHandle(nativeint descriptor,true)
+                try
+                    let stat = File.ReadAllText($"/proc/{pid}/stat")
+                    let fields = stat.Substring(stat.LastIndexOf(')')+2).Split(' ')
+                    if fields[19] = start then pidfdSignal(descriptor,9,0n,0u) |> ignore
+                with :? FileNotFoundException | :? DirectoryNotFoundException -> ()
+            File.Delete path
+
+    let auditScript = "import os,json,sys,time,subprocess\ndef note(pid,path):\n s=open('/proc/%d/stat'%pid).read();f=s[s.rfind(')')+2:].split();open(path,'w').write(json.dumps({'pid':pid,'start':f[19]}))\nnote(os.getpid(),os.environ['ROOT_AUDIT'])\np=subprocess.Popen([sys.executable,'-c','import time;time.sleep(20)'],start_new_session=os.environ['ESCAPE']=='yes')\nnote(p.pid,os.environ['CHILD_AUDIT'])\ntime.sleep(20)\n"
+
+open ProbeControls
+
+type ProbeCustodyTests() =
+    [<Theory>]
+    [<InlineData("fifo")>]
+    [<InlineData("symlink")>]
+    member _.``actual nonregular owned input refuses before open and hashing``(kind: string) = task {
+        let fixture,spec = create ()
+        use fixture = fixture
+        let path = Path.Combine(fixture.Root,"nonregular")
+        if kind = "fifo" then
+            use helper = Diagnostics.Process.Start("/usr/bin/mkfifo",path)
+            Assert.True(helper.WaitForExit(2000));Assert.Equal(0,helper.ExitCode)
+        else File.CreateSymbolicLink(path,Path.Combine(fixture.Root,"capture_custody.py")) |> ignore
+        let watch = Diagnostics.Stopwatch.StartNew()
+        let! outcome = prepare {spec with Inputs=spec.Inputs @ ["nonregular"]}
+        Assert.True(Result.isError outcome)
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds 1.,$"nonregular refusal took {watch.Elapsed}")
+    }
+
+    [<Fact>]
+    member _.``directory inode replacement also invalidates a prepared capsule``() = task {
+        let fixture,spec = create ()
+        use fixture = fixture
+        let directory = Path.Combine(fixture.Root,"discovery-assets")
+        Directory.CreateDirectory directory |> ignore
+        let! observation = prepare spec
+        let attempt = valid observation
+        Directory.Move(directory,directory+".previous")
+        Directory.CreateDirectory directory |> ignore
+        Directory.Delete(directory+".previous")
+        Assert.Equal(Error "preparation-input-invalidated",PreparedAttempt.validate DateTimeOffset.UtcNow "runner-argv-config-source" spec attempt)
+    }
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``owned group and escaped session controls never signal unrelated probe``(escape: bool) = task {
+        let fixture,initial = create ()
+        use fixture = fixture
+        let rootAudit = Path.Combine(Path.GetTempPath(),"fsgg-owned-root-"+Guid.NewGuid().ToString("N"))
+        let childAudit = Path.Combine(Path.GetTempPath(),"fsgg-owned-child-"+Guid.NewGuid().ToString("N"))
+        let python = initial.Checks.Head.Executable
+        let unrelatedInfo = Diagnostics.ProcessStartInfo(python)
+        unrelatedInfo.ArgumentList.Add "-c";unrelatedInfo.ArgumentList.Add "import time;time.sleep(20)"
+        use unrelated = Diagnostics.Process.Start unrelatedInfo
+        try
+            File.WriteAllText(Path.Combine(fixture.Root,"check.py"),auditScript)
+            let spec = {initial with MaximumCheckSeconds=1
+                                     Environment=initial.Environment |> Map.add "ROOT_AUDIT" rootAudit |> Map.add "CHILD_AUDIT" childAudit |> Map.add "ESCAPE" (if escape then "yes" else "no")}
+            let fake = FakeRunner(fun _ -> successfulObservation)
+            let ex,_,auth,selectedProfile,cmd = executor spec fake
+            let! outcome = ex.ExecuteAsync(auth,selectedProfile,cmd,CancellationToken.None)
+            Assert.Equal(0,fake.Calls)
+            Assert.False(unrelated.HasExited)
+            if escape then
+                Assert.Equal(Refused "preparation-cleanup-unobserved",outcome)
+                Assert.False(stopped childAudit)
+            else
+                match outcome with Refused reason -> Assert.StartsWith("preparation-",reason) | _ -> failwith $"unexpected {outcome}"
+                Assert.True(stopped rootAudit)
+                Assert.True(stopped childAudit)
+        finally
+            cleanup childAudit;cleanup rootAudit
+            if not unrelated.HasExited then unrelated.Kill();unrelated.WaitForExit(2000) |> ignore
+    }
