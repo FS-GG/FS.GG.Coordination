@@ -544,3 +544,16 @@ existing synthetic fanout, census, classifier and recovery controls pass, along
 with the pure original-native receipt predicates and count/accounting/shard
 refusals. No model, build, qualification or physical baseline rerun occurred;
 original failed native receipts remain failed and exact-head acceptance is pending.
+
+Native 21899 stable evidence collection reached six historical-profile refusals
+after canonical Q1/Q2 passed. The current inspector now binds the fixed admitted
+source/compiled-contract identity, 174 negatives and logical process inventory
+263/232/71, including their exact result-digest prefix. Retained logical-plus-retry
+physical counts stay distinct from the unchanged measured parallel sidecar. The
+complete historical 166/740c fixture remains dated refusal evidence. Pure FSI
+controls accept the original native current receipt and reject historical, count,
+logical/physical accounting, retry, input, result, tool, roster, timing, schema,
+property and malformed drift. Current synthetic fixtures and all ten existing
+mutation targets pass with changed-byte assertions; the pure workflow generator
+retains byte-identical output. No local model, build, qualification or baseline
+rerun occurred. Native exact-head manifest acceptance remains pending.

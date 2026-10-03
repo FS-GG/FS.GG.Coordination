@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/MilestoneQualification.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/QualificationCadence.fs"

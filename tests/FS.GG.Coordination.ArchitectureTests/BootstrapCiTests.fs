@@ -192,10 +192,10 @@ let private createArtifacts root =
             let preparationDigest = String.replicate 64 "c"
 
             let sourceDigest =
-                "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+                "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
 
             let contractDigest =
-                "137852914a1a7ec6e3af62be0f5c0c890390e02640775cddf97afa789dcb7d8b"
+                "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
 
             let toolchainDigest =
                 "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486"
@@ -249,7 +249,7 @@ let private createArtifacts root =
             let resultDigest =
                 SHA256.HashData(
                     Encoding.UTF8.GetBytes(
-                        $"passed|passed|8|166|242|217|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
+                        $"passed|passed|8|174|263|232|71|0|0|0|0|%s{preparationDigest}|%s{formalIdentity}|none|none"
                     )
                 )
                 |> Convert.ToHexString
@@ -257,7 +257,7 @@ let private createArtifacts root =
 
             File.WriteAllText(
                 target,
-                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":166,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":242,\"quintCli\":217,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
+                $"{{\"schema\":\"fsgg.coordination.canonical-quint-qualification/1\",\"q1Outcome\":\"passed\",\"q2Outcome\":\"passed\",\"positiveInvariantCount\":8,\"negativeControlCount\":174,\"preparationDurationMs\":100,\"q2DurationMs\":200,\"totalDurationMs\":300,\"processCounts\":{{\"external\":263,\"quintCli\":232,\"apalacheVerify\":71}},\"processAccounting\":\"logical-invocations-plus-explicit-startup-retries/v1\",\"physicalProcessCounts\":{{\"external\":263,\"quintCli\":232,\"apalacheVerify\":71}},\"startupRetries\":{{\"total\":0,\"verify\":0,\"reflectionDeadline\":0,\"earlyLifecycleExit\":0}},\"formalCounterexamples\":[%s{formalJson}],\"tools\":{{\"toolchainSha256\":\"%s{toolchainDigest}\",\"quintSha256\":\"%s{quintDigest}\",\"apalacheJarSha256\":\"%s{apalacheDigest}\"}},\"inputs\":{{\"sourceSha256\":\"%s{sourceDigest}\",\"contractSha256\":\"%s{contractDigest}\"}},\"preparationSha256\":\"%s{preparationDigest}\",\"failure\":null,\"resultSha256\":\"%s{resultDigest}\"}}"
             )
         else
             File.WriteAllText(target, $"artifact:%s{relative}")
@@ -1710,12 +1710,12 @@ let private mutateCanonicalQuintReceipt mutate =
 [<Theory>]
 [<InlineData("\"q1Outcome\":\"passed\"", "\"q1Outcome\":\"failed\"", "quint-receipt-outcome")>]
 [<InlineData("\"positiveInvariantCount\":8", "\"positiveInvariantCount\":7", "quint-receipt-inventory")>]
-[<InlineData("\"negativeControlCount\":166", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
+[<InlineData("\"negativeControlCount\":174", "\"negativeControlCount\":125", "quint-receipt-inventory")>]
 [<InlineData("\"totalDurationMs\":300", "\"totalDurationMs\":301", "quint-receipt-timing")>]
-[<InlineData("\"external\":242", "\"external\":185", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":217", "\"quintCli\":160", "quint-receipt-process-count")>]
+[<InlineData("\"external\":263", "\"external\":185", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":232", "\"quintCli\":160", "quint-receipt-process-count")>]
 [<InlineData("\"apalacheVerify\":71", "\"apalacheVerify\":46", "quint-receipt-process-count")>]
-[<InlineData("\"quintCli\":217", "\"quintCli\":0", "quint-receipt-process-count")>]
+[<InlineData("\"quintCli\":232", "\"quintCli\":0", "quint-receipt-process-count")>]
 [<InlineData("\"verify\":0", "\"verify\":1", "quint-receipt-startup-retries")>]
 [<InlineData("\"resultSha256\":\"", "\"resultSha256\":\"0", "quint-receipt-result-digest")>]
 let ``canonical Quint receipt rejects incomplete or contradictory evidence``
@@ -1725,10 +1725,28 @@ let ``canonical Quint receipt rejects incomplete or contradictory evidence``
     =
     let exitCode, _, error =
         mutateCanonicalQuintReceipt (fun path ->
-            File.WriteAllText(path, File.ReadAllText(path).Replace(original, replacement)))
+            let before = File.ReadAllText(path)
+            let changed = before.Replace(original, replacement)
+            Assert.NotEqual(before, changed)
+            File.WriteAllText(path, changed))
 
     Assert.NotEqual(0, exitCode)
     Assert.Contains($"rule=%s{rule}", error)
+
+[<Fact>]
+let ``historical canonical Quint receipt refuses current qualification`` () =
+    let historical =
+        Path.Combine(
+            repositoryRoot,
+            "eng/tests/bootstrap-receipt-profile/fixtures/historical-bootstrap-receipt-20261003.json"
+        )
+
+    let exitCode, _, error =
+        mutateCanonicalQuintReceipt (fun path -> File.Copy(historical, path, true))
+
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=quint-receipt-input-digest", error)
+    Assert.Contains("rule=quint-receipt-inventory", error)
 
 [<Fact>]
 let ``canonical Quint receipt rejects malformed JSON`` () =
