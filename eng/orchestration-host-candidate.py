@@ -163,6 +163,9 @@ def validate_archive(path: Path, expected_manifest: bytes | None = None) -> tupl
     require(canonical_bytes(manifest) == manifest_bytes, "OHC-MANIFEST", "manifest is not canonical")
     require(manifest.get("schema") == SCHEMA, "OHC-MANIFEST", "manifest schema differs")
     require(manifest.get("rid") == RID and manifest.get("selfContained") is True and manifest.get("singleFile") is True, "OHC-MANIFEST", "runtime binding differs")
+    # Historical uncompressed candidates omit this additive construction binding.
+    if "singleFileCompression" in manifest:
+        require(manifest["singleFileCompression"] is True, "OHC-COMPRESSION", "single-file compression binding differs")
     payload = manifest.get("payload", {})
     require(payload.get("path") == expected[0] and payload.get("bytes") == len(binary) and payload.get("sha256") == digest_bytes(binary), "OHC-PAYLOAD", "payload binding differs")
     if expected_manifest is not None:
@@ -206,7 +209,9 @@ def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity
     env.update({"DOTNET_CLI_HOME": str(root / "dotnet-home"), "NUGET_PACKAGES": str(root / "nuget"), "DOTNET_NOLOGO": "1", "DOTNET_ROLL_FORWARD": "Disable"})
     properties = [
         "-p:ContinuousIntegrationBuild=true", "-p:Deterministic=true", "-p:DeterministicSourcePaths=true",
-        "-p:UseSharedCompilation=false", "-p:DebugType=None", "-p:DebugSymbols=false", f"-p:PathMap={source}=/_/",
+        "-p:UseSharedCompilation=false", "-p:DebugType=None", "-p:DebugSymbols=false",
+        # Compress managed bundle content without removing files or changing the archive/payload ceilings.
+        "-p:EnableCompressionInSingleFile=true", f"-p:PathMap={source}=/_/",
         f"-p:FsggSourceRevision={candidate}",
     ]
     run(source, ["dotnet", "restore", PROJECT, "--locked-mode", "--disable-build-servers", *properties], env)
@@ -221,6 +226,7 @@ def build_once(repo: Path, candidate: str, tree: str, commit_time: str, identity
         "sourceArchiveSha256": source_archive_sha, "commitTime": commit_time, "rid": RID,
         "selfContained": True, "singleFile": True, "configuration": "Release", "publishInvocationsPerBuild": 1,
         "reproductionBuilds": 2, "debugType": "None", "debugSymbols": False, "sharedCompilation": False,
+        "singleFileCompression": True,
         "lock": {"path": LOCK, "sha256": lock_sha}, "toolchain": identity,
         "payload": {"path": f"{ROOT}/{PAYLOAD}", "bytes": binary.stat().st_size, "sha256": payload_sha},
     }
@@ -395,6 +401,19 @@ def self_test(repo: Path) -> None:
         make_archive(second, binary, manifest_bytes)
         require(first.read_bytes() == second.read_bytes(), "OHC-SELF-TEST", "canonical ZIP is not repeatable")
         validate_archive(first, manifest_bytes)
+        compressed_manifest = dict(manifest, singleFileCompression=True)
+        compressed_bytes = canonical_bytes(compressed_manifest)
+        compressed = root / "compression-binding.zip"
+        make_archive(compressed, binary, compressed_bytes)
+        validate_archive(compressed, compressed_bytes)
+        invalid_compression = canonical_bytes(dict(manifest, singleFileCompression="true"))
+        make_archive(compressed, binary, invalid_compression)
+        try:
+            validate_archive(compressed, invalid_compression)
+        except SystemExit as error:
+            require(str(error).startswith("OHC-COMPRESSION"), "OHC-SELF-TEST", "wrong compression refusal")
+        else:
+            refuse("OHC-SELF-TEST", "invalid compression binding accepted")
         mutations = 0
         for kind in ("payload", "manifest", "extra", "timestamp", "mode"):
             target = root / f"{kind}.zip"
@@ -439,7 +458,7 @@ def self_test(repo: Path) -> None:
             except SystemExit:
                 mutations += 1
         require(mutations == 11, "OHC-SELF-TEST", f"all mutation refusals differ: {mutations}")
-    print("ORCHESTRATION_HOST_CANDIDATE_SELF_TEST_OK controls=workflow,layout,timestamp,mode,rid,limit,reproducibility,artifact-route mutations=11")
+    print("ORCHESTRATION_HOST_CANDIDATE_SELF_TEST_OK controls=workflow,layout,timestamp,mode,rid,limit,compression-binding,reproducibility,artifact-route mutations=11")
 
 
 def main() -> None:
