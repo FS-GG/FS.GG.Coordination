@@ -25,7 +25,7 @@ for id in "${semantic[@]}" "$performance"; do
   if [[ "$id" == base ]]; then
     jq -n --arg digest "$(printf 'c%.0s' {1..64})" '
       {schema:"fsgg.coordination.canonical-quint-qualification/1",q1Outcome:"passed",q2Outcome:"passed",
-       positiveInvariantCount:8,negativeControlCount:71,preparationDurationMs:1,q2DurationMs:1,totalDurationMs:2,
+       positiveInvariantCount:8,negativeControlCount:79,preparationDurationMs:1,q2DurationMs:1,totalDurationMs:2,
        processCounts:{external:1,quintCli:1,apalacheVerify:1},processAccounting:"logical-invocations-plus-explicit-startup-retries/v1",
        physicalProcessCounts:{external:1,quintCli:1,apalacheVerify:1},
        startupRetries:{total:0,verify:0,reflectionDeadline:0,earlyLifecycleExit:0},formalCounterexamples:[],

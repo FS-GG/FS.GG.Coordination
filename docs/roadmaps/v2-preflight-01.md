@@ -535,3 +535,12 @@ region and executor-boundary controls pass, as do original native receipt predic
 and old-count, missing-control, accounting and missing-shard refusal controls. No
 local model, full qualification or physical baseline rerun occurred. Native exact-head
 acceptance remains pending; passed sub-results do not relabel the failed jobs.
+
+Native 91e0 compiler/tests, bootstrap recovery and optimistic partitions 3/5
+all exposed the same stale positive fanout fixture: it synthesized 71 base
+negatives before delegating to the strict 79-count aggregate. The fixture now
+uses 79; production acceptance and the old-71 refusal remain unchanged. All 19
+existing synthetic fanout, census, classifier and recovery controls pass, along
+with the pure original-native receipt predicates and count/accounting/shard
+refusals. No model, build, qualification or physical baseline rerun occurred;
+original failed native receipts remain failed and exact-head acceptance is pending.
