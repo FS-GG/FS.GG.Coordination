@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.GitHub/FleetShadowAdapter.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubFleetShadowQualification.fs"
 
@@ -13,6 +14,8 @@ let root =
         Path.GetFullPath fsi.CommandLineArgs[1]
     else
         Path.GetFullPath "."
+
+FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.requireCurrent root
 
 let readDocument relative =
     JsonDocument.Parse(File.ReadAllText(Path.Combine(root, relative)))
@@ -373,7 +376,7 @@ let quint = Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")
 
 if
     sha256 quint
-    <> "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+    <> FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
 then
     failwith "canonical Quint source changed"
 
@@ -540,7 +543,8 @@ let generatedMutation control =
     | PartialUnreadable ->
         FleetShadowAdapter.compare asOf (TimeSpan.FromHours 1) { observation with Complete = false }
         |> Result.isError
-    | QuintAndPrerequisite -> sha256 quint = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+    | QuintAndPrerequisite ->
+        sha256 quint = FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
     | LiveEvidence ->
         text v1Source "command" = "fsgg-coord ready --all --json"
         && text v2Source "command" = "gh api graphql --paginate --slurp"

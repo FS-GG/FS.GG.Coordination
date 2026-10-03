@@ -42,7 +42,7 @@ let ``committed matrix is deterministic complete and source bound`` () =
     Assert.Equal(15, summary.ScenarioCount)
     Assert.Equal(11, summary.ConvergedCount)
     Assert.Equal(4, summary.RefusedCount)
-    Assert.Equal("0946e635fd4572e9f533021fbba9eba3496863fe923c229357f65b5243959344", summary.SelfSha256)
+    Assert.Equal("d540c4ebe2573e6b884cb8fafde3fb08c641c68a724e962a0d02837bc457219e", summary.SelfSha256)
 
 [<Fact>]
 let ``every modeled external step has before and after convergence`` () =
@@ -194,3 +194,27 @@ let ``semantic oracle rejects duplicate and reorder defects even with healthy la
         match FaultInjectionOracle.validate root forged with
         | Ok _ -> failwith $"semantic defect %A{defect} escaped after trace-label restoration"
         | Error error -> Assert.StartsWith(expected, error)
+
+[<Fact>]
+let ``historical fault matrix cannot qualify current source`` () =
+    let historical =
+        File.ReadAllBytes(
+            Path.Combine(
+                root,
+                "tests/FS.GG.Coordination.ArchitectureTests/Fixtures/HistoricalProjections/fault-injection-740c.json"
+            )
+        )
+
+    let expected = "7e57a8cbc85c9e798375be5225b461ef9ff719dafdb06233b5be976b6326dd4d"
+
+    let digest =
+        historical
+        |> System.Security.Cryptography.SHA256.HashData
+        |> Convert.ToHexString
+        |> _.ToLowerInvariant()
+
+    Assert.Equal(expected, digest)
+
+    match FaultInjection.validate root historical with
+    | Ok _ -> failwith "historical fault artifact qualified current source"
+    | Error error -> Assert.StartsWith("FI-ARTIFACT-SOURCE", error)

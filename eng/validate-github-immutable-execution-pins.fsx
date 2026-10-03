@@ -1,3 +1,4 @@
+#load "../src/FS.GG.Coordination.Qualification.Contracts/CanonicalProtocolSourceIdentity.fs"
 #load "../src/FS.GG.Coordination.Qualification.Contracts/GitHubImmutableExecutionPinsQualification.fs"
 
 open System
@@ -18,6 +19,8 @@ let root =
     |> Array.tryFind Directory.Exists
     |> Option.map Path.GetFullPath
     |> Option.defaultValue defaultRoot
+
+FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.requireCurrent root
 
 let evidenceRoot = Path.Combine(root, "evidence/github-substrate-v2/gs2-06-4")
 
@@ -698,7 +701,7 @@ else
         | ExactPinsReplay -> GitHubImmutableExecutionPinsQualification.verify report.Seal snapshot = Ok report
         | QuintPinsUnchanged ->
             sha256File (Path.Combine(root, "src/FS.GG.Coordination.Protocol/Protocol.md")) =
-                "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+                FS.GG.Coordination.Qualification.Contracts.CanonicalProtocolSourceIdentity.CurrentSha256
         | NoPinsMutationSurface
         | NoWorkflowPublicationSurface ->
             let surface =

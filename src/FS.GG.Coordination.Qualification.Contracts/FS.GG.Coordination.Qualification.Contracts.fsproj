@@ -1,6 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <Compile Include="CanonicalProtocolSourceIdentity.fsi" />
+    <Compile Include="CanonicalProtocolSourceIdentity.fs" />
     <Compile Include="Library.fsi" />
     <Compile Include="Library.fs" />
     <Compile Include="QualificationReuse.fsi" />

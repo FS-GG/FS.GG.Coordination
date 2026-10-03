@@ -625,13 +625,13 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("successfulExitAfterParserWithoutResult", validator)
     Assert.Contains("APALACHE_EXECUTION_TIMEOUT", validator)
     Assert.Contains("let maxApalacheStartupRetries = 2", validator)
-    Assert.Contains("let rec invokeWithStartupRetries retriesRemaining", validator)
-    Assert.Contains("Some failureClass when retriesRemaining > 0", validator)
-    Assert.Contains("invokeWithStartupRetries (retriesRemaining - 1)", validator)
-    Assert.Contains("invokeWithStartupRetries maxApalacheStartupRetries", validator)
+    Assert.Contains("let private retryObserved eligible logicalId scope label timeoutMs invoke", validator)
+    Assert.Contains("classification.IsSome && ordinal <= maxApalacheStartupRetries", validator)
+    Assert.Contains("attempt ()", validator)
+    Assert.Contains("retryObserved (isQuint && List.tryHead arguments = Some \"verify\")", validator)
     Assert.Contains("let runMeasured timeoutMs", validator)
     Assert.Contains("child.Kill(true)", validator)
-    Assert.Contains("let boundedVerify = isQuint && List.tryHead arguments = Some \"verify\"", validator)
+    Assert.Contains("let retry = classification.IsSome && ordinal <= maxApalacheStartupRetries", validator)
     Assert.Contains("PASS #0: SanyParser", validator)
     Assert.Contains("states generated", validator)
     Assert.Contains("Invariant violated", validator)
@@ -642,18 +642,27 @@ let ``hosted compiler gate invokes the exact canonical Quint Q1 and Q2 subject``
     Assert.Contains("Interlocked.Increment(&apalacheVerifyStartupRetryCount)", validator)
 
     Assert.Equal(
-        2,
+        1,
         System.Text.RegularExpressions.Regex
-            .Matches(validator, "let rec invokeWithStartupRetries retriesRemaining")
+            .Matches(validator, "let private retryObserved eligible logicalId scope label timeoutMs invoke")
             .Count
     )
 
     Assert.Equal(
-        2,
+        1,
         System.Text.RegularExpressions.Regex
-            .Matches(validator, "invokeWithStartupRetries maxApalacheStartupRetries")
+            .Matches(
+                validator,
+                System.Text.RegularExpressions.Regex.Escape(
+                    "retryObserved (isQuint && List.tryHead arguments = Some \"verify\")"
+                )
+            )
             .Count
     )
+
+    Assert.Contains("runWithBudget (Some timeoutMs) workingDirectory executable arguments environment", validator)
+    Assert.Contains("physicalAttempts.Add row", validator)
+    Assert.Contains("recordApalacheStartupRetry \"verify\" classification.Value", validator)
 
     Assert.Equal(
         1,
@@ -4145,10 +4154,14 @@ let ``canonical Quint authority mutations fail closed`` () =
                 let path =
                     Path.Combine(clone, "src/FS.GG.Coordination.Protocol/Generated/typed-authority.json")
 
-                File.WriteAllText(
-                    path,
-                    File.ReadAllText(path).Replace("FS.GG.SDD.Artifacts/1.5.0", "FS.GG.SDD.Artifacts/9.9.9")
-                ))
+                let original = File.ReadAllText(path)
+                Assert.Contains("FS.GG.SDD.Artifacts/2.1.0", original)
+
+                let changed =
+                    original.Replace("FS.GG.SDD.Artifacts/2.1.0", "FS.GG.SDD.Artifacts/9.9.9")
+
+                Assert.NotEqual(original, changed)
+                File.WriteAllText(path, changed))
             "PACKAGE"
 
         runMutation

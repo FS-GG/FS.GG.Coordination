@@ -505,3 +505,19 @@ package root and checks the existing formatter digest before qualification. An
 isolated package restore and four pure bootstrap controls pass, including missing,
 tampered and failed-restore refusals. This does not rerun or replace the admitted
 physical baseline; exact-head native CI remains required.
+
+Bootstrap recovery in native run 37146089359 exposed current projection fixtures
+still bound to the historical whole source, old source-preservation assertions and
+a package mutant that no longer changed any bytes. The repair retains exact old
+GST/FI artifacts as historical fixtures, generates their current successors with
+the unchanged canonical pure generators, and binds live GitHub controls to one
+fixed admitted whole-source identity with independent configuration/manifest
+agreement. All 225 generated case payloads and all 15 fault executions retain their
+semantics; only input identities and derived digests change. Historical artifacts
+refuse current qualification, source/configuration/manifest drift controls refuse,
+and the package mutant must change bytes before validation. Retry wiring assertions
+follow the existing shared bounded physical-attempt journal. The bounded architecture
+build passes without warnings/errors and all 117 affected source tests pass. Canonical
+models, source/configuration/compiler identities, 57 native witnesses, accepted
+receipts, admission budgets and the physical baseline remain unchanged. Required
+exact-head native qualification is still pending.
