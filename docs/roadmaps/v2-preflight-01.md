@@ -496,3 +496,12 @@ require unchanged model, state, reducer and safety bytes. Preparation uses the a
 Artifacts 1.5 LMT source only after verifying its byte identity with published 2.1. Pinned
 native tool digests, admitted calibration, canonical models and qualification budgets remain
 unchanged. Native CI must qualify the repaired head before merge.
+
+Native run 37144761908 passed toolchain preparation, then the performance job and
+semantic shards refused `FANTOMAS-MISSING`: their isolated project restores did
+not supply the manifest-only formatter used for regenerated binding normalization.
+The second source repair restores exact Fantomas `[8.0.0]` into each consuming
+package root and checks the existing formatter digest before qualification. An
+isolated package restore and four pure bootstrap controls pass, including missing,
+tampered and failed-restore refusals. This does not rerun or replace the admitted
+physical baseline; exact-head native CI remains required.

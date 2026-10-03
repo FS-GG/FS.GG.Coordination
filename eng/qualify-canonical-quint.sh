@@ -121,6 +121,20 @@ if [[ "${FSGG_QUINT_PREPARE_ONLY:-0}" == "1" ]]; then
   exit 0
 fi
 
+# Regeneration normalizes bindings with this pinned formatter. Project restore
+# does not restore manifest-only tools into each consuming job's package root.
+: "${NUGET_PACKAGES:=$HOME/.nuget/packages}"
+formatter_restore="$qualification_root/formatter.csproj"
+printf '%s\n' \
+  '<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><TargetFramework>net10.0</TargetFramework></PropertyGroup><ItemGroup><PackageDownload Include="Fantomas" Version="[8.0.0]" /></ItemGroup></Project>' \
+  > "$formatter_restore"
+dotnet restore "$formatter_restore" \
+  --packages "$NUGET_PACKAGES" \
+  --configfile "$nuget_config"
+formatter="$NUGET_PACKAGES/fantomas/8.0.0/tools/net10.0/any/fantomas.dll"
+test -f "$formatter"
+printf '%s  %s\n' "1bb5742abd5fd194575cea1a56f898dd6049bc9c88bf96d60568f66c0d336c70" "$formatter" | sha256sum --check --status
+
 export FSGG_QUINT_CACHE="$cache"
 export FSGG_QUINT_HOME="$quint_home"
 export FSGG_SDD_CLI="$tool_path/fsgg-sdd"
