@@ -1,0 +1,40 @@
+{
+  "schema": "fsgg.coordination.canonical-quint-qualification/1",
+  "q1Outcome": "passed",
+  "q2Outcome": "passed",
+  "positiveInvariantCount": 8,
+  "negativeControlCount": 79,
+  "preparationDurationMs": 163221,
+  "q2DurationMs": 738919,
+  "totalDurationMs": 902140,
+  "processCounts": {
+    "external": 130,
+    "quintCli": 99,
+    "apalacheVerify": 14
+  },
+  "processAccounting": "logical-invocations-plus-explicit-startup-retries/v1",
+  "physicalProcessCounts": {
+    "external": 131,
+    "quintCli": 100,
+    "apalacheVerify": 15
+  },
+  "startupRetries": {
+    "total": 1,
+    "verify": 1,
+    "reflectionDeadline": 0,
+    "earlyLifecycleExit": 1
+  },
+  "formalCounterexamples": [],
+  "tools": {
+    "toolchainSha256": "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
+    "quintSha256": "939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f",
+    "apalacheJarSha256": "4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b"
+  },
+  "inputs": {
+    "sourceSha256": "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354",
+    "contractSha256": "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
+  },
+  "preparationSha256": "c3f0ebf2975832c84f950e4a0fce2ae109d3b7dc481131663aeb0d0a907867bc",
+  "failure": null,
+  "resultSha256": "b0ec2c5533e612761e5ebae8495df787f4abc3eca935f6bd14623701cba6cfab"
+}

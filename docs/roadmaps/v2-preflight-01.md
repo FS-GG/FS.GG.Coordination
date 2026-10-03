@@ -521,3 +521,17 @@ build passes without warnings/errors and all 117 affected source tests pass. Can
 models, source/configuration/compiler identities, 57 native witnesses, accepted
 receipts, admission budgets and the physical baseline remain unchanged. Required
 exact-head native qualification is still pending.
+
+Native runs 37148499631 and 37148499661 passed base Q1/Q2 and bounded provider/runner
+TLC, then their C3 executors refused the remaining historical/current whole-source
+join. The shared pure provenance guard now checks the fixed historical manifest,
+complete protocol fixture and eight retained trace hashes against the separately
+admitted current whole-source/configuration/manifest identity. Exact Choreo, C3
+execution and legacy model regions must join unchanged before C3/C5 execute any
+model. Historical trace lineage remains unchanged. The aggregate now requires the
+owner's exact 79 base negatives (71 established plus eight preflight controls),
+retaining all 19 five-negative formal shards and their accounting. Pure provenance,
+region and executor-boundary controls pass, as do original native receipt predicates
+and old-count, missing-control, accounting and missing-shard refusal controls. No
+local model, full qualification or physical baseline rerun occurred. Native exact-head
+acceptance remains pending; passed sub-results do not relabel the failed jobs.
