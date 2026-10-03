@@ -6,6 +6,7 @@ open System.IO
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
+open System.Runtime.InteropServices
 
 let private fail message =
     raise (InvalidOperationException message)
@@ -547,6 +548,124 @@ let private freezeSummary fixture managerReceipt =
                         sha256 = fileSha path
                     |})
         |}
+
+[<DllImport("libc", EntryPoint = "link", SetLastError = true)>]
+extern int private createSourceFixtureHardLink(string original, string linked)
+
+// SOURCE-ONLY mode: the focused script supplies delegates extracted verbatim from the
+// protected original and candidate Manager validator. No Manager installation is invoked.
+let sourceOnlyEmptyDependencyControls (uid: int) validateOriginal validateCandidate canonicalModule pythonRoot root =
+    if not (canonicalModuleInput canonicalModule) then fail "source-only canonical module differs"
+    if Directory.Exists root || File.Exists root then fail "source-only fixture already exists"
+    privateDirectory root
+    let runtime = Path.Combine(root, "required-runtime")
+    let modulePath = Path.Combine(root, "learn_01_native_source.py")
+    let manifest = Path.Combine(root, "runtime-manifest.json")
+    let runtimeBytes = utf8 "positive validator fixture; never executed"
+    writePrivate runtime runtimeBytes
+    File.SetUnixFileMode(runtime, enum<UnixFileMode> 0o700)
+    File.Copy(canonicalModule, modulePath)
+    File.SetUnixFileMode(modulePath, enum<UnixFileMode> 0o600)
+    let sourceRows = ResizeArray<_>()
+    let dependencies =
+        [|
+            "compression/__init__.py"
+            "compression/_common/__init__.py"
+            "email/mime/__init__.py"
+            "pydoc_data/__init__.py"
+            "urllib/__init__.py"
+        |]
+        |> Array.map (fun relative ->
+            let original = Path.Combine(pythonRoot, relative)
+            let info = FileInfo original
+            if not info.Exists || not (isNull info.LinkTarget) || info.Length <> 0L
+               || fileSha original <> "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" then
+                fail "source-only actual initializer differs"
+            let target = Path.Combine(root, "dependencies", relative)
+            privateDirectory (Path.GetDirectoryName target)
+            File.Copy(original, target)
+            File.SetUnixFileMode(target, enum<UnixFileMode> 0o444)
+            sourceRows.Add {| sourcePath = original; sourceMode = int (File.GetUnixFileMode original);
+                             path = target; bytes = 0L; sha256 = fileSha target; mode = "0444" |}
+            {| path = target; bytes = 0L; sha256 = fileSha target |})
+    let results = ResizeArray<_>()
+    let emptySha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    let writeManifest entries = runtimeManifestBytes runtime modulePath entries |> writePrivate manifest
+    let call validate = validate uid runtime (fileSha runtime) modulePath (fileSha modulePath) manifest (fileSha manifest)
+    let expect label accepted action =
+        let mutable refused = None
+        try action () |> ignore with :? InvalidOperationException as error -> refused <- Some error.Message
+        if accepted = refused.IsSome then fail ("source-only expectation failed: " + label)
+        results.Add {| case = label; accepted = accepted; refusal = refused |}
+    try
+        writeManifest [||]
+        expect "original positive required files" true (fun () -> call validateOriginal)
+        expect "candidate positive required files" true (fun () -> call validateCandidate)
+        writeManifest dependencies
+        expect "original actual empty initializer rejection" false (fun () -> call validateOriginal)
+        expect "candidate actual readonly initializer census" true (fun () -> call validateCandidate)
+        for digest in [ String.replicate 64 "a"; String.replicate 64 "0"; "bad" ] do
+            writeManifest [| {| dependencies[0] with sha256 = digest |} |]
+            expect ("wrong empty digest " + digest.Substring(0, 3)) false (fun () -> call validateCandidate)
+        for mode in [ 0o400; 0o600; 0o555; 0o755; 0o4444 ] do
+            writeManifest dependencies
+            File.SetUnixFileMode(dependencies[0].path, enum<UnixFileMode> mode)
+            expect ("non-readonly empty mode " + string mode) false (fun () -> call validateCandidate)
+            File.SetUnixFileMode(dependencies[0].path, enum<UnixFileMode> 0o444)
+        for requiredPath in [ runtime; modulePath; manifest ] do
+            writeManifest [| {| path = requiredPath; bytes = 0L; sha256 = emptySha |} |]
+            expect ("empty required row " + Path.GetFileName requiredPath) false (fun () -> call validateCandidate)
+        writeManifest dependencies
+        let malformedSize = System.Text.Json.Nodes.JsonNode.Parse(File.ReadAllBytes manifest).AsObject()
+        let malformedRow = malformedSize["files"].AsArray() |> Seq.find (fun row -> row["path"].GetValue<string>() = dependencies[0].path)
+        malformedRow["bytes"] <- System.Text.Json.Nodes.JsonValue.Create("0")
+        malformedSize.ToJsonString() |> utf8 |> writePrivate manifest
+        expect "string dependency size" false (fun () -> call validateCandidate)
+        writeManifest [| {| dependencies[0] with bytes = -1L |} |]
+        expect "negative dependency size" false (fun () -> call validateCandidate)
+        writeManifest [| {| dependencies[0] with bytes = 1L |} |]
+        expect "declared extent differs" false (fun () -> call validateCandidate)
+        writeManifest [| dependencies[0]; dependencies[0] |]
+        expect "duplicate census row" false (fun () -> call validateCandidate)
+        writeManifest (Array.create 4097 dependencies[0])
+        expect "over-bound census" false (fun () -> call validateCandidate)
+        writeManifest [| {| dependencies[0] with bytes = 512L * 1024L * 1024L + 1L |} |]
+        expect "over-bound aggregate" false (fun () -> call validateCandidate)
+        writeManifest dependencies
+        let originalBytes = File.ReadAllBytes manifest
+        let rewriteWithoutRequiredCode () =
+            use document = JsonDocument.Parse originalBytes
+            let node = System.Text.Json.Nodes.JsonNode.Parse(originalBytes).AsObject()
+            let files = node["files"].AsArray()
+            let withoutModule = files |> Seq.filter (fun row -> row["path"].GetValue<string>() <> modulePath) |> Seq.map (fun row -> row.DeepClone()) |> Seq.toArray
+            node["files"] <- System.Text.Json.Nodes.JsonArray(withoutModule)
+            node.ToJsonString() |> utf8 |> writePrivate manifest
+        rewriteWithoutRequiredCode ()
+        expect "required module omitted" false (fun () -> call validateCandidate)
+        for requiredPath in [ runtime; modulePath; manifest ] do
+            let prior = File.ReadAllBytes requiredPath
+            File.WriteAllBytes(requiredPath, [||])
+            expect ("empty required physical file " + Path.GetFileName requiredPath) false (fun () -> call validateCandidate)
+            File.WriteAllBytes(requiredPath, prior)
+        writeManifest dependencies
+        let linked = dependencies[0].path
+        File.Delete linked
+        File.CreateSymbolicLink(linked, sourceRows[0].sourcePath) |> ignore
+        expect "symlink empty dependency" false (fun () -> call validateCandidate)
+        File.Delete linked
+        File.Copy(sourceRows[0].sourcePath, linked)
+        File.SetUnixFileMode(linked, enum<UnixFileMode> 0o444)
+        let hardLink = Path.Combine(root, "extra-empty-link")
+        if createSourceFixtureHardLink(linked, hardLink) <> 0 then fail "source-only hardlink fixture failed"
+        expect "hardlink empty dependency" false (fun () -> call validateCandidate)
+        File.Delete hardLink
+        expect "restored actual initializer census" true (fun () -> call validateCandidate)
+        {| schema = "fsgg.learn.manager-empty-source-controls/1"; scope = "production source slices only; no installer or Host qualification";
+           sourceInitializers = sourceRows.ToArray(); results = results.ToArray(); installerExecuted = false |}
+    finally
+        for path in Directory.EnumerateFiles(root, "*", SearchOption.AllDirectories) do
+            File.SetUnixFileMode(path, enum<UnixFileMode> 0o600)
+        Directory.Delete(root, true)
 
 [<EntryPoint>]
 let main arguments =
