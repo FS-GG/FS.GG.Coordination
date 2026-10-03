@@ -88,8 +88,11 @@ dotnet tool install FS.GG.SDD.Cli \
   --configfile "$nuget_config"
 
 : "${NUGET_PACKAGES:=$HOME/.nuget/packages}"
-lmt_source="$NUGET_PACKAGES/fs.gg.sdd.artifacts/2.1.0/quint/lmt/main.go"
+# The locked Contracts dependency supplies this source. Its bytes are identical
+# to published SDD 2.1; verify that source before the pinned native build.
+lmt_source="$NUGET_PACKAGES/fs.gg.sdd.artifacts/1.5.0/quint/lmt/main.go"
 test -f "$lmt_source"
+printf '%s  %s\n' "88bc47acae2c26919ab96a5cafa80b12fac762092c57840a2baad1afcc7feda3" "$lmt_source" | sha256sum --check --status
 CGO_ENABLED=1 GO111MODULE=off "$go" build \
   -trimpath \
   -ldflags '-buildid=IvXAt1kJ-3iINki1alCT/Ut12KGabgkWIkwVpw-xO/c4zkZMLAubfWHvjZOY8o/8-oR_8tNNndNgfMVoD8F -B 0x03d1703027f57ed4dd2ba90b7cdfc8cdea2815da' \

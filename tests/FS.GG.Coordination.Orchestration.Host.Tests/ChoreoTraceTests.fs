@@ -21,7 +21,9 @@ let ``all deterministic Choreo scenarios are raw identity-bound Quint traces`` (
         Assert.Empty(QuintReplay.validateTrace scenario.Replay)
         Assert.Equal(scenario.Milestones.Length - 1, scenario.Replay.Steps.Length))
 
-    let terminal id = (ChoreoTrace.load id).Milestones |> List.last |> _.Snapshot
+    let terminal id =
+        (ChoreoTrace.load id).Milestones |> List.last |> _.Snapshot
+
     Assert.Equal(7, (terminal "happy-path").Stage)
     Assert.True((terminal "lost-applied").UnknownObserved)
     Assert.True((terminal "proven-absent-retry").RetryObserved)
@@ -32,25 +34,31 @@ let ``all deterministic Choreo scenarios are raw identity-bound Quint traces`` (
     Assert.Equal(6, (terminal "missing-native-readback").Stage)
 
 [<Fact>]
-let ``current Choreo manifest binds the qualified protocol while retaining exact traces`` () =
+let ``historical Choreo traces retain source identity and bind unchanged current region`` () =
     let fixtureRoot = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo")
-    let manifest = JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
+
+    let manifest =
+        JsonNode.Parse(File.ReadAllBytes(Path.Combine(fixtureRoot, "manifest.json"))).AsObject()
+
     let source = manifest["source"].AsObject()
-    let expectedSourceSha = "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
-    let protocolBytes = File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md"))
+
+    let expectedSourceSha =
+        "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
+
+    let protocolBytes =
+        File.ReadAllBytes(Path.Combine(fixtureRoot, "HistoricalProtocol.md"))
 
     Assert.Equal("38820f22535eabedefc3aa2590a05ab7498cb5c6", source["commit"].GetValue<string>())
     Assert.Equal(expectedSourceSha, source["sha256"].GetValue<string>())
 
     let actualSourceSha =
-        protocolBytes |> SHA256.HashData
-        |> Convert.ToHexString
-        |> _.ToLowerInvariant()
+        protocolBytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
     Assert.Equal(expectedSourceSha, actualSourceSha)
 
     for scenario in manifest["scenarios"].AsArray() do
         let value = scenario.AsObject()
+
         let actualTraceSha =
             File.ReadAllBytes(Path.Combine(fixtureRoot, value["file"].GetValue<string>()))
             |> SHA256.HashData
@@ -60,6 +68,7 @@ let ``current Choreo manifest binds the qualified protocol while retaining exact
         Assert.Equal(value["traceSha256"].GetValue<string>(), actualTraceSha)
 
     let changedProtocolBytes = Array.append protocolBytes [| byte '\n' |]
+
     let error =
         Assert.ThrowsAny<Exception>(fun () ->
             ChoreoTrace.validateSourceProvenance source changedProtocolBytes |> ignore)
@@ -67,8 +76,53 @@ let ``current Choreo manifest binds the qualified protocol while retaining exact
     Assert.Contains("protocol source digest differs", error.Message)
 
 [<Fact>]
+let ``current Choreo region rejects model drift and excludes appended unrelated modules`` () =
+    let historical =
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo", "HistoricalProtocol.md"))
+
+    let current =
+        File.ReadAllBytes(Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md"))
+
+    ChoreoTrace.validateCurrentProtocol current
+    Assert.Equal(ChoreoTrace.choreoRegionSha historical, ChoreoTrace.choreoRegionSha current)
+
+    let text = System.Text.Encoding.UTF8.GetString current
+
+    for original, replacement in
+        [
+            "type EffectKind = Claim | ProcessWork | Candidate | Branch | PullRequest | Merge | NativeReadback",
+            "type EffectKind = Claim | ProcessWork | Candidate | Branch | PullRequest | Merge | UnboundReadback"
+            "hostCompleted(Claim) and safety", "hostCompleted(Claim) and true"
+            "val safety = model::safety", "val safety = true"
+        ] do
+        Assert.Contains(original, text)
+
+        let changed =
+            System.Text.Encoding.UTF8.GetBytes(text.Replace(original, replacement))
+
+        Assert.NotEqual<string>(ChoreoTrace.choreoRegionSha current, ChoreoTrace.choreoRegionSha changed)
+
+        Assert.ThrowsAny<Exception>(fun () -> ChoreoTrace.validateCurrentProtocol changed)
+        |> ignore
+
+    let outside =
+        System.Text.Encoding.UTF8.GetBytes(
+            text.Replace(
+                "module PreflightArtifactModel {",
+                "module PreflightArtifactModel {\n  // outside retained Choreo region"
+            )
+        )
+
+    Assert.Equal(ChoreoTrace.choreoRegionSha current, ChoreoTrace.choreoRegionSha outside)
+
+    Assert.ThrowsAny<Exception>(fun () -> ChoreoTrace.validateCurrentProtocol outside)
+    |> ignore
+
+[<Fact>]
 let ``raw Choreo projection rejects a crossed generation even when JSON remains valid`` () =
-    let path = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo", "happy-path.itf.json")
+    let path =
+        Path.Combine(AppContext.BaseDirectory, "Fixtures", "Choreo", "happy-path.itf.json")
+
     let root = JsonNode.Parse(File.ReadAllBytes path).AsObject()
     let states = root["states"].AsArray()
     let state = states[2].AsObject()

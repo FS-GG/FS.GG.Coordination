@@ -486,3 +486,13 @@ without reversing current source identities to reconstruct historical evidence. 
 current qualification architecture checks pass under the owned Core7516 compiler, and
 routine eligibility and operation-boundary fixtures pass. These source checks preserve
 current witness freshness and all admission budgets; required remote CI remains pending.
+
+The first native source CI found stale generated-identity assertions, historical Choreo
+fixtures reading the changed whole protocol, and preparation looking for an unrestored
+Artifacts 2.1 source path. The repair updates the current assertion tuple, retains all eight
+original Choreo traces and their manifest, and supplies their exact historical protocol
+fixture. An independent whole-current-source check and exact seven-module region digest
+require unchanged model, state, reducer and safety bytes. Preparation uses the actual locked
+Artifacts 1.5 LMT source only after verifying its byte identity with published 2.1. Pinned
+native tool digests, admitted calibration, canonical models and qualification budgets remain
+unchanged. Native CI must qualify the repaired head before merge.

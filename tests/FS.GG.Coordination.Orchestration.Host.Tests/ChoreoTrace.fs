@@ -61,13 +61,13 @@ module ChoreoTrace =
 
     let private choreoCommit = "000cf4eed315187dc6f216a148781cff7dde6521"
 
-    let private currentSourceCommit = "38820f22535eabedefc3aa2590a05ab7498cb5c6"
+    let private historicalSourceCommit = "38820f22535eabedefc3aa2590a05ab7498cb5c6"
 
-    let private currentSourceSha =
+    let private historicalSourceSha =
         "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937"
 
-    // The whole source is bound to the current qualification while this independent
-    // region digest retains the identity of the Choreo model that produced the ITFs.
+    // Historical ITFs retain their original whole-source identity. This independent
+    // region digest requires their entire model/test region to remain unchanged.
     let private choreoSourceSha =
         "cd5b58dea391bf1afd6a84eb5e8b74f99b9dc3cf665f9ad78881e53cf7c9b6e1"
 
@@ -95,19 +95,68 @@ module ChoreoTrace =
     let private protocolPath () =
         Path.Combine(AppContext.BaseDirectory, "Fixtures", "Protocol.md")
 
-    let private currentChoreoSourceSha () =
-        let lines = File.ReadAllLines(protocolPath ())
-        let first = lines |> Array.findIndex (fun line -> line.Trim() = "module O2HostedWriterChoreoModel {")
+    let private currentSourceSha =
+        "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
+
+    let internal choreoRegionSha (protocolBytes: byte array) =
+        let lines = Encoding.UTF8.GetString(protocolBytes).Replace("\r\n", "\n").Split('\n')
+
+        let modules =
+            [
+                "O2HostedWriterChoreoModel"
+                "O2HostedWriterChoreoProviderBounded"
+                "O2HostedWriterChoreoRunnerBounded"
+                "O2HostedWriterChoreoProgressQualification"
+                "O2HostedWriterChoreoFaultQualification"
+                "O2HostedWriterChoreoTests"
+                "ChoreoSourcePinSmoke"
+            ]
+
+        let headers = modules |> List.map (fun name -> $"module {name} {{")
+
+        let indices =
+            headers
+            |> List.map (fun header ->
+                let matches =
+                    lines |> Array.indexed |> Array.filter (fun (_, line) -> line.Trim() = header)
+
+                if matches.Length <> 1 then
+                    failwith "Choreo module source boundary differs"
+
+                fst matches[0])
+
+        let first = List.head indices
+        let lastHeader = List.last indices
+
         let last =
             lines
             |> Array.indexed
-            |> Array.find (fun (index, line) -> index > first && line.Trim() = "```")
+            |> Array.find (fun (index, line) -> index > lastHeader && line = "}")
             |> fst
 
-        lines[first .. last - 1]
+        let actualHeaders =
+            lines[first..last]
+            |> Array.filter (fun line -> line.StartsWith("module ", StringComparison.Ordinal))
+            |> Array.toList
+
+        if actualHeaders <> headers then
+            failwith "Choreo module source roster differs"
+
+        let mutable after = last + 1
+
+        while after < lines.Length && String.IsNullOrWhiteSpace(lines[after]) do
+            after <- after + 1
+
+        lines[first .. after - 1]
         |> String.concat "\n"
-        |> fun value -> value + "\n"
-        |> sha256Text
+        |> fun value -> sha256Text (value + "\n")
+
+    let internal validateCurrentProtocol protocolBytes =
+        if sha256Bytes protocolBytes <> currentSourceSha then
+            failwith "current protocol source digest differs"
+
+        if choreoRegionSha protocolBytes <> choreoSourceSha then
+            failwith "historical Choreo protocol region differs"
 
     let internal validateSourceProvenance (source: JsonObject) protocolBytes =
         exactProperties "manifest source" [ "path"; "commit"; "sha256" ] source
@@ -116,13 +165,13 @@ module ChoreoTrace =
         if text source "path" <> "src/FS.GG.Coordination.Protocol/Protocol.md" then
             failwith "source path differs"
 
-        if text source "commit" <> currentSourceCommit then
+        if text source "commit" <> historicalSourceCommit then
             failwith "source commit differs"
 
-        if sourceSha <> currentSourceSha then
+        if sourceSha <> historicalSourceSha then
             failwith "manifest protocol source digest differs"
 
-        if sha256Bytes protocolBytes <> currentSourceSha then
+        if sha256Bytes protocolBytes <> historicalSourceSha then
             failwith "protocol source digest differs"
 
         sourceSha
@@ -510,10 +559,12 @@ module ChoreoTrace =
             failwith "Choreo raw variable differs"
 
         let source = root["source"].AsObject()
-        let sourceSha = validateSourceProvenance source (File.ReadAllBytes(protocolPath ()))
 
-        if currentChoreoSourceSha () <> choreoSourceSha then
-            failwith "historical Choreo protocol region differs"
+        let historicalProtocol =
+            File.ReadAllBytes(Path.Combine(fixtureRoot (), "HistoricalProtocol.md"))
+
+        let sourceSha = validateSourceProvenance source historicalProtocol
+        validateCurrentProtocol (File.ReadAllBytes(protocolPath ()))
 
         let quint = root["quint"].AsObject()
         exactProperties "manifest Quint" [ "version"; "binarySha256"; "backend"; "maxSamples" ] quint
