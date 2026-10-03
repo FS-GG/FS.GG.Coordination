@@ -65,17 +65,123 @@ module private CapsuleNative =
     [<DllImport("libc", SetLastError = true, EntryPoint = "statx")>]
     extern int statx(int dirfd, string path, int flags, uint32 mask, CapsuleStat& result)
 
-    [<DllImport("libc", SetLastError = true, EntryPoint = "kill")>]
-    extern int kill(int pid, int signal)
-
     [<DllImport("libc", SetLastError = true, EntryPoint = "open")>]
     extern int openRead(string path, int flags)
 
-    [<DllImport("libc", SetLastError = true, EntryPoint = "pidfd_open")>]
-    extern int pidfdOpen(int pid, uint32 flags)
+/// Pure custody decisions are replayable observations; they cannot construct PreparedAttempt.
+type PreparationCustodyState =
+    {
+        Identity: string
+        Bound: bool
+        Permitted: bool
+        Filtered: bool
+        ResultObserved: bool
+        LeaderExited: bool
+        GroupLive: bool
+        GroupTerminated: bool
+        CleanupObserved: bool
+        Pending: bool
+        Refused: bool
+        Admitted: bool
+    }
 
-    [<DllImport("libc", SetLastError = true, EntryPoint = "pidfd_send_signal")>]
-    extern int pidfdSignal(int descriptor, int signal, nativeint info, uint32 flags)
+type PreparationCustodyDecision =
+    {
+        State: PreparationCustodyState
+        Effects: string list
+        Refusal: string option
+    }
+
+[<RequireQualifiedAccess>]
+module PreparationCustody =
+    let initial =
+        {
+            Identity = ""
+            Bound = false
+            Permitted = false
+            Filtered = false
+            ResultObserved = false
+            LeaderExited = false
+            GroupLive = false
+            GroupTerminated = false
+            CleanupObserved = false
+            Pending = false
+            Refused = false
+            Admitted = false
+        }
+
+    let ready s =
+        s.Bound
+        && s.Permitted
+        && s.Filtered
+        && s.ResultObserved
+        && s.GroupTerminated
+        && not s.GroupLive
+        && s.CleanupObserved
+        && not s.Pending
+        && not s.Refused
+
+    let step event identity s =
+        let accept state effects =
+            {
+                State = state
+                Effects = effects
+                Refusal = None
+            }
+
+        let refuse reason =
+            {
+                State =
+                    { s with
+                        Refused = true
+                        Admitted = false
+                    }
+                Effects = []
+                Refusal = Some reason
+            }
+
+        match event with
+        | "bind" when not s.Bound && not (String.IsNullOrWhiteSpace identity) ->
+            accept
+                { s with
+                    Identity = identity
+                    Bound = true
+                    GroupLive = true
+                    Pending = true
+                }
+                [ "bind-owned-group" ]
+        | "permit" when s.Bound && not s.Permitted && not s.Refused ->
+            accept { s with Permitted = true } [ "ack-bootstrap" ]
+        | "filtered" when s.Bound && s.Permitted && not s.Filtered && not s.Refused ->
+            accept { s with Filtered = true } [ "observe-fixed-filter" ]
+        | "result" when s.Filtered && not s.ResultObserved && not s.Refused ->
+            accept { s with ResultObserved = true } [ "observe-check" ]
+        | "leaderExit" when s.Bound && not s.GroupTerminated ->
+            accept { s with LeaderExited = true } [ "observe-leader-exit" ]
+        | "terminated" when s.Bound && not s.GroupTerminated ->
+            accept
+                { s with
+                    GroupTerminated = true
+                    GroupLive = false
+                }
+                [ "observe-group-termination" ]
+        | "timeout" when s.Bound ->
+            accept
+                { s with
+                    Refused = true
+                    Admitted = false
+                }
+                [ "signal-owned-group"; "await-group-termination" ]
+        | "cleanup" when s.GroupTerminated && s.Pending ->
+            accept
+                { s with
+                    CleanupObserved = true
+                    Pending = false
+                }
+                [ "remove-scratch"; "observe-cleanup" ]
+        | "admit" when ready s && not s.Admitted -> accept { s with Admitted = true } [ "admit-prepared-check" ]
+        | "unavailable" -> refuse "preparation-custody-unavailable"
+        | _ -> refuse "preparation-custody-order-refused"
 
 /// Bounded owned observations. Distinct identity accounting is separate from event/byte accounting.
 type PreparationObservationLimits =
@@ -366,6 +472,7 @@ module PreparedAttempt =
 
                             match refusal with
                             | Some reason -> Error reason
+                            | None when DateTimeOffset.UtcNow >= deadline -> Error "preparation-deadline-refused"
                             | None ->
                                 statAt -100 path 0x100
                                 |> Result.bind (fun current ->
@@ -397,6 +504,9 @@ module PreparedAttempt =
                     let mutable total = bytes
 
                     for path in Directory.EnumerateFileSystemEntries directory do
+                        if DateTimeOffset.UtcNow >= deadline then
+                            invalidOp "input-deadline-bound"
+
                         if all.Length >= 8192 then
                             invalidOp "input-count-bound"
 
@@ -450,7 +560,7 @@ module PreparedAttempt =
                 then
                     Error "preparation-input-budget-refused"
                 else
-                    let executablePaths = "/usr/bin/setsid" :: (spec.Checks |> List.map _.Executable)
+                    let executablePaths = spec.Checks |> List.map _.Executable
 
                     let ancestors =
                         let rec walk p =
@@ -485,6 +595,10 @@ module PreparedAttempt =
         use bytes = new MemoryStream()
         use writer = new BinaryWriter(bytes, Encoding.UTF8, true)
         writer.Write binding
+        writer.Write CustodyBootstrap.ProfileId
+        writer.Write CustodyBootstrap.BootstrapSha256
+        writer.Write CustodyBootstrap.FilterSha256
+        writer.Write CustodyBootstrap.SourceSha256
         writer.Write spec.Root
         writer.Write spec.MaximumInputBytes
         writer.Write spec.MaximumOutputBytes
@@ -595,90 +709,24 @@ module PreparedAttempt =
         | :? DirectoryNotFoundException -> Error "process-ended"
         | _ -> Error "process-identity-unavailable"
 
-    let private cleanupProbe (root: OwnedProbeIdentity) =
-        // The known live root anchors ancestry. A recycled/unjoined group never receives a signal.
-        try
-            let deadline = DateTimeOffset.UtcNow.AddSeconds 2.
-            let mutable count = 0
-            let mutable complete = true
-            let mutable all = []
+    let private readCustodyLine (stream: Stream) (token: CancellationToken) =
+        task {
+            use bytes = new MemoryStream()
+            let one = Array.zeroCreate<byte> 1
+            let mutable ended = false
 
-            for directory in Directory.EnumerateDirectories("/proc") do
-                let mutable pid = 0
+            while not ended do
+                let! count = stream.ReadAsync(one.AsMemory(), token)
 
-                if Int32.TryParse(Path.GetFileName directory, &pid) then
-                    count <- count + 1
-
-                    if count > 32768 || DateTimeOffset.UtcNow >= deadline then
-                        complete <- false
-                    elif complete then
-                        match processIdentity pid with
-                        | Ok observed -> all <- observed :: all
-                        | Error "process-ended" -> ()
-                        | Error _ -> complete <- false
-
-            let currentRoot =
-                all |> List.tryFind (fun p -> p.Pid = root.Pid && p.Start = root.Start)
-
-            let candidates =
-                all
-                |> List.filter (fun p -> p.Group = root.Pid || p.Session = root.Pid || p.Pid = root.Pid)
-
-            if not complete then
-                false
-            elif candidates.IsEmpty then
-                true
-            elif
-                currentRoot
-                |> Option.exists (fun p -> p.Group = root.Pid && p.Session = root.Pid)
-                |> not
-            then
-                false
-            else
-                let rec descendants owned =
-                    let next =
-                        all
-                        |> List.filter (fun p -> Set.contains p.Parent owned)
-                        |> List.map _.Pid
-                        |> Set.ofList
-                        |> Set.union owned
-
-                    if next = owned then owned else descendants next
-
-                let owned = descendants (Set.singleton root.Pid)
-                let members = all |> List.filter (fun p -> Set.contains p.Pid owned)
-                // Escaped session/group members are unsupported; retain unknown cleanup.
-                if
-                    members |> List.exists (fun p -> p.Group <> root.Pid || p.Session <> root.Pid)
-                    || candidates |> List.exists (fun p -> not (Set.contains p.Pid owned))
-                then
-                    false
+                if count <> 1 || bytes.Length >= 128L then
+                    invalidOp "custody-handshake-refused"
+                elif one[0] = 10uy then
+                    ended <- true
                 else
-                    let mutable signalled = true
-                    // Open pidfds and re-observe identity before each signal. Pidfds do not follow PID reuse.
-                    for memberIdentity in members |> List.sortBy (fun p -> if p.Pid = root.Pid then 1 else 0) do
-                        let descriptor = CapsuleNative.pidfdOpen (memberIdentity.Pid, 0u)
+                    bytes.WriteByte one[0]
 
-                        if descriptor < 0 then
-                            if Marshal.GetLastPInvokeError() <> 3 then
-                                signalled <- false
-                        else
-                            use handle =
-                                new Microsoft.Win32.SafeHandles.SafeFileHandle(nativeint descriptor, true)
-
-                            match processIdentity memberIdentity.Pid with
-                            | Ok current when current = memberIdentity ->
-                                if
-                                    CapsuleNative.pidfdSignal (descriptor, 9, 0n, 0u) <> 0
-                                    && Marshal.GetLastPInvokeError() <> 3
-                                then
-                                    signalled <- false
-                            | Error "process-ended" -> ()
-                            | _ -> signalled <- false
-
-                    signalled
-        with _ ->
-            false
+            return Encoding.ASCII.GetString(bytes.ToArray())
+        }
 
     let private runCheck
         (spec: CapsulePreparation)
@@ -688,163 +736,372 @@ module PreparedAttempt =
         (token: CancellationToken)
         =
         task {
-            let scratch =
-                Path.Combine(Path.GetTempPath(), "fsgg-preparation-" + Guid.NewGuid().ToString("N"))
+            match CustodyBootstrap.tryOpen () with
+            | Error reason -> return Error reason
+            | Ok resources ->
+                use resources = resources
 
-            Directory.CreateDirectory scratch |> ignore
-            use child = new Process()
-            let mutable started = false
-            let mutable ownedIdentity = ""
-            let mutable ownedProcess = None
+                let scratch =
+                    Path.Combine(Path.GetTempPath(), "fsgg-preparation-" + Guid.NewGuid().ToString("N"))
 
-            let! outcome =
-                task {
-                    try
-                        // A separate owned process group makes descendants cleanable after parent exit.
-                        let info = ProcessStartInfo("/usr/bin/setsid")
-                        info.WorkingDirectory <- spec.Root
-                        info.UseShellExecute <- false
-                        info.RedirectStandardOutput <- true
-                        info.RedirectStandardError <- true
-                        info.Environment.Clear()
-                        spec.Environment |> Map.iter (fun k v -> info.Environment[k] <- v)
-                        info.Environment["TMPDIR"] <- scratch
-                        info.Environment["PYTHONDONTWRITEBYTECODE"] <- "1"
-                        info.ArgumentList.Add check.Executable
-                        check.Arguments |> List.iter info.ArgumentList.Add
-                        child.StartInfo <- info
+                Directory.CreateDirectory scratch |> ignore
+                use child = new Process()
+                let mutable started = false
+                let mutable ownedIdentity = ""
+                let mutable ownedGroup: CustodyProcessLease option = None
+                let mutable outputTasks: Task list = []
+                let mutable checkerPermitted = false
+                let mutable custody = PreparationCustody.initial
 
-                        let milliseconds =
-                            min
-                                (float spec.MaximumCheckSeconds * 1000.)
-                                (deadline - DateTimeOffset.UtcNow).TotalMilliseconds
+                let transition event identity =
+                    let decision = PreparationCustody.step event identity custody
+                    custody <- decision.State
 
-                        if milliseconds <= 0. || token.IsCancellationRequested then
-                            return Error "preparation-deadline-refused"
-                        else
-                            use budget = CancellationTokenSource.CreateLinkedTokenSource token
-                            budget.CancelAfter(TimeSpan.FromMilliseconds milliseconds)
-                            started <- child.Start()
+                    if decision.Refusal.IsSome then
+                        invalidOp decision.Refusal.Value
 
-                            if not started then
-                                return Error "preparation-tool-unavailable"
+                let! outcome =
+                    task {
+                        try
+                            let milliseconds =
+                                min
+                                    (float spec.MaximumCheckSeconds * 1000.)
+                                    (deadline - DateTimeOffset.UtcNow).TotalMilliseconds
+
+                            if milliseconds <= 0. || token.IsCancellationRequested then
+                                return Error "preparation-deadline-refused"
                             else
-                                let probeIdentity = processIdentity child.Id |> Result.defaultWith invalidOp
-                                ownedProcess <- Some probeIdentity
-                                let identity = $"{child.Id}:{probeIdentity.Start}:{check.Id}"
-                                ownedIdentity <- identity
+                                use budget = CancellationTokenSource.CreateLinkedTokenSource token
+                                budget.CancelAfter(TimeSpan.FromMilliseconds milliseconds)
+                                let nonce = Convert.ToHexStringLower(RandomNumberGenerator.GetBytes 16)
 
-                                let limits =
-                                    {
-                                        MaximumDistinct = spec.Checks.Length
-                                        MaximumEvents = spec.Checks.Length * 2
-                                        MaximumBytes = int64 spec.MaximumOutputBytes
-                                        Deadline = deadline.UtcTicks
-                                    }
+                                let environment =
+                                    spec.Environment
+                                    |> Map.add "TMPDIR" scratch
+                                    |> Map.add "PYTHONDONTWRITEBYTECODE" "1"
+                                    |> Map.toList
+                                    |> List.map (fun (k, v) -> k + "=" + v)
 
-                                let admitted =
-                                    PreparationObservation.observe
-                                        limits
-                                        DateTimeOffset.UtcNow.UtcTicks
-                                        identity
-                                        0L
-                                        ledger.Value
-
-                                ledger.Value <- admitted.State
-
-                                if admitted.Refusal.IsSome then
-                                    invalidOp "observation-admission-refused"
-
-                                let stdout =
-                                    readBounded child.StandardOutput.BaseStream spec.MaximumOutputBytes budget.Token
-
-                                let stderr =
-                                    readBounded child.StandardError.BaseStream spec.MaximumOutputBytes budget.Token
-
-                                let exit = child.WaitForExitAsync(budget.Token)
-                                let! first = Task.WhenAny(stdout :> Task, stderr :> Task, exit)
+                                let arguments = check.Executable :: check.Arguments
 
                                 if
-                                    first = (stdout :> Task) && (snd stdout.Result)
-                                    || first = (stderr :> Task) && (snd stderr.Result)
+                                    environment.Length > 128
+                                    || arguments.Length > 128
+                                    || (environment @ arguments
+                                        |> List.sumBy (fun value -> Encoding.UTF8.GetByteCount(value) + 1))
+                                        >
+                                        65536
                                 then
-                                    return Error "preparation-output-budget-refused"
+                                    return Error "preparation-custody-arguments-unavailable"
                                 else
-                                    let! outBytes, outExceeded = stdout
-                                    let! errBytes, errExceeded = stderr
-                                    do! exit
+                                    let info = ProcessStartInfo(resources.ExecutablePath)
+                                    info.WorkingDirectory <- spec.Root
+                                    info.UseShellExecute <- false
+                                    info.RedirectStandardInput <- true
+                                    info.RedirectStandardOutput <- true
+                                    info.RedirectStandardError <- true
+                                    // No owner/caller loader or startup hooks execute in the trusted bootstrap.
+                                    info.Environment.Clear()
+                                    info.Environment["LANG"] <- "C"
 
-                                    if
-                                        outExceeded
-                                        || errExceeded
-                                        || uint64 (outBytes.Length + errBytes.Length) > spec.MaximumOutputBytes
-                                    then
-                                        return Error "preparation-output-budget-refused"
-                                    elif child.ExitCode <> 0 then
-                                        let diagnostic = Encoding.UTF8.GetString(errBytes)
+                                    for value in
+                                        [
+                                            "--bootstrap"
+                                            nonce
+                                            string (min 60000 (max 1 (int milliseconds)))
+                                            string environment.Length
+                                            string arguments.Length
+                                        ]
+                                        @ environment
+                                        @ arguments do
+                                        info.ArgumentList.Add value
 
-                                        let missing =
-                                            System.Text.RegularExpressions.Regex.Match(
-                                                diagnostic,
-                                                "ModuleNotFoundError: No module named '([A-Za-z0-9_.-]{1,128})'"
-                                            )
+                                    child.StartInfo <- info
 
-                                        if missing.Success then
-                                            return Error("preparation-import-missing:" + missing.Groups[1].Value)
-                                        else
-                                            return Error("preparation-check-failed:" + check.Id)
-                                    elif errBytes.Length <> 0 then
-                                        return Error "preparation-observation-malformed"
+                                    if not (resources.Revalidate()) then
+                                        return Error "preparation-custody-resource-unavailable"
                                     else
-                                        let observed =
-                                            PreparationObservation.observe
-                                                limits
-                                                DateTimeOffset.UtcNow.UtcTicks
-                                                identity
-                                                (int64 (outBytes.Length + errBytes.Length))
-                                                ledger.Value
+                                        started <- child.Start()
 
-                                        ledger.Value <- observed.State
-
-                                        if observed.Refusal.IsSome then
-                                            return Error "preparation-observation-budget-refused"
+                                        if not started then
+                                            return Error "preparation-custody-bootstrap-unavailable"
                                         else
-                                            return checkOutput check outBytes
-                    with
-                    | :? OperationCanceledException -> return Error "preparation-check-timeout"
-                    | _ -> return Error "preparation-tool-unavailable"
-                }
+                                            let stderr =
+                                                readBounded
+                                                    child.StandardError.BaseStream
+                                                    spec.MaximumOutputBytes
+                                                    budget.Token
 
-            let mutable cleaned = true
+                                            outputTasks <- [ stderr :> Task ]
+                                            let! hello = readCustodyLine child.StandardOutput.BaseStream budget.Token
 
-            if started then
-                match ownedProcess with
-                | None -> cleaned <- false
-                | Some identity ->
-                    cleaned <- cleanupProbe identity
+                                            if hello <> $"FSGG-CUSTODY/1 {child.Id} {nonce}" then
+                                                invalidOp "custody-handshake-refused"
 
-                    if cleaned && not child.HasExited && not (child.WaitForExit(2000)) then
+                                            let bootstrapIdentity =
+                                                processIdentity child.Id |> Result.defaultWith invalidOp
+
+                                            if bootstrapIdentity.Parent <> Environment.ProcessId then
+                                                invalidOp "custody-direct-child-refused"
+
+                                            match CustodyProcessLease.BindHeld child.Id with
+                                            | Error reason -> return Error reason
+                                            | Ok group ->
+                                                ownedGroup <- Some group
+                                                let rejoined = processIdentity child.Id |> Result.defaultWith invalidOp
+
+                                                if
+                                                    rejoined <> bootstrapIdentity
+                                                    || group.Status <> CustodyProcessStatus.Live
+                                                    || not (resources.Revalidate())
+                                                then
+                                                    invalidOp "custody-held-child-refused"
+
+                                                let identity =
+                                                    $"{child.Id}:{bootstrapIdentity.Start}:{check.Id}:{CustodyBootstrap.ProfileId}"
+
+                                                ownedIdentity <- identity
+                                                transition "bind" identity
+
+                                                let limits =
+                                                    {
+                                                        MaximumDistinct = spec.Checks.Length
+                                                        MaximumEvents = spec.Checks.Length * 2
+                                                        MaximumBytes = int64 spec.MaximumOutputBytes
+                                                        Deadline = deadline.UtcTicks
+                                                    }
+
+                                                let admitted =
+                                                    PreparationObservation.observe
+                                                        limits
+                                                        DateTimeOffset.UtcNow.UtcTicks
+                                                        identity
+                                                        0L
+                                                        ledger.Value
+
+                                                ledger.Value <- admitted.State
+
+                                                if admitted.Refusal.IsSome then
+                                                    invalidOp "observation-admission-refused"
+
+                                                budget.Token.ThrowIfCancellationRequested()
+
+                                                if DateTimeOffset.UtcNow >= deadline then
+                                                    invalidOp "custody-deadline-refused"
+
+                                                transition "permit" identity
+                                                // Held bootstrap cannot execute checker code before this exact owned ACK.
+                                                do!
+                                                    child.StandardInput.BaseStream.WriteAsync(
+                                                        ReadOnlyMemory<byte>([| 65uy |]),
+                                                        budget.Token
+                                                    )
+
+                                                do! child.StandardInput.BaseStream.FlushAsync(budget.Token)
+                                                child.StandardInput.Close()
+                                                checkerPermitted <- true
+
+                                                let! filtered =
+                                                    readCustodyLine child.StandardOutput.BaseStream budget.Token
+
+                                                if filtered <> $"FSGG-FILTERED/1 {nonce}" then
+                                                    invalidOp "custody-filter-refused"
+
+                                                transition "filtered" identity
+
+                                                let stdout =
+                                                    readBounded
+                                                        child.StandardOutput.BaseStream
+                                                        spec.MaximumOutputBytes
+                                                        budget.Token
+
+                                                outputTasks <- [ stdout :> Task; stderr :> Task ]
+                                                let exit = child.WaitForExitAsync(budget.Token)
+                                                let mutable outputExceeded = false
+
+                                                while group.Status <> CustodyProcessStatus.Terminated
+                                                      && not outputExceeded do
+                                                    budget.Token.ThrowIfCancellationRequested()
+
+                                                    if group.Status = CustodyProcessStatus.Unknown then
+                                                        invalidOp "custody-group-unknown"
+
+                                                    if not custody.LeaderExited then
+                                                        try
+                                                            let stat = File.ReadAllText($"/proc/{child.Id}/stat")
+
+                                                            if
+                                                                stat
+                                                                    .Substring(stat.LastIndexOf(')') + 2)
+                                                                    .StartsWith("Z ")
+                                                                && group.Status = CustodyProcessStatus.Live
+                                                            then
+                                                                transition "leaderExit" identity
+                                                        with
+                                                        | :? FileNotFoundException
+                                                        | :? DirectoryNotFoundException -> ()
+
+                                                    if stdout.IsFaulted || stdout.IsCanceled then
+                                                        let! _ = stdout in ()
+
+                                                    if stderr.IsFaulted || stderr.IsCanceled then
+                                                        let! _ = stderr in ()
+
+                                                    outputExceeded <-
+                                                        (stdout.IsCompletedSuccessfully && snd stdout.Result)
+                                                        || (stderr.IsCompletedSuccessfully && snd stderr.Result)
+
+                                                    if not outputExceeded then
+                                                        do! Task.Delay(10, budget.Token)
+
+                                                if outputExceeded then
+                                                    custody <- { custody with Refused = true }
+                                                    return Error "preparation-output-budget-refused"
+                                                else
+                                                    transition "terminated" identity
+                                                    let! outBytes, outExceeded = stdout
+                                                    let! errBytes, errExceeded = stderr
+                                                    do! exit
+
+                                                    if
+                                                        outExceeded
+                                                        || errExceeded
+                                                        || uint64 (outBytes.Length + errBytes.Length) >
+                                                            spec.MaximumOutputBytes
+                                                    then
+                                                        return Error "preparation-output-budget-refused"
+                                                    elif not group.HasTerminated then
+                                                        return Error "preparation-cleanup-unobserved"
+                                                    elif child.ExitCode <> 0 then
+                                                        let diagnostic = Encoding.UTF8.GetString errBytes
+
+                                                        let missing =
+                                                            System.Text.RegularExpressions.Regex.Match(
+                                                                diagnostic,
+                                                                "ModuleNotFoundError: No module named '([A-Za-z0-9_.-]{1,128})'"
+                                                            )
+
+                                                        if missing.Success then
+                                                            return
+                                                                Error(
+                                                                    "preparation-import-missing:"
+                                                                    + missing.Groups[1].Value
+                                                                )
+                                                        else
+                                                            return Error("preparation-check-failed:" + check.Id)
+                                                    elif errBytes.Length <> 0 then
+                                                        return Error "preparation-observation-malformed"
+                                                    else
+                                                        let observed =
+                                                            PreparationObservation.observe
+                                                                limits
+                                                                DateTimeOffset.UtcNow.UtcTicks
+                                                                identity
+                                                                (int64 (outBytes.Length + errBytes.Length))
+                                                                ledger.Value
+
+                                                        ledger.Value <- observed.State
+
+                                                        if observed.Refusal.IsSome then
+                                                            return Error "preparation-observation-budget-refused"
+                                                        else
+                                                            let result = checkOutput check outBytes
+
+                                                            if Result.isOk result then
+                                                                transition "result" identity
+                                                            else
+                                                                custody <- { custody with Refused = true }
+
+                                                            return result
+                        with
+                        | :? OperationCanceledException ->
+                            if custody.Bound then
+                                transition "timeout" ownedIdentity
+                            else
+                                custody <- { custody with Refused = true }
+
+                            return Error "preparation-check-timeout"
+                        | _ ->
+                            custody <- { custody with Refused = true }
+
+                            return
+                                Error(
+                                    if checkerPermitted then
+                                        "preparation-custody-check-unavailable"
+                                    else
+                                        "preparation-custody-setup-unavailable"
+                                )
+                    }
+                // Cleanup has a separate bounded grace and uses only the already held process pidfd.
+                let mutable cleaned = not started
+
+                if started then
+                    try
+                        child.StandardInput.Close()
+                    with _ ->
+                        ()
+
+                    match ownedGroup with
+                    | None ->
+                        // Trusted pre-ACK bootstrap sees EOF and exits; absence of group custody is unknown.
+                        try
+                            child.WaitForExit(2000) |> ignore
+                        with _ ->
+                            ()
+
                         cleaned <- false
-                    // Surviving members or detached identities remain unknown; never signal by group number.
-                    if cleaned && CapsuleNative.kill (-child.Id, 0) = 0 then
-                        cleaned <- false
+                    | Some group ->
+                        if not group.HasTerminated then
+                            group.Terminate() |> ignore
 
-            try
-                Directory.Delete(scratch, true)
-            with _ ->
-                cleaned <- false
+                        let! terminated = group.WaitTerminatedAsync 2000
+                        cleaned <- terminated
 
-            if started then
-                let settlement = PreparationObservation.cleanup ownedIdentity cleaned ledger.Value
-                ledger.Value <- settlement.State
+                        if terminated && custody.Bound && not custody.GroupTerminated then
+                            transition "terminated" ownedIdentity
 
-                if settlement.Refusal.IsSome then
+                        if terminated then
+                            try
+                                cleaned <- child.WaitForExit(2000)
+                            with _ ->
+                                cleaned <- false
+                    // Reader faults/cancellation are settled observations, never abandoned background work.
+                    for output in outputTasks do
+                        if not output.IsCompleted then
+                            let! settled = Task.WhenAny(output, Task.Delay 2000)
+
+                            if settled <> output then
+                                cleaned <- false
+
+                        if output.IsFaulted then
+                            output.Exception |> ignore
+
+                try
+                    Directory.Delete(scratch, true)
+                with _ ->
                     cleaned <- false
 
-            if not cleaned then
-                return Error "preparation-cleanup-unobserved"
-            else
-                return outcome
+                if cleaned && custody.Bound then
+                    transition "cleanup" ownedIdentity
+
+                if not (String.IsNullOrEmpty ownedIdentity) then
+                    let settlement = PreparationObservation.cleanup ownedIdentity cleaned ledger.Value
+                    ledger.Value <- settlement.State
+
+                    if settlement.Refusal.IsSome then
+                        cleaned <- false
+
+                ownedGroup |> Option.iter (fun group -> (group :> IDisposable).Dispose())
+
+                if not cleaned then
+                    return Error "preparation-cleanup-unobserved"
+                elif Result.isOk outcome && not (PreparationCustody.ready custody) then
+                    return Error "preparation-custody-order-refused"
+                else
+                    if Result.isOk outcome then
+                        transition "admit" ownedIdentity
+
+                    return outcome
         }
 
     let private closureIdentity identities =
@@ -909,6 +1166,7 @@ module PreparedAttempt =
             inventory spec attempt.Deadline
             |> Result.bind (fun current ->
                 match attempt.Artifact with
+                | _ when DateTimeOffset.UtcNow >= attempt.Deadline -> Error "preparation-deadline-refused"
                 | None -> Error "preparation-check-unknown"
                 | Some artifact ->
                     let _, _, refusal = PreparedArtifact.consume (closureIdentity current) artifact

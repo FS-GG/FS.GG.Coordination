@@ -31,13 +31,27 @@ MUTANTS = [
         ('not terminationObserved\n            || not (\n                Map.containsKey identity state.Owned\n                || Set.contains identity state.CleanupPending\n            )',
          'not terminationObserved && false\n            || not (\n                Map.containsKey identity state.Owned\n                || Set.contains identity state.CleanupPending\n            ) && false')
     ], "FullyQualifiedName~PreparedAttemptReplayTests"),
+    ("bypass-custody-filter", [
+        ('"result" when s.Filtered && not s.ResultObserved', '"result" when s.Bound && not s.ResultObserved')
+    ], "FullyQualifiedName~custody requirements"),
+    ("json-as-custody-cleanup", [
+        ('"cleanup" when s.GroupTerminated && s.Pending', '"cleanup" when s.ResultObserved && s.Pending')
+    ], "FullyQualifiedName~custody requirements"),
+    ("leader-only-custody", [
+        ('accept { s with LeaderExited = true } [ "observe-leader-exit" ]', 'accept { s with LeaderExited = true; GroupTerminated = true; GroupLive = false } [ "observe-leader-exit" ]')
+    ], "FullyQualifiedName~custody requirements"),
+    ("drop-timeout-termination", [
+        ('[ "signal-owned-group"; "await-group-termination" ]', '[ "signal-owned-group" ]')
+    ], "FullyQualifiedName~custody requirements"),
 ]
 
 
 def run_tests(selection, output):
-    env = dict(os.environ, DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER="1")
+    env = dict(os.environ, DOTNET_CLI_DO_NOT_USE_MSBUILD_SERVER="1", DOTNET_PROCESSOR_COUNT="1")
     command = ["dotnet", "test", str(PROJECT), "--no-restore", "-m:1", "/nr:false", "-p:UseSharedCompilation=false",
                "--filter", selection, "--logger", "console;verbosity=minimal"]
+    if hasattr(os, "sched_getaffinity"):
+        command = ["taskset", "-c", str(min(os.sched_getaffinity(0))), *command]
     started = time.monotonic()
     with output.open("w") as log:
         result = subprocess.run(command, cwd=ROOT, env=env, stdout=log, stderr=subprocess.STDOUT, timeout=60)

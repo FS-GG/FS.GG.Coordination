@@ -353,6 +353,7 @@ let validateDocument root (document: JsonObject) =
                         "transitions"
                         "samples"
                         "elapsedMs"
+                        "allAttemptElapsedMs"
                         "peakMiB"
                         "artifactBytes"
                     ]
@@ -387,6 +388,12 @@ let validateDocument root (document: JsonObject) =
                 fail "QQ-FORMAL-BUDGET-FIELDS" id
             elif budgetFields |> Set.exists (fun field -> number budget field <= 0) then
                 fail "QQ-FORMAL-BUDGET" id
+            elif
+                number budget "elapsedMs" <> 300000
+                || number budget "allAttemptElapsedMs" <> 2100000
+                || number budget "peakMiB" <> 6144
+            then
+                fail "QQ-FORMAL-ACCOUNTING-BOUND" id
             else
                 Ok()
 
@@ -874,20 +881,41 @@ let validateBaseline root configBytes (document: JsonObject) =
         let measuredIds = measurements |> List.map (fun item -> text item "root")
         let measuredFormalIds = formalMeasurements |> List.map (fun item -> text item "id")
 
+        let invalidPhysicalAccounting () =
+            let physical = baseline["physicalAccounting"].AsObject()
+
+            let expectedValidator =
+                sha256 (File.ReadAllBytes(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx")))
+
+            not (Regex.IsMatch(text physical "attemptId", "^[a-f0-9]{32}$"))
+            || not (Regex.IsMatch(text physical "inventorySha256", "^[a-f0-9]{64}$"))
+            || text physical "validatorSha256" <> expectedValidator
+            || number physical "logicalCount" < roots.Count + 7 * formalTests.Count
+            || number physical "physicalCount" < number physical "logicalCount"
+            || number physical "allAttemptElapsedMs" <= 0
+            || number physical "wholeDurationMs" <= 0
+
         if text baseline "schema" <> "fsgg.coordination.quint-qualification-baseline/1" then
             fail "QQ-BASELINE-SCHEMA" "unsupported"
-        elif
-            text baseline "formalMeasurementMethod"
-            <> "canonical-runner-observed-tlc-and-rust-v1"
-        then
-            fail "QQ-BASELINE-FORMAL-METHOD" "unsupported"
         elif text baseline "sourceSha256" <> sha256 (File.ReadAllBytes sourcePath) then
             fail "QQ-BASELINE-SOURCE" "stale"
         elif text baseline "configurationSha256" <> sha256 configBytes then
             fail "QQ-BASELINE-CONFIG" "stale"
-        elif Set measuredIds <> Set(Map.keys roots) then
+        elif
+            text baseline "formalMeasurementMethod"
+            <> "canonical-runner-observed-tlc-and-rust-v2"
+        then
+            fail "QQ-BASELINE-FORMAL-METHOD" "unsupported"
+        elif isNull baseline["physicalAccounting"] then
+            fail "QQ-BASELINE-PHYSICAL-ACCOUNTING" "missing"
+        elif invalidPhysicalAccounting () then
+            fail "QQ-BASELINE-PHYSICAL-ACCOUNTING" "stale-or-incomplete"
+        elif measuredIds.Length <> roots.Count || Set measuredIds <> Set(Map.keys roots) then
             fail "QQ-BASELINE-COVERAGE" ($"%A{measuredIds}")
-        elif Set measuredFormalIds <> Set(Map.keys formalTests) then
+        elif
+            measuredFormalIds.Length <> formalTests.Count
+            || Set measuredFormalIds <> Set(Map.keys formalTests)
+        then
             fail "QQ-BASELINE-FORMAL-COVERAGE" ($"%A{measuredFormalIds}")
         else
             let rootResult =
@@ -940,6 +968,7 @@ let validateBaseline root configBytes (document: JsonObject) =
                             "transitionCount"
                             "sampleCount"
                             "elapsedMs"
+                            "allAttemptElapsedMs"
                             "peakMiB"
                             "artifactBytes"
                         ]
@@ -954,6 +983,8 @@ let validateBaseline root configBytes (document: JsonObject) =
                         || number item "transitionCount" > number budget "transitions"
                         || number item "sampleCount" > number budget "samples"
                         || number item "elapsedMs" > number budget "elapsedMs"
+                        || number item "allAttemptElapsedMs" > number budget "allAttemptElapsedMs"
+                        || number item "allAttemptElapsedMs" < number item "elapsedMs"
                         || number item "peakMiB" > number budget "peakMiB"
                         || number item "artifactBytes" > number budget "artifactBytes"
                     then
@@ -1024,6 +1055,13 @@ let runSelfTests root original =
             "formal-backend", fun value -> (firstObject "formalTests" value)["backend"] <- JsonValue.Create("apalache")
             "formal-counterexample",
             fun value -> (firstObject "formalTests" value)["counterexample"] <- JsonValue.Create("missing.itf.json")
+            "formal-terminal-accounting-budget",
+            fun value -> (firstObjectField "formalTests" "budget" value)["elapsedMs"] <- JsonValue.Create(300001)
+            "formal-all-attempt-accounting-budget",
+            fun value ->
+                (firstObjectField "formalTests" "budget" value)["allAttemptElapsedMs"] <- JsonValue.Create(2100001)
+            "formal-failed-attempt-memory-budget",
+            fun value -> (firstObjectField "formalTests" "budget" value)["peakMiB"] <- JsonValue.Create(6145)
             "formal-budget",
             fun value -> (firstObjectField "formalTests" "budget" value)["depth"] <- JsonValue.Create(0)
         ]
@@ -1322,7 +1360,11 @@ match validateDocument root document with
 
     match
         validateOracles sourceText ids
-        |> bind (fun () -> validateBaseline root bytes document)
+        |> bind (fun () ->
+            if mode = "measurement" then
+                Ok()
+            else
+                validateBaseline root bytes document)
     with
     | Error error ->
         eprintfn "%s" error
@@ -1431,6 +1473,7 @@ match validateDocument root document with
 
         let selected =
             match mode with
+            | "measurement" -> allRoots
             | "protected" when Set.contains protectedMode protectedModes -> allRoots
             | "pull-request" when not (Set.isEmpty changedSelection) -> changedSelection
             | "reuse" when
@@ -1477,6 +1520,15 @@ match validateDocument root document with
             let output = JsonObject()
             output["schema"] <- JsonValue.Create("fsgg.coordination.quint-selection/1")
             output["mode"] <- JsonValue.Create(mode)
+
+            output["disposition"] <-
+                JsonValue.Create(
+                    if mode = "measurement" then
+                        "unadmitted-measurement-selection"
+                    else
+                        "qualification-selection"
+                )
+
             output["sourceSha256"] <- JsonValue.Create(text document "sourceSha256")
 
             output["changedModules"] <-
@@ -1536,8 +1588,15 @@ match validateDocument root document with
 
         let mutationCount = if selfTest then runSelfTests root document else 0
 
+        let resultLabel =
+            if mode = "measurement" then
+                "QUINT_MEASUREMENT_SELECTION_OBSERVED"
+            else
+                "QUINT_QUALIFICATION_OK"
+
         printfn
-            "QUINT_QUALIFICATION_OK config=%s roots=%d selected=%s formalTests=%d oracles=%d negativeControls=%d semanticMutants=%d sha256=%s"
+            "%s config=%s roots=%d selected=%s formalTests=%d oracles=%d negativeControls=%d semanticMutants=%d sha256=%s"
+            resultLabel
             config
             (objects document "roots").Length
             (String.concat "," selected)

@@ -121,6 +121,7 @@ let private trace (model: string) (actions: string list) =
 type private ObservationRuntime =
     {
         mutable State: PreparationObservationState
+        mutable Custody: PreparationCustodyState
         mutable Effects: string list
         mutable Refusal: string option
         mutable Phase: int
@@ -142,6 +143,7 @@ let private observeDriver: ReplayDriver<ObservationRuntime> =
                     Ok
                         {
                             State = PreparationObservation.initial
+                            Custody = PreparationCustody.initial
                             Effects = []
                             Refusal = None
                             Phase = 0
@@ -149,23 +151,45 @@ let private observeDriver: ReplayDriver<ObservationRuntime> =
                 )
         Apply =
             fun step runtime _ ->
-                let decision =
-                    match step.Action with
-                    | "first"
-                    | "repeat" -> PreparationObservation.observe limits 0L "a" 1L runtime.State
-                    | "invalid" -> PreparationObservation.observe limits 3L "" 0L runtime.State
-                    | "second" -> PreparationObservation.observe limits 0L "b" 1L runtime.State
-                    | "distinctOverflow" -> PreparationObservation.observe limits 0L "c" 0L runtime.State
-                    | "eventOverflow" -> PreparationObservation.observe limits 0L "a" 0L runtime.State
-                    | "byteOverflow" -> PreparationObservation.observe limits 0L "a" 4L runtime.State
-                    | "expiry" -> PreparationObservation.observe limits 3L "c" 0L runtime.State
-                    | "cleaned" -> PreparationObservation.cleanup "a" true runtime.State
-                    | "cleanedB" -> PreparationObservation.cleanup "b" true runtime.State
-                    | other -> failwith other
+                let custodyEvents =
+                    Map
+                        [
+                            "custodyBind", "bind"
+                            "custodyPermit", "permit"
+                            "custodyFiltered", "filtered"
+                            "custodyLeaderExit", "leaderExit"
+                            "custodyTerminated", "terminated"
+                            "custodyResult", "result"
+                            "custodyCleaned", "cleanup"
+                            "custodyAdmit", "admit"
+                        ]
 
-                runtime.State <- decision.State
-                runtime.Effects <- decision.Effects
-                runtime.Refusal <- decision.Refusal
+                if custodyEvents.ContainsKey step.Action then
+                    let decision =
+                        PreparationCustody.step custodyEvents[step.Action] "a" runtime.Custody
+
+                    runtime.Custody <- decision.State
+                    runtime.Effects <- decision.Effects
+                    runtime.Refusal <- decision.Refusal
+                else
+                    let decision =
+                        match step.Action with
+                        | "first"
+                        | "repeat" -> PreparationObservation.observe limits 0L "a" 1L runtime.State
+                        | "invalid" -> PreparationObservation.observe limits 3L "" 0L runtime.State
+                        | "second" -> PreparationObservation.observe limits 0L "b" 1L runtime.State
+                        | "distinctOverflow" -> PreparationObservation.observe limits 0L "c" 0L runtime.State
+                        | "eventOverflow" -> PreparationObservation.observe limits 0L "a" 0L runtime.State
+                        | "byteOverflow" -> PreparationObservation.observe limits 0L "a" 4L runtime.State
+                        | "expiry" -> PreparationObservation.observe limits 3L "c" 0L runtime.State
+                        | "cleaned" -> PreparationObservation.cleanup "a" true runtime.State
+                        | "cleanedB" -> PreparationObservation.cleanup "b" true runtime.State
+                        | other -> failwith other
+
+                    runtime.State <- decision.State
+                    runtime.Effects <- decision.Effects
+                    runtime.Refusal <- decision.Refusal
+
                 runtime.Phase <- runtime.Phase + 1
                 Task.FromResult(Ok())
         Observe =
@@ -186,6 +210,22 @@ let private observeDriver: ReplayDriver<ObservationRuntime> =
                                         "bytes", integer s.Bytes
                                         "pending", strings s.CleanupPending
                                         "cleaned", strings s.CleanupObserved
+                                    ]
+                                "custody",
+                                QuintReplayValue.Record
+                                    [
+                                        "identity", text runtime.Custody.Identity
+                                        "bound", boolean runtime.Custody.Bound
+                                        "permitted", boolean runtime.Custody.Permitted
+                                        "filtered", boolean runtime.Custody.Filtered
+                                        "resultObserved", boolean runtime.Custody.ResultObserved
+                                        "leaderExited", boolean runtime.Custody.LeaderExited
+                                        "groupLive", boolean runtime.Custody.GroupLive
+                                        "groupTerminated", boolean runtime.Custody.GroupTerminated
+                                        "cleanupObserved", boolean runtime.Custody.CleanupObserved
+                                        "pending", boolean runtime.Custody.Pending
+                                        "refused", boolean runtime.Custody.Refused
+                                        "admitted", boolean runtime.Custody.Admitted
                                     ]
                                 "effects", QuintReplayValue.Sequence(List.map text runtime.Effects)
                                 "refusal", text (defaultArg runtime.Refusal "")
@@ -292,13 +332,21 @@ let ``genuine bounded Quint observation trace replays production state and order
                     "expiry"
                     "cleaned"
                     "cleanedB"
+                    "custodyBind"
+                    "custodyPermit"
+                    "custodyFiltered"
+                    "custodyLeaderExit"
+                    "custodyTerminated"
+                    "custodyResult"
+                    "custodyCleaned"
+                    "custodyAdmit"
                 ]
 
         let! report =
             Replay.run (TimeSpan.FromSeconds 10.) CancellationToken.None observeDriver expected
 
         Assert.Equal(ReplayOutcome.Equivalent, report.Outcome)
-        Assert.Equal(10, report.AppliedSteps)
+        Assert.Equal(18, report.AppliedSteps)
     }
 
 [<Fact>]
@@ -340,3 +388,47 @@ let ``invalid observations preserve state and expired valid refusal retains orde
     let unknown = PreparationObservation.cleanup "a" false expired.State
     Assert.Equal(expired.State, unknown.State)
     Assert.Equal(Some "cleanup-unobserved", unknown.Refusal)
+
+[<Theory>]
+[<InlineData("filter")>]
+[<InlineData("json")>]
+[<InlineData("leader")>]
+[<InlineData("timeout")>]
+let ``custody requirements independently refuse causal shortcuts and preserve cleanup`` (scenario: string) =
+    let advance event state =
+        (PreparationCustody.step event "owned" state).State
+
+    let bound = PreparationCustody.initial |> advance "bind" |> advance "permit"
+
+    match scenario with
+    | "filter" ->
+        let rejected = PreparationCustody.step "result" "owned" bound
+        Assert.Equal(Some "preparation-custody-order-refused", rejected.Refusal)
+        Assert.False(rejected.State.ResultObserved)
+        Assert.True(rejected.State.Pending)
+    | "json" ->
+        let validJson = bound |> advance "filtered" |> advance "result"
+        let rejected = PreparationCustody.step "cleanup" "owned" validJson
+        Assert.Equal(Some "preparation-custody-order-refused", rejected.Refusal)
+        Assert.False(rejected.State.CleanupObserved)
+        Assert.True(rejected.State.GroupLive)
+        Assert.False(PreparationCustody.ready rejected.State)
+    | "leader" ->
+        let leader = PreparationCustody.step "leaderExit" "owned" (advance "filtered" bound)
+        Assert.Equal<string list>([ "observe-leader-exit" ], leader.Effects)
+        Assert.True(leader.State.LeaderExited)
+        Assert.True(leader.State.GroupLive)
+        Assert.False(leader.State.GroupTerminated)
+        Assert.False(PreparationCustody.ready leader.State)
+    | "timeout" ->
+        let timed = PreparationCustody.step "timeout" "owned" (advance "filtered" bound)
+        Assert.Equal<string list>([ "signal-owned-group"; "await-group-termination" ], timed.Effects)
+        Assert.True(timed.State.Pending)
+        Assert.True(timed.State.GroupLive)
+        Assert.False(timed.State.GroupTerminated)
+        let closed = timed.State |> advance "terminated" |> advance "cleanup"
+        Assert.True(closed.Refused)
+        Assert.True(closed.CleanupObserved)
+        Assert.False(closed.Pending)
+        Assert.False(PreparationCustody.ready closed)
+    | _ -> failwith scenario

@@ -1,6 +1,6 @@
 # V2-PREFLIGHT-01 — Typed prerequisite admission
 
-**Accepted A–B implementation window; source qualification in progress. No publication or product adoption claimed.** Owning path:
+**A–B locally source-qualified; native source CI, merge, publication and product adoption remain pending.** Owning path:
 `FS.GG.Coordination/docs/roadmaps/v2-preflight-01.md`. Owner: Coordination for reusable
 execution contracts; BAR and SC2 for their real runner adapters; `.github` for programme
 and skill integration. Route: routine. Named Unified part: **Typed prerequisite admission**,
@@ -43,7 +43,7 @@ hosted acceptance census. Execution workers re-observe their own source heads be
 | Coordination `src/FS.GG.Coordination.Orchestration.Execution/PortableWorkspaceAdapter.fs`, `PortableWorkspaceExecutor.fs`, `PortableWorkspaceContract.fs` | `prepare` validates exact profile/command/scope/source/image/workflow/fence/time; executor selects reviewed fixed operations, checks deadline immediately before reservation, journals duplicates and requires cleanup | `PreparedWorkspaceOperation` is a public record. It does not establish actual assembled-capsule import/discovery or mutable prerequisite observations. Extend this execution boundary |
 | Coordination `src/FS.GG.Coordination.Cli/PortableWorkspaceCommand.fs`, `PortableWorkspaceRuntimeCommand.fs`; `eng/run-packaged-portable-workspace-qualification.py` | Existing `workspace-contract operation prepare`; exact CLI archive extraction and Execution DLL qualification; existing fixed runtime route | Current prepare output is contract agreement, not launch readiness. A JSON receipt must never deserialize into a trusted prepared value |
 | Coordination `docs/roadmaps/v2-lang-portable-integration.md` | Owning source says portable CLI 0.2.0 publication/readback complete; 0.2.1 trusted-provider source prepared, installed/provider/public join pending | Preserve this newer owner evidence even where the Unified index still mentions 0.1.7/P3 pending. This feature may use published machinery but must not claim 0.2.0 includes new checks or close V2-LANG P4/P5 |
-| Coordination `Protocol.md`, `Protocol.bindings.json`, generated compiled outputs, canonical qualification/replay | Published SDD compiler boundary and canonical source/contract drift validation already exist. Current pins: `FS.GG.SDD.Artifacts [1.5.0]`, `FsQuint 0.1.0` | Add consumer-owned semantics through the existing compiler route. The architecture guard rejects copied compiler/profile/replay sources and local `.qnt` files; do not evade it with a second extractor |
+| Coordination `Protocol.md`, `Protocol.bindings.json`, generated compiled outputs, canonical qualification/replay | Published SDD compiler boundary and canonical source/contract drift validation already exist. Intake pins were `FS.GG.SDD.Artifacts [1.5.0]`, `FsQuint 0.1.0`; the qualified compiler join below uses public SDD 2.1.0 | Add consumer-owned semantics through the existing compiler route. The architecture guard rejects copied compiler/profile/replay sources and local `.qnt` files; do not evade it with a second extractor |
 | SC2 `src/SC2.Client.Contracts/ModulePreparation.fs`; `eng/sc2c-author-preparation/ModulePreparation.qnt`, `_test.qnt`, `Program.fs` | Artifact/config/provenance preparation, invalidation/cleanup model, real `ModulePreparation.apply` replay through FsQuint | Prepared module alone does not prove the complete native execution capsule. Existing `tests/live-qualification-preflight.mjs` deliberately establishes only `assets-ready` |
 | BAR `tests/Broker.NativeProof/RuntimeEvidence/` at `3d723b` | `GrowingLogEvidence.fs/.fsi/.qnt`, full-state/effect correspondence, policy/data-root/complete-record checks; bounded complete `/proc` reads repaired | These checks are product policy; no generic preflight can replace them. Private stock runner/capture package requires its actual closure and discovery check |
 | Game candidate `b72f6155c3e38d84f37dcfd1a10c01799feb690f` | `src/Wasm.Browser/Lifecycle.fs` returns `HostDecision`; `submitLimited` preserves post-admission expiry state/effects on Error. Canonical `eng/wasm-shared/lifecycle.qnt`, selected traces, production facade replay, native API compatibility and installed browser fixture exist | Parent reports 13 selected traces, 24 reached witnesses and 8 browser controls; README/source corroborate scope, planner did not rerun them. Candidate remains unpublished/root-review pending. Reuse its correction, do not reimplement it |
@@ -129,6 +129,7 @@ publication and native execution have their existing separate boundaries.
   argument/config/input or expired clock refuses at consumption. Idempotent settled execution
   remains settled, and owned cleanup still runs when new preparation is unavailable. Test actual
   bounded subprocess discovery in an isolated assembled fixture as well as an instrumented runner.
+  Local source qualification is complete; the checkbox awaits native source CI and merge readback.
 
 - [ ] **V2-PREFLIGHT-01.B — Partitioned model and production correspondence** — route: routine.
   Parent .2. Depends on: A's state/interface shape, implemented in the same owner window.
@@ -144,6 +145,7 @@ publication and native execution have their existing separate boundaries.
   Changing actual capsule contents, runner argv, model, implementation or replay projection
   invalidates relevant evidence; an unrelated-file control remains reusable. Record explicit
   bounds/tool identities and first divergence. Run the applicable canonical/native gates.
+  Local source qualification is complete; the checkbox awaits native source CI and merge readback.
 
 ### Next bounded adoption window — open only from accepted A–B and owner handoffs
 
@@ -254,7 +256,7 @@ product's shared files with its current owner. No user decision is outstanding. 
 facts are the finalized private capsule source identities, accepted Game successor artifact and
 release version; they block their consuming adoption effects, not the first source window.
 
-### 2026-10-03 source checkpoint
+### Earlier source checkpoint — superseded cleanup and compiler evidence
 
 The local A–B slice now constructs an opaque attempt from owner-reviewed bounded
 imports and discovery of an exact assembled input closure. Consumption rechecks
@@ -289,3 +291,198 @@ published compiler-capacity join. Historical calibration authority and timings
 remain unchanged. Source readiness, publication, installed consumer acceptance, and
 product-native admission remain separate. A–B acceptance boxes remain open until
 that coherent gate and integration review complete.
+
+Independent cleanup review subsequently found a real custody gap: a checker can
+spawn a separate-session child, redirect its streams, emit readiness and exit before
+the first census. An empty later PID/group view cannot establish cleanup. The new
+owned fast-orphan control blocks source admission until complete custody or an
+actual OS constraint closes that case. Read-only capability inspection found the
+local cgroup mount read-only and no delegated user-systemd bus; installed util-linux
+`setpriv` supports inherited seccomp filters, a candidate bounded no-fork checker
+route for the separately reviewed repair. Existing fixed-operation semantics remain
+unchanged. No source/publication/native acceptance is claimed.
+
+Three-way interaction controls now join actual capsule observations, changing input
+identity or admission deadline, and the runner effect boundary; both require zero
+runner calls on refusal. The existing settled-cleanup/unavailable-new-admission case
+checks the recovery side of that composition. These additions still require their
+focused run after the custody repair.
+
+The generated-entry audit observed 1,012 lookup rows, 4,095 type rows and 4,095 effect
+rows with distinct node IDs. Repeated payloads are present: lookup IDs 3556 and 3603
+resolve declaration 3509 at separate AST use sites; literals 160–163 have distinct
+values but the same string type and empty effect. The audit proved no redundant
+semantic entry, so removal count is zero. It does not claim every possible source
+declaration minimal. All 19 previous exports and the catalogue, relationships, action
+effects, verification profiles, bounds and compatibility values remain preserved.
+
+The approved measurement-only route retains ordinary exact-baseline refusal and
+writes unadmitted observations outside source through exclusively created, held
+and rechecked directory identities. Ordinary qualification and source-refresh
+options are incompatible with this route. A pinned native parser control showed
+that `run --out` suppresses witness logs; state measurement therefore uses native
+ITF plus observed witness sample counts, while native test artifacts provide actual
+passed-case counts. Actual bounded parser controls pass; full fresh calibration
+still awaits the published compiler and final cleanup/model join.
+
+
+### Current A–B qualification window — 2026-10-03
+
+The earlier census defect is closed by the selected Linux x86_64 no-process-descendants
+checker profile, not by interpreting an empty census as completion. Assembly-owned static
+bootstrap, source and fixed filter bytes are hashed, held and sealed. The parent opens a
+whole-process pidfd before ACK; the bootstrap confirms installed filtering before executing
+the checker. Process creation and alternate ABIs are process-fatal; strictly qualified
+thread creation is supported; clone3 and all three io_uring calls return ENOSYS. Final
+readiness requires actual whole-group termination, drained output and owned scratch cleanup.
+Unsupported custody capabilities refuse before checker execution. Existing legacy operation
+requirements remain unchanged. This profile is not BAR or SC2 native qualification.
+
+Current production evidence passes 89 Execution tests and four existing CLI runtime controls.
+Eight real source reducer mutations and a real omitted-filter launcher mutation expose
+causal failures; each restored source passes. The fast-orphan control holds the test-owned
+child identity before allowing its parent to exit and closes that exact pidfd, without an
+unrelated signal. Thread-outliving-leader controls close their output first and still require
+the last-thread pidfd boundary. Seven resource/setup mutations refuse before checker effects.
+A private installed CLI package supports actual preparation and consumption from an external
+project referencing only its installed assembly. Current installed-resource Python, Node
+worker and CLR Thread/Task checks perform meaningful import/discovery without executing
+workload bodies. These are source-window controls, not package publication.
+
+Canonical source `ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354`
+uses genuine published SDD 2.1.0. The full production contract retains 20 exports and
+4,095 type/effect rows. The only changed prior export value records compiler provenance.
+Three independent whole-module projections preserve canonical spans, imports and source/tool
+identities; no native IR rows are merged or deleted. Thirteen bounded native calls cover
+three completion witnesses, eight causal counterexamples and two replay traces. Both traces
+match the entire core-plus-qualification source and production FsQuint replay, including
+custody state and ordered effects. Nine provenance mutations refuse at the actual pre-use
+guard. Sampling is not exhaustive proof or aggregate-profile authority.
+
+The refreshed generated-entry audit retains 1,012 distinct lookup IDs and 4,095 distinct
+IDs in each type/effect table. Same-payload nodes have distinct use-site/literal provenance;
+no redundant semantic entry was demonstrated, so zero entries were removed. The audit does
+not establish that all possible authored declarations are minimal.
+
+Measurement controls preserve ordinary stale-baseline refusal, reject incompatible receipts,
+source refresh and failure-exercise options, and refuse linked ancestors or replaced output
+inodes. State/test parsing is checked against actual pinned-native artifacts and missing
+witness logs refuse. One full fresh calibration pass began at 11:38 UTC, after the public
+compiler, current helper, partitions, installed API and causal controls joined. Its fresh
+external observations remain incomplete: GNU timeout returned 124 after seven roots,
+19 simulations and 11 completed formal obligations. Two classified physical checker timeouts
+retried under the existing policy. Their failed durations and memory were omitted by the
+old terminal-only projection; the full actual partial log and 33 counterexample files are
+retained as diagnostics. Original baseline hashes and timings remain untouched. This attempt
+provides no full qualification or new calibration authority.
+
+The prospective accounting-v2 source window retains the 300,000 ms physical checker timeout,
+300,000 ms terminal-work gate and 6,144 MiB peak gate. A separate 2,100,000 ms observed gate
+sums all physical attempts, including failed attempts and actual cleanup; failed-attempt RSS
+participates in the peak. The observed gate is conservative: cleanup and rounding can cause
+six full timeouts plus terminal work to exceed it and refuse. Seven logical calls remain
+separate from their seven to thirteen physical attempts. Durable held-directory records mark
+active interrupted attempts unknown and bind completed observations to one attempt, current
+source, configuration, validator and toolchain. Ordinary receipts retain their existing
+logical-count projection; measurement receipts carry the additional physical accounting.
+
+Focused controls exercise actual owned timeout/retry and memory behavior through both
+wrappers, exhausted and unclassified failures, exact and exceeded aggregate gates, omitted,
+duplicate and incomplete observations, source/tool/validator/receipt substitution, and replaced
+output inode refusal. Private collector fixtures emit no candidate and claim no native proof.
+A prospective 5,400-second whole-run operating cap is finite and does not promise the worst
+46,200-second retry envelope before other work. A new whole measurement attempt requires
+root review of frozen source and producer identities and a separate launch decision.
+A–B acceptance remains open until fresh complete qualification and root integration review.
+
+Root review additionally binds every successful terminal to its declared positive or negative
+semantic role, exit status and diagnostic outcome; crashes and timeouts cannot satisfy a
+negative witness. The thirteen sampling calls and two interaction traces join the same
+attempt, compiler, source, validator, native toolchain and physical journal. Interaction
+artifacts and formal witness paths are hashed against their actual receipts. The prospective
+compiler is the already qualified private SDK 10.0.401, FSI 15.2.401.0 and Core SHA7516;
+nested FSI calls use the running host and FSI DLL directly, and the genuine pinned Fantomas
+8 formatter DLL avoids SDK resolution through the repository's older global.json. Earlier
+SDK10.0.400 controls remain earlier-environment evidence and are not relabelled as SDK401.
+
+Correction to the preceding prospective SDK401 note: the earlier symlinked SDK entry
+resolved its FSI entry and loaded Core from the global directory, with actual Core SHA2232698,
+despite the intended private Core7516 file. Its prior packet, freeze and logs remain immutable;
+the earlier claim of loaded Core7516 was false and provides no admission. The successor
+materializes the complete SDK401 FSharp runtime closure as dereferenced single-linked files
+in a new owned directory. A probe verifies the actual loaded Core path and SHA7516 before
+focused controls. Measurement admission now checks the loaded Core bytes explicitly; nested
+FSI invocations remain bound to the owned entry DLL and actual qualified host. No global SDK,
+global.json, public SDD Core39b or Fable203 bytes are modified.
+
+The separately admitted whole accounting-v2 attempt exited 1 after 26.059 seconds,
+before formal qualification: direct owned FSI preserved a leading `--` script boundary
+that the compiled-output generator rejected. Its six physical observations retain
+22,248 ms of actual cost, including the failed generator's 2,318 ms and 224 MiB;
+one early call's peak remains unknown. The failed attempt, frozen inputs and baseline
+remain unchanged, and no candidate or automatic retry was produced.
+
+The focused successor consumes exactly one leading script boundary in the generator.
+Unknown options, embedded boundaries and a repeated boundary still refuse. Seven
+actual owned-Core7516 focused calls used 33.725 seconds: generation with and without
+the boundary preserved all eleven retained output files byte for byte, three argument
+refusals passed, and nested qualification retained its seven-root, nineteen-formal
+selection. These controls provide argument-boundary evidence, not whole qualification.
+Any fresh whole attempt requires root review and a distinct launch admission.
+
+The admitted argument-successor whole attempt later exited 1 after 2,463.651 seconds
+at its final inventory gate. All nineteen formal obligations, thirteen sampling calls,
+two interaction traces and seven roots completed, but four state roots using `--out-itf`
+were classified as base calls. The unchanged plan expected 63 base calls and seven root
+calls; the journal recorded 67 and three. Its 264 physical observations retain 2,739,594 ms
+of summed work, separately from whole wall time, including one 300,048 ms classified
+startup retry and its 632 MiB peak. The failed receipt remains unadmitted and unchanged.
+
+The focused classifier successor recognizes either root output flag, one rooted JSON
+path and its exact `root-artifacts` parent directory component for run/test calls.
+Substring lookalikes, relative paths, duplicate output options, wrong extensions and
+unknown output options do not enter the root bucket. Preflight sampling keeps its
+own bucket. Actual assembled root arguments exercise both ordinary and measurement
+dispatch, and diagnostic replay of the completed journal recovers the planned 63/7
+classification without changing historical receipts or inventing whole-run success.
+Budget, model, retry, accounting and expected invocation totals remain unchanged.
+
+## Local A–B source qualification and admitted baseline
+
+The final whole measurement exited 0 in 2,446.638 seconds with seven roots, nineteen
+formal obligations, thirteen explicitly sampled preflight calls and two full-source
+interaction traces. Its 263 logical calls have 264 physical observations and 2,723,158 ms
+of summed work; overlapping work is separate from whole wall time. One classified
+startup retry retains its failed 300,050 ms and 642 MiB peak. Formal maxima were
+181,155 ms terminal work, 363,174 ms all-attempt work and 4,866 MiB peak, within the
+unchanged 300,000/2,100,000 ms and 6,144 MiB gates. The early tool-call peak remains
+unknown, as do historical missing argv and native usage counters.
+
+Two preceding accounting-v2 whole attempts failed: the argument boundary at 26.059
+seconds and the root classification inventory at 2,463.651 seconds. The older 1,600-second
+timeout remains separate incomplete historical evidence. The final successful native
+run's first collector exited 1 before writing because it expected a sampling label for
+interaction rows. A separately reviewed one-expression collector correction then exited
+0 and produced the exact candidate; it did not rerun models or change native observations.
+The parent-reported collector duration is 0.002722642 seconds. Its invocation timestamp
+and literal captured argv were not supplied and are not reconstructed from the prospective
+command. Original failures, receipts and source snapshots remain private immutable history.
+
+Root admitted baseline SHA-256
+`2e7571915033d54067319abfd30bcb455d3a6972590872949846ba5f251c1f34`
+from the successful receipt and complete physical inventory. The exact canonical baseline
+validator accepts it, while the preserved historical source baseline still refuses as stale.
+The ordinary protected qualification validator passes the current seven-root/nineteen-formal
+catalogue, oracles, controls and baseline. Existing actual Execution, CLI, installed-resource,
+custody, reducer/replay and causal-mutant evidence applies to unchanged source inputs.
+Normal native source CI and merge remain required; this admitted calibration grants no
+package publication, BAR/SC2 adapter acceptance or product launch authority.
+
+All 57 declared counterexample files now match the completed native run exactly. The
+nineteen manifests bind the current canonical and assembled source; the thirty-eight
+trace/ITF files were already byte-identical. The previous actual source witnesses are
+preserved privately. Historical receipt assertions check that immutable receipt separately,
+without reversing current source identities to reconstruct historical evidence. All seven
+current qualification architecture checks pass under the owned Core7516 compiler, and
+routine eligibility and operation-boundary fixtures pass. These source checks preserve
+current witness freshness and all admission budgets; required remote CI remains pending.

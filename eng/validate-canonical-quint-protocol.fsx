@@ -1,6 +1,9 @@
+#nowarn "9" // Fixed-layout Linux statx ABI for the private measurement directory.
 open System
 open System.Diagnostics
 open System.IO
+open System.Runtime.InteropServices
+open Microsoft.Win32.SafeHandles
 open System.Security.Cryptography
 open System.Text
 open System.Text.Json
@@ -9,17 +12,161 @@ open System.Text.RegularExpressions
 open System.Threading
 open System.Threading.Tasks
 
+[<Struct; StructLayout(LayoutKind.Explicit, Size = 256)>]
+type private CalibrationDirectoryStat =
+    [<FieldOffset(0)>]
+    val mutable Mask: uint32
+
+    [<FieldOffset(28)>]
+    val mutable Mode: uint16
+
+    [<FieldOffset(32)>]
+    val mutable Inode: uint64
+
+    [<FieldOffset(136)>]
+    val mutable DeviceMajor: uint32
+
+    [<FieldOffset(140)>]
+    val mutable DeviceMinor: uint32
+
+module private CalibrationDirectoryNative =
+    [<DllImport("libc", SetLastError = true, EntryPoint = "statx")>]
+    extern int statx(int dirfd, string path, int flags, uint32 mask, CalibrationDirectoryStat& result)
+
+    [<DllImport("libc", SetLastError = true, EntryPoint = "open")>]
+    extern int openDirectory(string path, int flags)
+
+    [<DllImport("libc", SetLastError = true, EntryPoint = "openat")>]
+    extern int openChild(int descriptor, string path, int flags)
+
+    [<DllImport("libc", SetLastError = true, EntryPoint = "mkdirat")>]
+    extern int createChild(int descriptor, string path, uint32 mode)
+
+type private MeasurementDirectory =
+    {
+        NamedPath: string
+        HeldPath: string
+        Handle: SafeFileHandle
+        Identity: string
+        ParentPath: string
+        ParentHandle: SafeFileHandle
+        ParentIdentity: string
+    }
+
+module private MeasurementDirectory =
+    let directoryIdentity descriptor path flags =
+        let mutable stat = Unchecked.defaultof<CalibrationDirectoryStat>
+
+        if
+            CalibrationDirectoryNative.statx (descriptor, path, flags, 0x7ffu, &stat) <> 0
+            || stat.Mask &&& 0x100u = 0u
+            || stat.Mode &&& 0xf000us <> 0x4000us
+        then
+            invalidOp "MEASUREMENT-DIRECTORY-IDENTITY: unavailable"
+
+        $"{stat.DeviceMajor}:{stat.DeviceMinor}:{stat.Inode}"
+
+    let rec rejectLinkedAncestors (path: string) =
+        let directory = DirectoryInfo path
+
+        if
+            not directory.Exists
+            || not (isNull directory.LinkTarget)
+            || (File.GetAttributes path &&& FileAttributes.ReparsePoint)
+               <> enum<FileAttributes> 0
+        then
+            invalidOp "MEASUREMENT-DIRECTORY-LINK: refused"
+
+        if not (isNull directory.Parent) then
+            rejectLinkedAncestors directory.Parent.FullName
+
+    let descriptor (handle: SafeFileHandle) = handle.DangerousGetHandle().ToInt32()
+
+    let verify custody =
+        rejectLinkedAncestors custody.ParentPath
+
+        if
+            directoryIdentity -100 custody.ParentPath 0x100 <> custody.ParentIdentity
+            || directoryIdentity -100 custody.NamedPath 0x100 <> custody.Identity
+        then
+            invalidOp "MEASUREMENT-DIRECTORY-INVALIDATED: refused"
+
+    let create root path =
+        if not (OperatingSystem.IsLinux()) then
+            invalidOp "MEASUREMENT-DIRECTORY-PLATFORM: unavailable"
+
+        let parent = Path.GetDirectoryName(path: string)
+        let name = Path.GetFileName path
+        rejectLinkedAncestors parent
+        let parentFd = CalibrationDirectoryNative.openDirectory (parent, 0xb0000) // CLOEXEC | NOFOLLOW | DIRECTORY
+
+        if parentFd < 0 then
+            invalidOp "MEASUREMENT-DIRECTORY-PARENT: unavailable"
+
+        let parentHandle = new SafeFileHandle(nativeint parentFd, true)
+
+        try
+            let parentIdentity = directoryIdentity parentFd "" 0x1000
+
+            if directoryIdentity -100 parent 0x100 <> parentIdentity then
+                invalidOp "MEASUREMENT-DIRECTORY-PARENT: changed"
+
+            rejectLinkedAncestors parent
+
+            let actualParent =
+                File.ResolveLinkTarget($"/proc/self/fd/{parentFd}", true).FullName
+
+            let actualRelative = Path.GetRelativePath(root, actualParent)
+
+            if
+                actualRelative = "."
+                || not (actualRelative.StartsWith(".." + string Path.DirectorySeparatorChar, StringComparison.Ordinal))
+            then
+                invalidOp "MEASUREMENT-DIRECTORY-PARENT: inside-source"
+
+            if CalibrationDirectoryNative.createChild (parentFd, name, 0x1c0u) <> 0 then
+                invalidOp "MEASUREMENT-DIRECTORY-CREATE: requires-exclusive-fresh-output"
+
+            let outputFd = CalibrationDirectoryNative.openChild (parentFd, name, 0xb0000)
+
+            if outputFd < 0 then
+                invalidOp "MEASUREMENT-DIRECTORY-OPEN: unavailable"
+
+            let handle = new SafeFileHandle(nativeint outputFd, true)
+
+            try
+                let custody =
+                    {
+                        NamedPath = path
+                        HeldPath = $"/proc/self/fd/{outputFd}"
+                        Handle = handle
+                        Identity = directoryIdentity outputFd "" 0x1000
+                        ParentPath = parent
+                        ParentHandle = parentHandle
+                        ParentIdentity = parentIdentity
+                    }
+
+                verify custody
+                custody
+            with _ ->
+                handle.Dispose()
+                reraise ()
+        with _ ->
+            parentHandle.Dispose()
+            reraise ()
+
 type FormalMeasurement =
     {
         mutable StateCount: int
         mutable TransitionCount: int
         mutable SampleCount: int
         mutable ElapsedMs: int64
+        mutable AllAttemptElapsedMs: int64
         mutable PeakMiB: int
         mutable ArtifactBytes: int64
     }
 
-let expectedPackage = "FS.GG.SDD.Artifacts/1.5.0"
+let expectedPackage = "FS.GG.SDD.Artifacts/2.1.0"
 let expectedProfile = "fsgg-quint-profile/2"
 
 let expectedToolchain =
@@ -31,16 +178,16 @@ let expectedQuint =
 let expectedLmt = "37e0b0365c2641edce40b48605471f61fa12e97c3e2376152f0e849abdc31f10"
 
 let expectedSource =
-    "a6963369b7780a13d6360e1a0058594d643c39952d4e1ffedad36c87d43829ca"
+    "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
 
 let expectedContract =
-    "49800c920d1a5db3beb812d58a3b4523b054e980cee98b68d680d25ca0ceaf01"
+    "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
 
 let expectedBehavior =
-    "a75e17f802db0168f58d19ff8b30525b427a6cf278df2eede97453314678fda1"
+    "9d2581c99badfb89acdb359acceb0a1ba560322939d47944e58aa1fdcf10e05b"
 
 let expectedSourceVersion = "fsgg.quint.literate-source/1"
-let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/1.5.0"
+let expectedExtractorVersion = "quint-specification-v1@FS.GG.SDD.Artifacts/2.1.0"
 let expectedQuintVersion = "sha256:" + expectedQuint
 let expectedSchemaVersion = "fsgg.quint.compiled-contract/v2"
 
@@ -102,7 +249,17 @@ let argumentValue name arguments =
     |> Option.bind (fun index -> arguments |> List.tryItem (index + 1))
 
 let classifyInvocation isQuint arguments =
-    if isQuint && (argumentValue "--main" arguments |> Option.exists (fun main -> main.StartsWith("Preflight", StringComparison.Ordinal))) then
+    if
+        isQuint
+        && (argumentValue "--out-itf" arguments
+            |> Option.exists (fun path -> path.Contains("preflight-interaction", StringComparison.Ordinal)))
+    then
+        "quint/preflight-interaction"
+    elif
+        isQuint
+        && (argumentValue "--main" arguments
+            |> Option.exists (fun main -> main.StartsWith("Preflight", StringComparison.Ordinal)))
+    then
         "quint/preflight-sampling"
     elif not isQuint then
         "external/base"
@@ -119,9 +276,25 @@ let classifyInvocation isQuint arguments =
         let isFormal memberSet =
             step |> Option.exists (fun value -> Set.contains (main, value) memberSet)
 
-        let output = argumentValue "--out" arguments |> Option.defaultValue ""
+        // Measurement state roots emit --out-itf; test roots and ordinary roots emit --out.
+        // Require one actual root-artifacts directory component, not a path substring.
+        let rootOutput =
+            [ "--out"; "--out-itf" ]
+            |> List.collect (fun flag ->
+                arguments
+                |> List.indexed
+                |> List.choose (fun (index, value) ->
+                    if value = flag then List.tryItem (index + 1) arguments else None))
+            |> function
+                | [ path ] ->
+                    try
+                        Path.IsPathRooted path
+                        && Path.GetFileName(Path.GetDirectoryName path) = "root-artifacts"
+                        && Path.GetExtension path = ".json"
+                    with :? ArgumentException -> false
+                | _ -> false
 
-        if output.Contains("root-artifacts", StringComparison.Ordinal) then
+        if (command = "run" || command = "test") && rootOutput then
             "quint/selected-root"
         elif command = "verify" && isFormal formalSafeSteps then
             "quint/formal-temporal"
@@ -271,85 +444,6 @@ let recordApalacheStartupRetry commandKind failureClass =
 
     eprintfn "APALACHE_STARTUP_RETRY count=%d command=%s class=%s" retryCount commandKind failureClass
 
-let run workingDirectory (executable: string) arguments environment =
-    Interlocked.Increment(&externalProcessCount) |> ignore
-
-    let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
-    incrementInvocation (classifyInvocation isQuint arguments)
-
-    if isQuint then
-        Interlocked.Increment(&quintProcessCount) |> ignore
-
-        match arguments with
-        | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
-        | _ -> ()
-
-    let invoke () =
-        let isolatedArguments, _ = isolateApalacheEndpoint isQuint arguments
-        let info = ProcessStartInfo(executable)
-        info.WorkingDirectory <- workingDirectory
-        info.UseShellExecute <- false
-        info.RedirectStandardOutput <- true
-        info.RedirectStandardError <- true
-
-        for argument in isolatedArguments do
-            info.ArgumentList.Add argument
-
-        for name, value in environment do
-            info.Environment[name] <- value
-
-        use child = Process.Start info
-        let output = child.StandardOutput.ReadToEndAsync()
-        let error = child.StandardError.ReadToEndAsync()
-        let clock = Stopwatch.StartNew()
-        let boundedVerify = isQuint && List.tryHead arguments = Some "verify"
-        let mutable timedOut = false
-
-        while not child.HasExited && not timedOut do
-            if boundedVerify && clock.ElapsedMilliseconds > 150000L then
-                timedOut <- true
-
-                try
-                    child.Kill(true)
-                with _ ->
-                    ()
-            else
-                Thread.Sleep 10
-
-        child.WaitForExit()
-
-        let timeoutDiagnostic =
-            if timedOut then
-                $"APALACHE_EXECUTION_TIMEOUT elapsedMs=%d{clock.ElapsedMilliseconds} budgetMs=150000"
-            else
-                ""
-
-        (if timedOut then 124 else child.ExitCode),
-        output.Result.Trim(),
-        (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim()
-
-    let rec invokeWithStartupRetries retriesRemaining =
-        let exitCode, output, error = invoke ()
-
-        match
-            if isQuint && List.tryHead arguments = Some "verify" then
-                classifyTransientApalacheStartupFailure exitCode output error
-            else
-                None
-        with
-        | Some failureClass when retriesRemaining > 0 ->
-            recordApalacheStartupRetry (List.head arguments) failureClass
-            invokeWithStartupRetries (retriesRemaining - 1)
-        | _ -> exitCode, output, error
-
-    let exitCode, output, error =
-        invokeWithStartupRetries maxApalacheStartupRetries
-
-    if isQuint && exitCode <> 0 then
-        Interlocked.Increment(&quintRejectedProcessCount) |> ignore
-
-    exitCode, output, error
-
 let private processTreeRssBytes rootPid =
     let rec collect visited pid =
         if Set.contains pid visited then
@@ -388,19 +482,195 @@ let private processTreeRssBytes rootPid =
 
     collect Set.empty rootPid |> fst
 
-let runMeasured timeoutMs workingDirectory (executable: string) arguments environment =
+// Nested FSI calls use the host and FSI bytes actually running this validator.
+// This avoids a second SDK resolution through repository global.json.
+let private observedDotnetHost = Environment.ProcessPath
+let private observedFsiDll = System.Reflection.Assembly.GetEntryAssembly().Location
+let private observedFsharpDirectory = Path.GetDirectoryName observedFsiDll
+
+let private compilerFiles =
+    [
+        observedDotnetHost
+        observedFsiDll
+        typeof<option<int>>.Assembly.Location
+        Path.Combine(observedFsharpDirectory, "FSharp.Compiler.Service.dll")
+        Path.Combine(observedFsharpDirectory, "FSharp.Compiler.Interactive.Settings.dll")
+        Path.Combine(Directory.GetParent(observedFsharpDirectory).FullName, "dotnet.dll")
+        typeof<obj>.Assembly.Location
+    ]
+    |> List.distinct
+    |> List.map (fun path -> {| path = path; sha256 = sha256 path |})
+
+let private compilerIdentitySha256 =
+    compilerFiles
+    |> List.map (fun file -> file.path + "|" + file.sha256)
+    |> String.concat "\n"
+    |> sha256Text
+
+let private resolveFsiInvocation executable arguments =
+    match executable, arguments with
+    | "dotnet", "fsi" :: tail -> observedDotnetHost, observedFsiDll :: tail
+    | _ -> executable, arguments
+
+type private PhysicalAttemptObservation =
+    {
+        LogicalId: string
+        Ordinal: int
+        Scope: string option
+        Label: string
+        Classification: string option
+        ElapsedMs: int64 option
+        PeakMiB: int option
+        ExitCode: int option
+        TimedOut: bool option
+        Terminal: bool option
+        Completed: bool
+        Pid: int option
+        TimeoutMs: int option
+        OutputBytes: int64 option
+        OutputSha256: string option
+        SemanticOutcome: string option
+    }
+
+let mutable private physicalScope: string option = None
+let mutable private logicalSequence = 0
+let private physicalAttempts = ResizeArray<PhysicalAttemptObservation>()
+
+let mutable private physicalObserver: (PhysicalAttemptObservation -> unit) option =
+    None
+
+let private observePhysical row =
+    match physicalObserver with
+    | Some observer -> observer row
+    | None -> ()
+
+// Terminal work and all physical work are different accounting projections.
+// Retrying never discards failed-attempt duration or memory.
+let private terminalSemantics
+    (label: string)
+    (scope: string option)
+    code
+    timedOut
+    (classification: string option)
+    (output: string)
+    (error: string)
+    =
+    if timedOut || classification.IsSome then
+        None
+    elif code = 0 then
+        Some "positive-complete"
+    elif code = 1 then
+        let text = output + "\n" + error
+
+        if
+            label = "quint/formal-counterexample-temporal"
+            && text.Contains("Temporal properties were violated", StringComparison.Ordinal)
+            && text.Contains("Error: The following behavior constitutes a counter-example:", StringComparison.Ordinal)
+            && text.Contains("Finished checking temporal properties", StringComparison.Ordinal)
+        then
+            Some "temporal-counterexample"
+        elif
+            (label = "quint/formal-safety-mutant"
+             || label = "quint/formal-counterexample-projection"
+             || (scope
+                 |> Option.exists (fun value ->
+                     value.StartsWith("sampling/", StringComparison.Ordinal) && value.Contains(":"))))
+            && text.Contains("Invariant violated", StringComparison.Ordinal)
+        then
+            Some "invariant-counterexample"
+        else
+            None
+    else
+        None
+
+let private retryObserved eligible logicalId scope label timeoutMs invoke =
+    let mutable ordinal = 0
+    let mutable greatestPeak = 0
+
+    let rec attempt () =
+        ordinal <- ordinal + 1
+
+        if physicalAttempts.Count >= 4096 then
+            fail "PHYSICAL-INVENTORY-BOUND" logicalId
+
+        observePhysical
+            {
+                LogicalId = logicalId
+                Ordinal = ordinal
+                Scope = scope
+                Label = label
+                Classification = None
+                ElapsedMs = None
+                PeakMiB = None
+                ExitCode = None
+                TimedOut = None
+                Terminal = None
+                Completed = false
+                Pid = None
+                TimeoutMs = timeoutMs
+                OutputBytes = None
+                OutputSha256 = None
+                SemanticOutcome = None
+            }
+
+        let code, output, error, elapsed, peak, timedOut, pid = invoke ordinal
+
+        let classification =
+            if eligible then
+                classifyTransientApalacheStartupFailure code output error
+            else
+                None
+
+        let retry = classification.IsSome && ordinal <= maxApalacheStartupRetries
+        greatestPeak <- max greatestPeak peak
+
+        let row =
+            {
+                LogicalId = logicalId
+                Ordinal = ordinal
+                Scope = scope
+                Label = label
+                Classification = classification
+                ElapsedMs = Some elapsed
+                PeakMiB = (if peak > 0 then Some peak else None)
+                ExitCode = Some code
+                TimedOut = Some timedOut
+                Terminal = Some(not retry)
+                Completed = true
+                Pid = Some pid
+                TimeoutMs = timeoutMs
+                OutputBytes = Some(int64 (Encoding.UTF8.GetByteCount(output) + Encoding.UTF8.GetByteCount(error)))
+                OutputSha256 = Some(sha256Text (output + "\n" + error))
+                SemanticOutcome = terminalSemantics label scope code timedOut classification output error
+            }
+
+        physicalAttempts.Add row
+        observePhysical row
+
+        if retry then
+            recordApalacheStartupRetry "verify" classification.Value
+            attempt ()
+        else
+            code, output, error, elapsed, greatestPeak
+
+    attempt ()
+
+let private runWithBudget timeoutMs workingDirectory (executable: string) arguments environment =
     Interlocked.Increment(&externalProcessCount) |> ignore
     let isQuint = executable.EndsWith(expectedQuint, StringComparison.Ordinal)
-    incrementInvocation (classifyInvocation isQuint arguments)
+    let label = classifyInvocation isQuint arguments
+    incrementInvocation label
+    let logicalId = $"call-{Interlocked.Increment(&logicalSequence):D6}"
 
     if isQuint then
         Interlocked.Increment(&quintProcessCount) |> ignore
 
-        match arguments with
-        | "verify" :: _ -> Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
-        | _ -> ()
+        if List.tryHead arguments = Some "verify" then
+            Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
 
-    let invoke () =
+    let invoke _ =
+        let executable, arguments = resolveFsiInvocation executable arguments
+        let clock = Stopwatch.StartNew()
         let isolatedArguments, _ = isolateApalacheEndpoint isQuint arguments
         let info = ProcessStartInfo(executable)
         info.WorkingDirectory <- workingDirectory
@@ -415,16 +685,19 @@ let runMeasured timeoutMs workingDirectory (executable: string) arguments enviro
             info.Environment[name] <- value
 
         use child = Process.Start info
+        let pid = child.Id
         let output = child.StandardOutput.ReadToEndAsync()
         let error = child.StandardError.ReadToEndAsync()
-        let clock = Stopwatch.StartNew()
-        let mutable peakBytes = 0L
+        let mutable peakBytes = processTreeRssBytes pid
         let mutable timedOut = false
 
         while not child.HasExited && not timedOut do
-            peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
+            peakBytes <- max peakBytes (processTreeRssBytes pid)
 
-            if clock.ElapsedMilliseconds > int64 timeoutMs then
+            if
+                timeoutMs
+                |> Option.exists (fun bound -> clock.ElapsedMilliseconds > int64 bound)
+            then
                 timedOut <- true
 
                 try
@@ -435,41 +708,321 @@ let runMeasured timeoutMs workingDirectory (executable: string) arguments enviro
                 Thread.Sleep 10
 
         child.WaitForExit()
-        peakBytes <- Math.Max(peakBytes, processTreeRssBytes child.Id)
+        peakBytes <- max peakBytes (processTreeRssBytes pid)
+        // Waiting for reaping and both redirected streams is actual cleanup work.
+        let stdout = output.GetAwaiter().GetResult().Trim()
+        let stderr = error.GetAwaiter().GetResult().Trim()
+        let actualExit = if timedOut then 124 else child.ExitCode
+        child.Dispose()
+        let elapsed = clock.ElapsedMilliseconds
 
-        let timeoutDiagnostic =
+        let diagnostic =
             if timedOut then
-                $"APALACHE_EXECUTION_TIMEOUT elapsedMs=%d{clock.ElapsedMilliseconds} budgetMs=%d{timeoutMs}"
+                $"APALACHE_EXECUTION_TIMEOUT elapsedMs={elapsed} budgetMs={timeoutMs.Value}"
             else
                 ""
 
-        (if timedOut then 124 else child.ExitCode),
-        output.Result.Trim(),
-        (String.concat "\n" [ error.Result.Trim(); timeoutDiagnostic ]).Trim(),
-        clock.ElapsedMilliseconds,
-        int (Math.Ceiling(float peakBytes / 1048576.0))
+        actualExit,
+        stdout,
+        (String.concat "\n" [ stderr; diagnostic ]).Trim(),
+        elapsed,
+        int (Math.Ceiling(float peakBytes / 1048576.0)),
+        timedOut,
+        pid
 
-    let rec invokeWithStartupRetries retriesRemaining =
-        let exitCode, output, error, elapsed, peak = invoke ()
+    let result =
+        retryObserved (isQuint && List.tryHead arguments = Some "verify") logicalId physicalScope label timeoutMs invoke
 
-        match
-            if isQuint && List.tryHead arguments = Some "verify" then
-                classifyTransientApalacheStartupFailure exitCode output error
-            else
-                None
-        with
-        | Some failureClass when retriesRemaining > 0 ->
-            recordApalacheStartupRetry (List.head arguments) failureClass
-            invokeWithStartupRetries (retriesRemaining - 1)
-        | _ -> exitCode, output, error, elapsed, peak
+    let code, _, _, _, _ = result
 
-    let exitCode, output, error, elapsed, peak =
-        invokeWithStartupRetries maxApalacheStartupRetries
-
-    if isQuint && exitCode <> 0 then
+    if isQuint && code <> 0 then
         Interlocked.Increment(&quintRejectedProcessCount) |> ignore
 
-    exitCode, output, error, elapsed, peak
+    result
+
+let runMeasured timeoutMs workingDirectory executable arguments environment =
+    runWithBudget (Some timeoutMs) workingDirectory executable arguments environment
+
+let run workingDirectory (executable: string) arguments environment =
+    let timeoutMs =
+        if
+            executable.EndsWith(expectedQuint, StringComparison.Ordinal)
+            && List.tryHead arguments = Some "verify"
+        then
+            Some 150000
+        else
+            None
+
+    let code, output, error, _, _ =
+        runWithBudget timeoutMs workingDirectory executable arguments environment
+
+    code, output, error
+
+let private acceptedFormalTerminal row =
+    let expected =
+        match row.Label with
+        | "quint/formal-simulation"
+        | "quint/formal-temporal" -> Some(0, "positive-complete")
+        | "quint/formal-safety-mutant"
+        | "quint/formal-counterexample-projection" -> Some(1, "invariant-counterexample")
+        | "quint/formal-counterexample-temporal" -> Some(1, "temporal-counterexample")
+        | _ -> None
+
+    expected
+    |> Option.exists (fun (code, outcome) ->
+        row.ExitCode = Some code
+        && row.SemanticOutcome = Some outcome
+        && row.TimedOut = Some false
+        && row.Classification.IsNone)
+
+let private summarizeFormalPhysical allAttemptBudget (physical: PhysicalAttemptObservation array) =
+    let groups = physical |> Array.groupBy _.LogicalId
+
+    if groups.Length <> 7 || physical.Length < 7 || physical.Length > 13 then
+        Error "inventory"
+    elif
+        groups
+        |> Array.exists (fun (_, rows) ->
+            (rows
+             |> Array.mapi (fun index row ->
+                 row.Ordinal = index + 1
+                 && row.Completed
+                 && (row.ElapsedMs |> Option.exists (fun value -> value > 0L))
+                 && (row.PeakMiB |> Option.exists (fun value -> value > 0))
+                 && row.ExitCode.IsSome
+                 && row.Terminal.IsSome)
+             |> Array.exists not)
+            || (rows |> Array.filter (fun row -> row.Terminal = Some true) |> Array.length)
+               <> 1
+            || rows[rows.Length - 1].Terminal <> Some true
+            || (rows
+                |> Array.take (rows.Length - 1)
+                |> Array.exists (fun row -> row.Classification.IsNone)))
+    then
+        Error "incomplete-or-unclassified"
+    elif
+        (physical
+         |> Array.filter (fun row -> row.Terminal = Some true)
+         |> Array.countBy _.Label
+         |> Map.ofArray)
+        <> Map.ofList
+            [
+                ("quint/formal-simulation", 1)
+                ("quint/formal-temporal", 1)
+                ("quint/formal-safety-mutant", 1)
+                ("quint/formal-counterexample-temporal", 2)
+                ("quint/formal-counterexample-projection", 2)
+            ]
+    then
+        Error "declared-logical-roles"
+    elif
+        physical
+        |> Array.filter (fun row -> row.Terminal = Some true)
+        |> Array.exists (fun row -> not (acceptedFormalTerminal row))
+    then
+        Error "unexpected-terminal-outcome"
+    else
+        let terminal =
+            physical
+            |> Array.filter (fun row -> row.Terminal = Some true)
+            |> Array.sumBy (fun row -> row.ElapsedMs.Value)
+
+        let busy = physical |> Array.sumBy (fun row -> row.ElapsedMs.Value)
+        let peak = physical |> Array.map (fun row -> row.PeakMiB.Value) |> Array.max
+
+        if terminal > 300000L || busy > allAttemptBudget || peak > 6144 then
+            Error "budget"
+        else
+            Ok(terminal, busy, peak)
+
+// Controlled subprocess fixtures exercise the production wrappers, not native proof.
+if fsi.CommandLineArgs |> Array.contains "--exercise-accounting-controls" then
+    if fsi.CommandLineArgs |> Array.skip 1 <> [| "--exercise-accounting-controls" |] then
+        fail "ACCOUNTING-CONTROL-MIXTURE" "requires only focused switch"
+
+    let scratch = Directory.CreateTempSubdirectory("fsgg-physical-accounting-controls-")
+
+    let check name condition =
+        if not condition then
+            fail "ACCOUNTING-CONTROL" name
+
+    try
+        let executable = Path.Combine(scratch.FullName, expectedQuint)
+        File.CreateSymbolicLink(executable, "/usr/bin/python3") |> ignore
+
+        File.WriteAllText(
+            Path.Combine(scratch.FullName, "verify"),
+            """import sys,time,pathlib
+p=pathlib.Path(sys.argv[1]); n=int(p.read_text()) if p.exists() else 0; p.write_text(str(n+1))
+mode=sys.argv[2]
+if mode=='timeout' and n==0 or mode=='exhaust': time.sleep(2)
+if mode=='unknown': time.sleep(.06);sys.exit(7)
+if mode=='memory' and n==0:
+ x=bytearray(80*1024*1024);time.sleep(.08);print('Error querying reflection endpoint DEADLINE_EXCEEDED',file=sys.stderr);sys.exit(1)
+time.sleep(.06)
+        """
+        )
+
+        let invoke mode timeout =
+            let before = physicalAttempts.Count
+
+            let result =
+                runMeasured
+                    timeout
+                    scratch.FullName
+                    executable
+                    [ "verify"; Path.Combine(scratch.FullName, mode); mode ]
+                    []
+
+            result, physicalAttempts |> Seq.skip before |> Seq.toArray
+
+        let (code, _, _, elapsed, peak), timeoutRows = invoke "timeout" 180
+
+        check
+            "timeout-success"
+            (code = 0
+             && timeoutRows.Length = 2
+             && timeoutRows[0].TimedOut = Some true
+             && timeoutRows[0].Classification = Some "early-lifecycle-exit"
+             && timeoutRows[0].Terminal = Some false
+             && elapsed = timeoutRows[1].ElapsedMs.Value
+             && peak = (timeoutRows |> Array.map (fun row -> row.PeakMiB.Value) |> Array.max))
+
+        let (code, _, _, _, _), exhausted = invoke "exhaust" 180
+        check "two-retries-exhausted" (code = 124 && exhausted.Length = 3 && exhausted[2].Terminal = Some true)
+        let (code, _, _, _, _), unknown = invoke "unknown" 180
+        check "unclassified-no-retry" (code = 7 && unknown.Length = 1 && unknown[0].Classification.IsNone)
+        let (code, _, _, _, peak), memory = invoke "memory" 1000
+
+        check
+            "failed-high-rss-preserved"
+            (code = 0
+             && memory.Length = 2
+             && memory[0].PeakMiB.Value > memory[1].PeakMiB.Value
+             && peak = memory[0].PeakMiB.Value)
+
+        let beforeRun = physicalAttempts.Count
+
+        let code, _, _ =
+            run scratch.FullName executable [ "verify"; Path.Combine(scratch.FullName, "run-memory"); "memory" ] []
+
+        let runRows = physicalAttempts |> Seq.skip beforeRun |> Seq.toArray
+
+        check
+            "run-wrapper-preserves-failed-peak"
+            (code = 0
+             && runRows.Length = 2
+             && runRows[0].PeakMiB.Value > runRows[1].PeakMiB.Value)
+
+        let row index elapsed terminal ordinal classification peak =
+            { timeoutRows[1] with
+                LogicalId = string index
+                Label =
+                    [|
+                        "quint/formal-simulation"
+                        "quint/formal-temporal"
+                        "quint/formal-safety-mutant"
+                        "quint/formal-counterexample-temporal"
+                        "quint/formal-counterexample-temporal"
+                        "quint/formal-counterexample-projection"
+                        "quint/formal-counterexample-projection"
+                    |][index - 1]
+                ExitCode = Some(if index <= 2 then 0 else 1)
+                SemanticOutcome =
+                    Some(
+                        if index <= 2 then
+                            "positive-complete"
+                        elif index <= 3 || index >= 6 then
+                            "invariant-counterexample"
+                        else
+                            "temporal-counterexample"
+                    )
+                ElapsedMs = Some elapsed
+                Ordinal = ordinal
+                Terminal = Some terminal
+                Classification = classification
+                PeakMiB = Some peak
+            }
+
+        let exact =
+            [|
+                for index in 1..7 -> row index (if index = 7 then 299994L else 1L) true 1 None 10
+                for index in 1..3 do
+                    for ordinal in 1..2 -> row index 300000L false ordinal (Some "early-lifecycle-exit") 6144
+            |]
+
+        let exact =
+            exact
+            |> Array.groupBy _.LogicalId
+            |> Array.collect (fun (_, rows) ->
+                rows
+                |> Array.sortBy (fun row -> if row.Terminal = Some true then 4 else row.Ordinal)
+                |> Array.mapi (fun index row -> { row with Ordinal = index + 1 }))
+
+        check "exact-total-and-terminal" (summarizeFormalPhysical 2100000L exact = Ok(300000L, 2100000L, 6144))
+        check "over-total-includes-failed-cost" (summarizeFormalPhysical 2099999L exact = Error "budget")
+
+        check
+            "failed-high-rss-gate"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row -> if index = 0 then { row with PeakMiB = Some 6145 } else row))
+                =
+                Error "budget")
+
+        check "omitted" (summarizeFormalPhysical 2100000L exact[1..] |> Result.isError)
+
+        check
+            "duplicate"
+            (summarizeFormalPhysical 2100000L (Array.append exact [| exact[0] |])
+             |> Result.isError)
+
+        check
+            "incomplete"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row ->
+                     if index = 0 then
+                         { row with
+                             Completed = false
+                             ElapsedMs = None
+                         }
+                     else
+                         row))
+             |> Result.isError)
+
+        check
+            "unexpected-terminal-crash"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row -> if index = 2 then { row with ExitCode = Some 137 } else row))
+             |> Result.isError)
+
+        check
+            "unexpected-terminal-timeout"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row -> if index = 2 then { row with TimedOut = Some true } else row))
+             |> Result.isError)
+
+        check
+            "unexpected-nonsemantic-negative"
+            (terminalSemantics "quint/formal-safety-mutant" (Some "fixture") 1 false None "" "Traceback" = None)
+
+        check
+            "expected-semantic-negative"
+            (terminalSemantics "quint/formal-safety-mutant" (Some "fixture") 1 false None "Invariant violated" "" =
+                Some "invariant-counterexample")
+
+        printfn "ACCOUNTING_CONTROLS_OK controls=15 disposition=controlled-subprocess-not-native-qualification"
+    finally
+        scratch.Delete true
+
+    exit 0
 
 let requireGreen code workingDirectory executable arguments environment =
     let exitCode, output, error = run workingDirectory executable arguments environment
@@ -481,29 +1034,110 @@ let requireGreen code workingDirectory executable arguments environment =
 
 let arguments = fsi.CommandLineArgs |> Array.skip 1 |> Array.toList
 
-let rec parse root staticOnly compilerOnly output receiptFailurePhase remaining =
+let rec parse root staticOnly compilerOnly output receiptFailurePhase measurementOutput preflightOutput remaining =
     match remaining with
-    | [] -> root, staticOnly, compilerOnly, output, receiptFailurePhase
+    | [] -> root, staticOnly, compilerOnly, output, receiptFailurePhase, measurementOutput, preflightOutput
     | "--root" :: value :: tail ->
-        parse (Path.GetFullPath value) staticOnly compilerOnly output receiptFailurePhase tail
-    | "--static-only" :: tail -> parse root true compilerOnly output receiptFailurePhase tail
-    | "--compiler-only" :: tail -> parse root staticOnly true output receiptFailurePhase tail
-    | "--output" :: value :: tail -> parse root staticOnly compilerOnly (Some value) receiptFailurePhase tail
-    | "--exercise-failure-receipt" :: value :: tail -> parse root staticOnly compilerOnly output (Some value) tail
+        parse
+            (Path.GetFullPath value)
+            staticOnly
+            compilerOnly
+            output
+            receiptFailurePhase
+            measurementOutput
+            preflightOutput
+            tail
+    | "--static-only" :: tail ->
+        parse root true compilerOnly output receiptFailurePhase measurementOutput preflightOutput tail
+    | "--compiler-only" :: tail ->
+        parse root staticOnly true output receiptFailurePhase measurementOutput preflightOutput tail
+    | "--output" :: value :: tail ->
+        parse root staticOnly compilerOnly (Some value) receiptFailurePhase measurementOutput preflightOutput tail
+    | "--exercise-failure-receipt" :: value :: tail ->
+        parse root staticOnly compilerOnly output (Some value) measurementOutput preflightOutput tail
+    | "--measure-only" :: value :: tail ->
+        parse
+            root
+            staticOnly
+            compilerOnly
+            output
+            receiptFailurePhase
+            (Some(Path.GetFullPath value))
+            preflightOutput
+            tail
+    | "--preflight-only" :: value :: tail ->
+        parse
+            root
+            staticOnly
+            compilerOnly
+            output
+            receiptFailurePhase
+            measurementOutput
+            (Some(Path.GetFullPath value))
+            tail
     | value :: _ -> fail "ARGUMENT" value
 
-let root, staticOnly, compilerOnly, outputOption, receiptFailurePhase =
-    parse (Path.GetFullPath ".") false false None None arguments
+let root, staticOnly, compilerOnly, outputOption, receiptFailurePhase, measurementOutput, preflightOutput =
+    parse (Path.GetFullPath ".") false false None None None None arguments
+
+let measurementOnly = Option.isSome measurementOutput
+let preflightOnly = Option.isSome preflightOutput
+// Measurement admission requires the qualified Core bytes actually loaded, not a
+// symlinked SDK path that the loader may resolve into another runtime closure.
+if measurementOnly || preflightOnly then
+    let core = typeof<option<int>>.Assembly.Location
+
+    if
+        sha256 core
+        <> "7516a966abc789eab916e95d429bf3a49e996257069d97f7f3eb5d47373fa72b"
+    then
+        fail "FSI-CORE-BINDING" "loaded Core bytes are outside the qualified profile"
+
+if measurementOnly && preflightOnly then
+    fail "MEASUREMENT-MIXTURE" "measurement and focused observation are incompatible"
+
+let private measurementCustody =
+    (if preflightOnly then preflightOutput else measurementOutput)
+    |> Option.map (fun path ->
+        let relative = Path.GetRelativePath(root, path)
+
+        if
+            staticOnly
+            || compilerOnly
+            || Option.isSome outputOption
+            || Option.isSome receiptFailurePhase
+            || relative = "."
+            || not (relative.StartsWith(".." + string Path.DirectorySeparatorChar, StringComparison.Ordinal))
+        then
+            fail "MEASUREMENT-OUTPUT" "requires distinct directory outside source and full native execution"
+
+        if
+            not (String.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable "FSGG_QUINT_RECEIPT"))
+            || Environment.GetEnvironmentVariable "FSGG_REFRESH_FORMAL_EVIDENCE" = "1"
+        then
+            fail "MEASUREMENT-MIXTURE" "ordinary receipt and source-refresh options are incompatible"
+
+        MeasurementDirectory.create root path)
+
+let measurementAttemptId = Guid.NewGuid().ToString("N")
+let measurementDirectory = measurementCustody |> Option.map _.HeldPath
+
+let verifyMeasurementDirectory () =
+    measurementCustody |> Option.iter MeasurementDirectory.verify
 
 let refreshFormalEvidence =
     Environment.GetEnvironmentVariable("FSGG_REFRESH_FORMAL_EVIDENCE") = "1"
 
 let qualificationOutput =
-    outputOption
+    (if measurementOnly || preflightOnly then
+         measurementDirectory |> Option.map (fun p -> Path.Combine(p, "attempt.json"))
+     else
+         outputOption)
     |> Option.map Path.GetFullPath
     |> Option.defaultValue (Path.Combine(root, "artifacts/canonical-quint/qualification.json"))
 
 let writeQualificationReceipt failure =
+    verifyMeasurementDirectory ()
     let totalDurationMs = qualificationClock.ElapsedMilliseconds
     let q2DurationMs = Math.Max(0L, totalDurationMs - preparationDurationMs)
     let preparationValue = preparationDigest |> Option.defaultValue "none"
@@ -533,10 +1167,23 @@ let writeQualificationReceipt failure =
         qualificationOutput + "." + Guid.NewGuid().ToString("N") + ".tmp"
 
     do
-        use outputStream = File.Create temporaryOutput
+        use outputStream =
+            if measurementOnly || preflightOnly then
+                new FileStream(temporaryOutput, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+            else
+                File.Create temporaryOutput
+
         use writer = new Utf8JsonWriter(outputStream, JsonWriterOptions(Indented = true))
         writer.WriteStartObject()
-        writer.WriteString("schema", "fsgg.coordination.canonical-quint-qualification/1")
+
+        writer.WriteString(
+            "schema",
+            if measurementOnly || preflightOnly then
+                "fsgg.coordination.canonical-quint-measurement-attempt/1"
+            else
+                "fsgg.coordination.canonical-quint-qualification/1"
+        )
+
         writer.WriteString("q1Outcome", q1Outcome)
         writer.WriteString("q2Outcome", q2Outcome)
         writer.WriteNumber("positiveInvariantCount", verifiedPositiveInvariantCount)
@@ -549,7 +1196,28 @@ let writeQualificationReceipt failure =
         writer.WriteNumber("quintCli", quintProcessCount)
         writer.WriteNumber("apalacheVerify", apalacheVerifyInvocationCount)
         writer.WriteEndObject()
-        writer.WriteString("processAccounting", "logical-invocations-plus-explicit-startup-retries/v1")
+
+        writer.WriteString(
+            "processAccounting",
+            if measurementOnly then
+                "logical-invocations-plus-all-physical-observations/v2"
+            else
+                "logical-invocations-plus-explicit-startup-retries/v1"
+        )
+
+        if measurementOnly then
+            writer.WriteString("attemptId", measurementAttemptId)
+            writer.WriteString("compilerSha256", compilerIdentitySha256)
+
+            writer.WriteString(
+                "validatorSha256",
+                sha256 (Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+            )
+
+            writer.WriteString("configurationSha256", sha256 (Path.Combine(root, "eng/quint-qualification.json")))
+            writer.WriteNumber("allPhysicalElapsedMs", physicalAttempts |> Seq.sumBy (fun row -> row.ElapsedMs.Value))
+            writer.WriteNumber("observedPhysicalCount", physicalAttempts.Count)
+
         writer.WriteStartObject("physicalProcessCounts")
         writer.WriteNumber("external", externalProcessCount + apalacheStartupRetryCount)
         writer.WriteNumber("quintCli", quintProcessCount + apalacheStartupRetryCount)
@@ -600,7 +1268,8 @@ let writeQualificationReceipt failure =
         writer.Flush()
         outputStream.Flush(true)
 
-    File.Move(temporaryOutput, qualificationOutput, true)
+    verifyMeasurementDirectory ()
+    File.Move(temporaryOutput, qualificationOutput, not (measurementOnly || preflightOnly))
 
 failureReceiptWriter <-
     Some(fun code detail ->
@@ -629,8 +1298,9 @@ let requireCompletedProcessInventory () =
 let exerciseFormalShardProcessInventory mutation =
     let expected =
         [
-            "external/base", 25
-            "quint/preflight-sampling", 9
+            "external/base", 31
+            "quint/preflight-sampling", 13
+            "quint/preflight-interaction", 2
             "quint/base-nonverify", 5
             "quint/base-verify", 0
             "quint/selected-root", 7
@@ -699,6 +1369,71 @@ let qualificationValidator =
     Path.Combine(root, "eng/validate-quint-qualification.fsx")
 
 let qualificationConfiguration = Path.Combine(root, "eng/quint-qualification.json")
+
+let measurementConfigurationDigest = sha256 qualificationConfiguration
+
+let measurementValidatorDigest =
+    sha256 (Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+
+let writeMeasurementJson (name: string) value =
+    if measurementOnly then
+        verifyMeasurementDirectory ()
+
+        if Path.GetFileName name <> name then
+            fail "MEASUREMENT-OUTPUT-PATH" name
+
+        let options =
+            JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true)
+
+        let bytes = Encoding.UTF8.GetBytes(JsonSerializer.Serialize(value, options) + "\n")
+
+        use stream =
+            new FileStream(
+                Path.Combine(measurementDirectory.Value, name),
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None
+            )
+
+        stream.Write(bytes, 0, bytes.Length)
+        stream.Flush(true)
+        verifyMeasurementDirectory ()
+
+if measurementOnly then
+    physicalObserver <-
+        Some(fun row ->
+            let state = if row.Completed then "complete" else "active"
+
+            let boxOption value =
+                value |> Option.map box |> Option.defaultValue null
+
+            writeMeasurementJson
+                ($"physical-{row.LogicalId}-{row.Ordinal}-{state}.json")
+                {|
+                    schema = "fsgg.quint-physical-attempt/2"
+                    attemptId = measurementAttemptId
+                    sourceSha256 = expectedSource
+                    configurationSha256 = measurementConfigurationDigest
+                    toolchainSha256 = expectedToolchain
+                    validatorSha256 = measurementValidatorDigest
+                    compilerSha256 = compilerIdentitySha256
+                    logicalId = row.LogicalId
+                    ordinal = row.Ordinal
+                    scope = boxOption row.Scope
+                    label = row.Label
+                    classification = boxOption row.Classification
+                    elapsedMs = boxOption row.ElapsedMs
+                    peakMiB = boxOption row.PeakMiB
+                    exitCode = boxOption row.ExitCode
+                    timedOut = boxOption row.TimedOut
+                    terminal = boxOption row.Terminal
+                    completed = row.Completed
+                    pid = boxOption row.Pid
+                    timeoutMs = boxOption row.TimeoutMs
+                    outputBytes = boxOption row.OutputBytes
+                    outputSha256 = boxOption row.OutputSha256
+                    semanticOutcome = boxOption row.SemanticOutcome
+                |})
 
 let qualificationBaseline =
     Path.Combine(root, "eng/quint-qualification-baseline.json")
@@ -1074,10 +1809,11 @@ let selectionPlanPath =
     Path.Combine(Path.GetTempPath(), $"fsgg-quint-selection-{Guid.NewGuid():N}.json")
 
 let qualificationMode =
-    match Environment.GetEnvironmentVariable "FSGG_QUINT_QUALIFICATION_MODE" with
-    | null
-    | "" -> "protected"
-    | value -> value
+    match (measurementOnly || preflightOnly), Environment.GetEnvironmentVariable "FSGG_QUINT_QUALIFICATION_MODE" with
+    | true, _ -> "measurement"
+    | false, null
+    | false, "" -> "protected"
+    | false, value -> value
 
 let protectedMode =
     match Environment.GetEnvironmentVariable "FSGG_QUINT_PROTECTED_MODE" with
@@ -1179,6 +1915,9 @@ let formalShardId =
     | "base" -> Some "base"
     | value -> Some value
 
+if (measurementOnly || preflightOnly) && Option.isSome formalShardId then
+    fail "MEASUREMENT-SHARD" "requires one full inventory pass"
+
 let declaredFormalTestCount =
     match formalShardId with
     | None -> processInventoryConfiguration.RootElement.GetProperty("formalTests").GetArrayLength()
@@ -1223,7 +1962,7 @@ let cli =
 
 let version, _ = requireGreen "CLI-VERSION" root cli [ "--version" ] []
 
-if version.Trim() <> "1.5.0" then
+if version.Trim() <> "2.1.0" then
     fail "CLI-VERSION" version
 
 let scratch =
@@ -1292,28 +2031,39 @@ try
     let generatedBinding = Path.Combine(generatedRoot, "quint/bindings.fs")
     requireFile "REGEN-MISSING" generatedBinding
 
-    let runFormatter arguments =
-        let info = ProcessStartInfo("dotnet")
-        info.WorkingDirectory <- root
-        info.UseShellExecute <- false
-        info.RedirectStandardOutput <- true
-        info.RedirectStandardError <- true
+    let packages = Environment.GetEnvironmentVariable "NUGET_PACKAGES"
 
-        for argument in arguments do
-            info.ArgumentList.Add argument
+    let packageRoot =
+        if String.IsNullOrWhiteSpace packages then
+            Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".nuget/packages")
+        else
+            packages
 
-        use child = Process.Start info
-        let output = child.StandardOutput.ReadToEndAsync()
-        let error = child.StandardError.ReadToEndAsync()
-        child.WaitForExit()
+    let formatter =
+        Path.Combine(packageRoot, "fantomas/8.0.0/tools/net10.0/any/fantomas.dll")
 
-        if child.ExitCode <> 0 then
-            fail
-                "FANTOMAS-NORMALIZATION"
-                ($"exit={child.ExitCode}; stdout={output.Result.Trim()}; stderr={error.Result.Trim()}")
+    requireFile "FANTOMAS-MISSING" formatter
 
-    runFormatter [ "tool"; "restore" ]
-    runFormatter [ "fantomas"; generatedBinding ]
+    if
+        sha256 formatter
+        <> "1bb5742abd5fd194575cea1a56f898dd6049bc9c88bf96d60568f66c0d336c70"
+    then
+        fail "FANTOMAS-DIGEST" "unexpected bytes"
+
+    let info = ProcessStartInfo(observedDotnetHost)
+    info.WorkingDirectory <- root
+    info.UseShellExecute <- false
+    info.RedirectStandardOutput <- true
+    info.RedirectStandardError <- true
+    info.ArgumentList.Add formatter
+    info.ArgumentList.Add generatedBinding
+    use formatterProcess = Process.Start info
+    let formatterOutput = formatterProcess.StandardOutput.ReadToEndAsync()
+    let formatterError = formatterProcess.StandardError.ReadToEndAsync()
+    formatterProcess.WaitForExit()
+
+    if formatterProcess.ExitCode <> 0 then
+        fail "FANTOMAS-NORMALIZATION" (formatterOutput.Result + formatterError.Result)
 
     let comparisons =
         [
@@ -1776,34 +2526,694 @@ try
     requireGreen "QUINT-Q2-TYPECHECK" scratch quint [ "typecheck"; q2Qnt ] []
     |> ignore
 
+    // Whole canonical modules are independent profile inputs. No IR rows are merged or removed.
+    let preflightInputs = System.Collections.Generic.Dictionary<string, string>()
+    let markdownLines = File.ReadAllLines source
+
+    let testHeaders =
+        markdownLines
+        |> Array.mapi (fun i line -> i, line)
+        |> Array.filter (fun (_, line) -> line.Trim() = "```quint-test")
+
+    if testHeaders.Length <> 1 then
+        fail "PREFLIGHT-PROJECTION-FENCE" "expected-one"
+
+    let fenceStart = fst testHeaders[0]
+
+    let fenceEnd =
+        [ fenceStart + 1 .. markdownLines.Length - 1 ]
+        |> List.find (fun i -> markdownLines[i].Trim() = "```")
+
+    let moduleHeaders =
+        [ fenceStart + 1 .. fenceEnd - 1 ]
+        |> List.filter (fun i -> Regex.IsMatch(markdownLines[i], @"^module [A-Za-z0-9_]+ \{$"))
+
+    let parentDigest = sha256 source
+    let projectionReceipts = ResizeArray<string * string * string * string>()
+
+    let writeProjected label names =
+        let directory = Path.Combine(scratch, "preflight-" + label)
+        Directory.CreateDirectory directory |> ignore
+
+        let spans =
+            names
+            |> List.map (fun name ->
+                let hits =
+                    moduleHeaders
+                    |> List.filter (fun i -> markdownLines[i] = "module " + name + " {")
+
+                if hits.Length <> 1 then
+                    fail "PREFLIGHT-PROJECTION-MODULE" name
+
+                let first = hits.Head
+
+                let mutable last =
+                    moduleHeaders
+                    |> List.tryFind (fun i -> i > first)
+                    |> Option.defaultValue fenceEnd
+
+                while last > first && String.IsNullOrWhiteSpace markdownLines[last - 1] do
+                    last <- last - 1
+
+                if markdownLines[last - 1] <> "}" then
+                    fail "PREFLIGHT-PROJECTION-RANGE" name
+
+                name, first, last)
+
+        let selected = Set.ofList names
+
+        for _, first, last in spans do
+            for i in first .. last - 1 do
+                let imported = Regex.Match(markdownLines[i], @"^  import ([A-Za-z0-9_]+)\.\*")
+
+                if imported.Success && not (selected.Contains imported.Groups[1].Value) then
+                    fail "PREFLIGHT-PROJECTION-IMPORT" imported.Groups[1].Value
+
+        let projected = Array.create markdownLines.Length ""
+        let first = spans |> List.map (fun (_, first, _) -> first) |> List.min
+        let last = spans |> List.map (fun (_, _, last) -> last) |> List.max
+        projected[first - 1] <- "```quint protocol.qnt +="
+        projected[last] <- "```"
+
+        for _, first, last in spans do
+            Array.blit markdownLines first projected first (last - first)
+
+        let projectedPath = Path.Combine(directory, "Projection.md")
+        File.WriteAllLines(projectedPath, projected, UTF8Encoding(false))
+
+        let spanReceipts =
+            spans
+            |> List.map (fun (name, first, last) ->
+                {|
+                    moduleName = name
+                    startLine = first + 1
+                    endLine = last
+                    sha256 = sha256Text (String.Join(Environment.NewLine, markdownLines[first .. last - 1]))
+                |})
+
+        let actions =
+            spans
+            |> List.map (fun (name, first, last) ->
+                let declaration =
+                    if name.EndsWith("Replay", StringComparison.Ordinal) then
+                        "replayInit"
+                    else
+                        "init"
+
+                let matches =
+                    [ first .. last - 1 ]
+                    |> List.filter (fun i ->
+                        markdownLines[i].StartsWith("  action " + declaration + " =", StringComparison.Ordinal))
+
+                if matches.Length <> 1 then
+                    fail "PREFLIGHT-PROJECTION-ACTION" name
+
+                let line = matches.Head + 1
+                // Published native range for the inline admission record includes its next line.
+                // This selector is source-specific, retained from the independently qualified pilot.
+                let endLine = if name = "PreflightAdmissionModel" then line + 1 else line
+
+                {|
+                    id = "ACT-" + name + "-" + declaration
+                    ``module`` = name
+                    declaration = declaration
+                    source =
+                        {|
+                            path = "Projection.md"
+                            start = {| line = line; column = 1 |}
+                            ``end`` = {| line = endLine; column = 4 |}
+                        |}
+                |})
+
+        let bindingsPath = Path.Combine(directory, "bindings.json")
+
+        File.WriteAllText(
+            bindingsPath,
+            JsonSerializer.Serialize(
+                {|
+                    schema = "fsgg.quint.general-bindings/v1"
+                    profile = expectedProfile
+                    moduleName = "PreflightProjectionGenerated"
+                    exports = Array.empty<string>
+                    actions = actions
+                |}
+            ),
+            UTF8Encoding(false)
+        )
+
+        let projectedDigest = sha256 projectedPath
+
+        let authorCode, authorOutput, authorError, authorElapsed, authorPeak =
+            runMeasured
+                60000
+                root
+                cli
+                [
+                    "typed-sdd"
+                    "author"
+                    "--root"
+                    directory
+                    "--work"
+                    "partition-profile2"
+                    "--title"
+                    "Canonical preflight projection"
+                    "--agent"
+                    "coordination"
+                    "--session"
+                    "v2-preflight-coordination-20261003"
+                    "--backend"
+                    "quint-specification-v1"
+                    "--profile"
+                    expectedProfile
+                    "--source"
+                    "Projection.md"
+                    "--bindings"
+                    "bindings.json"
+                    "--cache"
+                    cache
+                ]
+                []
+
+        if authorCode <> 0 then
+            fail "PREFLIGHT-PROJECTION-AUTHOR" (label + ":" + authorOutput + authorError)
+
+        let inspectCode, inspectOutput, inspectError, inspectElapsed, inspectPeak =
+            runMeasured
+                60000
+                root
+                cli
+                [ "typed-sdd"; "inspect"; "--root"; directory; "--work"; "partition-profile2" ]
+                []
+
+        if inspectCode <> 0 then
+            fail "PREFLIGHT-PROJECTION-INSPECT" (label + ":" + inspectOutput + inspectError)
+
+        if
+            authorElapsed <= 0L
+            || inspectElapsed <= 0L
+            || authorPeak <= 0
+            || inspectPeak <= 0
+        then
+            fail "PREFLIGHT-PROJECTION-METRIC" label
+
+        let generated = Path.Combine(directory, "readiness/partition-profile2/quint")
+        let projectedQnt = Path.Combine(generated, "protocol.qnt")
+
+        use projectedReceipt =
+            JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generated, "receipt.json")))
+
+        let receipt = projectedReceipt.RootElement
+
+        if
+            receipt.GetProperty("sourceSha256").GetString() <> projectedDigest
+            || receipt.GetProperty("toolchainSha256").GetString() <> expectedToolchain
+        then
+            fail "PREFLIGHT-PROJECTION-RECEIPT" label
+
+        use projectedAuthority =
+            JsonDocument.Parse(
+                File.ReadAllBytes(Path.Combine(directory, "readiness/partition-profile2/typed-authority.json"))
+            )
+
+        if
+            projectedAuthority.RootElement.GetProperty("packageIdentity").GetString()
+            <> expectedPackage
+        then
+            fail "PREFLIGHT-PROJECTION-PACKAGE" label
+
+        use native =
+            JsonDocument.Parse(File.ReadAllBytes(Path.Combine(generated, "typed-effect.json")))
+
+        let keys (field: string) =
+            native.RootElement.GetProperty(field).EnumerateObject()
+            |> Seq.map _.Name
+            |> Set.ofSeq
+
+        if keys "types" <> keys "effects" then
+            fail "PREFLIGHT-PROJECTION-NATIVE-KEYS" label
+
+        if sha256 source <> parentDigest || sha256 projectedPath <> projectedDigest then
+            fail "PREFLIGHT-PROJECTION-PARENT-DRIFT" label
+
+        for _, first, last in spans do
+            if projected[first .. last - 1] <> markdownLines[first .. last - 1] then
+                fail "PREFLIGHT-PROJECTION-SPAN" label
+
+        File.WriteAllText(
+            Path.Combine(directory, "projection.json"),
+            JsonSerializer.Serialize(
+                {|
+                    schema = "fsgg.canonical-module-projection/1"
+                    parentPath = source
+                    parentSha256 = parentDigest
+                    derivedSha256 = projectedDigest
+                    quintSha256 = expectedQuint
+                    extractorSha256 = expectedLmt
+                    compilerPackage = expectedPackage
+                    toolchainSha256 = expectedToolchain
+                    selected = names
+                    spans = spanReceipts
+                    tableRows = (keys "table" |> Set.count)
+                    typeRows = (keys "types" |> Set.count)
+                    effectRows = (keys "effects" |> Set.count)
+                    authorElapsedMs = authorElapsed
+                    authorPeakMiB = authorPeak
+                    inspectElapsedMs = inspectElapsed
+                    inspectPeakMiB = inspectPeak
+                    typedEffectSha256 = sha256 (Path.Combine(generated, "typed-effect.json"))
+                    retainsAllNativeRows = true
+                    disposition = "independent-profile-input-not-aggregate-contract"
+                |}
+            ),
+            UTF8Encoding(false)
+        )
+
+        projectionReceipts.Add(directory, projectedPath, projectedDigest, sha256 projectedQnt)
+
+        for name in names do
+            preflightInputs[name] <- projectedQnt
+
+    writeProjected "artifact" [ "PreflightArtifactModel"; "PreflightArtifactReplay" ]
+    writeProjected "admission" [ "PreflightAdmissionModel" ]
+    writeProjected "observation" [ "PreflightObservationModel"; "PreflightObservationReplay" ]
+
+    let projectionRefusal directory path digest qntDigest =
+        try
+            use manifest =
+                JsonDocument.Parse(File.ReadAllBytes(Path.Combine(directory, "projection.json")))
+
+            let m = manifest.RootElement
+            let get (name: string) = m.GetProperty(name).GetString()
+
+            if sha256 source <> parentDigest || get "parentSha256" <> parentDigest then
+                Some "parent"
+            elif get "derivedSha256" <> digest || sha256 path <> digest then
+                Some "derived"
+            elif get "quintSha256" <> expectedQuint || sha256 quint <> expectedQuint then
+                Some "quint"
+            elif get "extractorSha256" <> expectedLmt || sha256 lmt <> expectedLmt then
+                Some "extractor"
+            elif
+                get "compilerPackage" <> expectedPackage
+                || get "toolchainSha256" <> expectedToolchain
+            then
+                Some "compiler"
+            elif
+                not (m.GetProperty("retainsAllNativeRows").GetBoolean())
+                || get "typedEffectSha256"
+                   <> sha256 (Path.Combine(directory, "readiness/partition-profile2/quint/typed-effect.json"))
+            then
+                Some "native-rows"
+            elif
+                sha256 (Path.Combine(directory, "readiness/partition-profile2/quint/protocol.qnt"))
+                <> qntDigest
+            then
+                Some "native-input"
+            else
+                let selected =
+                    m.GetProperty("selected").EnumerateArray()
+                    |> Seq.map _.GetString()
+                    |> Seq.toArray
+
+                let spans = m.GetProperty("spans").EnumerateArray() |> Seq.toArray
+
+                if
+                    selected.Length = 0
+                    || Set.count (Set.ofArray selected) <> selected.Length
+                    || spans.Length <> selected.Length
+                then
+                    Some "selection"
+                else
+                    let reconstructed = Array.create markdownLines.Length ""
+
+                    let ranges =
+                        spans
+                        |> Array.map (fun span ->
+                            let name = span.GetProperty("moduleName").GetString()
+                            let first = span.GetProperty("startLine").GetInt32() - 1
+                            let last = span.GetProperty("endLine").GetInt32()
+
+                            let hits =
+                                moduleHeaders
+                                |> List.filter (fun i -> markdownLines[i] = "module " + name + " {")
+
+                            let ownerEnd =
+                                hits
+                                |> List.tryHead
+                                |> Option.map (fun start ->
+                                    let mutable finish =
+                                        moduleHeaders
+                                        |> List.tryFind (fun i -> i > start)
+                                        |> Option.defaultValue fenceEnd
+
+                                    while finish > start && String.IsNullOrWhiteSpace markdownLines[finish - 1] do
+                                        finish <- finish - 1
+
+                                    finish)
+
+                            if
+                                not (Array.contains name selected)
+                                || hits <> [ first ]
+                                || ownerEnd <> Some last
+                                || span.GetProperty("sha256").GetString()
+                                   <> sha256Text (String.Join(Environment.NewLine, markdownLines[first .. last - 1]))
+                            then
+                                invalidOp "span"
+
+                            Array.blit markdownLines first reconstructed first (last - first)
+                            first, last)
+
+                    let first = ranges |> Array.map fst |> Array.min
+                    let last = ranges |> Array.map snd |> Array.max
+                    reconstructed[first - 1] <- "```quint protocol.qnt +="
+                    reconstructed[last] <- "```"
+
+                    if File.ReadAllLines path <> reconstructed then
+                        Some "reconstruction"
+                    else
+                        None
+        with _ ->
+            Some "malformed"
+
+    // Independent provenance mutations exercise the actual pre-use refusal guard.
+    let directory, path, digest, qntDigest = projectionReceipts[0]
+    let manifestPath = Path.Combine(directory, "projection.json")
+    let originalManifest = File.ReadAllBytes manifestPath
+    let originalDerived = File.ReadAllBytes path
+
+    for field in
+        [
+            "parentSha256"
+            "derivedSha256"
+            "quintSha256"
+            "extractorSha256"
+            "compilerPackage"
+            "toolchainSha256"
+            "typedEffectSha256"
+        ] do
+        try
+            let mutant = JsonNode.Parse originalManifest
+            mutant[field] <- JsonValue.Create("substituted")
+            File.WriteAllText(manifestPath, mutant.ToJsonString())
+
+            if projectionRefusal directory path digest qntDigest |> Option.isNone then
+                fail "PREFLIGHT-PROJECTION-CONTROL" field
+        finally
+            File.WriteAllBytes(manifestPath, originalManifest)
+
+    try
+        let mutant = JsonNode.Parse originalManifest
+        let spans = mutant["spans"].AsArray()
+        let span = spans[0].AsObject()
+        span["startLine"] <- JsonValue.Create(1)
+        File.WriteAllText(manifestPath, mutant.ToJsonString())
+
+        if projectionRefusal directory path digest qntDigest |> Option.isNone then
+            fail "PREFLIGHT-PROJECTION-CONTROL" "span"
+    finally
+        File.WriteAllBytes(manifestPath, originalManifest)
+
+    try
+        File.AppendAllText(path, "substituted source")
+
+        if projectionRefusal directory path digest qntDigest |> Option.isNone then
+            fail "PREFLIGHT-PROJECTION-CONTROL" "reconstruction"
+    finally
+        File.WriteAllBytes(path, originalDerived)
+
+    if projectionRefusal directory path digest qntDigest |> Option.isSome then
+        fail "PREFLIGHT-PROJECTION-CONTROL" "restored"
+
+    let validateProjectionUse main =
+        for directory, path, digest, qntDigest in projectionReceipts do
+            match projectionRefusal directory path digest qntDigest with
+            | Some reason -> fail "PREFLIGHT-PROJECTION-USE" (main + ":" + reason)
+            | None -> ()
+
+        preflightInputs[main]
+
+    let interactionMeasurements = ResizeArray<string * int64 * int * int64>()
+    let samplingMeasurements = ResizeArray<string * int64 * int * int64>()
+
+    let runPreflight label arguments =
+        physicalScope <- Some("sampling/" + label)
+
+        let code, output, error, elapsed, peak =
+            runMeasured 30000 scratch quint arguments []
+
+        let bytes =
+            int64 (Encoding.UTF8.GetByteCount(output) + Encoding.UTF8.GetByteCount(error))
+
+        if elapsed <= 0L || peak <= 0 || bytes <= 0L then
+            fail "MEASUREMENT-SAMPLING-METRIC" label
+
+        samplingMeasurements.Add(label, elapsed, peak, bytes)
+        physicalScope <- None
+        code, output, error
+
     // Consumer-owned, bounded preflight partitions use the published compiler's exact projection.
     // Sampling and causal counterexamples are explicitly separate from native exhaustive obligations.
-    let preflightBound = [ "--max-samples"; "100"; "--max-steps"; "12"; "--seed"; "37"; "--verbosity"; "1" ]
-    for main in [ "PreflightArtifactModel"; "PreflightAdmissionModel"; "PreflightObservationModel" ] do
-        let output, _ = requireGreen "PREFLIGHT-SAMPLED-INVARIANT" scratch quint
-                            ([ "run"; q2Qnt; "--main"; main; "--invariant"; "safety"; "--witnesses"; "done" ] @ preflightBound) []
+    let preflightBound =
+        [
+            "--max-samples"
+            "100"
+            "--max-steps"
+            "12"
+            "--seed"
+            "37"
+            "--verbosity"
+            "1"
+        ]
+
+    for main in
+        [
+            "PreflightArtifactModel"
+            "PreflightAdmissionModel"
+            "PreflightObservationModel"
+        ] do
+        let code, output, error =
+            runPreflight
+                main
+                ([
+                    "run"
+                    validateProjectionUse main
+                    "--main"
+                    main
+                    "--invariant"
+                    "safety"
+                    "--witnesses"
+                    "done"
+                 ]
+                 @ preflightBound)
+
+        if code <> 0 then
+            fail "PREFLIGHT-SAMPLED-INVARIANT" (main + ":" + output + error)
+
         if not (Regex.IsMatch(output, @"done was witnessed in [1-9][0-9]* trace")) then
             fail "PREFLIGHT-REACHABILITY" main
+
     for main, step, invariant in
-        [ "PreflightArtifactModel", "mutantStep", "safety"
-          "PreflightArtifactModel", "invalidationMutantStep", "safety"
-          "PreflightAdmissionModel", "mutantStep", "safety"
-          "PreflightObservationModel", "mutantStep", "cleanupSafety" ] do
-        let code, output, error = run scratch quint
-                                    ([ "run"; q2Qnt; "--main"; main; "--step"; step; "--invariant"; invariant ] @ preflightBound) []
-        if code = 0 || not ((output + error).Contains("Invariant violated", StringComparison.Ordinal)) then
+        [
+            "PreflightArtifactModel", "mutantStep", "safety"
+            "PreflightArtifactModel", "invalidationMutantStep", "safety"
+            "PreflightAdmissionModel", "mutantStep", "safety"
+            "PreflightObservationModel", "mutantStep", "cleanupSafety"
+            "PreflightObservationModel", "filterMutantStep", "custodySafety"
+            "PreflightObservationModel", "jsonMutantStep", "custodySafety"
+            "PreflightObservationModel", "leaderMutantStep", "custodySafety"
+            "PreflightObservationModel", "timeoutMutantStep", "custodySafety"
+        ] do
+        let code, output, error =
+            runPreflight
+                (main + ":" + step)
+                ([
+                    "run"
+                    validateProjectionUse main
+                    "--main"
+                    main
+                    "--step"
+                    step
+                    "--invariant"
+                    invariant
+                 ]
+                 @ preflightBound)
+
+        if
+            code = 0
+            || not ((output + error).Contains("Invariant violated", StringComparison.Ordinal))
+        then
             fail "PREFLIGHT-CAUSAL-MUTANT" (main + ":" + step)
-    for main, steps in [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "10" ] do
+
+    for main, steps in [ "PreflightArtifactReplay", "8"; "PreflightObservationReplay", "18" ] do
         let actualTrace = Path.Combine(scratch, main + ".itf.json")
-        requireGreen "PREFLIGHT-REPLAY-TRACE" scratch quint
-            [ "run"; q2Qnt; "--main"; main; "--init"; "replayInit"; "--step"; "replayStep"; "--invariant"; "safety"
-              "--max-samples"; "1"; "--max-steps"; steps; "--seed"; "37"; "--verbosity"; "1"; "--out-itf"; actualTrace ] [] |> ignore
+
+        let code, output, error =
+            runPreflight
+                main
+                [
+                    "run"
+                    validateProjectionUse main
+                    "--main"
+                    main
+                    "--init"
+                    "replayInit"
+                    "--step"
+                    "replayStep"
+                    "--invariant"
+                    "safety"
+                    "--max-samples"
+                    "1"
+                    "--max-steps"
+                    steps
+                    "--seed"
+                    "37"
+                    "--verbosity"
+                    "1"
+                    "--out-itf"
+                    actualTrace
+                ]
+
+        if code <> 0 then
+            fail "PREFLIGHT-REPLAY-TRACE" (main + ":" + output + error)
+
         use actual = JsonDocument.Parse(File.ReadAllBytes actualTrace)
-        use retainedTrace = JsonDocument.Parse(File.ReadAllBytes(Path.Combine(root, "tests/FS.GG.Coordination.Orchestration.Execution.Tests/Fixtures/preflight", main + ".itf.json")))
+
+        use retainedTrace =
+            JsonDocument.Parse(
+                File.ReadAllBytes(
+                    Path.Combine(
+                        root,
+                        "tests/FS.GG.Coordination.Orchestration.Execution.Tests/Fixtures/preflight",
+                        main + ".itf.json"
+                    )
+                )
+            )
+
+        let interactionTrace =
+            Path.Combine(scratch, "preflight-interaction-" + main + ".itf.json")
+
+        physicalScope <- Some("interaction/" + main)
+
+        let interactionCode, interactionOutput, interactionError, interactionElapsed, interactionPeak =
+            runMeasured
+                30000
+                scratch
+                quint
+                [
+                    "run"
+                    q2Qnt
+                    "--main"
+                    main
+                    "--init"
+                    "replayInit"
+                    "--step"
+                    "replayStep"
+                    "--invariant"
+                    "safety"
+                    "--max-samples"
+                    "1"
+                    "--max-steps"
+                    steps
+                    "--seed"
+                    "37"
+                    "--verbosity"
+                    "1"
+                    "--out-itf"
+                    interactionTrace
+                ]
+                []
+
+        if interactionCode <> 0 then
+            fail "PREFLIGHT-INTERACTION-TRACE" (main + ":" + interactionOutput + interactionError)
+
+        let interactionBytes = int64 (FileInfo(interactionTrace).Length)
+
+        if interactionElapsed <= 0L || interactionPeak <= 0 || interactionBytes <= 0L then
+            fail "PREFLIGHT-INTERACTION-METRIC" main
+
+        interactionMeasurements.Add(main, interactionElapsed, interactionPeak, interactionBytes)
+        physicalScope <- None
+
+        if measurementOnly then
+            verifyMeasurementDirectory ()
+
+            File.Copy(
+                interactionTrace,
+                Path.Combine(measurementDirectory.Value, "interaction-" + main + ".itf.json"),
+                false
+            )
+
+        use interaction = JsonDocument.Parse(File.ReadAllBytes interactionTrace)
+        // Isolated, full-core/test-fence, and retained production-driver traces agree causally.
+        for key in [ "vars"; "states" ] do
+            if
+                actual.RootElement.GetProperty(key).GetRawText()
+                <> interaction.RootElement.GetProperty(key).GetRawText()
+            then
+                fail "PREFLIGHT-INTERACTION-DRIFT" (main + ":" + key)
         // Tool timestamps are observations; causal states and their variables must match exactly.
         for key in [ "vars"; "states" ] do
-            if actual.RootElement.GetProperty(key).GetRawText() <> retainedTrace.RootElement.GetProperty(key).GetRawText() then
+            if
+                actual.RootElement.GetProperty(key).GetRawText()
+                <> retainedTrace.RootElement.GetProperty(key).GetRawText()
+            then
                 fail "PREFLIGHT-REPLAY-DRIFT" (main + ":" + key)
+
+    if preflightOnly then
+        if samplingMeasurements.Count <> 13 || interactionMeasurements.Count <> 2 then
+            fail "PREFLIGHT-FOCUSED-COVERAGE" "missing observation"
+
+        verifyMeasurementDirectory ()
+
+        let options =
+            JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase, WriteIndented = true)
+
+        let metrics rows =
+            rows
+            |> Seq.map (fun (id, elapsed, peak, bytes) ->
+                {|
+                    id = id
+                    elapsedMs = elapsed
+                    peakMiB = peak
+                    artifactBytes = bytes
+                |})
+            |> Seq.toArray
+
+        for directory, _, _, _ in projectionReceipts do
+            File.Copy(
+                Path.Combine(directory, "projection.json"),
+                Path.Combine(measurementDirectory.Value, Path.GetFileName(directory) + ".json"),
+                false
+            )
+
+        let report =
+            {|
+                schema = "fsgg.preflight-focused-observation/1"
+                disposition = "bounded-sampling-and-native-replay-not-full-qualification"
+                sourceSha256 = expectedSource
+                compilerPackage = expectedPackage
+                toolchainSha256 = expectedToolchain
+                sampling = metrics samplingMeasurements
+                interaction = metrics interactionMeasurements
+            |}
+
+        use stream =
+            new FileStream(
+                Path.Combine(measurementDirectory.Value, "preflight.json"),
+                FileMode.CreateNew,
+                FileAccess.Write,
+                FileShare.None
+            )
+
+        JsonSerializer.Serialize(stream, report, options)
+        stream.Flush()
+
+        printfn
+            "PREFLIGHT_FOCUSED_OBSERVED disposition=not-full-qualification output=%s"
+            measurementCustody.Value.NamedPath
+
+        Directory.Delete(scratch, true)
+        exit 0
 
     // The pinned Choreo modules are appended to the canonical Q2 source and are
     // compiled above as part of that source identity. Quint 0.32's TLC flattener,
@@ -1910,8 +3320,9 @@ try
 
     for label, count in
         [
-            "external/base", 25
-            "quint/preflight-sampling", 9
+            "external/base", 31
+            "quint/preflight-sampling", 13
+            "quint/preflight-interaction", 2
             "quint/base-nonverify", expectedBaseNonverifyCount
             "quint/base-verify", expectedBaseVerifyCount
             "quint/selected-root", selectedRootIds.Count
@@ -1924,12 +3335,122 @@ try
         expectedInvocationInventory[label] <- count
         actualInvocationInventory.TryAdd(label, 0) |> ignore
 
-    // The base qualification suite has 71 established red outcomes plus four preflight mutants. Every formal scenario
+    // The base qualification suite has 71 established red outcomes plus eight preflight mutants. Every formal scenario
     // contributes one safety mutant, two TLC reproductions, and two Rust projections.
-    let expectedRejectedProcessCount = 75 + 5 * declaredFormalTestCount
+    let expectedRejectedProcessCount = 79 + 5 * declaredFormalTestCount
     let rootArtifactDirectory = Path.Combine(scratch, "root-artifacts")
     Directory.CreateDirectory rootArtifactDirectory |> ignore
     let rootArtifactDigests = ResizeArray<string * string>()
+
+    let rootMeasurements =
+        System.Collections.Generic.Dictionary<string, int * int * int * int64 * int * int64>()
+
+    let rootConfiguration =
+        processInventoryConfiguration.RootElement.GetProperty("roots").EnumerateArray()
+        |> Seq.map (fun r -> r.GetProperty("id").GetString(), r.Clone())
+        |> Map.ofSeq
+
+    let selectionImports =
+        processInventoryConfiguration.RootElement.GetProperty("modules").EnumerateArray()
+        |> Seq.map (fun m ->
+            m.GetProperty("id").GetString(),
+            m.GetProperty("selectionImports").EnumerateArray()
+            |> Seq.map _.GetString()
+            |> Seq.toList)
+        |> Map.ofSeq
+
+    let rec measuredDependencyDepth owner =
+        match selectionImports[owner] with
+        | [] -> 1
+        | dependencies -> 1 + (dependencies |> List.map measuredDependencyDepth |> List.max)
+
+    let runRoot rootId artifactPath arguments =
+        physicalScope <- Some("root/" + rootId)
+
+        if measurementOnly then
+            let budget = rootConfiguration[rootId].GetProperty("budget")
+
+            let actualArguments =
+                if rootConfiguration[rootId].GetProperty("mode").GetString() = "state" then
+                    arguments
+                    |> List.map (fun argument -> if argument = "--out" then "--out-itf" else argument)
+                else
+                    arguments
+
+            let code, output, error, elapsed, peak =
+                runMeasured (budget.GetProperty("elapsedMs").GetInt32()) scratch quint actualArguments []
+
+            if code <> 0 then
+                fail "MEASUREMENT-ROOT-FAILED" (rootId + ":" + output + error)
+
+            use artifact = JsonDocument.Parse(File.ReadAllBytes artifactPath)
+            let mutable trace = Unchecked.defaultof<JsonElement>
+
+            let states, samples =
+                if artifact.RootElement.TryGetProperty("states", &trace) then
+                    let observed = Regex.Match(output + error, @"out of (\d+) explored")
+
+                    if not observed.Success then
+                        fail "MEASUREMENT-ROOT-SAMPLES" rootId
+
+                    trace.GetArrayLength(), Int32.Parse observed.Groups[1].Value
+                else
+                    let passed = artifact.RootElement.GetProperty("passed").GetArrayLength()
+
+                    if
+                        artifact.RootElement.GetProperty("failed").GetArrayLength() <> 0
+                        || artifact.RootElement.GetProperty("ignored").GetArrayLength() <> 0
+                    then
+                        fail "MEASUREMENT-ROOT-PARTIAL" rootId
+
+                    passed, passed
+
+            let depth =
+                measuredDependencyDepth (rootConfiguration[rootId].GetProperty("module").GetString())
+
+            let bytes = FileInfo(artifactPath).Length
+
+            if
+                elapsed <= 0L
+                || peak <= 0
+                || bytes <= 0L
+                || samples < 1
+                || states < 1
+                || depth > budget.GetProperty("depth").GetInt32()
+                || states > budget.GetProperty("states").GetInt32()
+                || samples > budget.GetProperty("samples").GetInt32()
+                || peak > budget.GetProperty("peakMiB").GetInt32()
+                || bytes > budget.GetProperty("artifactBytes").GetInt64()
+            then
+                fail "MEASUREMENT-ROOT-BUDGET" rootId
+
+            if rootMeasurements.ContainsKey rootId then
+                fail "MEASUREMENT-ROOT-DUPLICATE" rootId
+
+            rootMeasurements.Add(rootId, (depth, states, samples, elapsed, peak, bytes))
+
+            writeMeasurementJson
+                ("root-" + rootId + ".json")
+                {|
+                    id = rootId
+                    outcome = "passed"
+                    attemptId = measurementAttemptId
+                    sourceSha256 = expectedSource
+                    configurationSha256 = measurementConfigurationDigest
+                    toolchainSha256 = expectedToolchain
+                    validatorSha256 = measurementValidatorDigest
+                    compilerSha256 = compilerIdentitySha256
+                    dependencyDepth = depth
+                    stateCount = states
+                    sampleCount = samples
+                    elapsedMs = elapsed
+                    peakMiB = peak
+                    artifactBytes = bytes
+                |}
+        else
+            requireGreen "QUINT-BOUNDED-ROOT" scratch quint arguments [] |> ignore
+
+        physicalScope <- None
 
     let recordRootArtifact rootId path =
         requireFile "QUINT-ROOT-ARTIFACT-MISSING" path
@@ -1976,10 +3497,9 @@ try
         |> List.filter (fun (rootId, _) -> Set.contains rootId selectedRootIds) do
         let artifactPath = Path.Combine(rootArtifactDirectory, $"%s{rootId}.json")
 
-        requireGreen
-            "QUINT-BOUNDED-ROOT"
-            scratch
-            quint
+        runRoot
+            rootId
+            artifactPath
             [
                 "run"
                 qualificationQnt
@@ -2001,12 +3521,11 @@ try
                 "--seed"
                 "1"
                 "--verbosity"
-                "0"
+                (if measurementOnly then "1" else "0")
                 "--out"
                 artifactPath
             ]
-            []
-        |> ignore
+
 
         recordRootArtifact rootId artifactPath
 
@@ -2022,10 +3541,9 @@ try
         |> List.filter (fun (rootId, _) -> Set.contains rootId selectedRootIds) do
         let artifactPath = Path.Combine(rootArtifactDirectory, $"%s{rootId}.json")
 
-        requireGreen
-            "QUINT-BOUNDED-TEST-ROOT"
-            scratch
-            quint
+        runRoot
+            rootId
+            artifactPath
             [
                 "test"
                 qualificationQnt
@@ -2036,12 +3554,11 @@ try
                 "--match"
                 rootPattern
                 "--verbosity"
-                "0"
+                (if measurementOnly then "1" else "0")
                 "--out"
                 artifactPath
             ]
-            []
-        |> ignore
+
 
         recordRootArtifact rootId artifactPath
 
@@ -2090,6 +3607,8 @@ try
         elapsedBudget,
         peakBudget,
         artifactBudget in formalTests do
+        physicalScope <- Some formalId
+
         let artifactPath =
             Path.Combine(formalArtifactDirectory, $"%s{formalId}-simulation.json")
 
@@ -2154,6 +3673,7 @@ try
                 TransitionCount = 0
                 SampleCount = observedSamples
                 ElapsedMs = elapsedMs
+                AllAttemptElapsedMs = 0L
                 PeakMiB = peakMiB
                 ArtifactBytes = length
             }
@@ -2166,6 +3686,8 @@ try
             peakMiB
             length
             (sha256 artifactPath)
+
+    physicalScope <- None
 
     requireGreen
         "QUINT-INDEPENDENT-ORACLES"
@@ -2283,6 +3805,8 @@ try
     // the TLC loop.  The result is retained as the first of the two reproducibility samples,
     // so this changes failure order without adding process work.
     let runProjection formalId main init removedStep blockedInvariant depth elapsedBudget ordinal =
+        physicalScope <- Some formalId
+
         let pattern =
             Path.Combine(formalArtifactDirectory, $"%s{formalId}-counterexample-%d{ordinal}-{{seq}}.itf.json")
 
@@ -2373,6 +3897,8 @@ try
         elapsedBudget,
         peakBudget,
         artifactBudget in formalTests do
+        physicalScope <- Some formalId
+
         let temporalExit, temporalOutput, temporalError, temporalElapsed, temporalPeak =
             runMeasured
                 elapsedBudget
@@ -2598,7 +4124,24 @@ try
             ] do
             let fullPath = Path.Combine(root, retainedPath)
 
-            if refreshFormalEvidence then
+            if measurementOnly then
+                verifyMeasurementDirectory ()
+
+                if Path.IsPathFullyQualified retainedPath || Path.GetFileName(formalId) <> formalId then
+                    fail "MEASUREMENT-EVIDENCE-PATH" "outside-candidate"
+
+                let candidatePath =
+                    Path.Combine(
+                        measurementDirectory.Value,
+                        "counterexample-" + formalId + "-" + Path.GetFileName retainedPath
+                    )
+
+                use stream =
+                    new FileStream(candidatePath, FileMode.CreateNew, FileAccess.Write, FileShare.None)
+
+                let bytes = Encoding.UTF8.GetBytes actualText
+                stream.Write(bytes, 0, bytes.Length)
+            elif refreshFormalEvidence then
                 Directory.CreateDirectory(Path.GetDirectoryName fullPath) |> ignore
                 File.WriteAllText(fullPath, actualText, UTF8Encoding(false))
             else
@@ -2617,6 +4160,25 @@ try
         measurement.ElapsedMs <- measurement.ElapsedMs + firstElapsed + secondElapsed
         measurement.PeakMiB <- List.max [ measurement.PeakMiB; firstPeak; secondPeak ]
 
+        let physical =
+            physicalAttempts
+            |> Seq.filter (fun row -> row.Scope = Some formalId)
+            |> Seq.toArray
+
+        let allAttemptBudget =
+            processInventoryConfiguration.RootElement.GetProperty("formalTests").EnumerateArray()
+            |> Seq.find (fun item -> item.GetProperty("id").GetString() = formalId)
+            |> fun item -> item.GetProperty("budget").GetProperty("allAttemptElapsedMs").GetInt64()
+
+        match summarizeFormalPhysical allAttemptBudget physical with
+        | Error detail -> fail "PHYSICAL-FORMAL-ACCOUNTING" (formalId + ":" + detail)
+        | Ok(terminal, busy, peak) ->
+            if terminal <> measurement.ElapsedMs then
+                fail "PHYSICAL-FORMAL-TERMINAL-WORK" formalId
+
+            measurement.AllAttemptElapsedMs <- busy
+            measurement.PeakMiB <- peak
+
         if
             distinctStates > stateBudget
             || transitions > transitionBudget
@@ -2627,6 +4189,26 @@ try
             fail
                 "QUINT-FORMAL-MEASUREMENT-BUDGET"
                 ($"%s{formalId}: states=%d{distinctStates}; transitions=%d{transitions}; elapsedMs=%d{measurement.ElapsedMs}; peakMiB=%d{measurement.PeakMiB}; bytes=%d{totalBytes}")
+
+        writeMeasurementJson
+            ("formal-" + formalId + ".json")
+            {|
+                id = formalId
+                outcome = "passed"
+                attemptId = measurementAttemptId
+                sourceSha256 = expectedSource
+                configurationSha256 = measurementConfigurationDigest
+                toolchainSha256 = expectedToolchain
+                validatorSha256 = measurementValidatorDigest
+                compilerSha256 = compilerIdentitySha256
+                stateCount = measurement.StateCount
+                transitionCount = measurement.TransitionCount
+                sampleCount = measurement.SampleCount
+                elapsedMs = measurement.ElapsedMs
+                allAttemptElapsedMs = measurement.AllAttemptElapsedMs
+                peakMiB = measurement.PeakMiB
+                artifactBytes = measurement.ArtifactBytes
+            |}
 
         formalCounterexampleReceipts.Add(formalId, sha256 manifestPath, traceSha256, itfSha256)
 
@@ -2650,10 +4232,13 @@ try
         JsonDocument.Parse(File.ReadAllBytes qualificationBaseline)
 
     if
-        formalBaselineDocument.RootElement.GetProperty("formalMeasurementMethod").GetString()
-        <> "canonical-runner-observed-tlc-and-rust-v1"
+        not measurementOnly
+        && formalBaselineDocument.RootElement.GetProperty("formalMeasurementMethod").GetString()
+           <> "canonical-runner-observed-tlc-and-rust-v2"
     then
         fail "QUINT-FORMAL-BASELINE-METHOD" "unsupported"
+
+    physicalScope <- None
 
     let retainedFormalMeasurements =
         formalBaselineDocument.RootElement.GetProperty("formalMeasurements").EnumerateArray()
@@ -2675,7 +4260,11 @@ try
         let observedStable =
             observed.StateCount, observed.TransitionCount, observed.SampleCount, observed.ArtifactBytes
 
-        if expectedStable <> observedStable && not refreshFormalEvidence then
+        if
+            expectedStable <> observedStable
+            && not refreshFormalEvidence
+            && not measurementOnly
+        then
             fail
                 "QUINT-FORMAL-BASELINE-DRIFT"
                 ($"%s{formalId}: expected=%A{expectedStable}; observed=%A{observedStable}")
@@ -3751,6 +5340,175 @@ try
             ($"expected=%d{expectedRejectedProcessCount}; actual=%d{quintRejectedProcessCount}")
 
     requireCompletedProcessInventory ()
+
+    if measurementOnly then
+        let expectedRoots = rootConfiguration |> Map.keys |> Set.ofSeq
+
+        let expectedFormal =
+            formalTests
+            |> List.map (fun (id, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _, _) -> id)
+            |> Set.ofList
+
+        if
+            Set.ofSeq rootMeasurements.Keys <> expectedRoots
+            || Set.ofSeq formalMeasurements.Keys <> expectedFormal
+            || samplingMeasurements.Count <> 13
+            || (samplingMeasurements
+                |> Seq.map (fun (id, _, _, _) -> id)
+                |> Set.ofSeq
+                |> Set.count)
+               <> 13
+        then
+            fail "MEASUREMENT-COVERAGE" "missing-or-duplicate-observations"
+
+        for KeyValue(id, m) in formalMeasurements do
+            if
+                m.SampleCount < 1
+                || m.ElapsedMs <= 0L
+                || m.PeakMiB <= 0
+                || m.ArtifactBytes <= 0L
+            then
+                fail "MEASUREMENT-FORMAL-METRIC" id
+
+        verifyMeasurementDirectory ()
+        let candidate = measurementDirectory.Value
+
+        for directory, _, _, _ in projectionReceipts do
+            verifyMeasurementDirectory ()
+
+            File.Copy(
+                Path.Combine(directory, "projection.json"),
+                Path.Combine(candidate, Path.GetFileName(directory) + ".json"),
+                false
+            )
+
+        Directory.CreateDirectory candidate |> ignore
+        let writeJson = writeMeasurementJson
+        let configDigest = measurementConfigurationDigest
+        let measuredAt = DateTimeOffset.UtcNow.ToString("O")
+
+        let journal =
+            Directory.GetFiles(candidate, "physical-*.json")
+            |> Array.sort
+            |> Array.map (fun path ->
+                {|
+                    name = Path.GetFileName path
+                    sha256 = sha256 path
+                |})
+
+        if journal.Length <> physicalAttempts.Count * 2 then
+            fail "MEASUREMENT-PHYSICAL-COVERAGE" "active-or-completed-missing"
+
+        writeJson
+            "physical-inventory.json"
+            {|
+                schema = "fsgg.quint-physical-inventory/2"
+                attemptId = measurementAttemptId
+                sourceSha256 = expectedSource
+                configurationSha256 = configDigest
+                toolchainSha256 = expectedToolchain
+                validatorSha256 = measurementValidatorDigest
+                compilerSha256 = compilerIdentitySha256
+                logicalCount = logicalSequence
+                physicalCount = physicalAttempts.Count
+                allAttemptElapsedMs = (physicalAttempts |> Seq.sumBy (fun row -> row.ElapsedMs.Value))
+                files = journal
+            |}
+
+        let invocationMetrics =
+            samplingMeasurements
+            |> Seq.map (fun (id, elapsed, peak, bytes) ->
+                {|
+                    id = id
+                    elapsedMs = elapsed
+                    peakMiB = peak
+                    artifactBytes = bytes
+                    logicalId =
+                        (physicalAttempts
+                         |> Seq.filter (fun row -> row.Scope = Some("sampling/" + id))
+                         |> Seq.exactlyOne)
+                            .LogicalId
+                |})
+            |> Seq.toArray
+
+        writeJson
+            "preflight-sampling.json"
+            {|
+                schema = "fsgg.preflight-sampling-observation/2"
+                attemptId = measurementAttemptId
+                validatorSha256 = measurementValidatorDigest
+                compilerSha256 = compilerIdentitySha256
+                toolchainSha256 = expectedToolchain
+                disposition = "bounded-sampling-not-proof"
+                sourceSha256 = expectedSource
+                configurationSha256 = configDigest
+                invocations = invocationMetrics
+            |}
+
+        if interactionMeasurements.Count <> 2 then
+            fail "PREFLIGHT-INTERACTION-COVERAGE" "expected-two"
+
+        writeJson
+            "preflight-interaction.json"
+            {|
+                schema = "fsgg.preflight-interaction-observation/2"
+                attemptId = measurementAttemptId
+                validatorSha256 = measurementValidatorDigest
+                compilerSha256 = compilerIdentitySha256
+                toolchainSha256 = expectedToolchain
+                configurationSha256 = configDigest
+                disposition = "native-causal-equivalence-not-aggregate-profile"
+                sourceSha256 = expectedSource
+                invocations =
+                    (interactionMeasurements
+                     |> Seq.map (fun (id, elapsed, peak, bytes) ->
+                         {|
+                             id = id
+                             elapsedMs = elapsed
+                             peakMiB = peak
+                             artifactBytes = bytes
+                             logicalId =
+                                 (physicalAttempts
+                                  |> Seq.filter (fun row -> row.Scope = Some("interaction/" + id))
+                                  |> Seq.exactlyOne)
+                                     .LogicalId
+                             artifactSha256 = sha256 (Path.Combine(candidate, "interaction-" + id + ".itf.json"))
+                         |})
+                     |> Seq.toArray)
+            |}
+
+        writeJson
+            "closure.json"
+            {|
+                schema = "fsgg.coordination.quint-calibration-observation/2"
+                attemptId = measurementAttemptId
+                validatorSha256 = measurementValidatorDigest
+                compilerSha256 = compilerIdentitySha256
+                compilerFiles = compilerFiles
+                physicalInventorySha256 = sha256 (Path.Combine(candidate, "physical-inventory.json"))
+                outcome = "observed-complete-unadmitted"
+                sourceSha256 = expectedSource
+                configurationSha256 = configDigest
+                toolchainSha256 = expectedToolchain
+                contractSha256 = expectedContract
+                preparationSha256 = preparationSha256
+                assembledQuintSha256 = sha256 q2Qnt
+                measuredAt = measuredAt
+                runnerClass = "linux-x64-local-exact-sdk-single-compiler-observed"
+                memoryMethod = "process-tree-proc-rss-sampled-10ms"
+                rootArtifactMethod = "state-native-itf-with-observed-witness-samples-and-test-native-passed-array"
+                observedIds = Set.union expectedRoots expectedFormal |> Set.toArray
+            |}
+
+        q2Outcome <- "measured-unadmitted"
+        writeQualificationReceipt None
+
+        printfn
+            "CANONICAL_QUINT_MEASUREMENT_OBSERVED disposition=unadmitted output=%s source=%s"
+            measurementCustody.Value.NamedPath
+            expectedSource
+
+        exit 0
 
     q2Outcome <- "passed"
     writeQualificationReceipt None

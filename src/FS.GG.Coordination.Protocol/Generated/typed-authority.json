@@ -4,37 +4,37 @@
   "backend": "quint-specification-v1",
   "profileIdentity": "fsgg-quint-profile/2",
   "toolchainIdentity": "79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486",
-  "packageIdentity": "FS.GG.SDD.Artifacts/1.5.0",
+  "packageIdentity": "FS.GG.SDD.Artifacts/2.1.0",
   "artifacts": [
     {
       "id": "bindings",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/bindings.fs",
-      "sha256": "de0ffcde0575ed3793e0348869fefe83ceb60133fa167b567cde429d836e2d64"
+      "sha256": "5b61738c954c6e9a805f70928d58751fc0f2ca0d16cc26c92487e41cc595b7f6"
     },
     {
       "id": "compilation-receipt",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/receipt.json",
-      "sha256": "d0e72d4a5a74e780ae38d327774522ed52dce085ba124e61bbf24c8c35e1d8b6"
+      "sha256": "11d3f4a31620e1f2e78b101271f07f878d40b1d4d8554665d53dc9bf6ba4a9b9"
     },
     {
       "id": "compiled-contract",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/contract.json",
-      "sha256": "49800c920d1a5db3beb812d58a3b4523b054e980cee98b68d680d25ca0ceaf01"
+      "sha256": "791c65eacbc4ef93484673ed6c40d3e8ca21fd75f34371e58c9f954f757c1a64"
     },
     {
       "id": "fence-manifest",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/fences.json",
-      "sha256": "f831668bd7d1139b52fb03859d9e730bc06b1e23b738e48994109e72ec09f691"
+      "sha256": "4849c4817b2c3a08ba9b087e53dfaa24c61ef6597d065509ee88902d98ef423a"
     },
     {
       "id": "generated-modules",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/protocol.qnt",
-      "sha256": "c6f54a8398393894cdd3a5790e7dc4697d80714dad5c0e900046e4865e7283d2"
+      "sha256": "9c1d420c38584053f6038633a9288828ace1ad7f264fc35269db4c49ab930c5e"
     },
     {
       "id": "markdown",
       "path": "src/FS.GG.Coordination.Protocol/Protocol.md",
-      "sha256": "a6963369b7780a13d6360e1a0058594d643c39952d4e1ffedad36c87d43829ca"
+      "sha256": "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354"
     },
     {
       "id": "profile-bindings",
@@ -49,12 +49,12 @@
     {
       "id": "source-map",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/source-map.json",
-      "sha256": "7f119487dce979546d000cbb7c8858cfd26a0318eeb691b21e2b75259bac90e1"
+      "sha256": "e02569240031d1a88902b14112cea2ac8f1096135a97d358101c56cd08ec44ad"
     },
     {
       "id": "typed-effect",
       "path": "readiness/66-gs2-02-11-deterministic-identity/quint/typed-effect.json",
-      "sha256": "a75e17f802db0168f58d19ff8b30525b427a6cf278df2eede97453314678fda1"
+      "sha256": "9d2581c99badfb89acdb359acceb0a1ba560322939d47944e58aa1fdcf10e05b"
     }
   ],
   "authoringAgent": "swift-5db0",

@@ -1,248 +1,276 @@
 {
   "schema": "fsgg.coordination.quint-qualification-baseline/1",
-  "sourceSha256": "740c9e55cc02067d04f43eeeaae26a71ab492c96c921eb012bade0883a35d937",
-  "configurationSha256": "7c1a8fdad373d0aa90d0c55785106cacd5d57ecbf1f933186baec253cff06c1d",
-  "assembledQuintSha256": "34c45dc51d9a56479e139d21866f45447eddd2a1d17e15fb240f405d807a8e15",
-  "runnerClass": "linux-x64-local-exact-sdk-10.0.400-cold-sharded-refresh",
-  "measuredAt": "2026-09-18T04:02:48.026879Z",
-  "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v1",
+  "sourceSha256": "ab114cbfd7738dd1568ce2da3250b7b141b7d5759169bd9d9fb23d3165bdd354",
+  "configurationSha256": "1e7274a0005cc9a1479ebdbe44b0d004473a287a7ad63b0af5f70593b7d677a0",
+  "assembledQuintSha256": "30168c5eb307866f34dc55388955a932326c214beccf8b5eb7fe3585bff38349",
+  "runnerClass": "linux-x64-local-exact-sdk-single-compiler-observed",
+  "measuredAt": "2026-10-03T16:10:56.2944194+00:00",
+  "formalMeasurementMethod": "canonical-runner-observed-tlc-and-rust-v2",
   "measurements": [
     {
       "root": "authority",
-      "dependencyDepth": 2,
-      "stateCount": 2,
+      "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 3640,
-      "peakMiB": 345,
-      "artifactBytes": 10844565
+      "elapsedMs": 4415,
+      "peakMiB": 336,
+      "artifactBytes": 1028,
+      "dependencyDepth": 2
     },
     {
       "root": "lifecycle",
-      "dependencyDepth": 3,
-      "stateCount": 2,
+      "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 3452,
-      "peakMiB": 354,
-      "artifactBytes": 10844816
+      "elapsedMs": 4378,
+      "peakMiB": 333,
+      "artifactBytes": 1030,
+      "dependencyDepth": 3
     },
     {
       "root": "relations",
-      "dependencyDepth": 2,
-      "stateCount": 4,
+      "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 3510,
-      "peakMiB": 348,
-      "artifactBytes": 10846265
+      "elapsedMs": 4266,
+      "peakMiB": 333,
+      "artifactBytes": 1609,
+      "dependencyDepth": 2
     },
     {
       "root": "protocol-streams",
-      "dependencyDepth": 2,
-      "stateCount": 4,
+      "stateCount": 9,
       "sampleCount": 100,
-      "elapsedMs": 3392,
-      "peakMiB": 348,
-      "artifactBytes": 10868519
+      "elapsedMs": 4298,
+      "peakMiB": 335,
+      "artifactBytes": 8490,
+      "dependencyDepth": 2
     },
     {
       "root": "mutation-saga",
-      "dependencyDepth": 3,
       "stateCount": 17,
       "sampleCount": 17,
-      "elapsedMs": 5997,
-      "peakMiB": 440,
-      "artifactBytes": 10841865
+      "elapsedMs": 7123,
+      "peakMiB": 835,
+      "artifactBytes": 12082566,
+      "dependencyDepth": 3
     },
     {
       "root": "desired-state",
-      "dependencyDepth": 4,
       "stateCount": 5,
       "sampleCount": 5,
-      "elapsedMs": 3822,
-      "peakMiB": 394,
-      "artifactBytes": 10841292
+      "elapsedMs": 5401,
+      "peakMiB": 406,
+      "artifactBytes": 12081993,
+      "dependencyDepth": 4
     },
     {
       "root": "qualification",
-      "dependencyDepth": 5,
       "stateCount": 9,
       "sampleCount": 9,
-      "elapsedMs": 4946,
-      "peakMiB": 423,
-      "artifactBytes": 10841562
+      "elapsedMs": 6035,
+      "peakMiB": 438,
+      "artifactBytes": 12082263,
+      "dependencyDepth": 5
     }
   ],
   "formalMeasurements": [
     {
       "id": "claim-election",
       "stateCount": 3,
-      "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 44082,
-      "peakMiB": 1344,
-      "artifactBytes": 5674
+      "elapsedMs": 63626,
+      "peakMiB": 1075,
+      "artifactBytes": 5674,
+      "transitionCount": 3,
+      "allAttemptElapsedMs": 63626
     },
     {
       "id": "relation-mutation",
       "stateCount": 3,
-      "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 44056,
-      "peakMiB": 1307,
-      "artifactBytes": 4919
+      "elapsedMs": 64246,
+      "peakMiB": 1132,
+      "artifactBytes": 4919,
+      "transitionCount": 3,
+      "allAttemptElapsedMs": 64246
     },
     {
       "id": "lifecycle",
       "stateCount": 3,
-      "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 44147,
-      "peakMiB": 1301,
-      "artifactBytes": 4586
+      "elapsedMs": 63208,
+      "peakMiB": 1390,
+      "artifactBytes": 4586,
+      "transitionCount": 3,
+      "allAttemptElapsedMs": 63208
     },
     {
       "id": "operation-saga",
       "stateCount": 3,
-      "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 44188,
-      "peakMiB": 1309,
-      "artifactBytes": 4559
+      "elapsedMs": 62309,
+      "peakMiB": 1176,
+      "artifactBytes": 4559,
+      "transitionCount": 3,
+      "allAttemptElapsedMs": 62309
     },
     {
       "id": "epoch",
       "stateCount": 4,
-      "transitionCount": 4,
       "sampleCount": 100,
-      "elapsedMs": 44153,
-      "peakMiB": 1316,
-      "artifactBytes": 9392
+      "elapsedMs": 64614,
+      "peakMiB": 1336,
+      "artifactBytes": 9392,
+      "transitionCount": 4,
+      "allAttemptElapsedMs": 64614
     },
     {
       "id": "rollback",
       "stateCount": 3,
-      "transitionCount": 3,
       "sampleCount": 100,
-      "elapsedMs": 44197,
-      "peakMiB": 1325,
-      "artifactBytes": 4582
+      "elapsedMs": 62959,
+      "peakMiB": 1429,
+      "artifactBytes": 4582,
+      "transitionCount": 3,
+      "allAttemptElapsedMs": 62959
     },
     {
       "id": "journal-reconciliation",
       "stateCount": 20,
-      "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 41058,
-      "peakMiB": 1097,
-      "artifactBytes": 7536
+      "elapsedMs": 58928,
+      "peakMiB": 993,
+      "artifactBytes": 7536,
+      "transitionCount": 48,
+      "allAttemptElapsedMs": 58928
     },
     {
       "id": "journal-fencing",
       "stateCount": 20,
-      "transitionCount": 48,
       "sampleCount": 100,
-      "elapsedMs": 41495,
-      "peakMiB": 1090,
-      "artifactBytes": 9097
+      "elapsedMs": 59586,
+      "peakMiB": 1394,
+      "artifactBytes": 9097,
+      "transitionCount": 48,
+      "allAttemptElapsedMs": 59586
     },
     {
       "id": "authority-reconciliation",
       "stateCount": 51,
-      "transitionCount": 163,
       "sampleCount": 1000,
-      "elapsedMs": 41723,
-      "peakMiB": 1091,
-      "artifactBytes": 4615
+      "elapsedMs": 59668,
+      "peakMiB": 1386,
+      "artifactBytes": 4615,
+      "transitionCount": 163,
+      "allAttemptElapsedMs": 59668
     },
     {
       "id": "review-epoch",
       "stateCount": 10,
-      "transitionCount": 22,
       "sampleCount": 100,
-      "elapsedMs": 41698,
-      "peakMiB": 1087,
-      "artifactBytes": 7322
+      "elapsedMs": 59036,
+      "peakMiB": 1010,
+      "artifactBytes": 7322,
+      "transitionCount": 22,
+      "allAttemptElapsedMs": 59036
     },
     {
       "id": "cutover-observation",
       "stateCount": 136,
-      "transitionCount": 532,
       "sampleCount": 10000,
-      "elapsedMs": 42693,
-      "peakMiB": 1078,
-      "artifactBytes": 3412
+      "elapsedMs": 61200,
+      "peakMiB": 1363,
+      "artifactBytes": 3412,
+      "transitionCount": 532,
+      "allAttemptElapsedMs": 61200
     },
     {
       "id": "pilot-permit-transfer",
       "stateCount": 5,
-      "transitionCount": 5,
       "sampleCount": 10000,
-      "elapsedMs": 45050,
-      "peakMiB": 1147,
-      "artifactBytes": 9669
+      "elapsedMs": 65460,
+      "peakMiB": 1066,
+      "artifactBytes": 9669,
+      "transitionCount": 5,
+      "allAttemptElapsedMs": 65460
     },
     {
       "id": "pilot-permit-fault-safety",
       "stateCount": 3032,
-      "transitionCount": 8002,
       "sampleCount": 10000,
-      "elapsedMs": 44304,
-      "peakMiB": 1235,
-      "artifactBytes": 9678
+      "elapsedMs": 63962,
+      "peakMiB": 1104,
+      "artifactBytes": 9678,
+      "transitionCount": 8002,
+      "allAttemptElapsedMs": 63962
     },
     {
       "id": "pilot-permit-major-action-coverage",
       "stateCount": 14,
-      "transitionCount": 14,
       "sampleCount": 10000,
-      "elapsedMs": 46018,
-      "peakMiB": 1179,
-      "artifactBytes": 9697
+      "elapsedMs": 66424,
+      "peakMiB": 1423,
+      "artifactBytes": 9697,
+      "transitionCount": 14,
+      "allAttemptElapsedMs": 66424
     },
     {
       "id": "hosted-writer-progress",
       "stateCount": 64,
-      "transitionCount": 63,
       "sampleCount": 10000,
-      "elapsedMs": 144592,
-      "peakMiB": 3619,
-      "artifactBytes": 518084
+      "elapsedMs": 181155,
+      "peakMiB": 4505,
+      "artifactBytes": 518084,
+      "transitionCount": 63,
+      "allAttemptElapsedMs": 181155
     },
     {
       "id": "hosted-writer-fault-safety",
       "stateCount": 1162,
-      "transitionCount": 1387,
       "sampleCount": 10000,
-      "elapsedMs": 127884,
-      "peakMiB": 3652,
-      "artifactBytes": 43897
+      "elapsedMs": 157521,
+      "peakMiB": 4866,
+      "artifactBytes": 43897,
+      "transitionCount": 1387,
+      "allAttemptElapsedMs": 157521
     },
     {
       "id": "administrative-retirement-closure",
       "stateCount": 15,
-      "transitionCount": 29,
       "sampleCount": 10000,
-      "elapsedMs": 42270,
-      "peakMiB": 1140,
-      "artifactBytes": 6539
+      "elapsedMs": 63087,
+      "peakMiB": 1306,
+      "artifactBytes": 6539,
+      "transitionCount": 29,
+      "allAttemptElapsedMs": 63087
     },
     {
       "id": "administrative-retirement-race",
       "stateCount": 13,
-      "transitionCount": 25,
       "sampleCount": 10000,
-      "elapsedMs": 42074,
-      "peakMiB": 1103,
-      "artifactBytes": 6532
+      "elapsedMs": 63124,
+      "peakMiB": 1000,
+      "artifactBytes": 6532,
+      "transitionCount": 25,
+      "allAttemptElapsedMs": 363174
     },
     {
       "id": "administrative-retirement-old-plan-counterexample",
       "stateCount": 7,
-      "transitionCount": 13,
       "sampleCount": 10000,
-      "elapsedMs": 39313,
-      "peakMiB": 1099,
-      "artifactBytes": 7620
+      "elapsedMs": 62385,
+      "peakMiB": 1002,
+      "artifactBytes": 7620,
+      "transitionCount": 13,
+      "allAttemptElapsedMs": 62385
     }
   ],
-  "formalMeasuredAt": "2026-09-18T04:11:41.947274Z"
+  "physicalAccounting": {
+    "attemptId": "58777bdf8540480ba8ae59c9f15bb477",
+    "validatorSha256": "80fdd970af21353c803bd380e645b72e922c8b3a39b455b86574872d03c2b74e",
+    "compilerSha256": "117f5b7d13fe8505dcbe8e827fffeba2bc524159eda2e892ddc71f7a69c9ff74",
+    "inventorySha256": "96d3ee08072d369f091412877c2adbae9adfdfb5aa6ac265119542f32f48ef3c",
+    "logicalCount": 263,
+    "physicalCount": 264,
+    "allAttemptElapsedMs": 2723158,
+    "wholeDurationMs": 2443744
+  }
 }

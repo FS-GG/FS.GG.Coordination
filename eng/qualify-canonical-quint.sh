@@ -83,12 +83,12 @@ go="$runtime/go/bin/go"
 test -x "$go"
 
 dotnet tool install FS.GG.SDD.Cli \
-  --version 1.5.0 \
+  --version 2.1.0 \
   --tool-path "$tool_path" \
   --configfile "$nuget_config"
 
 : "${NUGET_PACKAGES:=$HOME/.nuget/packages}"
-lmt_source="$NUGET_PACKAGES/fs.gg.sdd.artifacts/1.5.0/quint/lmt/main.go"
+lmt_source="$NUGET_PACKAGES/fs.gg.sdd.artifacts/2.1.0/quint/lmt/main.go"
 test -f "$lmt_source"
 CGO_ENABLED=1 GO111MODULE=off "$go" build \
   -trimpath \
@@ -126,6 +126,10 @@ export HOME="$qualification_root/home"
 
 cd "$repo_root"
 qualification_receipt="${FSGG_QUINT_RECEIPT:-$repo_root/artifacts/canonical-quint/qualification.json}"
-dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output "$qualification_receipt"
-
-printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s receipt=%s\n' "$repo_root" "$qualification_receipt"
+if [[ -n "${FSGG_QUINT_MEASUREMENT_OUTPUT:-}" ]]; then
+  dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --measure-only "$FSGG_QUINT_MEASUREMENT_OUTPUT"
+  printf 'CANONICAL_QUINT_HOSTED_MEASUREMENT_OBSERVED disposition=unadmitted root=%s output=%s\n' "$repo_root" "$FSGG_QUINT_MEASUREMENT_OUTPUT"
+else
+  dotnet fsi eng/validate-canonical-quint-protocol.fsx -- --root . --output "$qualification_receipt"
+  printf 'CANONICAL_QUINT_HOSTED_QUALIFICATION_OK root=%s receipt=%s\n' "$repo_root" "$qualification_receipt"
+fi
