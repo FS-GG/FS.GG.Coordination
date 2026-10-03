@@ -392,3 +392,31 @@ the measured read window and do not claim that no writer can act after the final
 check. This is source compatibility only. No Codex process ran, and installed
 custody, authentication, native capture, genuine producer receipts and LEARN
 enrollment remain open gates.
+
+
+## C2 current Host diagnostic packaging repair, 2026-10-03
+
+The current protected Host candidate [run 37097765531](https://github.com/FS-GG/FS.GG.Coordination/actions/runs/37097765531)
+refused before serving an archive: its self-contained apphost exceeds the existing 100 MiB
+payload ceiling. Local reconstruction of protected source `49fe964f0239ad3734f5fa5119b3227f2a04758d`
+measured 106,138,938 bytes. Four required managed assemblies added since the last served candidate,
+plus existing assembly growth, account for the increase; debug symbols were already excluded.
+
+The candidate publisher now selects the pinned SDK's single-file compression and records
+`singleFileCompression: true` in its construction manifest. Historical manifests without that
+additive field retain their readback route. The archive and payload ceilings remain 100 MiB.
+Same-source-path compressed and uncompressed bundle readback preserves all 227 entries' types,
+uncompressed byte counts and SHA-256 values; 225 entries use compression. The compressed apphost
+is 50,364,860 bytes. Two cold constructions use the producer's existing fixed absolute source
+path, separate fresh restores and output trees, and produced identical canonical archives of 42,966,885 bytes, SHA-256
+`352a67550c1b51ede4919c552920ce12b73c0af5e525cab8d74b9c772ca9ff67`. Actual
+empty-environment CLI readback exposes the current capability command and rejects unsupported
+input before native authentication. This is same-path construction reproducibility, not
+arbitrary-directory reproducibility.
+
+Source repair, protected serving and actual diagnostic acquisition remain distinct. The previous
+served Host predates `diagnose-fixed-native-capability`; it cannot qualify a prospective profile
+for that command. A fresh successor must pass protected source and served-byte readback before
+its actual executable hash can enter an owner-selected diagnostic profile. This packaging change
+runs no native authentication, model discovery, provider execution, collector installation,
+grant, capture, enrollment or activation.
