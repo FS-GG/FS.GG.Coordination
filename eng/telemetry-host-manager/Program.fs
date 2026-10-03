@@ -1,5 +1,7 @@
 module TelemetryHostManager
 
+#nowarn "9"
+
 open System
 open System.Diagnostics
 open System.IO
@@ -8,6 +10,8 @@ open System.Net.Http
 open System.Security.Cryptography
 open System.Text.Json
 open System.Text.RegularExpressions
+open System.Runtime.InteropServices
+open Microsoft.Win32.SafeHandles
 
 let private fail reason = raise (InvalidOperationException reason)
 let private sha256 (bytes: byte array) = Convert.ToHexString(SHA256.HashData bytes).ToLowerInvariant()
@@ -334,11 +338,80 @@ let private stringJsonProperty (label: string) (name: string) (element: JsonElem
        || String.IsNullOrWhiteSpace(property.GetString()) then fail (label + " " + name + " is invalid")
     property.GetString()
 
+[<StructLayout(LayoutKind.Explicit, Size = 256)>]
+type private NativeDependencyStatx =
+    struct
+        [<FieldOffset(0)>] val mutable Mask: uint32
+        [<FieldOffset(16)>] val mutable Links: uint32
+        [<FieldOffset(20)>] val mutable Uid: uint32
+        [<FieldOffset(24)>] val mutable Gid: uint32
+        [<FieldOffset(28)>] val mutable Mode: uint16
+        [<FieldOffset(32)>] val mutable Inode: uint64
+        [<FieldOffset(40)>] val mutable Size: uint64
+        [<FieldOffset(96)>] val mutable ChangedSeconds: int64
+        [<FieldOffset(104)>] val mutable ChangedNanoseconds: uint32
+        [<FieldOffset(112)>] val mutable ModifiedSeconds: int64
+        [<FieldOffset(120)>] val mutable ModifiedNanoseconds: uint32
+        [<FieldOffset(136)>] val mutable DeviceMajor: uint32
+        [<FieldOffset(140)>] val mutable DeviceMinor: uint32
+    end
+
+[<DllImport("libc", EntryPoint = "open", SetLastError = true)>]
+extern int private openNativeDependency(string path, int flags)
+
+[<DllImport("libc", EntryPoint = "statx", SetLastError = true)>]
+extern int private statNativeDependency(int descriptor, string path, int flags, uint32 mask, NativeDependencyStatx& value)
+
+let private nativeDependencyIdentity descriptor path flags =
+    let mutable value = NativeDependencyStatx()
+    if statNativeDependency(descriptor, path, flags, 0x7ffu, &value) <> 0
+       || value.Mask &&& 0x3dfu <> 0x3dfu then
+        fail "native verifier runtime file stat refused"
+    value
+
+let private sameNativeDependency (left: NativeDependencyStatx) (right: NativeDependencyStatx) =
+    left.Links = right.Links && left.Uid = right.Uid && left.Gid = right.Gid
+    && left.Mode = right.Mode && left.Inode = right.Inode && left.Size = right.Size
+    && left.DeviceMajor = right.DeviceMajor && left.DeviceMinor = right.DeviceMinor
+    && left.ChangedSeconds = right.ChangedSeconds && left.ChangedNanoseconds = right.ChangedNanoseconds
+    && left.ModifiedSeconds = right.ModifiedSeconds && left.ModifiedNanoseconds = right.ModifiedNanoseconds
+
+let private verifyNativeManifestFile (uid: int) executable allowEmpty declaredBytes digest path =
+    if not (safeOwnedArtifactFile uid executable path) then fail "native verifier runtime manifest file is unsafe"
+    // Bind declared size and digest to one regular, single-link, no-follow fd and its final name.
+    let descriptor = openNativeDependency(path, 0x80000 ||| 0x20000 ||| 0x800)
+    if descriptor < 0 then fail "native verifier runtime manifest file open refused"
+    use handle = new SafeFileHandle(nativeint descriptor, true)
+    let before = nativeDependencyIdentity descriptor "" 0x1000
+    let mode = before.Mode &&& 0xfffus
+    if before.Mode &&& 0xf000us <> 0x8000us || before.Links <> 1u
+       || (before.Uid <> 0u && before.Uid <> uint32 uid)
+       || mode &&& 0o022us <> 0us || (executable && mode &&& 0o111us = 0us)
+       || before.Size <> uint64 declaredBytes then
+        fail "native verifier runtime manifest file is unsafe"
+    if declaredBytes = 0L && (not allowEmpty || mode <> 0o444us) then
+        fail "native verifier runtime empty dependency custody differs"
+    use stream = new FileStream(handle, FileAccess.Read, 65536, false)
+    use hash = IncrementalHash.CreateHash HashAlgorithmName.SHA256
+    let buffer = Array.zeroCreate<byte> 65536
+    let mutable remaining = declaredBytes
+    while remaining > 0L do
+        let count = stream.Read(buffer, 0, int (min remaining (int64 buffer.Length)))
+        if count = 0 then fail "native verifier runtime manifest file is truncated"
+        hash.AppendData(buffer, 0, count)
+        remaining <- remaining - int64 count
+    if stream.ReadByte() <> -1 then fail "native verifier runtime manifest file extent changed"
+    let after = nativeDependencyIdentity descriptor "" 0x1000
+    let named = nativeDependencyIdentity -100 path 0x100
+    if not (sameNativeDependency before after && sameNativeDependency after named)
+       || Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant() <> digest then
+        fail "native verifier runtime manifest file differs"
+
 let private verifyNativeVerifierManifest uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest =
     let canonicalModuleSha256 = "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
-    if not (safeOwnedArtifactFile uid true runtime) then fail "native verifier runtime executable is unsafe"
-    if not (safeOwnedArtifactFile uid false modulePath) then fail "native verifier module is unsafe"
-    if not (safeOwnedArtifactFile uid false manifestPath) then fail "native verifier runtime manifest is unsafe"
+    if not (safeOwnedArtifactFile uid true runtime) || FileInfo(runtime).Length <= 0L then fail "native verifier runtime executable is unsafe"
+    if not (safeOwnedArtifactFile uid false modulePath) || FileInfo(modulePath).Length <= 0L then fail "native verifier module is unsafe"
+    if not (safeOwnedArtifactFile uid false manifestPath) || FileInfo(manifestPath).Length <= 0L then fail "native verifier runtime manifest is unsafe"
     if not (nonzeroSha256 runtimeDigest && nonzeroSha256 moduleDigest && nonzeroSha256 manifestDigest) then
         fail "native verifier SHA-256 must be lowercase nonzero hex"
     if moduleDigest <> canonicalModuleSha256 then fail "native verifier module is not the canonical qualified module"
@@ -376,24 +449,28 @@ let private verifyNativeVerifierManifest uid runtime runtimeDigest modulePath mo
         let mutable declaredBytes = 0L
         let mutable bytesProperty = Unchecked.defaultof<JsonElement>
         if not (entry.TryGetProperty("bytes", &bytesProperty))
+           || bytesProperty.ValueKind <> JsonValueKind.Number
            || not (bytesProperty.TryGetInt64(&declaredBytes))
-           || declaredBytes <= 0L then fail "native verifier runtime manifest file bytes are invalid"
+           || declaredBytes < 0L then fail "native verifier runtime manifest file bytes are invalid"
         if not (canonicalAbsolutePath path) || not (nonzeroSha256 digest) then
             fail "native verifier runtime manifest file identity is invalid"
+        let allowEmpty = path <> runtime && path <> modulePath && path <> manifestPath
+        if declaredBytes = 0L
+           && (not allowEmpty || digest <> "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855") then
+            fail "native verifier runtime manifest empty dependency is invalid"
         if not (isNull previous) && StringComparer.Ordinal.Compare(previous, path) >= 0 then
             fail "native verifier runtime manifest files must be sorted and unique"
         if total > 512L * 1024L * 1024L - declaredBytes then fail "native verifier runtime closure exceeds its byte bound"
         total <- total + declaredBytes
         previous <- path
-        if not (safeOwnedArtifactFile uid (path = runtime) path) then fail "native verifier runtime manifest file is unsafe"
-        let info = FileInfo path
-        if info.Length <> declaredBytes || fileSha256 path <> digest then fail "native verifier runtime manifest file differs"
+        verifyNativeManifestFile uid (path = runtime) allowEmpty declaredBytes digest path
         if path = runtime then
             runtimeSeen <- true
             if digest <> runtimeDigest then fail "native verifier runtime inventory binding differs"
         if path = modulePath then
             moduleSeen <- true
             if digest <> moduleDigest then fail "native verifier module inventory binding differs"
+    if total <= 0L then fail "native verifier runtime closure must remain positive"
     if not runtimeSeen || not moduleSeen then fail "native verifier runtime inventory omits required code"
     manifestBytes
 
