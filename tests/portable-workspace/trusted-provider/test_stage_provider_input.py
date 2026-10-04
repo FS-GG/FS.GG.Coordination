@@ -76,8 +76,12 @@ def fixture(root: Path) -> argparse.Namespace:
         "callable-cli-release-manifest.json": STAGE.canonical(callable_manifest),
         "portable-workspace-release-manifest.json": STAGE.canonical(release),
         "portable-workspace-packaged-qualification.json": STAGE.canonical(packaged), "evidence/cleanup-state.json": STAGE.canonical(cleanup)})
-    sdd_package = root / "sdd.nupkg"; package(sdd_package, "FS.GG.SDD.Cli", "2.0.3")
-    templates_package = root / "templates.nupkg"; package(templates_package, "FS.GG.Workspace.Template", "0.16.0")
+    sdd_package = root / "sdd.nupkg"; package(sdd_package, "FS.GG.SDD.Cli", "2.1.0")
+    templates_package = root / "templates.nupkg"; package(templates_package, "FS.GG.Workspace.Template", "0.18.0")
+    for ident, expected in ((31, STAGE.SDD), (41, STAGE.TEMPLATES)):
+        expected.update(runId=ident, runAttempt=1, artifactId=ident+1,
+            workflow=".github/workflows/release.yml", headSha="e"*40,
+            artifactName=f"synthetic-{ident}", event="workflow_dispatch")
     STAGE.SDD["packageSha256"] = STAGE.digest(sdd_package); STAGE.TEMPLATES["packageSha256"] = STAGE.digest(templates_package)
     sdd_zip = root / "sdd.zip"; artifact(sdd_zip, {STAGE.SDD["package"]: sdd_package})
     templates_zip = root / "templates.zip"; artifact(templates_zip, {STAGE.TEMPLATES["package"]: templates_package})
@@ -85,10 +89,12 @@ def fixture(root: Path) -> argparse.Namespace:
     STAGE.TEMPLATES["artifactDigest"] = "sha256:" + STAGE.digest(templates_zip)
     runtime = root / "runtime.tar.gz"; runtime.write_bytes(b"runtime")
     STAGE.RUNTIME_SHA256 = STAGE.digest(runtime); STAGE.RUNTIME_SHA512 = STAGE.digest(runtime, "sha512")
-    descriptor = root / "descriptor.yml"; descriptor.write_text("source: FS.GG.Workspace.Template::0.16.0\n")
+    descriptor = root / "descriptor.yml"; descriptor.write_text("    contractVersion: \"2.0.0\"\n    minimumFsggSdd:\n      version: \"2.1.0\"\n    source: FS.GG.Workspace.Template::0.18.0\n")
     STAGE.DESCRIPTOR["sha256"] = STAGE.digest(descriptor)
     descriptor_commit = root / "descriptor-commit.json"
     write_json(descriptor_commit, {"sha": STAGE.DESCRIPTOR["revision"], "tree": {"sha": STAGE.DESCRIPTOR["tree"]}})
+    receiver_custody = root / "receiver-custody.json"
+    write_json(receiver_custody, {"schema": "fsgg.portable-current-receiver-custody/1", "sdd": STAGE.SDD, "templates": STAGE.TEMPLATES})
     p_expected = {"repository": "FS-GG/FS.GG.Coordination", "runId": 11, "runAttempt": 1,
         "workflow": ".github/workflows/callable-cli-release-prepare.yml", "headSha": source, "headTree": tree,
         "artifactId": 12, "artifactName": "callable-cli-" + source, "artifactDigest": "sha256:" + STAGE.digest(prep_zip),
@@ -97,7 +103,7 @@ def fixture(root: Path) -> argparse.Namespace:
     for label, expected in (("preparation", p_expected), ("sdd", STAGE.SDD), ("templates", STAGE.TEMPLATES)):
         paths[label + "_run"] = root / (label + "-run.json"); paths[label + "_artifact"] = root / (label + "-artifact.json")
         write_json(paths[label + "_run"], run_record(expected)); write_json(paths[label + "_artifact"], artifact_record(expected))
-    return argparse.Namespace(preparation_archive=prep_zip, preparation_run=paths["preparation_run"], preparation_artifact=paths["preparation_artifact"],
+    return argparse.Namespace(receiver_custody=receiver_custody, preparation_archive=prep_zip, preparation_run=paths["preparation_run"], preparation_artifact=paths["preparation_artifact"],
         sdd_archive=sdd_zip, sdd_run=paths["sdd_run"], sdd_artifact=paths["sdd_artifact"], templates_archive=templates_zip,
         templates_run=paths["templates_run"], templates_artifact=paths["templates_artifact"], runtime=runtime, descriptor=descriptor, descriptor_commit=descriptor_commit,
         output=root / "output", preparation_run_id=11, preparation_run_attempt=1, preparation_artifact_id=12,
@@ -186,6 +192,41 @@ def main() -> None:
         root = Path(temporary); args = fixture(root)
         rewrite_preparation(args, lambda members: mutate_json(members, "portable-workspace-packaged-qualification.json", lambda value: value.update(qualificationExitCode=1)))
         refusal(lambda: STAGE.assemble(args), "packaged qualification differs")
+    with tempfile.TemporaryDirectory(prefix="p4-published-tag-push-") as temporary:
+        args = fixture(Path(temporary)); value = json.loads(args.receiver_custody.read_text())
+        value["templates"]["event"] = "push"
+        write_json(args.receiver_custody, value)
+        record = json.loads(args.templates_run.read_text()); record["event"] = "push"
+        write_json(args.templates_run, record)
+        STAGE.assemble(args)
+        assert json.loads((args.output / "provider-input.json").read_text())["templates"]["version"] == "0.18.0"
+    with tempfile.TemporaryDirectory(prefix="p4-published-tag-push-mismatch-") as temporary:
+        args = fixture(Path(temporary)); value = json.loads(args.receiver_custody.read_text())
+        value["templates"]["event"] = "push"; write_json(args.receiver_custody, value)
+        refusal(lambda: STAGE.assemble(args), "producer run custody differs")
+    # Actual production assembler consumes mandatory exact current custody, not globals.
+    for mutation in ("old-sdd", "old-templates", "wrong-repository", "missing-field", "zero-run", "changed-archive", "changed-package", "v1-descriptor", "lower-floor"):
+        with tempfile.TemporaryDirectory(prefix="p4-current-receiver-refusal-") as temporary:
+            args = fixture(Path(temporary)); value = json.loads(args.receiver_custody.read_text())
+            if mutation == "old-sdd": value["sdd"]["version"] = "2.0.3"
+            elif mutation == "old-templates": value["templates"]["version"] = "0.16.0"
+            elif mutation == "wrong-repository": value["sdd"]["repository"] = "foreign/repo"
+            elif mutation == "missing-field": value["sdd"].pop("packageSha256")
+            elif mutation == "zero-run": value["sdd"]["runId"] = 0
+            elif mutation == "changed-archive": value["sdd"]["artifactDigest"] = "sha256:" + "0"*64
+            elif mutation == "changed-package": value["sdd"]["packageSha256"] = "0"*64
+            elif mutation in ("v1-descriptor", "lower-floor"):
+                text = args.descriptor.read_text().replace('contractVersion: "2.0.0"', 'contractVersion: "1.1.0"') if mutation == "v1-descriptor" else args.descriptor.read_text().replace('version: "2.1.0"', 'version: "2.0.3"')
+                args.descriptor.write_text(text); STAGE.DESCRIPTOR["sha256"] = STAGE.digest(args.descriptor)
+            write_json(args.receiver_custody, value)
+            try: STAGE.assemble(args)
+            except ValueError: pass
+            else: raise AssertionError(f"accepted {mutation}")
+            assert not args.output.exists()
+    for raw in ('{}', '[]', '{"schema":"x","schema":"x"}', ' ' * 8193):
+        try: STAGE.parse_receiver_custody(raw)
+        except ValueError: pass
+        else: raise AssertionError("accepted missing/ambiguous/unbounded custody")
     print("portable provider staging checks passed")
 
 
