@@ -23,27 +23,54 @@ IMAGE_REFERENCE = f"{IMAGE_NAME}@{IMAGE_DIGEST}"
 RUNTIME_SHA256 = "8458f4cef855fcebd139d9853e47fb0a5d86ab65d4aa101ea158a11e036c0fa4"
 RUNTIME_SHA512 = "58388fdde4f13bd703c7a6f7defb3300b17e42ba5fe8bca50066f80f64ac7406620dcdfb4acc1eff7992750c8cc5cff8369dd12d09730c8a9e8760d6032f7f6e"
 RUNTIME_URL = "https://builds.dotnet.microsoft.com/dotnet/Runtime/10.0.12/dotnet-runtime-10.0.12-linux-x64.tar.gz"
-SDD = {
-    "repository": "FS-GG/FS.GG.SDD", "runId": 36475182052, "runAttempt": 1,
-    "workflow": ".github/workflows/release.yml", "headSha": "0c26ac591e76d2839177da823b3f6ada5c09a698",
-    "artifactId": 10993636498, "artifactName": "coherent-sdd-packages-0c26ac591e76d2839177da823b3f6ada5c09a698",
-    "artifactDigest": "sha256:3f6767015b74d23c30ad4b905cc81c4a2e69883c7f1146a7c07807a6e47205b7",
-    "package": "FS.GG.SDD.Cli.2.0.3.nupkg", "packageSha256": "7e37124de1b5aa4a7de09f18be937d3148eae91c1447e7374f74c7f5a2f81bf2",
-    "packageId": "FS.GG.SDD.Cli", "version": "2.0.3", "event": "workflow_dispatch",
-}
-TEMPLATES = {
-    "repository": "FS-GG/FS.GG.Templates", "runId": 36832168724, "runAttempt": 1,
-    "workflow": ".github/workflows/release.yml", "headSha": "d336814d8bf7c9f7172a5a42c9cdae9b25308ec8",
-    "artifactId": 11147906420, "artifactName": "fs-gg-templates-36832168724",
-    "artifactDigest": "sha256:ec4d3c42c2505c981612dac95cfa834b31e7ec67dbd840a047b06a193e44df69",
-    "package": "FS.GG.Workspace.Template.0.16.0.nupkg", "packageSha256": "39cf59fdc1701c68b02696a8e26ef28079fc543110d9a827c68b94c2ef39a311",
-    "packageId": "FS.GG.Workspace.Template", "version": "0.16.0", "event": "pull_request",
-}
-DESCRIPTOR = {
-    "repository": "FS-GG/FS.GG.Templates", "revision": "cfe37f35a66e3494b211197a1c84de69f08bf87e",
-    "tree": "006553d8a59b6fef729553ed6b3093d94471dd27", "path": "providers/python.providers.yml",
-    "sha256": "e8fd3d68e1ecea35e01d26738f09d89829d3067ae0d6d5dee01b0ef65371660b",
-}
+# Current receiver identities are fixed; exact genuine Actions custody is a root-bound
+# required input. Missing run/archive digests cannot silently select historical bytes.
+SDD = {"repository": "FS-GG/FS.GG.SDD", "packageId": "FS.GG.SDD.Cli", "version": "2.1.0", "package": "FS.GG.SDD.Cli.2.1.0.nupkg"}
+TEMPLATES = {"repository": "FS-GG/FS.GG.Templates", "packageId": "FS.GG.Workspace.Template", "version": "0.18.0", "package": "FS.GG.Workspace.Template.0.18.0.nupkg"}
+DESCRIPTOR = {"repository": "FS-GG/FS.GG.Templates", "revision": "96b9d01475935ea3f474cfd4ed4dd93b4755f726", "tree": "5cf467fd0aa1b078738fcb31bf1128f8aa06be3c", "path": "providers/python.providers.yml", "sha256": "f817b5c42cce22dae53ddc16cec075ed1387d1dfc7226eeaae85b3db2cb475f0"}
+
+def receiver_custody(value):
+    if not isinstance(value, dict) or set(value) != {"schema", "sdd", "templates"} or value["schema"] != "fsgg.portable-current-receiver-custody/1":
+        raise ValueError("required current receiver custody schema")
+    records = []
+    fields = {"runId", "runAttempt", "workflow", "headSha", "artifactId", "artifactName", "artifactDigest", "packageSha256", "event"}
+    for role, identity in (("sdd", SDD), ("templates", TEMPLATES)):
+        identity = {key: identity[key] for key in ("repository", "packageId", "version", "package")}
+        row = value[role]
+        if not isinstance(row, dict) or set(row) != set(identity) | fields or any(row[k] != v for k, v in identity.items()):
+            raise ValueError("exact current receiver identity required")
+        if any(type(row[k]) is not int or row[k] <= 0 for k in ("runId", "runAttempt", "artifactId")):
+            raise ValueError("actual receiver run/artifact identities required")
+        if (not isinstance(row["headSha"], str) or not COMMIT.fullmatch(row["headSha"])
+                or not isinstance(row["packageSha256"], str) or not SHA.fullmatch(row["packageSha256"])
+                or not isinstance(row["artifactDigest"], str) or not re.fullmatch(r"sha256:[0-9a-f]{64}", row["artifactDigest"])
+                or not isinstance(row["workflow"], str) or not re.fullmatch(r"\.github/workflows/[A-Za-z0-9._-]+\.ya?ml", row["workflow"])
+                or row["event"] not in ("workflow_dispatch", "pull_request", "push")
+                or not isinstance(row["artifactName"], str) or not re.fullmatch(r"[A-Za-z0-9._-]{1,160}", row["artifactName"])):
+            raise ValueError("closed genuine receiver custody required")
+        records.append(dict(row))
+    return tuple(records)
+
+
+def parse_receiver_custody(raw):
+    if not isinstance(raw, str) or not 0 < len(raw.encode()) <= 8192:
+        raise ValueError("required bounded current receiver custody")
+    def unique(pairs):
+        value = {}
+        for key, item in pairs:
+            if key in value: raise ValueError("duplicate receiver custody field")
+            value[key] = item
+        return value
+    value = json.loads(raw, object_pairs_hook=unique)
+    receiver_custody(value)
+    return value
+
+
+def receiver_custody_file(path):
+    if path.is_symlink() or not path.is_file() or path.stat().st_size > 8192:
+        raise ValueError("regular bounded receiver custody required")
+    return receiver_custody(parse_receiver_custody(path.read_text(encoding="utf-8")))
+
 
 
 def canonical(value: object) -> bytes:
@@ -218,6 +245,7 @@ def preparation(expected: dict[str, object], run: dict[str, object], artifact: d
 
 
 def assemble(args: argparse.Namespace) -> None:
+    SDD, TEMPLATES = receiver_custody_file(args.receiver_custody)
     if (args.output.exists() or args.runtime.is_symlink() or args.runtime.stat().st_size > 128 * 1024 * 1024
             or digest(args.runtime) != RUNTIME_SHA256 or digest(args.runtime, "sha512") != RUNTIME_SHA512):
         raise ValueError("output or official runtime custody differs")
@@ -257,8 +285,10 @@ def assemble(args: argparse.Namespace) -> None:
             raise ValueError("receiver package digest differs")
         package_identity(sdd_package, SDD["packageId"], SDD["version"]); package_identity(templates_package, TEMPLATES["packageId"], TEMPLATES["version"])
         descriptor = args.descriptor.read_text(encoding="utf-8")
-        marker = "source: FS.GG.Workspace.Template::0.16.0"
-        if descriptor.count(marker) != 1 or "::<pin>" in descriptor:
+        marker = "source: FS.GG.Workspace.Template::0.18.0"
+        if (descriptor.count(marker) != 1 or "::<pin>" in descriptor
+                or '    contractVersion: "2.0.0"' not in descriptor
+                or not re.search(r'(?m)^    minimumFsggSdd:\n      version: "2\.1\.0"$', descriptor)):
             raise ValueError("protected descriptor transform refused")
         transformed = descriptor.replace(marker, "source: FS.GG.Workspace.Template::<pin>").encode()
         args.output.mkdir(mode=0o700)
@@ -303,7 +333,7 @@ def assemble(args: argparse.Namespace) -> None:
 
 def parser() -> argparse.ArgumentParser:
     result = argparse.ArgumentParser(); result.add_argument("--preparation-archive", type=Path, required=True)
-    for name in ("preparation-run", "preparation-artifact", "sdd-archive", "sdd-run", "sdd-artifact", "templates-archive", "templates-run", "templates-artifact", "runtime", "descriptor", "descriptor-commit", "output"):
+    for name in ("receiver-custody", "preparation-run", "preparation-artifact", "sdd-archive", "sdd-run", "sdd-artifact", "templates-archive", "templates-run", "templates-artifact", "runtime", "descriptor", "descriptor-commit", "output"):
         result.add_argument(f"--{name}", type=Path, required=True)
     result.add_argument("--preparation-run-id", type=int, required=True); result.add_argument("--preparation-run-attempt", type=int, required=True)
     result.add_argument("--preparation-artifact-id", type=int, required=True); result.add_argument("--preparation-artifact-digest", required=True)

@@ -54,6 +54,10 @@ on:
         description: Exact sha256-prefixed preparation artifact digest
         required: false
         type: string
+      receiver_custody:
+        description: Root-reviewed closed genuine SDD2.1 and Templates0.18 Actions/package custody
+        required: false
+        type: string
       upstream_artifact_id:
         description: Exact post-pack Coordination, SDD, Templates, runtime, and image join
         required: false
@@ -144,6 +148,7 @@ jobs:
           P_SOURCE: ${{ inputs.preparation_source_revision }}
           P_TREE: ${{ inputs.preparation_source_tree }}
           P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+          R_CUSTODY: ${{ inputs.receiver_custody }}
         run: |
           set -euo pipefail
           umask 077
@@ -163,22 +168,33 @@ jobs:
           P_SOURCE: ${{ inputs.preparation_source_revision }}
           P_TREE: ${{ inputs.preparation_source_tree }}
           P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+          R_CUSTODY: ${{ inputs.receiver_custody }}
         run: |
           set -euo pipefail
           umask 077
+          PYTHONDONTWRITEBYTECODE=1 python3 - "$STAGE_ROOT/receiver-custody.json" <<'PY'
+          import importlib.util, json, os, pathlib, sys
+          raw = os.environ['R_CUSTODY']
+          spec = importlib.util.spec_from_file_location('stage', 'tests/portable-workspace/trusted-provider/stage_provider_input.py')
+          module = importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+          value = module.parse_receiver_custody(raw)
+          pathlib.Path(sys.argv[1]).write_bytes(module.canonical(value))
+          PY
           gh api "repos/FS-GG/FS.GG.Coordination/actions/runs/$P_RUN" > "$STAGE_ROOT/preparation-run.json"
           gh api "repos/FS-GG/FS.GG.Coordination/actions/artifacts/$P_ARTIFACT" > "$STAGE_ROOT/preparation-artifact.json"
           gh api "repos/FS-GG/FS.GG.Coordination/actions/artifacts/$P_ARTIFACT/zip" > "$STAGE_ROOT/preparation.zip"
-          gh api repos/FS-GG/FS.GG.SDD/actions/runs/36475182052 > "$STAGE_ROOT/sdd-run.json"
-          gh api repos/FS-GG/FS.GG.SDD/actions/artifacts/10993636498 > "$STAGE_ROOT/sdd-artifact.json"
-          gh api repos/FS-GG/FS.GG.SDD/actions/artifacts/10993636498/zip > "$STAGE_ROOT/sdd.zip"
-          gh api repos/FS-GG/FS.GG.Templates/actions/runs/36832168724 > "$STAGE_ROOT/templates-run.json"
-          gh api repos/FS-GG/FS.GG.Templates/actions/artifacts/11147906420 > "$STAGE_ROOT/templates-artifact.json"
-          gh api repos/FS-GG/FS.GG.Templates/actions/artifacts/11147906420/zip > "$STAGE_ROOT/templates.zip"
+          for role in sdd templates; do
+            repository=$(jq -r ".$role.repository" "$STAGE_ROOT/receiver-custody.json")
+            run=$(jq -r ".$role.runId" "$STAGE_ROOT/receiver-custody.json")
+            artifact=$(jq -r ".$role.artifactId" "$STAGE_ROOT/receiver-custody.json")
+            gh api "repos/$repository/actions/runs/$run" > "$STAGE_ROOT/$role-run.json"
+            gh api "repos/$repository/actions/artifacts/$artifact" > "$STAGE_ROOT/$role-artifact.json"
+            gh api "repos/$repository/actions/artifacts/$artifact/zip" > "$STAGE_ROOT/$role.zip"
+          done
           gh api -H 'Accept: application/vnd.github.raw+json' \
-            'repos/FS-GG/FS.GG.Templates/contents/providers/python.providers.yml?ref=cfe37f35a66e3494b211197a1c84de69f08bf87e' \
+            'repos/FS-GG/FS.GG.Templates/contents/providers/python.providers.yml?ref=96b9d01475935ea3f474cfd4ed4dd93b4755f726' \
             > "$STAGE_ROOT/python.providers.source.yml"
-          gh api repos/FS-GG/FS.GG.Templates/git/commits/cfe37f35a66e3494b211197a1c84de69f08bf87e \
+          gh api repos/FS-GG/FS.GG.Templates/git/commits/96b9d01475935ea3f474cfd4ed4dd93b4755f726 \
             > "$STAGE_ROOT/descriptor-commit.json"
           curl --fail --silent --show-error --location --proto '=https' --proto-redir '=https' --tlsv1.2 \
             --output "$STAGE_ROOT/dotnet-runtime-10.0.12-linux-x64.tar.gz" "$RUNTIME_URL"
@@ -192,10 +208,12 @@ jobs:
           P_SOURCE: ${{ inputs.preparation_source_revision }}
           P_TREE: ${{ inputs.preparation_source_tree }}
           P_DIGEST: ${{ inputs.preparation_artifact_digest }}
+          R_CUSTODY: ${{ inputs.receiver_custody }}
         run: |
           set -euo pipefail
           umask 077
           python3 tests/portable-workspace/trusted-provider/stage_provider_input.py \
+            --receiver-custody "$STAGE_ROOT/receiver-custody.json" \
             --preparation-archive "$STAGE_ROOT/preparation.zip" --preparation-run "$STAGE_ROOT/preparation-run.json" \
             --preparation-artifact "$STAGE_ROOT/preparation-artifact.json" --preparation-run-id "$P_RUN" \
             --preparation-run-attempt "$P_ATTEMPT" --preparation-artifact-id "$P_ARTIFACT" \
@@ -294,7 +312,7 @@ jobs:
             --sha256 "$(value .sdd.sha256)" --package-id FS.GG.SDD.Cli --version "$(value .sdd.version)" --output "$EVIDENCE/sdd-install.json"
           install -d -m 0700 "$ROOT/p4-receiver/.fsgg"; cp "$UPSTREAM/$(value .templates.descriptor)" "$ROOT/p4-receiver/.fsgg/providers.yml"
           python3 tests/portable-workspace/trusted-provider/validate_provider_input.py --descriptor "$ROOT/p4-receiver/.fsgg/providers.yml" --template-package "$UPSTREAM/$(value .templates.package)"
-          dotnet "$ROOT/sdd/tools/net10.0/any/FS.GG.SDD.Cli.dll" scaffold --root "$ROOT/p4-receiver" --provider python --param productName=ReceiverPython --param lifecycle=sdd --no-update --json > "$EVIDENCE/scaffold.json"
+          dotnet "$ROOT/sdd/tools/net10.0/any/FS.GG.SDD.Cli.dll" scaffold --root "$ROOT/p4-receiver" --provider python --param productName=ReceiverPython --param lifecycle=none --no-update --json > "$EVIDENCE/scaffold.json"
           for file in app.py build.py test.py; do cmp "$ROOT/p4-receiver/python/$file" "tests/portable-workspace/image/fixture/python/$file"; done
           git -C "$ROOT/p4-receiver" init -q; git -C "$ROOT/p4-receiver" config user.name p4-provider-qualification; git -C "$ROOT/p4-receiver" config user.email p4-provider@example.invalid
           git -C "$ROOT/p4-receiver" add --all; GIT_AUTHOR_DATE=2026-10-01T00:00:00Z GIT_COMMITTER_DATE=2026-10-01T00:00:00Z git -C "$ROOT/p4-receiver" commit -q -m 'Fresh Python receiver candidate'
