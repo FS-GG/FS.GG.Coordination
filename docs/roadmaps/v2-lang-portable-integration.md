@@ -237,3 +237,39 @@ P1–P3 change Coordination source and distribution only. They do not change fre
 workspaces, a product default or an enabled runtime. P4 is the first possible workspace change and requires exact
 producer publication plus receiver-owned clean-creation proof. P5 expands verified adoption without rewriting the
 frozen V2 cohort or historical outcomes.
+
+
+## Current Python receiver staging source refresh
+
+The retained final protected producer remains `b06c18722b422213fe1c7cdd11cda1732605466f`,
+tree `51df48a04b6cb7971233723945e6c743e3a65147`: preparation `36895926751`, attempt1,
+artifact `11179803664`, original archive SHA256
+`193fe72c090efbb00e005e03e3d637abd8eb1a85f38a7a29c567d4b0c7eff494`.
+Its original 0.2.1 package and image select the fixed `40085dd0…` manifest /
+`371d2b5d…` config pair. Full original archive/member and OCI-layer readback joins
+permit reuse; the earlier 0dd4 image mismatch remains historical evidence. No
+producer rebuild or runtime policy change is selected by this source window.
+
+The public staging source now fixes receiver identities to SDD2.1.0 and
+Workspace.Template0.18.0, with Python descriptor V2 and exact SDD2.1.0 floor from
+protected Templates `96b9d01475935ea3f474cfd4ed4dd93b4755f726`. A closed, bounded
+`receiver_custody` input requires both genuine successful Actions run/artifact
+identities, archive digests and original package digests. It supplies no grant or
+execution authority. Missing, historical, malformed or changed records refuse;
+the same authenticated run/artifact/archive/package checks remain mandatory.
+Root must independently bind the actual records before dispatch. Their current
+archive identities are not invented by source preparation.
+
+Candidate facts materialize only the explicitly selected lifecycle `none` Python
+receiver, preserve upstream projected product bytes, and remain unauthorized.
+The default lifecycle remains `sdd`; no adoption setting is enabled. A fresh
+receiver commit/tree/profile/inventory and corresponding private host facts are
+required before root may construct its receiver-bound grant. The old0.16
+receiver facts and grants cannot qualify this current receiver.
+
+Focused staging controls cover current custody, V2/floor and wrong/missing/run/
+archive/package refusals. Workflow source/ordering checks and embedded shell
+syntax pass without an SDK, container, grant or native qualification. This local
+source candidate is ready for root review and genuine-input binding; public
+staging/facts, private host readiness, one installed runtime-only qualification,
+publication and fresh public opt-in adoption remain distinct pending boundaries.
