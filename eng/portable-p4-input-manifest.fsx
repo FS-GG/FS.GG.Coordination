@@ -18,7 +18,7 @@ let transportSchema = "fsgg.portable-p4-manifest-transport/2"
 let repository = "FS-GG/FS.GG.GitHub.Substrate.Sandbox"
 let coordinationRepository = "FS-GG/FS.GG.Coordination"
 // One prospective input generation for the accepted dc934 receiver. Historical tags stay closed.
-let releaseTag = "portable-p4-python-private-inputs-20261004-layout-v2-dc934643"
+let releaseTag = "portable-p4-python-private-inputs-20261004-result-v3-dc934643"
 
 let sha256Bytes (bytes: byte[]) = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant()
 let sha256File path =

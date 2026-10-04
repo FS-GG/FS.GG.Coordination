@@ -50,7 +50,7 @@ for index,role in roles |> List.indexed do
     assetNodes.Add(obj ["id",JsonValue.Create(id);"name",JsonValue.Create(Path.GetFileName(path));"bytes",JsonValue.Create(bytes.Length);"sha256",JsonValue.Create(digest);"state",JsonValue.Create("uploaded")])
 let manifest = obj [
     "schema",JsonValue.Create("fsgg.portable-p4-private-inputs/2"); "classification",JsonValue.Create("public-candidate-files-only")
-    "release",obj ["repository",JsonValue.Create("FS-GG/FS.GG.GitHub.Substrate.Sandbox");"releaseId",JsonValue.Create(55);"tag",JsonValue.Create("portable-p4-python-private-inputs-20261004-layout-v2-dc934643");"targetCommit",JsonValue.Create(target)]
+    "release",obj ["repository",JsonValue.Create("FS-GG/FS.GG.GitHub.Substrate.Sandbox");"releaseId",JsonValue.Create(55);"tag",JsonValue.Create("portable-p4-python-private-inputs-20261004-result-v3-dc934643");"targetCommit",JsonValue.Create(target)]
     "coordinationSource",obj ["repository",JsonValue.Create("FS-GG/FS.GG.Coordination");"commit",JsonValue.Create(source);"tree",JsonValue.Create(tree)]
     "producers",producers; "files",arr roleNodes; "privateProviderFactsRef",null]
 let sourcePath=Path.Combine(root,"source.json")
