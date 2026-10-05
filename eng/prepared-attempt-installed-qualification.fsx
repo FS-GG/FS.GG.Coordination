@@ -416,6 +416,60 @@ try
     demand (PreparedAttempt.validate DateTimeOffset.UtcNow binding good prepared = Error "preparation-input-invalidated") "input-drift-admitted"
     driftClock.Stop()
     record "consume-drift-controls" "refused" 0 0 driftClock.Elapsed.TotalMilliseconds
+    // Additive diagnostics use the same installed actual checker and held custody path.
+    let declarations (spec: CapsulePreparation) =
+        spec.Checks |> List.map (fun check -> {CheckId=check.Id; DependsOn=[]; SharedStateScopes=[]})
+    let detailed name spec selected deadline =
+        let report,milliseconds = time (fun () -> PreparedAttempt.prepareDetailedAsync binding deadline spec selected CancellationToken.None |> fun t -> t.GetAwaiter().GetResult())
+        verifyOutput ()
+        observations.Add(box {| name=name; result=report.FirstFailure |> Option.defaultValue "ready"
+                               candidateBinding=report.CandidateBinding; dependenciesBinding=report.DependenciesBinding
+                               prepared=report.Prepared.IsSome; firstFailure=report.FirstFailure |> Option.toObj; additionalFailures=report.AdditionalFailures
+                               findings=report.Findings |> List.map (fun f -> {| checkId=f.CheckId; outcome=string f.Outcome; cause=f.Cause |> Option.toObj
+                                                                               exitCode=f.ExitCode |> Option.toNullable; cleanupObserved=f.CleanupObserved |> Option.toNullable; reportingFailure=f.ReportingFailure |> Option.toObj |})
+                               omittedChecks=report.OmittedChecks; truncated=report.Truncated; elapsedMilliseconds=milliseconds |})
+        report
+    let success = fixture "diagnostic-success"
+    let selected = declarations success
+    let report = detailed "diagnostic-success" success selected (DateTimeOffset.UtcNow.AddSeconds 15.)
+    demand (report.Prepared.IsSome && report.FirstFailure.IsNone && (report.Findings |> List.forall (fun f -> f.Outcome=PreparationCheckOutcome.Passed))) "detailed-success-incomplete"
+    demand (PreparedAttempt.validateDetailed DateTimeOffset.UtcNow binding success selected report.Prepared.Value = Ok()) "detailed-consume-refused"
+    demand (PreparedAttempt.validateDetailed DateTimeOffset.UtcNow binding success (selected |> List.map (fun d -> {d with SharedStateScopes=["changed"]})) report.Prepared.Value = Error "preparation-dependencies-invalidated") "declaration-drift-admitted"
+    for name in ["independent";"dependent";"shared-state";"unknown-dependency";"unknown-result";"contamination";"cleanup";"reporting";"output";"deadline"] do
+        let mutable spec = fixture ("diagnostic-"+name)
+        let source =
+            match name with
+            | "independent" -> "import sys\nif sys.argv[1]=='imports': import absent_first\nelse: import absent_second\n"
+            | "unknown-result" -> "print('unknown')\n"
+            | "contamination" -> "open('dependency.py','a').write('# changed\\n')\nraise RuntimeError('first cause')\n"
+            | "cleanup" -> "import os\nos.rmdir(os.environ['TMPDIR'])\nraise RuntimeError('first cause')\n"
+            | "reporting" -> "import sys\nsys.stdout.write('x'*2200)\nsys.stderr.write('y'*2200)\nsys.exit(1)\n"
+            | "output" -> "print('x'*10000)\n"
+            | _ -> "raise RuntimeError('first cause')\n"
+        File.WriteAllText(Path.Combine(spec.Root,"checker.py"),source)
+        let selected =
+            declarations spec |> List.map (fun d ->
+                match name with
+                | "dependent" when d.CheckId="discovery" -> {d with DependsOn=["imports"]}
+                | "unknown-dependency" when d.CheckId="discovery" -> {d with DependsOn=["missing"]}
+                | "shared-state" -> {d with SharedStateScopes=["shared"]}
+                | _ -> d)
+        let deadline = DateTimeOffset.UtcNow.AddSeconds(if name="deadline" then -1. else 15.)
+        let report = detailed ("diagnostic-"+name) spec selected deadline
+        demand (report.Prepared.IsNone && report.FirstFailure.IsSome) ("diagnostic-negative-admitted:"+name)
+        if name="independent" then
+            demand (report.Findings.Length=2 && (report.Findings |> List.forall (fun f -> f.Outcome=PreparationCheckOutcome.Failed && f.CleanupObserved=Some true))) "independent-findings-lost"
+            demand (report.FirstFailure=Some "preparation-import-missing:absent_first" && List.contains "preparation-import-missing:absent_second" report.AdditionalFailures) "independent-causes-lost"
+        elif name<>"deadline" then
+            let first,second = report.Findings[0],report.Findings[1]
+            demand (second.ExitCode.IsNone && second.Outcome<>PreparationCheckOutcome.Passed) ("dependent-check-ran:"+name)
+            if name="cleanup" then
+                demand (report.FirstFailure=Some "preparation-check-failed:imports" && first.CleanupObserved=Some false && List.contains "preparation-cleanup-unobserved" report.AdditionalFailures) "cleanup-masked-first-cause"
+            elif name="reporting" then
+                demand (report.FirstFailure=Some "preparation-check-failed:imports" && first.ReportingFailure.IsSome) "reporting-masked-first-cause"
+            elif name="unknown-result" then demand (first.Outcome=PreparationCheckOutcome.Unknown) "unknown-result-misclassified"
+            elif name="output" then demand (second.Outcome=PreparationCheckOutcome.NotRunBound) "output-bound-unreported"
+    // These are prerequisite-only capsules. The legacy executor controls below prove zero workload effects.
     for name in ["missing";"empty";"malformed";"timeout";"tool";"during-check-drift"] do
         let mutable spec = fixture name
         match name with

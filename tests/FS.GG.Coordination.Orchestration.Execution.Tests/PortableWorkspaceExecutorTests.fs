@@ -2065,3 +2065,157 @@ type ThreadGroupCustodyTests() =
             Assert.True(stopped rootAudit)
         finally cleanup rootAudit
     }
+
+type PreparationDiagnosticsTests() =
+    let declarations (spec: CapsulePreparation) =
+        spec.Checks |> List.map (fun check ->
+            { CheckId = check.Id; DependsOn = []; SharedStateScopes = [] })
+    let detailed spec selected =
+        PreparedAttempt.prepareDetailedAsync "runner-argv-config-source" (DateTimeOffset.UtcNow.AddSeconds 10.) spec selected CancellationToken.None
+    let findings (report: PreparationReport) = report.Findings |> List.filter (fun finding -> finding.Stage = "check")
+
+    [<Fact>]
+    member _.``two independent actual prerequisite failures retain both causes and no readiness``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"), "import sys\nif sys.argv[1]=='imports': import absent_import_one\nelse: import absent_import_two\n")
+        let! report = detailed spec (declarations spec)
+        Assert.True(report.Prepared.IsNone)
+        Assert.Equal(Some "preparation-import-missing:absent_import_one", report.FirstFailure)
+        Assert.Contains("preparation-import-missing:absent_import_two", report.AdditionalFailures)
+        Assert.Equal<PreparationCheckOutcome list>([PreparationCheckOutcome.Failed; PreparationCheckOutcome.Failed], findings report |> List.map _.Outcome)
+        Assert.All(findings report, fun finding -> Assert.Equal(Some 1,finding.ExitCode); Assert.Equal(Some true,finding.CleanupObserved))
+        let! strict = prepare spec
+        Assert.Equal(Error "preparation-import-missing:absent_import_one", strict)
+        // The existing executor uses the same strict implementation and never reserves/launches a workload.
+        let fake = FakeRunner(fun _ -> successfulObservation)
+        let ex, _, auth, selectedProfile, cmd = executor spec fake
+        let! result = ex.ExecuteAsync(auth,selectedProfile,cmd,CancellationToken.None)
+        Assert.Equal(Refused "preparation-import-missing:absent_import_one",result)
+        Assert.Equal(0,fake.Calls)
+    }
+
+    [<Theory>]
+    [<InlineData("dependency")>]
+    [<InlineData("scope")>]
+    [<InlineData("unknown")>]
+    [<InlineData("undeclared")>]
+    member _.``invalid prerequisites and shared state block actual later checks``(scenario: string) = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"), "raise RuntimeError('first failure')\n")
+        let selected = declarations spec
+        let selected =
+            match scenario with
+            | "dependency" -> selected |> List.map (fun d -> if d.CheckId = "discovery" then {d with DependsOn = ["imports"]} else d)
+            | "unknown" -> selected |> List.map (fun d -> if d.CheckId = "discovery" then {d with DependsOn = ["unknown-check"]} else d)
+            | "scope" -> selected |> List.map (fun d -> {d with SharedStateScopes = ["same-state"]})
+            | "undeclared" -> []
+            | _ -> failwith scenario
+        let! report = detailed spec selected
+        let second = (findings report)[1]
+        Assert.Equal(PreparationCheckOutcome.Blocked,second.Outcome)
+        Assert.True(second.ExitCode.IsNone)
+        Assert.True(second.CleanupObserved.IsNone)
+        Assert.True(report.Prepared.IsNone)
+    }
+
+    [<Fact>]
+    member _.``complete detailed success binds declarations and refuses stale input at consumption``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        let selected = declarations spec
+        let! report = detailed spec selected
+        Assert.True(report.FirstFailure.IsNone)
+        let prepared = report.Prepared.Value
+        Assert.All(findings report, fun finding -> Assert.Equal(PreparationCheckOutcome.Passed,finding.Outcome))
+        Assert.Equal(Ok (),PreparedAttempt.validateDetailed DateTimeOffset.UtcNow "runner-argv-config-source" spec selected prepared)
+        let changed = selected |> List.map (fun d -> {d with SharedStateScopes = ["changed"]})
+        Assert.Equal(Error "preparation-dependencies-invalidated",PreparedAttempt.validateDetailed DateTimeOffset.UtcNow "runner-argv-config-source" spec changed prepared)
+        File.AppendAllText(Path.Combine(spec.Root,"capture_custody.py"),"# changed\n")
+        Assert.Equal(Error "preparation-input-invalidated",PreparedAttempt.validateDetailed DateTimeOffset.UtcNow "runner-argv-config-source" spec selected prepared)
+    }
+
+    [<Fact>]
+    member _.``structural closure collects independent missing inputs without probes``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        File.Delete(Path.Combine(spec.Root,"capture_custody.py"))
+        File.Delete(Path.Combine(spec.Root,"stock_entry.py"))
+        let! report = detailed spec (declarations spec)
+        Assert.Equal(2,report.Findings |> List.filter (fun finding -> finding.Stage = "closure") |> List.length)
+        Assert.All(findings report, fun finding -> Assert.Equal(PreparationCheckOutcome.Blocked,finding.Outcome); Assert.True(finding.ExitCode.IsNone))
+        Assert.True(report.Prepared.IsNone)
+    }
+
+    [<Fact>]
+    member _.``unknown check result cannot prepare or permit later effects``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"),"print('unknown')\n")
+        let! report = detailed spec (declarations spec)
+        Assert.Equal(PreparationCheckOutcome.Unknown,((findings report)[0]).Outcome)
+        Assert.Equal(PreparationCheckOutcome.Blocked,((findings report)[1]).Outcome)
+        Assert.True(report.Prepared.IsNone)
+    }
+
+    [<Fact>]
+    member _.``failed checker input contamination blocks otherwise independent check``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"),"open('capture_custody.py','a').write('# changed\\n')\nraise RuntimeError('first failure')\n")
+        let! report = detailed spec (declarations spec)
+        Assert.Equal(Some "preparation-check-failed:imports",report.FirstFailure)
+        Assert.Contains("preparation-input-invalidated",report.AdditionalFailures)
+        Assert.Equal(PreparationCheckOutcome.Blocked,((findings report)[1]).Outcome)
+        Assert.True(report.Prepared.IsNone)
+    }
+
+    [<Fact>]
+    member _.``first failure survives later cleanup uncertainty and continuation stops``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        // Disposable owned scratch is removed by the failed checker, making cleanup observation unavailable.
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"),"import os\nos.rmdir(os.environ['TMPDIR'])\nraise RuntimeError('first failure')\n")
+        let! report = detailed spec (declarations spec)
+        Assert.Equal(Some "preparation-check-failed:imports",report.FirstFailure)
+        Assert.Contains("preparation-cleanup-unobserved",report.AdditionalFailures)
+        Assert.Equal(Some false,((findings report)[0]).CleanupObserved)
+        Assert.Equal(PreparationCheckOutcome.Blocked,((findings report)[1]).Outcome)
+        Assert.True(report.Prepared.IsNone)
+    }
+
+    [<Fact>]
+    member _.``failed checks consume cumulative output budget and preserve first cause``() = task {
+        let fixture, initial = create ()
+        use fixture = fixture
+        let third = {initial.Checks[1] with Id = "third"}
+        let spec = {initial with Checks = initial.Checks @ [third]}
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"),"import sys\nsys.stderr.write('x'*2200)\nsys.exit(1)\n")
+        let! report = detailed spec (declarations spec)
+        Assert.Equal(Some "preparation-check-failed:imports",report.FirstFailure)
+        Assert.Equal(PreparationCheckOutcome.NotRunBound,((findings report)[2]).Outcome)
+        Assert.True(report.Prepared.IsNone)
+        Assert.True(report.AdditionalFailures |> List.exists (fun reason -> reason.Contains("budget")))
+    }
+
+    [<Fact>]
+    member _.``original absolute deadline records checks not run because bound``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        let! report = PreparedAttempt.prepareDetailedAsync "runner-argv-config-source" (DateTimeOffset.UtcNow.AddSeconds(-1.)) spec (declarations spec) CancellationToken.None
+        Assert.True(report.Prepared.IsNone)
+        Assert.All(findings report, fun finding -> Assert.True(finding.ExitCode.IsNone))
+    }
+
+    [<Fact>]
+    member _.``first checker failure survives bounded reporting failure``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"),"import sys\nsys.stdout.write('x'*2200)\nsys.stderr.write('y'*2200)\nsys.exit(1)\n")
+        let! report = detailed spec (declarations spec)
+        Assert.Equal(Some "preparation-check-failed:imports",report.FirstFailure)
+        Assert.Equal(Some "preparation-output-budget-refused",((findings report)[0]).ReportingFailure)
+        Assert.Equal(PreparationCheckOutcome.NotRunBound,((findings report)[1]).Outcome)
+        Assert.True(report.Prepared.IsNone)
+    }
