@@ -243,9 +243,12 @@ type OwnedOutput =
       Lease: Microsoft.Win32.SafeHandles.SafeFileHandle; Identity: string; Directory: bool
       mutable Retired: bool }
 let ownedOutputs = ResizeArray<OwnedOutput>()
+let liveOwnedOutputs () = ownedOutputs |> Seq.filter (fun value -> not value.Retired)
 let holdOutput parent name directory =
-    // Eight fixed capsules plus seven fixed journals admit at most seventy nodes.
-    demand (ownedOutputs.Count < 70) "owned-output-count-refused"
+    // Retire diagnostic groups before subsequent groups. Keep the original live-node bound.
+    demand (liveOwnedOutputs () |> Seq.length |> fun count -> count < 70) "owned-output-count-refused"
+    // Nineteen fixed capsules (6 nodes), seven journals (2 dirs + at most2 leaves):142 lifetime records.
+    demand (ownedOutputs.Count < 142) "owned-output-metadata-count-refused"
     demand (name <> "" && name <> "." && name <> ".." && Path.GetFileName name = name) "invalid-owned-child-name"
     let observed = node parent name 0x100
     let kind = if directory then 0x4000us else 0x8000us
@@ -264,7 +267,7 @@ let createDirectory parent name =
     verifyOutput ()
     demand (Nodes.mkdirAt(parent,name,448u)=0) "exclusive-owned-directory-required"
     holdOutput parent name true
-let disposeOwned () = for value in ownedOutputs do value.Lease.Dispose()
+let disposeOwned () = for value in liveOwnedOutputs () do value.Lease.Dispose()
 let retireOwned value =
     demand (not value.Retired) "owned-child-already-retired"
     verifyOutput ()
@@ -284,11 +287,11 @@ let retireOwned value =
         demand (Directory.EnumerateFileSystemEntries(anchored value.Descriptor) |> Seq.isEmpty) "owned-directory-not-empty"
     demand (node outputDescriptor captured 0x100 |> nodeId = value.Identity) "captured-child-replaced"
     demand (Nodes.unlinkAt(outputDescriptor,captured,if value.Directory then 0x200 else 0)=0) "owned-child-retirement-refused"
-    value.Retired <- true
     value.Lease.Dispose()
+    value.Retired <- true
 let cleanupOwned () =
     // Reverse creation order removes only known leaves and then their held parents.
-    for value in ownedOutputs |> Seq.filter (fun value -> not value.Retired) |> Seq.rev do retireOwned value
+    for value in liveOwnedOutputs () |> Seq.rev do retireOwned value
     demand (Directory.EnumerateFileSystemEntries(anchored outputDescriptor) |> Seq.isEmpty) "owned-cleanup-incomplete"
     verifyOutput ()
 let immutableInputs =
@@ -383,6 +386,7 @@ let execute name (spec: CapsulePreparation) =
     outcome,runner
 
 let observations = ResizeArray<obj>()
+let mutable firstDiagnosticFailure: string option = None
 let time action =
     let clock = Diagnostics.Stopwatch.StartNew()
     let value = action ()
@@ -419,8 +423,20 @@ try
     // Additive diagnostics use the same installed actual checker and held custody path.
     let declarations (spec: CapsulePreparation) =
         spec.Checks |> List.map (fun check -> {CheckId=check.Id; DependsOn=[]; SharedStateScopes=[]})
+    let cleanupDiagnostics () =
+        try cleanupOwned ()
+        with error ->
+            // Retirement refusal is a hard stop; neither reporting nor cleanup replaces the first cause.
+            eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_FIRST_CAUSE %s" (Option.defaultValue "none" firstDiagnosticFailure)
+            eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_RETIREMENT_REFUSED %s" error.Message
+            try
+                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_OBSERVATIONS %s" (JsonSerializer.Serialize(observations.ToArray()))
+            with reporting ->
+                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_REPORTING_REFUSED %s" reporting.Message
+            reraise ()
     let detailed name spec selected deadline =
         let report,milliseconds = time (fun () -> PreparedAttempt.prepareDetailedAsync binding deadline spec selected CancellationToken.None |> fun t -> t.GetAwaiter().GetResult())
+        if firstDiagnosticFailure.IsNone then firstDiagnosticFailure <- report.FirstFailure
         verifyOutput ()
         let findingProjection =
             report.Findings |> List.map (fun f ->
@@ -442,6 +458,9 @@ try
     demand (report.Prepared.IsSome && report.FirstFailure.IsNone && (report.Findings |> List.forall (fun f -> f.Outcome=PreparationCheckOutcome.Passed))) "detailed-success-incomplete"
     demand (PreparedAttempt.validateDetailed DateTimeOffset.UtcNow binding success selected report.Prepared.Value = Ok()) "detailed-consume-refused"
     demand (PreparedAttempt.validateDetailed DateTimeOffset.UtcNow binding success (selected |> List.map (fun d -> {d with SharedStateScopes=["changed"]})) report.Prepared.Value = Error "preparation-dependencies-invalidated") "declaration-drift-admitted"
+    // Completed controls retain descriptive observations, then retire their exact held fixture leaves.
+    // This bounds the live output population without increasing the existing 128-entry envelope.
+    cleanupDiagnostics ()
     for name in ["independent";"dependent";"shared-state";"unknown-dependency";"unknown-result";"contamination";"cleanup";"reporting";"output";"deadline"] do
         let mutable spec = fixture ("diagnostic-"+name)
         let source =
@@ -476,13 +495,14 @@ try
                 demand (report.FirstFailure=Some "preparation-check-failed:imports" && first.ReportingFailure.IsSome) "reporting-masked-first-cause"
             elif name="unknown-result" then demand (first.Outcome=PreparationCheckOutcome.Unknown) "unknown-result-misclassified"
             elif name="output" then demand (second.Outcome=PreparationCheckOutcome.NotRunBound) "output-bound-unreported"
+        cleanupDiagnostics ()
     // These are prerequisite-only capsules. The legacy executor controls below prove zero workload effects.
     for name in ["missing";"empty";"malformed";"timeout";"tool";"during-check-drift"] do
         let mutable spec = fixture name
         match name with
         | "missing" ->
-            let root = ownedOutputs |> Seq.find (fun value -> value.Parent=outputDescriptor && value.Name=name && value.Directory)
-            let dependency = ownedOutputs |> Seq.find (fun value -> value.Parent=root.Descriptor && value.Name="dependency.py")
+            let root = liveOwnedOutputs () |> Seq.find (fun value -> value.Parent=outputDescriptor && value.Name=name && value.Directory)
+            let dependency = liveOwnedOutputs () |> Seq.find (fun value -> value.Parent=root.Descriptor && value.Name="dependency.py")
             retireOwned dependency
             spec <- {spec with Inputs=spec.Inputs |> List.filter ((<>) "dependency.py")}
         | "empty" -> File.WriteAllText(Path.Combine(spec.Root,"test_entry.py"),"import unittest\n")
@@ -497,7 +517,7 @@ try
     match outcome with
     | Completed receipt -> demand (receipt.CleanupCompleted && runner.Calls=1 && runner.Cleanups=1) "positive-runner-control-failed"
     | _ -> invalidOp "positive-executor-refused"
-    for value in ownedOutputs do
+    for value in liveOwnedOutputs () do
         if value.Directory then
             demand (not (Directory.Exists(Path.Combine(anchored value.Descriptor,"__pycache__")))) "checker-output-in-inputs"
     record "executor-good" "completed-instrumented-runner" runner.Calls runner.Cleanups elapsed
