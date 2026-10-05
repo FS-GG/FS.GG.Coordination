@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import ast, argparse, contextlib, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, zipfile
+import ast, argparse, contextlib, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, unittest, zipfile
 from pathlib import Path
 from unittest.mock import patch
 HERE=Path(__file__).parent
@@ -46,6 +46,9 @@ def capability_collector_contract():
    assert command[command.index('--runroot')+1]=='/p4/runtime-v1/xdg-runtime/containers-runroot'
   assert [command[7:] for command in calls]==[['--format=json'],['cat','/proc/self/uid_map'],['cat','/proc/self/gid_map']]
  assert os.environ.get('HOME')==parent_home
+ diagnostics=load('fixed_diagnostic_controls','test_capability_diagnostics.py')
+ result=unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromTestCase(diagnostics.Controls))
+ assert result.wasSuccessful() and result.testsRun==3 and not result.skipped
 
 def main():
  capability_collector_contract()
