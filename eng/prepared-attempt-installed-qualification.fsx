@@ -422,12 +422,19 @@ try
     let detailed name spec selected deadline =
         let report,milliseconds = time (fun () -> PreparedAttempt.prepareDetailedAsync binding deadline spec selected CancellationToken.None |> fun t -> t.GetAwaiter().GetResult())
         verifyOutput ()
-        observations.Add(box {| name=name; result=report.FirstFailure |> Option.defaultValue "ready"
-                               candidateBinding=report.CandidateBinding; dependenciesBinding=report.DependenciesBinding
-                               prepared=report.Prepared.IsSome; firstFailure=report.FirstFailure |> Option.toObj; additionalFailures=report.AdditionalFailures
-                               findings=report.Findings |> List.map (fun f -> {| checkId=f.CheckId; outcome=string f.Outcome; cause=f.Cause |> Option.toObj
-                                                                               exitCode=f.ExitCode |> Option.toNullable; cleanupObserved=f.CleanupObserved |> Option.toNullable; reportingFailure=f.ReportingFailure |> Option.toObj |})
-                               omittedChecks=report.OmittedChecks; truncated=report.Truncated; elapsedMilliseconds=milliseconds |})
+        let findingProjection =
+            report.Findings |> List.map (fun f ->
+                {| checkId = f.CheckId; outcome = string f.Outcome;
+                   cause = Option.toObj f.Cause; exitCode = Option.toNullable f.ExitCode;
+                   cleanupObserved = Option.toNullable f.CleanupObserved;
+                   reportingFailure = Option.toObj f.ReportingFailure |})
+        observations.Add(box
+            {| name = name; result = Option.defaultValue "ready" report.FirstFailure;
+               candidateBinding = report.CandidateBinding; dependenciesBinding = report.DependenciesBinding;
+               prepared = report.Prepared.IsSome; firstFailure = Option.toObj report.FirstFailure;
+               additionalFailures = report.AdditionalFailures; findings = findingProjection;
+               omittedChecks = report.OmittedChecks; truncated = report.Truncated;
+               elapsedMilliseconds = milliseconds |})
         report
     let success = fixture "diagnostic-success"
     let selected = declarations success
