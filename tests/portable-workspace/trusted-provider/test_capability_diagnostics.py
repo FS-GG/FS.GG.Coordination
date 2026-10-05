@@ -1,7 +1,7 @@
 """Pure capability probe marker controls; no provider commands are launched."""
 import sys
 sys.dont_write_bytecode=True
-import ast,importlib.util,io,tempfile,unittest
+import ast,importlib.util,io,re,tempfile,unittest
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -37,4 +37,19 @@ class Controls(unittest.TestCase):
    with patch.object(sys,'argv',argv),patch.object(c,'runuser',side_effect=AssertionError('provider forbidden')) as run,redirect_stdout(output):
     with self.assertRaises(ValueError):c.main()
    run.assert_not_called();self.assertEqual(output.getvalue().splitlines()[-1],'PORTABLE_PROVIDER_CAPABILITY_STAGE=locations')
+ def test_fresh_manifest_generation_and_native_refusal_fixture_stay_joined(self):
+  root=HERE.parents[2]
+  helper=(root/'eng/portable-p4-input-manifest.fsx').read_text()
+  fixture=(HERE/'test_private_input_manifest.fsx').read_text()
+  selected='portable-p4-python-private-inputs-20261005-root-runtime-e8eb322'
+  consumed='portable-p4-python-private-inputs-20261005-capability-h-dc934643'
+  pins=re.findall(r'^let releaseTag = "([^"\n]+)"$',helper,re.M)
+  self.assertEqual(pins,[selected])
+  self.assertIn('text "tag" release = releaseTag',helper)
+  self.assertNotIn(consumed,helper)
+  self.assertIn('"tag",JsonValue.Create("'+selected+'")',fixture)
+  refusal_loop=fixture[fixture.index('for index,tag in ['):fixture.index('let body=')]
+  self.assertIn('"'+consumed+'"',refusal_loop)
+  self.assertIn('run "construct" wrongPath',refusal_loop)
+  self.assertIn('assertTrue (refusedCode<>0)',refusal_loop)
 if __name__=='__main__':unittest.main()

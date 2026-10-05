@@ -48,7 +48,7 @@ def capability_collector_contract():
  assert os.environ.get('HOME')==parent_home
  diagnostics=load('fixed_diagnostic_controls','test_capability_diagnostics.py')
  result=unittest.TextTestRunner(verbosity=1).run(unittest.defaultTestLoader.loadTestsFromTestCase(diagnostics.Controls))
- assert result.wasSuccessful() and result.testsRun==3 and not result.skipped
+ assert result.wasSuccessful() and result.testsRun==4 and not result.skipped
 
 def main():
  capability_collector_contract()
