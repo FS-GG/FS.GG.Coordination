@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import ast, argparse, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, zipfile
+import ast, argparse, contextlib, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, zipfile
 from pathlib import Path
 from unittest.mock import patch
 HERE=Path(__file__).parent
@@ -34,9 +34,11 @@ def capability_collector_contract():
   def observe(account,args):
    assert account=='p4executor'; calls.append(args)
    return json.dumps({'host':{}}) if len(calls)==1 else 'fixture-map'
-  namespace={'argparse':argparse,'Path':Path,'json':json,'runuser':observe}
+  namespace={'argparse':argparse,'Path':Path,'json':json,'runuser':observe,'stage':collector.stage}
   argv=['fixture','--account','p4executor','--uid','32001','--state','/p4','--storage','/p4/runtime-v1/storage','--archive','/fixture/archive','--runtime','/fixture/runtime','--measured-locations',str(measured),'--podman-info','/fixture/info','--output','/fixture/output']
-  with patch.object(sys,'argv',argv): exec(compile(program,'<collector contract fixture>','exec'),namespace)
+  markers=io.StringIO()
+  with patch.object(sys,'argv',argv),contextlib.redirect_stdout(markers): exec(compile(program,'<collector contract fixture>','exec'),namespace)
+  assert markers.getvalue().splitlines()==['PORTABLE_PROVIDER_CAPABILITY_STAGE='+name for name in ['arguments','locations','podman-info','uid-map','gid-map','podman-shape']]
   assert len(calls)==3
   for command in calls:
    assert command[:3]==['podman','--storage-driver=vfs','--root']
