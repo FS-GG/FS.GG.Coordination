@@ -2219,3 +2219,19 @@ type PreparationDiagnosticsTests() =
         Assert.Equal(PreparationCheckOutcome.NotRunBound,((findings report)[1]).Outcome)
         Assert.True(report.Prepared.IsNone)
     }
+
+    [<Fact>]
+    member _.``oversize candidate binding refuses before checker effects or serialization``() = task {
+        let fixture, spec = create ()
+        use fixture = fixture
+        // If reached, a checker mutates the capsule. The invalid binding must fence both checks.
+        File.WriteAllText(Path.Combine(spec.Root,"check.py"),"open('checker-launched','w').write('unexpected')\n")
+        let selected = declarations spec
+        let! report = PreparedAttempt.prepareDetailedAsync (String.replicate 4097 "x") (DateTimeOffset.UtcNow.AddSeconds 10.) spec selected CancellationToken.None
+        Assert.True(report.Prepared.IsNone)
+        Assert.True(report.FirstFailure.IsSome)
+        Assert.Empty(report.Findings)
+        Assert.Equal("unavailable",report.CandidateBinding)
+        Assert.Equal(spec.Checks.Length,report.OmittedChecks)
+        Assert.False(File.Exists(Path.Combine(spec.Root,"checker-launched")))
+    }

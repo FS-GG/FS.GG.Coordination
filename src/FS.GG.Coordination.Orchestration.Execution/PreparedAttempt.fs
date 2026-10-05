@@ -1189,7 +1189,8 @@ module PreparedAttempt =
         let boundedStrings maximum values =
             List.length values <= maximum
             && (values |> List.forall (fun (value: string) -> not (isNull value) && value.Length <= 4096))
-        spec.Checks.Length <= 32
+        not (isNull spec.Root) && spec.Root.Length <= 4096
+        && spec.Checks.Length <= 32
         && boundedStrings 4096 spec.Inputs
         && spec.Environment.Count <= 128
         && (spec.Environment |> Map.toList |> List.forall (fun (key, value) ->
@@ -1197,12 +1198,32 @@ module PreparedAttempt =
         && kinds = set [ CapsuleCheckKind.Import; CapsuleCheckKind.Discovery ]
         && not (spec.Checks |> List.exists (fun c ->
             String.IsNullOrWhiteSpace c.Id || c.Id.Length > 128
+            || isNull c.Executable || c.Executable.Length > 4096
             || not (Path.IsPathFullyQualified c.Executable)
             || not (boundedStrings 128 c.Arguments)
             || not (boundedStrings 4096 c.ExpectedDiscoveries)
             || c.ExpectedDiscoveries.IsEmpty
             || c.ExpectedDiscoveries |> List.exists String.IsNullOrWhiteSpace))
         && (spec.Checks |> List.map _.Id |> Set.ofList |> Set.count) = spec.Checks.Length
+
+    let private validCandidate (binding: string) (spec: CapsulePreparation) =
+        // Bound every serialized string before encoding, then cap their cumulative UTF-8 population.
+        not (isNull binding) && binding.Length <= 4096
+        && validChecks spec
+        && (seq {
+                yield binding
+                yield spec.Root
+                yield! spec.Inputs
+                for KeyValue(key, value) in spec.Environment do
+                    yield key
+                    yield value
+                for check in spec.Checks do
+                    yield check.Id
+                    yield check.Executable
+                    yield! check.Arguments
+                    yield! check.ExpectedDiscoveries
+            }
+            |> Seq.sumBy (fun value -> int64 (Encoding.UTF8.GetByteCount value))) <= 1048576L
 
     let private validDeclarations (spec: CapsulePreparation) (declarations: CapsuleCheckDependencies list) =
         let ids = spec.Checks |> List.map _.Id |> Set.ofList
@@ -1255,7 +1276,7 @@ module PreparedAttempt =
                   Required = true; Outcome = outcome; Cause = cause
                   EvidenceReferences = ["capsule-check:" + id]
                   ExitCode = exit; CleanupObserved = cleanup; ReportingFailure = reporting }
-            let valid = validChecks spec && validDeclarations spec declarations
+            let valid = validCandidate binding spec && validDeclarations spec declarations
             // Invalid input never reaches the potentially unbounded binding serializer.
             let candidate = if valid then specBinding binding spec else "unavailable"
             let selection = if valid then dependenciesBinding declarations else "unavailable"
@@ -1373,7 +1394,7 @@ module PreparedAttempt =
     let validate now binding (spec: CapsulePreparation) (attempt: PreparedAttempt) =
         if now >= attempt.Deadline then
             Error "preparation-deadline-refused"
-        elif specBinding binding spec <> attempt.Binding then
+        elif not (validCandidate binding spec) || specBinding binding spec <> attempt.Binding then
             Error "preparation-binding-invalidated"
         else
             inventory spec attempt.Deadline
@@ -1390,7 +1411,7 @@ module PreparedAttempt =
 
     /// Consume a detailed preparation only with the same frozen continuation declarations.
     let validateDetailed now binding spec declarations (attempt: PreparedAttempt) =
-        if not (validDeclarations spec declarations)
+        if not (validCandidate binding spec) || not (validDeclarations spec declarations)
            || attempt.DependenciesBinding <> Some(dependenciesBinding declarations) then
             Error "preparation-dependencies-invalidated"
         else validate now binding spec attempt
