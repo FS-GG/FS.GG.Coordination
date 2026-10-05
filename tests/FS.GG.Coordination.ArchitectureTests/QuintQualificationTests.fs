@@ -644,4 +644,8 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     let observed = output.GetAwaiter().GetResult() + error.GetAwaiter().GetResult()
     Assert.True(child.ExitCode = 0, observed)
     Assert.Contains("ACCOUNTING_CONTROLS_OK controls=15", observed)
+    Assert.Contains(
+        "ACCOUNTING_CONTROL_ATTEMPT mode=unknown ordinal=1 exit=7 timedOut=false classification=unclassified completed=true terminal=true",
+        observed
+    )
     Assert.Contains("controlled-subprocess-not-native-qualification", observed)

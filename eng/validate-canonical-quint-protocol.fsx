@@ -874,7 +874,32 @@ time.sleep(.06)
                     [ "verify"; Path.Combine(scratch.FullName, mode); mode ]
                     []
 
-            result, physicalAttempts |> Seq.skip before |> Seq.toArray
+            let rows = physicalAttempts |> Seq.skip before |> Seq.toArray
+
+            if rows.Length > 3 then
+                fail "ACCOUNTING-CONTROL" "physical-row-bound"
+
+            // Fixed fixture metadata only: retain the actual row before an assertion fails.
+            // Never print child stdout/stderr, process arguments or environment.
+            let observed value =
+                value
+                |> Option.map (fun item -> (string item).ToLowerInvariant())
+                |> Option.defaultValue "unobserved"
+
+            for row in rows do
+                printfn
+                    "ACCOUNTING_CONTROL_ATTEMPT mode=%s ordinal=%d exit=%s timedOut=%s classification=%s completed=%b terminal=%s elapsedMs=%s peakMiB=%s"
+                    mode
+                    row.Ordinal
+                    (observed row.ExitCode)
+                    (observed row.TimedOut)
+                    (row.Classification |> Option.defaultValue "unclassified")
+                    row.Completed
+                    (observed row.Terminal)
+                    (observed row.ElapsedMs)
+                    (observed row.PeakMiB)
+
+            result, rows
 
         let (code, _, _, elapsed, peak), timeoutRows = invoke "timeout" 180
 
@@ -890,8 +915,20 @@ time.sleep(.06)
 
         let (code, _, _, _, _), exhausted = invoke "exhaust" 180
         check "two-retries-exhausted" (code = 124 && exhausted.Length = 3 && exhausted[2].Terminal = Some true)
-        let (code, _, _, _, _), unknown = invoke "unknown" 180
-        check "unclassified-no-retry" (code = 7 && unknown.Length = 1 && unknown[0].Classification.IsNone)
+        // This control exercises an observed ordinary exit, not the separate 180ms
+        // timeout controls. Allow bounded process startup/scheduling headroom.
+        let (code, _, _, _, _), unknown = invoke "unknown" 3000
+
+        check
+            "unclassified-no-retry"
+            (code = 7
+             && unknown.Length = 1
+             && unknown[0].Classification.IsNone
+             && unknown[0].TimedOut = Some false
+             && unknown[0].Completed
+             && unknown[0].Terminal = Some true
+             && (unknown[0].ElapsedMs |> Option.exists (fun value -> value > 0L))
+             && (unknown[0].PeakMiB |> Option.exists (fun value -> value > 0)))
         let (code, _, _, _, peak), memory = invoke "memory" 1000
 
         check
