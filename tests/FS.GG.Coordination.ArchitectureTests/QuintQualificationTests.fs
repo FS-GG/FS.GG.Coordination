@@ -606,42 +606,74 @@ let ``missing or over budget measurements are rejected before reuse`` () =
 
 [<Fact>]
 let ``physical accounting preserves failed attempts and rejects incomplete or over budget work`` () =
-    let host = Environment.GetEnvironmentVariable "DOTNET_HOST_PATH"
+    // Preserve the genuine full-validator measurement pin. This synthetic fixture
+    // composes the actual production functions with a separately reviewed control body.
+    let source = File.ReadAllText(Path.Combine(root, "eng/validate-canonical-quint-protocol.fsx"))
+    let digest (value: string) =
+        Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
 
-    let info =
-        ProcessStartInfo(if String.IsNullOrWhiteSpace host then "dotnet" else host)
+    Assert.Equal("80fdd970af21353c803bd380e645b72e922c8b3a39b455b86574872d03c2b74e", digest source)
+    let marker = "// Controlled subprocess fixtures exercise the production wrappers, not native proof."
+    let ending = "let requireGreen code workingDirectory executable arguments environment ="
+    let start = source.IndexOf(marker, StringComparison.Ordinal)
+    let finish = source.IndexOf(ending, StringComparison.Ordinal)
+    Assert.True(start >= 0 && finish > start)
+    Assert.Equal(start, source.LastIndexOf(marker, StringComparison.Ordinal))
+    Assert.Equal(finish, source.LastIndexOf(ending, StringComparison.Ordinal))
+    let prefix = source.Substring(0, start)
+    Assert.Equal("6e7c4dab87d0db93c5ab205249f0936290b3e0a7a931b36b5f631c8313d8ea7f", digest prefix)
+    let fragment = File.ReadAllText(Path.Combine(root, "tests/FS.GG.Coordination.ArchitectureTests/Fixtures/quint-accounting-controls.fsx.fragment"))
+    Assert.True(Encoding.UTF8.GetByteCount(fragment) <= 32768)
+    Assert.Equal("c36035d4ddd27852a1374037f2f9d71ec079fc2d374105b82a5e948780d2c753", digest fragment)
+    Assert.StartsWith(marker, fragment)
+    Assert.EndsWith("    exit 0\n\n", fragment)
+    let scratch = Directory.CreateTempSubdirectory("fsgg-focused-accounting-test-")
+    let focusedPath = Path.Combine(scratch.FullName, "focused-accounting.fsx")
 
-    let selectedFsi = Environment.GetEnvironmentVariable "FSGG_QUINT_ACCOUNTING_FSI_DLL"
+    try
+        File.WriteAllText(focusedPath, prefix + fragment)
+        let host = Environment.GetEnvironmentVariable "DOTNET_HOST_PATH"
 
-    let fsiArgument =
-        if String.IsNullOrWhiteSpace selectedFsi then
-            "fsi"
-        else
-            selectedFsi
+        let info =
+            ProcessStartInfo(if String.IsNullOrWhiteSpace host then "dotnet" else host)
 
-    info.WorkingDirectory <- root
-    info.UseShellExecute <- false
-    info.RedirectStandardOutput <- true
-    info.RedirectStandardError <- true
+        let selectedFsi = Environment.GetEnvironmentVariable "FSGG_QUINT_ACCOUNTING_FSI_DLL"
 
-    for argument in
-        [
-            fsiArgument
-            "eng/validate-canonical-quint-protocol.fsx"
-            "--exercise-accounting-controls"
-        ] do
-        info.ArgumentList.Add argument
+        let fsiArgument =
+            if String.IsNullOrWhiteSpace selectedFsi then
+                "fsi"
+            else
+                selectedFsi
 
-    use child = Process.Start info
-    let output = child.StandardOutput.ReadToEndAsync()
-    let error = child.StandardError.ReadToEndAsync()
+        info.WorkingDirectory <- root
+        info.UseShellExecute <- false
+        info.RedirectStandardOutput <- true
+        info.RedirectStandardError <- true
 
-    if not (child.WaitForExit(30000)) then
-        child.Kill(true)
-        child.WaitForExit()
-        Assert.Fail("owned accounting controls exceeded their bounded test deadline")
+        for argument in
+            [
+                fsiArgument
+                focusedPath
+                "--exercise-accounting-controls"
+            ] do
+            info.ArgumentList.Add argument
 
-    let observed = output.GetAwaiter().GetResult() + error.GetAwaiter().GetResult()
-    Assert.True(child.ExitCode = 0, observed)
-    Assert.Contains("ACCOUNTING_CONTROLS_OK controls=15", observed)
-    Assert.Contains("controlled-subprocess-not-native-qualification", observed)
+        use child = Process.Start info
+        let output = child.StandardOutput.ReadToEndAsync()
+        let error = child.StandardError.ReadToEndAsync()
+
+        if not (child.WaitForExit(30000)) then
+            child.Kill(true)
+            child.WaitForExit()
+            Assert.Fail("owned accounting controls exceeded their bounded test deadline")
+
+        let observed = output.GetAwaiter().GetResult() + error.GetAwaiter().GetResult()
+        Assert.True(child.ExitCode = 0, observed)
+        Assert.Contains("ACCOUNTING_CONTROLS_OK controls=15", observed)
+        Assert.Contains(
+            "ACCOUNTING_CONTROL_ATTEMPT mode=unknown ordinal=1 exit=7 timedOut=false classification=unclassified completed=true terminal=true",
+            observed
+        )
+        Assert.Contains("controlled-subprocess-not-native-qualification", observed)
+    finally
+        scratch.Delete true

@@ -1,0 +1,226 @@
+// Controlled subprocess fixtures exercise the production wrappers, not native proof.
+if fsi.CommandLineArgs |> Array.contains "--exercise-accounting-controls" then
+    if fsi.CommandLineArgs |> Array.skip 1 <> [| "--exercise-accounting-controls" |] then
+        fail "ACCOUNTING-CONTROL-MIXTURE" "requires only focused switch"
+
+    let scratch = Directory.CreateTempSubdirectory("fsgg-physical-accounting-controls-")
+
+    let check name condition =
+        if not condition then
+            fail "ACCOUNTING-CONTROL" name
+
+    try
+        let executable = Path.Combine(scratch.FullName, expectedQuint)
+        File.CreateSymbolicLink(executable, "/usr/bin/python3") |> ignore
+
+        File.WriteAllText(
+            Path.Combine(scratch.FullName, "verify"),
+            """import sys,time,pathlib
+p=pathlib.Path(sys.argv[1]); n=int(p.read_text()) if p.exists() else 0; p.write_text(str(n+1))
+mode=sys.argv[2]
+if mode=='timeout' and n==0 or mode=='exhaust': time.sleep(2)
+if mode=='unknown': time.sleep(.06);sys.exit(7)
+if mode=='memory' and n==0:
+ x=bytearray(80*1024*1024);time.sleep(.08);print('Error querying reflection endpoint DEADLINE_EXCEEDED',file=sys.stderr);sys.exit(1)
+time.sleep(.06)
+        """
+        )
+
+        let invoke mode timeout =
+            let before = physicalAttempts.Count
+
+            let result =
+                runMeasured
+                    timeout
+                    scratch.FullName
+                    executable
+                    [ "verify"; Path.Combine(scratch.FullName, mode); mode ]
+                    []
+
+            let rows = physicalAttempts |> Seq.skip before |> Seq.toArray
+
+            if rows.Length > 3 then
+                fail "ACCOUNTING-CONTROL" "physical-row-bound"
+
+            // Fixed fixture metadata only: retain the actual row before an assertion fails.
+            // Never print child stdout/stderr, process arguments or environment.
+            let observed value =
+                value
+                |> Option.map (fun item -> (string item).ToLowerInvariant())
+                |> Option.defaultValue "unobserved"
+
+            for row in rows do
+                printfn
+                    "ACCOUNTING_CONTROL_ATTEMPT mode=%s ordinal=%d exit=%s timedOut=%s classification=%s completed=%b terminal=%s elapsedMs=%s peakMiB=%s"
+                    mode
+                    row.Ordinal
+                    (observed row.ExitCode)
+                    (observed row.TimedOut)
+                    (row.Classification |> Option.defaultValue "unclassified")
+                    row.Completed
+                    (observed row.Terminal)
+                    (observed row.ElapsedMs)
+                    (observed row.PeakMiB)
+
+            result, rows
+
+        let (code, _, _, elapsed, peak), timeoutRows = invoke "timeout" 180
+
+        check
+            "timeout-success"
+            (code = 0
+             && timeoutRows.Length = 2
+             && timeoutRows[0].TimedOut = Some true
+             && timeoutRows[0].Classification = Some "early-lifecycle-exit"
+             && timeoutRows[0].Terminal = Some false
+             && elapsed = timeoutRows[1].ElapsedMs.Value
+             && peak = (timeoutRows |> Array.map (fun row -> row.PeakMiB.Value) |> Array.max))
+
+        let (code, _, _, _, _), exhausted = invoke "exhaust" 180
+        check "two-retries-exhausted" (code = 124 && exhausted.Length = 3 && exhausted[2].Terminal = Some true)
+        // This control exercises an observed ordinary exit, not the separate 180ms
+        // timeout controls. Allow bounded process startup/scheduling headroom.
+        let (code, _, _, _, _), unknown = invoke "unknown" 3000
+
+        check
+            "unclassified-no-retry"
+            (code = 7
+             && unknown.Length = 1
+             && unknown[0].Classification.IsNone
+             && unknown[0].TimedOut = Some false
+             && unknown[0].Completed
+             && unknown[0].Terminal = Some true
+             && (unknown[0].ElapsedMs |> Option.exists (fun value -> value > 0L))
+             && (unknown[0].PeakMiB |> Option.exists (fun value -> value > 0)))
+        let (code, _, _, _, peak), memory = invoke "memory" 1000
+
+        check
+            "failed-high-rss-preserved"
+            (code = 0
+             && memory.Length = 2
+             && memory[0].PeakMiB.Value > memory[1].PeakMiB.Value
+             && peak = memory[0].PeakMiB.Value)
+
+        let beforeRun = physicalAttempts.Count
+
+        let code, _, _ =
+            run scratch.FullName executable [ "verify"; Path.Combine(scratch.FullName, "run-memory"); "memory" ] []
+
+        let runRows = physicalAttempts |> Seq.skip beforeRun |> Seq.toArray
+
+        check
+            "run-wrapper-preserves-failed-peak"
+            (code = 0
+             && runRows.Length = 2
+             && runRows[0].PeakMiB.Value > runRows[1].PeakMiB.Value)
+
+        let row index elapsed terminal ordinal classification peak =
+            { timeoutRows[1] with
+                LogicalId = string index
+                Label =
+                    [|
+                        "quint/formal-simulation"
+                        "quint/formal-temporal"
+                        "quint/formal-safety-mutant"
+                        "quint/formal-counterexample-temporal"
+                        "quint/formal-counterexample-temporal"
+                        "quint/formal-counterexample-projection"
+                        "quint/formal-counterexample-projection"
+                    |][index - 1]
+                ExitCode = Some(if index <= 2 then 0 else 1)
+                SemanticOutcome =
+                    Some(
+                        if index <= 2 then
+                            "positive-complete"
+                        elif index <= 3 || index >= 6 then
+                            "invariant-counterexample"
+                        else
+                            "temporal-counterexample"
+                    )
+                ElapsedMs = Some elapsed
+                Ordinal = ordinal
+                Terminal = Some terminal
+                Classification = classification
+                PeakMiB = Some peak
+            }
+
+        let exact =
+            [|
+                for index in 1..7 -> row index (if index = 7 then 299994L else 1L) true 1 None 10
+                for index in 1..3 do
+                    for ordinal in 1..2 -> row index 300000L false ordinal (Some "early-lifecycle-exit") 6144
+            |]
+
+        let exact =
+            exact
+            |> Array.groupBy _.LogicalId
+            |> Array.collect (fun (_, rows) ->
+                rows
+                |> Array.sortBy (fun row -> if row.Terminal = Some true then 4 else row.Ordinal)
+                |> Array.mapi (fun index row -> { row with Ordinal = index + 1 }))
+
+        check "exact-total-and-terminal" (summarizeFormalPhysical 2100000L exact = Ok(300000L, 2100000L, 6144))
+        check "over-total-includes-failed-cost" (summarizeFormalPhysical 2099999L exact = Error "budget")
+
+        check
+            "failed-high-rss-gate"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row -> if index = 0 then { row with PeakMiB = Some 6145 } else row))
+                =
+                Error "budget")
+
+        check "omitted" (summarizeFormalPhysical 2100000L exact[1..] |> Result.isError)
+
+        check
+            "duplicate"
+            (summarizeFormalPhysical 2100000L (Array.append exact [| exact[0] |])
+             |> Result.isError)
+
+        check
+            "incomplete"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row ->
+                     if index = 0 then
+                         { row with
+                             Completed = false
+                             ElapsedMs = None
+                         }
+                     else
+                         row))
+             |> Result.isError)
+
+        check
+            "unexpected-terminal-crash"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row -> if index = 2 then { row with ExitCode = Some 137 } else row))
+             |> Result.isError)
+
+        check
+            "unexpected-terminal-timeout"
+            (summarizeFormalPhysical
+                2100000L
+                (exact
+                 |> Array.mapi (fun index row -> if index = 2 then { row with TimedOut = Some true } else row))
+             |> Result.isError)
+
+        check
+            "unexpected-nonsemantic-negative"
+            (terminalSemantics "quint/formal-safety-mutant" (Some "fixture") 1 false None "" "Traceback" = None)
+
+        check
+            "expected-semantic-negative"
+            (terminalSemantics "quint/formal-safety-mutant" (Some "fixture") 1 false None "Invariant violated" "" =
+                Some "invariant-counterexample")
+
+        printfn "ACCOUNTING_CONTROLS_OK controls=15 disposition=controlled-subprocess-not-native-qualification"
+    finally
+        scratch.Delete true
+
+    exit 0
+
