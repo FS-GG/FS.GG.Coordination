@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 from __future__ import annotations
-import argparse, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, zipfile
+import ast, argparse, hashlib, importlib.util, io, json, os, stat, subprocess, sys, tempfile, time, zipfile
 from pathlib import Path
+from unittest.mock import patch
 HERE=Path(__file__).parent
 def load(name,file):
  s=importlib.util.spec_from_file_location(name,HERE/file); m=importlib.util.module_from_spec(s); s.loader.exec_module(m); return m
@@ -9,7 +10,43 @@ R=load('runtime','provider_runtime.py'); Q=load('qualify',Path('../../../eng/qua
 # load helper from repository
 root=HERE.parents[2]; s=importlib.util.spec_from_file_location('qualify',root/'eng/qualify-installed-python-hello.py'); Q=importlib.util.module_from_spec(s); s.loader.exec_module(Q)
 def write(p,b=b'x'): p.parent.mkdir(parents=True,exist_ok=True); p.write_bytes(b)
+def capability_collector_contract():
+ # Pure command observations: never launch runuser, Podman, account effects or CLR.
+ collector=load('collector_contract','collect_provider_capability.py')
+ parent_home=os.environ.get('HOME'); commands=[]
+ with patch.object(collector.subprocess,'check_output',side_effect=lambda argv,**kwargs:commands.append(argv) or ''):
+  collector.runuser('p4executor',['podman','info'])
+ assert commands==[['/usr/sbin/runuser','--user','p4executor','--','/usr/bin/env','HOME=/p4/runtime-v1/home','XDG_CONFIG_HOME=/p4/runtime-v1/xdg-config','XDG_RUNTIME_DIR=/p4/runtime-v1/xdg-runtime','PATH=/usr/local/bin:/usr/bin:/bin','podman','info']]
+ assert os.environ.get('HOME')==parent_home
+ with patch.object(collector.subprocess,'check_output',side_effect=subprocess.CalledProcessError(2,['fixture'])) as child:
+  try: collector.runuser('p4executor',['podman','info']); raise AssertionError('child failure accepted')
+  except subprocess.CalledProcessError: pass
+  assert child.call_count==1
+ tree=ast.parse((HERE/'collect_provider_capability.py').read_bytes())
+ main=next(n for n in tree.body if isinstance(n,ast.FunctionDef) and n.name=='main')
+ prefix=[]
+ for node in main.body:
+  if isinstance(node,ast.Expr) and isinstance(node.value,ast.Call) and isinstance(node.value.func,ast.Attribute) and node.value.func.attr=='write_text': break
+  prefix.append(node)
+ program=ast.Module(body=prefix,type_ignores=[]); ast.fix_missing_locations(program)
+ with tempfile.TemporaryDirectory() as td:
+  measured=Path(td)/'measured'; measured.write_text('/fixture/hidden\n'); calls=[]
+  def observe(account,args):
+   assert account=='p4executor'; calls.append(args)
+   return json.dumps({'host':{}}) if len(calls)==1 else 'fixture-map'
+  namespace={'argparse':argparse,'Path':Path,'json':json,'runuser':observe}
+  argv=['fixture','--account','p4executor','--uid','32001','--state','/p4','--storage','/p4/runtime-v1/storage','--archive','/fixture/archive','--runtime','/fixture/runtime','--measured-locations',str(measured),'--podman-info','/fixture/info','--output','/fixture/output']
+  with patch.object(sys,'argv',argv): exec(compile(program,'<collector contract fixture>','exec'),namespace)
+  assert len(calls)==3
+  for command in calls:
+   assert command[:3]==['podman','--storage-driver=vfs','--root']
+   assert command[command.index('--root')+1]=='/p4/runtime-v1/storage'
+   assert command[command.index('--runroot')+1]=='/p4/runtime-v1/xdg-runtime/containers-runroot'
+  assert [command[7:] for command in calls]==[['--format=json'],['cat','/proc/self/uid_map'],['cat','/proc/self/gid_map']]
+ assert os.environ.get('HOME')==parent_home
+
 def main():
+ capability_collector_contract()
  # Producer metadata is an exact tuple.
  expected={'runId':11,'runAttempt':2,'sourceRevision':'a'*40,'workflow':'.github/workflows/x.yml','artifactId':22,'artifactDigest':'sha256:'+'b'*64,'artifactName':'candidate'}
  run={'id':11,'run_attempt':2,'head_sha':'a'*40,'path':'.github/workflows/x.yml','conclusion':'success','event':'workflow_dispatch'}
