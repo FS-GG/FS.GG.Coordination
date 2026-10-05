@@ -330,8 +330,12 @@ class DiagnosticRetirementControls(unittest.TestCase):
         if retire.index('value.Lease.Dispose()') > retire.index('value.Retired <- true'):
             raise ValueError("retired handle not disposed")
         diagnostics = source[source.index('let cleanupDiagnostics'):source.index('let detailed name')]
-        if not all(term in diagnostics for term in ['firstDiagnosticFailure', 'observations.ToArray()', 'reraise ()']):
+        if not all(term in diagnostics for term in ['firstDiagnosticFailure', 'observations.ToArray()', 'reraise ()',
+                                                    'with _ -> diagnosticReportingFailed <- true']):
             raise ValueError("retirement failure lost cause or continued")
+        # Every optional emission is dominated by the local catch-all wrapper, including its failure report.
+        if diagnostics.count('emitBestEffort (fun () ->') != diagnostics.count('eprintfn '):
+            raise ValueError("reporting failure can mask retirement")
         if source.count('cleanupDiagnostics ()') != 3:  # definition + success group + each negative group
             raise ValueError("diagnostic groups accumulate")
 
@@ -356,6 +360,8 @@ class DiagnosticRetirementControls(unittest.TestCase):
             source.replace('value.Lease.Dispose()\n    value.Retired <- true', 'value.Retired <- true\n    value.Lease.Dispose()'),
             source.replace('observations.ToArray()', 'Array.empty'),
             source.replace('reraise ()', '()'),
+            source.replace('emitBestEffort (fun () ->', 'ignore (fun () ->', 1),
+            source.replace('with _ -> diagnosticReportingFailed <- true', 'with reporting -> raise reporting'),
             source.replace('        cleanupDiagnostics ()\n    // These', '        ()\n    // These'),
         ]
         for mutation in mutations:

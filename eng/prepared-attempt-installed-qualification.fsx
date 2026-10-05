@@ -387,6 +387,7 @@ let execute name (spec: CapsulePreparation) =
 
 let observations = ResizeArray<obj>()
 let mutable firstDiagnosticFailure: string option = None
+let mutable diagnosticReportingFailed = false
 let time action =
     let clock = Diagnostics.Stopwatch.StartNew()
     let value = action ()
@@ -426,13 +427,19 @@ try
     let cleanupDiagnostics () =
         try cleanupOwned ()
         with error ->
-            // Retirement refusal is a hard stop; neither reporting nor cleanup replaces the first cause.
-            eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_FIRST_CAUSE %s" (Option.defaultValue "none" firstDiagnosticFailure)
-            eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_RETIREMENT_REFUSED %s" error.Message
-            try
-                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_OBSERVATIONS %s" (JsonSerializer.Serialize(observations.ToArray()))
-            with reporting ->
-                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_REPORTING_REFUSED %s" reporting.Message
+            // Preserve bounded observation state even when every optional emission fails.
+            let emitBestEffort action =
+                try action ()
+                with _ -> diagnosticReportingFailed <- true
+            emitBestEffort (fun () ->
+                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_FIRST_CAUSE %s" (Option.defaultValue "none" firstDiagnosticFailure))
+            emitBestEffort (fun () ->
+                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_RETIREMENT_REFUSED %s" error.Message)
+            emitBestEffort (fun () ->
+                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_OBSERVATIONS %s" (JsonSerializer.Serialize(observations.ToArray())))
+            emitBestEffort (fun () ->
+                eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_REPORTING_REFUSED %b" diagnosticReportingFailed)
+            // No reporting exception can escape before the original retirement exception.
             reraise ()
     let detailed name spec selected deadline =
         let report,milliseconds = time (fun () -> PreparedAttempt.prepareDetailedAsync binding deadline spec selected CancellationToken.None |> fun t -> t.GetAwaiter().GetResult())
@@ -574,7 +581,7 @@ try
     outputLease.Dispose()
 with error ->
     // Preserve diagnostic artifacts for the finite operator to inspect; no successful receipt.
-    eprintfn "PREPARED_INSTALLED_QUALIFICATION_REFUSED %s" error.Message
+    try eprintfn "PREPARED_INSTALLED_QUALIFICATION_REFUSED %s" error.Message with _ -> ()
     disposeOwned ()
     outputLease.Dispose()
     exit 2
