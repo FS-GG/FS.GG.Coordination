@@ -298,6 +298,78 @@ class PackageAssemblyLayoutControls(unittest.TestCase):
             self.assertFalse((root / "tampered").exists())
 
 
+class DiagnosticRetirementControls(unittest.TestCase):
+    """Pure source admission and population controls; no compiled F# caller claim."""
+
+    @staticmethod
+    def population(source):
+        loops = re.findall(r'for name in \[([^]]+)\] do', source)
+        diagnostic = next(re.findall(r'"([^"\n]+)"', block) for block in loops if '"independent"' in block)
+        legacy = next(re.findall(r'"([^"\n]+)"', block) for block in loops if '"during-check-drift"' in block)
+        files = re.search(r'let files =\n(.*?)\nlet fixture', source, re.S).group(1)
+        file_count = len(re.findall(r'"[^"\n]+\.py",', files))
+        per_capsule = file_count + 2  # held capsule and app directories, plus declared leaves
+        journal_count = len(legacy) + 1
+        lifetime = (len(diagnostic) + len(legacy) + 3) * per_capsule + journal_count * 4
+        # After each diagnostic group's retirement, the legacy population grows to seven capsules.
+        # Missing dependency is already retired; each journal is bounded to two dirs/two leaves.
+        legacy_live = (len(legacy) + 1) * per_capsule - 1 + journal_count * 4
+        peak_live = max(2 * per_capsule, per_capsule, legacy_live)
+        return lifetime, peak_live, peak_live + 4 + 1  # op home/scratch/receipt/output + current checker scratch
+
+    @staticmethod
+    def validate_retirement_source(source):
+        if not re.search(r'let liveOwnedOutputs \(\) = ownedOutputs \|> Seq.filter .*not value.Retired', source):
+            raise ValueError("retired rows remain live")
+        hold = source[source.index('let holdOutput'):source.index('let createDirectory')]
+        if 'liveOwnedOutputs () |> Seq.length' not in hold or 'count < 70' not in hold or 'ownedOutputs.Count < 142' not in hold:
+            raise ValueError("live or metadata population unbounded")
+        if re.search(r'for value in ownedOutputs do|ownedOutputs \|> Seq.find', source):
+            raise ValueError("disposed descriptor query")
+        retire = source[source.index('let retireOwned'):source.index('let cleanupOwned')]
+        if retire.index('value.Lease.Dispose()') > retire.index('value.Retired <- true'):
+            raise ValueError("retired handle not disposed")
+        diagnostics = source[source.index('let cleanupDiagnostics'):source.index('let detailed name')]
+        if not all(term in diagnostics for term in ['firstDiagnosticFailure', 'observations.ToArray()', 'reraise ()',
+                                                    'with _ -> diagnosticReportingFailed <- true']):
+            raise ValueError("retirement failure lost cause or continued")
+        # Every optional emission is dominated by the local catch-all wrapper, including its failure report.
+        if diagnostics.count('emitBestEffort (fun () ->') != diagnostics.count('eprintfn '):
+            raise ValueError("reporting failure can mask retirement")
+        if source.count('cleanupDiagnostics ()') != 3:  # definition + success group + each negative group
+            raise ValueError("diagnostic groups accumulate")
+
+    def test_staged_fixed_population_fits_original_live_and_disk_limits(self):
+        source = SCRIPT.read_text()
+        lifetime, live, disk = self.population(source)
+        self.assertEqual((lifetime, live, disk), (142, 69, 74))
+        self.assertLessEqual(live, 70)
+        self.assertLessEqual(disk, 128)
+        # The old accumulating population violates both bounds, independent of timing.
+        self.assertGreater(lifetime - 1, 70)
+        self.assertGreater(lifetime - 1 + 4, 128)
+        self.validate_retirement_source(source)
+
+    def test_source_controls_refuse_accumulation_disposed_queries_and_lost_cause(self):
+        source = SCRIPT.read_text()
+        mutations = [
+            source.replace('liveOwnedOutputs () |> Seq.length', 'ownedOutputs |> Seq.length'),
+            source.replace('ownedOutputs.Count < 142', 'true'),
+            source.replace('for value in liveOwnedOutputs () do', 'for value in ownedOutputs do'),
+            source.replace('liveOwnedOutputs () |> Seq.find', 'ownedOutputs |> Seq.find'),
+            source.replace('value.Lease.Dispose()\n    value.Retired <- true', 'value.Retired <- true\n    value.Lease.Dispose()'),
+            source.replace('observations.ToArray()', 'Array.empty'),
+            source.replace('reraise ()', '()'),
+            source.replace('emitBestEffort (fun () ->', 'ignore (fun () ->', 1),
+            source.replace('with _ -> diagnosticReportingFailed <- true', 'with reporting -> raise reporting'),
+            source.replace('        cleanupDiagnostics ()\n    // These', '        ()\n    // These'),
+        ]
+        for mutation in mutations:
+            with self.subTest():
+                with self.assertRaises(ValueError):
+                    self.validate_retirement_source(mutation)
+
+
 class HeldOutputFilesystemControls(unittest.TestCase):
     """Actual private filesystem conditions; no F# compiled-caller proof.
 

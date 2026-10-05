@@ -39,6 +39,38 @@ type CapsulePreparation =
         MaximumCheckSeconds: int
     }
 
+/// Explicit owner declarations; absence never establishes independence.
+type CapsuleCheckDependencies =
+    {
+        CheckId: string
+        DependsOn: string list
+        SharedStateScopes: string list
+    }
+
+[<RequireQualifiedAccess>]
+type PreparationCheckOutcome =
+    | Passed
+    | Failed
+    | Blocked
+    | Unknown
+    | NotRunBound
+
+/// Bounded per-check observations. Exit, cleanup and reporting are distinct from the first cause.
+type PreparationCheckFinding =
+    {
+        CheckId: string
+        Stage: string
+        Dependencies: string list
+        SharedStateScopes: string list
+        Required: bool
+        Outcome: PreparationCheckOutcome
+        Cause: string option
+        EvidenceReferences: string list
+        ExitCode: int option
+        CleanupObserved: bool option
+        ReportingFailure: string option
+    }
+
 [<RequireQualifiedAccess>]
 type PortablePrerequisiteRequirement =
     | CapsuleRequired of CapsulePreparation
@@ -379,15 +411,34 @@ type PreparedAttempt
         binding: string,
         deadline: DateTimeOffset,
         identities: (string * string) list,
-        artifact: PreparedArtifactState option
+        artifact: PreparedArtifactState option,
+        dependenciesBinding: string option
     ) =
     member internal _.Binding = binding
     member internal _.Deadline = deadline
     member internal _.Identities = identities
     member internal _.Artifact = artifact
+    member internal _.DependenciesBinding = dependenciesBinding
 
     static member internal Create(binding, deadline, identities, artifact) =
-        PreparedAttempt(binding, deadline, identities, artifact)
+        PreparedAttempt(binding, deadline, identities, artifact, None)
+
+    static member internal CreateDetailed(binding, deadline, identities, artifact, dependenciesBinding) =
+        PreparedAttempt(binding, deadline, identities, artifact, Some dependenciesBinding)
+
+/// A report is data; only its assembly-created prepared value can admit consumption.
+type PreparationReport =
+    {
+        CandidateBinding: string
+        ClosureIdentity: string option
+        DependenciesBinding: string
+        Prepared: PreparedAttempt option
+        FirstFailure: string option
+        Findings: PreparationCheckFinding list
+        AdditionalFailures: string list
+        OmittedChecks: int
+        Truncated: bool
+    }
 
 [<RequireQualifiedAccess>]
 module PreparedAttempt =
@@ -589,7 +640,8 @@ module PreparedAttempt =
                                 |> Result.map (fun value -> (p, value) :: values)))
                         (Ok [])
         with _ ->
-            Error "preparation-input-unavailable"
+            if DateTimeOffset.UtcNow >= deadline then Error "preparation-deadline-refused"
+            else Error "preparation-input-unavailable"
 
     let private specBinding (binding: string) (spec: CapsulePreparation) =
         use bytes = new MemoryStream()
@@ -737,7 +789,7 @@ module PreparedAttempt =
         =
         task {
             match CustodyBootstrap.tryOpen () with
-            | Error reason -> return Error reason
+            | Error reason -> return Error reason, None, Some true, None
             | Ok resources ->
                 use resources = resources
 
@@ -751,6 +803,9 @@ module PreparedAttempt =
                 let mutable ownedGroup: CustodyProcessLease option = None
                 let mutable outputTasks: Task list = []
                 let mutable checkerPermitted = false
+                let mutable observedExit = None
+                let mutable reportingFailure = None
+                let remainingOutput = spec.MaximumOutputBytes - uint64 ledger.Value.Bytes
                 let mutable custody = PreparationCustody.initial
 
                 let transition event identity =
@@ -829,7 +884,7 @@ module PreparedAttempt =
                                             let stderr =
                                                 readBounded
                                                     child.StandardError.BaseStream
-                                                    spec.MaximumOutputBytes
+                                                    remainingOutput
                                                     budget.Token
 
                                             outputTasks <- [ stderr :> Task ]
@@ -912,7 +967,7 @@ module PreparedAttempt =
                                                 let stdout =
                                                     readBounded
                                                         child.StandardOutput.BaseStream
-                                                        spec.MaximumOutputBytes
+                                                        remainingOutput
                                                         budget.Token
 
                                                 outputTasks <- [ stdout :> Task; stderr :> Task ]
@@ -963,56 +1018,53 @@ module PreparedAttempt =
                                                     let! errBytes, errExceeded = stderr
                                                     do! exit
 
-                                                    if
-                                                        outExceeded
-                                                        || errExceeded
-                                                        || uint64 (outBytes.Length + errBytes.Length) >
-                                                            spec.MaximumOutputBytes
-                                                    then
-                                                        return Error "preparation-output-budget-refused"
-                                                    elif not group.HasTerminated then
-                                                        return Error "preparation-cleanup-unobserved"
-                                                    elif child.ExitCode <> 0 then
-                                                        let diagnostic = Encoding.UTF8.GetString errBytes
+                                                    observedExit <- Some child.ExitCode
+                                                    // Failed checks consume the same cumulative observation budget as successes.
+                                                    let observed =
+                                                        PreparationObservation.observe
+                                                            limits
+                                                            DateTimeOffset.UtcNow.UtcTicks
+                                                            identity
+                                                            (int64 (outBytes.Length + errBytes.Length))
+                                                            ledger.Value
 
-                                                        let missing =
-                                                            System.Text.RegularExpressions.Regex.Match(
-                                                                diagnostic,
-                                                                "ModuleNotFoundError: No module named '([A-Za-z0-9_.-]{1,128})'"
-                                                            )
-
-                                                        if missing.Success then
-                                                            return
-                                                                Error(
-                                                                    "preparation-import-missing:"
-                                                                    + missing.Groups[1].Value
+                                                    ledger.Value <- observed.State
+                                                    let checkerResult =
+                                                        if child.ExitCode <> 0 then
+                                                            let diagnostic = Encoding.UTF8.GetString errBytes
+                                                            let missing =
+                                                                System.Text.RegularExpressions.Regex.Match(
+                                                                    diagnostic,
+                                                                    "ModuleNotFoundError: No module named '([A-Za-z0-9_.-]{1,128})'"
                                                                 )
-                                                        else
-                                                            return Error("preparation-check-failed:" + check.Id)
-                                                    elif errBytes.Length <> 0 then
-                                                        return Error "preparation-observation-malformed"
-                                                    else
-                                                        let observed =
-                                                            PreparationObservation.observe
-                                                                limits
-                                                                DateTimeOffset.UtcNow.UtcTicks
-                                                                identity
-                                                                (int64 (outBytes.Length + errBytes.Length))
-                                                                ledger.Value
-
-                                                        ledger.Value <- observed.State
-
-                                                        if observed.Refusal.IsSome then
-                                                            return Error "preparation-observation-budget-refused"
-                                                        else
-                                                            let result = checkOutput check outBytes
-
-                                                            if Result.isOk result then
-                                                                transition "result" identity
+                                                            if missing.Success then
+                                                                Error("preparation-import-missing:" + missing.Groups[1].Value)
                                                             else
-                                                                custody <- { custody with Refused = true }
+                                                                Error("preparation-check-failed:" + check.Id)
+                                                        elif errBytes.Length <> 0 then
+                                                            Error "preparation-observation-malformed"
+                                                        else
+                                                            checkOutput check outBytes
 
-                                                            return result
+                                                    let boundFailure =
+                                                        if outExceeded || errExceeded
+                                                           || uint64 (outBytes.Length + errBytes.Length) > remainingOutput then
+                                                            Some "preparation-output-budget-refused"
+                                                        elif observed.Refusal.IsSome then
+                                                            Some "preparation-observation-budget-refused"
+                                                        else None
+
+                                                    reportingFailure <- boundFailure
+                                                    match checkerResult, boundFailure with
+                                                    | Error reason, _ ->
+                                                        custody <- { custody with Refused = true }
+                                                        return Error reason
+                                                    | Ok (), Some reason ->
+                                                        custody <- { custody with Refused = true }
+                                                        return Error reason
+                                                    | Ok (), None ->
+                                                        transition "result" identity
+                                                        return Ok ()
                         with
                         | :? OperationCanceledException ->
                             if custody.Bound then
@@ -1076,6 +1128,11 @@ module PreparedAttempt =
                         if output.IsFaulted then
                             output.Exception |> ignore
 
+                if cleaned && started && observedExit.IsNone then
+                    try
+                        if child.HasExited then observedExit <- Some child.ExitCode
+                    with _ -> ()
+
                 try
                     Directory.Delete(scratch, true)
                 with _ ->
@@ -1093,15 +1150,19 @@ module PreparedAttempt =
 
                 ownedGroup |> Option.iter (fun group -> (group :> IDisposable).Dispose())
 
-                if not cleaned then
-                    return Error "preparation-cleanup-unobserved"
-                elif Result.isOk outcome && not (PreparationCustody.ready custody) then
-                    return Error "preparation-custody-order-refused"
-                else
-                    if Result.isOk outcome then
-                        transition "admit" ownedIdentity
+                let finalOutcome =
+                    if not cleaned then
+                        match outcome with
+                        | Error reason -> Error reason
+                        | Ok () -> Error "preparation-cleanup-unobserved"
+                    elif Result.isOk outcome && not (PreparationCustody.ready custody) then
+                        Error "preparation-custody-order-refused"
+                    else outcome
 
-                    return outcome
+                if Result.isOk finalOutcome then
+                    transition "admit" ownedIdentity
+
+                return finalOutcome, observedExit, Some cleaned, reportingFailure
         }
 
     let private closureIdentity identities =
@@ -1111,56 +1172,229 @@ module PreparedAttempt =
         |> Encoding.UTF8.GetBytes
         |> digest
 
-    /// Performs bounded actual import/discovery without launching the product workload.
-    let prepareAsync binding deadline (spec: CapsulePreparation) cancellationToken =
-        task {
-            let kinds = spec.Checks |> List.map _.Kind |> Set.ofList
+    let private dependenciesBinding (declarations: CapsuleCheckDependencies list) =
+        use bytes = new MemoryStream()
+        use writer = new BinaryWriter(bytes, Encoding.UTF8, true)
+        for declaration in declarations do
+            writer.Write declaration.CheckId
+            writer.Write declaration.DependsOn.Length
+            for dependency in declaration.DependsOn do writer.Write dependency
+            writer.Write declaration.SharedStateScopes.Length
+            for scope in declaration.SharedStateScopes do writer.Write scope
+        writer.Flush()
+        digest (bytes.ToArray())
 
-            if
-                spec.Checks.Length > 32
-                || kinds <> set [ CapsuleCheckKind.Import; CapsuleCheckKind.Discovery ]
-                || spec.Checks
-                   |> List.exists (fun c ->
-                       String.IsNullOrWhiteSpace c.Id
-                       || not (Path.IsPathFullyQualified c.Executable)
-                       || c.ExpectedDiscoveries.IsEmpty
-                       || c.ExpectedDiscoveries |> List.exists String.IsNullOrWhiteSpace)
-                || (spec.Checks |> List.map _.Id |> Set.ofList |> Set.count) <> spec.Checks.Length
-            then
-                return Error "preparation-required-check-unavailable"
+    let private validChecks (spec: CapsulePreparation) =
+        let kinds = spec.Checks |> List.map _.Kind |> Set.ofList
+        let boundedStrings maximum values =
+            List.length values <= maximum
+            && (values |> List.forall (fun (value: string) -> not (isNull value) && value.Length <= 4096))
+        not (isNull spec.Root) && spec.Root.Length <= 4096
+        && spec.Checks.Length <= 32
+        && boundedStrings 4096 spec.Inputs
+        && spec.Environment.Count <= 128
+        && (spec.Environment |> Map.toList |> List.forall (fun (key, value) ->
+            not (isNull key) && not (isNull value) && key.Length <= 4096 && value.Length <= 4096))
+        && kinds = set [ CapsuleCheckKind.Import; CapsuleCheckKind.Discovery ]
+        && not (spec.Checks |> List.exists (fun c ->
+            String.IsNullOrWhiteSpace c.Id || c.Id.Length > 128
+            || isNull c.Executable || c.Executable.Length > 4096
+            || not (Path.IsPathFullyQualified c.Executable)
+            || not (boundedStrings 128 c.Arguments)
+            || not (boundedStrings 4096 c.ExpectedDiscoveries)
+            || c.ExpectedDiscoveries.IsEmpty
+            || c.ExpectedDiscoveries |> List.exists String.IsNullOrWhiteSpace))
+        && (spec.Checks |> List.map _.Id |> Set.ofList |> Set.count) = spec.Checks.Length
+
+    let private validCandidate (binding: string) (spec: CapsulePreparation) =
+        // Bound every serialized string before encoding, then cap their cumulative UTF-8 population.
+        not (isNull binding) && binding.Length <= 4096
+        && validChecks spec
+        && (seq {
+                yield binding
+                yield spec.Root
+                yield! spec.Inputs
+                for KeyValue(key, value) in spec.Environment do
+                    yield key
+                    yield value
+                for check in spec.Checks do
+                    yield check.Id
+                    yield check.Executable
+                    yield! check.Arguments
+                    yield! check.ExpectedDiscoveries
+            }
+            |> Seq.sumBy (fun value -> int64 (Encoding.UTF8.GetByteCount value))) <= 1048576L
+
+    let private validDeclarations (spec: CapsulePreparation) (declarations: CapsuleCheckDependencies list) =
+        let ids = spec.Checks |> List.map _.Id |> Set.ofList
+        let mutable prior = Set.empty
+        let mutable valid = List.length declarations <= 32
+        for declaration in declarations do
+            valid <- valid
+                     && ids.Contains declaration.CheckId
+                     && not (prior.Contains declaration.CheckId)
+                     && declaration.DependsOn.Length <= 32
+                     && declaration.SharedStateScopes.Length <= 32
+                     && (declaration.DependsOn @ declaration.SharedStateScopes
+                         |> List.forall (fun value -> not (String.IsNullOrWhiteSpace value) && value.Length <= 128))
+                     && (declaration.DependsOn |> Set.ofList |> Set.count) = declaration.DependsOn.Length
+                     && (declaration.SharedStateScopes |> Set.ofList |> Set.count) = declaration.SharedStateScopes.Length
+            prior <- prior.Add declaration.CheckId
+        // Unknown references are retained as blocked outcomes; cycles likewise never execute.
+        valid
+
+    let private hardStop (reason: string) =
+        not (reason.StartsWith("preparation-check-failed:", StringComparison.Ordinal)
+             || reason.StartsWith("preparation-import-missing:", StringComparison.Ordinal)
+             || reason.StartsWith("preparation-discovery-", StringComparison.Ordinal))
+
+    /// Runs the existing actual checks once, collecting only explicitly independent observations.
+    /// Declarations select continuation, never readiness; every original check remains required.
+    let prepareDetailedAsync binding deadline (spec: CapsulePreparation) (declarations: CapsuleCheckDependencies list) (cancellationToken: CancellationToken) =
+        task {
+            // Immutable F# records/lists/maps are snapped before any checker effects.
+            let declarations = declarations |> List.map (fun d -> { d with DependsOn = List.ofSeq d.DependsOn; SharedStateScopes = List.ofSeq d.SharedStateScopes })
+            let mutable firstFailure: string option = None
+            let mutable additional: string list = []
+            let mutable findings: PreparationCheckFinding list = []
+            let mutable omitted = 0
+            let mutable truncated = false
+            let remember reason =
+                match firstFailure with
+                | None -> firstFailure <- Some reason
+                | Some first when first <> reason && not (List.contains reason additional) ->
+                    if additional.Length < 32 then additional <- additional @ [reason]
+                    else truncated <- true
+                | _ -> ()
+            let add finding =
+                if findings.Length < 32 then findings <- findings @ [finding]
+                else omitted <- omitted + 1; truncated <- true
+            let finding id stage (declaration: CapsuleCheckDependencies option) outcome cause exit cleanup reporting =
+                { CheckId = id; Stage = stage
+                  Dependencies = declaration |> Option.map _.DependsOn |> Option.defaultValue []
+                  SharedStateScopes = declaration |> Option.map _.SharedStateScopes |> Option.defaultValue []
+                  Required = true; Outcome = outcome; Cause = cause
+                  EvidenceReferences = ["capsule-check:" + id]
+                  ExitCode = exit; CleanupObserved = cleanup; ReportingFailure = reporting }
+            let valid = validCandidate binding spec && validDeclarations spec declarations
+            // Invalid input never reaches the potentially unbounded binding serializer.
+            let candidate = if valid then specBinding binding spec else "unavailable"
+            let selection = if valid then dependenciesBinding declarations else "unavailable"
+            let mutable prepared = None
+            let mutable closure = None
+            if not valid then
+                omitted <- spec.Checks.Length
+                truncated <- omitted > 0
+                remember "preparation-required-check-unavailable"
             else
                 match inventory spec deadline with
-                | Error reason -> return Error reason
-                | Ok before ->
-                    let mutable result = Ok()
-                    let ledger = ref PreparationObservation.initial
-
-                    let mutable artifact =
-                        PreparedArtifact.initial (closureIdentity before) (spec.Checks |> List.map _.Id |> Set.ofList)
-
+                | Error reason ->
+                    remember reason
+                    // Structural missing inputs are independently observable without running any probe.
+                    if reason.StartsWith("preparation-input-missing:", StringComparison.Ordinal) then
+                        for input in spec.Inputs do
+                            if DateTimeOffset.UtcNow >= deadline then truncated <- true
+                            else
+                                // Malformed relative declarations never authorize reads outside the capsule.
+                                let missingInput =
+                                    try
+                                        let root = Path.GetFullPath(spec.Root).TrimEnd(Path.DirectorySeparatorChar)
+                                        let path = Path.GetFullPath(Path.Combine(root, input))
+                                        not (path.StartsWith(root + string Path.DirectorySeparatorChar, StringComparison.Ordinal))
+                                        || not (File.Exists path)
+                                    with _ -> true
+                                if missingInput then
+                                    let missing = "preparation-input-missing:" + Path.GetFileName input
+                                    remember missing
+                                    add (finding (Path.GetFileName input) "closure" None PreparationCheckOutcome.Failed (Some missing) None None None)
                     for check in spec.Checks do
-                        if Result.isOk result then
-                            let! observed = runCheck spec deadline check ledger cancellationToken
-                            result <- observed
-
-                            if Result.isOk observed then
+                        let declaration = declarations |> List.tryFind (fun d -> d.CheckId = check.Id)
+                        add (finding check.Id "check" declaration (if reason.Contains("deadline") || reason.Contains("budget") then PreparationCheckOutcome.NotRunBound else PreparationCheckOutcome.Blocked) (Some reason) None None None)
+                | Ok before ->
+                    closure <- Some(closureIdentity before)
+                    let ledger = ref PreparationObservation.initial
+                    let mutable artifact = PreparedArtifact.initial (closureIdentity before) (spec.Checks |> List.map _.Id |> Set.ofList)
+                    let mutable observed = Map.empty<string, PreparationCheckOutcome>
+                    let mutable invalidScopes = Set.empty<string>
+                    let mutable stopped = None
+                    for check in spec.Checks do
+                        let declaration = declarations |> List.tryFind (fun d -> d.CheckId = check.Id)
+                        let blocked =
+                            match declaration with
+                            | None when firstFailure.IsSome -> Some "preparation-independence-unknown"
+                            | None -> None
+                            | Some d when d.DependsOn |> List.exists (fun id -> Map.tryFind id observed <> Some PreparationCheckOutcome.Passed) ->
+                                Some "preparation-dependency-not-passed"
+                            | Some d when d.SharedStateScopes |> List.exists invalidScopes.Contains ->
+                                Some "preparation-shared-state-invalidated"
+                            | Some _ -> None
+                        if stopped.IsSome || DateTimeOffset.UtcNow >= deadline || cancellationToken.IsCancellationRequested then
+                            let reason = stopped |> Option.defaultValue "preparation-deadline-refused"
+                            remember reason
+                            let outcome = if reason.Contains("budget") || reason.Contains("deadline") || reason.Contains("timeout") then PreparationCheckOutcome.NotRunBound else PreparationCheckOutcome.Blocked
+                            add (finding check.Id "check" declaration outcome (Some reason) None None None)
+                            observed <- observed.Add(check.Id, outcome)
+                        elif blocked.IsSome then
+                            remember blocked.Value
+                            add (finding check.Id "check" declaration PreparationCheckOutcome.Blocked blocked None None None)
+                            observed <- observed.Add(check.Id, PreparationCheckOutcome.Blocked)
+                        else
+                            let! result, exit, cleanup, reporting = runCheck spec deadline check ledger cancellationToken
+                            let outcome, cause =
+                                match result with
+                                | Ok () -> PreparationCheckOutcome.Passed, None
+                                | Error reason ->
+                                    remember reason
+                                    (if hardStop reason then PreparationCheckOutcome.Unknown else PreparationCheckOutcome.Failed), Some reason
+                            add (finding check.Id "check" declaration outcome cause exit cleanup reporting)
+                            observed <- observed.Add(check.Id, outcome)
+                            match reporting with Some reason -> remember reason; stopped <- Some reason | None -> ()
+                            if cleanup <> Some true then
+                                remember "preparation-cleanup-unobserved"
+                                stopped <- Some "preparation-cleanup-unobserved"
+                            match cause with
+                            | Some reason ->
+                                if hardStop reason then stopped <- Some reason
+                                match declaration with
+                                | None -> stopped <- Some "preparation-independence-unknown"
+                                | Some d -> invalidScopes <- Set.union invalidScopes (Set.ofList d.SharedStateScopes)
+                            | None ->
                                 match PreparedArtifact.observe check.Id artifact with
                                 | Ok next -> artifact <- next
-                                | Error reason -> result <- Error reason
+                                | Error reason -> remember reason; stopped <- Some reason
+                            // A failed checker may have modified inputs. Never use old closure validity to continue.
+                            match inventory spec deadline with
+                            | Error reason -> remember reason; stopped <- Some reason
+                            | Ok current when current <> before ->
+                                remember "preparation-input-invalidated"
+                                stopped <- Some "preparation-input-invalidated"
+                            | Ok _ -> ()
+                    if firstFailure.IsNone then
+                        match inventory spec deadline with
+                        | Error reason -> remember reason
+                        | Ok after when after <> before -> remember "preparation-input-invalidated"
+                        | Ok after -> prepared <- Some(PreparedAttempt.CreateDetailed(candidate, deadline, after, Some artifact, selection))
+            return
+                { CandidateBinding = candidate; ClosureIdentity = closure; DependenciesBinding = selection; Prepared = prepared
+                  FirstFailure = firstFailure; Findings = findings; AdditionalFailures = additional
+                  OmittedChecks = omitted; Truncated = truncated }
+        }
 
-                    match result, inventory spec deadline with
-                    | Error reason, _ -> return Error reason
-                    | _, Error reason -> return Error reason
-                    | Ok(), Ok after when before <> after -> return Error "preparation-input-invalidated"
-                    | Ok(), Ok after ->
-                        return Ok(PreparedAttempt.Create(specBinding binding spec, deadline, after, Some artifact))
+    /// Legacy strict projection shares the same implementation and conservative continuation policy.
+    let prepareAsync binding deadline (spec: CapsulePreparation) cancellationToken =
+        task {
+            let! report = prepareDetailedAsync binding deadline spec [] cancellationToken
+            match report.Prepared, report.FirstFailure with
+            | Some prepared, None -> return Ok prepared
+            | _, Some reason -> return Error reason
+            | _ -> return Error "preparation-check-unknown"
         }
 
     /// Consume only against the same inputs/command/configuration and a current deadline.
     let validate now binding (spec: CapsulePreparation) (attempt: PreparedAttempt) =
         if now >= attempt.Deadline then
             Error "preparation-deadline-refused"
-        elif specBinding binding spec <> attempt.Binding then
+        elif not (validCandidate binding spec) || specBinding binding spec <> attempt.Binding then
             Error "preparation-binding-invalidated"
         else
             inventory spec attempt.Deadline
@@ -1174,3 +1408,10 @@ module PreparedAttempt =
                     match refusal with
                     | Some reason -> Error reason
                     | None -> Ok())
+
+    /// Consume a detailed preparation only with the same frozen continuation declarations.
+    let validateDetailed now binding spec declarations (attempt: PreparedAttempt) =
+        if not (validCandidate binding spec) || not (validDeclarations spec declarations)
+           || attempt.DependenciesBinding <> Some(dependenciesBinding declarations) then
+            Error "preparation-dependencies-invalidated"
+        else validate now binding spec attempt
