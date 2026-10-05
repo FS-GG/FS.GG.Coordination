@@ -1,7 +1,7 @@
 """Pure capability probe marker controls; no provider commands are launched."""
 import sys
 sys.dont_write_bytecode=True
-import ast,importlib.util,io,re,tempfile,unittest
+import ast,importlib.util,io,re,tempfile,unittest,json,subprocess
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
@@ -30,6 +30,50 @@ class Controls(unittest.TestCase):
    with patch.object(sys,'argv',argv),patch.object(c,'runuser',side_effect=ValueError('PRIVATE_SENTINEL /private/path')),redirect_stdout(output):
     with self.assertRaises(ValueError):c.main()
    self.assertEqual(output.getvalue().splitlines(),['PORTABLE_PROVIDER_CAPABILITY_STAGE=arguments','PORTABLE_PROVIDER_CAPABILITY_STAGE=locations','PORTABLE_PROVIDER_CAPABILITY_STAGE=podman-info']);self.assertNotIn('PRIVATE_SENTINEL',output.getvalue());self.assertNotIn('/private/path',output.getvalue());self.assertFalse((root/'output').exists())
+ def test_actual_entrypoint_classifies_transport_failure_without_private_text(self):
+  cases=[(subprocess.CalledProcessError(125,['PRIVATE_SENTINEL'],output='PRIVATE_SENTINEL',stderr='PRIVATE_SENTINEL'),'child-exit',125,None),
+         (subprocess.TimeoutExpired('PRIVATE_SENTINEL',20,output='PRIVATE_SENTINEL'),'timeout',None,None),
+         (FileNotFoundError(2,'PRIVATE_SENTINEL','/private/path'),'os-error',None,2),
+         (json.JSONDecodeError('PRIVATE_SENTINEL','PRIVATE_SENTINEL',0),'json',None,None),
+         (UnicodeDecodeError('utf8',b'PRIVATE_SENTINEL',0,1,'PRIVATE_SENTINEL'),'unicode',None,None),
+         (KeyError('PRIVATE_SENTINEL'),'json-shape',None,None),
+         (ValueError('PRIVATE_SENTINEL'),'value',None,None),
+         (RuntimeError('PRIVATE_SENTINEL'),'internal',None,None)]
+  for error,kind,code,errno in cases:
+   with self.subTest(kind=kind),tempfile.TemporaryDirectory() as td:
+    root=Path(td);locations=root/'locations';locations.write_text('/fixture/sdk\n');output=io.StringIO()
+    argv=['collector','--account','fixture','--uid','987654','--state',td,'--storage',td,'--archive',str(root/'archive'),'--runtime',str(root/'runtime'),'--measured-locations',str(locations),'--podman-info',str(root/'podman'),'--output',str(root/'output')]
+    with patch.object(sys,'argv',argv),patch.object(c.subprocess,'check_output',side_effect=error) as transport,redirect_stdout(output):
+     self.assertEqual(c.entrypoint(),2)
+    transport.assert_called_once();self.assertEqual(transport.call_args.kwargs,{'text':True,'timeout':20})
+    lines=output.getvalue().splitlines();diagnostics=[x.split('=',1)[1] for x in lines if x.startswith('PORTABLE_PROVIDER_CAPABILITY_FAILURE=')]
+    self.assertEqual(len(diagnostics),1);self.assertEqual(json.loads(diagnostics[0]),{'stage':'podman-info','kind':kind,'exit':code,'errno':errno})
+    self.assertNotIn('PRIVATE_SENTINEL',output.getvalue());self.assertNotIn('/private/path',output.getvalue());self.assertFalse((root/'output').exists())
+ def test_broken_stage_and_refusal_sinks_preserve_transport_failure_exit(self):
+  class BrokenSink(io.StringIO):
+   def write(self,value): raise BrokenPipeError('PRIVATE_SENTINEL')
+   def flush(self): raise BrokenPipeError('PRIVATE_SENTINEL')
+  with tempfile.TemporaryDirectory() as td:
+   root=Path(td);locations=root/'locations';locations.write_text('/fixture/sdk\n')
+   argv=['collector','--account','fixture','--uid','987654','--state',td,'--storage',td,'--archive',str(root/'archive'),'--runtime',str(root/'runtime'),'--measured-locations',str(locations),'--podman-info',str(root/'podman'),'--output',str(root/'output')]
+   error=subprocess.CalledProcessError(125,['PRIVATE_SENTINEL'])
+   with patch.object(sys,'argv',argv),patch.object(c.subprocess,'check_output',side_effect=error) as transport,patch.object(c,'failure_diagnostic',wraps=c.failure_diagnostic) as classify,redirect_stdout(BrokenSink()):
+    self.assertEqual(c.entrypoint(),2)
+   transport.assert_called_once();classify.assert_called_once_with(error)
+ def test_diagnostic_failure_preserves_original_refusal_exit(self):
+  output=io.StringIO()
+  with patch.object(c,'main',side_effect=RuntimeError('PRIVATE_SENTINEL')),patch.object(c,'failure_diagnostic',side_effect=RuntimeError('PRIVATE_SENTINEL')),redirect_stdout(output):
+   self.assertEqual(c.entrypoint(),2)
+  self.assertNotIn('PRIVATE_SENTINEL',output.getvalue())
+  self.assertEqual(json.loads(output.getvalue().splitlines()[0].split('=',1)[1]),{'stage':'unavailable','kind':'unavailable','exit':None,'errno':None})
+ def test_diagnostic_integer_bounds_and_unknown_stage(self):
+  for code in [True,256,-256,'PRIVATE_SENTINEL']:
+   self.assertIsNone(c.failure_diagnostic(subprocess.CalledProcessError(code,'PRIVATE_SENTINEL'))['exit'])
+  c._last_stage='PRIVATE_SENTINEL'
+  self.assertEqual(c.failure_diagnostic(RuntimeError('PRIVATE_SENTINEL'))['stage'],'unavailable')
+  for errno in [True,0,4096]:
+   error=OSError();error.errno=errno
+   self.assertIsNone(c.failure_diagnostic(error)['errno'])
  def test_location_refusal_precedes_any_provider_call(self):
   with tempfile.TemporaryDirectory() as td:
    root=Path(td);locations=root/'locations';locations.write_text('relative/path\n');output=io.StringIO()
