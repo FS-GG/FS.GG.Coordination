@@ -2,17 +2,23 @@
 import sys
 sys.dont_write_bytecode=True
 import ast,importlib.util,io,re,tempfile,unittest,json,subprocess
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout,ExitStack
 from pathlib import Path
 from unittest.mock import patch
 import socket,os
 def forbidden(*args,**kwargs):raise AssertionError('native-network-forbidden')
-subprocess.Popen=forbidden;subprocess.run=forbidden;subprocess.check_output=forbidden;subprocess.check_call=forbidden;os.system=forbidden;socket.socket.connect=forbidden;socket.create_connection=forbidden
 HERE=Path(__file__).parent
-spec=importlib.util.spec_from_file_location('collector',HERE/'collect_provider_capability.py');c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
+# Scope import traps: this module is also imported by the independently selected
+# hosted runtime driver. Restore its prior transports; never relax an outer trap.
+TRAPS=[(subprocess,'Popen'),(subprocess,'run'),(subprocess,'call'),(subprocess,'check_output'),(subprocess,'check_call'),(os,'system'),(socket.socket,'connect'),(socket,'create_connection')]
+with ExitStack() as importing:
+ for target,name in TRAPS:importing.enter_context(patch.object(target,name,forbidden))
+ spec=importlib.util.spec_from_file_location('collector',HERE/'collect_provider_capability.py');c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 STAGES={'arguments','locations','podman-info','uid-map','gid-map','podman-shape','helper-hashes','git-version','tar-version','podman-version','runtime-list','sdk-list','sdk-probe','resource-read','output'}
 class Controls(unittest.TestCase):
  def setUp(self):
+  traps=ExitStack();self.addCleanup(traps.close)
+  for target,name in TRAPS:traps.enter_context(patch.object(target,name,forbidden))
   self.probe=patch.object(c,'podman_version_probe',return_value='podman version 4.9.3');self.probe.start();self.addCleanup(self.probe.stop)
   self.transport=patch.object(c.subprocess,'run',side_effect=AssertionError('native command forbidden'));self.transport.start();self.addCleanup(self.transport.stop)
 

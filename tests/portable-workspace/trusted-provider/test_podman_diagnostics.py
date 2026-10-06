@@ -34,6 +34,24 @@ class Controls(unittest.TestCase):
    with patch.object(c.subprocess,'run',failed):
     with self.assertRaises(subprocess.CalledProcessError) as got:c.podman_version_probe('p4executor')
    self.assertEqual(got.exception.returncode,125);self.assertEqual(got.exception.stderr,b'PRIVATE')
+ def test_diagnostic_import_and_cases_restore_exact_outer_traps(self):
+  import runpy
+  names=['Popen','run','call','check_output','check_call'];prior={name:getattr(subprocess,name) for name in names}
+  file=pathlib.Path(__file__).parent/'test_capability_diagnostics.py'
+  imported=runpy.run_path(str(file),run_name='diagnostics_import_only')
+  with contextlib.redirect_stderr(io.StringIO()):result=unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromTestCase(imported['Controls']))
+  self.assertTrue(result.wasSuccessful());self.assertEqual(result.testsRun,8)
+  self.assertTrue(all(getattr(subprocess,name) is old for name,old in prior.items()))
+  class RefusingLoader:
+   def create_module(self,spec):return None
+   def exec_module(self,module):raise RuntimeError('injected-import-refusal')
+  original=importlib.util.spec_from_file_location
+  def spec(name,path):
+   if name=='collector':return importlib.util.spec_from_loader(name,RefusingLoader())
+   return original(name,path)
+  with patch.object(importlib.util,'spec_from_file_location',spec):
+   with self.assertRaisesRegex(RuntimeError,'injected-import-refusal'):runpy.run_path(str(file),run_name='failed_import_only')
+  self.assertTrue(all(getattr(subprocess,name) is old for name,old in prior.items()))
  def test_numeric_version_and_unavailable_exit(self):
   self.assertEqual(self.provenance('podman version 5.4.2-ubuntu.1')['version'],'5.4.2')
   v=c.podman_provenance(None,subprocess.CalledProcessError(125,['SECRET']))
