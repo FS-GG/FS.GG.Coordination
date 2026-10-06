@@ -1931,7 +1931,10 @@ let ``compiler gate owns pinned native collector manager behavior`` () =
           "sha256sum --check --strict"
           "tests/telemetry-runtime-receiver/run.sh"
           "tests/telemetry-native-collector-installation/run-v3.sh"
-          "tests/telemetry-native-collector-installation/run.py" ]
+          "tests/telemetry-native-collector-installation/run.py"
+          "dotnet restore tests/telemetry-native-collector-responses-installation/ResponsesInstallationTests.fsproj --locked-mode"
+          "dotnet build tests/telemetry-native-collector-responses-installation/ResponsesInstallationTests.fsproj --configuration Release --no-restore --warnaserror"
+          "dotnet tests/telemetry-native-collector-responses-installation/bin/Release/net10.0/ResponsesInstallationTests.dll" ]
         |> List.forall testOwner.Contains
 
     Assert.True(valid runner harness)
@@ -1939,3 +1942,6 @@ let ``compiler gate owns pinned native collector manager behavior`` () =
     Assert.False(valid runner (harness.Replace("a1310e14a60d1d025dd3fa9f404970890503d092", String.replicate 40 "0")))
     Assert.False(valid runner (harness.Replace("tests/telemetry-native-collector-installation/run-v3.sh", "missing-v3")))
     Assert.False(valid runner (harness.Replace("tests/telemetry-native-collector-installation/run.py", "missing-legacy")))
+    Assert.False(valid runner (harness.Replace("ResponsesInstallationTests.dll", "missing-responses")))
+    Assert.False(valid runner (harness.Replace("--locked-mode", "--force")))
+    Assert.False(valid runner (harness.Replace("--warnaserror", "--no-warn")))
