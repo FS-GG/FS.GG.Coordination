@@ -109,7 +109,9 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: qualification-selection-${{ needs.prepare.outputs.candidate }}
-          path: ${{ runner.temp }}/optimistic-selection
+          path: |
+            ${{ runner.temp }}/optimistic-selection/selection.json
+            ${{ runner.temp }}/optimistic-selection/profile.json
           retention-days: 90
           if-no-files-found: error
 

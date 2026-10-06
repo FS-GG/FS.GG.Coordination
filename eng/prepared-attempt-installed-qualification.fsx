@@ -385,6 +385,16 @@ let execute name (spec: CapsulePreparation) =
         holdOutput journal.Descriptor leaf false |> ignore
     outcome,runner
 
+// Preserve explicit output quota evidence across both original checker completion orders.
+let outputBoundEvidence firstFailure firstCause firstOutcome firstReporting secondCause secondOutcome secondUnlaunched firstCleaned additionalQuota =
+    let quota = Some "preparation-output-budget-refused"
+    let malformed = Some "preparation-observation-malformed"
+    firstOutcome = PreparationCheckOutcome.Unknown && firstCleaned && secondUnlaunched
+    && ((firstFailure = quota && firstCause = quota && firstReporting = None
+         && secondCause = quota && secondOutcome = PreparationCheckOutcome.NotRunBound)
+        || (firstFailure = malformed && firstCause = malformed && firstReporting = quota && additionalQuota
+            && secondCause = malformed && secondOutcome = PreparationCheckOutcome.Blocked))
+
 let observations = ResizeArray<obj>()
 let mutable firstDiagnosticFailure: string option = None
 let mutable diagnosticReportingFailed = false
@@ -501,7 +511,10 @@ try
             elif name="reporting" then
                 demand (report.FirstFailure=Some "preparation-check-failed:imports" && first.ReportingFailure.IsSome) "reporting-masked-first-cause"
             elif name="unknown-result" then demand (first.Outcome=PreparationCheckOutcome.Unknown) "unknown-result-misclassified"
-            elif name="output" then demand (second.Outcome=PreparationCheckOutcome.NotRunBound) "output-bound-unreported"
+            elif name="output" then
+                demand (outputBoundEvidence report.FirstFailure first.Cause first.Outcome first.ReportingFailure
+                            second.Cause second.Outcome second.ExitCode.IsNone (first.CleanupObserved=Some true)
+                            (List.contains "preparation-output-budget-refused" report.AdditionalFailures)) "output-bound-unreported"
         cleanupDiagnostics ()
     // These are prerequisite-only capsules. The legacy executor controls below prove zero workload effects.
     for name in ["missing";"empty";"malformed";"timeout";"tool";"during-check-drift"] do
@@ -582,6 +595,14 @@ try
 with error ->
     // Preserve diagnostic artifacts for the finite operator to inspect; no successful receipt.
     try eprintfn "PREPARED_INSTALLED_QUALIFICATION_REFUSED %s" error.Message with _ -> ()
+    // Optional bounded diagnostic emission never replaces the actual first refusal.
+    try
+        let payload = JsonSerializer.Serialize(observations.ToArray())
+        if Encoding.UTF8.GetByteCount payload <= 65536 then
+            eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_OBSERVATIONS %s" payload
+        else
+            eprintfn "PREPARED_INSTALLED_DIAGNOSTIC_OBSERVATIONS_REFUSED byte-cap"
+    with _ -> diagnosticReportingFailed <- true
     disposeOwned ()
     outputLease.Dispose()
     exit 2

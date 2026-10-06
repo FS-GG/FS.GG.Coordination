@@ -499,5 +499,77 @@ class HeldOutputFilesystemControls(unittest.TestCase):
         self.assertEqual(self.identity(os.fstat(fd)), expected)
 
 
+class OutputBoundCompletionControls(unittest.TestCase):
+    """Pure injected completion orders evaluate the actual F# fixture predicate."""
+
+    @staticmethod
+    def admitted(**changes):
+        source = SCRIPT.read_text()
+        block = source.split('let outputBoundEvidence ', 1)[1].split('\n\nlet observations', 1)[0]
+        expression = block[block.index('    firstOutcome ='):]
+        expression = re.sub(r'PreparationCheckOutcome\.(Unknown|Blocked|NotRunBound)',
+                            lambda match: repr(match.group(1)), expression)
+        expression = expression.replace('&&', ' and ').replace('||', ' or ')
+        expression = re.sub(r'(?<![<>=!])=(?!=)', '==', expression)
+        row = dict(firstFailure='preparation-output-budget-refused',
+                   firstCause='preparation-output-budget-refused', firstOutcome='Unknown',
+                   firstReporting=None, secondCause='preparation-output-budget-refused',
+                   secondOutcome='NotRunBound', secondUnlaunched=True, firstCleaned=True,
+                   additionalQuota=False, quota='preparation-output-budget-refused',
+                   malformed='preparation-observation-malformed')
+        row.update(changes)
+        return eval(compile(' '.join(expression.split()), 'actual-output-bound-predicate', 'eval'),
+                    {'__builtins__': {}}, row)
+
+    @staticmethod
+    def completed():
+        return dict(firstFailure='preparation-observation-malformed',
+                    firstCause='preparation-observation-malformed',
+                    firstReporting='preparation-output-budget-refused',
+                    secondCause='preparation-observation-malformed',
+                    secondOutcome='Blocked', additionalQuota=True)
+
+    def test_live_overflow_requires_explicit_quota_cause(self):
+        self.assertTrue(self.admitted())
+        for field in ('firstFailure', 'firstCause', 'secondCause'):
+            with self.subTest(field=field):
+                self.assertFalse(self.admitted(**{field: 'unrelated'}))
+
+    def test_terminated_overflow_preserves_malformed_and_separate_quota(self):
+        completed = self.completed()
+        self.assertTrue(self.admitted(**completed))
+        for field in ('firstFailure', 'firstCause', 'secondCause'):
+            with self.subTest(field=field):
+                self.assertFalse(self.admitted(**(completed | {field: 'unrelated'})))
+        self.assertFalse(self.admitted(**(completed | {'firstReporting': None})))
+        self.assertFalse(self.admitted(**(completed | {'additionalQuota': False})))
+
+    def test_arbitrary_blocked_or_bound_cannot_qualify(self):
+        self.assertFalse(self.admitted(secondOutcome='Blocked'))
+        self.assertFalse(self.admitted(**(self.completed() | {'secondOutcome': 'NotRunBound'})))
+        self.assertFalse(self.admitted(**(self.completed() | {'secondCause': 'preparation-cleanup-unobserved'})))
+
+    def test_launched_continuation_or_unknown_cleanup_refuses_both_orders(self):
+        for branch in ({}, self.completed()):
+            self.assertFalse(self.admitted(**(branch | {'secondUnlaunched': False})))
+            self.assertFalse(self.admitted(**(branch | {'firstCleaned': False})))
+            for outcome in ('Passed', 'Failed', 'Blocked', 'NotRunBound'):
+                self.assertFalse(self.admitted(**(branch | {'firstOutcome': outcome})))
+
+    def test_fixture_uses_actual_reporting_exit_and_cleanup_fields(self):
+        source = SCRIPT.read_text()
+        self.assertIn('outputBoundEvidence report.FirstFailure first.Cause first.Outcome first.ReportingFailure', source)
+        self.assertIn('second.Cause second.Outcome second.ExitCode.IsNone (first.CleanupObserved=Some true)', source)
+        self.assertIn('(List.contains "preparation-output-budget-refused" report.AdditionalFailures)', source)
+
+    def test_refusal_observations_are_bounded_and_best_effort(self):
+        source = SCRIPT.read_text().split('with error ->\n    // Preserve diagnostic artifacts', 1)[1]
+        self.assertLess(source.index('PREPARED_INSTALLED_QUALIFICATION_REFUSED'), source.index('let payload'))
+        self.assertIn('Encoding.UTF8.GetByteCount payload <= 65536', source)
+        self.assertIn('with _ -> diagnosticReportingFailed <- true', source)
+        self.assertLess(source.index('with _ -> diagnosticReportingFailed <- true'), source.index('disposeOwned ()'))
+        self.assertIn('exit 2', source)
+
+
 if __name__ == "__main__":
     unittest.main()
