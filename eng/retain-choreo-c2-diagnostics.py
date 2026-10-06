@@ -29,8 +29,10 @@ def filtered(raw, scratch):
     return '\n'.join(lines)
 
 
-def capture(scratch, destination, status, *, clock=time.monotonic):
+def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MAX_OUTPUT):
     """Bound enumeration, nofollow reads, head/tail retention and output bytes."""
+    if not 1024 <= max_output <= MAX_OUTPUT:
+        raise ValueError('diagnostic output profile')
     scratch = Path(scratch).absolute()
     destination = Path(destination).absolute()
     end = clock() + SECONDS
@@ -100,7 +102,11 @@ def capture(scratch, destination, status, *, clock=time.monotonic):
                 'outcome': 'failed', 'logs': records, 'omittedCoverage': sorted(set(coverage)),
                 'filter': 'sensitive-lines-omitted; textual-logs-only; no-environment-capture'}
     raw = (json.dumps(document, ensure_ascii=True, indent=2) + '\n').encode()
-    if len(raw) > MAX_OUTPUT:
+    while len(raw) > max_output and records:
+        records.pop()
+        document['omittedCoverage'] = sorted(set(document['omittedCoverage'] + ['output-byte-bound']))
+        raw = (json.dumps(document, ensure_ascii=True, indent=2) + '\n').encode()
+    if len(raw) > max_output:
         raise ValueError('diagnostic output bound')
     destination.mkdir(mode=0o700)
     f = os.open(destination / 'failure.json', os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600)
@@ -111,7 +117,8 @@ def capture(scratch, destination, status, *, clock=time.monotonic):
 
 if __name__ == '__main__':
     try:
-        capture(sys.argv[1], sys.argv[2], int(sys.argv[3]))
+        capture(sys.argv[1], sys.argv[2], int(sys.argv[3]),
+                max_output=int(sys.argv[4]) if len(sys.argv) == 5 else MAX_OUTPUT)
     except Exception:
         # Never echo errors, paths, input bytes or credentials into public logs.
         sys.exit(2)

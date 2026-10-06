@@ -9,6 +9,7 @@ import hashlib
 import json
 import os
 import re
+import runpy
 import sys
 from pathlib import Path
 import shutil
@@ -126,10 +127,28 @@ def relative_retry(states, operation, initial_stage):
             for state in states]
 
 
+def retain_failure(directory):
+    """Best effort before C5 cleanup; never replace the original exception."""
+    destination = os.environ.get('FSGG_CHOREO_DIAGNOSTIC_ROOT')
+    if not destination:
+        return
+    try:
+        collector = runpy.run_path(str(ROOT / 'eng/retain-choreo-c2-diagnostics.py'))['capture']
+        collector(directory, Path(destination + '-parity'), 1, max_output=96 * 1024)
+        print('CHOREO_PARITY_FAILURE_DIAGNOSTIC retained', file=sys.stderr)
+    except BaseException:
+        try:
+            print('CHOREO_PARITY_FAILURE_DIAGNOSTIC unavailable', file=sys.stderr)
+        except BaseException:
+            pass
+
+
 def main():
     manifest = json.loads((FIXTURES / 'manifest.json').read_text())
-    with tempfile.TemporaryDirectory(prefix='fsgg-choreo-parity-') as temporary:
-        directory = Path(temporary)
+    temporary = tempfile.TemporaryDirectory(prefix='fsgg-choreo-parity-')
+    directory = Path(temporary.name)
+    first_failure = None
+    try:
         export_legacy(directory)
         for old, new in [('happy', 'happy-path'), ('lostApplied', 'lost-applied'),
                          ('restart', 'restart-gates'), ('missingNative', 'missing-native-readback')]:
@@ -142,6 +161,20 @@ def main():
         compare('relative-same-operation-retry',
                 relative_retry(legacy(directory, 'processRetry')[3:], 'op-process', 1),
                 relative_retry(retry, 'op-claim', 0))
+    except BaseException as error:
+        first_failure = error
+        retain_failure(directory)
+        raise
+    finally:
+        try:
+            temporary.cleanup()
+        except BaseException:
+            try:
+                print('CHOREO_PARITY_SCRATCH_CLEANUP failed', file=sys.stderr)
+            except BaseException:
+                pass
+            if first_failure is None:
+                raise
 
 
 if __name__ == '__main__':

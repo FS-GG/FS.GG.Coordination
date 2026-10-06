@@ -163,4 +163,83 @@ exit 0
         self.assertIn('FSGG_CHOREO_DIAGNOSTIC_ROOT="$fragment/choreo-failure-diagnostics"', script)
 
 
+
+
+class ParityDiagnosticControls(unittest.TestCase):
+    def module(self):
+        s = importlib.util.spec_from_file_location('parity_diagnostic_control', ROOT / 'eng/verify-choreo-c5-parity.py')
+        m = importlib.util.module_from_spec(s); s.loader.exec_module(m)
+        return m
+
+    def test_actual_c5_exception_retains_details_before_original_cleanup(self):
+        from unittest.mock import patch
+        import io
+        m = self.module(); observed = []; original = RuntimeError('original compile failure')
+        with tempfile.TemporaryDirectory() as tmp:
+            destination = Path(tmp) / 'choreo-failure-diagnostics'
+            def fail(directory):
+                observed.append(directory)
+                logs = directory / '_apalache-out/server/attempt'; logs.mkdir(parents=True)
+                (logs / 'detailed.log').write_text('compiler detail: failed translation\npassword=synthetic-c5-secret')
+                raise original
+            with patch.dict(os.environ, FSGG_CHOREO_DIAGNOSTIC_ROOT=str(destination)), patch.object(m, 'export_legacy', side_effect=fail), patch.object(m.sys, 'stderr', io.StringIO()):
+                with self.assertRaises(RuntimeError) as actual: m.main()
+            self.assertIs(original, actual.exception)
+            self.assertFalse(observed[0].exists())
+            artifact = Path(str(destination) + '-parity') / 'failure.json'
+            text = artifact.read_text()
+            self.assertIn('failed translation', text)
+            self.assertNotIn('synthetic-c5-secret', text)
+            self.assertLessEqual(artifact.stat().st_size, 96 * 1024)
+
+    def test_c5_reporting_failure_preserves_exact_original_exception_and_cleanup(self):
+        from unittest.mock import patch
+        import io
+        m = self.module(); observed = []; original = RuntimeError('first cause')
+        def fail(directory): observed.append(directory); raise original
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, FSGG_CHOREO_DIAGNOSTIC_ROOT=str(Path(tmp) / 'diagnostics')), patch.object(m, 'export_legacy', side_effect=fail), patch.object(m.runpy, 'run_path', side_effect=OSError('reporting unavailable')), patch.object(m.sys, 'stderr', io.StringIO()):
+                with self.assertRaises(RuntimeError) as actual: m.main()
+            self.assertIs(original, actual.exception)
+            self.assertFalse(observed[0].exists())
+
+    def test_c5_cleanup_failure_cannot_green_success_or_replace_first_cause(self):
+        from unittest.mock import patch
+        import io
+        for fails in [False, True]:
+            m = self.module(); original = RuntimeError('first cause')
+            with tempfile.TemporaryDirectory() as tmp:
+                class FakeTemporary:
+                    name = tmp
+                    def cleanup(self): raise OSError('cleanup failed')
+                with patch.object(m.tempfile, 'TemporaryDirectory', return_value=FakeTemporary()), patch.object(m, 'export_legacy', side_effect=original if fails else None), patch.object(m, 'legacy', return_value=[]), patch.object(m, 'choreo', return_value=[]), patch.object(m, 'compare'), patch.object(m, 'relative_retry', return_value=[]), patch.object(m, 'retain_failure'), patch.object(m.sys, 'stderr', io.StringIO()):
+                    with self.assertRaises(RuntimeError if fails else OSError) as actual: m.main()
+                if fails: self.assertIs(original, actual.exception)
+
+    def test_joint_output_cap_reports_omission_without_losing_original_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); scratch = root / 'scratch'; scratch.mkdir()
+            for i in range(16): (scratch / f'{i}.log').write_text('\N{SNOWMAN}' * 8192)
+            value = module.capture(scratch, root / 'diagnostics', 37, max_output=96 * 1024)
+            self.assertIn('output-byte-bound', value['omittedCoverage'])
+            self.assertEqual(37, value['originalExitCode'])
+            self.assertLessEqual((root / 'diagnostics/failure.json').stat().st_size, 96 * 1024)
+            # Both runtime callers select half the original diagnostic output cap.
+            gate = (ROOT / 'eng/verify-choreo-c2-bounded.sh').read_text()
+            parity = (ROOT / 'eng/verify-choreo-c5-parity.py').read_text()
+            self.assertIn('"$status" 98304; then', gate)
+            self.assertIn('max_output=96 * 1024', parity)
+            self.assertEqual(192 * 1024, 2 * 96 * 1024)
+
+    def test_c5_interrupted_or_broken_reporting_preserves_original_exception(self):
+        from unittest.mock import patch
+        m = self.module(); original = RuntimeError('first cause')
+        class BrokenSink:
+            def write(self, value): raise OSError('broken reporting')
+        with tempfile.TemporaryDirectory() as tmp:
+            with patch.dict(os.environ, FSGG_CHOREO_DIAGNOSTIC_ROOT=str(Path(tmp) / 'diagnostics')), patch.object(m, 'export_legacy', side_effect=original), patch.object(m.runpy, 'run_path', side_effect=SystemExit(99)), patch.object(m.sys, 'stderr', BrokenSink()):
+                with self.assertRaises(RuntimeError) as actual: m.main()
+            self.assertIs(original, actual.exception)
+
+
 if __name__ == '__main__': unittest.main()

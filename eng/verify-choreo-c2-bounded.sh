@@ -11,7 +11,7 @@ finish() {
     # Reporting is best effort; neither its exit nor cleanup replaces the cause.
     if timeout --signal=TERM --kill-after=1s 3s python3 \
       "$repo_root/eng/retain-choreo-c2-diagnostics.py" \
-      "$scratch_root" "$FSGG_CHOREO_DIAGNOSTIC_ROOT" "$status"; then
+      "$scratch_root" "$FSGG_CHOREO_DIAGNOSTIC_ROOT" "$status" 98304; then
       printf 'CHOREO_FAILURE_DIAGNOSTIC retained\n' >&2 || :
     else
       printf 'CHOREO_FAILURE_DIAGNOSTIC unavailable\n' >&2 || :
