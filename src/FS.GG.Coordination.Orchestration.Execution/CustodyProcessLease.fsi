@@ -10,6 +10,7 @@ type internal CustodyProcessStatus =
     | Unknown
 
 /// Owns an acquired process pidfd. This primitive does not confer execution admission.
+/// Readability is the last-thread termination boundary, never leader exit alone.
 [<Class>]
 type internal CustodyProcessLease =
     member Status: CustodyProcessStatus

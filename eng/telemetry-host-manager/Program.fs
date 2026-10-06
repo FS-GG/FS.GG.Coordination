@@ -407,8 +407,7 @@ let private verifyNativeManifestFile (uid: int) executable allowEmpty declaredBy
        || Convert.ToHexString(hash.GetHashAndReset()).ToLowerInvariant() <> digest then
         fail "native verifier runtime manifest file differs"
 
-let private verifyNativeVerifierManifest uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest =
-    let canonicalModuleSha256 = "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba"
+let private verifyNativeVerifierManifestFor (canonicalModuleSha256: string) uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest =
     if not (safeOwnedArtifactFile uid true runtime) || FileInfo(runtime).Length <= 0L then fail "native verifier runtime executable is unsafe"
     if not (safeOwnedArtifactFile uid false modulePath) || FileInfo(modulePath).Length <= 0L then fail "native verifier module is unsafe"
     if not (safeOwnedArtifactFile uid false manifestPath) || FileInfo(manifestPath).Length <= 0L then fail "native verifier runtime manifest is unsafe"
@@ -473,6 +472,9 @@ let private verifyNativeVerifierManifest uid runtime runtimeDigest modulePath mo
     if total <= 0L then fail "native verifier runtime closure must remain positive"
     if not runtimeSeen || not moduleSeen then fail "native verifier runtime inventory omits required code"
     manifestBytes
+
+let private verifyNativeVerifierManifest uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest =
+    verifyNativeVerifierManifestFor "8d6a33beae9a4de84fa7a703809e9b1a1656359a085f92091cf56de3b77fd3ba" uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest
 
 let private verifyNativeSourceReference uid custodyAnchor codexHome evidenceRoot manifestDigest =
     let sourceReferencePath = Path.Combine(custodyAnchor, "source-reference.json")
@@ -867,6 +869,194 @@ let private installNativeCollector values =
 
     installExact sidecar sidecarBytes
     installExact receiptPath receiptBytes
+    printfn "%s" (System.Text.Encoding.UTF8.GetString receiptBytes)
+
+let private installResponsesCollector values =
+    let allowed = Set.ofList [ "--host-config"; "--credential-reference"; "--provider-credential-reference"; "--provider-credential-file"; "--evidence-root"; "--capability-profile"; "--capability-profile-sha256"; "--capability-result"; "--capability-result-sha256"; "--verifier-runtime"; "--verifier-runtime-sha256"; "--verifier-module"; "--verifier-module-sha256"; "--verifier-runtime-manifest"; "--verifier-runtime-manifest-sha256" ]
+    only allowed values
+    if not (OperatingSystem.IsLinux()) then fail "Responses installation supports Linux only"
+    let uid = currentUid ()
+    let absolute (name: string) =
+        let path = required name values
+        if not (canonicalAbsolutePath path) then fail (name + " requires a normalized absolute path")
+        path
+    let hostConfig = absolute "--host-config"
+    let anchor = Path.GetDirectoryName hostConfig
+    if not (privateFile uid hostConfig && privateDirectory uid anchor) then fail "Responses requires private Host custody"
+    let privateInput (name: string) bound =
+        let path = absolute name
+        if not (privateFile uid path) || not (path.StartsWith(anchor + string Path.DirectorySeparatorChar, StringComparison.Ordinal)) then fail "Responses private input is outside Host custody"
+        path, boundedFileBytes bound name path
+    let expectedSha (name: string) =
+        let value = required name values
+        if not (nonzeroSha256 value) then fail "Responses digest must be nonzero lowercase SHA256"
+        value
+    let profilePath, profileBytes = privateInput "--capability-profile" 65536
+    let profileDigest = expectedSha "--capability-profile-sha256"
+    let resultPath, resultBytes = privateInput "--capability-result" 65536
+    let resultDigest = expectedSha "--capability-result-sha256"
+    if sha256 profileBytes <> profileDigest || sha256 resultBytes <> resultDigest then fail "Responses capability input digest differs"
+    let runtime = absolute "--verifier-runtime"
+    let runtimeDigest = expectedSha "--verifier-runtime-sha256"
+    let modulePath = absolute "--verifier-module"
+    let moduleDigest = expectedSha "--verifier-module-sha256"
+    let manifestPath = absolute "--verifier-runtime-manifest"
+    let manifestDigest = expectedSha "--verifier-runtime-manifest-sha256"
+    let responsesModuleDigest = "599034490c93333875b169c7fc4d3e873e3d911fe5571ad90127ea86b1e8b373"
+    verifyNativeVerifierManifestFor responsesModuleDigest uid runtime runtimeDigest modulePath moduleDigest manifestPath manifestDigest |> ignore
+    let number (label: string) (name: string) (node: JsonElement) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        let mutable value = 0L
+        if not (node.TryGetProperty(name, &property)) || property.ValueKind <> JsonValueKind.Number || not (property.TryGetInt64(&value)) || value < 0L then fail (label + " number invalid")
+        value
+    let boolean (label: string) (name: string) (expected: bool) (node: JsonElement) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        if not (node.TryGetProperty(name, &property)) || (property.ValueKind <> JsonValueKind.True && property.ValueKind <> JsonValueKind.False) || property.GetBoolean() <> expected then fail (label + " Boolean differs")
+    let array (label: string) (name: string) (node: JsonElement) =
+        let mutable property = Unchecked.defaultof<JsonElement>
+        if not (node.TryGetProperty(name, &property)) || property.ValueKind <> JsonValueKind.Array then fail (label + " array invalid")
+        property.EnumerateArray() |> Seq.toArray
+    use profileDoc = JsonDocument.Parse profileBytes
+    let profile = profileDoc.RootElement
+    let profileFields = Set.ofList [ "schema"; "sourceVariant"; "provider"; "model"; "effort"; "countEndpoint"; "generationEndpoint"; "inputTokenLimit"; "outputTokenLimit"; "wholeMilliseconds"; "networkMilliseconds"; "requestPolicySha256"; "instructionsSha256"; "responseSchemaSha256"; "responseSchemaName"; "verifierModuleSha256"; "verifierRuntimeManifestSha256"; "installedRoots"; "installedFiles" ]
+    if not (exactJsonProperties profileFields profile) then fail "Responses profile is not closed"
+    let ps name = stringJsonProperty "Responses profile" name profile
+    for name, expected in [ "schema", "fsgg.telemetry.responses-capability-profile/1"; "sourceVariant", "openai-responses/1"; "provider", "openai"; "model", "gpt-6.1-sol"; "effort", "medium"; "countEndpoint", "https://api.openai.com/v1/responses/input_tokens"; "generationEndpoint", "https://api.openai.com/v1/responses"; "requestPolicySha256", "7a0e6970101b8cc9343c23ebe5d273e183cf4535b4dc09fca4d48a0bee7ae071"; "verifierModuleSha256", moduleDigest; "verifierRuntimeManifestSha256", manifestDigest ] do
+        if ps name <> expected then fail "Responses profile fixed policy differs"
+    for name, expected in [ "inputTokenLimit", 8000L; "outputTokenLimit", 1500L; "wholeMilliseconds", 60000L; "networkMilliseconds", 55000L ] do
+        if number "Responses profile" name profile <> expected then fail "Responses profile limit differs"
+    if not (nonzeroSha256 (ps "instructionsSha256") && nonzeroSha256 (ps "responseSchemaSha256")) || not (Regex.IsMatch(ps "responseSchemaName", "^[A-Za-z0-9_-]{1,64}$")) then fail "Responses instruction/schema policy is invalid"
+    let roots = array "Responses profile" "installedRoots" profile |> Array.map (fun node ->
+        if node.ValueKind <> JsonValueKind.String then fail "Responses installed root invalid"
+        let path = node.GetString()
+        if not (canonicalAbsolutePath path) || not (Directory.Exists path) then fail "Responses installed root missing"
+        safeDirectory path)
+    if roots.Length = 0 || roots.Length > 4 || (Set.ofArray roots |> Set.count) <> roots.Length then fail "Responses installed roots invalid"
+    for a in roots do
+        for b in roots do
+            if a <> b && a.StartsWith(Path.TrimEndingDirectorySeparator(b) + string Path.DirectorySeparatorChar, StringComparison.Ordinal) then fail "Responses installed roots overlap"
+    let files = array "Responses profile" "installedFiles" profile
+    if files.Length = 0 || files.Length > 512 then fail "Responses installed file count exceeded"
+    let mutable previous: string = null
+    let mutable total = 0L
+    let mutable declared = Set.empty<string>
+    let mutable components = Set.empty<string>
+    let expectedAssemblies = Map.ofList [ "host", "FS.GG.Telemetry.Host"; "client", "FS.GG.Telemetry.Client"; "core", "FS.GG.Coord.Core"; "store", "FS.GG.Telemetry.Store" ]
+    for entry in files do
+        if not (exactJsonProperties (Set.ofList [ "path"; "bytes"; "sha256"; "components" ]) entry) then fail "Responses installed entry is not closed"
+        let path = stringJsonProperty "Responses installed file" "path" entry
+        let digest = stringJsonProperty "Responses installed file" "sha256" entry
+        let bytes = number "Responses installed file" "bytes" entry
+        if not (canonicalAbsolutePath path) || not (nonzeroSha256 digest) || not (roots |> Array.exists (fun root -> path.StartsWith(Path.TrimEndingDirectorySeparator(root) + string Path.DirectorySeparatorChar, StringComparison.Ordinal))) then fail "Responses installed file identity differs"
+        if not (isNull previous) && StringComparer.Ordinal.Compare(previous,path) >= 0 then fail "Responses installed files must be sorted unique"
+        if total > 200L * 1024L * 1024L - bytes then fail "Responses installed files exceed byte bound"
+        if bytes <= 0L then fail "Responses installed product files must be positive"
+        verifyNativeManifestFile uid false false bytes digest path
+        previous <- path
+        total <- total + bytes
+        declared <- declared.Add path
+        let roles = array "Responses installed file" "components" entry |> Array.map (fun node ->
+            if node.ValueKind <> JsonValueKind.String then fail "Responses component invalid"
+            node.GetString())
+        if roles.Length > 4 || (Set.ofArray roles |> Set.count) <> roles.Length then fail "Responses component list invalid"
+        for role in roles do
+            if components.Contains role || not (expectedAssemblies.ContainsKey role) then fail "Responses component repeated or invalid"
+            let expectedName = expectedAssemblies[role]
+            if Path.GetFileName path <> expectedName + ".dll" || Reflection.AssemblyName.GetAssemblyName(path).Name <> expectedName then fail "Responses component assembly identity differs"
+            components <- components.Add role
+    if components <> (expectedAssemblies |> Map.keys |> Set.ofSeq) then fail "Responses installed inventory omits assembly components"
+    let mutable actual = Set.empty<string>
+    let mutable directories = 0
+    let pending = Collections.Generic.Stack<string>(roots)
+    while pending.Count > 0 do
+        let directory = pending.Pop()
+        directories <- directories + 1
+        if directories > 1024 || not (isNull (DirectoryInfo(directory).LinkTarget)) then fail "Responses installed directory inventory refused"
+        for entry in Directory.EnumerateFileSystemEntries directory do
+            if not (isNull (FileInfo(entry).LinkTarget)) then fail "Responses installed linked entry refused"
+            if Directory.Exists entry then pending.Push entry
+            elif File.Exists entry then
+                actual <- actual.Add entry
+                if actual.Count > 512 then fail "Responses installed inventory file bound exceeded"
+            else fail "Responses installed special entry refused"
+    if actual <> declared then fail "Responses installed inventory has extra or missing files"
+    let installedFilesDigest = sha256 (JsonSerializer.SerializeToUtf8Bytes(profile.GetProperty("installedFiles")))
+    use resultDoc = JsonDocument.Parse resultBytes
+    let result = resultDoc.RootElement
+    let resultFields = Set.ofList [ "schema"; "sourceVariant"; "profileSha256"; "verifierRuntimeManifestSha256"; "verifierModuleSha256"; "installedFilesSha256"; "scenarioResults"; "ownedCustodyClean"; "resourceFailed"; "elapsedMilliseconds"; "originalWholeMilliseconds"; "operationSpecificCaptureProduced" ]
+    if not (exactJsonProperties resultFields result) then fail "Responses static qualification is not closed"
+    for name, expected in [ "schema", "fsgg.telemetry.responses-static-qualification/1"; "sourceVariant", "openai-responses/1"; "profileSha256", profileDigest; "verifierRuntimeManifestSha256", manifestDigest; "verifierModuleSha256", moduleDigest; "installedFilesSha256", installedFilesDigest ] do
+        if stringJsonProperty "Responses static qualification" name result <> expected then fail "Responses static qualification binding differs"
+    boolean "Responses static qualification" "ownedCustodyClean" true result
+    boolean "Responses static qualification" "resourceFailed" false result
+    boolean "Responses static qualification" "operationSpecificCaptureProduced" false result
+    let whole = number "Responses static qualification" "originalWholeMilliseconds" result
+    if whole <= 0L || whole > 60000L || number "Responses static qualification" "elapsedMilliseconds" result >= whole then fail "Responses static qualification original deadline failed"
+    let scenarios = array "Responses static qualification" "scenarioResults" result
+    let expectedCases = Set.ofList [ "bounded-client-wire-cardinality"; "denied-count-no-generation"; "cancellation-retirement"; "request-policy-caps"; "credential-role-separation"; "verifier-valid-capture"; "verifier-mutated-capture-refused"; "verifier-stale-snapshot-refused"; "current-installed-closure" ]
+    let names = scenarios |> Array.map (stringJsonProperty "Responses scenario" "name")
+    if names <> (expectedCases |> Set.toArray) then fail "Responses scenario qualification roster must be exact and sorted"
+    let mutable seen = Set.empty<string>
+    for scenario in scenarios do
+        if not (exactJsonProperties (Set.ofList [ "name"; "outcome"; "evidenceSha256" ]) scenario) then fail "Responses scenario result is not closed"
+        let name = stringJsonProperty "Responses scenario" "name" scenario
+        if seen.Contains name || not (expectedCases.Contains name) || stringJsonProperty "Responses scenario" "outcome" scenario <> "pass" || not (nonzeroSha256 (stringJsonProperty "Responses scenario" "evidenceSha256" scenario)) then fail "Responses scenario qualification differs"
+        seen <- seen.Add name
+    if seen <> expectedCases then fail "Responses static qualification scenario roster is incomplete"
+    let configBytes = boundedFileBytes (1024 * 1024) "Host config" hostConfig
+    use configDoc = JsonDocument.Parse configBytes
+    let config = configDoc.RootElement
+    let rec uniqueJson depth (node: JsonElement) =
+        if depth > 64 then fail "Responses Host config nesting exceeds bound"
+        if node.ValueKind = JsonValueKind.Object then
+            let properties = node.EnumerateObject() |> Seq.toArray
+            if (properties |> Array.map _.Name |> Set.ofArray |> Set.count) <> properties.Length then fail "Responses Host config duplicate property"
+            for property in properties do uniqueJson (depth + 1) property.Value
+        elif node.ValueKind = JsonValueKind.Array then
+            for entry in node.EnumerateArray() do uniqueJson (depth + 1) entry
+    uniqueJson 0 config
+    if stringJsonProperty "Host config" "Schema" config <> "fsgg.telemetry.host-config/2" then fail "Responses requires Host config v2"
+    let credentials = array "Host config" "Credentials" config
+    let reference = required "--credential-reference" values
+    let providerReference = required "--provider-credential-reference" values
+    let validIdentity (value: string) = Regex.IsMatch(value, "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$")
+    if not (validIdentity reference && validIdentity providerReference) || reference = providerReference then fail "Responses credential roles must be distinct"
+    let matches = credentials |> Array.filter (fun c -> stringJsonProperty "Host credential" "Reference" c = reference)
+    if matches.Length <> 1 then fail "Responses native principal must resolve exactly once"
+    let credential = matches[0]
+    boolean "Host credential" "Revoked" false credential
+    if stringJsonProperty "Host credential" "Role" credential <> "native-collector" then fail "Responses principal is not native-collector"
+    let cs name = stringJsonProperty "Host credential" name credential
+    let workspace, producer, stream, grant = cs "WorkspaceId", cs "ProducerId", cs "StreamId", cs "GrantId"
+    if [ workspace; producer; stream; grant ] |> List.exists (validIdentity >> not) then fail "Responses native principal scope invalid"
+    let generation = number "Host credential" "GrantGeneration" credential
+    if generation <= 0L || not (privateFile uid (cs "SecretFile")) then fail "Responses native grant invalid"
+    let providerFile = absolute "--provider-credential-file"
+    if not (privateFile uid providerFile) || not (providerFile.StartsWith(anchor + string Path.DirectorySeparatorChar,StringComparison.Ordinal)) || (credentials |> Array.exists (fun c -> stringJsonProperty "Host credential" "Reference" c = providerReference || stringJsonProperty "Host credential" "SecretFile" c = providerFile)) then fail "Responses provider credential is not separately held"
+    let providerIdentity = nativeDependencyIdentity -100 providerFile 0x100
+    let nativeIdentity = nativeDependencyIdentity -100 (cs "SecretFile") 0x100
+    if providerIdentity.Links <> 1u || nativeIdentity.Links <> 1u
+       || providerIdentity.Mode &&& 0xf000us <> 0x8000us || nativeIdentity.Mode &&& 0xf000us <> 0x8000us
+       || (providerIdentity.DeviceMajor = nativeIdentity.DeviceMajor && providerIdentity.DeviceMinor = nativeIdentity.DeviceMinor && providerIdentity.Inode = nativeIdentity.Inode) then fail "Responses secret file roles are not physically distinct"
+    // Inspect custody only. Never read or hash either credential's secret bytes.
+    let evidence = absolute "--evidence-root"
+    let evidenceParent = Path.GetDirectoryName evidence
+    if not (privateDirectory uid evidenceParent) || (evidenceParent <> anchor && not (privateDescendantDirectory uid anchor evidenceParent)) then fail "Responses evidence custody differs"
+    if File.Exists evidence || (Directory.Exists evidence && not (privateDescendantDirectory uid anchor evidence)) then fail "Responses evidence root unsafe"
+    let sidecar = hostConfig + ".native-collector.json"
+    let receiptPath = hostConfig + ".native-collector.receipt.json"
+    let sidecarBytes = JsonSerializer.SerializeToUtf8Bytes
+                        {| Schema = "fsgg.telemetry.native-collector-installation/4"; SourceVariant = "openai-responses/1"; CredentialReference = reference; ProviderCredentialReference = providerReference; ProviderCredentialFile = providerFile; EvidenceRoot = evidence; Provider = "openai"; Model = "gpt-6.1-sol"; Effort = "medium"; CountEndpoint = "https://api.openai.com/v1/responses/input_tokens"; GenerationEndpoint = "https://api.openai.com/v1/responses"; InputTokenLimit = 8000L; OutputTokenLimit = 1500L; WholeMilliseconds = 60000L; CapabilityProfilePath = profilePath; CapabilityProfileSha256 = profileDigest; CapabilityResultPath = resultPath; CapabilityResultSha256 = resultDigest; NativeVerifier = {| RuntimeExecutablePath = runtime; RuntimeExecutableSha256 = runtimeDigest; ModulePath = modulePath; ModuleSha256 = moduleDigest; RuntimeManifestPath = manifestPath; RuntimeManifestSha256 = manifestDigest |} |}
+    let receiptBytes = JsonSerializer.SerializeToUtf8Bytes
+                        {| schema = "fsgg.telemetry.native-collector-installation-receipt/4"; status = "installed"; ownerUid = uid; hostConfigSha256 = sha256 configBytes; sidecarSha256 = sha256 sidecarBytes; sourceVariant = "openai-responses/1"; credentialReference = reference; workspaceId = workspace; producerId = producer; streamId = stream; grantId = grant; grantGeneration = generation; providerCredentialReference = providerReference; providerCredentialFile = providerFile; capabilityProfileSha256 = profileDigest; capabilityResultSha256 = resultDigest; verifierRuntimeManifestSha256 = manifestDigest; verifierModuleSha256 = moduleDigest; installedFilesSha256 = installedFilesDigest; sourceVerification = "unknown"; snapshotOrigin = "unknown"; activationAuthorized = false |}
+    for path, bytes in [ sidecar, sidecarBytes; receiptPath, receiptBytes ] do
+        if File.Exists path && (not (privateFile uid path) || File.ReadAllBytes path <> bytes) then fail "Responses installation cannot promote or replace existing custody"
+    // All positive static qualification and current physical joins precede writes.
+    if not (Directory.Exists evidence) then
+        Directory.CreateDirectory evidence |> ignore
+        File.SetUnixFileMode(evidence, UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute)
+    for path, bytes in [ sidecar, sidecarBytes; receiptPath, receiptBytes ] do
+        if not (File.Exists path) then atomicPrivateWrite path bytes
     printfn "%s" (System.Text.Encoding.UTF8.GetString receiptBytes)
 
 let private serviceAccount = "fsgg-telemetry-podman"
@@ -1284,13 +1474,14 @@ let main arguments =
         | "verify-host-release" :: rest -> verifyHostRelease (options rest); 0
         | "verify-engine-release" :: rest -> verifyEngineRelease (options rest); 0
         | "install-native-collector" :: rest -> installNativeCollector (options rest); 0
+        | "install-responses-collector" :: rest -> installResponsesCollector (options rest); 0
         | "update-host" :: rest -> runHostUpdater (options rest); 0
         | "migrate-host" :: rest -> migrateHost (options rest); 0
         | "retry-host" :: rest -> retryHost (options rest); 0
         | "backup-stopped-host" :: rest -> backup (options rest); 0
         | "prepare-inert" :: rest -> prepareInert (options rest); 0
         | _ ->
-            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|migrate-host|retry-host|build-host-image|verify-host-release|verify-engine-release|install-native-collector|backup-stopped-host|prepare-inert> [--name value ...]"
+            eprintfn "usage: telemetry-host-manager <status|source-fence-status|guard|install-guard-dropins|install-legacy-writer-guard|install-engine|install-manager|create-host-account|prepare-rootless-runtime|stage-host-assets|install-host-files|update-host-files|migrate-host|retry-host|build-host-image|verify-host-release|verify-engine-release|install-native-collector|install-responses-collector|backup-stopped-host|prepare-inert> [--name value ...]"
             2
     with error ->
         eprintfn "telemetry host manager refused: %s" error.Message

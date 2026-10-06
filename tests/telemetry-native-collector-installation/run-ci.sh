@@ -20,3 +20,6 @@ printf '%s  %s\n' "$native_source_sha256" "$native_module" | sha256sum --check -
 chmod 0400 "$native_module"
 bash "$ROOT/tests/telemetry-native-collector-installation/run-v3.sh" "$native_module" "$native_fixture"
 PYTHONDONTWRITEBYTECODE=1 python3 "$ROOT/tests/telemetry-native-collector-installation/run.py"
+dotnet restore tests/telemetry-native-collector-responses-installation/ResponsesInstallationTests.fsproj --locked-mode
+dotnet build tests/telemetry-native-collector-responses-installation/ResponsesInstallationTests.fsproj --configuration Release --no-restore --warnaserror
+dotnet tests/telemetry-native-collector-responses-installation/bin/Release/net10.0/ResponsesInstallationTests.dll
