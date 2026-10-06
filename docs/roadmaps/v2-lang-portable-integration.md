@@ -281,10 +281,10 @@ DIAG 0.2.1 has one successful canonical preparation at protected producer
 `723919d52ee2598858907978b1f33332ab1d9074`, run `37403093489`, attempt 1,
 artifact `11386361825`. Its original archive SHA-256 is
 `269a75efe766321effd54a9a0affa701a51ee25e401c9773f42d8e895f12e67c`.
-The exact retained candidate is selected for canonical installed qualification;
-its prepared package, bundle, image and portable release manifest are bound in
-the publisher source. Successful preparation does not establish canonical
-installed DIAG, genuine P4 qualification/grant or publication.
+The exact retained candidate's package, bundle, image and portable release
+manifest are bound in the publisher source. Root's subsequent canonical
+installed DIAG qualification passed against this original candidate; genuine P4
+qualification/grant and publication remain pending.
 
 The next coherent source change combines the fresh-tag qualification helper
 with the exact-candidate 0.2.1 publisher bindings. The helper selects
@@ -311,3 +311,15 @@ adoption remains separately gated. Original P4 run `37299089618`, attempt 2,
 failed cleanup/missing capsule and 18 consumed effects remain historical;
 capability is not established and Portal remains fenced. Neither that failure
 nor the earlier local `54b` pilot is converted into current installed acceptance.
+
+The actual canonical installed DIAG window exited 0 and settled all owned
+children. Its 21 expected ready/refusal observations preserve independent first
+and additional failures, dependency blocking, malformed output, reporting quota
+and the accepted blocked continuation, alongside the successful prepared path.
+The root receipt SHA-256 is
+`0c1fedb5bb04c99b730bf2f106b54f0fcba12c1f2ce9a21ac6e92f6244b954e5`;
+installed evidence SHA-256 is
+`3fc939d583413f197c173cbab359a9674e3601689c481064ec6aa0d97bb5b4c7`.
+This qualifies canonical installed diagnostics, without authorizing provider
+execution, publication or adoption. P4 and its fresh receiver-bound grant remain
+open, and the original private-provider failure remains unchanged.
