@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Focused fail-closed contract for the qualified 0.2.0 publication pins."""
+"""Focused fail-closed contract for the qualified 0.2.1 publication pins."""
 
 from __future__ import annotations
 
@@ -11,17 +11,17 @@ ROOT = Path(__file__).resolve().parents[3]
 WORKFLOW = ROOT / ".github/workflows/callable-cli-release-publish.yml"
 
 EXPECTED = {
-    "EXPECTED_OPERATION": "publish-v2-lang-01-2-cli-020",
-    "EXPECTED_SOURCE": "d25b9eaec991c94593adcecda6869d07dabdfb43",
-    "EXPECTED_TREE": "169b7df260ee6668b8b28d43857183ad669b0e12",
-    "EXPECTED_MERGE": "d25b9eaec991c94593adcecda6869d07dabdfb43",
-    "EXPECTED_SHA256": "8ee67f83cecb3898eee12fd69f54cad0e3d1e232b3c88c18c434e3969019ab13",
-    "EXPECTED_BUNDLE_SHA256": "c4ccc949ba02d67eba27302dfdffa258ecd4a55b628315fff82c26b2e4566abc",
-    "EXPECTED_IMAGE_SHA256": "24dfd6fbf5e5d86b664963e5bcf896f2bbaba8803fdd9125c343a9389d6295b6",
-    "EXPECTED_PORTABLE_MANIFEST_SHA256": "bd08411e277c77f0f607716c510cc487ac438e4aeeff766b6b76e8a63e49d390",
-    "EXPECTED_PREPARATION_RUN_ID": "36794564231",
-    "EXPECTED_PREPARATION_ARTIFACT_ID": "11133062598",
-    "EXPECTED_PREPARATION_ARCHIVE_SHA256": "27c52b6cc7aeb415be0c313fda40165c83daf1e30b5fe8e89d16cb9828824aa9",
+    "EXPECTED_OPERATION": "publish-v2-diag-01-4-cli-021",
+    "EXPECTED_SOURCE": "bc55a3d1cc887d653c1bb1198e4823b24f47aaa8",
+    "EXPECTED_TREE": "723919d52ee2598858907978b1f33332ab1d9074",
+    "EXPECTED_MERGE": "bc55a3d1cc887d653c1bb1198e4823b24f47aaa8",
+    "EXPECTED_SHA256": "3b4381be04a47d48016b2b99d8855f7072124dd7409beb23ec766ceec99ef165",
+    "EXPECTED_BUNDLE_SHA256": "a7bc5186a7f5c4f5fd54153d773c2ddee6ca8701979f2fc211a50bf51153c67f",
+    "EXPECTED_IMAGE_SHA256": "656a82fdd79a39ed977253db611d3ea8e2c2231fba12ccca78d63efd743da365",
+    "EXPECTED_PORTABLE_MANIFEST_SHA256": "c25dbfc651b7f45cf3f05cc1ac500ce1365aa6ffae5a2713077960544eb9751a",
+    "EXPECTED_PREPARATION_RUN_ID": "37403093489",
+    "EXPECTED_PREPARATION_ARTIFACT_ID": "11386361825",
+    "EXPECTED_PREPARATION_ARCHIVE_SHA256": "269a75efe766321effd54a9a0affa701a51ee25e401c9773f42d8e895f12e67c",
 }
 
 
@@ -103,11 +103,11 @@ def main() -> None:
     assert "--configfile \"$config\" --no-cache" in anonymous
     assert "|| true" not in anonymous
 
-    assert "PACKAGE_VERSION: 0.2.0" in text
-    assert "PACKAGE_FILE: FS.GG.Coordination.Cli.0.2.0.nupkg" in text
-    assert "PORTABLE_BUNDLE: portable-workspace-v1-0.2.0.zip" in text
-    assert "PORTABLE_IMAGE: portable-workspace-linux-amd64-0.2.0.oci.tar" in text
-    assert "0.2.1" not in text
+    assert "PACKAGE_VERSION: 0.2.1" in text
+    assert "PACKAGE_FILE: FS.GG.Coordination.Cli.0.2.1.nupkg" in text
+    assert "PORTABLE_BUNDLE: portable-workspace-v1-0.2.1.zip" in text
+    assert "PORTABLE_IMAGE: portable-workspace-linux-amd64-0.2.1.oci.tar" in text
+    assert "0.2.0" not in text
 
     cleanup = text.index("- name: Remove exact private runtime state")
     assert cleanup > first_effect

@@ -24,7 +24,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: callable-cli-release-v0.2.0
+  group: callable-cli-release-v0.2.1
   cancel-in-progress: false
 
 jobs:
@@ -44,22 +44,22 @@ jobs:
       DOTNET_NOLOGO: 1
       DOTNET_PROCESSOR_COUNT: 4
       PACKAGE_ID: FS.GG.Coordination.Cli
-      PACKAGE_VERSION: 0.2.0
-      PACKAGE_FILE: FS.GG.Coordination.Cli.0.2.0.nupkg
-      PORTABLE_BUNDLE: portable-workspace-v1-0.2.0.zip
-      PORTABLE_IMAGE: portable-workspace-linux-amd64-0.2.0.oci.tar
+      PACKAGE_VERSION: 0.2.1
+      PACKAGE_FILE: FS.GG.Coordination.Cli.0.2.1.nupkg
+      PORTABLE_BUNDLE: portable-workspace-v1-0.2.1.zip
+      PORTABLE_IMAGE: portable-workspace-linux-amd64-0.2.1.oci.tar
       PORTABLE_MANIFEST: portable-workspace-release-manifest.json
-      EXPECTED_OPERATION: publish-v2-lang-01-2-cli-020
-      EXPECTED_SOURCE: d25b9eaec991c94593adcecda6869d07dabdfb43
-      EXPECTED_TREE: 169b7df260ee6668b8b28d43857183ad669b0e12
-      EXPECTED_MERGE: d25b9eaec991c94593adcecda6869d07dabdfb43
-      EXPECTED_SHA256: 8ee67f83cecb3898eee12fd69f54cad0e3d1e232b3c88c18c434e3969019ab13
-      EXPECTED_BUNDLE_SHA256: c4ccc949ba02d67eba27302dfdffa258ecd4a55b628315fff82c26b2e4566abc
-      EXPECTED_IMAGE_SHA256: 24dfd6fbf5e5d86b664963e5bcf896f2bbaba8803fdd9125c343a9389d6295b6
-      EXPECTED_PORTABLE_MANIFEST_SHA256: bd08411e277c77f0f607716c510cc487ac438e4aeeff766b6b76e8a63e49d390
-      EXPECTED_PREPARATION_RUN_ID: 36794564231
-      EXPECTED_PREPARATION_ARTIFACT_ID: 11133062598
-      EXPECTED_PREPARATION_ARCHIVE_SHA256: 27c52b6cc7aeb415be0c313fda40165c83daf1e30b5fe8e89d16cb9828824aa9
+      EXPECTED_OPERATION: publish-v2-diag-01-4-cli-021
+      EXPECTED_SOURCE: bc55a3d1cc887d653c1bb1198e4823b24f47aaa8
+      EXPECTED_TREE: 723919d52ee2598858907978b1f33332ab1d9074
+      EXPECTED_MERGE: bc55a3d1cc887d653c1bb1198e4823b24f47aaa8
+      EXPECTED_SHA256: 3b4381be04a47d48016b2b99d8855f7072124dd7409beb23ec766ceec99ef165
+      EXPECTED_BUNDLE_SHA256: a7bc5186a7f5c4f5fd54153d773c2ddee6ca8701979f2fc211a50bf51153c67f
+      EXPECTED_IMAGE_SHA256: 656a82fdd79a39ed977253db611d3ea8e2c2231fba12ccca78d63efd743da365
+      EXPECTED_PORTABLE_MANIFEST_SHA256: c25dbfc651b7f45cf3f05cc1ac500ce1365aa6ffae5a2713077960544eb9751a
+      EXPECTED_PREPARATION_RUN_ID: 37403093489
+      EXPECTED_PREPARATION_ARTIFACT_ID: 11386361825
+      EXPECTED_PREPARATION_ARCHIVE_SHA256: 269a75efe766321effd54a9a0affa701a51ee25e401c9773f42d8e895f12e67c
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-callable-cli-readback
       PUBLISH_ROOT: /tmp/fsgg-${{ github.run_id }}-portable-publish-root
@@ -109,7 +109,7 @@ jobs:
           git merge-base --is-ancestor "$EXPECTED_MERGE" refs/remotes/origin/main
           test "$(git rev-parse "$EXPECTED_SOURCE^{tree}")" = "$EXPECTED_TREE"
           test "$(git rev-parse "$EXPECTED_MERGE^{tree}")" = "$EXPECTED_TREE"
-          tagged="$(git ls-remote --tags origin refs/tags/v0.2.0 refs/tags/v0.2.0^\{\} | awk '$2=="refs/tags/v0.2.0^{}"{peeled=$1} $2=="refs/tags/v0.2.0"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.2.1 refs/tags/v0.2.1^\{\} | awk '$2=="refs/tags/v0.2.1^{}"{peeled=$1} $2=="refs/tags/v0.2.1"{plain=$1} END{print peeled ? peeled : plain}')"
           test -z "$tagged" || test "$tagged" = "$EXPECTED_MERGE"
           jq -e '.actions | .githubOwnedAllowed == true and .verifiedAllowed == false and .patternsAllowed == ["NuGet/login@8d196754b4036150537f80ac539e15c2f1028841"]' eng/repository-settings/desired.json >/dev/null
 
@@ -145,7 +145,7 @@ jobs:
           test "$CANONICAL_SOURCE" = "$GITHUB_WORKSPACE"
           git -C "$CANONICAL_SOURCE" checkout --detach "$EXPECTED_SOURCE"
           test "$(git rev-parse HEAD)" = "$EXPECTED_SOURCE"
-          git -C "$CANONICAL_SOURCE" tag -d v0.2.0 2>/dev/null || true
+          git -C "$CANONICAL_SOURCE" tag -d v0.2.1 2>/dev/null || true
           dotnet restore "$CANONICAL_SOURCE/FS.GG.Coordination.sln" --locked-mode
           mkdir -p "$READBACK_OUTPUT/reproduced"
           (cd "$CANONICAL_SOURCE" && dotnet fsi eng/callable-cli-release.fsx prepare --source "$EXPECTED_SOURCE" --version "$PACKAGE_VERSION" --output "$READBACK_OUTPUT/reproduced")
@@ -174,13 +174,13 @@ jobs:
           release_json="$READBACK_OUTPUT/release-preflight/release.json"
           status="$(curl --silent --show-error --location --output "$release_json" --write-out '%{http_code}' \
             --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' \
-            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/v0.2.0")"
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/v0.2.1")"
           case "$status" in
             404) echo 'exists=false' >> "$GITHUB_OUTPUT"; exit 0 ;;
             200) echo 'exists=true' >> "$GITHUB_OUTPUT" ;;
             *) echo "::error::GitHub release observation is unknown (HTTP $status)"; exit 1 ;;
           esac
-          jq -e '.tag_name == "v0.2.0" and .draft == false and .prerelease == false' "$release_json" >/dev/null
+          jq -e '.tag_name == "v0.2.1" and .draft == false and .prerelease == false' "$release_json" >/dev/null
           for path in "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$CANDIDATE_OUTPUT/$PORTABLE_BUNDLE" "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE" "$CANDIDATE_OUTPUT/$PORTABLE_MANIFEST"; do
             name="$(basename "$path")"
             mapfile -t ids < <(jq -r --arg name "$name" '.assets[] | select(.name == $name) | .id' "$release_json")
@@ -396,15 +396,15 @@ jobs:
           set -euo pipefail
           test "$(sha256sum "$READBACK_OUTPUT/github/$PACKAGE_FILE" | cut -d' ' -f1)" = "$EXPECTED_SHA256"
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget/$PACKAGE_FILE" nuget-org >/dev/null
-          tagged="$(git ls-remote --tags origin refs/tags/v0.2.0 refs/tags/v0.2.0^\{\} | awk '$2=="refs/tags/v0.2.0^{}"{peeled=$1} $2=="refs/tags/v0.2.0"{plain=$1} END{print peeled ? peeled : plain}')"
+          tagged="$(git ls-remote --tags origin refs/tags/v0.2.1 refs/tags/v0.2.1^\{\} | awk '$2=="refs/tags/v0.2.1^{}"{peeled=$1} $2=="refs/tags/v0.2.1"{plain=$1} END{print peeled ? peeled : plain}')"
           if test -z "$tagged"; then
-            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.2.0 -f sha="$EXPECTED_MERGE"
+            gh api "repos/$GITHUB_REPOSITORY/git/refs" -X POST -f ref=refs/tags/v0.2.1 -f sha="$EXPECTED_MERGE"
           else
             test "$tagged" = "$EXPECTED_MERGE"
           fi
           assets=("$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$CANDIDATE_OUTPUT/$PORTABLE_BUNDLE" "$CANDIDATE_OUTPUT/$PORTABLE_IMAGE" "$CANDIDATE_OUTPUT/$PORTABLE_MANIFEST" "$READBACK_OUTPUT/release-readback.json")
           if test "$RELEASE_EXISTS" = false; then
-            gh release create v0.2.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title "FS.GG.Coordination.Cli 0.2.0"               --notes "Portable workspace v1 CLI and exact qualified Linux amd64 OCI archive; receiver adoption remains separately gated." "${assets[@]}"
+            gh release create v0.2.1 --repo "$GITHUB_REPOSITORY" --verify-tag --title "FS.GG.Coordination.Cli 0.2.1"               --notes "Portable workspace v1 CLI and exact qualified Linux amd64 OCI archive; receiver adoption remains separately gated." "${assets[@]}"
           else
             test "$RELEASE_EXISTS" = true
           fi
@@ -412,13 +412,13 @@ jobs:
           mkdir "$release_dir"
           for path in "${assets[@]}"; do
             name="$(basename "$path")"
-            release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.2.0")"
+            release="$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/v0.2.1")"
             count="$(jq --arg name "$name" '[.assets[] | select(.name == $name)] | length' <<<"$release")"
             test "$count" -le 1
             if test "$count" = 0; then
-              gh release upload v0.2.0 --repo "$GITHUB_REPOSITORY" "$path"
+              gh release upload v0.2.1 --repo "$GITHUB_REPOSITORY" "$path"
             fi
-            gh release download v0.2.0 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
+            gh release download v0.2.1 --repo "$GITHUB_REPOSITORY" --pattern "$name" --dir "$release_dir"
             cmp "$release_dir/$name" "$path"
           done
 
