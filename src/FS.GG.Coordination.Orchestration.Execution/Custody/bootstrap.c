@@ -47,7 +47,13 @@ static int number(const char *value, int maximum) {
  if(errno || !value[0] || !end || *end || parsed<0 || parsed>maximum) reject("arguments");
  return (int)parsed;
 }
+#include "native-collector-fake.h"
+
 int main(int argc, char **argv) {
+ if(argc>1 && !strcmp(argv[1],FAKE_MODE)) fake_main(argc,argv);
+ if(argc==2 && !strcmp(argv[1],"--export-native-collector-fake-filter")) {
+  return write(1,fake_rules,sizeof(fake_rules))==(ssize_t)sizeof(fake_rules)?0:125;
+ }
  if(argc==2 && !strcmp(argv[1],"--export-filter")) {
   if(write(1,rules,sizeof(rules))!=(ssize_t)sizeof(rules)) return 125;
   return 0;
