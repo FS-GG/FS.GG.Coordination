@@ -28,7 +28,7 @@ type internal CustodyProcessStatus =
     | Terminated
     | Unknown
 
-/// An actual process pidfd: readability is the last-thread boundary, never leader exit alone.
+// An actual process pidfd: readability is the last-thread boundary, never leader exit alone.
 type internal CustodyProcessLease private (handle: SafeFileHandle) =
     member _.Status =
         try
