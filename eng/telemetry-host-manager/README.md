@@ -262,3 +262,29 @@ state, installs the fail-closed writer guard, and invokes the existing Host
 updater/backup operations. Cross-host backup transport, private state restore,
 and publisher activation need their own reviewed implementation and physical
 Host evidence before an actual switch.
+
+## Prospective Responses collector installation
+
+`install-responses-collector` writes closed installation schema 4 and its digest-bound receipt using the
+existing Host private custody and verifier runtime/module/manifest arguments. This source route pins
+`openai-responses/1`, the approved endpoint pair, model/effort and 8000 input / 1500 inclusive output / 60000
+whole-phase limits. The provider credential reference/file is separate from the active native-collector
+principal and grant. Installation checks file identity and custody without reading or hashing either
+secret. Existing sidecars cannot be promoted or replaced.
+
+The operator must supply exact private capability profile and actual no-model qualification result
+paths and digests. Profiles are bounded to 64 KiB; product files must have positive lengths and
+scenario results must use the exact sorted roster. A profile inventories complete disjoint installed directories and the actual
+Host, Client, Core and Store assembly identities, plus fixed request policy, instruction/schema,
+Responses verifier module and runtime manifest digests. The result joins the exact profile and code
+with the closed nine-case fixture roster, evidence hashes, clean custody and original deadline.
+Missing or authored example results do not qualify an installation. The Manager has no provider
+request or credential-acquisition operation.
+
+The independent verifier is distributed as the separately pinned programme module
+`tools/learn_01_responses_source.py`. Its command is `verify-responses --capture CAPTURE
+--telemetry-snapshot SNAPSHOT`; it performs offline replay only. The installed Host owns the original
+remaining 60 seconds, verifier retirement, current grant and queue-claim checks. Installation leaves source
+verification and snapshot origin unknown and activation unauthorized; genuine operation capture and
+receiver acceptance are later gates. The prior AppServer verifier and v1-v3 receipts remain historical
+variants and cannot establish Responses authority.
