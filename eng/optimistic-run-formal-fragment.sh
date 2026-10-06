@@ -22,6 +22,7 @@ install -m 0644 "$plan_root/partition-plan.json" "$fragment/partition-plan.json"
 
 shard_root="$fragment/shard"
 export FSGG_QUINT_SHARD_ROOT="$shard_root"
+export FSGG_CHOREO_DIAGNOSTIC_ROOT="$fragment/choreo-failure-diagnostics"
 bash eng/bootstrap-gates/canonical-quint-shard.sh
 install -m 0644 "$shard_root/$FSGG_QUINT_SHARD.json" "$fragment/receipt.json"
 if [[ "$FSGG_QUINT_SHARD" == epoch ]]; then

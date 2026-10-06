@@ -4,7 +4,28 @@ set -euo pipefail
 repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
 scratch_parent="${RUNNER_TEMP:-${TMPDIR:-/tmp}}"
 scratch_root="$(mktemp -d "$scratch_parent/fsgg-choreo-c2-bounded.XXXXXX")"
-trap 'rm -rf -- "$scratch_root"' EXIT
+finish() {
+  local status="$?"
+  trap - EXIT
+  if [[ "$status" -ne 0 && -n "${FSGG_CHOREO_DIAGNOSTIC_ROOT:-}" ]]; then
+    # Reporting is best effort; neither its exit nor cleanup replaces the cause.
+    if timeout --signal=TERM --kill-after=1s 3s python3 \
+      "$repo_root/eng/retain-choreo-c2-diagnostics.py" \
+      "$scratch_root" "$FSGG_CHOREO_DIAGNOSTIC_ROOT" "$status" 98304; then
+      printf 'CHOREO_FAILURE_DIAGNOSTIC retained\n' >&2 || :
+    else
+      printf 'CHOREO_FAILURE_DIAGNOSTIC unavailable\n' >&2 || :
+    fi
+  fi
+  local cleanup_status=0
+  rm -rf -- "$scratch_root" || cleanup_status="$?"
+  if [[ "$cleanup_status" -ne 0 ]]; then
+    printf 'CHOREO_SCRATCH_CLEANUP failed\n' >&2 || :
+    [[ "$status" -ne 0 ]] || status="$cleanup_status"
+  fi
+  exit "$status"
+}
+trap finish EXIT
 
 quint_sha="939b64095b706017f2f202c6f99c860c40be7c31bddc2b98557316e50f42cd7f"
 quint_bin="${FSGG_QUINT_BIN:-}"
