@@ -98,7 +98,7 @@ class Controls(unittest.TestCase):
   root=HERE.parents[2]
   helper=(root/'eng/portable-p4-input-manifest.fsx').read_text()
   fixture=(HERE/'test_private_input_manifest.fsx').read_text()
-  selected='portable-p4-python-private-inputs-20261006-diag-source2'
+  selected='portable-p4-python-private-inputs-20261006-diag-source3'
   consumed='portable-p4-python-private-inputs-20261006-diag-source1'
   pins=re.findall(r'^let releaseTag = "([^"\n]+)"$',helper,re.M)
   self.assertEqual(pins,[selected])
@@ -107,6 +107,8 @@ class Controls(unittest.TestCase):
   self.assertIn('"tag",JsonValue.Create("'+selected+'")',fixture)
   refusal_loop=fixture[fixture.index('for index,tag in ['):fixture.index('let body=')]
   self.assertIn('"'+consumed+'"',refusal_loop)
+  self.assertIn('"portable-p4-python-private-inputs-20261006-diag-source2"',refusal_loop)
+  self.assertIn('text "targetCommit" release = expectedTarget',helper)
   self.assertIn('run "construct" wrongPath',refusal_loop)
   self.assertIn('assertTrue (refusedCode<>0)',refusal_loop)
 if __name__=='__main__':unittest.main()
