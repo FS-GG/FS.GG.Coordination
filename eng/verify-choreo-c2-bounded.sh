@@ -17,7 +17,12 @@ finish() {
       printf 'CHOREO_FAILURE_DIAGNOSTIC unavailable\n' >&2 || :
     fi
   fi
-  rm -rf -- "$scratch_root" || { printf 'CHOREO_SCRATCH_CLEANUP failed\n' >&2 || :; }
+  local cleanup_status=0
+  rm -rf -- "$scratch_root" || cleanup_status="$?"
+  if [[ "$cleanup_status" -ne 0 ]]; then
+    printf 'CHOREO_SCRATCH_CLEANUP failed\n' >&2 || :
+    [[ "$status" -ne 0 ]] || status="$cleanup_status"
+  fi
   exit "$status"
 }
 trap finish EXIT

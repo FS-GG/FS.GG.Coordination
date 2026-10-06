@@ -136,6 +136,26 @@ exit 0
             self.assertEqual(37, result.returncode)
             self.assertFalse(list(root.glob('fsgg-choreo-c2-bounded.*')))
 
+    def test_cleanup_failure_fails_success_and_preserves_original_failure(self):
+        for original, expected in [(0, 73), (37, 37)]:
+            with self.subTest(original=original), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp); binary = root / 'bin'; binary.mkdir()
+                fake_rm = binary / 'rm'
+                fake_rm.write_text('#!/bin/sh\nexit 73\n')
+                fake_rm.chmod(0o755)
+                script = (ROOT / 'eng/verify-choreo-c2-bounded.sh').read_text().split('quint_sha=', 1)[0]
+                script = script.replace('repo_root="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"', 'repo_root="' + str(ROOT) + '"')
+                env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], RUNNER_TEMP=str(root), FSGG_CHOREO_DIAGNOSTIC_ROOT=str(root / 'diagnostics'))
+                result = subprocess.run(['bash', '-c', script + f'\nexit {original}\n'], env=env, capture_output=True, text=True, timeout=5)
+                self.assertEqual(expected, result.returncode, result.stderr)
+                self.assertIn('CHOREO_SCRATCH_CLEANUP failed', result.stderr)
+                self.assertTrue(list(root.glob('fsgg-choreo-c2-bounded.*')))
+                if original:
+                    value = json.loads((root / 'diagnostics/failure.json').read_text())
+                    self.assertEqual(original, value['originalExitCode'])
+                else:
+                    self.assertFalse((root / 'diagnostics').exists())
+
     def test_collector_is_in_formal_source_identity_and_only_existing_artifact(self):
         plan = json.loads((ROOT / 'eng/bootstrap-qualification-plan.json').read_text())
         self.assertIn('eng/retain-choreo-c2-diagnostics.py', plan['formalReuse']['exactPaths'])
