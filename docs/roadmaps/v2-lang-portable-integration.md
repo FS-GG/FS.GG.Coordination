@@ -239,9 +239,9 @@ producer publication plus receiver-owned clean-creation proof. P5 expands verifi
 frozen V2 cohort or historical outcomes.
 
 
-## Current Python receiver staging source refresh
+## Historical Python receiver staging source refresh
 
-The retained final protected producer remains `b06c18722b422213fe1c7cdd11cda1732605466f`,
+The earlier protected producer was `b06c18722b422213fe1c7cdd11cda1732605466f`,
 tree `51df48a04b6cb7971233723945e6c743e3a65147`: preparation `36895926751`, attempt1,
 artifact `11179803664`, original archive SHA256
 `193fe72c090efbb00e005e03e3d637abd8eb1a85f38a7a29c567d4b0c7eff494`.
@@ -273,3 +273,53 @@ syntax pass without an SDK, container, grant or native qualification. This local
 source candidate is ready for root review and genuine-input binding; public
 staging/facts, private host readiness, one installed runtime-only qualification,
 publication and fresh public opt-in adoption remain distinct pending boundaries.
+
+## DIAG 0.2.1 canonical preparation and dormant source amendment
+
+DIAG 0.2.1 has one successful canonical preparation at protected producer
+`bc55a3d1cc887d653c1bb1198e4823b24f47aaa8`, tree
+`723919d52ee2598858907978b1f33332ab1d9074`, run `37403093489`, attempt 1,
+artifact `11386361825`. Its original archive SHA-256 is
+`269a75efe766321effd54a9a0affa701a51ee25e401c9773f42d8e895f12e67c`.
+The exact retained candidate's package, bundle, image and portable release
+manifest are bound in the publisher source. Root's subsequent canonical
+installed DIAG qualification passed against this original candidate; genuine P4
+qualification/grant and publication remain pending.
+
+The next coherent source change combines the fresh-tag qualification helper
+with the exact-candidate 0.2.1 publisher bindings. The helper selects
+`portable-p4-python-private-inputs-20261006-diag-source1` and rejects the consumed
+prior generation. Its eventual protected merge supplies helper H and publisher
+Q; neither is known before protected delivery. Producer P and protected merge M
+remain the canonical `bc55` source and tree, and the original package/image
+bytes remain unchanged. Updating H/Q does not require repacking P or introducing
+a source self-reference.
+
+This source-order amendment permits the dormant publisher source to land before
+P4 acceptance. Source delivery does not authorize dispatch. Root may select
+publication only after canonical installed DIAG and genuine receiver-bound P4
+installed qualification/grant, preserving capability, custody and cleanup
+refusals. The existing publisher does not encode a machine P4 receipt gate;
+these remain independently admitted operation boundaries. The selected dormant
+operation name is `publish-v2-diag-01-4-cli-021`, not a publication grant.
+
+The publisher still performs two independent reproduction packs and compares
+them with the retained original candidate, loads the exact image and reruns all
+six packaged operations before its existing ordered GitHub Packages and
+nuget.org effects, exact readbacks, immutable tag and release. Fresh public
+adoption remains separately gated. Original P4 run `37299089618`, attempt 2,
+failed cleanup/missing capsule and 18 consumed effects remain historical;
+capability is not established and Portal remains fenced. Neither that failure
+nor the earlier local `54b` pilot is converted into current installed acceptance.
+
+The actual canonical installed DIAG window exited 0 and settled all owned
+children. Its 21 expected ready/refusal observations preserve independent first
+and additional failures, dependency blocking, malformed output, reporting quota
+and the accepted blocked continuation, alongside the successful prepared path.
+The root receipt SHA-256 is
+`0c1fedb5bb04c99b730bf2f106b54f0fcba12c1f2ce9a21ac6e92f6244b954e5`;
+installed evidence SHA-256 is
+`3fc939d583413f197c173cbab359a9674e3601689c481064ec6aa0d97bb5b4c7`.
+This qualifies canonical installed diagnostics, without authorizing provider
+execution, publication or adoption. P4 and its fresh receiver-bound grant remain
+open, and the original private-provider failure remains unchanged.
