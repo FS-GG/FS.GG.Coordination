@@ -5,6 +5,9 @@ import ast,importlib.util,io,re,tempfile,unittest,json,subprocess
 from contextlib import redirect_stdout
 from pathlib import Path
 from unittest.mock import patch
+import socket,os
+def forbidden(*args,**kwargs):raise AssertionError('native-network-forbidden')
+subprocess.Popen=forbidden;subprocess.run=forbidden;subprocess.check_output=forbidden;subprocess.check_call=forbidden;os.system=forbidden;socket.socket.connect=forbidden;socket.create_connection=forbidden
 HERE=Path(__file__).parent
 spec=importlib.util.spec_from_file_location('collector',HERE/'collect_provider_capability.py');c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 STAGES={'arguments','locations','podman-info','uid-map','gid-map','podman-shape','helper-hashes','git-version','tar-version','podman-version','runtime-list','sdk-list','sdk-probe','resource-read','output'}

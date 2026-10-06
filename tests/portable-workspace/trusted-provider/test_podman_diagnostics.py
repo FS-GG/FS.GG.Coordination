@@ -1,10 +1,12 @@
 """Closed diagnostic controls; native/network execution is forbidden."""
 import contextlib,importlib.util,io,json,os,pathlib,subprocess,sys,tempfile,unittest
 from unittest.mock import patch
+import socket
 sys.dont_write_bytecode=True
 def load(name,path):
  s=importlib.util.spec_from_file_location(name,path);m=importlib.util.module_from_spec(s);sys.modules[name]=m;s.loader.exec_module(m);return m
 def forbidden(*args,**kwargs):raise AssertionError('native-network-forbidden')
+subprocess.Popen=forbidden;subprocess.run=forbidden;subprocess.check_output=forbidden;subprocess.check_call=forbidden;os.system=forbidden;socket.socket.connect=forbidden;socket.create_connection=forbidden
 c=load('collector_candidate',pathlib.Path(__file__).parent/'collect_provider_capability.py')
 subprocess.Popen=forbidden;subprocess.run=forbidden
 class Controls(unittest.TestCase):
