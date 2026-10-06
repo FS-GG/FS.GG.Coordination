@@ -85,8 +85,8 @@ class Controls(unittest.TestCase):
   root=HERE.parents[2]
   helper=(root/'eng/portable-p4-input-manifest.fsx').read_text()
   fixture=(HERE/'test_private_input_manifest.fsx').read_text()
-  selected='portable-p4-python-private-inputs-20261006-diag-source1'
-  consumed='portable-p4-python-private-inputs-20261005-root-runtime-e8eb322'
+  selected='portable-p4-python-private-inputs-20261006-diag-source2'
+  consumed='portable-p4-python-private-inputs-20261006-diag-source1'
   pins=re.findall(r'^let releaseTag = "([^"\n]+)"$',helper,re.M)
   self.assertEqual(pins,[selected])
   self.assertIn('text "tag" release = releaseTag',helper)
