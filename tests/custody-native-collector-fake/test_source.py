@@ -19,11 +19,21 @@ class SourceControls(unittest.TestCase):
         self.assertEqual(hashlib.sha256(original.encode()).hexdigest(), '4d2105f8223b2eceb89d8fee675b9ee41759c50a36a9d9c86d59a4c5978cd610')
 
     def test_exact_fixed_fixture_source(self):
-        for name, expected in [('fake_fixture','3cf0fee6dbe4c8be40b67fc8bf5729ca79b397e2cd499738807ed6f4c6eb68fb'), ('fake_packet','cf02e16bb5d9e765cbea047c718424795e92404f652f46fe97a8696ac54d046b'), ('fake_schema','96064563fe913c04db4f2ba3d6bdfed4bc1df9795d8180db1f914b3779e8eddb')]:
+        for name, expected in [('fake_fixture','69e764675313417a96e863aba73a41b78cf70836a176aeedba33cfda8d8376bf'), ('fake_packet','cf02e16bb5d9e765cbea047c718424795e92404f652f46fe97a8696ac54d046b'), ('fake_schema','96064563fe913c04db4f2ba3d6bdfed4bc1df9795d8180db1f914b3779e8eddb')]:
             with self.subTest(name=name):
                 block = re.search(r'static const char '+name+r'\[\] =\n(.*?)^;', HEADER, re.M|re.S).group(1)
                 raw = ''.join(json.loads(line.strip()) for line in block.splitlines()).encode()
                 self.assertEqual(hashlib.sha256(raw).hexdigest(), expected)
+
+    def test_denied_operation_diagnostics_use_only_captured_stdout(self):
+        block = re.search(r'static const char fake_fixture\[\] =\n(.*?)^;', HEADER, re.M|re.S).group(1)
+        fixture = ''.join(json.loads(line.strip()) for line in block.splitlines())
+        self.assertEqual(fixture.count('exec 2>&1'), 1)
+        self.assertLess(fixture.index('for fd in {3..63}'), fixture.index('exec 2>&1'))
+        self.assertLess(fixture.index('> /unbounded-root-write'), fixture.index('exec 2>&1'))
+        self.assertLess(fixture.index('exec 2>&1'), fixture.index("trap 'code=$?"))
+        self.assertIn("exec /usr/bin/unshare --user /usr/bin/bash --noprofile --norc -c ':' 2>&1", fixture)
+        self.assertNotIn('/proc/self/fd', fixture)
 
     def test_fake_filter_source_has_selected_byte_shape(self):
         block = HEADER.split('static struct sock_filter fake_rules[] = {',1)[1].split('\n};',1)[0]
