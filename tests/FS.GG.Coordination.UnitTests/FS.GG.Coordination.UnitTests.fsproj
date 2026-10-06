@@ -100,6 +100,9 @@
     <Compile Include="RoadmapWorkTests.fs" />
     <Compile Include="QualificationManifestTests.fs" />
     <Compile Include="PortableWorkspaceCommandTests.fs" />
+    <Compile Include="PortableWorkspaceC2PhaseTests.fs" />
+    <Compile Include="PortableWorkspaceC2RuntimeCommandTests.fs" />
+    <Compile Include="PortableWorkspaceC2AdmissionTests.fs" />
     <Compile Include="PortableWorkspaceRuntimeCommandTests.fs" />
     <Compile Include="PortableWorkspaceTrustedEnrollmentSourceTests.fs" />
     <Compile Include="CritiqueEvidenceTests.fs" />
@@ -124,6 +127,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <Content Include="..\..\contracts\portable-workspace\c2-phase-v1\fixtures\admission\schema-only-unqualified.json"
+             Link="C2Fixtures\schema-only-unqualified.json"
+             CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\contracts\portable-workspace\c2-phase-v1\fixtures\*.json"
+             Link="C2Fixtures\%(Filename)%(Extension)"
+             CopyToOutputDirectory="PreserveNewest" />
     <Content Include="..\portable-workspace\executor\python\app.py"
              Link="portable-python-hello\python\app.py"
              CopyToOutputDirectory="PreserveNewest" />

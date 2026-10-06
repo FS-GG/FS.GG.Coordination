@@ -1,0 +1,375 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "enrollmentId",
+    "grantId",
+    "fenceGeneration",
+    "allowedUid",
+    "profileId",
+    "profileSha256",
+    "cli",
+    "image",
+    "executables",
+    "stateRoot",
+    "operation"
+  ],
+  "properties": {
+    "schema": {
+      "const": "fsgg.portable-workspace-c2-enrollment/v1"
+    },
+    "enrollmentId": {
+      "enum": [
+        "local-c2-dotnet-scaffold-fixture-v1",
+        "local-c2-dotnet-compiler-fixture-v1"
+      ]
+    },
+    "grantId": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 512
+    },
+    "fenceGeneration": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 9223372036854775807
+    },
+    "allowedUid": {
+      "const": 1000
+    },
+    "profileId": {
+      "enum": [
+        "c2-dotnet-scaffold-fixture/1",
+        "c2-dotnet-compiler-fixture/1"
+      ]
+    },
+    "profileSha256": {
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "cli": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "packageId",
+        "version",
+        "packageSha256",
+        "payloadSha256",
+        "installationRoot",
+        "entryRelativePath",
+        "apphost",
+        "dotnetHost",
+        "hostClosureSha256",
+        "installedQualificationSha256"
+      ],
+      "properties": {
+        "packageId": {
+          "const": "FS.GG.Coordination.Cli"
+        },
+        "version": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "packageSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "payloadSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "installationRoot": {
+          "type": "string",
+          "pattern": "^/opt/fsgg/coordination/c2/installed/[0-9a-f]{64}$",
+          "maxLength": 4096
+        },
+        "entryRelativePath": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "apphost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "dotnetHost": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "type": "string",
+              "pattern": "^/",
+              "maxLength": 4096
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "hostClosureSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "installedQualificationSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "image": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "qualifiedImage",
+        "archiveSha256",
+        "manifestDigest",
+        "configDigest",
+        "recipeSha256",
+        "sdk",
+        "runtime",
+        "qualificationReceiptSha256"
+      ],
+      "properties": {
+        "qualifiedImage": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "archiveSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "manifestDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "configDigest": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "recipeSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "sdk": {
+          "const": "10.0.401"
+        },
+        "runtime": {
+          "const": "10.0.12"
+        },
+        "qualificationReceiptSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        }
+      }
+    },
+    "executables": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "git",
+        "tar",
+        "podman"
+      ],
+      "properties": {
+        "git": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "/usr/bin/git"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "tar": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "/usr/bin/tar"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        },
+        "podman": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "path",
+            "sha256"
+          ],
+          "properties": {
+            "path": {
+              "const": "/usr/bin/podman"
+            },
+            "sha256": {
+              "type": "string",
+              "pattern": "^[0-9a-f]{64}$"
+            }
+          }
+        }
+      }
+    },
+    "stateRoot": {
+      "const": "/var/lib/fsgg/portable-workspaces/c2/1000"
+    },
+    "operation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "operationId",
+        "idempotencyId",
+        "requestSha256",
+        "consumerRepository",
+        "consumerSource",
+        "inputInventorySha256",
+        "bootId",
+        "phaseStartedUtc",
+        "notAfterUtc",
+        "phaseStartMonotonicNs",
+        "workDeadlineMonotonicNs",
+        "producerDeadlineMonotonicNs",
+        "phaseDeadlineMonotonicNs"
+      ],
+      "properties": {
+        "operationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "idempotencyId": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512
+        },
+        "requestSha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "consumerRepository": {
+          "enum": [
+            "FS-GG/FS.GG.SDD",
+            "FS-GG/FS.GG.Governance"
+          ]
+        },
+        "consumerSource": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{40}$"
+        },
+        "inputInventorySha256": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{64}$"
+        },
+        "bootId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "phaseStartedUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "notAfterUtc": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "phaseStartMonotonicNs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "workDeadlineMonotonicNs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "producerDeadlineMonotonicNs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        },
+        "phaseDeadlineMonotonicNs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9223372036854775807
+        }
+      }
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Draft C2 first-fixture enrollment shape; no file is provisioned and schema validity conveys no authority",
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "profileId": {
+            "const": "c2-dotnet-scaffold-fixture/1"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "enrollmentId": {
+            "const": "local-c2-dotnet-scaffold-fixture-v1"
+          },
+          "operation": {
+            "properties": {
+              "consumerRepository": {
+                "const": "FS-GG/FS.GG.SDD"
+              }
+            }
+          }
+        }
+      },
+      "else": {
+        "properties": {
+          "enrollmentId": {
+            "const": "local-c2-dotnet-compiler-fixture-v1"
+          },
+          "operation": {
+            "properties": {
+              "consumerRepository": {
+                "const": "FS-GG/FS.GG.Governance"
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

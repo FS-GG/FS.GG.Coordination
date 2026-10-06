@@ -1,0 +1,12 @@
+// Negative compile fixture, intentionally excluded from normal projects.
+// Each attempted constructor/coercion must fail after the actual admission body
+// exists; no fake body or test-supplied authority is permitted to compile it now.
+namespace FS.GG.Coordination.PortableWorkspace.UnitTests
+open FS.GG.Coordination.Cli
+module CannotConstructAuthority =
+    module A = PortableWorkspaceC2Admission
+    let forgedAdmission = A.Admission()
+    let forgedEnrollment = A.TrustedEnrollment()
+    let forgedHandoff = A.RetiredHandoff()
+    let fromDeclaration (value: PortableWorkspaceC2Phase.BoundDeclaration) : A.Admission = value
+    let fromResult (value: PortableWorkspaceC2Phase.ResultDocument) : A.RetiredHandoff = value
