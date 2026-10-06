@@ -1,12 +1,41 @@
 #!/usr/bin/env python3
 """Measure selected-account provider capability; performs no provisioning."""
 from __future__ import annotations
-import argparse, hashlib, json, os, shutil, subprocess
+import argparse, hashlib, json, os, re, resource, shutil, subprocess, tempfile
 from pathlib import Path
 REQUIRED_DIRS=['/p4','/p4/runtime-v1','/p4/runtime-v1/home','/p4/runtime-v1/xdg-config','/p4/runtime-v1/xdg-config/containers','/p4/runtime-v1/xdg-runtime','/p4/runtime-v1/xdg-runtime/containers-runroot','/p4/runtime-v1/storage','/p4/evidence']
 def sha(p): return hashlib.sha256(Path(p).read_bytes()).hexdigest()
 ACCOUNT_ENV=['/usr/bin/env','HOME=/p4/runtime-v1/home','XDG_CONFIG_HOME=/p4/runtime-v1/xdg-config','XDG_RUNTIME_DIR=/p4/runtime-v1/xdg-runtime','PATH=/usr/local/bin:/usr/bin:/bin']
 def runuser(account,args): return subprocess.check_output(['/usr/sbin/runuser','--user',account,'--',*ACCOUNT_ENV,*args],text=True,timeout=20)
+# Public projection contains closed metadata only, never values/paths/error suffixes.
+PODMAN_OVERRIDE_KEYS=frozenset({'CONTAINER_HOST','CONTAINER_CONNECTION','CONTAINERS_CONF',
+ 'CONTAINERS_REGISTRIES_CONF','CONTAINERS_STORAGE_CONF','STORAGE_DRIVER','STORAGE_OPTS'})
+VERSION_BYTES=4096
+VERSION_NUMBER=re.compile(r'podman version ([0-9]{1,2}\.[0-9]{1,2}\.[0-9]{1,3})(?:[-+][A-Za-z0-9.]{1,64})?')
+def podman_version_probe(account):
+ """Observe version before info; bounded read-only FD transport, no provider writes."""
+ command=['/usr/sbin/runuser','--user',account,'--',*ACCOUNT_ENV,'podman','--version']
+ def limits():resource.setrlimit(resource.RLIMIT_FSIZE,(VERSION_BYTES+1,VERSION_BYTES+1))
+ with tempfile.TemporaryFile() as stdout, tempfile.TemporaryFile() as stderr:
+  result=subprocess.run(command,stdout=stdout,stderr=stderr,timeout=20,preexec_fn=limits)
+  sizes=[os.fstat(f.fileno()).st_size for f in (stdout,stderr)]
+  if any(size>VERSION_BYTES for size in sizes):raise ValueError('version response exceeded bound')
+  stdout.seek(0);stderr.seek(0);raw=stdout.read(VERSION_BYTES+1);error=stderr.read(VERSION_BYTES+1)
+  if result.returncode!=0:raise subprocess.CalledProcessError(result.returncode,command,output=raw,stderr=error)
+  lines=raw.decode('utf-8','strict').splitlines()
+  if not lines or len(lines[0])>256:raise ValueError('version response shape refused')
+  return lines[0]
+def podman_provenance(version_text,error):
+ match=VERSION_NUMBER.fullmatch(version_text) if type(version_text) is str else None
+ version=match.group(1) if match is not None else None
+ kind='observed' if version is not None else 'unrecognized' if error is None else 'unavailable'
+ return {'schema':'fsgg.portable-p4-podman-provenance/1','commandRole':'podman-info',
+  'version':version,'versionObservation':kind,'versionExit':0 if error is None else error.returncode if isinstance(error,subprocess.CalledProcessError) and type(error.returncode) is int and -255<=error.returncode<=255 else None,
+  'lookupMode':'account-fixed-PATH','environmentContract':'declared-fixed-account-v1',
+  'parentOverrideKeysPresent':sorted(key for key in PODMAN_OVERRIDE_KEYS if key in os.environ)}
+def emit_podman_provenance(version_text,error):
+ try:print('PORTABLE_PROVIDER_PODMAN_PROVENANCE='+json.dumps(podman_provenance(version_text,error),sort_keys=True,separators=(',',':')),flush=True)
+ except Exception:pass
 STAGES=frozenset({'arguments','locations','podman-info','uid-map','gid-map','podman-shape','helper-hashes','git-version','tar-version','podman-version','runtime-list','sdk-list','sdk-probe','resource-read','output'})
 _last_stage='unavailable'
 def failure_diagnostic(error):
@@ -34,6 +63,11 @@ def main():
  stage("locations")
  locations=[x for x in a.measured_locations.read_text().splitlines() if x]
  if len(locations)!=len(set(locations)) or any(not Path(x).is_absolute() for x in locations): raise ValueError('measured location inventory is malformed')
+ # Diagnostic metadata must not replace the owning info failure or cause retries.
+ podman_version=None;podman_version_error=None
+ try:podman_version=podman_version_probe(a.account)
+ except Exception as error:podman_version_error=error
+ emit_podman_provenance(podman_version,podman_version_error)
  stage("podman-info")
  podman=json.loads(runuser(a.account,['podman','--storage-driver=vfs','--root',str(a.storage),'--runroot','/p4/runtime-v1/xdg-runtime/containers-runroot','info','--format=json']))
  stage("uid-map")

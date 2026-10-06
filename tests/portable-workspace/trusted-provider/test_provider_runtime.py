@@ -34,7 +34,7 @@ def capability_collector_contract():
   def observe(account,args):
    assert account=='p4executor'; calls.append(args)
    return json.dumps({'host':{}}) if len(calls)==1 else 'fixture-map'
-  namespace={'argparse':argparse,'Path':Path,'json':json,'runuser':observe,'stage':collector.stage}
+  namespace={'argparse':argparse,'Path':Path,'json':json,'runuser':observe,'stage':collector.stage,'podman_version_probe':lambda account:'podman version 4.9.3','emit_podman_provenance':lambda version,error:None}
   argv=['fixture','--account','p4executor','--uid','32001','--state','/p4','--storage','/p4/runtime-v1/storage','--archive','/fixture/archive','--runtime','/fixture/runtime','--measured-locations',str(measured),'--podman-info','/fixture/info','--output','/fixture/output']
   markers=io.StringIO()
   with patch.object(sys,'argv',argv),contextlib.redirect_stdout(markers): exec(compile(program,'<collector contract fixture>','exec'),namespace)
