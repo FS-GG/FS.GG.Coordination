@@ -12,6 +12,27 @@ and all of P5 remain pending.
 
 ## Authority and compatibility
 
+The C2 dependency has a separate byte contract and observation-only admission
+source in `contracts/portable-workspace/c2-phase-v1/`. The internal CLI modules
+validate closed canonical request/result bytes, supplied declarations and literal
+options, and implement bounded physical observation with opaque capabilities.
+Local qualification of source `ab2cd9c6` passed all 65 selected cases: 37 phase
+API, 10 options, 17 admission/refusal and one existing v1 contract case.
+A separately admitted read-only recovery verified the retained TRX and complete
+source, cache, SDK, import, evaluated-project and assembly closure without
+replaying tests. The original formatter-refused window and earlier compile or
+resource-proof failures remain retained. Exact delivery-head hosted validation
+and protected source delivery are still pending.
+
+The reader refuses when current image availability is unproved. No valid
+protected enrollment, current loaded-image proof, installed host closure or
+selected operation is available, and no positive TrustedEnrollment or Admission
+path is qualified. Command registration, workload execution, container custody,
+recovery and retired output handoff remain separate work. SDD's install/create
+and Governance's compiler routes require those installed boundaries before
+consumer execution. This source window changes neither DIAG 0.2.1 nor Python
+P4 qualification, publication or adoption.
+
 The v1 profile, command and result bytes remain stable. Product repositories do not import Coordination CLR,
 Akka or agent-framework types. The CLI exposes a read-only contract utility: it exports compiled schemas and
 examples, validates exact canonical bytes, computes SHA-256 digests and prepares a reviewed named operation.
@@ -323,3 +344,37 @@ installed evidence SHA-256 is
 This qualifies canonical installed diagnostics, without authorizing provider
 execution, publication or adoption. P4 and its fresh receiver-bound grant remain
 open, and the original private-provider failure remains unchanged.
+
+## C2 source qualification
+
+The source at `ab2cd9c67cae4982c6dac9db66afd791cc875f01` compiled the phase API,
+literal options and observation-only reader, and its actual TRX contains all 65
+selected passing cases. The first test window exited zero but its wrapper refused
+two truncated parameter display names. Its receipt remains `accepted=false`.
+The correction selects only the two exact, distinct xUnit formatter variants;
+full source literals, method/class, adapter, assembly, execution identifiers,
+outcomes and complete counters remain required.
+
+A new read-only operation then passed five selected commands, revalidated the
+retained test results and postconditions, and retired all owned children with no
+resource or storage failure. It replayed zero tests. Its accepted terminal
+SHA-256 is `d5655f7742f4d2665a3716dc4b2e44be835ab7db0e84d812af7e1f1c9c7e56c8`.
+The earlier 48-case pure API/options result and all failed windows remain
+historical evidence; they are not relabeled as current installed acceptance.
+
+The admission body uses bounded no-follow request, enrollment and role reads,
+closed decoding, original-clock accounting and opaque producer-owned values.
+It implements the independent observation path but fails closed at
+`image-availability-unproved`. Synthetic enrollment declarations are schema
+fixtures, never protected grants. Actual enrollment, package, image and operation
+bindings remain absent. The 5-second read ceiling is charged to the original
+60-second phase, not a renewed deadline.
+
+This source delivery contains no Program or RuntimeExecutor wiring, Podman
+launch, journal integration, positive admission factory or retired-handoff
+constructor. The next authority window must establish the protected normal
+installed CLI and host closure, fixed root-owned enrollment, current loaded image
+proof and selected operation before enabling execution. Consumer request/result
+parity and installed SDD/Governance custody remain independently qualified work;
+product repositories do not import Coordination CLR types. Hosted validation and
+source delivery do not grant image, enrollment, publication or adoption authority.

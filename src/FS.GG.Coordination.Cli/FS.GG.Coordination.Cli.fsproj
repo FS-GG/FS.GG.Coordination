@@ -106,9 +106,15 @@
     <Compile Include="MigrationSandboxProviderObservation.fs" />
     <Compile Include="OrdinarySettlementCommand.fs" />
     <Compile Include="PortableWorkspaceCommand.fs" />
+    <Compile Include="PortableWorkspaceC2Phase.fsi" />
+    <Compile Include="PortableWorkspaceC2Phase.fs" />
+    <Compile Include="PortableWorkspaceC2RuntimeCommand.fsi" />
+    <Compile Include="PortableWorkspaceC2RuntimeCommand.fs" />
     <Compile Include="PortableWorkspaceRuntimeCommand.fs" />
     <Compile Include="PortableWorkspacePythonHelloPolicy.fs" />
     <Compile Include="PortableWorkspaceTrustedEnrollmentSource.fs" />
+    <Compile Include="PortableWorkspaceC2Admission.fsi" />
+    <Compile Include="PortableWorkspaceC2Admission.fs" />
     <Compile Include="PortableWorkspacePythonHelloQualification.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
