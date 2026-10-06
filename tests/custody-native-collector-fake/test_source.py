@@ -70,12 +70,22 @@ class SourceControls(unittest.TestCase):
         self.assertIn('F_SEAL_WRITE|F_SEAL_GROW|F_SEAL_SHRINK|F_SEAL_SEAL',HEADER)
         self.assertIn('O_NOFOLLOW|O_NONBLOCK',HEADER)
 
-    def test_generated_existing_assets_remain_historical(self):
-        for name, expected in [('bootstrap.linux-x64.bin','28c5c28bb6279f994606584e9fe930213c8848b7a0cf9366c03e150520974716'),('filter.linux-x64.bpf','53281c62a5db55e8b407aa45f11484bd564bc1907b6ffc6bd65acb950cedbbe1')]:
-            self.assertEqual(hashlib.sha256((CUSTODY/name).read_bytes()).hexdigest(),expected)
+    def test_generated_assets_and_managed_pins_are_coherent(self):
         manifest=json.loads((CUSTODY/'manifest.json').read_bytes())
-        self.assertEqual(manifest['sourceSha256'],'4d2105f8223b2eceb89d8fee675b9ee41759c50a36a9d9c86d59a4c5978cd610')
-        self.assertNotIn('nativeCollectorFake',manifest)
+        for name,key,size in [('bootstrap.linux-x64.bin','bootstrapSha256','bootstrapBytes'),('filter.linux-x64.bpf','filterSha256','filterBytes')]:
+            raw=(CUSTODY/name).read_bytes()
+            self.assertEqual(hashlib.sha256(raw).hexdigest(),manifest[key])
+            self.assertEqual(len(raw),manifest[size])
+        self.assertEqual(hashlib.sha256((CUSTODY/'bootstrap.c').read_bytes()).hexdigest(),manifest['sourceSha256'])
+        fake=manifest['nativeCollectorFake']
+        self.assertEqual(hashlib.sha256((CUSTODY/'native-collector-fake.h').read_bytes()).hexdigest(),fake['headerSha256'])
+        self.assertEqual(fake['filterSha256'],'8924388729dfd5a649a6d4218ad83c8a9bcc07361c50ec6829a32b783808593a')
+        self.assertFalse(fake['hostAdmissionAvailable'])
+        self.assertFalse(fake['nativeQualificationRecorded'])
+        pins=(CUSTODY.parent/'CustodyBootstrap.fs').read_text()
+        for name,key in [('BootstrapSha256','bootstrapSha256'),('FilterSha256','filterSha256'),('SourceSha256','sourceSha256')]:
+            observed=re.search(r'let '+name+r' =\s+"([0-9a-f]{64})"',pins).group(1)
+            self.assertEqual(observed,manifest[key])
 
     def test_future_build_requires_actual_export_and_header_join(self):
         source=(CUSTODY/'build.py').read_text()

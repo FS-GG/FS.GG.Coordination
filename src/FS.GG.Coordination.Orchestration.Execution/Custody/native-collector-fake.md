@@ -2,8 +2,9 @@
 
 This source adds one fake-only mode to the existing custody bootstrap producer.
 It does not add a Host API, admission, installed capability, model execution or
-network access. Generated native assets and their consumers remain unchanged
-until a separately qualified coherent producer build. The existing ordinary
+network access. The native assets and managed digest pins now bind a genuine bounded producer
+regeneration and actual compiled filter exports. Ordinary execution and fake
+namespace custody remain separately unqualified. The existing ordinary
 `--bootstrap` and `--export-filter` implementations are preserved.
 
 The closed entry is:
@@ -88,15 +89,17 @@ source does not copy a process supervision engine into Host.
 `--export-native-collector-fake-filter` exports only the compiled fake filter.
 The existing build script will compare that actual export with the selected
 SHA256 and bind the new header plus filter bytes in its generated manifest. It
-continues to mark Host admission and native qualification unavailable. No such
-build has occurred for this source checkpoint; old binary/filter/manifest and
-managed pins are intentionally historical and unchanged.
+continues to mark Host admission and native qualification unavailable. The coherent artifact successor copies the actual bounded regeneration outputs
+and derives the three managed digest pins from those bytes. The actual fake
+and ordinary exports match their selected filters; this does not qualify the
+fake stdio profile, ordinary process custody or positive Host admission.
 
 `tests/custody-native-collector-fake/test_source.py` supplies pure source controls
 for original-mode equality, fixture/filter declarations, closed recipe, refusal
 ordering and generated-asset custody. `test_fake.c` supplies authored native
 controls for the actual parser/recipe and memfd refusal paths through injected
-syscalls; it has not been compiled or executed in this source window. Compilation,
+syscalls; its unchanged parser/recipe/memfd bodies passed the separate bounded C-first
+compilation and injected-control execution. Compilation,
 real memfd/descriptor/filter behavior, namespace execution, deadline and complete
 retirement need a separately bounded native selection. Source tests alone do not
 establish C compilation or platform acceptance.

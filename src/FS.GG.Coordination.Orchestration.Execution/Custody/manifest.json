@@ -2,10 +2,10 @@
   "schema": "fsgg.custody-bootstrap/1",
   "profile": "linux-x64-no-process-descendants/1",
   "architecture": "x86_64",
-  "sourceSha256": "4d2105f8223b2eceb89d8fee675b9ee41759c50a36a9d9c86d59a4c5978cd610",
-  "bootstrapSha256": "28c5c28bb6279f994606584e9fe930213c8848b7a0cf9366c03e150520974716",
+  "sourceSha256": "63e46d16156f415b13ae12e91eec9665a129b3a25271bfc072a17b7615a7fb1c",
+  "bootstrapSha256": "b66ddd741e0249ce88dfd62a7f9a9fe60bbc48d96ccd641cb6d8824ebb2d06a9",
   "filterSha256": "53281c62a5db55e8b407aa45f11484bd564bc1907b6ffc6bd65acb950cedbbe1",
-  "bootstrapBytes": 772400,
+  "bootstrapBytes": 785040,
   "filterBytes": 264,
   "compiler": "gcc (GCC) 16.2.1 20260810",
   "flags": [
@@ -25,5 +25,19 @@
   "threadCloneAllowed": "0x013d0f00",
   "processCreationAction": "KILL_PROCESS",
   "clone3Action": "ENOSYS",
-  "ioUringAction": "ENOSYS"
+  "ioUringAction": "ENOSYS",
+  "nativeCollectorFake": {
+    "mode": "--native-collector-fake-v1",
+    "profile": "untrusted-workload-userns-seccomp-v1",
+    "headerSha256": "fa34fe7506bbda152cab4e001756b95d81f874dc0250056fea4df4b42a77dc4b",
+    "filterSha256": "8924388729dfd5a649a6d4218ad83c8a9bcc07361c50ec6829a32b783808593a",
+    "filterBytes": 344,
+    "hostAdmissionAvailable": false,
+    "nativeQualificationRecorded": false,
+    "appStdin": "closed",
+    "appStderr": "closed",
+    "statusFd": 2,
+    "blockFd": 0,
+    "filterFd": 3
+  }
 }

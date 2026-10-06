@@ -45,13 +45,13 @@ module internal CustodyBootstrap =
     let ProfileId = "linux-x64-no-process-descendants/1"
 
     let BootstrapSha256 =
-        "28c5c28bb6279f994606584e9fe930213c8848b7a0cf9366c03e150520974716"
+        "b66ddd741e0249ce88dfd62a7f9a9fe60bbc48d96ccd641cb6d8824ebb2d06a9"
 
     let FilterSha256 =
         "53281c62a5db55e8b407aa45f11484bd564bc1907b6ffc6bd65acb950cedbbe1"
 
     let SourceSha256 =
-        "4d2105f8223b2eceb89d8fee675b9ee41759c50a36a9d9c86d59a4c5978cd610"
+        "63e46d16156f415b13ae12e91eec9665a129b3a25271bfc072a17b7615a7fb1c"
 
     let private read name expected =
         use resource =
