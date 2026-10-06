@@ -89,6 +89,7 @@
       "eng/validate-canonical-quint-protocol.fsx",
       "eng/validate-quint-qualification.fsx",
       "eng/verify-choreo-c2-bounded.sh",
+      "eng/retain-choreo-c2-diagnostics.py",
       "eng/verify-choreo-c3-traces.sh",
       "eng/verify-choreo-c5-parity.py",
       "global.json",
