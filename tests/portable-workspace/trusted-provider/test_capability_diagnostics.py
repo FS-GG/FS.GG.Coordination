@@ -2,13 +2,26 @@
 import sys
 sys.dont_write_bytecode=True
 import ast,importlib.util,io,re,tempfile,unittest,json,subprocess
-from contextlib import redirect_stdout
+from contextlib import redirect_stdout,ExitStack
 from pathlib import Path
 from unittest.mock import patch
+import socket,os
+def forbidden(*args,**kwargs):raise AssertionError('native-network-forbidden')
 HERE=Path(__file__).parent
-spec=importlib.util.spec_from_file_location('collector',HERE/'collect_provider_capability.py');c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
+# Scope import traps: this module is also imported by the independently selected
+# hosted runtime driver. Restore its prior transports; never relax an outer trap.
+TRAPS=[(subprocess,'Popen'),(subprocess,'run'),(subprocess,'call'),(subprocess,'check_output'),(subprocess,'check_call'),(os,'system'),(socket.socket,'connect'),(socket,'create_connection')]
+with ExitStack() as importing:
+ for target,name in TRAPS:importing.enter_context(patch.object(target,name,forbidden))
+ spec=importlib.util.spec_from_file_location('collector',HERE/'collect_provider_capability.py');c=importlib.util.module_from_spec(spec);spec.loader.exec_module(c)
 STAGES={'arguments','locations','podman-info','uid-map','gid-map','podman-shape','helper-hashes','git-version','tar-version','podman-version','runtime-list','sdk-list','sdk-probe','resource-read','output'}
 class Controls(unittest.TestCase):
+ def setUp(self):
+  traps=ExitStack();self.addCleanup(traps.close)
+  for target,name in TRAPS:traps.enter_context(patch.object(target,name,forbidden))
+  self.probe=patch.object(c,'podman_version_probe',return_value='podman version 4.9.3');self.probe.start();self.addCleanup(self.probe.stop)
+  self.transport=patch.object(c.subprocess,'run',side_effect=AssertionError('native command forbidden'));self.transport.start();self.addCleanup(self.transport.stop)
+
  def test_probe_markers_are_fixed_ascii_tokens(self):
   source=(HERE/'collect_provider_capability.py').read_text();tree=ast.parse(source)
   calls=[n for n in ast.walk(tree) if isinstance(n,ast.Call) and isinstance(n.func,ast.Name) and n.func.id=='stage']
@@ -29,7 +42,7 @@ class Controls(unittest.TestCase):
    argv=['collector','--account','fixture','--uid','987654','--state',td,'--storage',td,'--archive',str(root/'archive'),'--runtime',str(root/'runtime'),'--measured-locations',str(locations),'--podman-info',str(root/'podman'),'--output',str(root/'output')]
    with patch.object(sys,'argv',argv),patch.object(c,'runuser',side_effect=ValueError('PRIVATE_SENTINEL /private/path')),redirect_stdout(output):
     with self.assertRaises(ValueError):c.main()
-   self.assertEqual(output.getvalue().splitlines(),['PORTABLE_PROVIDER_CAPABILITY_STAGE=arguments','PORTABLE_PROVIDER_CAPABILITY_STAGE=locations','PORTABLE_PROVIDER_CAPABILITY_STAGE=podman-info']);self.assertNotIn('PRIVATE_SENTINEL',output.getvalue());self.assertNotIn('/private/path',output.getvalue());self.assertFalse((root/'output').exists())
+   self.assertEqual([line for line in output.getvalue().splitlines() if line.startswith('PORTABLE_PROVIDER_CAPABILITY_STAGE=')],['PORTABLE_PROVIDER_CAPABILITY_STAGE=arguments','PORTABLE_PROVIDER_CAPABILITY_STAGE=locations','PORTABLE_PROVIDER_CAPABILITY_STAGE=podman-info']);self.assertNotIn('PRIVATE_SENTINEL',output.getvalue());self.assertNotIn('/private/path',output.getvalue());self.assertFalse((root/'output').exists())
  def test_actual_entrypoint_classifies_transport_failure_without_private_text(self):
   cases=[(subprocess.CalledProcessError(125,['PRIVATE_SENTINEL'],output='PRIVATE_SENTINEL',stderr='PRIVATE_SENTINEL'),'child-exit',125,None),
          (subprocess.TimeoutExpired('PRIVATE_SENTINEL',20,output='PRIVATE_SENTINEL'),'timeout',None,None),
