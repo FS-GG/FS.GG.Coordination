@@ -5,14 +5,18 @@ using ProcessKit;
 
 // Investigation source only: this is not the proposed shared production API.
 if (args is ["--controls"]) { ObservationControls.Run(); return; }
-if (args.Length != 4) throw new ArgumentException("backend case python fixture");
+if (args.Length is not (4 or 5)) throw new ArgumentException("backend case python fixture [normal|sink-failure]");
+var evaluationMode = args.Length == 5 ? args[4] : "normal";
+if (evaluationMode is not ("normal" or "sink-failure")) throw new ArgumentException("unknown evaluation mode");
+if (evaluationMode == "sink-failure" && args[1] != "ordinary-dual")
+    throw new ArgumentException("sink failure requires the existing finite ordinary-dual fixture");
 var backend = args[0];
 var fixtureCase = args[1];
 var python = args[2];
 var fixture = args[3];
 var clock = Stopwatch.StartNew();
 var state = new Capture();
-using var stdout = new Sink(state, true);
+using var stdout = new Sink(state, true, failOnWrite: evaluationMode == "sink-failure");
 using var stderr = new Sink(state, false);
 using var cancel = new CancellationTokenSource();
 using var cancellationCause = cancel.Token.Register(() => state.RecordCause(
@@ -114,7 +118,7 @@ state.Cause ??= cancel.IsCancellationRequested
 if (backend == "cliwrap") output = state.StdoutRead == "eof" && state.StderrRead == "eof" ? "complete" : "incomplete";
 Console.WriteLine(JsonSerializer.Serialize(new
 {
-    schema = "fsgg.process-evaluation.observation/1", backend, fixtureCase,
+    schema = "fsgg.process-evaluation.observation/1", backend, fixtureCase, evaluationMode,
     launch, exit, exitCode, output, cause = state.Cause, cleanup, error,
     elapsedMs = clock.ElapsedMilliseconds, chargedBytes = state.Charged,
     stdoutRead = state.StdoutRead, stderrRead = state.StderrRead,
@@ -162,7 +166,7 @@ sealed class Capture
         }
     }
 }
-sealed class Sink(Capture state, bool stdout) : Stream
+sealed class Sink(Capture state, bool stdout, bool failOnWrite = false) : Stream
 {
     public override bool CanRead => false;
     public override bool CanSeek => false;
@@ -173,8 +177,18 @@ sealed class Sink(Capture state, bool stdout) : Stream
     public override int Read(byte[] buffer, int offset, int count) => throw new NotSupportedException();
     public override long Seek(long offset, SeekOrigin origin) => throw new NotSupportedException();
     public override void SetLength(long length) => throw new NotSupportedException();
-    public override void Write(byte[] buffer, int offset, int count) => state.Write(stdout, buffer.AsSpan(offset, count));
-    public override void Write(ReadOnlySpan<byte> bytes) => state.Write(stdout, bytes);
+    public override void Write(byte[] buffer, int offset, int count) => Write(buffer.AsSpan(offset, count));
+    public override void Write(ReadOnlySpan<byte> bytes)
+    {
+        if (failOnWrite)
+        {
+            // A real sink failure is distinct from cap overflow; incoming bytes are charged,
+            // but this failed write retains none. First cause precedes the thrown exception.
+            lock (state) { state.Charged += bytes.Length; state.Cause ??= "sink-failure"; }
+            throw new IOException("injected evaluator sink failure");
+        }
+        state.Write(stdout, bytes);
+    }
     public override ValueTask WriteAsync(ReadOnlyMemory<byte> bytes, CancellationToken cancellationToken = default)
-    { cancellationToken.ThrowIfCancellationRequested(); state.Write(stdout, bytes.Span); return ValueTask.CompletedTask; }
+    { cancellationToken.ThrowIfCancellationRequested(); Write(bytes.Span); return ValueTask.CompletedTask; }
 }

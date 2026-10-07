@@ -22,6 +22,10 @@ static class ObservationControls
         _ => "domain-policy-required"
     };
 
+    private static bool IsExplicitSinkFailure(Capture capture, bool rejected) =>
+        rejected && capture.Cause == "sink-failure" && capture.Charged == 256 &&
+        capture.Out.Length + capture.Err.Length == 0;
+
     public static void Run()
     {
         int count = 0;
@@ -53,6 +57,22 @@ static class ObservationControls
         Check(TaskState(Task.FromException(new IOException())) == "faulted",
               "faulted task is terminal but not successful cleanup");
         Check(TaskState(new TaskCompletionSource().Task) == "unresolved", "pending remains unresolved");
+        var sinkFailure = new Capture();
+        using var faultingSink = new Sink(sinkFailure, true, failOnWrite: true);
+        bool rejected = false;
+        try { faultingSink.Write(new byte[256]); } catch (IOException) { rejected = true; }
+        Check(IsExplicitSinkFailure(sinkFailure, rejected), "finite non-overflow sink failure charged without retention");
+        var cancelledSink = new Capture();
+        cancelledSink.RecordCause("cancel-requested");
+        using var lateFault = new Sink(cancelledSink, true, failOnWrite: true);
+        try { lateFault.Write(new byte[256]); } catch (IOException) { }
+        Check(cancelledSink.Cause == "cancel-requested", "later sink failure preserves cancellation first cause");
+        // Guard-removal negative control: a successful ordinary sink cannot satisfy the fault case.
+        var bypass = new Capture();
+        using var ordinarySink = new Sink(bypass, true);
+        bool bypassRejected = false;
+        try { ordinarySink.Write(new byte[256]); } catch (IOException) { bypassRejected = true; }
+        Check(!IsExplicitSinkFailure(bypass, bypassRejected), "negative control detects disabled fault injection");
         Console.WriteLine(JsonSerializer.Serialize(new { controls = count,
             scope = "pure evaluator/consumer-meaning controls; native and consumer acceptance not-established" }));
     }

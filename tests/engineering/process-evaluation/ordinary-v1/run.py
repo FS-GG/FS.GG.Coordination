@@ -15,6 +15,7 @@ import time
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--output', type=Path, required=True)
+parser.add_argument('--sink-failure-only', action='store_true')
 parser.add_argument('--dotnet', type=Path, default=Path('/usr/share/dotnet/dotnet'))
 args = parser.parse_args()
 base = Path(__file__).resolve().parent
@@ -33,15 +34,20 @@ for runtime in pins['runtime']['files']:
     assert hashlib.sha256(Path(runtime['path']).read_bytes()).hexdigest() == runtime['sha256']
 args.output.mkdir(mode=0o700, parents=True, exist_ok=False)
 results = []
+cases = [case for case in pins['cases'] if not args.sink_failure_only or case['id'] == 'ordinary-dual']
+mode = 'sink-failure' if args.sink_failure_only else 'normal'
+collection_started = time.monotonic()
 for backend in ('baseline', 'cliwrap', 'processkit'):
-    for case in pins['cases']:
+    for case in cases:
+        if args.sink_failure_only and time.monotonic() - collection_started >= 15:
+            raise RuntimeError('sink observation collection budget exhausted; no next launch')
         started = time.monotonic()
         registry = args.output / (backend + '-' + case['id'] + '-owned')
         registry.mkdir(mode=0o700)
         environment = os.environ.copy()
         environment['FSGG_PROC_REGISTRY'] = str(registry)
         process = subprocess.Popen([str(args.dotnet), str(dll), backend, case['id'],
-                                    str(python), str(base / 'fixture.py')],
+                                    str(python), str(base / 'fixture.py'), mode],
                                    stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                    start_new_session=True, cwd=base, env=environment)
         selector = selectors.DefaultSelector()
@@ -81,7 +87,7 @@ for backend in ('baseline', 'cliwrap', 'processkit'):
             observation = json.loads(retained['stdout'])
         except (UnicodeError, ValueError):
             observation = None
-        report = {'backend': backend, 'case': case['id'], 'outerGuard': guard,
+        report = {'backend': backend, 'case': case['id'], 'evaluationMode': mode, 'outerGuard': guard,
                   'evaluatorExitCode': process.returncode,
                   'elapsedMs': int((time.monotonic() - started) * 1000),
                   'observation': observation,
@@ -109,6 +115,9 @@ for backend in ('baseline', 'cliwrap', 'processkit'):
         path.write_text(json.dumps(report, indent=2) + '\n')
         path.chmod(0o600)
         results.append(report)
+        if guard != 'none' or any(row['observed'] != 'absent' for row in known) or \
+                (observation is None or (observation.get('launch') in ('started', 'submitted') and not known)):
+            raise RuntimeError('outer guard or registered-generation uncertainty; affected collection stopped')
 (args.output / 'summary.json').write_text(json.dumps(results, indent=2) + '\n')
 print(json.dumps({'observations': len(results), 'output': str(args.output),
                   'qualification': 'not-established'}))

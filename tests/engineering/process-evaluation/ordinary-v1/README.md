@@ -71,3 +71,24 @@ held-pipe or child timeout. FsQuint's output/cancel/deadline causes remain disti
 completion cannot establish executable identity, version or Quint domain success. These are meanings
 checked in the evaluator, not the existing consumers' acceptance tests. The root-scheduled follow-up
 build and its serial fixture findings are retained separately in `contract-observations.json`.
+
+## Prepared finite sink-failure slice
+
+The optional fifth evaluator argument `sink-failure` accepts only the existing finite
+`ordinary-dual` fixture. Its stdout sink charges the attempted bytes, retains none from the failed
+write, records `sink-failure` before throwing, and preserves any earlier cause. Normal mode keeps the
+existing fixture meanings. Three added pure controls specify this non-overflow failure, first-cause
+preservation and a negative case where disabling fault injection cannot satisfy the failure assertion.
+These controls and the changed C# source are **uncompiled and unexecuted** in this source-only window.
+
+`run.py --sink-failure-only` prepares three serial baseline/CliWrap/ProcessKit observations. A guard
+failure, missing observation or unresolved registered fixture generation stops affected collection.
+The earlier13 pure/15 ordinary observations remain historical; they do not validate this new source.
+`sink-source-preparation.json` records static checks and the deferred qualification boundary.
+
+The historical build manifest stays intact. Source mismatch intentionally refuses the old binary;
+a root-admitted qualification window must rebuild and refresh exact compiled/source joins before
+running the new mode. Its proposed30s includes cleanup, uses oneCPU with at most two build CLR/four
+owned processes, and must fit the current1792MiB global admission. This grants no inherited2GiB
+exception or workload authority. Preserve500ms work/1000ms total and the independent3000ms outer
+guard. Candidate exit/cleanup, ProcessKit tee EOF and full descendant coverage remain unknown.

@@ -1,0 +1,39 @@
+{
+  "schema": "fsgg.process-evaluation.source-preparation/1",
+  "sourceBase": "a3aeb61ca6abf26c82c5286fe25926b397918209",
+  "scope": "Evaluator-only finite non-overflow sink-failure source; no compile/run/backend selection or public API",
+  "sourceChanges": [
+    "Optional sink-failure mode uses unchanged ordinary-dual fixture and faults stdout before retention, recording and charging bytes first.",
+    "Three additional pure controls specify failed sink, cancellation first cause and guard-disabled negative rejection; not executed.",
+    "Runner selects only three serial sink-failure cases and fences further collection on outer guard/missing observation/unresolved registered generation."
+  ],
+  "staticChecks": [
+    "Python AST parsed for runner and unchanged fixture.",
+    "Prior13pure/15native observation artifacts, fixture and package/runtime/build pins byte-identical.",
+    "Entrypoint rejects unknown mode or sink-failure on non-finite cases before launch.",
+    "git diff whitespace check; no CLR/compiler/workload executed."
+  ],
+  "qualification": "deferred; current C# changes uncompiled and all new controls unexecuted",
+  "qualifiedBuildManifest": "Historical a3 snapshot intentionally retained; source mismatch fences launching old binary. Scheduled qualification must rebuild and join new binary/dependencies/executable sources in a separately identified current manifest.",
+  "futureBudget": {
+    "maxSecondsIncludingCleanup": 30,
+    "collectionStopSeconds": 15,
+    "cpu": 1,
+    "requestedMemoryMiB": 1792,
+    "peakClrBuild": 2,
+    "peakClrRun": 1,
+    "maxOwnedProcesses": 4,
+    "evaluatorWorkMs": 500,
+    "evaluatorTotalMs": 1000,
+    "outerGuardMs": 3000,
+    "sinkRetainedBytes": 4096,
+    "outerDiagnosticBytes": 16384,
+    "admission": "root global resource admission pending; no inherited2GiB exception"
+  },
+  "unknowns": [
+    "Candidate independent error-path leader exit/cleanup and ProcessKit tee EOF remain unknown.",
+    "Complete descendant/reaping/native closure and actual consumer acceptance remain unknown.",
+    ".1/backend/containment remain open; original evaluator/A1-A4/originalAttempt unknown.",
+    "Original follow-up dispatch collection state unavailable; no fabricated telemetry baseline."
+  ]
+}
