@@ -1,0 +1,195 @@
+{
+  "schema": "fsgg.process-evaluation.window/1",
+  "identity": "ordinary-v1-new-source-20261007",
+  "executionStatus": "15 ordinary observations; no qualification or backend selection",
+  "observedAt": "2026-10-07T01:38:00.820969+00:00",
+  "rows": [
+    {
+      "backend": "baseline",
+      "case": "ordinary-dual",
+      "elapsedMs": 45,
+      "cause": "none",
+      "exit": "observed",
+      "output": "complete",
+      "cleanup": "direct-child-and-read-tasks-terminal",
+      "chargedBytes": 512,
+      "retainedBytes": 512
+    },
+    {
+      "backend": "baseline",
+      "case": "ordinary-overflow",
+      "elapsedMs": 49,
+      "cause": "output-overflow",
+      "exit": "observed",
+      "output": "incomplete",
+      "cleanup": "direct-child-and-read-tasks-terminal",
+      "chargedBytes": 6144,
+      "retainedBytes": 4096
+    },
+    {
+      "backend": "baseline",
+      "case": "ordinary-deadline",
+      "elapsedMs": 526,
+      "cause": "deadline",
+      "exit": "observed",
+      "output": "complete",
+      "cleanup": "direct-child-and-read-tasks-terminal",
+      "chargedBytes": 8,
+      "retainedBytes": 8
+    },
+    {
+      "backend": "baseline",
+      "case": "ordinary-cancel",
+      "elapsedMs": 125,
+      "cause": "cancel-requested",
+      "exit": "observed",
+      "output": "complete",
+      "cleanup": "direct-child-and-read-tasks-terminal",
+      "chargedBytes": 8,
+      "retainedBytes": 8
+    },
+    {
+      "backend": "baseline",
+      "case": "ordinary-heldpipe",
+      "elapsedMs": 1000,
+      "cause": "deadline",
+      "exit": "observed",
+      "output": "incomplete",
+      "cleanup": "incomplete",
+      "chargedBytes": 15,
+      "retainedBytes": 15
+    },
+    {
+      "backend": "cliwrap",
+      "case": "ordinary-dual",
+      "elapsedMs": 73,
+      "cause": "none",
+      "exit": "observed",
+      "output": "complete",
+      "cleanup": "library-task-terminal;descendants-unverified",
+      "chargedBytes": 512,
+      "retainedBytes": 512
+    },
+    {
+      "backend": "cliwrap",
+      "case": "ordinary-overflow",
+      "elapsedMs": 69,
+      "cause": "output-overflow",
+      "exit": "unknown",
+      "output": "unknown",
+      "cleanup": "unknown",
+      "chargedBytes": 65536,
+      "retainedBytes": 4096
+    },
+    {
+      "backend": "cliwrap",
+      "case": "ordinary-deadline",
+      "elapsedMs": 519,
+      "cause": "deadline",
+      "exit": "unknown",
+      "output": "unknown",
+      "cleanup": "unknown",
+      "chargedBytes": 8,
+      "retainedBytes": 8
+    },
+    {
+      "backend": "cliwrap",
+      "case": "ordinary-cancel",
+      "elapsedMs": 118,
+      "cause": "cancel-requested",
+      "exit": "unknown",
+      "output": "unknown",
+      "cleanup": "unknown",
+      "chargedBytes": 8,
+      "retainedBytes": 8
+    },
+    {
+      "backend": "cliwrap",
+      "case": "ordinary-heldpipe",
+      "elapsedMs": 515,
+      "cause": "deadline",
+      "exit": "unknown",
+      "output": "unknown",
+      "cleanup": "unknown",
+      "chargedBytes": 15,
+      "retainedBytes": 15
+    },
+    {
+      "backend": "processkit",
+      "case": "ordinary-dual",
+      "elapsedMs": 119,
+      "cause": "none",
+      "exit": "observed",
+      "output": "complete",
+      "cleanup": "library-task-terminal;mechanism-and-descendants-unverified",
+      "chargedBytes": 512,
+      "retainedBytes": 512
+    },
+    {
+      "backend": "processkit",
+      "case": "ordinary-overflow",
+      "elapsedMs": 126,
+      "cause": "output-overflow",
+      "exit": "unknown",
+      "output": "unknown",
+      "cleanup": "unknown",
+      "chargedBytes": 16384,
+      "retainedBytes": 4096
+    },
+    {
+      "backend": "processkit",
+      "case": "ordinary-deadline",
+      "elapsedMs": 529,
+      "cause": "deadline",
+      "exit": "unknown",
+      "output": "incomplete-or-unreported",
+      "cleanup": "library-error;cleanup-unreported",
+      "chargedBytes": 8,
+      "retainedBytes": 8
+    },
+    {
+      "backend": "processkit",
+      "case": "ordinary-cancel",
+      "elapsedMs": 127,
+      "cause": "cancel-requested",
+      "exit": "unknown",
+      "output": "incomplete-or-unreported",
+      "cleanup": "library-error;cleanup-unreported",
+      "chargedBytes": 8,
+      "retainedBytes": 8
+    },
+    {
+      "backend": "processkit",
+      "case": "ordinary-heldpipe",
+      "elapsedMs": 523,
+      "cause": "deadline",
+      "exit": "unknown",
+      "output": "incomplete-or-unreported",
+      "cleanup": "library-error;cleanup-unreported",
+      "chargedBytes": 15,
+      "retainedBytes": 15
+    }
+  ],
+  "controls": "All 15 valid JSON observations; finite dual-stream payload exact; all retention<=4096; overflow/cancel/deadline causes preserved; no outer deadline/overflow fired; registered fixture identities absent after independent outer expiry observation.",
+  "scopeLimits": [
+    "Single ordered cold invocation per backend/case; no performance inference, repeated-run leak measurement or existing consumer acceptance.",
+    "Fixture self-expiry and registered-identity absence do not prove complete descendant retirement or reaping.",
+    "Shared tee bounds caller retention, not all internal library allocation or pre-retention byte accounting.",
+    "Errors return exit/output/cleanup unknown where public APIs were not adapted; library completion never implies containment acceptance.",
+    "No mechanism readback for ProcessKit; no native containment fixture, dependency choice, migration or installed adoption.",
+    "Historical A1-A4 and original attempt remain unknown.",
+    "Package nuspec source joins are declarations, not reproducible-build proofs; ProcessKit source project says2.11.0 despite package2.12.0."
+  ],
+  "buildFindings": [
+    {
+      "firstCause": "Inherited parent package reference produced NU1504 duplicate FSharp.Core; source isolated locally with evaluator Directory.Build.props/Directory.Packages.props, repository files untouched."
+    },
+    {
+      "additional": "C# bridge needed ProcessKit extension namespace and option-valued Code member; consecutive compile findings repaired before any fixture launch."
+    },
+    {
+      "compositionReview": "Ordinary investigation compiles a C# bridge over F# package APIs. Package XML and source were reviewed together; parent consumer package policy cannot serve candidate isolation. Final build0warnings/0errors; all five copied dependency DLLs hash-match package payloads."
+    }
+  ],
+  "decision": "retain existing consumers; investigate bounded error-result/exit/EOF/cleanup adapters. Contained evaluation remains independently pending."
+}

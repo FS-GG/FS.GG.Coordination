@@ -1,0 +1,45 @@
+{
+  "version": 1,
+  "dependencies": {
+    "net10.0": {
+      "CliWrap": {
+        "type": "Direct",
+        "requested": "[3.10.5, 3.10.5]",
+        "resolved": "3.10.5",
+        "contentHash": "L5SghZThsAVhV8ucwwW5FLMzKj1Ps57JB8DM2bEjpBNTyGi1EDjDO7Mi39Yx1FoXM2fZ1l9j39xqlPsZI1QCJQ=="
+      },
+      "FSharp.Core": {
+        "type": "Direct",
+        "requested": "[10.1.300, 10.1.300]",
+        "resolved": "10.1.300",
+        "contentHash": "BACHDBo/KL615GifW2wGB8vw3HLraCJb77VN/XVmQZPceNw+Oc+J+McehOo2yHtcr7hABmW4EqZZzVYiR1Z1EQ=="
+      },
+      "Microsoft.Extensions.DependencyInjection.Abstractions": {
+        "type": "Direct",
+        "requested": "[10.0.11, 10.0.11]",
+        "resolved": "10.0.11",
+        "contentHash": "/a1aJz4m7ylhEDf25ugQChLQoN5XwoGjWw/BoR/ZWWKsO1v4DdJElS1uyngahz4B/eOzjFk1KNTkarRLE5wsIg=="
+      },
+      "Microsoft.Extensions.Logging.Abstractions": {
+        "type": "Direct",
+        "requested": "[10.0.11, 10.0.11]",
+        "resolved": "10.0.11",
+        "contentHash": "Ljd0Uxoq5XpScD2Bg0nM/r3mwx7Ao5Uq24eo2ARxbGvqJ7Zht6rt2cJtwVRH4Cv+1ZVMdXz6TB43KbpmsxRrvQ==",
+        "dependencies": {
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11"
+        }
+      },
+      "ProcessKit": {
+        "type": "Direct",
+        "requested": "[2.12.0, 2.12.0]",
+        "resolved": "2.12.0",
+        "contentHash": "JJjtLxrzPm4XSDbr+jTbUNxldVLiatTxoH3NRh2itooknGc3YjuauOmOfEFHqOrO+4YfXYB5fHTM7xK/iRjM3A==",
+        "dependencies": {
+          "FSharp.Core": "10.1.300",
+          "Microsoft.Extensions.DependencyInjection.Abstractions": "10.0.11",
+          "Microsoft.Extensions.Logging.Abstractions": "10.0.11"
+        }
+      }
+    }
+  }
+}

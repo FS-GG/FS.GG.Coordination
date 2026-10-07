@@ -31,3 +31,12 @@ CLR and owned-process budget. Native containment additionally requires current d
 complete runtime closure, original operation identity/deadline and exact admission. Source preparation
 and pinned-source verification grant none of these. No evaluator, package restore, native workload,
 publication, installation or consumer migration ran in this window. V2-PROC-01.1 remains open.
+
+## Separately identified ordinary follow-up
+
+`ordinary-v1/` now contains executable source, pinned package/source/runtime inputs and fifteen
+bounded ordinary observations for baseline/CliWrap/ProcessKit. These use five newly defined cases;
+the historical evaluator/A1–A4 remain unrecovered. See its README for result limits, preparation
+failures and scheduled execution instructions. The comparison establishes source/testing readiness
+and concrete error-observation gaps; it does not complete .1, select a dependency, establish a
+contained guarantee or qualify either consumer.

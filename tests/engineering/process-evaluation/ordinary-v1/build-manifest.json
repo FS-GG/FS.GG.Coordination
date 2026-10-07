@@ -1,0 +1,112 @@
+{
+  "schema": "fsgg.process-evaluation.build-closure/1",
+  "artifacts": [
+    {
+      "name": "CliWrap.dll",
+      "sha256": "5b17d76df9f476fabd88a350ae43f727f74f2ce0fda699aa54b395a9a60c2be3",
+      "bytes": 582656
+    },
+    {
+      "name": "FSharp.Core.dll",
+      "sha256": "9fb54a29996ccaea48507a5791712b05210831a7a2967fa8ec9ba49149a5db59",
+      "bytes": 2407208
+    },
+    {
+      "name": "Microsoft.Extensions.DependencyInjection.Abstractions.dll",
+      "sha256": "43497d8f23b82159295933effe92c82447469b60cdbefcca4a62232e4ebbca99",
+      "bytes": 65832
+    },
+    {
+      "name": "Microsoft.Extensions.Logging.Abstractions.dll",
+      "sha256": "cec836c1dff8e64701ee4fd3a710bd971fef953c90a34b577d9f4363103e6c39",
+      "bytes": 66856
+    },
+    {
+      "name": "OrdinaryEvaluation",
+      "sha256": "ade5b2f71fa8b0c0f6eb2d5b8a3d51cf8cf2ef65d0c3350c5ddbed070ea1cf8f",
+      "bytes": 78256
+    },
+    {
+      "name": "OrdinaryEvaluation.deps.json",
+      "sha256": "d5e7abec59299c3009aacbeb28e5e924bac21d4e2c9ca6437459a4cb987a6d47",
+      "bytes": 5296
+    },
+    {
+      "name": "OrdinaryEvaluation.dll",
+      "sha256": "197da5af1531cf57731bb19e723e9cbfa4a7f7c9f9d97470f1b116e0a2756ba1",
+      "bytes": 23040
+    },
+    {
+      "name": "OrdinaryEvaluation.pdb",
+      "sha256": "f476b46cb95a661fb3172b1dc9e449fcc1748a3ffa2e3495a54429f1d49400ca",
+      "bytes": 14324
+    },
+    {
+      "name": "OrdinaryEvaluation.runtimeconfig.json",
+      "sha256": "6e7448cd3f2386af6df221a8c23b82add7215de800d4f22388bc053c8df5b22a",
+      "bytes": 290
+    },
+    {
+      "name": "ProcessKit.dll",
+      "sha256": "d949b0a19fe4b0aac60ea0ce269aa2d9374db3a82c09fdc0d81a405c75f327f5",
+      "bytes": 1525760
+    }
+  ],
+  "runtimeConfig": {
+    "runtimeOptions": {
+      "tfm": "net10.0",
+      "rollForward": "Disable",
+      "framework": {
+        "name": "Microsoft.NETCore.App",
+        "version": "10.0.12"
+      },
+      "configProperties": {
+        "System.Runtime.Serialization.EnableUnsafeBinaryFormatterSerialization": false
+      }
+    }
+  },
+  "nativeAcceptance": "not-established",
+  "fixtureSources": [
+    {
+      "name": "Program.cs",
+      "sha256": "915698def9c186a1dbdd031970ec22eb02873c6650829b6bdbb4a067175b89fc",
+      "bytes": 7142
+    },
+    {
+      "name": "fixture.py",
+      "sha256": "8d81730e2d4ed6a3fe091b4e0931f540a62ffc91ae5c395b2795d1ddcc504bd1",
+      "bytes": 1429
+    },
+    {
+      "name": "run.py",
+      "sha256": "03144e1fda87868047b887f3e2a2e7d493028bbf817249ccac5e32ce8eb5a242",
+      "bytes": 5734
+    },
+    {
+      "name": "OrdinaryEvaluation.csproj",
+      "sha256": "0401bc7fc1d08fef45e2961dd54d0ccd8443f4018b78243be5e1f6fccb8df309",
+      "bytes": 838
+    },
+    {
+      "name": "Directory.Build.props",
+      "sha256": "a8a33893253d416fbd777c535516402f1b23ed84d927b4df8c6c01075bd4e574",
+      "bytes": 351
+    },
+    {
+      "name": "Directory.Packages.props",
+      "sha256": "2d5bfd4d93d6ed857b76d40c1de99f10f316c0cd5d5cf8cf241f9f9790d12648",
+      "bytes": 121
+    },
+    {
+      "name": "global.json",
+      "sha256": "289e45aafd6eb59adcc4b7dda4d6fe5f1924065345aa8ab75be4a0c2b9cb00db",
+      "bytes": 79
+    },
+    {
+      "name": "packages.lock.json",
+      "sha256": "b0e62451a9428193f7b689064430cccd8dcbbd221ee30af8b722540be8d4508a",
+      "bytes": 1690
+    }
+  ],
+  "scope": "Pins of inspected build output and current executable sources; findings/input manifest add later read-only observations. Not a reproducible-build or native acceptance receipt."
+}
