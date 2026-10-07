@@ -1,0 +1,106 @@
+{
+  "schema": "fsgg.process-evaluation.preparation/1",
+  "feature": "V2-PROC-01",
+  "item": "V2-PROC-01.1",
+  "scope": "Read-only source preparation; no executable/backend choice or native acceptance",
+  "consumers": [
+    {
+      "repository": "FS-GG/FS.GG.SDD",
+      "revision": "cf2f046a10497a336d6243c9a314c3f91fb15771",
+      "path": "tests/Shared/TestShared.fs",
+      "sha256": "d5a969d9dac88195fb86b744c15b8c0d93b2841aa179bd5bbf0793642a246e10",
+      "bytes": 27751,
+      "classification": "routine",
+      "sourceObservation": "Concurrent string capture; distinct child timeout and held-pipe failure; 5000ms shared reap/diagnostic grace; full capture has no combined byte cap."
+    },
+    {
+      "repository": "FS-GG/FsQuint",
+      "revision": "fa1dc39e61e5e1d83a44d0fbf0b7ab59c8a45381",
+      "path": "src/FsQuint.Tooling/Tooling.fs",
+      "sha256": "bafb69aff469b2f5b1622c4a7149b22a037f1cd7528111140c06e9fe6544d3ff",
+      "bytes": 12030,
+      "classification": "routine",
+      "sourceObservation": "Linked timeout/cancellation and concurrent reads; combined UTF-8 accounting after decoding; cancellation and exception paths await exit without a cleanup token."
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "revision": "b171d4941a6de938c6148a974729d6a38e7b12ad",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/CustodyBootstrap.fs",
+      "sha256": "c3c6475d634f92fed47a07f8dcec0303701a38d1b49b3530e97c893995fa1155",
+      "bytes": 5510,
+      "classification": "contained-profile-specific",
+      "sourceObservation": "Held bootstrap file handles; linux-x64-no-process-descendants/1 profile, not general descendant containment."
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "revision": "b171d4941a6de938c6148a974729d6a38e7b12ad",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/PreparedAttempt.fs",
+      "sha256": "c72ebdb0274086e5a0c8470695a0b30f9081dc0089a0f83ea5e9a3f07768d339",
+      "bytes": 66784,
+      "classification": "contained-profile-specific",
+      "sourceObservation": "Original-attempt execution and held pidfd cleanup; existing 2000ms bounded cleanup waits must retain their operation authority."
+    },
+    {
+      "repository": "FS-GG/FS.GG.Coordination",
+      "revision": "b171d4941a6de938c6148a974729d6a38e7b12ad",
+      "path": "src/FS.GG.Coordination.Orchestration.Execution/PortableWorkspacePodmanRunner.fs",
+      "sha256": "3bc5d3ce317fd6696a3ad389fcf26efe4d8c8b68d1a608ec4360c8531676bdc2",
+      "bytes": 56506,
+      "classification": "routine-helper-with-contained-workspace-policy",
+      "sourceObservation": "Concurrent byte reads and shared retention cap for CLI helper; TerminationGrace read retirement; wall-clock deadline and Kill(true) do not alone establish aggregate workload containment."
+    }
+  ],
+  "candidateInputs": [
+    {
+      "candidate": "CliWrap",
+      "version": "3.10.5",
+      "pinStatus": "inherited-plan-version-only; package/source/runtime closure missing"
+    },
+    {
+      "candidate": "ProcessKit",
+      "version": "2.12.0",
+      "pinStatus": "inherited-plan-version-only; package/source/runtime closure missing"
+    },
+    {
+      "candidate": "Meziantou.Framework.Unix.ControlGroups",
+      "version": "2.0.2",
+      "sourceRevision": "db940dd4d4f05435c571ae01a2322a9aa505e0bd",
+      "pinStatus": "inherited-plan-source-only; package/runtime closure missing"
+    }
+  ],
+  "recovery": {
+    "historicalSourceRevision": "8b56f4cce419b8e727f8acb96507025c44a01d51",
+    "historicalBranch": "routine/v2-process-evaluation-source",
+    "status": "unrecovered",
+    "preservedFixtureIdentity": "A1-A4 definitions unavailable; do not recreate their meaning or qualify them",
+    "originalAttempt": "unknown; original private records unavailable"
+  },
+  "requirements": [
+    "Concurrent byte capture, combined accounting before retention and bounded incomplete text",
+    "One monotonic total deadline including reserved cleanup; no cancellation-triggered unbounded await",
+    "Separate launch, exit, output-completion, timeout/cancel/overflow, cleanup observations",
+    "Literal executable/arguments and explicit environment policy",
+    "Retain SDD child-timeout versus held-pipe meaning and FsQuint identity/version/domain result policy",
+    "Routine accepted descendant limitations must stay distinct from contained guarantees"
+  ],
+  "preparedCases": [
+    {
+      "id": "prep-dual-stream",
+      "requiredObservation": "Finite simultaneous stdout/stderr complete within one deadline and combined cap; streams remain attributable"
+    },
+    {
+      "id": "prep-held-writer",
+      "requiredObservation": "Leader exit with inherited writer cannot report output complete; retirement remains bounded"
+    },
+    {
+      "id": "prep-timeout-retirement",
+      "requiredObservation": "Timeout/cancel cause retained separately from observed exit and incomplete cleanup"
+    },
+    {
+      "id": "prep-output-overflow",
+      "requiredObservation": "Both streams charged before retention; overflow causes bounded retirement with retained first cause"
+    }
+  ],
+  "executionStatus": "not-run",
+  "decision": "deferred until exact recovered evaluator or separately reviewed replacement, artifact closure and scheduled budget"
+}

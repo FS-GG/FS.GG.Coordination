@@ -1,0 +1,8 @@
+<Project>
+  <!-- Isolated prior-art evaluator: repository consumer package pins are not candidate pins. -->
+  <PropertyGroup>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <Deterministic>true</Deterministic>
+    <DisableImplicitLibraryPacksFolder>true</DisableImplicitLibraryPacksFolder>
+  </PropertyGroup>
+</Project>
