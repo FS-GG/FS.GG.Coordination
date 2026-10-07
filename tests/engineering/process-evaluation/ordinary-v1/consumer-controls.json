@@ -1,0 +1,28 @@
+{
+  "scope": "Read-only pinned source mapping; evaluator pure controls only. Existing consumer acceptance tests not run.",
+  "sources": [
+    {
+      "repository": "FS.GG.SDD",
+      "revision": "cf2f046a10497a336d6243c9a314c3f91fb15771",
+      "path": "tests/Shared/TestShared.fs",
+      "sha256": "d5a969d9dac88195fb86b744c15b8c0d93b2841aa179bd5bbf0793642a246e10",
+      "bytes": 27751
+    },
+    {
+      "repository": "FS.GG.SDD",
+      "revision": "cf2f046a10497a336d6243c9a314c3f91fb15771",
+      "path": "tests/FS.GG.SDD.Commands.Tests/ChildProcessTests.fs",
+      "sha256": "432668ff5a006f98a67da012e509eec22772d5c6caaeee838fe14ca2710c535a",
+      "bytes": 14289
+    },
+    {
+      "repository": "FsQuint",
+      "revision": "fa1dc39e61e5e1d83a44d0fbf0b7ab59c8a45381",
+      "path": "src/FsQuint.Tooling/Tooling.fs",
+      "sha256": "bafb69aff469b2f5b1622c4a7149b22a037f1cd7528111140c06e9fe6544d3ff",
+      "bytes": 12030
+    }
+  ],
+  "sdd": "ChildOutlivedBound and PipesHeldAfterExit need evidence distinguishing exit-before-failure; launch is separate.",
+  "fsquint": "OutputLimit/Cancelled/TimedOut causes preserved; executable identity/version and Quint result policy require owning adapter."
+}

@@ -33,13 +33,13 @@
     },
     {
       "name": "OrdinaryEvaluation.dll",
-      "sha256": "197da5af1531cf57731bb19e723e9cbfa4a7f7c9f9d97470f1b116e0a2756ba1",
-      "bytes": 23040
+      "sha256": "ab620eff538d42217795d8d074a58ac14e060e38bd1cee36209bdbab5f13bfac",
+      "bytes": 30720
     },
     {
       "name": "OrdinaryEvaluation.pdb",
-      "sha256": "f476b46cb95a661fb3172b1dc9e449fcc1748a3ffa2e3495a54429f1d49400ca",
-      "bytes": 14324
+      "sha256": "2b235e49c12ca9cf65f3afaeba77dd826f4882c070b2e59d324efff74e6ce9d9",
+      "bytes": 15440
     },
     {
       "name": "OrdinaryEvaluation.runtimeconfig.json",
@@ -69,8 +69,13 @@
   "fixtureSources": [
     {
       "name": "Program.cs",
-      "sha256": "915698def9c186a1dbdd031970ec22eb02873c6650829b6bdbb4a067175b89fc",
-      "bytes": 7142
+      "sha256": "715e67d7b77b48fb25548f9fefaf7e1abf867b08a7bb927ab6856772c219f00a",
+      "bytes": 9078
+    },
+    {
+      "name": "ObservationControls.cs",
+      "sha256": "aae28a5e4afb0b35e3b815299957810d7026f615e7254e5b4c16b44ef4081beb",
+      "bytes": 3349
     },
     {
       "name": "fixture.py",

@@ -52,3 +52,22 @@ compiler processes counted separately. Execution requires the integrator's resou
 work is to adapt public error paths into bounded exit/EOF/cleanup observations, run meaningful
 negative controls and existing consumer fixtures, and independently admit any contained evaluation.
 V2-PROC-01.1 remains open; existing consumer implementations stay selected.
+
+## Error and output observation follow-up
+
+The next local investigation keeps the five fixture meanings and the earlier source-window
+observations intact. Baseline and CliWrap now record caller-owned byte-reader EOF separately from
+cancelled/faulted reads; ProcessKit's tee API does not expose EOF, so it retains `not-exposed` reader
+observations separately from capture completeness. Library task settlement (`completed`, `cancelled`,
+`faulted`, `unresolved`) and returned result errors are separate fields. A completed error-returning
+task is not successful command execution or observed cleanup. Public ProcessKit error exit codes are
+retained when available; absent codes remain unknown. Cancellation registration preserves the first
+cause before later sink failures. This remains evaluator-only source, not the shared .2 contracts.
+
+`ObservationControls.cs` supplies thirteen pure controls for shared byte charging, retained first
+cause, task settlement and the source-pinned consumer meanings in `consumer-controls.json`. SDD
+held-pipe mapping requires positive prior-exit evidence; an unknown prior exit cannot become either
+held-pipe or child timeout. FsQuint's output/cancel/deadline causes remain distinct, and mechanical
+completion cannot establish executable identity, version or Quint domain success. These are meanings
+checked in the evaluator, not the existing consumers' acceptance tests. The root-scheduled follow-up
+build and its serial fixture findings are retained separately in `contract-observations.json`.
