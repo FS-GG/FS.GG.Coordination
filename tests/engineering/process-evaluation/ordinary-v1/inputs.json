@@ -1,6 +1,6 @@
 {
   "schema": "fsgg.process-evaluation.inputs/1",
-  "evaluatorIdentity": "ordinary-v1-new-source-20261007",
+  "evaluatorIdentity": "ordinary-v1-contract-20261007",
   "historicalEvaluator": "8b56f4cce419b8e727f8acb96507025c44a01d51 unavailable; A1-A4 unknown",
   "packages": [
     {
@@ -1118,7 +1118,7 @@
     "maxOwnedProcesses": 5,
     "cpu": "one CPU; serial cases"
   },
-  "executionStatus": "ordinary-v1-run1:15 observations; qualification not-established",
+  "executionStatus": "contract follow-up:13 pure controls and15 ordinary observations; earlier ordinary-v1-run1 results preserved in observations.json at sourceBasee368",
   "nativeInputs": {
     "linuxLibc": {
       "path": "/usr/lib/libc.so.6",

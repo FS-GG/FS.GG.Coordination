@@ -4,6 +4,7 @@ using CliWrap;
 using ProcessKit;
 
 // Investigation source only: this is not the proposed shared production API.
+if (args is ["--controls"]) { ObservationControls.Run(); return; }
 if (args.Length != 4) throw new ArgumentException("backend case python fixture");
 var backend = args[0];
 var fixtureCase = args[1];
@@ -14,7 +15,11 @@ var state = new Capture();
 using var stdout = new Sink(state, true);
 using var stderr = new Sink(state, false);
 using var cancel = new CancellationTokenSource();
+using var cancellationCause = cancel.Token.Register(() => state.RecordCause(
+    fixtureCase == "ordinary-cancel" ? "cancel-requested" : "deadline"));
 cancel.CancelAfter(fixtureCase == "ordinary-cancel" ? 100 : 500);
+Task? libraryTask = null;
+string libraryResult = "not-applicable";
 string launch = "pending", exit = "unknown", output = "unknown", cleanup = "unknown";
 string? error = null;
 int? exitCode = null;
@@ -30,8 +35,8 @@ try
         // All three adapters deliberately inherit the evaluator environment; no secrets are logged.
         process.Start();
         launch = "started";
-        var reads = Task.WhenAll(Pump(process.StandardOutput.BaseStream, stdout),
-                                 Pump(process.StandardError.BaseStream, stderr));
+        var reads = Task.WhenAll(Pump(process.StandardOutput.BaseStream, stdout, state, true, CancellationToken.None),
+                                 Pump(process.StandardError.BaseStream, stderr, state, false, CancellationToken.None));
         var exited = process.WaitForExitAsync();
         try
         {
@@ -55,10 +60,12 @@ try
     {
         var running = Cli.Wrap(python).WithArguments(new[] { fixture, fixtureCase })
             .WithValidation(CommandResultValidation.None)
-            .WithStandardOutputPipe(PipeTarget.ToStream(stdout))
-            .WithStandardErrorPipe(PipeTarget.ToStream(stderr)).ExecuteAsync(cancel.Token);
+            .WithStandardOutputPipe(PipeTarget.Create((stream, token) => Pump(stream, stdout, state, true, token)))
+            .WithStandardErrorPipe(PipeTarget.Create((stream, token) => Pump(stream, stderr, state, false, token))).ExecuteAsync(cancel.Token);
         launch = "submitted";
+        libraryTask = running.Task;
         var result = await running.Task.WaitAsync(Remaining(clock));
+        libraryResult = "success";
         exitCode = result.ExitCode;
         exit = "observed";
         output = "complete";
@@ -72,7 +79,10 @@ try
         var command = new ProcessKit.Command(python).Args(new[] { fixture, fixtureCase })
             .OutputBuffer(policy).StdoutTee(stdout).StderrTee(stderr).CancelOn(cancel.Token);
         launch = "submitted";
-        var result = await command.OutputBytesAsync().WaitAsync(Remaining(clock));
+        var running = command.OutputBytesAsync();
+        libraryTask = running;
+        var result = await running.WaitAsync(Remaining(clock));
+        libraryResult = result.IsOk ? "success" : "error";
         if (result.IsOk)
         {
             exitCode = result.ResultValue.Code?.Value;
@@ -83,6 +93,8 @@ try
         else
         {
             error = result.ErrorValue.GetType().Name;
+            exitCode = result.ErrorValue.Code?.Value;
+            if (exitCode is not null) exit = "observed";
             output = "incomplete-or-unreported";
             cleanup = "library-error;cleanup-unreported";
         }
@@ -92,16 +104,22 @@ try
 catch (Exception e)
 {
     error = e.GetType().Name;
+    libraryResult = "exception";
     if (launch == "pending") launch = "failed";
     if (e is TimeoutException) cleanup = "evaluator-deadline;library-task-unresolved";
 }
 state.Cause ??= cancel.IsCancellationRequested
     ? (fixtureCase == "ordinary-cancel" ? "cancel-requested" : "deadline") : error is null ? "none" : "library-error";
+// Callback completion and task settlement are observations independent of process/descendant cleanup.
+if (backend == "cliwrap") output = state.StdoutRead == "eof" && state.StderrRead == "eof" ? "complete" : "incomplete";
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     schema = "fsgg.process-evaluation.observation/1", backend, fixtureCase,
     launch, exit, exitCode, output, cause = state.Cause, cleanup, error,
     elapsedMs = clock.ElapsedMilliseconds, chargedBytes = state.Charged,
+    stdoutRead = state.StdoutRead, stderrRead = state.StderrRead,
+    libraryTask = ObservationControls.TaskState(libraryTask), libraryResult,
+    eofScope = backend == "processkit" ? "not-exposed-by-tee;capture-completeness-separate" : "caller-owned-byte-reader",
     retainedBytes = state.Out.Length + state.Err.Length,
     stdoutPrefix = Convert.ToBase64String(state.Out.ToArray()),
     stderrPrefix = Convert.ToBase64String(state.Err.ToArray()),
@@ -109,17 +127,29 @@ Console.WriteLine(JsonSerializer.Serialize(new
 }));
 
 static TimeSpan Remaining(Stopwatch clock) => TimeSpan.FromMilliseconds(Math.Max(1, 1000 - clock.ElapsedMilliseconds));
-static async Task Pump(Stream source, Stream sink)
+static async Task Pump(Stream source, Stream sink, Capture state, bool stdout, CancellationToken token)
 {
-    var buffer = new byte[1024];
-    int count;
-    while ((count = await source.ReadAsync(buffer)) != 0) await sink.WriteAsync(buffer.AsMemory(0, count));
+    state.SetRead(stdout, "reading");
+    try
+    {
+        var buffer = new byte[1024];
+        int count;
+        while ((count = await source.ReadAsync(buffer, token)) != 0)
+            await sink.WriteAsync(buffer.AsMemory(0, count), token);
+        state.SetRead(stdout, "eof");
+    }
+    catch (OperationCanceledException) { state.SetRead(stdout, "cancelled-without-eof"); throw; }
+    catch { state.SetRead(stdout, "failed-without-eof"); throw; }
 }
 sealed class Capture
 {
     public const int Cap = 4096;
     public long Charged;
     public string? Cause;
+    public string StdoutRead = "not-exposed", StderrRead = "not-exposed";
+    public void RecordCause(string cause) { lock (this) Cause ??= cause; }
+    public void SetRead(bool stdout, string observation)
+    { lock (this) { if (stdout) StdoutRead = observation; else StderrRead = observation; } }
     public readonly MemoryStream Out = new(), Err = new();
     public void Write(bool stdout, ReadOnlySpan<byte> bytes)
     {
