@@ -44,7 +44,7 @@ jobs:
         run: python3 eng/fourd-public-provider/capacity.py screen --output "$RESULT_ROOT/result.json"
       - name: Retain only the bounded capacity result
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fourd-public-provider-capacity-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ env.RESULT_ROOT }}/result.json
@@ -227,7 +227,7 @@ jobs:
       - name: Upload only verified public result and sealed capsules
         if: steps.public-validation.outcome == 'success'
         timeout-minutes: 10
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: fourd-public-provider-qualification-${{ github.sha }}-${{ github.run_attempt }}
           path: ${{ env.PUBLIC_OUTPUT }}
