@@ -24,5 +24,12 @@
     }
   ],
   "sdd": "ChildOutlivedBound and PipesHeldAfterExit need evidence distinguishing exit-before-failure; launch is separate.",
-  "fsquint": "OutputLimit/Cancelled/TimedOut causes preserved; executable identity/version and Quint result policy require owning adapter."
+  "fsquint": "OutputLimit/Cancelled/TimedOut causes preserved; executable identity/version and Quint result policy require owning adapter.",
+  "observationControls": {
+    "exit": "Absent public result/error code remains unknown irrespective of settlement.",
+    "cliwrap": "Public CommandTask Task/ProcessId exposes no fault/cancel exit code; no PID-only process acquisition.",
+    "processkit": "ProcessError.Code covers Exit/RetryPredicate Exit; optional result code absent remains unknown; tee EOF not exposed.",
+    "cleanup": "Reader and task settlement supply no descendant/reaping cleanup evidence.",
+    "newPureControls": "Absent code, present zero code, late sink charging, wait timeout with uncancelled token and late public successful exit preserving first failure; twenty-one compiled pure meaning controls passed; production consumer acceptance remains open."
+  }
 }
