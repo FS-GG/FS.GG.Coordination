@@ -98,7 +98,7 @@ concurrency:
 
 jobs:
   source-contract:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 12
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -127,7 +127,7 @@ jobs:
   stage-inputs:
     if: github.event_name == 'workflow_dispatch' && inputs.phase == 'stage-inputs'
     needs: source-contract
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 15
     env:
       STAGE_ROOT: /tmp/p4-public-stage-${{ github.run_id }}-${{ github.run_attempt }}
@@ -254,7 +254,7 @@ jobs:
   candidate-facts:
     if: github.event_name == 'workflow_dispatch' && inputs.phase == 'candidate-facts'
     needs: source-contract
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 20
     env:
       ROOT: /tmp/p4-public-candidate

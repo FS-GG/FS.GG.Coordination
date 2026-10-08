@@ -30,7 +30,7 @@ concurrency:
 jobs:
   publish:
     name: Qualify, publish, and read back exact portable CLI
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 60
     permissions:
       actions: read

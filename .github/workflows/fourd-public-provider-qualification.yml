@@ -19,7 +19,7 @@ concurrency:
 jobs:
   capacity:
     if: inputs.phase == 'capacity' && github.repository == 'FS-GG/FS.GG.Coordination' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/qualification/fourd-native-20261001'
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 10
     env:
       RESULT_ROOT: /tmp/fsgg-fourd-capacity-${{ github.run_id }}-${{ github.run_attempt }}
@@ -69,7 +69,7 @@ jobs:
   qualification:
     if: inputs.phase == 'qualification' && github.repository == 'FS-GG/FS.GG.Coordination' && github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/qualification/fourd-native-20261001'
     environment: fourd-native-private-source
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     timeout-minutes: 180
     env:
       CAPACITY_ROOT: /tmp/fsgg-fourd-qualification-capacity-${{ github.run_id }}-${{ github.run_attempt }}
