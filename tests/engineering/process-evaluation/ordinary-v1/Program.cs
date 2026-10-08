@@ -23,6 +23,9 @@ using var cancellationCause = cancel.Token.Register(() => state.RecordCause(
     fixtureCase == "ordinary-cancel" ? "cancel-requested" : "deadline"));
 cancel.CancelAfter(fixtureCase == "ordinary-cancel" ? 100 : 500);
 Task? libraryTask = null;
+Task<CommandResult>? cliwrapTask = null;
+string exitScope = "not-observed";
+string readTasks = "not-applicable";
 string libraryResult = "not-applicable";
 string launch = "pending", exit = "unknown", output = "unknown", cleanup = "unknown";
 string? error = null;
@@ -58,7 +61,9 @@ try
             catch { output = reads.IsCompletedSuccessfully ? "complete" : "incomplete"; }
         }
         if (process.HasExited) { exit = "observed"; exitCode = process.ExitCode; }
-        cleanup = exited.IsCompletedSuccessfully && reads.IsCompleted ? "direct-child-and-read-tasks-terminal" : "incomplete";
+        readTasks = ObservationControls.TaskState(reads);
+        exitScope = exitCode is null ? "not-observed" : "caller-owned-process-handle";
+        cleanup = "unknown;descendant-and-reaping-observation-unavailable";
     }
     else if (backend == "cliwrap")
     {
@@ -68,12 +73,14 @@ try
             .WithStandardErrorPipe(PipeTarget.Create((stream, token) => Pump(stream, stderr, state, false, token))).ExecuteAsync(cancel.Token);
         launch = "submitted";
         libraryTask = running.Task;
+        cliwrapTask = running.Task;
         var result = await running.Task.WaitAsync(Remaining(clock));
         libraryResult = "success";
         exitCode = result.ExitCode;
-        exit = "observed";
+        exit = ObservationControls.ExitState(exitCode);
+        exitScope = "public-command-result";
         output = "complete";
-        cleanup = "library-task-terminal;descendants-unverified";
+        cleanup = "unknown;library-task-settlement-is-not-cleanup";
     }
     else if (backend == "processkit")
     {
@@ -90,15 +97,17 @@ try
         if (result.IsOk)
         {
             exitCode = result.ResultValue.Code?.Value;
-            exit = "observed";
+            exit = ObservationControls.ExitState(exitCode);
+            exitScope = exitCode is null ? "not-observed" : "public-processkit-result-code";
             output = result.ResultValue.Truncated ? "incomplete" : "complete";
-            cleanup = "library-task-terminal;mechanism-and-descendants-unverified";
+            cleanup = "unknown;library-task-settlement-is-not-cleanup";
         }
         else
         {
             error = result.ErrorValue.GetType().Name;
             exitCode = result.ErrorValue.Code?.Value;
-            if (exitCode is not null) exit = "observed";
+            exit = ObservationControls.ExitState(exitCode);
+            exitScope = exitCode is null ? "not-observed" : "public-processkit-error-code";
             output = "incomplete-or-unreported";
             cleanup = "library-error;cleanup-unreported";
         }
@@ -110,19 +119,35 @@ catch (Exception e)
     error = e.GetType().Name;
     libraryResult = "exception";
     if (launch == "pending") launch = "failed";
-    if (e is TimeoutException) cleanup = "evaluator-deadline;library-task-unresolved";
+    if (e is TimeoutException)
+    {
+        // The bounded wait itself observed its deadline, even if the work timer has not fired.
+        state.RecordWaitFailure(e);
+        cleanup = "evaluator-deadline;library-task-unresolved";
+    }
 }
-state.Cause ??= cancel.IsCancellationRequested
-    ? (fixtureCase == "ordinary-cancel" ? "cancel-requested" : "deadline") : error is null ? "none" : "library-error";
+// Freeze the scheduled timer before constructing the final observation.
+cancel.CancelAfter(Timeout.Infinite);
+// A result that settled during the remaining-time exception path still supplies public exit evidence.
+if (cliwrapTask?.IsCompletedSuccessfully == true)
+{
+    exitCode = cliwrapTask.Result.ExitCode;
+    exit = ObservationControls.ExitState(exitCode);
+    exitScope = "public-command-result";
+}
+else if (backend == "cliwrap" && libraryTask is not null)
+    exitScope = "not-exposed-by-public-fault-or-cancellation-task";
+state.RecordCause(cancel.IsCancellationRequested
+    ? (fixtureCase == "ordinary-cancel" ? "cancel-requested" : "deadline") : error is null ? "none" : "library-error");
 // Callback completion and task settlement are observations independent of process/descendant cleanup.
 if (backend == "cliwrap") output = state.StdoutRead == "eof" && state.StderrRead == "eof" ? "complete" : "incomplete";
 Console.WriteLine(JsonSerializer.Serialize(new
 {
     schema = "fsgg.process-evaluation.observation/1", backend, fixtureCase, evaluationMode,
-    launch, exit, exitCode, output, cause = state.Cause, cleanup, error,
+    launch, exit, exitCode, exitScope, output, cause = state.Cause, cleanup, error,
     elapsedMs = clock.ElapsedMilliseconds, chargedBytes = state.Charged,
     stdoutRead = state.StdoutRead, stderrRead = state.StderrRead,
-    libraryTask = ObservationControls.TaskState(libraryTask), libraryResult,
+    libraryTask = ObservationControls.TaskState(libraryTask), libraryResult, readTasks,
     eofScope = backend == "processkit" ? "not-exposed-by-tee;capture-completeness-separate" : "caller-owned-byte-reader",
     retainedBytes = state.Out.Length + state.Err.Length,
     stdoutPrefix = Convert.ToBase64String(state.Out.ToArray()),
@@ -152,6 +177,8 @@ sealed class Capture
     public string? Cause;
     public string StdoutRead = "not-exposed", StderrRead = "not-exposed";
     public void RecordCause(string cause) { lock (this) Cause ??= cause; }
+    public void RecordWaitFailure(Exception error)
+    { if (error is TimeoutException) RecordCause("deadline"); }
     public void SetRead(bool stdout, string observation)
     { lock (this) { if (stdout) StdoutRead = observation; else StderrRead = observation; } }
     public readonly MemoryStream Out = new(), Err = new();

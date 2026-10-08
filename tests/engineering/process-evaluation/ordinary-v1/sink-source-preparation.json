@@ -1,11 +1,13 @@
 {
   "schema": "fsgg.process-evaluation.source-preparation/1",
-  "sourceBase": "a3aeb61ca6abf26c82c5286fe25926b397918209",
-  "scope": "Evaluator-only finite non-overflow sink-failure source; no compile/run/backend selection or public API",
+  "sourceBase": "8304442e0cf4a1f12e0ae4839cfbe43aef5c7d59",
+  "scope": "Evaluator-only public exit/EOF/task meanings and finite sink failure; no shared API or backend selection",
   "sourceChanges": [
-    "Optional sink-failure mode uses unchanged ordinary-dual fixture and faults stdout before retention, recording and charging bytes first.",
-    "Three additional pure controls specify failed sink, cancellation first cause and guard-disabled negative rejection; not executed.",
-    "Runner selects only three serial sink-failure cases and fences further collection on outer guard/missing observation/unresolved registered generation."
+    "Absent ProcessKit code remains unknown on success/error.",
+    "CliWrap already-successful result supplies obtainable exit after a wait exception; fault/cancel exit not exposed.",
+    "Baseline reader settlement separate from unknown descendant/reaping cleanup.",
+    "Five pure controls added; twenty-one compiled pure meaning controls passed.",
+    "Observed wait TimeoutException recorded before timer freeze; controls cover an unfired token and a late successful exit without replacing the first cause."
   ],
   "staticChecks": [
     "Python AST parsed for runner and unchanged fixture.",
@@ -13,8 +15,8 @@
     "Entrypoint rejects unknown mode or sink-failure on non-finite cases before launch.",
     "git diff whitespace check; no CLR/compiler/workload executed."
   ],
-  "qualification": "deferred; current C# changes uncompiled and all new controls unexecuted",
-  "qualifiedBuildManifest": "Historical a3 snapshot intentionally retained; source mismatch fences launching old binary. Scheduled qualification must rebuild and join new binary/dependencies/executable sources in a separately identified current manifest.",
+  "qualification": "Exact current C# source compiled; twenty-one pure meaning controls passed; one baseline ordinary-dual normal observation passed its admitted native scope. Remaining backend and sink-failure matrix unrun.",
+  "qualifiedBuildManifest": "Historical a3 manifest intentionally retained; source mismatch fences run.py. A separate retained compiled manifest qualifies the exact current C# source, without authorizing another effect.",
   "futureBudget": {
     "maxSecondsIncludingCleanup": 30,
     "collectionStopSeconds": 15,
@@ -28,12 +30,85 @@
     "outerGuardMs": 3000,
     "sinkRetainedBytes": 4096,
     "outerDiagnosticBytes": 16384,
-    "admission": "root global resource admission pending; no inherited2GiB exception"
+    "admission": "Historical proposal only; no window or resource admission transfers to new effects."
   },
   "unknowns": [
     "Candidate independent error-path leader exit/cleanup and ProcessKit tee EOF remain unknown.",
     "Complete descendant/reaping/native closure and actual consumer acceptance remain unknown.",
     ".1/backend/containment remain open; original evaluator/A1-A4/originalAttempt unknown.",
     "Original follow-up dispatch collection state unavailable; no fabricated telemetry baseline."
-  ]
+  ],
+  "currentSourceManifest": {
+    "schema": "fsgg.process-evaluation.build-closure/1",
+    "fixtureSources": [
+      {
+        "name": "Program.cs",
+        "sha256": "ef715564398feb3d3d726bf288fe9fff43ef5c8b73cca444ee08d2bef58405a8",
+        "bytes": 11271
+      },
+      {
+        "name": "ObservationControls.cs",
+        "sha256": "ad1332391b335babdfc789a9b7b321dff70fc17e281d4c38aca6afe67b4408c7",
+        "bytes": 5990
+      },
+      {
+        "name": "fixture.py",
+        "sha256": "8d81730e2d4ed6a3fe091b4e0931f540a62ffc91ae5c395b2795d1ddcc504bd1",
+        "bytes": 1429
+      },
+      {
+        "name": "run.py",
+        "sha256": "1a9043058cff8b5265d359c531013d0eac282861e471ad1556d56068cd994512",
+        "bytes": 6511
+      },
+      {
+        "name": "OrdinaryEvaluation.csproj",
+        "sha256": "0401bc7fc1d08fef45e2961dd54d0ccd8443f4018b78243be5e1f6fccb8df309",
+        "bytes": 838
+      },
+      {
+        "name": "Directory.Build.props",
+        "sha256": "a8a33893253d416fbd777c535516402f1b23ed84d927b4df8c6c01075bd4e574",
+        "bytes": 351
+      },
+      {
+        "name": "Directory.Packages.props",
+        "sha256": "2d5bfd4d93d6ed857b76d40c1de99f10f316c0cd5d5cf8cf241f9f9790d12648",
+        "bytes": 121
+      },
+      {
+        "name": "global.json",
+        "sha256": "289e45aafd6eb59adcc4b7dda4d6fe5f1924065345aa8ab75be4a0c2b9cb00db",
+        "bytes": 79
+      },
+      {
+        "name": "packages.lock.json",
+        "sha256": "b0e62451a9428193f7b689064430cccd8dcbbd221ee30af8b722540be8d4508a",
+        "bytes": 1690
+      }
+    ],
+    "compiledArtifacts": [],
+    "compiledSourceJoin": "Established in separate retained 23-file compiled manifest; historical build-manifest.json unchanged. This preparation document does not authorize run.py or another effect.",
+    "nativeAcceptance": "not-established"
+  },
+  "qualificationEvidence": {
+    "compiledManifestSha256": "6c29a13f01b2003a1e65209b40c8a145da0e307cf33beccf0e2b18a6f25b6ff0",
+    "compiledEvaluatorSha256": "725793c8fe591c815e4a9599f309fbc99245a1d6f3b0dd93e27bbea4085eaa16",
+    "compiledControls": 21,
+    "baselineObservation": {
+      "backend": "baseline",
+      "fixtureCase": "ordinary-dual",
+      "evaluationMode": "normal",
+      "chargedBytes": 512,
+      "retainedBytes": 512,
+      "exitCode": 0,
+      "stdoutRead": "eof",
+      "stderrRead": "eof",
+      "cause": "none"
+    },
+    "scope": "Pure evaluator/consumer meanings and one finite baseline observation only; no production consumer or whole-feature acceptance.",
+    "operationReuse": "Original effect consumed; new effects require separate current admission.",
+    "compiledControlsResultSha256": "cfce36d6a13471a86528286559cc79295789b5dcf9b42f85e64068d60a14a2fc",
+    "baselineObservationSha256": "fc586ac4a99dd0fd952e89afb3e8db41df2e3eac31011afd300c00aae80c8a9d"
+  }
 }

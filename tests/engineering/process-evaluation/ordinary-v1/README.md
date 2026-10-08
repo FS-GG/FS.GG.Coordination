@@ -79,7 +79,8 @@ The optional fifth evaluator argument `sink-failure` accepts only the existing f
 write, records `sink-failure` before throwing, and preserves any earlier cause. Normal mode keeps the
 existing fixture meanings. Three added pure controls specify this non-overflow failure, first-cause
 preservation and a negative case where disabling fault injection cannot satisfy the failure assertion.
-These controls and the changed C# source are **uncompiled and unexecuted** in this source-only window.
+These controls and the changed C# source were **uncompiled and unexecuted** when this slice was
+prepared. The later qualification below records the scoped compiled result.
 
 `run.py --sink-failure-only` prepares three serial baseline/CliWrap/ProcessKit observations. A guard
 failure, missing observation or unresolved registered fixture generation stops affected collection.
@@ -87,8 +88,46 @@ The earlier13 pure/15 ordinary observations remain historical; they do not valid
 `sink-source-preparation.json` records static checks and the deferred qualification boundary.
 
 The historical build manifest stays intact. Source mismatch intentionally refuses the old binary;
-a root-admitted qualification window must rebuild and refresh exact compiled/source joins before
-running the new mode. Its proposed30s includes cleanup, uses oneCPU with at most two build CLR/four
-owned processes, and must fit the current1792MiB global admission. This grants no inherited2GiB
-exception or workload authority. Preserve500ms work/1000ms total and the independent3000ms outer
-guard. Candidate exit/cleanup, ProcessKit tee EOF and full descendant coverage remain unknown.
+using `run.py` for the new mode requires a separately qualified current manifest. The original
+proposed 30s source window granted no workload authority. Later admitted operations used their own
+resource and custody boundaries. Every future effect requires current admission; no historical
+window or resource exception transfers. Candidate exit/cleanup, ProcessKit tee EOF and full
+descendant coverage remain unknown.
+
+## Private observation source preparation
+
+Five added pure controls give twenty-one total. These exact C# bytes have since been compiled,
+and all twenty-one pure controls passed in a separately admitted operation.
+Exit observation requires a present public code, including ProcessKit success. CliWrap's public
+success result can supply a code if it has settled when sampled after a remaining-time failure;
+fault/cancellation exposes no code through this API. No handle is acquired from a bare library
+PID. ProcessKit tee EOF stays not exposed. Task settlement is separate from cleanup evidence.
+
+The exact current source manifest is embedded in `sink-source-preparation.json`. Historical
+`build-manifest.json` remains unchanged and rejects the new sources. Separate retained qualification
+evidence joins the current C# bytes to the compiled artifacts; `run.py` still refuses the historical
+binary and is not the entry point used for that qualification.
+
+The bounded wait records an observed `TimeoutException` as deadline before timer freeze, even
+when the cancellation token has not fired. The added uncancelled-token control would fail if that
+recording guard were removed; a late successful public exit preserves the first timeout cause.
+
+## Scoped qualification evidence
+
+A separately admitted locked restore and build produced a 23-file compiled closure. The current
+`Program.cs` SHA256 is `ef715564398feb3d3d726bf288fe9fff43ef5c8b73cca444ee08d2bef58405a8`;
+`ObservationControls.cs` is `ad1332391b335babdfc789a9b7b321dff70fc17e281d4c38aca6afe67b4408c7`.
+The compiled evaluator DLL is `725793c8fe591c815e4a9599f309fbc99245a1d6f3b0dd93e27bbea4085eaa16`.
+All twenty-one compiled pure meaning controls passed. One subsequent finite baseline
+`ordinary-dual/normal` observation recorded 512 charged and retained bytes, leader exit 0, both reader
+EOFs, completed read tasks and no failure cause within its 1000ms total. Its separate native custody
+operation recorded known owned cleanup and complete descriptor closure. The evaluator's own
+descendant/reaping cleanup remains unknown, and its acceptance field remains `not-established`.
+
+These observations used an existing reviewed custody entry point, not the historical `run.py`.
+The admitted native scope passed independently of the broader standalone guard result. Earlier
+failed attempts remain failed; the consumed baseline operation must not be replayed. The new-source
+CliWrap/ProcessKit matrix and sink-failure observations, production SDD/FsQuint acceptance, complete
+descendant coverage and the V2-PROC-01.1 reuse/adaptation decision remain open. Exact private
+operation artifacts are retained by the programme owner; no backend or consumer adoption follows
+from these pure controls or the single baseline observation.

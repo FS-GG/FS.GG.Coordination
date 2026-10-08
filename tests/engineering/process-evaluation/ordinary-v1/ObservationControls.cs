@@ -3,6 +3,8 @@ using System.Text.Json;
 // Evaluator-only interpretations; no consumer source/API change or acceptance claim.
 static class ObservationControls
 {
+    public static string ExitState(int? code) => code is null ? "unknown" : "observed";
+
     public static string TaskState(Task? task) => task is null ? "not-applicable" :
         !task.IsCompleted ? "unresolved" : task.IsCanceled ? "cancelled" :
         task.IsFaulted ? "faulted" : "completed";
@@ -67,6 +69,21 @@ static class ObservationControls
         using var lateFault = new Sink(cancelledSink, true, failOnWrite: true);
         try { lateFault.Write(new byte[256]); } catch (IOException) { }
         Check(cancelledSink.Cause == "cancel-requested", "later sink failure preserves cancellation first cause");
+        Check(ExitState(null) == "unknown", "absent public exit code cannot fabricate observed exit");
+        Check(ExitState(0) == "observed", "zero public exit code is positive exit evidence");
+        Check(cancelledSink.Charged == 256 && cancelledSink.Out.Length == 0,
+              "sink failure after cancellation charges without retention while preserving first cause");
+        using var unfiredTimer = new CancellationTokenSource();
+        var timedWait = new Capture();
+        timedWait.RecordWaitFailure(new TimeoutException());
+        timedWait.RecordCause(unfiredTimer.IsCancellationRequested ? "deadline" : "library-error");
+        Check(!unfiredTimer.IsCancellationRequested && timedWait.Cause == "deadline",
+              "negative control: observed wait timeout survives an uncancelled timer token");
+        // A late public success supplies exit evidence; final success cannot replace the failed wait.
+        var lateExit = ExitState(0);
+        timedWait.RecordCause("none");
+        Check(lateExit == "observed" && timedWait.Cause == "deadline",
+              "late successful public exit cannot erase original timeout failure");
         // Guard-removal negative control: a successful ordinary sink cannot satisfy the fault case.
         var bypass = new Capture();
         using var ordinarySink = new Sink(bypass, true);
