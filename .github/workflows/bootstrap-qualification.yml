@@ -46,7 +46,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Select the exact-head qualification route
         id: decide
@@ -78,7 +78,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Prepare the pinned canonical toolchain
         run: bash eng/bootstrap-gates/canonical-quint-prepare.sh
@@ -112,7 +112,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Download the pinned canonical toolchain
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -149,7 +149,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Download the pinned canonical toolchain
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -230,7 +230,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/deterministic-build.sh
@@ -256,7 +256,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/compiler-and-tests.sh
@@ -283,7 +283,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/dependency-and-security.sh
@@ -308,7 +308,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/package-install-smoke.sh
@@ -334,7 +334,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/bootstrap-recovery.sh
@@ -363,7 +363,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/orchestration-postgresql.sh
@@ -392,7 +392,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/orchestration-observer-postgresql.sh
@@ -421,7 +421,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Run the stable qualification gate
         run: bash eng/bootstrap-gates/orchestration-pilot-postgresql.sh
@@ -452,7 +452,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Download the current route receipt
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
@@ -510,7 +510,7 @@ jobs:
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
-          dotnet-version: 10.0.400
+          dotnet-version: 10.0.401
           global-json-file: global.json
       - name: Evaluate observed qualification economics
         run: bash eng/bootstrap-gates/qualification-economics.sh
