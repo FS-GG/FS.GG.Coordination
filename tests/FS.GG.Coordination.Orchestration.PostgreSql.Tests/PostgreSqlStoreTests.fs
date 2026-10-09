@@ -3209,6 +3209,12 @@ type PostgreSqlStoreTests() =
                 let! zeroPage = executions.ReadCommittedAdmissions(0, None, cancellationToken)
                 let! oversizedPage = executions.ReadCommittedAdmissions(65, None, cancellationToken)
                 let! invalidCursor = executions.ReadCommittedAdmissions(1, Some(String.replicate 65 "x"), cancellationToken)
+                let canonical = firstPage.NextCursor.Value
+                Assert.Equal(canonical.ToLowerInvariant(), canonical)
+                // Deterministic alphabetic UUID ensures this refusal cannot pass vacuously for all-digit IDs.
+                let uppercase = "ABCDEF0123456789ABCDEF0123456789AB:ABCDEF0123456789ABCDEF0123456789AB"
+                let! uppercaseCursor = executions.ReadCommittedAdmissions(1, Some uppercase, cancellationToken)
+                Assert.Equal(Error "execution-admission-page-bounds-refused", uppercaseCursor)
                 Assert.True(Result.isError zeroPage && Result.isError oversizedPage && Result.isError invalidCursor)
 
                 let mutate sql (payload: byte array) =
@@ -3247,6 +3253,40 @@ type PostgreSqlStoreTests() =
                 do! checkCorruption
                         "UPDATE fsgg_orchestration.execution_route_binding SET payload=$1 WHERE assignment_id=$2 AND attempt_id=$3"
                         (Encoding.UTF8.GetBytes "{}") originalRoute "execution-admission-source-corrupt"
+                let mutateColumns sql (values: obj array) =
+                    task {
+                        use! connection = dataSource.OpenConnectionAsync cancellationToken
+                        use command = new NpgsqlCommand(sql, connection)
+                        for value in values do command.Parameters.AddWithValue(value) |> ignore
+                        command.Parameters.AddWithValue(assignment) |> ignore
+                        command.Parameters.AddWithValue(attempt) |> ignore
+                        let! affected = command.ExecuteNonQueryAsync cancellationToken
+                        Assert.Equal(1, affected)
+                    }
+                let foreign = alternatePreparation ()
+                let foreignAdmission =
+                    ExecutionCausalAdmission.create (WorkItemIdentity.persistenceId workItem) (WorkItemIdentity.persistenceId workItem)
+                        foreign.Binding.AssignmentId foreign.Binding.AttemptId generation now ExecutionCausalAdmission.unclassified None
+                    |> Result.defaultWith failwith
+                let foreignRoute = QualifiedExecutorWire.wrapRoute foreign.Binding foreignAdmission |> Result.defaultWith failwith
+                let _, _, foreignDigest = QualifiedExecutorWire.parseRoute foreignRoute |> Result.defaultWith failwith
+                let _, _, originalDigest = QualifiedExecutorWire.parseRoute originalRoute |> Result.defaultWith failwith
+                let foreignEvent = SessionEventCodec.encode (LaunchIntentRecorded foreign.LaunchIntent)
+                let originalEvent = SessionEventCodec.encode (LaunchIntentRecorded launch)
+                let routeSql = "UPDATE fsgg_orchestration.execution_route_binding SET payload=$1,binding_sha256=$2 WHERE assignment_id=$3 AND attempt_id=$4"
+                let eventSql = "UPDATE fsgg_orchestration.execution_event SET payload=$1,event_identity=$2 WHERE assignment_id=$3 AND attempt_id=$4 AND revision=1"
+                // Both bodies and digests coherently agree with each other, but not their physical rows.
+                do! mutateColumns routeSql [| box foreignRoute; box foreignDigest |]
+                do! mutateColumns eventSql [| box foreignEvent; box (RunnerWire.sha256 foreignEvent) |]
+                let! foreignPair = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                do! mutateColumns routeSql [| box originalRoute; box originalDigest |]
+                do! mutateColumns eventSql [| box originalEvent; box (RunnerWire.sha256 originalEvent) |]
+                Assert.Equal(Error "execution-admission-source-corrupt", foreignPair)
+                let generationSql = "UPDATE fsgg_orchestration.execution_route_binding SET generation=$1 WHERE assignment_id=$2 AND attempt_id=$3"
+                do! mutateColumns generationSql [| box (generation + 1L) |]
+                let! wrongGeneration = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                do! mutateColumns generationSql [| box generation |]
+                Assert.Equal(Error "execution-admission-source-corrupt", wrongGeneration)
                 let! restored = executions.ReadCommittedAdmissions(64, None, cancellationToken)
                 Assert.Equal(2, (restored |> Result.defaultWith failwith).Admissions.Length)
 

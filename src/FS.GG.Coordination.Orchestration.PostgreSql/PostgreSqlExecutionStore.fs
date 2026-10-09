@@ -972,17 +972,20 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
     /// A staged route without its matching committed intent is never an admission.
     member _.ReadCommittedAdmissions(maximum: int, cursor: string option, cancellationToken: CancellationToken) =
         task {
-            if maximum < 1 || maximum > 64 || (cursor |> Option.exists (fun value ->
-                    value.Length <> 65 || value[32] <> ':'
-                    || not (Guid.TryParseExact(value.Substring(0, 32), "N") |> fst)
-                    || not (Guid.TryParseExact(value.Substring(33, 32), "N") |> fst))) then
+            let canonicalCursor (value: string) =
+                if isNull value || value.Length <> 65 || value[32] <> ':' then false
+                else
+                    match Guid.TryParseExact(value.Substring(0, 32), "N"), Guid.TryParseExact(value.Substring(33, 32), "N") with
+                    | (true, assignment), (true, attempt) -> value = assignment.ToString("N") + ":" + attempt.ToString("N")
+                    | _ -> false
+            if maximum < 1 || maximum > 64 || (cursor |> Option.exists (canonicalCursor >> not)) then
                 return Error "execution-admission-page-bounds-refused"
             else
                 use! connection = dataSource.OpenConnectionAsync cancellationToken
                 use! transaction = connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
                 do! gate connection transaction false cancellationToken
                 use command = new NpgsqlCommand(
-                    "SELECT CASE WHEN octet_length(r.payload) <= 32768 THEN r.payload END,r.binding_sha256,CASE WHEN octet_length(e.payload) <= 262144 THEN e.payload END,e.event_identity,e.schema FROM fsgg_orchestration.execution_route_binding r JOIN fsgg_orchestration.execution_event e ON e.assignment_id=r.assignment_id AND e.attempt_id=r.attempt_id AND e.revision=1 WHERE (replace(r.assignment_id::text,'-','') || ':' || replace(r.attempt_id::text,'-','')) > $1 ORDER BY r.assignment_id,r.attempt_id LIMIT $2", connection, transaction)
+                    "SELECT CASE WHEN octet_length(r.payload) <= 32768 THEN r.payload END,r.binding_sha256,CASE WHEN octet_length(e.payload) <= 262144 THEN e.payload END,e.event_identity,e.schema,r.assignment_id,r.attempt_id,r.generation FROM fsgg_orchestration.execution_route_binding r JOIN fsgg_orchestration.execution_event e ON e.assignment_id=r.assignment_id AND e.attempt_id=r.attempt_id AND e.revision=1 WHERE (replace(r.assignment_id::text,'-','') || ':' || replace(r.attempt_id::text,'-','')) > $1 ORDER BY r.assignment_id,r.attempt_id LIMIT $2", connection, transaction)
                 add command (cursor |> Option.defaultValue "")
                 add command (maximum + 1)
                 use! row = command.ExecuteReaderAsync cancellationToken
@@ -1007,9 +1010,10 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                 match QualifiedExecutorWire.parseRoute bytes, SessionEventCodec.decode eventBytes with
                                 | Ok(route, causal, digest), Ok(LaunchIntentRecorded intent) when
                                     digest = row.GetString(1) && sha eventBytes = row.GetString(3) && row.GetString(4) = SessionEventCodec.schema
+                                    && route.AssignmentId = row.GetGuid(5) && route.AttemptId = row.GetGuid(6)
                                     && route.AssignmentId = intent.Key.AssignmentId && route.AttemptId = intent.Key.AttemptId
-                                    && route.Generation = intent.Key.Generation && route.PromptDigest = intent.InputDigest ->
-                                    nextCursor <- Some(route.AssignmentId.ToString("N") + ":" + route.AttemptId.ToString("N"))
+                                    && route.Generation = row.GetInt64(7) && route.Generation = intent.Key.Generation && route.PromptDigest = intent.InputDigest ->
+                                    nextCursor <- Some(row.GetGuid(5).ToString("N") + ":" + row.GetGuid(6).ToString("N"))
                                     match causal with
                                     | Some admission when admission.AdmittedAt = intent.RecordedAt -> admissions.Add((route, admission, intent))
                                     | Some _ -> failure <- Some "execution-causal-admission-intent-conflict"
