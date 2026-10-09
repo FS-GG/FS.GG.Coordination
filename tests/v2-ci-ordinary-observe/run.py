@@ -5,6 +5,7 @@ import importlib.util
 import json
 import pathlib
 import unittest
+import tempfile
 from unittest.mock import patch
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -95,6 +96,30 @@ class RulesetReaderTests(unittest.TestCase):
                 OBSERVER.QUALIFICATION.Refusal('native page unavailable')]):
             with self.assertRaisesRegex(OBSERVER.QUALIFICATION.Refusal, 'native page unavailable'):
                 OBSERVER.required_checks('FS-GG/FS.GG.Coordination', PROFILE)
+
+    def test_main_anchor_is_fenced_against_current_source_and_missing_refuses(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            paths = ['policy/v2-ci-ordinary-settlement.json', '.github/workflows/settle.yml',
+                     'policy/v2-ci-ordinary-settlement-anchor.json',
+                     'policy/v2-ci-ordinary-settlement-main-anchor.json']
+            for path in paths:
+                target = root / path
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(path.encode())
+            current = {path: (root / path).read_bytes() for path in paths}
+            policy = {'workflow': {'path': paths[1]}}
+            with patch.object(OBSERVER, 'ROOT', root), \
+                    patch.object(OBSERVER, 'api', return_value={'object': {'sha': 'a' * 40}}), \
+                    patch.object(OBSERVER, 'current_file', side_effect=lambda repo, path, revision: current[path]):
+                OBSERVER.current_authority('FS-GG/example', policy, root / paths[0], main_storage=True)
+                current[paths[3]] = b'changed main anchor'
+                with self.assertRaisesRegex(OBSERVER.QUALIFICATION.Refusal, 'main-anchor'):
+                    OBSERVER.current_authority('FS-GG/example', policy, root / paths[0], main_storage=True)
+                OBSERVER.current_authority('FS-GG/example', policy, root / paths[0])
+                (root / paths[3]).unlink()
+                with self.assertRaises(FileNotFoundError):
+                    OBSERVER.current_authority('FS-GG/example', policy, root / paths[0], main_storage=True)
 
     def test_installed_workflow_policy_and_public_anchor(self):
         workflow = (ROOT / '.github/workflows/v2-ci-ordinary-settlement.yml').read_text()

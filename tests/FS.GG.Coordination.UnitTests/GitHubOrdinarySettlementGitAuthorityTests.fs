@@ -532,3 +532,41 @@ let ``main storage refuses sibling race stale reads and absent main without boot
     Assert.Equal(SettlementDocumentReadUnknown "authority-main-missing", transport.ReadDocument address)
     Assert.Equal(SettlementCasConflict, transport.CompareExchangeDocument(address, None, [| 1uy |]))
     Assert.Equal(0, wire.Patches)
+
+[<Fact>]
+let ``main anchor is explicit and cannot substitute legacy protection`` () =
+    let profile = { OrdinarySettlementAuthorityProfiles.production with Name = "production-main"; WriterExcludes = Set.empty }
+    let legacy = publicAnchor "refs/heads/fsgg/v2/journal/cutover/d5" true
+    let main =
+        legacy |> Encoding.UTF8.GetString
+        |> _.Replace("refs/heads/fsgg/v2/journal/**/*", "refs/heads/main")
+        |> _.Replace("[\"refs/heads/fsgg/v2/journal/cutover/d5\"]", "[]")
+        |> Encoding.UTF8.GetBytes
+    let parse bytes = OrdinarySettlementPublicAnchor.parseForStorage OrdinarySettlementGitStorage.MainDirectory profile (ReadOnlyMemory bytes)
+    Assert.True(Result.isOk(parse main))
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", parse legacy)
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", OrdinarySettlementPublicAnchor.parse profile (ReadOnlyMemory main))
+    let substituted = main |> Encoding.UTF8.GetString |> _.Replace("21872113", "21872114") |> Encoding.UTF8.GetBytes
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", parse substituted)
+    let excluded = main |> Encoding.UTF8.GetString |> _.Replace("\"exclude\":[]", "\"exclude\":[\"refs/heads/main\"]") |> Encoding.UTF8.GetBytes
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", parse excluded)
+
+[<Fact>]
+let ``installed main profile pins separate native rulesets and retains logical epoch`` () =
+    let profile = OrdinarySettlementAuthorityProfiles.productionMain
+    Assert.Equal(24802693L, profile.WriterRulesetId)
+    Assert.Equal(24802698L, profile.IntegrityRulesetId)
+    Assert.Equal(OrdinarySettlementAuthorityProfiles.production.EpochRef, profile.EpochRef)
+    Assert.Equal(OrdinarySettlementAuthorityProfiles.production.PolicyId, profile.PolicyId)
+    let bytes =
+        publicAnchor "refs/heads/fsgg/v2/journal/cutover/d5" true
+        |> Encoding.UTF8.GetString
+        |> _.Replace("refs/heads/fsgg/v2/journal/**/*", "refs/heads/main")
+        |> _.Replace("[\"refs/heads/fsgg/v2/journal/cutover/d5\"]", "[]")
+        |> _.Replace("21872113", "24802693")
+        |> _.Replace("21872115", "24802698")
+        |> _.Replace("v2-journal-writer", "ordinary-v2-main-writer")
+        |> _.Replace("v2-journal-integrity", "ordinary-v2-main-integrity")
+        |> Encoding.UTF8.GetBytes
+    Assert.True(OrdinarySettlementPublicAnchor.parseForStorage OrdinarySettlementGitStorage.MainDirectory profile (ReadOnlyMemory bytes) |> Result.isOk)
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", OrdinarySettlementPublicAnchor.parse OrdinarySettlementAuthorityProfiles.production (ReadOnlyMemory bytes))

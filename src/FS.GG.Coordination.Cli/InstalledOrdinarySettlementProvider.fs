@@ -180,6 +180,7 @@ module InstalledOrdinarySettlementProvider =
     let private policyPath = "policy/v2-ci-ordinary-settlement.json"
     let private rehearsalPolicyPath = "policy/v2-ci-ordinary-settlement-rehearsal.json"
     let private anchorPath = "policy/v2-ci-ordinary-settlement-anchor.json"
+    let private mainAnchorPath = "policy/v2-ci-ordinary-settlement-main-anchor.json"
     let private rehearsalAnchorPath = "policy/v2-ci-ordinary-settlement-rehearsal-anchor.json"
     let private observerPath = "tools/v2-ci-ordinary-observe.py"
 
@@ -451,7 +452,7 @@ module InstalledOrdinarySettlementProvider =
             dotGitHubSourceProfile expectedEnvironment expectedPolicyId receiptBytes policyBytes
 
     type private Provider
-        (profile: OrdinarySettlementAuthorityProfile, sourceProfile: Result<SourceProfile, string>, receiptVariable,
+        (profile: OrdinarySettlementAuthorityProfile, storage: OrdinarySettlementGitStorage, sourceProfile: Result<SourceProfile, string>, receiptVariable,
          selectedPolicyPath, selectedAnchorPath, observerAction, rehearsal,
          appIdVariable, appPrivateKeyVariable, authorizerPrivateKeyVariable) =
         interface IOrdinarySettlementCommandProvider with
@@ -473,7 +474,7 @@ module InstalledOrdinarySettlementProvider =
                         let policyBytes = File.ReadAllBytes(Path.Combine(workspace, selectedPolicyPath))
                         let anchorBytes = File.ReadAllBytes(Path.Combine(workspace, selectedAnchorPath))
                         let receiptBytes = File.ReadAllBytes receiptPath
-                        let! anchor = OrdinarySettlementPublicAnchor.parse profile (ReadOnlyMemory anchorBytes)
+                        let! anchor = OrdinarySettlementPublicAnchor.parseForStorage storage profile (ReadOnlyMemory anchorBytes)
                         if anchor.Trust.AppId <> appId then return! Error "app-id-anchor"
                         let! source, head, tree, nodeId, baseSha, pr, policyDigest, checks =
                             validateReceiptFactsForSourceProfile
@@ -519,7 +520,7 @@ module InstalledOrdinarySettlementProvider =
                               Signature = authorizer.SignData(intent, HashAlgorithmName.SHA256, RSASignaturePadding.Pss) }
                         let effectTransport = RehearsalFaultTransport(github, fault) :> IOrdinaryGitHubTransport
                         let options = OrdinarySettlementPublicAnchor.transportOptions apiBase authorityToken userAgent profile anchor epochCommit epochGeneration
-                        let runtime = OrdinarySettlementGitAuthority.Runtime(appId, OrdinarySettlementGitHubAuthority.Transport(options, effectTransport))
+                        let runtime = OrdinarySettlementGitAuthority.Runtime(appId, OrdinarySettlementGitHubAuthority.Transport(options, effectTransport, storage))
                         return { Plan = plan; Credential = binding; Anchor = anchor.Trust; Authorization = authorization
                                  Runtime = runtime :> IOrdinaryPostMergeSettlementRuntime }
                     }
@@ -529,6 +530,7 @@ module InstalledOrdinarySettlementProvider =
         Some(
             Provider(
                 OrdinarySettlementAuthorityProfiles.production,
+                OrdinarySettlementGitStorage.JournalBranches,
                 selectSourceProfile (Environment.GetEnvironmentVariable "FSGG_V2_SOURCE_PROFILE"),
                 "FSGG_V2_PREFLIGHT_RECEIPT", policyPath, anchorPath, "verify", false,
                 "V2_ORDINARY_APP_ID", "V2_ORDINARY_APP_PRIVATE_KEY", "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY")
@@ -538,8 +540,20 @@ module InstalledOrdinarySettlementProvider =
         Some(
             Provider(
                 OrdinarySettlementAuthorityProfiles.rehearsal,
+                OrdinarySettlementGitStorage.JournalBranches,
                 Ok dotGitHubSourceProfile,
                 "FSGG_V2_REHEARSAL_PREFLIGHT_RECEIPT", rehearsalPolicyPath, rehearsalAnchorPath, "verify-rehearsal", true,
                 "V2_ORDINARY_REHEARSAL_APP_ID", "V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY",
                 "V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY")
+            :> IOrdinarySettlementCommandProvider)
+
+    /// Explicit command selection; no environment variable can replace the authority profile or path.
+    let tryCreateMain () =
+        Some(
+            Provider(
+                OrdinarySettlementAuthorityProfiles.productionMain,
+                OrdinarySettlementGitStorage.MainDirectory,
+                selectSourceProfile (Environment.GetEnvironmentVariable "FSGG_V2_SOURCE_PROFILE"),
+                "FSGG_V2_PREFLIGHT_RECEIPT", policyPath, mainAnchorPath, "verify-main", false,
+                "V2_ORDINARY_APP_ID", "V2_ORDINARY_APP_PRIVATE_KEY", "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY")
             :> IOrdinarySettlementCommandProvider)

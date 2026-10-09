@@ -144,6 +144,16 @@ module OrdinarySettlementAuthorityProfiles =
         if profile = production then Ok production
         else Error "production-command-refuses-rehearsal-profile"
 
+    /// Explicit main-directory adoption profile; legacy production and its epoch remain unchanged.
+    let productionMain =
+        { production with
+            Name = "production-main"
+            WriterRulesetId = 24802693L
+            WriterRulesetName = "ordinary-v2-main-writer"
+            IntegrityRulesetId = 24802698L
+            IntegrityRulesetName = "ordinary-v2-main-integrity"
+            WriterExcludes = Set.empty }
+
 [<RequireQualifiedAccess>]
 module OrdinarySettlementPublicAnchor =
     let private fields (value: JsonElement) =
@@ -171,7 +181,7 @@ module OrdinarySettlementPublicAnchor =
                 item.GetProperty("bypassMode").GetString())
             |> Set.ofSeq }
 
-    let parse (profile: OrdinarySettlementAuthorityProfile) (bytes: ReadOnlyMemory<byte>) =
+    let parseForStorage storage (profile: OrdinarySettlementAuthorityProfile) (bytes: ReadOnlyMemory<byte>) =
         try
             use document = JsonDocument.Parse bytes
             let root = document.RootElement
@@ -217,7 +227,10 @@ module OrdinarySettlementPublicAnchor =
                 not (isNull text) && text.Length = 64 && text |> Seq.forall (fun item -> Uri.IsHexDigit item && not (Char.IsUpper item))
             let validCommit (text: string) =
                 not (isNull text) && text.Length = 40 && text |> Seq.forall Uri.IsHexDigit
-            let expectedIncludes = Set [ "refs/heads/fsgg/v2/journal/**/*" ]
+            let expectedIncludes =
+                match storage with
+                | OrdinarySettlementGitStorage.JournalBranches -> Set [ "refs/heads/fsgg/v2/journal/**/*" ]
+                | OrdinarySettlementGitStorage.MainDirectory -> Set [ "refs/heads/main" ]
             let writerActors = value.WriterRuleset.BypassActors |> Set.map (fun (id, actorType, mode) -> id, actorType, mode)
             let expectedWriterActors =
                 Set.ofList ((value.Trust.AppId :: profile.RetainedWriterAppIds) |> List.map (fun id -> id, "Integration", "always"))
@@ -258,6 +271,7 @@ module OrdinarySettlementPublicAnchor =
                || not (DateTimeOffset.TryParse(value.WriterRuleset.UpdatedAt, &writerUpdated))
                || value.WriterRuleset.Includes <> expectedIncludes
                || value.WriterRuleset.Excludes <> profile.WriterExcludes
+               || (storage = OrdinarySettlementGitStorage.MainDirectory && not profile.WriterExcludes.IsEmpty)
                || value.WriterRuleset.Rules <> Set [ "creation"; "update" ]
                || writerActors <> expectedWriterActors
                || value.IntegrityRuleset.Id <> profile.IntegrityRulesetId
@@ -273,6 +287,8 @@ module OrdinarySettlementPublicAnchor =
                || accepted.ToUniversalTime() < integrityUpdated.ToUniversalTime().AddSeconds 60.0 then Error "ordinary-settlement-anchor-binding"
             else Ok value
         with _ -> Error "ordinary-settlement-anchor-json"
+
+    let parse profile bytes = parseForStorage OrdinarySettlementGitStorage.JournalBranches profile bytes
 
     let transportOptions apiBase token userAgent (profile: OrdinarySettlementAuthorityProfile) (anchor: OrdinarySettlementPublicAnchor)
         expectedEpochCommit expectedEpochGeneration =
