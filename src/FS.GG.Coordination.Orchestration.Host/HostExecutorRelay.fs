@@ -42,7 +42,7 @@ type HostExecutorRelay(maximumPending: int, maximumAggregateBytes: int) =
     let commandId (frames: byte array list) =
         frames
         |> List.tryLast
-        |> Option.bind (fun bytes -> ExecutorWire.parseCommandV2 bytes |> Result.toOption)
+        |> Option.bind (fun bytes -> QualifiedExecutorWire.parseCommand bytes |> Result.map (fun (command, _, _) -> command) |> Result.toOption)
         |> Option.map _.CommandId
 
     let bounded (frames: byte array list) =

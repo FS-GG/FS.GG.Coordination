@@ -80,12 +80,12 @@ module private StoredExecutorCommand =
                     WorkspaceManifestSha256 = None
                 }
         | Error legacyError ->
-            match ExecutorWire.parseCommandV2 bytes with
-            | Ok value ->
+            match QualifiedExecutorWire.parseCommand bytes with
+            | Ok(value, _, persistentDigest) ->
                 Ok
                     {
                         CommandId = value.CommandId
-                        BodySha256 = value.BodySha256
+                        BodySha256 = persistentDigest
                         Kind = value.Kind
                         WorkItemPersistenceId = value.WorkItemPersistenceId
                         AssignmentId = value.AssignmentId
@@ -154,6 +154,12 @@ module PostgreSqlExecutionSchema =
             let! _ = command.ExecuteNonQueryAsync cancellationToken
             do! transaction.CommitAsync cancellationToken
         }
+
+type CommittedExecutionAdmissionPage =
+    { Admissions: (ExecutorRouteBinding * ExecutionCausalAdmission * LaunchIntent) list
+      NextCursor: string option
+      Truncated: bool
+      Coverage: string }
 
 type PostgreSqlExecutionStore(options: StoreOptions) =
     let dataSource = options.DataSource
@@ -569,9 +575,9 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                         let expected = routeRow.GetString 1
                                         let payload = routeRow.GetFieldValue<byte array> 3
 
-                                        match ExecutorWire.parseRouteBinding payload with
-                                        | Ok value when
-                                            value.BindingSha256 = expected
+                                        match QualifiedExecutorWire.parseRoute payload with
+                                        | Ok(value, _, persistentDigest) when
+                                            persistentDigest = expected
                                             && value.AssignmentId = binding.AssignmentId
                                             && value.AttemptId = binding.AttemptId
                                             && value.Generation = binding.Generation
@@ -962,6 +968,65 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                     | _ -> return raise (InvalidDataException "execution-stream-generation-refused")
         }
 
+    /// A bounded repeatable-read page over existing immutable routes and first intent events.
+    /// A staged route without its matching committed intent is never an admission.
+    member _.ReadCommittedAdmissions(maximum: int, cursor: string option, cancellationToken: CancellationToken) =
+        task {
+            let canonicalCursor (value: string) =
+                if isNull value || value.Length <> 65 || value[32] <> ':' then false
+                else
+                    match Guid.TryParseExact(value.Substring(0, 32), "N"), Guid.TryParseExact(value.Substring(33, 32), "N") with
+                    | (true, assignment), (true, attempt) -> value = assignment.ToString("N") + ":" + attempt.ToString("N")
+                    | _ -> false
+            if maximum < 1 || maximum > 64 || (cursor |> Option.exists (canonicalCursor >> not)) then
+                return Error "execution-admission-page-bounds-refused"
+            else
+                use! connection = dataSource.OpenConnectionAsync cancellationToken
+                use! transaction = connection.BeginTransactionAsync(IsolationLevel.RepeatableRead, cancellationToken)
+                do! gate connection transaction false cancellationToken
+                use command = new NpgsqlCommand(
+                    "SELECT CASE WHEN octet_length(r.payload) <= 32768 THEN r.payload END,r.binding_sha256,CASE WHEN octet_length(e.payload) <= 262144 THEN e.payload END,e.event_identity,e.schema,r.assignment_id,r.attempt_id,r.generation FROM fsgg_orchestration.execution_route_binding r JOIN fsgg_orchestration.execution_event e ON e.assignment_id=r.assignment_id AND e.attempt_id=r.attempt_id AND e.revision=1 WHERE (replace(r.assignment_id::text,'-','') || ':' || replace(r.attempt_id::text,'-','')) > $1 ORDER BY r.assignment_id,r.attempt_id LIMIT $2", connection, transaction)
+                add command (cursor |> Option.defaultValue "")
+                add command (maximum + 1)
+                use! row = command.ExecuteReaderAsync cancellationToken
+                let admissions = ResizeArray<ExecutorRouteBinding * ExecutionCausalAdmission * LaunchIntent>()
+                let mutable nextCursor = None
+                let mutable count = 0
+                let mutable truncated = false
+                let mutable failure = None
+                let mutable reading = true
+                while reading do
+                    let! more = row.ReadAsync cancellationToken
+                    reading <- more
+                    if more then
+                        count <- count + 1
+                        if count > maximum then truncated <- true
+                        else
+                            if row.IsDBNull 0 || row.IsDBNull 2 then
+                                failure <- Some "execution-admission-source-size-refused"
+                            else
+                                let bytes = row.GetFieldValue<byte array> 0
+                                let eventBytes = row.GetFieldValue<byte array> 2
+                                match QualifiedExecutorWire.parseRoute bytes, SessionEventCodec.decode eventBytes with
+                                | Ok(route, causal, digest), Ok(LaunchIntentRecorded intent) when
+                                    digest = row.GetString(1) && sha eventBytes = row.GetString(3) && row.GetString(4) = SessionEventCodec.schema
+                                    && route.AssignmentId = row.GetGuid(5) && route.AttemptId = row.GetGuid(6)
+                                    && route.AssignmentId = intent.Key.AssignmentId && route.AttemptId = intent.Key.AttemptId
+                                    && route.Generation = row.GetInt64(7) && route.Generation = intent.Key.Generation && route.PromptDigest = intent.InputDigest ->
+                                    nextCursor <- Some(row.GetGuid(5).ToString("N") + ":" + row.GetGuid(6).ToString("N"))
+                                    match causal with
+                                    | Some admission when admission.AdmittedAt = intent.RecordedAt -> admissions.Add((route, admission, intent))
+                                    | Some _ -> failure <- Some "execution-causal-admission-intent-conflict"
+                                    | None -> ()
+                                | _ -> failure <- Some "execution-admission-source-corrupt"
+                do! row.CloseAsync()
+                do! transaction.CommitAsync cancellationToken
+                return match failure with
+                       | Some reason -> Error reason
+                       | None -> Ok { Admissions = List.ofSeq admissions; NextCursor = if truncated then nextCursor else None
+                                      Truncated = truncated; Coverage = if truncated || cursor.IsSome then "partial-page" else "complete-read-snapshot" }
+        }
+
     interface IExecutionSessionJournal with
         member _.ReadAttempt(assignmentId, attemptId, cancellationToken) =
             read assignmentId attemptId cancellationToken
@@ -1079,9 +1144,9 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
     interface IExecutorCommandStore with
         member _.BindRoute(bindingBytes, cancellationToken) =
             task {
-                match ExecutorWire.parseRouteBinding bindingBytes with
+                match QualifiedExecutorWire.parseRoute bindingBytes with
                 | Error reason -> return Error reason
-                | Ok binding ->
+                | Ok(binding, _, persistentDigest) ->
                     use! connection = dataSource.OpenConnectionAsync cancellationToken
 
                     use! transaction =
@@ -1099,14 +1164,14 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                     add command binding.AssignmentId
                     add command binding.AttemptId
                     add command binding.Generation
-                    add command binding.BindingSha256
+                    add command persistentDigest
                     add command bindingBytes
                     add command DateTimeOffset.UtcNow
                     let! changed = command.ExecuteNonQueryAsync cancellationToken
 
                     if changed = 1 then
                         do! transaction.CommitAsync cancellationToken
-                        return Ok binding.BindingSha256
+                        return Ok persistentDigest
                     else
                         use existing =
                             new NpgsqlCommand(
@@ -1123,7 +1188,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                         let same =
                             found
                             && row.GetInt64(0) = binding.Generation
-                            && row.GetString(1) = binding.BindingSha256
+                            && row.GetString(1) = persistentDigest
                             && (row.GetFieldValue<byte array>(2)).AsSpan().SequenceEqual(bindingBytes.AsSpan())
 
                         do! row.CloseAsync()
@@ -1131,7 +1196,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
 
                         return
                             if same then
-                                Ok binding.BindingSha256
+                                Ok persistentDigest
                             else
                                 Error "execution-route-binding-conflict"
             }
@@ -1165,12 +1230,12 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                     let payload = row.GetFieldValue<byte array> 2
 
                     return
-                        match ExecutorWire.parseRouteBinding payload with
-                        | Ok value when
+                        match QualifiedExecutorWire.parseRoute payload with
+                        | Ok(value, _, persistentDigest) when
                             value.AssignmentId = assignmentId
                             && value.AttemptId = attemptId
                             && value.Generation = generation
-                            && value.BindingSha256 = digest
+                            && persistentDigest = digest
                             ->
                             Ok payload
                         | _ -> Error "execution-route-binding-corrupt"

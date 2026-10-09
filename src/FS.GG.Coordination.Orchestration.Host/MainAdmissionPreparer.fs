@@ -351,6 +351,31 @@ module MainAdmissionPreparer =
                         | _ -> Error decision.Receipt.Detail)
         }
 
+    let private causalParent (workItems: IJournalStore) (executions: IExecutorCommandStore) workItemId (parent: TelemetryParent option) token =
+        task {
+            match parent with
+            | None -> return Ok None
+            | Some selected ->
+                let! history = workItems.Recover(WorkItemIdentity.persistenceId workItemId, token)
+                match history with
+                | Error _ -> return Error "causal-parent-history-unavailable"
+                | Ok history when history.Snapshot.IsSome -> return Error "causal-parent-history-compacted"
+                | Ok history ->
+                    let routes =
+                        history.Events |> List.choose (fun stored ->
+                            match EventEnvelope.tryDecode stored.Payload with
+                            | Ok(HostedRouteSelected route)
+                            | Ok(HostedRouteRecovered(route, _)) when Id.attemptValue route.AttemptId = selected.AttemptId && Id.generationValue route.Generation = selected.Generation -> Some route
+                            | _ -> None) |> List.distinct
+                    match routes with
+                    | [ route ] ->
+                        let! bytes = executions.ReadRoute(Id.operationValue route.ProcessOperationId, selected.AttemptId, token)
+                        return bytes |> Result.bind QualifiedExecutorWire.parseRoute
+                                     |> Result.bind (fun (_, admission, _) ->
+                                         admission |> Option.map (Some >> Ok) |> Option.defaultValue (Error "causal-parent-binding-unavailable"))
+                    | _ -> return Error "causal-parent-route-ambiguous"
+        }
+
     let private prepareBounded
         (clock: TimeProvider)
         (workItems: IJournalStore)
@@ -360,6 +385,7 @@ module MainAdmissionPreparer =
         principal
         (request: MainAdmissionPreparationRequest)
         (inputBytes: byte array)
+        (causalDeclaration: ExecutionCausalDeclaration option)
         (beforeLaunch:
             PlanningSnapshot ->
             Generation ->
@@ -426,6 +452,21 @@ module MainAdmissionPreparer =
                     let generation = admittedState.State.Generation
                     let! parentResult = selectTelemetryParent workItems workItemId request.AttemptId generation token
                     let parent = parentResult |> Result.defaultWith (fun reason -> raise (TelemetryParentRefused reason))
+                    let! causal =
+                        match causalDeclaration with
+                        | None -> Task.FromResult(Ok None)
+                        | Some declaration ->
+                            task {
+                                let! original = causalParent workItems executions workItemId parent token
+                                return original |> Result.bind (fun original ->
+                                    let memberId = WorkItemIdentity.persistenceId workItemId
+                                    let originalId = original |> Option.map _.OriginalItemId |> Option.defaultValue memberId
+                                    ExecutionCausalAdmission.create originalId memberId request.ProcessOperationId request.AttemptId (Id.generationValue generation) request.SelectedAt declaration original
+                                    |> Result.bind (fun admission ->
+                                        let admission = { admission with Relation = parent |> Option.map _.Relation |> Option.defaultValue "root" }
+                                        ExecutionCausalAdmission.validate admission |> Result.map Some))
+                            }
+                    let causal = causal |> Result.defaultWith (fun reason -> raise (TelemetryParentRefused reason))
                     let repositoryNodeId = WorkItemIdentity.repositoryNodeId workItemId
 
                     let route =
@@ -605,7 +646,11 @@ module MainAdmissionPreparer =
                                 | Ok(), Ok digest when digest <> workspaceDigest ->
                                     return Error "main-admission-preparation-workspace-digest-refused"
                                 | Ok(), Ok _ ->
-                                    let! bound = executions.BindRoute(ExecutorWire.encodeRouteBinding binding, token)
+                                    let bindingBytes =
+                                        match causal with
+                                        | None -> ExecutorWire.encodeRouteBinding binding
+                                        | Some admission -> QualifiedExecutorWire.wrapRoute binding admission |> Result.defaultWith (fun reason -> raise (TelemetryParentRefused reason))
+                                    let! bound = executions.BindRoute(bindingBytes, token)
 
                                     match bound with
                                     | Error reason -> return Error reason
@@ -720,7 +765,7 @@ module MainAdmissionPreparer =
                                                     )
         }
 
-    let internal prepareWithPreIntent
+    let private prepareQualifiedWithPreIntent
         clock
         workItems
         executions
@@ -729,6 +774,7 @@ module MainAdmissionPreparer =
         principal
         request
         (inputBytes: byte array)
+        causalDeclaration
         (beforeLaunch:
             PlanningSnapshot ->
             Generation ->
@@ -771,12 +817,20 @@ module MainAdmissionPreparer =
             | Ok _, Ok _ ->
                 task {
                     try
-                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes beforeLaunch token
+                        return! prepareBounded clock workItems executions executionJournal workItemId principal request inputBytes causalDeclaration beforeLaunch token
                     with TelemetryParentRefused reason ->
                         return Error reason
                 }
             | Error reason, _
             | _, Error reason -> Task.FromResult(Error reason)
+
+    let internal prepareWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes beforeLaunch token =
+        prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes None beforeLaunch token
+
+    /// Explicit source-only qualified preparation; ordinary callers retain their historical route.
+    let prepareCausal clock workItems executions executionJournal workItemId principal request inputBytes declaration token =
+        prepareQualifiedWithPreIntent clock workItems executions executionJournal workItemId principal request inputBytes (Some declaration)
+            (fun _ _ _ _ -> Task.FromResult(Ok())) token
 
     let prepare clock workItems executions executionJournal workItemId principal request inputBytes token =
         prepareWithPreIntent

@@ -15,6 +15,7 @@
     <Compile Include="CompatibilityDiagnosticTests.fs" />
     <Compile Include="FixedNativeCapabilityDiagnosticTests.fs" />
     <Compile Include="HostTests.fs" />
+    <Compile Include="ActorTelemetryAdmissionTests.fs" />
     <Compile Include="LearningInstalledReadinessSourceTests.fs" />
     <Compile Include="LearningJournalReadinessSourceTests.fs" />
     <Compile Include="LearningTelemetryReadinessSourceTests.fs" />

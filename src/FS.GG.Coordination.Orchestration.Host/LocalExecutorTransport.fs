@@ -171,7 +171,7 @@ type LocalExecutorTransport
     let command frames =
         frames
         |> List.tryLast
-        |> Option.bind (fun frame -> ExecutorWire.parseCommandV2 frame |> Result.toOption)
+        |> Option.bind (fun frame -> QualifiedExecutorWire.parseCommand frame |> Result.map (fun (command, _, _) -> command) |> Result.toOption)
 
     let workspaceBaseline frames =
         frames

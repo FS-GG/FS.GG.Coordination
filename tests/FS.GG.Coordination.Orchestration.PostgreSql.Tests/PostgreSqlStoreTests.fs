@@ -2805,9 +2805,15 @@ type PostgreSqlStoreTests() =
             Assert.True(Result.isError changed)
         }
 
-    [<Fact>]
-    member _.``production Main composes PostgreSQL packaged executor and seven native effects``() =
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    member _.``production Main composes PostgreSQL packaged executor and seven native effects``(causalRoute: bool) =
         task {
+            // Production can deliberately back off for 15s after external uncertainty.
+            // Phase deadlines never renew; each case also has one 150s monotonic ceiling.
+            let fixtureClock = Stopwatch.StartNew()
+            let phaseDeadline (seconds: float) = min (fixtureClock.Elapsed + TimeSpan.FromSeconds seconds) (TimeSpan.FromSeconds 150.)
             let! dataSource, identity = Fixture.reset ()
             use dataSource = dataSource
 
@@ -3141,11 +3147,149 @@ type PostgreSqlStoreTests() =
             do! appendCore (Id.protocolVersion 1 0) (SelectHostedRoute preparation.Route)
             do! appendCore (Id.protocolVersion 1 0) (RecordStartupPause "main-admission-preparation")
 
+            if causalRoute then
+                let admission =
+                    ExecutionCausalAdmission.create (WorkItemIdentity.persistenceId workItem) (WorkItemIdentity.persistenceId workItem)
+                        assignment attempt generation now ExecutionCausalAdmission.unclassified None
+                    |> Result.defaultWith failwith
+                let bytes = QualifiedExecutorWire.wrapRoute binding admission |> Result.defaultWith failwith
+                let! stagedRoute = commandStore.BindRoute(bytes, cancellationToken)
+                Assert.True(Result.isOk stagedRoute)
+                let! beforeIntent = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                Assert.Empty((beforeIntent |> Result.defaultWith failwith).Admissions)
+
             let! stagedIntent =
                 (executions :> IExecutionSessionJournal)
                     .AppendAttempt(assignment, attempt, 0L, LaunchIntentRecorded launch, CancellationToken.None)
 
             Assert.Equal(Appended, stagedIntent)
+            if causalRoute then
+                let! admitted = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                let page = admitted |> Result.defaultWith failwith
+                Assert.Single(page.Admissions) |> ignore
+                Assert.Equal("complete-read-snapshot", page.Coverage)
+                let _, admission, recoveredIntent = page.Admissions.Head
+                Assert.Equal(launch, recoveredIntent)
+                Assert.Equal(ExecutionCausalAdmission.invocationId (WorkItemIdentity.persistenceId workItem) attempt generation, admission.InvocationId)
+                let name, bytes = ExecutionAdmissionFacts.prepare admission launch.Requested.Model launch.Requested.Effort |> Result.defaultWith failwith
+                use restarted = Fixture.dataSource "orchestration_o0"
+                let reopened = PostgreSqlExecutionStore({ options with DataSource = restarted })
+                let! replay = reopened.ReadCommittedAdmissions(64, None, cancellationToken)
+                let _, sameAdmission, sameIntent = (replay |> Result.defaultWith failwith).Admissions.Head
+                let sameName, sameBytes = ExecutionAdmissionFacts.prepare sameAdmission sameIntent.Requested.Model sameIntent.Requested.Effort |> Result.defaultWith failwith
+                Assert.Equal(name, sameName)
+                Assert.True(bytes.AsSpan().SequenceEqual(sameBytes.AsSpan()))
+
+                let second = alternatePreparation ()
+                let secondAdmission =
+                    ExecutionCausalAdmission.create (WorkItemIdentity.persistenceId workItem) (WorkItemIdentity.persistenceId workItem)
+                        second.Binding.AssignmentId second.Binding.AttemptId generation now ExecutionCausalAdmission.unclassified None
+                    |> Result.defaultWith failwith
+                let secondBytes = QualifiedExecutorWire.wrapRoute second.Binding secondAdmission |> Result.defaultWith failwith
+                let! secondBinding = commandStore.BindRoute(secondBytes, cancellationToken)
+                Assert.True(Result.isOk secondBinding)
+                let! secondIntent =
+                    (executions :> IExecutionSessionJournal).AppendAttempt(
+                        second.Binding.AssignmentId, second.Binding.AttemptId, 0L, LaunchIntentRecorded second.LaunchIntent, cancellationToken)
+                Assert.Equal(Appended, secondIntent)
+                let! firstPage = executions.ReadCommittedAdmissions(1, None, cancellationToken)
+                let firstPage = firstPage |> Result.defaultWith failwith
+                Assert.Single(firstPage.Admissions) |> ignore
+                Assert.True(firstPage.Truncated)
+                Assert.Equal("partial-page", firstPage.Coverage)
+                Assert.True(firstPage.NextCursor.IsSome)
+                let! lastPage = executions.ReadCommittedAdmissions(1, firstPage.NextCursor, cancellationToken)
+                let lastPage = lastPage |> Result.defaultWith failwith
+                Assert.Single(lastPage.Admissions) |> ignore
+                Assert.False(lastPage.Truncated)
+                Assert.True(lastPage.NextCursor.IsNone)
+                Assert.Equal("partial-page", lastPage.Coverage)
+                Assert.NotEqual((firstPage.Admissions.Head |> fun (_, value, _) -> value.InvocationId),
+                                (lastPage.Admissions.Head |> fun (_, value, _) -> value.InvocationId))
+                let! zeroPage = executions.ReadCommittedAdmissions(0, None, cancellationToken)
+                let! oversizedPage = executions.ReadCommittedAdmissions(65, None, cancellationToken)
+                let! invalidCursor = executions.ReadCommittedAdmissions(1, Some(String.replicate 65 "x"), cancellationToken)
+                let canonical = firstPage.NextCursor.Value
+                Assert.Equal(canonical.ToLowerInvariant(), canonical)
+                // Deterministic alphabetic UUID ensures this refusal cannot pass vacuously for all-digit IDs.
+                let uppercase = "ABCDEF0123456789ABCDEF0123456789AB:ABCDEF0123456789ABCDEF0123456789AB"
+                let! uppercaseCursor = executions.ReadCommittedAdmissions(1, Some uppercase, cancellationToken)
+                Assert.Equal(Error "execution-admission-page-bounds-refused", uppercaseCursor)
+                Assert.True(Result.isError zeroPage && Result.isError oversizedPage && Result.isError invalidCursor)
+
+                let mutate sql (payload: byte array) =
+                    task {
+                        use! connection = dataSource.OpenConnectionAsync cancellationToken
+                        use command = new NpgsqlCommand(sql, connection)
+                        command.Parameters.AddWithValue(payload) |> ignore
+                        command.Parameters.AddWithValue(assignment) |> ignore
+                        command.Parameters.AddWithValue(attempt) |> ignore
+                        let! affected = command.ExecuteNonQueryAsync cancellationToken
+                        Assert.Equal(1, affected)
+                    }
+                let checkCorruption sql corrupt restore expected =
+                    task {
+                        do! mutate sql corrupt
+                        let! refused = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                        // Restore before assertion so a failed expectation cannot contaminate the production join.
+                        do! mutate sql restore
+                        Assert.Equal(Error expected, refused)
+                    }
+                let originalRoute = QualifiedExecutorWire.wrapRoute binding admission |> Result.defaultWith failwith
+                let checkSizeConstraint sql length =
+                    task {
+                        let mutable rejected = false
+                        try
+                            do! mutate sql (Array.zeroCreate length)
+                        with :? PostgresException as error ->
+                            Assert.Equal("23514", error.SqlState)
+                            rejected <- true
+                        Assert.True(rejected, "oversized stored payload must fail existing database CHECK")
+                    }
+                do! checkSizeConstraint
+                        "UPDATE fsgg_orchestration.execution_route_binding SET payload=$1 WHERE assignment_id=$2 AND attempt_id=$3" 32769
+                do! checkSizeConstraint
+                        "UPDATE fsgg_orchestration.execution_event SET payload=$1 WHERE assignment_id=$2 AND attempt_id=$3 AND revision=1" 262145
+                do! checkCorruption
+                        "UPDATE fsgg_orchestration.execution_route_binding SET payload=$1 WHERE assignment_id=$2 AND attempt_id=$3"
+                        (Encoding.UTF8.GetBytes "{}") originalRoute "execution-admission-source-corrupt"
+                let mutateColumns sql (values: obj array) =
+                    task {
+                        use! connection = dataSource.OpenConnectionAsync cancellationToken
+                        use command = new NpgsqlCommand(sql, connection)
+                        for value in values do command.Parameters.AddWithValue(value) |> ignore
+                        command.Parameters.AddWithValue(assignment) |> ignore
+                        command.Parameters.AddWithValue(attempt) |> ignore
+                        let! affected = command.ExecuteNonQueryAsync cancellationToken
+                        Assert.Equal(1, affected)
+                    }
+                let foreign = alternatePreparation ()
+                let foreignAdmission =
+                    ExecutionCausalAdmission.create (WorkItemIdentity.persistenceId workItem) (WorkItemIdentity.persistenceId workItem)
+                        foreign.Binding.AssignmentId foreign.Binding.AttemptId generation now ExecutionCausalAdmission.unclassified None
+                    |> Result.defaultWith failwith
+                let foreignRoute = QualifiedExecutorWire.wrapRoute foreign.Binding foreignAdmission |> Result.defaultWith failwith
+                let _, _, foreignDigest = QualifiedExecutorWire.parseRoute foreignRoute |> Result.defaultWith failwith
+                let _, _, originalDigest = QualifiedExecutorWire.parseRoute originalRoute |> Result.defaultWith failwith
+                let foreignEvent = SessionEventCodec.encode (LaunchIntentRecorded foreign.LaunchIntent)
+                let originalEvent = SessionEventCodec.encode (LaunchIntentRecorded launch)
+                let routeSql = "UPDATE fsgg_orchestration.execution_route_binding SET payload=$1,binding_sha256=$2 WHERE assignment_id=$3 AND attempt_id=$4"
+                let eventSql = "UPDATE fsgg_orchestration.execution_event SET payload=$1,event_identity=$2 WHERE assignment_id=$3 AND attempt_id=$4 AND revision=1"
+                // Both bodies and digests coherently agree with each other, but not their physical rows.
+                do! mutateColumns routeSql [| box foreignRoute; box foreignDigest |]
+                do! mutateColumns eventSql [| box foreignEvent; box (RunnerWire.sha256 foreignEvent) |]
+                let! foreignPair = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                do! mutateColumns routeSql [| box originalRoute; box originalDigest |]
+                do! mutateColumns eventSql [| box originalEvent; box (RunnerWire.sha256 originalEvent) |]
+                Assert.Equal(Error "execution-admission-source-corrupt", foreignPair)
+                let generationSql = "UPDATE fsgg_orchestration.execution_route_binding SET generation=$1 WHERE assignment_id=$2 AND attempt_id=$3"
+                do! mutateColumns generationSql [| box (generation + 1L) |]
+                let! wrongGeneration = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                do! mutateColumns generationSql [| box generation |]
+                Assert.Equal(Error "execution-admission-source-corrupt", wrongGeneration)
+                let! restored = executions.ReadCommittedAdmissions(64, None, cancellationToken)
+                Assert.Equal(2, (restored |> Result.defaultWith failwith).Admissions.Length)
+
 
             let! stagedReservation =
                 (executions :> IExecutorCommandStore)
@@ -3172,6 +3316,46 @@ type PostgreSqlStoreTests() =
             let mutable checkReads = 0
             let mutable checksReleased = false
             use firstShutdown = new CancellationTokenSource()
+
+            let checkpointFailure phase =
+                task {
+                    let! recovered = HostedWriterJournal.recover workItems workItem CancellationToken.None
+                    let sourceState =
+                        recovered |> Result.map (fun value ->
+                            let control =
+                                match value.State.Control with
+                                | ControlState.Running -> "running"
+                                | ControlState.Paused _ -> "paused"
+                                | ControlState.CancelPending _ -> "cancel-pending"
+                                | ControlState.Cancelled _ -> "cancelled"
+                                | ControlState.Revoked _ -> "revoked"
+                            let operations =
+                                value.State.Operations |> Map.toList |> List.map (fun (id, operation) ->
+                                    let intent, status, code =
+                                        match operation with
+                                        | OperationState.IntentRecorded intent -> intent, "intent", ""
+                                        | OperationState.Dispatching intent -> intent, "dispatching", ""
+                                        | OperationState.NeedsObservation(intent, reason) -> intent, "needs-observation", reason.Split(':')[0]
+                                        | OperationState.Settled(intent, EffectOutcome.Applied _) -> intent, "settled-applied", ""
+                                        | OperationState.Settled(intent, EffectOutcome.ProvenAbsent) -> intent, "settled-absent", ""
+                                        | OperationState.Settled(intent, EffectOutcome.Refused reason) -> intent, "settled-refused", reason.Split(':')[0]
+                                        | OperationState.Settled(intent, EffectOutcome.Unknown reason) -> intent, "settled-unknown", reason.Split(':')[0]
+                                    {| operation = string (Id.operationValue id); kind = string intent.Kind; status = status
+                                       code = if code.Length > 128 then code[..127] else code |})
+                            {| revision = Id.revisionValue value.State.Revision; generation = Id.generationValue value.State.Generation
+                               control = control; operations = operations |})
+                    let detail =
+                        JsonSerializer.Serialize
+                            {| phase = phase; causalRoute = causalRoute; elapsedSeconds = fixtureClock.Elapsed.TotalSeconds
+                               journalReadable = Result.isOk recovered
+                               journal = sourceState |> Result.map (fun value -> JsonSerializer.Serialize value) |> Result.defaultValue "unavailable"
+                               pullCreated = pullCreated; pullCreateCount = pullCreateCount; mutationCount = mutationCount
+                               mergePutCount = mergePutCount; checkReads = checkReads; checksReleased = checksReleased |}
+                    let path = Path.Combine(root, phase + "-failure.json")
+                    File.WriteAllText(path, detail)
+                    File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                    return detail
+                }
 
             let jsonResponse status body =
                 Response
@@ -3385,7 +3569,7 @@ try:
             header,body=frame
             child.stdin.write(header+body)
             value=json.loads(body)
-            if value.get('schema')=='fsgg.orchestration.executor-command/2': break
+            if value.get('schema') in ('fsgg.orchestration.executor-command/2','fsgg.orchestration.executor-command/5'): break
         child.stdin.flush()
         while True:
             frame=read_frame(child.stdout)
@@ -3555,9 +3739,9 @@ finally:
 
             Assert.Contains("main-route-admission-receipt/1", admissionDetail)
             let mutable settlementVisible = false
-            let mutable settlementChecks = 0
+            let settlementDeadline = phaseDeadline 45.
 
-            while not settlementVisible && settlementChecks < 50 do
+            while not settlementVisible && fixtureClock.Elapsed < settlementDeadline do
                 do! Task.Delay 100
 
                 let! recovered =
@@ -3575,9 +3759,10 @@ finally:
                             | Some(OperationState.NeedsObservation _), None -> true
                             | _ -> false))
 
-                settlementChecks <- settlementChecks + 1
 
-            Assert.True(settlementVisible, "PR mutation was not exposed before its durable receipt")
+            if not settlementVisible then
+                let! detail = checkpointFailure "mutation-before-receipt"
+                Assert.True(settlementVisible, "PR mutation was not exposed before its durable receipt; " + detail)
             let transportStartsBeforeRestart = Int32.Parse(File.ReadAllText proxyState)
             let mutationsBeforeRestart = mutationCount
             Assert.True(pullCreated)
@@ -3762,9 +3947,9 @@ finally:
             Assert.Equal(HttpStatusCode.OK, displacedRecovery.StatusCode)
             Assert.True(admission.Running.IsSome, "displaced claim did not retain observation-only recovery")
             let mutable exposedObserved = false
-            let mutable exposedChecks = 0
+            let exposedDeadline = phaseDeadline 30.
 
-            while not exposedObserved && exposedChecks < 50 do
+            while not exposedObserved && fixtureClock.Elapsed < exposedDeadline do
                 do! Task.Delay 50
 
                 let! recovered =
@@ -3778,9 +3963,10 @@ finally:
                             | OperationState.Settled _ -> true
                             | _ -> false))
 
-                exposedChecks <- exposedChecks + 1
 
-            Assert.True(exposedObserved, "claim-lost observation-only graph did not reconcile the exposed PR")
+            if not exposedObserved then
+                let! detail = checkpointFailure "claim-lost-observation"
+                Assert.True(exposedObserved, "claim-lost observation-only graph did not reconcile the exposed PR; " + detail)
             Assert.Equal(mutationsBeforeRestart, mutationCount)
 
             claimBody <- Some originalClaim
@@ -3944,13 +4130,14 @@ finally:
                     return response.StatusCode, JsonDocument.Parse(ReadOnlyMemory body)
                 }
 
-            let mutable preflightWaits = 0
+            let preflightDeadline = phaseDeadline 30.
 
-            while checkReads = 0 && preflightWaits < 100 do
+            while checkReads = 0 && fixtureClock.Elapsed < preflightDeadline do
                 do! Task.Delay 50
-                preflightWaits <- preflightWaits + 1
 
-            Assert.True(checkReads > 0, "merge preflight did not reach the pending native check")
+            if checkReads = 0 then
+                let! detail = checkpointFailure "merge-preflight"
+                Assert.True(checkReads > 0, "merge preflight did not reach the pending native check; " + detail)
             let! readyCode, readyStatus = getMainStatus ()
             use readyStatus = readyStatus
             Assert.Equal(HttpStatusCode.OK, readyCode)
@@ -3993,10 +4180,10 @@ finally:
             use resumeReceipt = resumeReceipt
             Assert.Equal(HttpStatusCode.OK, resumeCode)
             let mutable complete = false
-            let mutable checks = 0
+            let completionDeadline = phaseDeadline 45.
             let mutable routeState = "not-read"
 
-            while not complete && checks < 400 do
+            while not complete && fixtureClock.Elapsed < completionDeadline do
                 do! Task.Delay 100
 
                 let! recovered =
@@ -4022,7 +4209,6 @@ finally:
                         |> Map.tryFind route.AttemptId
                         |> Option.exists (fun item -> item.Status = AttemptStatus.Completed))
 
-                checks <- checks + 1
 
             let! executionState =
                 (executions :> IExecutionSessionJournal).ReadAttempt(assignment, attempt, CancellationToken.None)
@@ -4040,6 +4226,10 @@ finally:
                     File.ReadAllText proxyState
                 else
                     "0"
+
+            if not complete then
+                let! _ = checkpointFailure "native-delivery"
+                ()
 
             Assert.True(
                 complete,
