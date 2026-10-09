@@ -196,3 +196,42 @@ module ExecutionAdmissionFacts =
             events |> List.iter payload.Add
             batch["events"] <- payload
             Ok("batch-" + digest, System.Text.Encoding.UTF8.GetBytes(batch.ToJsonString(JsonSerializerOptions(WriteIndented = false)))))
+
+/// A separate immutable declaration batch leaves historical admission batches unchanged.
+[<RequireQualifiedAccess>]
+module ExecutionCausalAdmissionFacts =
+    open System.Text
+    open System.Text.Json.Nodes
+    let private validDigest (value: string) =
+        not (isNull value) && value.Length = 64
+        && (value |> Seq.forall (fun character -> (character >= '0' && character <= '9') || (character >= 'a' && character <= 'f')))
+    let prepare (admission: ExecutionCausalAdmission) (admissionBytes: byte array) routeBindingSha256 launchIntentSha256 =
+        ExecutionCausalAdmission.parse admissionBytes |> Result.bind (fun retained ->
+            if retained <> admission || not (validDigest routeBindingSha256) || not (validDigest launchIntentSha256) then
+                Error "execution-causal-admission-source-conflict"
+            else
+                let identity = "execution-causal-admission-" + retained.InvocationId
+                let digest = RunnerWire.sha256(Encoding.UTF8.GetBytes("execution-causal-admission/1" + "\u001f" + identity))
+                let event = JsonObject()
+                event["kind"] <- JsonValue.Create "execution-causal-admission/1"
+                event["identity"] <- JsonValue.Create identity
+                event["itemId"] <- JsonValue.Create retained.OriginalItemId
+                event["revision"] <- JsonValue.Create 0
+                event["dispatchId"] <- JsonValue.Create(ExecutionAdmissionFacts.dispatchId retained.OriginalItemId retained.AttemptId retained.Generation)
+                event["admissionBase64"] <- JsonValue.Create(Convert.ToBase64String admissionBytes)
+                event["admissionSha256"] <- JsonValue.Create(RunnerWire.sha256 admissionBytes)
+                event["routeBindingSha256"] <- JsonValue.Create routeBindingSha256
+                event["launchIntentSha256"] <- JsonValue.Create launchIntentSha256
+                let batch = JsonObject()
+                batch["schema"] <- JsonValue.Create "fsgg.telemetry.ingest/1"
+                batch["ingestId"] <- JsonValue.Create("batch-" + digest)
+                batch["sourceIdentity"] <- JsonValue.Create "coordination"
+                batch["generation"] <- JsonValue.Create retained.InvocationId
+                batch["cursor"] <- JsonValue.Create digest
+                batch["eventCount"] <- JsonValue.Create 1
+                let events = JsonArray()
+                events.Add event
+                batch["events"] <- events
+                let bytes = Encoding.UTF8.GetBytes(batch.ToJsonString(JsonSerializerOptions(WriteIndented = false)))
+                if bytes.Length > 65536 then Error "telemetry-batch-size-refused"
+                else Ok("batch-" + digest, bytes))

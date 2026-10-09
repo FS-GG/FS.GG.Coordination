@@ -1,0 +1,25 @@
+{
+  "declaration": {
+    "purpose": "implementation",
+    "dependencyCoverage": "complete",
+    "dependencies": [],
+    "retryOfInvocationId": null
+  },
+  "clockProvenance": "host-wall",
+  "rootAdmittedAt": "2026-10-10T00:00:00Z",
+  "admittedAt": "2026-10-10T00:00:00Z",
+  "relation": "root",
+  "rootGeneration": 0,
+  "rootAttemptId": "22222222-2222-4222-8222-222222222222",
+  "parentGeneration": null,
+  "parentAttemptId": null,
+  "parentInvocationId": null,
+  "rootInvocationId": "invocation-e32a815d66260d1d7b8011c37130ae4bc6145252f1cd1fab33cbc6dee7029870",
+  "invocationId": "invocation-e32a815d66260d1d7b8011c37130ae4bc6145252f1cd1fab33cbc6dee7029870",
+  "generation": 0,
+  "attemptId": "22222222-2222-4222-8222-222222222222",
+  "assignmentId": "11111111-1111-4111-8111-111111111111",
+  "memberItemId": "LEARN-01.2-SYNTHETIC",
+  "originalItemId": "LEARN-01.2-SYNTHETIC",
+  "schema": "fsgg.orchestration.execution-causal-admission/1"
+}

@@ -278,6 +278,85 @@ type PostgreSqlStoreTests() =
     let cancellationToken = CancellationToken.None
 
     [<Fact>]
+    member _.``fixed causal raw admissions survive committed journal restart and emit genuine source digests``() =
+        task {
+            let! dataSource, identity = Fixture.reset ()
+            use dataSource = dataSource
+            do! PostgreSqlExecutionSchema.migrate dataSource cancellationToken
+            let options = { Fixture.options dataSource identity 0L with RuntimeSchemaVersion = 2 }
+            let store = PostgreSqlExecutionStore options
+            let directory = Path.Combine(__SOURCE_DIRECTORY__, "..", "FS.GG.Coordination.Orchestration.Host.Tests", "Fixtures", "Learning", "CausalAdmission")
+            let manifestBytes = File.ReadAllBytes(Path.Combine(directory, "manifest.json"))
+            Assert.Equal("58de080758af83f2e243faf6995a44a529d00f810d43b2ac64753d14f59ce880", RunnerWire.sha256 manifestBytes)
+            use manifest = JsonDocument.Parse manifestBytes
+            let cases = manifest.RootElement.GetProperty("cases").EnumerateArray() |> Seq.toArray
+            Assert.Equal(4, manifest.RootElement.GetProperty("caseCount").GetInt32())
+            Assert.Equal(4, cases.Length)
+            for fixture in cases do
+                let raw = File.ReadAllBytes(Path.Combine(directory, fixture.GetProperty("admissionFile").GetString()))
+                Assert.Equal(fixture.GetProperty("admissionBytes").GetInt32(), raw.Length)
+                Assert.Equal(fixture.GetProperty("admissionSha256").GetString(), RunnerWire.sha256 raw)
+                let admission = ExecutionCausalAdmission.parse raw |> Result.defaultWith failwith
+                let route0: ExecutorRouteBinding =
+                    { Schema = ExecutorWire.routeBindingSchema; BindingSha256 = ""
+                      WorkItemPersistenceId = admission.MemberItemId; RouteId = Guid.NewGuid()
+                      RouteOperationId = admission.AssignmentId; ProcessOperationId = admission.AssignmentId
+                      AssignmentId = admission.AssignmentId; AttemptId = admission.AttemptId; CandidateId = Guid.NewGuid()
+                      Generation = admission.Generation; RepositoryBinding = "FS-GG/synthetic"; BaselineObjectId = String.replicate 40 "a"
+                      PromptDigest = String.replicate 64 "a"; WorkspaceManifestSha256 = String.replicate 64 "b"; ExecutorBinding = "runner"
+                      ParentAttemptId = admission.ParentAttemptId; ParentGeneration = admission.ParentGeneration
+                      TelemetryRelation = if admission.Relation = "root" then null else admission.Relation }
+                let route = { route0 with BindingSha256 = ExecutorWire.routeBindingDigest route0 }
+                let wrapper: QualifiedExecutorRoute =
+                    { Schema = QualifiedExecutorWire.routeSchema; BindingSha256 = ""; Binding = route; AdmissionBase64 = Convert.ToBase64String raw }
+                let digest = QualifiedExecutorWire.routeDigest wrapper
+                let routeBytes = QualifiedExecutorWire.encodeRoute { wrapper with BindingSha256 = digest }
+                let intent: LaunchIntent =
+                    { Schema = ExecutionProtocol.launchSchema; Key = { AssignmentId = admission.AssignmentId; AttemptId = admission.AttemptId; Generation = admission.Generation }
+                      InputDigest = route.PromptDigest; Workspace = "synthetic-source-workspace"; Requested = { Model = None; Effort = None }
+                      Limits = { Deadline = admission.AdmittedAt.AddMinutes 1.; MaximumRuntime = TimeSpan.FromMinutes 1.; MaximumAttempts = 1 }
+                      RecordedAt = admission.AdmittedAt }
+                let! bound = (store :> IExecutorCommandStore).BindRoute(routeBytes, cancellationToken)
+                Assert.Equal(Ok digest, bound)
+                let! appended = (store :> IExecutionSessionJournal).AppendAttempt(admission.AssignmentId, admission.AttemptId, 0L, LaunchIntentRecorded intent, cancellationToken)
+                Assert.Equal(Appended, appended)
+            let! first = store.ReadCommittedAdmissions(64, None, cancellationToken)
+            let first = first |> Result.defaultWith failwith
+            Assert.Equal(4, first.Admissions.Length)
+            use reopenedSource = Fixture.dataSource "orchestration_o0"
+            let reopened = PostgreSqlExecutionStore { options with DataSource = reopenedSource }
+            let! replay = reopened.ReadCommittedAdmissions(64, None, cancellationToken)
+            let replay = replay |> Result.defaultWith failwith
+            Assert.Equal(first, replay)
+            let export = Environment.GetEnvironmentVariable "FSGG_CAUSAL_BATCH_EXPORT_ROOT"
+            if not (String.IsNullOrWhiteSpace export) then
+                let fixtureRoot = Environment.GetEnvironmentVariable "FSGG_PG_ROOT"
+                Assert.False(String.IsNullOrWhiteSpace fixtureRoot)
+                Assert.True(Path.IsPathFullyQualified export)
+                Assert.Equal(Path.Combine(Path.GetFullPath fixtureRoot, "causal-source-batches"), Path.GetFullPath export)
+                Assert.False(Directory.Exists export)
+                Directory.CreateDirectory export |> ignore
+            for source in first.Admissions do
+                let fixture = cases |> Array.find (fun value -> value.GetProperty("invocationId").GetString() = source.Admission.InvocationId)
+                let expectedRaw = File.ReadAllBytes(Path.Combine(directory, fixture.GetProperty("admissionFile").GetString()))
+                Assert.True(expectedRaw.AsSpan().SequenceEqual(source.AdmissionBytes.AsSpan()))
+                let! retainedRoute = (store :> IExecutorCommandStore).ReadRoute(source.Admission.AssignmentId, source.Admission.AttemptId, cancellationToken)
+                let _, _, retainedDigest = retainedRoute |> Result.defaultWith failwith |> QualifiedExecutorWire.parseRouteWithAdmissionBytes |> Result.defaultWith failwith
+                Assert.Equal(retainedDigest, source.RouteBindingSha256)
+                Assert.Equal(RunnerWire.sha256(SessionEventCodec.encode (LaunchIntentRecorded source.Intent)), source.LaunchIntentSha256)
+                let oldName, oldBytes = ExecutionAdmissionFacts.prepare source.Admission None None |> Result.defaultWith failwith
+                let name, bytes = ExecutionCausalAdmissionFacts.prepare source.Admission source.AdmissionBytes source.RouteBindingSha256 source.LaunchIntentSha256 |> Result.defaultWith failwith
+                let nameAgain, bytesAgain = ExecutionCausalAdmissionFacts.prepare source.Admission source.AdmissionBytes source.RouteBindingSha256 source.LaunchIntentSha256 |> Result.defaultWith failwith
+                Assert.Equal(name, nameAgain)
+                Assert.True(bytes.AsSpan().SequenceEqual(bytesAgain.AsSpan()))
+                if not (String.IsNullOrWhiteSpace export) then
+                    for batchName, batchBytes in [ oldName, oldBytes; name, bytes ] do
+                        use output = new FileStream(Path.Combine(export, batchName + ".json"), FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                        output.Write batchBytes
+                        output.Flush true
+        }
+
+    [<Fact>]
     member _.``native delivery readback and appended effect kinds survive recovery``() =
         task {
             let! dataSource, identity = Fixture.reset ()
@@ -3168,14 +3247,16 @@ type PostgreSqlStoreTests() =
                 let page = admitted |> Result.defaultWith failwith
                 Assert.Single(page.Admissions) |> ignore
                 Assert.Equal("complete-read-snapshot", page.Coverage)
-                let _, admission, recoveredIntent = page.Admissions.Head
+                let source = page.Admissions.Head
+                let admission, recoveredIntent = source.Admission, source.Intent
                 Assert.Equal(launch, recoveredIntent)
                 Assert.Equal(ExecutionCausalAdmission.invocationId (WorkItemIdentity.persistenceId workItem) attempt generation, admission.InvocationId)
                 let name, bytes = ExecutionAdmissionFacts.prepare admission launch.Requested.Model launch.Requested.Effort |> Result.defaultWith failwith
                 use restarted = Fixture.dataSource "orchestration_o0"
                 let reopened = PostgreSqlExecutionStore({ options with DataSource = restarted })
                 let! replay = reopened.ReadCommittedAdmissions(64, None, cancellationToken)
-                let _, sameAdmission, sameIntent = (replay |> Result.defaultWith failwith).Admissions.Head
+                let replayedSource = (replay |> Result.defaultWith failwith).Admissions.Head
+                let sameAdmission, sameIntent = replayedSource.Admission, replayedSource.Intent
                 let sameName, sameBytes = ExecutionAdmissionFacts.prepare sameAdmission sameIntent.Requested.Model sameIntent.Requested.Effort |> Result.defaultWith failwith
                 Assert.Equal(name, sameName)
                 Assert.True(bytes.AsSpan().SequenceEqual(sameBytes.AsSpan()))
@@ -3204,8 +3285,8 @@ type PostgreSqlStoreTests() =
                 Assert.False(lastPage.Truncated)
                 Assert.True(lastPage.NextCursor.IsNone)
                 Assert.Equal("partial-page", lastPage.Coverage)
-                Assert.NotEqual((firstPage.Admissions.Head |> fun (_, value, _) -> value.InvocationId),
-                                (lastPage.Admissions.Head |> fun (_, value, _) -> value.InvocationId))
+                Assert.NotEqual(firstPage.Admissions.Head.Admission.InvocationId,
+                                lastPage.Admissions.Head.Admission.InvocationId)
                 let! zeroPage = executions.ReadCommittedAdmissions(0, None, cancellationToken)
                 let! oversizedPage = executions.ReadCommittedAdmissions(65, None, cancellationToken)
                 let! invalidCursor = executions.ReadCommittedAdmissions(1, Some(String.replicate 65 "x"), cancellationToken)

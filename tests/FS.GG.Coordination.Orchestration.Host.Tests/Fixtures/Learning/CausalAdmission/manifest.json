@@ -1,0 +1,47 @@
+{
+  "schema": "fsgg.learn.causal-admission-fixtures/1",
+  "provenance": "synthetic-source-contract-not-native-installation",
+  "caseCount": 4,
+  "cases": [
+    {
+      "name": "root",
+      "admissionFile": "root.admission.json",
+      "admissionBytes": 940,
+      "admissionSha256": "e7f021da96c018280575c6b4e56906259811d0a9d16cfcca96226aa144e33bf3",
+      "eventFile": "root.event.json",
+      "eventBytes": 1828,
+      "eventSha256": "309bbf168e9bfc09f95a262d555d88735a556738a32c08836d1e6af3920f74eb",
+      "invocationId": "invocation-e32a815d66260d1d7b8011c37130ae4bc6145252f1cd1fab33cbc6dee7029870"
+    },
+    {
+      "name": "child",
+      "admissionFile": "child.admission.json",
+      "admissionBytes": 1116,
+      "admissionSha256": "28623513c4cdcd7a29b0327bf7ac2acef46a808fbdd6a1d82b8c9ae188088c7d",
+      "eventFile": "child.event.json",
+      "eventBytes": 2060,
+      "eventSha256": "b69488a5817921d4eddda3b095291e706ac136ad948dda6121802bfd4fb0846a",
+      "invocationId": "invocation-435d85bb120f1036fc8abb6c96b1b713c5c0bd4d5226e99daadb7d902e6a8199"
+    },
+    {
+      "name": "follow-up",
+      "admissionFile": "follow-up.admission.json",
+      "admissionBytes": 939,
+      "admissionSha256": "96c87ab913533a7380d34934f21b7e4dd50700f65be83b36333a8549c2fde590",
+      "eventFile": "follow-up.event.json",
+      "eventBytes": 1824,
+      "eventSha256": "d34b4fe315cfaa87e65a42998ced6bae7ff19b96908edb840c571ceab5a896a5",
+      "invocationId": "invocation-a98f673543f854d4e92f4912ef831c874befb284e2312a27a6615e86c0f2d9a7"
+    },
+    {
+      "name": "explicit-retry",
+      "admissionFile": "explicit-retry.admission.json",
+      "admissionBytes": 1199,
+      "admissionSha256": "d07fd175b1dd7729ecefcb4adba0249fa2645ebfaa0adbee8e296eefd3a07ec9",
+      "eventFile": "explicit-retry.event.json",
+      "eventBytes": 2172,
+      "eventSha256": "2168aae3c084af2148a36e2ff2bc925c70750838cc864908ca7f78daf4926762",
+      "invocationId": "invocation-a9e6d313a419cd36ec34881b3dc4b8adaccfdd3bb6ec6ac2fc6965198d776970"
+    }
+  ]
+}

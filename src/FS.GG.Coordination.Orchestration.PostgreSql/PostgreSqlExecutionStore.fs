@@ -155,8 +155,16 @@ module PostgreSqlExecutionSchema =
             do! transaction.CommitAsync cancellationToken
         }
 
+type CommittedExecutionAdmission =
+    { Route: ExecutorRouteBinding
+      Admission: ExecutionCausalAdmission
+      AdmissionBytes: byte array
+      RouteBindingSha256: string
+      LaunchIntentSha256: string
+      Intent: LaunchIntent }
+
 type CommittedExecutionAdmissionPage =
-    { Admissions: (ExecutorRouteBinding * ExecutionCausalAdmission * LaunchIntent) list
+    { Admissions: CommittedExecutionAdmission list
       NextCursor: string option
       Truncated: bool
       Coverage: string }
@@ -989,7 +997,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                 add command (cursor |> Option.defaultValue "")
                 add command (maximum + 1)
                 use! row = command.ExecuteReaderAsync cancellationToken
-                let admissions = ResizeArray<ExecutorRouteBinding * ExecutionCausalAdmission * LaunchIntent>()
+                let admissions = ResizeArray<CommittedExecutionAdmission>()
                 let mutable nextCursor = None
                 let mutable count = 0
                 let mutable truncated = false
@@ -1007,7 +1015,7 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                             else
                                 let bytes = row.GetFieldValue<byte array> 0
                                 let eventBytes = row.GetFieldValue<byte array> 2
-                                match QualifiedExecutorWire.parseRoute bytes, SessionEventCodec.decode eventBytes with
+                                match QualifiedExecutorWire.parseRouteWithAdmissionBytes bytes, SessionEventCodec.decode eventBytes with
                                 | Ok(route, causal, digest), Ok(LaunchIntentRecorded intent) when
                                     digest = row.GetString(1) && sha eventBytes = row.GetString(3) && row.GetString(4) = SessionEventCodec.schema
                                     && route.AssignmentId = row.GetGuid(5) && route.AttemptId = row.GetGuid(6)
@@ -1015,7 +1023,10 @@ type PostgreSqlExecutionStore(options: StoreOptions) =
                                     && route.Generation = row.GetInt64(7) && route.Generation = intent.Key.Generation && route.PromptDigest = intent.InputDigest ->
                                     nextCursor <- Some(row.GetGuid(5).ToString("N") + ":" + row.GetGuid(6).ToString("N"))
                                     match causal with
-                                    | Some admission when admission.AdmittedAt = intent.RecordedAt -> admissions.Add((route, admission, intent))
+                                    | Some(admission, raw) when admission.AdmittedAt = intent.RecordedAt ->
+                                        admissions.Add
+                                            { Route = route; Admission = admission; AdmissionBytes = raw
+                                              RouteBindingSha256 = digest; LaunchIntentSha256 = row.GetString(3); Intent = intent }
                                     | Some _ -> failure <- Some "execution-causal-admission-intent-conflict"
                                     | None -> ()
                                 | _ -> failure <- Some "execution-admission-source-corrupt"

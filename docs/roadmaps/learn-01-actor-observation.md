@@ -43,3 +43,12 @@ Publication must bind exact qualified Host/runner artifacts and any changed tele
 Native usage requires authentic completed-turn counters, with requested, selected and observed model/effort kept separate. Missing usage, built-in collaboration coverage or descendant cleanup stays unknown. LEARN-01.4 activation, the current/focused experiment and later learning decisions retain their existing owners and prerequisites.
 
 The committed census reader binds decoded route and intent identities to the selected physical assignment/attempt keys and stored generation, then derives the page cursor from those verified keys. Cursor input must be the exact lowercase canonical UUID pair. Added controls cover a coherent foreign route/intent pair under existing physical keys, stored-generation mismatch and uppercase cursor refusal; these controls executed and passed in the final separately admitted fresh composition window.
+
+
+## Lossless declaration receiver join — C2 source candidate
+
+The receiver contract adds `execution-causal-admission/1` as a separate immutable observation. The existing admission projector and its batch bytes remain unchanged. The producer retains exact decoded admission bytes from the validated committed route, carries verified route and first-intent digests through the bounded census, and creates a distinct identity-based declaration batch. Reordered JSON properties and whitespace remain part of the retained bytes; parsed DTO reserialization cannot replace them.
+
+The existing bridge independently queues both required batches and counts one admission only when both obligations succeed. Partial queue failure, page truncation and applied receipts remain separate outcomes. The existing publisher, execution authority and runner observations are unchanged. The mirrored four-case contract manifest is synthetic source evidence; its route/intent references are inert examples. Real journal controls derive source hashes from actual stored bytes.
+
+C2 compilation and fixture execution are pending. C3 must pass genuinely emitted batches through the exact receiver artifact against an isolated source-test store, with separate process/resource admission. Compatible receiver publication and receiving-installation adoption precede new installed Host emission. This source candidate enables no experiment, installed receiver or retrospective accounting; waits and critical-path evaluation remain later work.

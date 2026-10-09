@@ -1040,6 +1040,17 @@ module QualifiedExecutorWire =
                       && joined binding.WorkItemPersistenceId binding.AssignmentId binding.AttemptId binding.Generation binding.ParentAttemptId binding.ParentGeneration binding.TelemetryRelation admission ->
                     Ok(binding, Some admission, value.BindingSha256)
                 | _ -> Error "qualified-executor-route-refused")
+    /// Retains the exact decoded admission bytes after the ordinary route validation succeeds.
+    let parseRouteWithAdmissionBytes (bytes: byte array) =
+        parseRoute bytes |> Result.bind (fun (binding, admission, digest) ->
+            match admission with
+            | None -> Ok(binding, None, digest)
+            | Some admission ->
+                decode<QualifiedExecutorRoute> bytes |> Result.bind (fun retained ->
+                    try
+                        let raw = Convert.FromBase64String retained.AdmissionBase64
+                        Ok(binding, Some(admission, raw), digest)
+                    with :? FormatException -> Error "qualified-executor-route-refused"))
     let parseCommand (bytes: byte array) =
         match ExecutorWire.parseCommandV2 bytes with
         | Ok value -> Ok(value, None, value.BodySha256)
