@@ -124,10 +124,10 @@ def verify_successor(text: str) -> None:
     assert len(blocks)==2
     code = "\n".join(line[10:] for line in blocks[0].splitlines())
     actual = json.loads((ROOT/'eng/callable-cli-successor-admission.json').read_text())
-    assert actual['enabled'] is False and actual['source'] is None
+    assert actual == {'schema': 'fsgg.coordination.cli-successor-admission/1', 'enabled': True, 'operation': 'publish-main-cli-030-20261009', 'version': '0.3.0', 'source': '8eef1ab7f205132553632e03dc650e7ecdd03679', 'tree': '583c70b4643b5c488d7410ef576806baf0ff8df3', 'protectedMerge': '8eef1ab7f205132553632e03dc650e7ecdd03679', 'runId': 37977490696, 'artifactId': 11638674063, 'archiveSha256': 'cdaef32fb1e14691e8a9d72fedde06fe9d199fed1ed074da5e7954cf422a8653', 'packageSha256': 'a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c', 'manifestSha256': '86468a295579982859b2a38d13d55c0da88b6d694f6e2bd01157287d9794235f'}
     good = dict(actual,enabled=True,operation='publish-main-cli-030-fixture',source='a'*40,tree='b'*40,protectedMerge='c'*40,runId=1,artifactId=2,archiveSha256='d'*64,packageSha256='e'*64,manifestSha256='f'*64)
     env=dict(OPERATION=good['operation'],REQUESTED_SOURCE=good['source'],REQUESTED_MERGE=good['protectedMerge'],REQUESTED_SHA256=good['packageSha256'],REQUESTED_PUBLISHER='1'*40)
-    cases=[actual,good,dict(good,runId=True),dict(good,source='0'*40),dict(good,packageSha256='wrong'),dict(good,operation='publish-v2-diag-01-4-cli-021'),dict(good,extra=True)]
+    cases=[actual,good,dict(good,enabled=False),dict(good,runId=True),dict(good,source='0'*40),dict(good,packageSha256='wrong'),dict(good,operation='publish-v2-diag-01-4-cli-021'),dict(good,extra=True)]
     with tempfile.TemporaryDirectory() as directory:
         output=Path(directory)/'env'
         for index,value in enumerate(cases):

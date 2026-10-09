@@ -1,14 +1,14 @@
 {
   "schema": "fsgg.coordination.cli-successor-admission/1",
-  "enabled": false,
-  "operation": null,
+  "enabled": true,
+  "operation": "publish-main-cli-030-20261009",
   "version": "0.3.0",
-  "source": null,
-  "tree": null,
-  "protectedMerge": null,
-  "runId": null,
-  "artifactId": null,
-  "archiveSha256": null,
-  "packageSha256": null,
-  "manifestSha256": null
+  "source": "8eef1ab7f205132553632e03dc650e7ecdd03679",
+  "tree": "583c70b4643b5c488d7410ef576806baf0ff8df3",
+  "protectedMerge": "8eef1ab7f205132553632e03dc650e7ecdd03679",
+  "runId": 37977490696,
+  "artifactId": 11638674063,
+  "archiveSha256": "cdaef32fb1e14691e8a9d72fedde06fe9d199fed1ed074da5e7954cf422a8653",
+  "packageSha256": "a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c",
+  "manifestSha256": "86468a295579982859b2a38d13d55c0da88b6d694f6e2bd01157287d9794235f"
 }
