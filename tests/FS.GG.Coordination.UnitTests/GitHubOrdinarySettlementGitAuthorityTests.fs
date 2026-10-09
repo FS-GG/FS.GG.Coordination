@@ -46,9 +46,9 @@ let private binding =
     { AppId = 9001L; InstallationId = 9002L; RepositoryIds = [ 1351660651L ]
       Permissions = Map [ "contents", "write"; "metadata", "read" ] }
 
-let private signed () =
+let private signedFor selectedPlan =
     let rsa = RSA.Create(2048)
-    let intent = OrdinaryPostMergeSettlement.canonicalIntent plan binding
+    let intent = OrdinaryPostMergeSettlement.canonicalIntent selectedPlan binding
     let digest = SHA256.HashData intent |> Convert.ToHexString |> _.ToLowerInvariant()
     let spki = rsa.ExportSubjectPublicKeyInfo() |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
     let anchor =
@@ -58,6 +58,8 @@ let private signed () =
         { KeyId = "synthetic"; PublicKeyPem = rsa.ExportSubjectPublicKeyInfoPem(); IntentSha256 = digest
           Signature = rsa.SignData(intent, HashAlgorithmName.SHA256, RSASignaturePadding.Pss) }
     rsa, anchor, authorization
+
+let private signed () = signedFor plan
 
 type private Transport() =
     let mutable state: (string * byte array) option = None
@@ -385,9 +387,11 @@ let ``main storage requires exact main protection and visible actors`` () =
 
 /// Local Git supplies actual objects, trees, parents, and atomic refs; the HTTP seam supplies only
 /// the GitHub wire envelope and pinned synthetic protection/epoch observations. No remote effects.
-type private LocalGitMainTransport() =
+type private LocalGitMainTransport(?legacyEpochAvailable: bool) =
     let directory = IO.Path.Combine(IO.Path.GetTempPath(), "ordinary-main-" + Guid.NewGuid().ToString("N"))
     let policy = GitHubAuthorityTransport(mainDirectory = true) :> IOrdinaryGitHubTransport
+    let legacyPolicy = GitHubAuthorityTransport() :> IOrdinaryGitHubTransport
+    let mutable legacyProtection = false
     let mutable raceNextPatch = false
     let mutable loseNextReply = false
     let mutable patches = 0
@@ -430,6 +434,8 @@ type private LocalGitMainTransport() =
         let eventBlob = git [ "hash-object"; "-w"; "--stdin" ] (Some event)
         let tree = git [ "mktree" ] (Some $"100644 blob {eventBlob}\tevent.json\n100644 blob {headBlob}\thead.json\n")
         epochHead <- git [ "commit-tree"; tree ] (Some "original immutable epoch")
+        if defaultArg legacyEpochAvailable false then
+            git [ "update-ref"; authorityOptions.EpochRef; epochHead ] None |> ignore
         IO.Directory.CreateDirectory(IO.Path.Combine(directory, "state/epoch")) |> ignore
         for path, bytes in [ "head.json", head; "event.json", event; "epoch-head.txt", epochHead + "\n" ] do
             IO.File.WriteAllText(IO.Path.Combine(directory, "state/epoch", path), bytes)
@@ -445,6 +451,7 @@ type private LocalGitMainTransport() =
         | 0, value, _ -> value
         | _, _, error -> failwith error
     member _.Patches = patches
+    member _.UseLegacyProtection with set value = legacyProtection <- value
     member _.RaceNextPatch with set value = raceNextPatch <- value
     member _.LoseNextReply with set value = loseNextReply <- value
     member _.RemoveMain() = git [ "update-ref"; "-d"; "refs/heads/main" ] None |> ignore
@@ -454,6 +461,20 @@ type private LocalGitMainTransport() =
             let tree = git [ "rev-parse"; current + "^{tree}" ] None
             let next = git [ "commit-tree"; tree; "-p"; current ] (Some $"unrelated main update {index}")
             git [ "update-ref"; "refs/heads/main"; next; current ] None |> ignore
+    member _.RetainLegacyDocument(observedAddress: AggregateAddress) =
+        let legacyHead = git [ "rev-parse"; observedAddress.Ref ] None
+        let document = $"ordinary-v2/{observedAddress.Digest}.json"
+        let blob = git [ "rev-parse"; legacyHead + ":" + document ] None
+        let main = git [ "rev-parse"; "refs/heads/main" ] None
+        git [ "read-tree"; main ] None |> ignore
+        git [ "update-index"; "--add"; "--cacheinfo"; "100644"; blob; "state/" + document ] None |> ignore
+        let tree = git [ "write-tree" ] None
+        let retained = git [ "commit-tree"; tree; "-p"; main; "-p"; legacyHead ] (Some "retain exact legacy document and history")
+        git [ "update-ref"; "refs/heads/main"; retained; main ] None |> ignore
+        git [ "merge-base"; "--is-ancestor"; legacyHead; retained ] None |> ignore
+        git [ "update-ref"; "-d"; observedAddress.Ref; legacyHead ] None |> ignore
+        legacyHead
+    member _.RetireLegacyEpoch() = git [ "update-ref"; "-d"; authorityOptions.EpochRef; epochHead ] None |> ignore
     interface IDisposable with
         member _.Dispose() = IO.Directory.Delete(directory, true)
     interface IOrdinaryGitHubTransport with
@@ -462,12 +483,13 @@ type private LocalGitMainTransport() =
             let path = Uri.UnescapeDataString rest.Uri.AbsolutePath
             let body () = JsonDocument.Parse rest.Body.Value
             match rest.Method with
-            | Get when path.Contains("/git/ref/heads/fsgg/v2/journal/cutover/") -> failwith "legacy epoch ref retired in this fixture"
-            | Get when path.EndsWith("/git/ref/heads/main") ->
-                match run [ "rev-parse"; "--verify"; "refs/heads/main" ] None with
+            | Get when path.Contains("/git/ref/heads/fsgg/v2/journal/cutover/") && not (defaultArg legacyEpochAvailable false) -> failwith "legacy epoch ref retired in this fixture"
+            | Get when path.Contains("/git/ref/") ->
+                let reference = "refs/" + path.Substring(path.IndexOf("/git/ref/", StringComparison.Ordinal) + 9)
+                match run [ "rev-parse"; "--verify"; reference ] None with
                 | 0, value, _ -> refResponse 200 (value.Trim())
                 | _ -> githubResponse 404 "{}"
-            | Get when path.Contains("/contents/state/") ->
+            | Get when path.Contains("/contents/") ->
                 let file = path.Substring(path.IndexOf("/contents/", StringComparison.Ordinal) + 10)
                 let revision = Uri.UnescapeDataString(rest.Uri.Query.Substring(5))
                 match run [ "show"; revision + ":" + file ] None with
@@ -490,7 +512,10 @@ type private LocalGitMainTransport() =
             | Post when path.EndsWith("/git/trees") ->
                 use document = body ()
                 let root = document.RootElement
-                git [ "read-tree"; root.GetProperty("base_tree").GetString() ] None |> ignore
+                let mutable baseTree = Unchecked.defaultof<JsonElement>
+                if root.TryGetProperty("base_tree", &baseTree) then
+                    git [ "read-tree"; baseTree.GetString() ] None |> ignore
+                else git [ "read-tree"; "--empty" ] None |> ignore
                 for entry in root.GetProperty("tree").EnumerateArray() do
                     git [ "update-index"; "--add"; "--cacheinfo"; entry.GetProperty("mode").GetString()
                           entry.GetProperty("sha").GetString(); entry.GetProperty("path").GetString() ] None |> ignore
@@ -504,27 +529,35 @@ type private LocalGitMainTransport() =
                 let arguments = [ "commit-tree"; tree ] @ (parents |> List.collect (fun parent -> [ "-p"; parent ]))
                 let revision = git arguments (Some(root.GetProperty("message").GetString()))
                 githubResponse 201 (JsonSerializer.Serialize {| sha = revision; tree = {| sha = tree |}; parents = parents |> List.map (fun parent -> {| sha = parent |}) |})
-            | Patch when path.EndsWith("/git/refs/heads/main") ->
+            | Post when path.EndsWith("/git/refs") ->
+                use document = body ()
+                let proposed = document.RootElement.GetProperty("sha").GetString()
+                let reference = document.RootElement.GetProperty("ref").GetString()
+                match run [ "update-ref"; reference; proposed; String.replicate 40 "0" ] None with
+                | 0, _, _ -> patches <- patches + 1; refResponse 201 proposed
+                | _ -> githubResponse 422 "{}"
+            | Patch when path.Contains("/git/refs/") ->
                 use document = body ()
                 Assert.False(document.RootElement.GetProperty("force").GetBoolean())
                 let proposed = document.RootElement.GetProperty("sha").GetString()
-                let before = git [ "rev-parse"; "refs/heads/main" ] None
+                let reference = "refs/" + path.Substring(path.IndexOf("/git/refs/", StringComparison.Ordinal) + 10)
+                let before = git [ "rev-parse"; reference ] None
                 if raceNextPatch then
                     raceNextPatch <- false
                     let tree = git [ "rev-parse"; before + "^{tree}" ] None
                     let sibling = git [ "commit-tree"; tree; "-p"; before ] (Some "competing main writer")
-                    git [ "update-ref"; "refs/heads/main"; sibling; before ] None |> ignore
-                let current = git [ "rev-parse"; "refs/heads/main" ] None
+                    git [ "update-ref"; reference; sibling; before ] None |> ignore
+                let current = git [ "rev-parse"; reference ] None
                 match run [ "merge-base"; "--is-ancestor"; current; proposed ] None with
                 | 0, _, _ ->
-                    match run [ "update-ref"; "refs/heads/main"; proposed; current ] None with
+                    match run [ "update-ref"; reference; proposed; current ] None with
                     | 0, _, _ ->
                         patches <- patches + 1
                         if loseNextReply then loseNextReply <- false; NetworkFailure
                         else refResponse 200 proposed
                     | _ -> githubResponse 422 "{}"
                 | _ -> githubResponse 422 "{}"
-            | _ -> policy.Send request
+            | _ -> if legacyProtection then legacyPolicy.Send request else policy.Send request
 
 [<Fact>]
 let ``main storage completes and replays real local Git settlement preserving unrelated state`` () =
@@ -641,3 +674,60 @@ let ``closed main epoch refuses changed pointer content missing ancestry and mov
                         githubResponse 200 (JsonSerializer.Serialize {| ``object`` = {| ``type`` = "commit"; sha = sha "b" |} |})
                     else baseWire.Send request }
         Assert.True(OrdinarySettlementGitHubAuthority.readMainEpochSnapshot mainOptions wire |> Result.isError, mode)
+
+[<Fact>]
+let ``legacy transport state imports exactly then main replay preserves completed and unresolved outcomes`` () =
+    use wire = new LocalGitMainTransport(legacyEpochAvailable = true)
+    wire.UseLegacyProtection <- true
+    let legacyOptions = { authorityOptions with ExpectedEpochCommit = wire.EpochHead }
+    let legacyTransport = OrdinarySettlementGitHubAuthority.Transport(legacyOptions, wire) :> IOrdinarySettlementGitAuthorityTransport
+    let legacyRuntime = OrdinarySettlementGitAuthority.Runtime(binding.AppId, legacyTransport) :> IOrdinaryPostMergeSettlementRuntime
+    let rsa, anchor, authorization = signed ()
+    use _key = rsa
+    let receipt =
+        match OrdinaryPostMergeSettlement.execute plan binding anchor authorization SettlementNoCut legacyRuntime with
+        | Ok(SettlementSucceeded value) -> value
+        | value -> failwithf "unexpected original result: %A" value
+    let pendingAddress =
+        Seq.initInfinite (fun index -> ShardedJournalAdapter.address Operation $"ordinary:101:PR_pending_{index}")
+        |> Seq.choose Result.toOption |> Seq.find (fun value -> value.Ref <> address.Ref)
+    let pendingId = "ordinary-settlement:" + String.replicate 64 "2"
+    let pendingPlan = { plan with OperationId = pendingId; AttemptId = pendingId + ":attempt:1"; JournalAddress = pendingAddress }
+    let pendingKey, pendingAnchor, pendingAuthorization = signedFor pendingPlan
+    use _pendingKey = pendingKey
+    let unknownRuntime =
+        { new IOrdinaryPostMergeSettlementRuntime with
+            member _.ReadShard selected = legacyRuntime.ReadShard selected
+            member _.CompareExchangeShard(expected, proposed) = legacyRuntime.CompareExchangeShard(expected, proposed)
+            member _.ObserveEffect _ = Ok SettlementEffectUnknown
+            member _.ApplyEffect(_, _) = failwith "unresolved original effect must not be retried"
+            member _.ReadBack selected = legacyRuntime.ReadBack selected }
+    Assert.Equal(Ok(SettlementPending "effect-observation-unknown"),
+                 OrdinaryPostMergeSettlement.execute pendingPlan binding pendingAnchor pendingAuthorization SettlementNoCut unknownRuntime)
+    let bytesAt transport selected =
+        match (transport: IOrdinarySettlementGitAuthorityTransport).ReadDocument selected with
+        | SettlementDocumentPresent(_, bytes) -> bytes
+        | value -> failwithf "missing document: %A" value
+    let completedBytes = bytesAt legacyTransport address
+    let unresolvedBytes = bytesAt legacyTransport pendingAddress
+    let originalEffects = wire.Patches
+    wire.RetainLegacyDocument address |> ignore
+    wire.RetainLegacyDocument pendingAddress |> ignore
+    wire.RetireLegacyEpoch()
+    Assert.Equal(originalEffects, wire.Patches)
+    wire.UseLegacyProtection <- false
+    let main = OrdinarySettlementGitHubAuthority.Transport(
+                    { mainOptions with ExpectedEpochCommit = wire.EpochHead }, wire, OrdinarySettlementGitStorage.MainDirectory)
+               :> IOrdinarySettlementGitAuthorityTransport
+    Assert.Equal<byte>(completedBytes, bytesAt main address)
+    Assert.Equal<byte>(unresolvedBytes, bytesAt main pendingAddress)
+    let runtime = OrdinarySettlementGitAuthority.Runtime(binding.AppId, main) :> IOrdinaryPostMergeSettlementRuntime
+    Assert.Equal(Ok(SettlementAlreadyComplete receipt),
+                 OrdinaryPostMergeSettlement.execute plan binding anchor authorization SettlementNoCut runtime)
+    Assert.Equal(originalEffects, wire.Patches)
+    let unresolved = OrdinarySettlementAuthorityDocument.decode pendingAddress None (ReadOnlyMemory(bytesAt main pendingAddress)) |> Result.defaultWith failwith
+    Assert.Equal(SettlementIntentPersisted, unresolved.Entries[pendingId].Stage)
+    Assert.Equal(None, unresolved.Entries[pendingId].ReceiptDigest)
+    Assert.True(unresolved.Effects.IsEmpty)
+    // Import only preserves bytes/history. No execution/reconciliation was attempted for the pending operation.
+    Assert.Equal(originalEffects, wire.Patches)
