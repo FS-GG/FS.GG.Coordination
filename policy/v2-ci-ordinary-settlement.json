@@ -10,9 +10,9 @@
     "repositoryId": 1346720714
   },
   "sourceImplementation": {
-    "repository": "FS-GG/FS.GG.Game",
-    "adaptation": "coordination-v1-ruleset-aware-installed-receiver",
-    "commit": "6e2558d811037104b0984d17e19a05dfe5a38421",
+    "repository": "FS-GG/FS.GG.Coordination",
+    "adaptation": "coordination-v1-ruleset-aware-installed-receiver; main-storage extension with local profile preserved",
+    "commit": "8eef1ab7f205132553632e03dc650e7ecdd03679",
     "observerSha256": "e1906dfadee5f31263db569e91879506c5bc2a4b87483d0947fefc82903703c3",
     "qualificationSha256": "3880dd6e9bf8b0919a63a7503dbe45d96123699624647826fd38eb1e7ed7bc65"
   },
@@ -135,18 +135,14 @@
   },
   "packagePin": {
     "status": "published-verified",
-    "version": "0.1.7",
-    "sha256": "f0506cbd3bd8429d86cfcbdf5eb8c85f5cd229961cdc528014d712e3185c8c5c",
+    "version": "0.3.0",
+    "sha256": "a8cd6d602e1203257e1241df0b5dfdb9d867334b46dc406d8cdaa8e6d2b3019c",
+    "sourceCommit": "8eef1ab7f205132553632e03dc650e7ecdd03679",
     "servedPackageVerified": true,
-    "sourceCommit": "fdfdcfc91e65f814b42d8c9e061fec0e6221a139",
-    "releaseTag": "v0.1.7",
-    "publisherRunId": 36473720547,
+    "requiredBeforeActivation": true,
     "requiredCapability": "coordination-v1 selected source",
-    "tagProtectionRulesetId": 21633398,
-    "githubReleaseImmutableFlag": false,
-    "githubPackagesReadback": "successful-protected-publisher",
-    "nugetOrgReadback": "independent-anonymous-payload-and-install",
-    "requiredBeforeActivation": true
+    "publisherRunId": 37983508705,
+    "releaseTag": "v0.3.0"
   },
   "credentialInventory": [
     {
