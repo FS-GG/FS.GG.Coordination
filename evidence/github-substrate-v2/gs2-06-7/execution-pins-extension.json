@@ -228,17 +228,6 @@
     },
     {
       "kind": "workflow",
-      "path": ".github/workflows/fourd-public-provider-qualification.yml",
-      "sha256": "03e2c515ca58c045892135c2dc53fa8826fb2c0489af68ff49bd9a53dfc59d80",
-      "externalReferences": [
-        "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
-        "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
-      ],
-      "localReferences": []
-    },
-    {
-      "kind": "workflow",
       "path": ".github/workflows/telemetry-host-manager-bundle.yml",
       "sha256": "77f00b9016ce2e91fcafae196af1f0f9f73dffde313c2db93fc17fa36e8bfe4e",
       "externalReferences": [
