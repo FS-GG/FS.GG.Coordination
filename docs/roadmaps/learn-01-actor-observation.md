@@ -1,6 +1,6 @@
 # LEARN-01.2 — Actor-owned admission and native observation
 
-Status: A1–A3 source implementation prepared; production composition and exact-head hosted qualification pending. LEARN-01.2 and installed acceptance LEARN-01.4 remain open. Source, publication, installed adoption, native usage coverage and process cleanup are separate outcomes.
+Status: A1–A3 local source composition qualified at `8a2ad031f899f7e345e373dcacbef8943eeb748b`; exact-head hosted qualification and protected integration pending. LEARN-01.2 and installed acceptance LEARN-01.4 remain open. Source, publication, installed adoption, native usage coverage and process cleanup are separate outcomes.
 
 This window follows [.github LEARN §1.1](https://github.com/FS-GG/.github/blob/d01650c9/docs/roadmaps/2026-09-12-095059-stable-policy-orchestration-and-statistical-learning.md#11-telemetry-acceptance-at-actor-owned-dispatch--2026-10-09). The [executor observation](learn-01-executor-observation.md), [context shadow](learn-01-context-shadow.md) and [installed window](learn-01-installed-window.md) retain their existing accepted work. O0–O3 and LEARN-01.3 are not reopened.
 
@@ -26,9 +26,11 @@ The committed census caps pages at 64 rows, validates canonical cursor form and 
 
 ## Qualification
 
-Focused compilation covers the Protocol, Host, Runner and PostgreSQL test consumers. Five in-memory admission controls cover declared lineage/refusal, deterministic projection, actual Host preparer ordering and immutable outbox recovery. A pure runner control verifies exact historical admission bytes and native event identity joins.
+Focused committed-source Release compilation passed with zero warnings or errors across Protocol, Host, Runner and PostgreSQL test consumers. Five in-memory admission controls passed and cover declared lineage/refusal, deterministic projection, actual Host preparer ordering and immutable outbox recovery. A pure runner control passed and verifies exact historical admission bytes and native event identity joins.
 
 The existing production Main composition theory has both historical and qualified cases. It crosses the real Host actor, PostgreSQL journal, remote provider, authenticated relay, packaged runner and local synthetic provider. Its transport interrupts the runner and loses a recovered response to exercise durable reconciliation across seven native effects. The qualified case also checks staged-route exclusion, independent restart replay, bounded pagination, invalid cursor/page refusal, existing payload size constraints and corrupt-route refusal/restoration before the production path proceeds.
+
+The two production theory cases passed in 51 seconds against a fresh disposable PostgreSQL cluster at the qualified source commit. The wrapper separately confirmed both case identities, no surviving owned descendants and removal of the private socket. The first run’s two timeout failures remain part of qualification history. The fixture’s four phase waits now use fixed monotonic deadlines of 45/30/30/45 seconds, sharing a 150-second case ceiling within a 360-second aggregate wrapper window. This allows the existing 15-second production reconciliation backoff; production pacing and checkpoint predicates are unchanged. Failure diagnostics retain only the selected fixture journal’s control/operation tags and synthetic effect counts.
 
 Actual PostgreSQL/process execution requires a fresh disposable cluster, isolated sockets and independently owned child cleanup. Synthetic providers and loopback fixtures do not establish installed provider acceptance. Required hosted checks, semantic/formal selection, coherent validation and exact-source integration remain mandatory; local test success does not waive them. No authority, retry, budget state transition, canonical Quint model, process supervision, authentication or custody change is selected here.
 
