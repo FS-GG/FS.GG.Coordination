@@ -380,7 +380,7 @@ type PostgreSqlStoreTests() =
             if not (String.IsNullOrWhiteSpace export) then
                 Assert.Equal(4, sourceFiles.Count)
                 Assert.Equal(8, batches.Count)
-                let revision = typeof<ExecutionTelemetryAdmissionBridge>.Assembly.GetCustomAttributes(typeof<System.Reflection.AssemblyMetadataAttribute>, false)
+                let revision = typeof<TelemetryAdmissionBridge>.Assembly.GetCustomAttributes(typeof<System.Reflection.AssemblyMetadataAttribute>, false)
                                |> Seq.cast<System.Reflection.AssemblyMetadataAttribute>
                                |> Seq.filter (fun attribute -> attribute.Key = "FsggSourceRevision")
                                |> Seq.exactlyOne
