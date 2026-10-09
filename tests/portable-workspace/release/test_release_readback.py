@@ -66,6 +66,18 @@ def main() -> None:
             refused=subprocess.run([*cli,*extra],capture_output=True)
             assert refused.returncode==2
         assert subprocess.run([*command,'--cli-only'],capture_output=True).returncode==2
+        original=work/'original-publication.json'
+        retained=dict(publisherSource='b'*40,runId=37979658494,runAttempt=1,jobId=113986647717,observationArtifactId=11640567029,observationArchiveSha256='c'*64,conclusion='failure',publicReadback='unresolved-after-404')
+        write(original,retained)
+        subprocess.run([*cli,'--original-publication',str(original)],check=True)
+        recovered=json.loads(output.read_bytes())
+        assert recovered['publisherSource']=='a'*40 and recovered['originalPublication']==retained
+        assert recovered['originalPublication']['conclusion']=='failure'
+        for change in [dict(runAttempt=2),dict(conclusion='success'),dict(publicReadback='success'),dict(runId=True),dict(extra=True)]:
+            write(original,{**retained,**change})
+            assert subprocess.run([*cli,'--original-publication',str(original)],capture_output=True).returncode==2
+        original.unlink()
+        assert subprocess.run([*cli,'--original-publication',str(original)],capture_output=True).returncode==2
         github.unlink()
         absent_feed = subprocess.run([*command, "--existing", str(exact)], text=True, capture_output=True)
         assert absent_feed.returncode == 2
