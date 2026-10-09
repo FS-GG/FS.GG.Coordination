@@ -2810,6 +2810,10 @@ type PostgreSqlStoreTests() =
     [<InlineData(true)>]
     member _.``production Main composes PostgreSQL packaged executor and seven native effects``(causalRoute: bool) =
         task {
+            // Production can deliberately back off for 15s after external uncertainty.
+            // Phase deadlines never renew; each case also has one 150s monotonic ceiling.
+            let fixtureClock = Stopwatch.StartNew()
+            let phaseDeadline (seconds: float) = min (fixtureClock.Elapsed + TimeSpan.FromSeconds seconds) (TimeSpan.FromSeconds 150.)
             let! dataSource, identity = Fixture.reset ()
             use dataSource = dataSource
 
@@ -3273,6 +3277,46 @@ type PostgreSqlStoreTests() =
             let mutable checksReleased = false
             use firstShutdown = new CancellationTokenSource()
 
+            let checkpointFailure phase =
+                task {
+                    let! recovered = HostedWriterJournal.recover workItems workItem CancellationToken.None
+                    let sourceState =
+                        recovered |> Result.map (fun value ->
+                            let control =
+                                match value.State.Control with
+                                | ControlState.Running -> "running"
+                                | ControlState.Paused _ -> "paused"
+                                | ControlState.CancelPending _ -> "cancel-pending"
+                                | ControlState.Cancelled _ -> "cancelled"
+                                | ControlState.Revoked _ -> "revoked"
+                            let operations =
+                                value.State.Operations |> Map.toList |> List.map (fun (id, operation) ->
+                                    let intent, status, code =
+                                        match operation with
+                                        | OperationState.IntentRecorded intent -> intent, "intent", ""
+                                        | OperationState.Dispatching intent -> intent, "dispatching", ""
+                                        | OperationState.NeedsObservation(intent, reason) -> intent, "needs-observation", reason.Split(':')[0]
+                                        | OperationState.Settled(intent, EffectOutcome.Applied _) -> intent, "settled-applied", ""
+                                        | OperationState.Settled(intent, EffectOutcome.ProvenAbsent) -> intent, "settled-absent", ""
+                                        | OperationState.Settled(intent, EffectOutcome.Refused reason) -> intent, "settled-refused", reason.Split(':')[0]
+                                        | OperationState.Settled(intent, EffectOutcome.Unknown reason) -> intent, "settled-unknown", reason.Split(':')[0]
+                                    {| operation = string (Id.operationValue id); kind = string intent.Kind; status = status
+                                       code = if code.Length > 128 then code[..127] else code |})
+                            {| revision = Id.revisionValue value.State.Revision; generation = Id.generationValue value.State.Generation
+                               control = control; operations = operations |})
+                    let detail =
+                        JsonSerializer.Serialize
+                            {| phase = phase; causalRoute = causalRoute; elapsedSeconds = fixtureClock.Elapsed.TotalSeconds
+                               journalReadable = Result.isOk recovered
+                               journal = sourceState |> Result.map (fun value -> JsonSerializer.Serialize value) |> Result.defaultValue "unavailable"
+                               pullCreated = pullCreated; pullCreateCount = pullCreateCount; mutationCount = mutationCount
+                               mergePutCount = mergePutCount; checkReads = checkReads; checksReleased = checksReleased |}
+                    let path = Path.Combine(root, phase + "-failure.json")
+                    File.WriteAllText(path, detail)
+                    File.SetUnixFileMode(path, UnixFileMode.UserRead ||| UnixFileMode.UserWrite)
+                    return detail
+                }
+
             let jsonResponse status body =
                 Response
                     {
@@ -3655,9 +3699,9 @@ finally:
 
             Assert.Contains("main-route-admission-receipt/1", admissionDetail)
             let mutable settlementVisible = false
-            let mutable settlementChecks = 0
+            let settlementDeadline = phaseDeadline 45.
 
-            while not settlementVisible && settlementChecks < 50 do
+            while not settlementVisible && fixtureClock.Elapsed < settlementDeadline do
                 do! Task.Delay 100
 
                 let! recovered =
@@ -3675,9 +3719,10 @@ finally:
                             | Some(OperationState.NeedsObservation _), None -> true
                             | _ -> false))
 
-                settlementChecks <- settlementChecks + 1
 
-            Assert.True(settlementVisible, "PR mutation was not exposed before its durable receipt")
+            if not settlementVisible then
+                let! detail = checkpointFailure "mutation-before-receipt"
+                Assert.True(settlementVisible, "PR mutation was not exposed before its durable receipt; " + detail)
             let transportStartsBeforeRestart = Int32.Parse(File.ReadAllText proxyState)
             let mutationsBeforeRestart = mutationCount
             Assert.True(pullCreated)
@@ -3862,9 +3907,9 @@ finally:
             Assert.Equal(HttpStatusCode.OK, displacedRecovery.StatusCode)
             Assert.True(admission.Running.IsSome, "displaced claim did not retain observation-only recovery")
             let mutable exposedObserved = false
-            let mutable exposedChecks = 0
+            let exposedDeadline = phaseDeadline 30.
 
-            while not exposedObserved && exposedChecks < 50 do
+            while not exposedObserved && fixtureClock.Elapsed < exposedDeadline do
                 do! Task.Delay 50
 
                 let! recovered =
@@ -3878,9 +3923,10 @@ finally:
                             | OperationState.Settled _ -> true
                             | _ -> false))
 
-                exposedChecks <- exposedChecks + 1
 
-            Assert.True(exposedObserved, "claim-lost observation-only graph did not reconcile the exposed PR")
+            if not exposedObserved then
+                let! detail = checkpointFailure "claim-lost-observation"
+                Assert.True(exposedObserved, "claim-lost observation-only graph did not reconcile the exposed PR; " + detail)
             Assert.Equal(mutationsBeforeRestart, mutationCount)
 
             claimBody <- Some originalClaim
@@ -4044,13 +4090,14 @@ finally:
                     return response.StatusCode, JsonDocument.Parse(ReadOnlyMemory body)
                 }
 
-            let mutable preflightWaits = 0
+            let preflightDeadline = phaseDeadline 30.
 
-            while checkReads = 0 && preflightWaits < 100 do
+            while checkReads = 0 && fixtureClock.Elapsed < preflightDeadline do
                 do! Task.Delay 50
-                preflightWaits <- preflightWaits + 1
 
-            Assert.True(checkReads > 0, "merge preflight did not reach the pending native check")
+            if checkReads = 0 then
+                let! detail = checkpointFailure "merge-preflight"
+                Assert.True(checkReads > 0, "merge preflight did not reach the pending native check; " + detail)
             let! readyCode, readyStatus = getMainStatus ()
             use readyStatus = readyStatus
             Assert.Equal(HttpStatusCode.OK, readyCode)
@@ -4093,10 +4140,10 @@ finally:
             use resumeReceipt = resumeReceipt
             Assert.Equal(HttpStatusCode.OK, resumeCode)
             let mutable complete = false
-            let mutable checks = 0
+            let completionDeadline = phaseDeadline 45.
             let mutable routeState = "not-read"
 
-            while not complete && checks < 400 do
+            while not complete && fixtureClock.Elapsed < completionDeadline do
                 do! Task.Delay 100
 
                 let! recovered =
@@ -4122,7 +4169,6 @@ finally:
                         |> Map.tryFind route.AttemptId
                         |> Option.exists (fun item -> item.Status = AttemptStatus.Completed))
 
-                checks <- checks + 1
 
             let! executionState =
                 (executions :> IExecutionSessionJournal).ReadAttempt(assignment, attempt, CancellationToken.None)
@@ -4140,6 +4186,10 @@ finally:
                     File.ReadAllText proxyState
                 else
                     "0"
+
+            if not complete then
+                let! _ = checkpointFailure "native-delivery"
+                ()
 
             Assert.True(
                 complete,
