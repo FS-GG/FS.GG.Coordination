@@ -61,13 +61,13 @@ module TelemetryJournalRecovery =
             string command.Generation
         )
 
-    let requeue stateRoot (command: ExecutorCommandV2) (publisher: TelemetryCliPublisher) =
+    let requeueCausal stateRoot (command: ExecutorCommandV2) causal (publisher: TelemetryCliPublisher) =
         let directory = evidenceDirectory stateRoot command
 
         if not (Directory.Exists directory) then
             []
         else
-            let context = TelemetryFactBatches.rootInvocation command
+            let context = TelemetryFactBatches.invocationFor command causal
             let files = Directory.GetFiles(directory, "*.json") |> Array.sort
             let errors = ResizeArray<string>()
 
@@ -144,3 +144,5 @@ module TelemetryJournalRecovery =
                     errors.Add "telemetry-journal-replay-failed"
 
             errors |> Seq.toList
+
+    let requeue stateRoot command publisher = requeueCausal stateRoot command None publisher

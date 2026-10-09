@@ -214,9 +214,9 @@ module Fixture =
             member _.BindRoute(bytes, _) =
                 writes <- writes + 1
 
-                match ExecutorWire.parseRouteBinding bytes with
+                match QualifiedExecutorWire.parseRoute bytes with
                 | Error reason -> Task.FromResult(Error reason)
-                | Ok binding ->
+                | Ok(binding, _, digest) ->
                     let key = binding.AssignmentId, binding.AttemptId
 
                     match routes.TryGetValue key with
@@ -224,7 +224,7 @@ module Fixture =
                         Task.FromResult(Error "route-conflict")
                     | _ ->
                         routes[key] <- bytes
-                        Task.FromResult(Ok binding.BindingSha256)
+                        Task.FromResult(Ok digest)
 
             member _.ReadRoute(assignment, attempt, _) =
                 match routes.TryGetValue((assignment, attempt)) with

@@ -26,6 +26,7 @@
     <Compile Include="HostExecutorRelay.fs" />
     <Compile Include="GitHubRouteClient.fs" />
     <Compile Include="TelemetryOutcomeBridge.fs" />
+    <Compile Include="TelemetryAdmissionBridge.fs" />
     <Compile Include="MainEffectDriver.fs" />
     <Compile Include="MainRouteAdmission.fs" />
     <Compile Include="MainTerminalEvidence.fs" />

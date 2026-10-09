@@ -48,6 +48,16 @@ module TelemetryFactBatches =
             else command.LearningOriginalItemId
         invocation itemId (command.AttemptId.ToString("N")) command.Generation
 
+    let invocationFor (command: ExecutorCommandV2) (causal: ExecutionCausalAdmission option) =
+        match causal with
+        | None -> rootInvocation command
+        | Some admission ->
+            { ItemId = admission.OriginalItemId
+              AttemptId = admission.AttemptId.ToString("N") + "-g" + string admission.Generation
+              ActivationId = ExecutionAdmissionFacts.activationId admission.OriginalItemId
+              DispatchId = ExecutionAdmissionFacts.dispatchId admission.OriginalItemId admission.AttemptId admission.Generation
+              InvocationId = admission.InvocationId }
+
     let private optional (event: JsonObject) (key: string) (value: string option) =
         event[key] <-
             match value with

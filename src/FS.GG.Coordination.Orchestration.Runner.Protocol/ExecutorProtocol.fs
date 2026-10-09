@@ -975,3 +975,91 @@ module ExecutorWire =
                 Ok value
             else
                 Error "executor-response-refused")
+
+/// New closed envelopes preserve the constructors and bytes of the historical DTOs.
+[<CLIMutable>]
+type QualifiedExecutorRoute =
+    { Schema: string
+      BindingSha256: string
+      Binding: ExecutorRouteBinding
+      AdmissionBase64: string }
+
+[<CLIMutable>]
+type QualifiedExecutorCommand =
+    { Schema: string
+      BodySha256: string
+      Command: ExecutorCommandV2
+      AdmissionBase64: string }
+
+[<RequireQualifiedAccess>]
+module QualifiedExecutorWire =
+    let routeSchema = "fsgg.orchestration.executor-route-binding/3"
+    let commandSchema = "fsgg.orchestration.executor-command/5"
+    let private options = System.Text.Json.JsonSerializerOptions(PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase,
+                                                                UnmappedMemberHandling = System.Text.Json.Serialization.JsonUnmappedMemberHandling.Disallow,
+                                                                MaxDepth = 12)
+    let private encode<'T> (value: 'T) = System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(value, options)
+    let private decode<'T> (bytes: byte array) =
+        if isNull bytes || bytes.Length = 0 || bytes.Length > ExecutorWire.maximumControlBytes then Error "qualified-executor-control-size-refused"
+        else
+            try
+                use doc = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory bytes)
+                let rec unique (value: System.Text.Json.JsonElement) =
+                    match value.ValueKind with
+                    | System.Text.Json.JsonValueKind.Object ->
+                        let properties = value.EnumerateObject() |> Seq.toArray
+                        (properties |> Array.map _.Name |> Array.distinct |> Array.length) = properties.Length
+                        && (properties |> Array.forall (fun property -> unique property.Value))
+                    | System.Text.Json.JsonValueKind.Array -> value.EnumerateArray() |> Seq.forall unique
+                    | _ -> true
+                if doc.RootElement.ValueKind = System.Text.Json.JsonValueKind.Object && unique doc.RootElement then Ok(System.Text.Json.JsonSerializer.Deserialize<'T>(bytes, options))
+                else Error "qualified-executor-duplicate-property"
+            with :? System.Text.Json.JsonException -> Error "qualified-executor-json-refused"
+    let private joined memberId assignment attempt generation parentAttempt parentGeneration relation (admission: ExecutionCausalAdmission) =
+        admission.MemberItemId = memberId && admission.AssignmentId = assignment
+        && admission.AttemptId = attempt && admission.Generation = generation
+        && (if (parentAttempt: Nullable<Guid>).HasValue then
+                (parentGeneration: Nullable<int64>).HasValue
+                && admission.Relation = relation
+                && admission.ParentInvocationId = ExecutionCausalAdmission.invocationId admission.OriginalItemId parentAttempt.Value parentGeneration.Value
+            else admission.Relation = "root" && isNull admission.ParentInvocationId)
+    let routeDigest (value: QualifiedExecutorRoute) = encode { value with BindingSha256 = "" } |> RunnerWire.sha256
+    let commandDigest (value: QualifiedExecutorCommand) = encode { value with BodySha256 = "" } |> RunnerWire.sha256
+    let encodeRoute = encode<QualifiedExecutorRoute>
+    let encodeCommand = encode<QualifiedExecutorCommand>
+    let parseRoute (bytes: byte array) =
+        match ExecutorWire.parseRouteBinding bytes with
+        | Ok value -> Ok(value, None, value.BindingSha256)
+        | Error _ ->
+            decode<QualifiedExecutorRoute> bytes |> Result.bind (fun value ->
+                if isNull (box value.Binding) then Error "qualified-executor-route-missing"
+                else
+                match ExecutorWire.encodeRouteBinding value.Binding |> ExecutorWire.parseRouteBinding,
+                      ExecutionCausalAdmission.fromBase64 value.AdmissionBase64 with
+                | Ok binding, Ok admission when value.Schema = routeSchema && routeDigest value = value.BindingSha256
+                      && joined binding.WorkItemPersistenceId binding.AssignmentId binding.AttemptId binding.Generation binding.ParentAttemptId binding.ParentGeneration binding.TelemetryRelation admission ->
+                    Ok(binding, Some admission, value.BindingSha256)
+                | _ -> Error "qualified-executor-route-refused")
+    let parseCommand (bytes: byte array) =
+        match ExecutorWire.parseCommandV2 bytes with
+        | Ok value -> Ok(value, None, value.BodySha256)
+        | Error _ ->
+            decode<QualifiedExecutorCommand> bytes |> Result.bind (fun value ->
+                if isNull (box value.Command) then Error "qualified-executor-command-missing"
+                else
+                match ExecutorWire.encodeCommandV2 value.Command |> ExecutorWire.parseCommandV2,
+                      ExecutionCausalAdmission.fromBase64 value.AdmissionBase64 with
+                | Ok command, Ok admission when value.Schema = commandSchema && commandDigest value = value.BodySha256
+                      && joined command.WorkItemPersistenceId command.AssignmentId command.AttemptId command.Generation command.ParentAttemptId command.ParentGeneration command.TelemetryRelation admission
+                      && command.RecordedAt = admission.AdmittedAt
+                      && (isNull command.LearningOriginalItemId || command.LearningOriginalItemId = admission.OriginalItemId) ->
+                    Ok(command, Some admission, value.BodySha256)
+                | _ -> Error "qualified-executor-command-refused")
+    let wrapRoute binding admission =
+        let value = { Schema = routeSchema; BindingSha256 = ""; Binding = binding; AdmissionBase64 = ExecutionCausalAdmission.encode admission |> Convert.ToBase64String }
+        let bytes = encodeRoute { value with BindingSha256 = routeDigest value }
+        parseRoute bytes |> Result.map (fun _ -> bytes)
+    let wrapCommand command admission =
+        let value = { Schema = commandSchema; BodySha256 = ""; Command = command; AdmissionBase64 = ExecutionCausalAdmission.encode admission |> Convert.ToBase64String }
+        let bytes = encodeCommand { value with BodySha256 = commandDigest value }
+        parseCommand bytes |> Result.map (fun _ -> bytes)

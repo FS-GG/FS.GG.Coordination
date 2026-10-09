@@ -352,6 +352,18 @@ let main arguments =
                         outcomeBridge
                         |> Option.map (fun bridge -> bridge.DrainUntilCancelled shutdown.Token)
 
+                    let admissionBridge =
+                        localConfiguration.Telemetry
+                        |> Option.map (fun telemetry ->
+                            let publisher = TelemetryCliPublisher
+                                                { Executable = telemetry.Executable; Config = telemetry.Config
+                                                  CredentialFile = telemetry.CredentialFile
+                                                  CertificateAuthorityFile = telemetry.CertificateAuthorityFile
+                                                  Outbox = Path.Combine(Path.GetDirectoryName telemetry.Outbox, "host-admission-outbox")
+                                                  Repository = telemetry.Repository; BindingDigest = telemetry.BindingDigest }
+                            TelemetryAdmissionBridge((fun (maximum, cursor, token) -> executionStore.ReadCommittedAdmissions(maximum, cursor, token)), publisher))
+                    let admissionDrain = admissionBridge |> Option.map (fun bridge -> bridge.RecoverUntilCancelled shutdown.Token)
+
                     let admission =
                         MainProductionAdmission(
                             actorSystem,
@@ -374,6 +386,7 @@ let main arguments =
                     finally
                         shutdown.Cancel()
                         outcomeDrain |> Option.iter (fun pending -> pending.GetAwaiter().GetResult())
+                        admissionDrain |> Option.iter (fun pending -> pending.GetAwaiter().GetResult())
 
                     actorSystem.Terminate() |> ignore
 

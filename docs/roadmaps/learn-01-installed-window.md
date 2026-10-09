@@ -420,3 +420,7 @@ for that command. A fresh successor must pass protected source and served-byte r
 its actual executable hash can enter an owner-selected diagnostic profile. This packaging change
 runs no native authentication, model discovery, provider execution, collector installation,
 grant, capture, enrollment or activation.
+
+## Prospective actor-owned observation source continuation
+
+The [LEARN-01.2 actor observation source window](learn-01-actor-observation.md) extends the existing actor-owned Host/provider/runner chain with durable causal admission, bounded committed-intent recovery and the existing native-fact identity join. Its source qualification is separate from this installed window. O0–O3 and LEARN-01.3 stay accepted; publication, private custody, real provider counters, cleanup, installed adoption and experiment enrollment remain open.

@@ -54,8 +54,8 @@ type PostgreSqlExecutorBindingResolver
 
             match stored, routeBytes with
             | Some stream, Ok bytes ->
-                match SessionState.replay stream.Events, ExecutorWire.parseRouteBinding bytes with
-                | Some state, Ok route when
+                match SessionState.replay stream.Events, QualifiedExecutorWire.parseRoute bytes with
+                | Some state, Ok(route, _, _) when
                     expectedIntent |> Option.forall ((=) state.Intent)
                     && route.AssignmentId = state.Intent.Key.AssignmentId
                     && route.AttemptId = state.Intent.Key.AttemptId
@@ -411,10 +411,22 @@ type RemoteExecutorProvider
             BodySha256 = ExecutorWire.commandV2Digest value
         }
 
+    let encodeBoundCommand (intent: LaunchIntent) (commandValue: ExecutorCommandV2) token =
+        task {
+            let! route = store.ReadRoute(intent.Key.AssignmentId, intent.Key.AttemptId, token)
+            return route |> Result.bind QualifiedExecutorWire.parseRoute
+                         |> Result.bind (fun (_, causal, _) ->
+                             match causal with
+                             | None -> Ok(ExecutorWire.encodeCommandV2 commandValue)
+                             | Some admission -> QualifiedExecutorWire.wrapCommand commandValue admission)
+        }
+
     let invoke kind intent binding session token =
         task {
             let commandValue = command kind intent binding session null 0L 0
-            let commandBytes = ExecutorWire.encodeCommandV2 commandValue
+            let! commandBytesResult = encodeBoundCommand intent commandValue token
+            let commandBytes = commandBytesResult |> Result.defaultValue [||]
+            let expectedDigest = commandBytesResult |> Result.bind QualifiedExecutorWire.parseCommand |> Result.map (fun (_, _, digest) -> digest) |> Result.defaultValue ""
 
             let! inputPrepared =
                 store.StageInput(ExecutorWire.encodeInputManifest binding.InputManifest, binding.InputBytes, token)
@@ -426,8 +438,8 @@ type RemoteExecutorProvider
                 RunnerWire.serialize binding.WorkspaceManifest |> RunnerWire.sha256
 
             let! persisted =
-                match inputPrepared, manifestPrepared with
-                | Ok(), Ok digest when digest = expectedManifest -> store.PersistCommand(commandBytes, token)
+                match commandBytesResult, inputPrepared, manifestPrepared with
+                | Ok _, Ok(), Ok digest when digest = expectedManifest -> store.PersistCommand(commandBytes, token)
                 | _ -> Task.FromResult(CommandRefused "executor-bound-input-preparation-refused")
 
             match persisted with
@@ -481,7 +493,7 @@ type RemoteExecutorProvider
                         |> List.tryLast
 
                     let bound id body =
-                        id = commandValue.CommandId && body = commandValue.BodySha256
+                        id = commandValue.CommandId && body = expectedDigest
 
                     let artifactsBound =
                         observedArtifacts
@@ -515,37 +527,41 @@ type RemoteExecutorProvider
     let readiness intent binding token =
         task {
             let value = command "readiness" intent binding null null 0L 0
-            let bytes = ExecutorWire.encodeCommandV2 value
-
-            let frames =
-                [
-                    ExecutorWire.encodeInputManifest binding.InputManifest
-                    ExecutorWire.encodeContent
-                        {
-                            Schema = ExecutorWire.contentSchema
-                            CommandId = value.CommandId
-                            InputDigest = intent.InputDigest
-                            Offset = 0L
-                            Final = true
-                            ContentBase64 = Convert.ToBase64String binding.InputBytes
-                        }
-                    ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest
-                    bytes
-                ]
-
-            let! exchanged = transport.Exchange(frames, token)
-
-            match exchanged with
+            let! encoded = encodeBoundCommand intent value token
+            match encoded with
             | Error reason -> return Error reason
-            | Ok readback ->
-                match
-                    readback.Frames
-                    |> List.choose (fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
-                    |> List.tryLast
-                with
-                | Some response when response.CommandId = value.CommandId && response.BodySha256 = value.BodySha256 ->
-                    return Ok response
-                | _ -> return Error "executor-readiness-binding-refused"
+            | Ok bytes ->
+                let expectedDigest = QualifiedExecutorWire.parseCommand bytes |> Result.map (fun (_, _, digest) -> digest) |> Result.defaultValue ""
+
+                let frames =
+                    [
+                        ExecutorWire.encodeInputManifest binding.InputManifest
+                        ExecutorWire.encodeContent
+                            {
+                                Schema = ExecutorWire.contentSchema
+                                CommandId = value.CommandId
+                                InputDigest = intent.InputDigest
+                                Offset = 0L
+                                Final = true
+                                ContentBase64 = Convert.ToBase64String binding.InputBytes
+                            }
+                        ExecutorWire.encodeWorkspaceManifest binding.WorkspaceManifest
+                        bytes
+                    ]
+
+                let! exchanged = transport.Exchange(frames, token)
+
+                match exchanged with
+                | Error reason -> return Error reason
+                | Ok readback ->
+                    match
+                        readback.Frames
+                        |> List.choose (fun bytes -> ExecutorWire.parseResponse bytes |> Result.toOption)
+                        |> List.tryLast
+                    with
+                    | Some response when response.CommandId = value.CommandId && response.BodySha256 = expectedDigest ->
+                        return Ok response
+                    | _ -> return Error "executor-readiness-binding-refused"
         }
 
     interface IExecutionProvider with
@@ -722,8 +738,13 @@ type RemoteExecutorProvider
                     let commandValue =
                         command "content-read" intent binding null manifest.BundleSha256 offset length
 
-                    let commandBytes = ExecutorWire.encodeCommandV2 commandValue
-                    let! persisted = store.PersistCommand(commandBytes, token)
+                    let! encoded = encodeBoundCommand intent commandValue token
+                    let commandBytes = encoded |> Result.defaultValue [||]
+                    let expectedDigest = encoded |> Result.bind QualifiedExecutorWire.parseCommand |> Result.map (fun (_, _, digest) -> digest) |> Result.defaultValue ""
+                    let! persisted =
+                        match encoded with
+                        | Ok bytes -> store.PersistCommand(bytes, token)
+                        | Error reason -> Task.FromResult(CommandRefused reason)
 
                     match persisted with
                     | CommandConflict
@@ -752,7 +773,7 @@ type RemoteExecutorProvider
                                 && item.Offset = offset
                                 && item.BundleSha256 = manifest.BundleSha256
                                 && doneValue.CommandId = commandValue.CommandId
-                                && doneValue.BodySha256 = commandValue.BodySha256
+                                && doneValue.BodySha256 = expectedDigest
                                 && doneValue.Disposition = "reconciled"
                                 ->
                                 let! settled =

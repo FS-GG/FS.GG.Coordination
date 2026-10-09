@@ -2575,3 +2575,30 @@ type ExecutorRuntimeTests() =
             Assert.Empty(TelemetryJournalRecovery.requeue root command publisher)
             Assert.Equal(0, publisher.PendingCount)
         }
+    [<Fact>]
+    member _.``qualified command preserves legacy bytes and joins native facts to Host admission``() =
+        let command = RuntimeFixture.command (String.replicate 64 "a") (String.replicate 64 "b") "baseline" "launch" null
+        let legacyBytes = ExecutorWire.encodeCommandV2 command
+        let admission =
+            ExecutionCausalAdmission.create command.WorkItemPersistenceId command.WorkItemPersistenceId
+                command.AssignmentId command.AttemptId command.Generation command.RecordedAt ExecutionCausalAdmission.unclassified None
+            |> Result.defaultWith failwith
+        let bytes = QualifiedExecutorWire.wrapCommand command admission |> Result.defaultWith failwith
+        let recovered, causal, digest = QualifiedExecutorWire.parseCommand bytes |> Result.defaultWith failwith
+        Assert.Equal(command, recovered)
+        Assert.Equal(Some admission, causal)
+        Assert.NotEqual(command.BodySha256, digest)
+        Assert.True(ExecutorWire.parseCommandV2 bytes |> Result.isError)
+        Assert.True(legacyBytes.AsSpan().SequenceEqual((ExecutorWire.encodeCommandV2 recovered).AsSpan()))
+        Assert.True(QualifiedExecutorWire.wrapCommand command { admission with MemberItemId = "foreign" } |> Result.isError)
+        let context = TelemetryFactBatches.invocationFor recovered causal
+        Assert.Equal(admission.InvocationId, context.InvocationId)
+        let oldName, oldExpected = TelemetryFactBatches.prospectiveRoot command command.RecordedAt (command.AttemptId.ToString("N")) command.Generation
+        let newName, hostExpected = ExecutionAdmissionFacts.prepare admission (Option.ofObj command.RequestedModel) (Option.ofObj command.RequestedEffort) |> Result.defaultWith failwith
+        Assert.Equal(oldName, newName)
+        Assert.True(oldExpected.AsSpan().SequenceEqual(hostExpected.AsSpan()))
+        let _, processBytes = TelemetryFactBatches.processStart context 17 command.RecordedAt
+        use native = JsonDocument.Parse processBytes
+        let nativeEvent = native.RootElement.GetProperty("events").EnumerateArray() |> Seq.head
+        Assert.Equal(admission.OriginalItemId, nativeEvent.GetProperty("itemId").GetString())
+        Assert.Equal(admission.InvocationId, nativeEvent.GetProperty("invocationId").GetString())

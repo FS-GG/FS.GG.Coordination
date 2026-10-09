@@ -190,7 +190,7 @@ type MainRouteWorkflow
             let routeBound =
                 durableRoute
                 |> Result.toOption
-                |> Option.bind (fun bytes -> ExecutorWire.parseRouteBinding bytes |> Result.toOption)
+                |> Option.bind (fun bytes -> QualifiedExecutorWire.parseRoute bytes |> Result.map (fun (binding, _, _) -> binding) |> Result.toOption)
                 |> Option.exists ((=) value.Binding)
 
             let launchBound =
@@ -405,8 +405,20 @@ type MainRouteWorkflow
                 | Ok(), Ok workspaceDigest when workspaceDigest <> value.Binding.WorkspaceManifestSha256 ->
                     return Error "main-route-workspace-digest-refused"
                 | Ok(), Ok _ ->
+                    let! priorRoute = executions.ReadRoute(value.Binding.AssignmentId, value.Binding.AttemptId, token)
+                    let bindingBytes =
+                        match priorRoute with
+                        | Ok bytes ->
+                            match QualifiedExecutorWire.parseRoute bytes with
+                            | Ok(binding, _, _) when binding = value.Binding -> Ok bytes
+                            | _ -> Error "main-route-durable-binding-conflict"
+                        | Error "execution-route-binding-not-found"
+                        | Error "missing" -> Ok(ExecutorWire.encodeRouteBinding value.Binding)
+                        | Error reason -> Error reason
                     let! bound =
-                        executions.BindRoute(ExecutorWire.encodeRouteBinding value.Binding, token)
+                        match bindingBytes with
+                        | Ok bytes -> executions.BindRoute(bytes, token)
+                        | Error reason -> Task.FromResult(Error reason)
 
                     let mutable failure =
                         match bound with

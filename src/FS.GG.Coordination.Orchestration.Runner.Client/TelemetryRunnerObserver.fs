@@ -10,11 +10,12 @@ type TelemetryRunnerObserver(
     command: ExecutorCommandV2,
     publisher: TelemetryCliPublisher option,
     ?learning: PreparedLearningTelemetry,
-    ?learningBinding: LearningExecutionBinding
+    ?learningBinding: LearningExecutionBinding,
+    ?causalAdmission: ExecutionCausalAdmission
 ) =
     let concreteJournal = TelemetryTurnJournal(stateRoot, command)
     let journal = concreteJournal :> ICodexTurnObserver
-    let context = TelemetryFactBatches.rootInvocation command
+    let context = TelemetryFactBatches.invocationFor command causalAdmission
     let mutable turnCount = 0L
     let preparedLearning =
         match learning with

@@ -29,6 +29,7 @@ type ExecutorRuntimeOptions =
 type private Supervised =
     {
         Command: ExecutorCommandV2
+        CausalAdmission: ExecutionCausalAdmission option
         Manifest: ExecutorWorkspaceManifest
         Provider: IExecutionProvider
         Inspector: GitCandidateInspector
@@ -398,7 +399,7 @@ type ExecutorRuntime
             observation.Candidate
             ""
 
-    let build (command: ExecutorCommandV2) (manifest: ExecutorWorkspaceManifest) =
+    let build (command: ExecutorCommandV2) causal (manifest: ExecutorWorkspaceManifest) =
         if
             manifest.Workspace <> command.Workspace
             || manifest.InputDigest <> command.InputDigest
@@ -442,9 +443,9 @@ type ExecutorRuntime
                     publisher
                     |> Option.iter (fun target ->
                         let journal = TelemetryTurnJournal(options.StateRoot, command)
-                        let context = TelemetryFactBatches.rootInvocation command
+                        let context = TelemetryFactBatches.invocationFor command causal
 
-                        TelemetryJournalRecovery.requeue options.StateRoot command target
+                        TelemetryJournalRecovery.requeueCausal options.StateRoot command causal target
                         |> List.distinct
                         |> List.iter (fun code ->
                             let gapId = journal.RecordGapOnce code
@@ -455,7 +456,7 @@ type ExecutorRuntime
                         MaximumStreamBytes = 1024 * 1024
                         TurnObserver =
                             Some(
-                                TelemetryRunnerObserver(options.StateRoot, command, publisher, ?learningBinding = learning)
+                                TelemetryRunnerObserver(options.StateRoot, command, publisher, ?learningBinding = learning, ?causalAdmission = causal)
                                 :> ICodexTurnObserver
                             )
                     }
@@ -465,6 +466,7 @@ type ExecutorRuntime
 
                 {
                     Command = command
+                    CausalAdmission = causal
                     Manifest = manifest
                     Provider = provider
                     Inspector = inspector
@@ -472,7 +474,7 @@ type ExecutorRuntime
                     Readiness = None
                 })
 
-    let persistLaunch (command: ExecutorCommandV2) =
+    let persistLaunch (command: ExecutorCommandV2) causal =
         let directory =
             Path.Combine(
                 options.StateRoot,
@@ -484,7 +486,10 @@ type ExecutorRuntime
 
         Directory.CreateDirectory directory |> ignore
         let path = Path.Combine(directory, "launch-command.json")
-        let bytes = ExecutorWire.encodeCommandV2 command
+        let bytes =
+            match causal with
+            | None -> ExecutorWire.encodeCommandV2 command
+            | Some admission -> QualifiedExecutorWire.wrapCommand command admission |> Result.defaultWith invalidOp
 
         try
             use stream =
@@ -502,15 +507,15 @@ type ExecutorRuntime
             NewLaunch
         with :? IOException ->
             try
-                let existing = File.ReadAllBytes path |> ExecutorWire.parseCommandV2
+                let existing = File.ReadAllBytes path |> QualifiedExecutorWire.parseCommand
 
                 match existing with
-                | Ok value when sameAuthority value command -> ExistingLaunch
+                | Ok(value, priorCausal, _) when sameAuthority value command && priorCausal = causal -> ExistingLaunch
                 | _ -> ConflictingLaunch
             with _ ->
                 ConflictingLaunch
 
-    let matchesDurableLaunch (command: ExecutorCommandV2) =
+    let matchesDurableLaunch (command: ExecutorCommandV2) causal =
         let path =
             Path.Combine(
                 options.StateRoot,
@@ -532,8 +537,8 @@ type ExecutorRuntime
             then
                 false
             else
-                match File.ReadAllBytes path |> ExecutorWire.parseCommandV2 with
-                | Ok launch -> launch.Kind = "launch" && sameAuthority launch command
+                match File.ReadAllBytes path |> QualifiedExecutorWire.parseCommand with
+                | Ok(launch, priorCausal, _) -> launch.Kind = "launch" && sameAuthority launch command && priorCausal = causal
                 | Error _ -> false
         with _ ->
             false
@@ -611,7 +616,18 @@ type ExecutorRuntime
                 return readiness
         }
 
-    let handleCommand (output: Stream) (command: ExecutorCommandV2) =
+    let handleCommand (output: Stream) (command: ExecutorCommandV2) causal =
+        let replyCommand =
+            match causal with
+            | None -> command
+            | Some admission ->
+                let digest = QualifiedExecutorWire.wrapCommand command admission |> Result.bind QualifiedExecutorWire.parseCommand
+                             |> Result.map (fun (_, _, digest) -> digest) |> Result.defaultWith invalidOp
+                { command with BodySha256 = digest }
+        let receipt (_: ExecutorCommandV2) = receipt replyCommand
+        let operation (_: ExecutorCommandV2) = operation replyCommand
+        let response (_: ExecutorCommandV2) = response replyCommand
+        let observationResponse (_: ExecutorCommandV2) = observationResponse replyCommand
         task {
             let now = clock.GetUtcNow()
             let itemKey = key command
@@ -737,7 +753,7 @@ type ExecutorRuntime
                         Error "executor-session-capacity-refused"
                     | _ ->
                         match manifests.TryGetValue command.WorkspaceManifestSha256 with
-                        | true, manifest -> build command manifest
+                        | true, manifest -> build command causal manifest
                         | _ -> Error "executor-workspace-manifest-missing"
 
                 match supervised with
@@ -753,7 +769,7 @@ type ExecutorRuntime
                         else
                             sessions.GetOrAdd(itemKey, value)
 
-                    if not (sameAuthority selected.Command command) then
+                    if not (sameAuthority selected.Command command) || selected.CausalAdmission <> causal then
                         do!
                             writeFrame
                                 output
@@ -834,7 +850,7 @@ type ExecutorRuntime
                                     RecordedAt = command.RecordedAt
                                 }
 
-                            match persistLaunch command with
+                            match persistLaunch command causal with
                             | ConflictingLaunch ->
                                 do!
                                     writeFrame
@@ -907,7 +923,7 @@ type ExecutorRuntime
                                 match readiness.Authentication with
                                 | Authenticated _ ->
                                     match telemetryPublisher selected.Manifest with
-                                    | Some publisher ->
+                                    | Some publisher when causal.IsNone ->
                                         let observer =
                                             TelemetryRunnerObserver(
                                                 options.StateRoot,
@@ -927,6 +943,7 @@ type ExecutorRuntime
                                             | Applied
                                             | AwaitingApplication -> ()
                                         | Error code -> observer.Gap code
+                                    | Some _ -> ()
                                     | None when options.Telemetry.IsSome ->
                                         (TelemetryTurnJournal(options.StateRoot, command) :> ICodexTurnObserver)
                                             .Gap "telemetry-repository-binding-mismatch"
@@ -978,7 +995,7 @@ type ExecutorRuntime
                                 ProviderSessionReference.create command.ProviderSessionReference,
                                 verifiedArtifact selected command.CandidateId
                             with
-                            | Ok session, Some artifact when matchesDurableLaunch command ->
+                            | Ok session, Some artifact when matchesDurableLaunch command causal ->
                                 // Keep terminal recovery replayable. A response may be lost after the
                                 // replacement has reconstructed it, so every later exact observation
                                 // continues to use the verified durable artifact instead of an empty
@@ -1220,7 +1237,7 @@ type ExecutorRuntime
                         let errors = ResizeArray<string>()
                         for session in sessions.Values do
                             let command = session.Command
-                            let context = TelemetryFactBatches.rootInvocation command
+                            let context = TelemetryFactBatches.invocationFor command session.CausalAdmission
                             let journal = TelemetryTurnJournal(options.StateRoot, command)
                             let recordGap code =
                                 errors.Add code
@@ -1229,7 +1246,7 @@ type ExecutorRuntime
                                 | Ok _ -> ()
                                 | Error queueCode -> errors.Add queueCode
 
-                            match TelemetryRootGuard.replay options.StateRoot command with
+                            match (if session.CausalAdmission.IsSome then Ok None else TelemetryRootGuard.replay options.StateRoot command) with
                             | Ok(Some marker) ->
                                 match TelemetryFactBatches.prospectiveRoot command marker.ActivatedAt marker.AttemptId marker.Generation |> publisher.Queue with
                                 | Ok _ -> ()
@@ -1237,7 +1254,7 @@ type ExecutorRuntime
                             | Ok None -> ()
                             | Error code -> recordGap code
 
-                            TelemetryJournalRecovery.requeue options.StateRoot command publisher
+                            TelemetryJournalRecovery.requeueCausal options.StateRoot command session.CausalAdmission publisher
                             |> List.distinct
                             |> List.iter recordGap
 
@@ -1366,10 +1383,10 @@ type ExecutorRuntime
 
                                         stream.Close()
                                         File.Move(temporary, completed, false)
-                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 || value = ExecutorWire.commandSchemaV4 ->
-                        match ExecutorWire.parseCommandV2 bytes with
+                    | value when value = ExecutorWire.commandSchemaV2 || value = ExecutorWire.commandSchemaV3 || value = ExecutorWire.commandSchemaV4 || value = QualifiedExecutorWire.commandSchema ->
+                        match QualifiedExecutorWire.parseCommand bytes with
                         | Error reason -> raise (InvalidDataException reason)
-                        | Ok command ->
+                        | Ok(command, causal, _) ->
                             let completed = running |> Seq.filter _.IsCompleted |> Seq.toArray
 
                             if completed.Length > 0 then
@@ -1384,7 +1401,7 @@ type ExecutorRuntime
                             running.Add(
                                 task {
                                     do! Task.Yield()
-                                    do! handleCommand output command
+                                    do! handleCommand output command causal
                                 }
                             )
                     | _ -> raise (InvalidDataException "executor-frame-schema-refused")
