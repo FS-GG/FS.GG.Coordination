@@ -4,6 +4,12 @@
 from __future__ import annotations
 
 import re
+import json
+import os
+import tempfile
+import urllib.error
+import urllib.request
+from unittest.mock import patch
 from pathlib import Path
 
 
@@ -34,8 +40,76 @@ def require_in_order(text: str, fragments: list[str]) -> None:
         position = next_position
 
 
+
+def verify_preflight(text: str) -> None:
+    preflight = text[text.index("  preflight:\n"):text.index("  publish:\n")]
+    assert "if: inputs.preflight_only == true" in preflight
+    assert "  publish:\n    if: inputs.preflight_only != true" in text
+    assert "preflight_only:\n" in text and "default: false\n        type: boolean" in text
+    assert "packages: read" in preflight and "id-token: write" in preflight
+    assert "packages: write" not in preflight and "contents: write" not in preflight
+    assert preflight.count("uses:") == 2
+    assert "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841" in preflight
+    assert "actions/upload-artifact@" in preflight
+    for forbidden in ("dotnet ", "gh ", "checkout@", "NUGET_API_KEY", "outputs.", "git push", "nuget push"):
+        assert forbidden not in preflight, forbidden
+    require_in_order(preflight, ["Observe exact main", "Verify existing Trusted Publishing", "Record successful authorization"])
+    code = preflight.split("          python3 - <<'PY_PREFLIGHT'\n", 1)[1].split("          PY_PREFLIGHT\n", 1)[0]
+    code = "\n".join(line[10:] for line in code.splitlines())
+    compile(code, "actual-workflow-preflight", "exec")
+    source = "a" * 40
+    namespace = "https://api.github.com/orgs/FS-GG/packages/nuget/fs.gg.coordination.cli"
+
+    class Response:
+        status = 200
+        def __init__(self, value): self.raw = json.dumps(value).encode()
+        def __enter__(self): return self
+        def __exit__(self, *args): return False
+        def read(self, limit): return self.raw[:limit]
+
+    for mode in ("good", "org-denied", "org-collision", "public-collision", "incomplete", "malformed", "main-moved"):
+        main_reads = 0
+        def open_response(request, timeout):
+            nonlocal main_reads
+            assert timeout == 15
+            url = request.full_url
+            if url.startswith("https://api.github.com/"):
+                assert request.get_header("Authorization") == "Bearer fixture-only-token"
+            else:
+                assert request.get_header("Authorization") is None
+            if url.endswith("/git/ref/heads/main"):
+                main_reads += 1
+                return Response({"object": {"sha": "b" * 40 if mode == "main-moved" and main_reads == 2 else source}})
+            if url == namespace:
+                if mode == "org-denied": raise urllib.error.HTTPError(url, 403, "fixture refusal", {}, None)
+                return Response({"name": "FS.GG.Coordination.Cli", "package_type": "nuget"})
+            if url.startswith(namespace + "/versions?"):
+                if mode == "incomplete": return Response([{"name": str(i)} for i in range(100)])
+                if mode == "malformed": return Response([{"name": 3}])
+                return Response([{"name": "0.2.2" if mode == "org-collision" else "0.2.0"}])
+            assert url == "https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/index.json"
+            return Response({"versions": ["0.2.2" if mode == "public-collision" else "0.2.0"]})
+        with tempfile.TemporaryDirectory() as directory:
+            environment = {"REQUESTED_SOURCE": source, "GITHUB_SHA": source, "GITHUB_REF": "refs/heads/main",
+                           "GITHUB_REPOSITORY": "FS-GG/FS.GG.Coordination", "GH_TOKEN": "fixture-only-token", "RUNNER_TEMP": directory}
+            refused = False
+            with patch.dict(os.environ, environment, clear=True), patch.object(urllib.request, "urlopen", open_response):
+                try: exec(code, {})
+                except (SystemExit, urllib.error.HTTPError): refused = True
+            receipt = Path(directory) / "migration-release-preflight.json"
+            assert refused == (mode != "good"), mode
+            assert receipt.exists() == (mode == "good"), mode
+            if receipt.exists():
+                value = json.loads(receipt.read_text())
+                assert value["githubPaginationComplete"] and value["publicVersionAbsent"]
+                assert value["versionReserved"] is False and value["publicationAuthorized"] is False
+                assert "fixture-only-token" not in receipt.read_text()
+                assert "trustedPublishingLoginSucceeded" not in value
+
+
 def main() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
+    verify_preflight(text)
     pins = dict(re.findall(r"^      (EXPECTED_[A-Z0-9_]+): ([^\n]+)$", text, re.MULTILINE))
     assert pins == EXPECTED
 

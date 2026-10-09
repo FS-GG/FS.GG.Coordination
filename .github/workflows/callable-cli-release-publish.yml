@@ -3,9 +3,14 @@ name: callable-cli-release-publish
 on:
   workflow_dispatch:
     inputs:
+      preflight_only:
+        description: Read package occupancy and Trusted Publishing authorization only; no publication
+        required: false
+        default: false
+        type: boolean
       operation:
         description: Exact protected operation identity
-        required: true
+        required: false
         type: string
       source:
         description: Exact reviewed candidate commit
@@ -13,11 +18,11 @@ on:
         type: string
       protected_merge:
         description: Exact protected-main merge with the candidate tree
-        required: true
+        required: false
         type: string
       expected_sha256:
         description: Exact prepared package digest
-        required: true
+        required: false
         type: string
 
 permissions:
@@ -27,8 +32,111 @@ concurrency:
   group: callable-cli-release-v0.2.1
   cancel-in-progress: false
 
+# Static preflight is sufficient: two mutually exclusive jobs, no shared candidate,
+# retries, pack or publication in preflight. Existing publisher gates remain unchanged.
 jobs:
+  preflight:
+    name: Read-only migration release feasibility
+    if: inputs.preflight_only == true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
+    steps:
+      - name: Observe exact main and complete known package namespace on both feeds
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_SOURCE: ${{ inputs.source }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_PREFLIGHT'
+          import hashlib, json, os, pathlib, re, urllib.request
+
+          source = os.environ["REQUESTED_SOURCE"]
+          if (os.environ["GITHUB_REF"] != "refs/heads/main"
+              or not re.fullmatch(r"[0-9a-f]{40}", source)
+              or source != os.environ["GITHUB_SHA"]
+              or os.environ["GITHUB_REPOSITORY"] != "FS-GG/FS.GG.Coordination"):
+              raise SystemExit("preflight requires this exact protected-main source")
+          observations = []
+          def read(url, authenticated=False):
+              headers = {"Accept": "application/vnd.github+json", "User-Agent": "coordination-release-preflight"}
+              if authenticated:
+                  headers["Authorization"] = "Bearer " + os.environ["GH_TOKEN"]
+                  headers["X-GitHub-Api-Version"] = "2022-11-28"
+              with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=15) as response:
+                  raw = response.read(4_194_305)
+                  if response.status != 200 or len(raw) > 4_194_304:
+                      raise SystemExit("preflight response status/size unknown")
+              observations.append({"url": url, "sha256": hashlib.sha256(raw).hexdigest()})
+              return json.loads(raw)
+
+          api = "https://api.github.com"
+          current = read(api + "/repos/FS-GG/FS.GG.Coordination/git/ref/heads/main", True)
+          if current.get("object", {}).get("sha") != source:
+              raise SystemExit("preflight protected main moved")
+          namespace = api + "/orgs/FS-GG/packages/nuget/fs.gg.coordination.cli"
+          package = read(namespace, True)
+          if package.get("name", "").lower() != "fs.gg.coordination.cli" or package.get("package_type") != "nuget":
+              raise SystemExit("preflight known package namespace binding failed")
+          versions = []
+          for page in range(1, 11):
+              entries = read(namespace + f"/versions?per_page=100&page={page}", True)
+              if (not isinstance(entries, list) or len(entries) > 100
+                  or any(not isinstance(row, dict) or not isinstance(row.get("name"), str) for row in entries)):
+                  raise SystemExit("preflight organization versions malformed")
+              versions.extend(row["name"] for row in entries)
+              if len(entries) < 100:
+                  break
+          else:
+              raise SystemExit("preflight organization version pagination incomplete")
+          public = read("https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/index.json")
+          public_versions = public.get("versions") if isinstance(public, dict) else None
+          if not isinstance(public_versions, list) or not all(isinstance(value, str) for value in public_versions):
+              raise SystemExit("preflight public versions malformed")
+          proposed = "0.2.2"
+          if proposed in versions or proposed in public_versions:
+              raise SystemExit("preflight proposed successor version is occupied")
+          after = read(api + "/repos/FS-GG/FS.GG.Coordination/git/ref/heads/main", True)
+          if after.get("object", {}).get("sha") != source:
+              raise SystemExit("preflight protected main moved")
+          receipt = {"schema": "fsgg.coordination.migration-release-preflight/1", "source": source,
+                     "proposedVersion": proposed, "githubNamespaceReadable": True,
+                     "githubPaginationComplete": True, "githubVersionAbsent": True, "publicVersionAbsent": True,
+                     "publicationAuthorized": False, "versionReserved": False, "observations": observations}
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "migration-release-preflight.json"
+          path.write_text(json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8")
+          PY_PREFLIGHT
+      - name: Verify existing Trusted Publishing identity without publishing
+        id: preflight-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Record successful authorization without retaining the temporary key
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY_PREFLIGHT_RECEIPT'
+          import json, os, pathlib
+          path = pathlib.Path(os.environ["RUNNER_TEMP"]) / "migration-release-preflight.json"
+          receipt = json.loads(path.read_text(encoding="utf-8"))
+          receipt["trustedPublishingLoginSucceeded"] = True
+          path.write_text(json.dumps(receipt, sort_keys=True) + "\n", encoding="utf-8")
+          PY_PREFLIGHT_RECEIPT
+      - name: Retain read-only preflight observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: migration-release-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/migration-release-preflight.json
+          if-no-files-found: warn
+          retention-days: 14
+
   publish:
+    if: inputs.preflight_only != true
     name: Qualify, publish, and read back exact portable CLI
     runs-on: ubuntu-24.04
     timeout-minutes: 60
