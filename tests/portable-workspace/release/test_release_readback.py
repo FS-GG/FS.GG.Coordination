@@ -52,6 +52,20 @@ def main() -> None:
         assert refused.returncode == 2
         assert "differs from the complete expected receipt" in refused.stderr
 
+        cli = command[:]
+        for flag in ('--bundle-sha256','--image-sha256','--manifest-sha256'):
+            index=cli.index(flag); del cli[index:index+2]
+        cli[cli.index('--version')+1]='0.3.0'
+        cli.extend(['--cli-only','--publisher','a'*40])
+        subprocess.run(cli,check=True)
+        value=json.loads(output.read_bytes())
+        assert value['schema']=='fsgg.coordination.callable-cli-release-readback/3'
+        assert value['source']==SOURCE and value['publisherSource']=='a'*40
+        assert 'portableAssets' not in value
+        for extra in [['--bundle-sha256','7'*64], ['--version','0.2.0'], ['--publisher','invalid']]:
+            refused=subprocess.run([*cli,*extra],capture_output=True)
+            assert refused.returncode==2
+        assert subprocess.run([*command,'--cli-only'],capture_output=True).returncode==2
         github.unlink()
         absent_feed = subprocess.run([*command, "--existing", str(exact)], text=True, capture_output=True)
         assert absent_feed.returncode == 2

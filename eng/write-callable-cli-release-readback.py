@@ -38,15 +38,17 @@ def feed(path: Path, name: str, package_sha256: str) -> dict[str, object]:
 
 def main() -> int:
     parser = argparse.ArgumentParser()
+    parser.add_argument("--cli-only", action="store_true")
+    parser.add_argument("--publisher", help="Reviewed publisher B for CLI-only source A")
     parser.add_argument("--source", required=True)
     parser.add_argument("--tree", required=True)
     parser.add_argument("--merge", required=True)
     parser.add_argument("--package-id", required=True)
     parser.add_argument("--version", required=True)
     parser.add_argument("--package-sha256", required=True)
-    parser.add_argument("--bundle-sha256", required=True)
-    parser.add_argument("--image-sha256", required=True)
-    parser.add_argument("--manifest-sha256", required=True)
+    parser.add_argument("--bundle-sha256")
+    parser.add_argument("--image-sha256")
+    parser.add_argument("--manifest-sha256")
     parser.add_argument("--github-feed", required=True, type=Path)
     parser.add_argument("--nuget-feed", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
@@ -56,9 +58,17 @@ def main() -> int:
     sha(args.source, 40)
     sha(args.tree, 40)
     sha(args.merge, 40)
-    for value in (args.package_sha256, args.bundle_sha256, args.image_sha256, args.manifest_sha256):
-        sha(value, 64)
-    if args.package_id != "FS.GG.Coordination.Cli" or args.version != "0.2.0":
+    sha(args.package_sha256, 64)
+    if args.cli_only:
+        if args.publisher is None or any((args.bundle_sha256, args.image_sha256, args.manifest_sha256)):
+            refuse("CLI-only requires publisher identity and excludes portable assets")
+        sha(args.publisher, 40)
+    else:
+        if args.publisher is not None or any(value is None for value in (args.bundle_sha256, args.image_sha256, args.manifest_sha256)):
+            refuse("portable readback requires every original asset")
+        for value in (args.bundle_sha256, args.image_sha256, args.manifest_sha256):
+            sha(value, 64)
+    if args.package_id != "FS.GG.Coordination.Cli" or args.version != ("0.3.0" if args.cli_only else "0.2.0"):
         refuse("package identity changed")
     value = {
         "schema": "fsgg.coordination.callable-cli-release-readback/2",
@@ -78,6 +88,10 @@ def main() -> int:
             "nugetOrg": feed(args.nuget_feed, "nuget-org", args.package_sha256),
         },
     }
+    if args.cli_only:
+        value["schema"] = "fsgg.coordination.callable-cli-release-readback/3"
+        value["publisherSource"] = args.publisher
+        del value["portableAssets"]
     expected = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
     if args.existing is not None:
         if not args.existing.is_file():
