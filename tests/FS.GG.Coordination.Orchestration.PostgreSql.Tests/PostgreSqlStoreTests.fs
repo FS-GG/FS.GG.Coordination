@@ -336,24 +336,61 @@ type PostgreSqlStoreTests() =
                 Assert.Equal(Path.Combine(Path.GetFullPath fixtureRoot, "causal-source-batches"), Path.GetFullPath export)
                 Assert.False(Directory.Exists export)
                 Directory.CreateDirectory export |> ignore
+            let sourceFiles = ResizeArray<obj>()
+            let batches = ResizeArray<obj>()
+            let writeExclusive relative bytes =
+                use output = new FileStream(Path.Combine(export, relative), FileMode.CreateNew, FileAccess.Write, FileShare.None)
+                output.Write(bytes: byte array)
+                output.Flush true
+                {| path = relative; sha256 = RunnerWire.sha256 bytes; bytes = bytes.Length |}
             for source in first.Admissions do
                 let fixture = cases |> Array.find (fun value -> value.GetProperty("invocationId").GetString() = source.Admission.InvocationId)
                 let expectedRaw = File.ReadAllBytes(Path.Combine(directory, fixture.GetProperty("admissionFile").GetString()))
                 Assert.True(expectedRaw.AsSpan().SequenceEqual(source.AdmissionBytes.AsSpan()))
                 let! retainedRoute = (store :> IExecutorCommandStore).ReadRoute(source.Admission.AssignmentId, source.Admission.AttemptId, cancellationToken)
-                let _, _, retainedDigest = retainedRoute |> Result.defaultWith failwith |> QualifiedExecutorWire.parseRouteWithAdmissionBytes |> Result.defaultWith failwith
+                let retainedRouteBytes = retainedRoute |> Result.defaultWith failwith
+                let _, _, retainedDigest = retainedRouteBytes |> QualifiedExecutorWire.parseRouteWithAdmissionBytes |> Result.defaultWith failwith
                 Assert.Equal(retainedDigest, source.RouteBindingSha256)
-                Assert.Equal(RunnerWire.sha256(SessionEventCodec.encode (LaunchIntentRecorded source.Intent)), source.LaunchIntentSha256)
+                let retainedIntentBytes = SessionEventCodec.encode (LaunchIntentRecorded source.Intent)
+                Assert.Equal(RunnerWire.sha256 retainedIntentBytes, source.LaunchIntentSha256)
                 let oldName, oldBytes = ExecutionAdmissionFacts.prepare source.Admission None None |> Result.defaultWith failwith
                 let name, bytes = ExecutionCausalAdmissionFacts.prepare source.Admission source.AdmissionBytes source.RouteBindingSha256 source.LaunchIntentSha256 |> Result.defaultWith failwith
                 let nameAgain, bytesAgain = ExecutionCausalAdmissionFacts.prepare source.Admission source.AdmissionBytes source.RouteBindingSha256 source.LaunchIntentSha256 |> Result.defaultWith failwith
                 Assert.Equal(name, nameAgain)
                 Assert.True(bytes.AsSpan().SequenceEqual(bytesAgain.AsSpan()))
                 if not (String.IsNullOrWhiteSpace export) then
-                    for batchName, batchBytes in [ oldName, oldBytes; name, bytes ] do
-                        use output = new FileStream(Path.Combine(export, batchName + ".json"), FileMode.CreateNew, FileAccess.Write, FileShare.None)
-                        output.Write batchBytes
-                        output.Flush true
+                    let invocation = source.Admission.InvocationId
+                    let admissionFile = writeExclusive (invocation + ".admission.json") source.AdmissionBytes
+                    let routeFile = writeExclusive (invocation + ".route.json") retainedRouteBytes
+                    let intentFile = writeExclusive (invocation + ".intent.json") retainedIntentBytes
+                    sourceFiles.Add(box {| order = sourceFiles.Count; invocationId = invocation
+                                           originalItemId = source.Admission.OriginalItemId; memberItemId = source.Admission.MemberItemId
+                                           admission = admissionFile; route = routeFile; intent = intentFile
+                                           routeBindingSha256 = source.RouteBindingSha256; launchIntentSha256 = source.LaunchIntentSha256 |})
+                    for obligation, batchName, batchBytes in [ "legacy", oldName, oldBytes; "declaration", name, bytes ] do
+                        let file = writeExclusive (batchName + ".json") batchBytes
+                        use batch = JsonDocument.Parse batchBytes
+                        let facts = batch.RootElement.GetProperty("events").EnumerateArray()
+                                    |> Seq.map (fun fact -> {| kind = fact.GetProperty("kind").GetString(); identity = fact.GetProperty("identity").GetString() |})
+                                    |> Seq.toArray
+                        Assert.Equal(batchName, batch.RootElement.GetProperty("ingestId").GetString())
+                        batches.Add(box {| order = batches.Count; obligation = obligation; invocationId = invocation
+                                           ingestId = batchName; cursor = batch.RootElement.GetProperty("cursor").GetString()
+                                           file = file; facts = facts |})
+            if not (String.IsNullOrWhiteSpace export) then
+                Assert.Equal(4, sourceFiles.Count)
+                Assert.Equal(8, batches.Count)
+                let revision = typeof<ExecutionTelemetryAdmissionBridge>.Assembly.GetCustomAttributes(typeof<System.Reflection.AssemblyMetadataAttribute>, false)
+                               |> Seq.cast<System.Reflection.AssemblyMetadataAttribute>
+                               |> Seq.filter (fun attribute -> attribute.Key = "FsggSourceRevision")
+                               |> Seq.exactlyOne
+                               |> fun attribute -> attribute.Value
+                Assert.Matches("^[a-f0-9]{40}$", revision)
+                let manifest = {| schema = "fsgg.learn-causal-source-export/1"; sourceRevision = revision
+                                  provenance = "synthetic-qualified-disposable-postgresql-not-installed"
+                                  admissionCount = sourceFiles.Count; batchCount = batches.Count
+                                  admissions = sourceFiles.ToArray(); batches = batches.ToArray() |}
+                writeExclusive "manifest.json" (JsonSerializer.SerializeToUtf8Bytes manifest) |> ignore
         }
 
     [<Fact>]
