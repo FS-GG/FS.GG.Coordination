@@ -191,7 +191,7 @@ let ``fixed causal declaration fixtures retain exact raw bytes and separate immu
         Assert.Equal(oldName, sameOldName)
         Assert.True(oldBytes.AsSpan().SequenceEqual(sameOldBytes.AsSpan()))
         use batch = JsonDocument.Parse batchBytes
-        let actual = batch.RootElement.GetProperty("events")[0]
+        let actual = (batch.RootElement.GetProperty("events")).[0]
         Assert.Equal(9, actual.EnumerateObject() |> Seq.length)
         Assert.Equal(0L, actual.GetProperty("revision").GetInt64())
         for key in [ "kind"; "identity"; "itemId"; "dispatchId"; "admissionBase64"; "admissionSha256"; "routeBindingSha256"; "launchIntentSha256" ] do
@@ -239,7 +239,7 @@ let ``lossless route extraction preserves fixed raw bytes and ordinary parser re
         let name, bytes = ExecutionCausalAdmissionFacts.prepare source.Admission source.AdmissionBytes source.RouteBindingSha256 source.LaunchIntentSha256 |> unwrap
         Assert.False(String.IsNullOrWhiteSpace name)
         use batch = JsonDocument.Parse bytes
-        Assert.Equal(RunnerWire.sha256 raw, batch.RootElement.GetProperty("events")[0].GetProperty("admissionSha256").GetString())
+        Assert.Equal(RunnerWire.sha256 raw, (batch.RootElement.GetProperty("events")).[0].GetProperty("admissionSha256").GetString())
         let legacyBytes = ExecutorWire.encodeRouteBinding source.Route
         let oldRoute, oldAdmission, oldDigest = QualifiedExecutorWire.parseRoute legacyBytes |> unwrap
         let recoveredRoute, recoveredAdmission, recoveredDigest = QualifiedExecutorWire.parseRouteWithAdmissionBytes legacyBytes |> unwrap
