@@ -53,6 +53,7 @@ def main() -> int:
     parser.add_argument("--nuget-feed", required=True, type=Path)
     parser.add_argument("--output", required=True, type=Path)
     parser.add_argument("--existing", type=Path)
+    parser.add_argument("--original-publication", type=Path, help="Verified original failed attempt retained by readback recovery")
     args = parser.parse_args()
 
     sha(args.source, 40)
@@ -92,6 +93,23 @@ def main() -> int:
         value["schema"] = "fsgg.coordination.callable-cli-release-readback/3"
         value["publisherSource"] = args.publisher
         del value["portableAssets"]
+    if args.original_publication is not None:
+        if not args.cli_only:
+            refuse("original publication applies only to CLI-only recovery")
+        try:
+            original = json.loads(args.original_publication.read_bytes())
+            keys = {"publisherSource", "runId", "runAttempt", "jobId", "observationArtifactId", "observationArchiveSha256", "conclusion", "publicReadback"}
+            if not isinstance(original, dict) or set(original) != keys:
+                refuse("original publication shape changed")
+            sha(original["publisherSource"], 40)
+            sha(original["observationArchiveSha256"], 64)
+            if any(type(original[key]) is not int or original[key] <= 0 for key in ("runId", "jobId", "observationArtifactId")):
+                refuse("original publication native identity changed")
+            if type(original["runAttempt"]) is not int or original["runAttempt"] != 1 or original["conclusion"] != "failure" or original["publicReadback"] != "unresolved-after-404":
+                refuse("original publication outcome changed")
+        except (OSError, ValueError, TypeError, KeyError):
+            refuse("original publication evidence unavailable")
+        value["originalPublication"] = original
     expected = (json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode()
     if args.existing is not None:
         if not args.existing.is_file():

@@ -108,10 +108,69 @@ def verify_preflight(text: str) -> None:
 
 
 
+def verify_recovery(job: str) -> None:
+    import hashlib, zipfile, copy
+    # Actual YAML conditions: neither recovery nor invalid mode combinations can launch package writes.
+    workflow=WORKFLOW.read_text()
+    gated=['Attest original A bytes under reviewed publisher B','Prove Trusted Publishing authorization before the first package effect','Push original A package to GitHub Packages first','Push those same original A bytes to nuget.org']
+    for name in gated:
+        step=job.split('      - name: '+name+'\n',1)[1].split('      - name:',1)[0]
+        assert step.splitlines()[0]=='        if: inputs.readback_only != true'
+    assert 'if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only' in workflow
+    assert 'if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only' in workflow
+    require_in_order(job,['Download and verify','Bind the original failed first attempt','Verify provenance','Observe both feeds','Read and verify GitHub','Read public bytes','Validate public-only','Create successor tag'])
+    assert job.count('test "$release_status" = 404')==2
+    assert 'if test "$READBACK_ONLY" = true; then exit 0; fi' in job
+    assert '--original-publication "$READBACK_OUTPUT/original-publication.json"' in job
+    code=job.split("          python3 - <<'PY_RECOVERY'\n",1)[1].split('          PY_RECOVERY\n',1)[0]
+    code='\n'.join(line[10:] for line in code.splitlines())
+    compile(code,'actual-original-publication-proof','exec')
+    names=['Bind disabled-by-default CLI admission and both source identities','Bind A ancestry and pin-only B changes','Download and verify the original A archive before consumption','Attest original A bytes under reviewed publisher B','Verify provenance and original package installation before effects','Observe both feeds and tag before any package effect','Prove Trusted Publishing authorization before the first package effect','Recheck current publisher B immediately before the first effect','Push original A package to GitHub Packages first','Read and verify GitHub raw bytes before the public push','Push those same original A bytes to nuget.org','Read public bytes and verify repository signature before comparison','Validate public-only installed CLI and write A/B readback','Create successor tag and release only after both feeds and public install settle']
+    with tempfile.TemporaryDirectory() as directory:
+        root=Path(directory);package='a'*64;publisher='b'*40;candidate=b'exact-original-candidate'
+        with zipfile.ZipFile(root/'original-observation.zip','w') as z:
+            z.writestr('candidate.zip',candidate)
+            z.writestr('github.json',json.dumps(dict(feed='github-packages',candidateSha256=package,servedArchiveSha256=package,payloadMatch=True)))
+        digest=hashlib.sha256((root/'original-observation.zip').read_bytes()).hexdigest()
+        run=dict(id=37979658494,run_attempt=1,repository=dict(id=1346720714),head_repository=dict(id=1346720714),head_branch='main',head_sha=publisher,event='workflow_dispatch',path='.github/workflows/callable-cli-release-publish.yml',status='completed',conclusion='failure')
+        statuses=['success']*11+['failure','skipped','skipped']
+        nativejob=dict(id=113986647717,run_id=run['id'],run_attempt=1,head_sha=publisher,name='Publish the admitted original CLI-only candidate',status='completed',conclusion='failure',steps=[dict(name=name,number=i+1,status='completed',conclusion=status) for i,(name,status) in enumerate(zip(names,statuses))])
+        jobs=dict(total_count=1,jobs=[nativejob])
+        artifact=dict(id=11640567029,expired=False,name='cli-successor-publication-37979658494-1',digest='sha256:'+digest,workflow_run=dict(id=run['id'],head_sha=publisher))
+        env=dict(READBACK_OUTPUT=directory,ORIGINAL_RUN=str(run['id']),ORIGINAL_JOB=str(nativejob['id']),ORIGINAL_PUBLISHER=publisher,ORIGINAL_OBSERVATION=str(artifact['id']),ORIGINAL_OBSERVATION_SHA=digest,PACKAGE_SHA=package,ARCHIVE_SHA=hashlib.sha256(candidate).hexdigest())
+        cases=('good','wrong-run','rerun','wrong-source','missing-step','failed-push','public-success','tag-ran','incomplete-jobs','wrong-artifact','wrong-zip','missing-proof','malformed-attempt','malformed-pagination')
+        for case in cases:
+            r,j,a=copy.deepcopy(run),copy.deepcopy(jobs),copy.deepcopy(artifact);change={}
+            if case=='wrong-run':r['id']+=1
+            if case=='rerun':r['run_attempt']=2
+            if case=='malformed-attempt':r['run_attempt']=True
+            if case=='malformed-pagination':j['total_count']=True
+            if case=='wrong-source':r['head_sha']='c'*40
+            if case=='missing-step':j['jobs'][0]['steps'].pop(0)
+            if case=='failed-push':j['jobs'][0]['steps'][10]['conclusion']='failure'
+            if case=='public-success':j['jobs'][0]['steps'][11]['conclusion']='success'
+            if case=='tag-ran':j['jobs'][0]['steps'][13]['conclusion']='success'
+            if case=='incomplete-jobs':j['total_count']=2
+            if case=='wrong-artifact':a['workflow_run']['head_sha']='c'*40
+            if case=='wrong-zip':change['ORIGINAL_OBSERVATION_SHA']='0'*64
+            for name,value in [('original-run.json',r),('original-jobs.json',j),('original-artifact.json',a)]: (root/name).write_text(json.dumps(value))
+            if case=='missing-proof':(root/'original-run.json').unlink()
+            receipt=root/'original-publication.json';receipt.unlink(missing_ok=True)
+            failed=False
+            with patch.dict(os.environ,{**env,**change},clear=False):
+                try:exec(code,{})
+                except (AssertionError,KeyError,OSError):failed=True
+            assert failed==(case!='good'),case
+            assert receipt.exists()==(case=='good'),case
+            if receipt.exists():
+                value=json.loads(receipt.read_bytes());assert value['runId']==run['id'] and value['conclusion']=='failure' and value['publicReadback']=='unresolved-after-404'
+
+
 def verify_successor(text: str) -> None:
     import json, os, tempfile
     from unittest.mock import patch
     job = text.split("\n  cli_successor:",1)[1]
+    verify_recovery(job)
     assert "inputs.cli_only && !inputs.preflight_only" in job
     assert "dotnet pack" not in job and "portable-workspace-release" not in job
     assert job.count('dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE"') == 2

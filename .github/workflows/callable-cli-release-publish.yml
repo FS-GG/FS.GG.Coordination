@@ -13,6 +13,11 @@ on:
         required: false
         default: false
         type: boolean
+      readback_only:
+        description: Recover the bound original publication without package pushes; finalize only after readback
+        required: false
+        default: false
+        type: boolean
       publisher_source:
         description: Exact reviewed publisher B (CLI-only)
         required: false
@@ -46,7 +51,7 @@ concurrency:
 jobs:
   preflight:
     name: Read-only migration release feasibility
-    if: inputs.preflight_only == true && !inputs.cli_only
+    if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -145,7 +150,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: inputs.preflight_only != true && !inputs.cli_only
+    if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only
     name: Qualify, publish, and read back exact portable CLI
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -584,6 +589,12 @@ jobs:
       PACKAGE_ID: FS.GG.Coordination.Cli
       PACKAGE_VERSION: 0.3.0
       PACKAGE_FILE: FS.GG.Coordination.Cli.0.3.0.nupkg
+      READBACK_ONLY: ${{ inputs.readback_only }}
+      ORIGINAL_PUBLISHER: 1c690180eb0bd0577deb925aab045675a787d32e
+      ORIGINAL_RUN: 37979658494
+      ORIGINAL_JOB: 113986647717
+      ORIGINAL_OBSERVATION: 11640567029
+      ORIGINAL_OBSERVATION_SHA: 4977be50585318c51705b319c6432af340868df20a7fcda8daba3f563d73a73f
       CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-cli-successor-candidate
       READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-cli-successor-readback
     steps:
@@ -673,11 +684,64 @@ jobs:
           assert a['sourceCommit']==os.environ['SOURCE_A'] and a['sourceTree']==os.environ['TREE_A'] and a['packageSha256']==os.environ['PACKAGE_SHA']
           assert a['publicationAuthorized'] is False and a['tagAuthorized'] is False
           PY
+      - name: Bind the original failed first attempt before readback recovery
+        if: inputs.readback_only
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$ORIGINAL_PUBLISHER" "$GITHUB_SHA"
+          cmp <(git show "$ORIGINAL_PUBLISHER:eng/callable-cli-successor-admission.json") eng/callable-cli-successor-admission.json
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ORIGINAL_RUN" > "$READBACK_OUTPUT/original-run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$ORIGINAL_RUN/attempts/1/jobs?per_page=100" > "$READBACK_OUTPUT/original-jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$ORIGINAL_OBSERVATION" > "$READBACK_OUTPUT/original-artifact.json"
+          curl --fail --silent --show-error --location --max-time 120 --max-filesize 104857600 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/original-observation.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$ORIGINAL_OBSERVATION/zip"
+          python3 - <<'PY_RECOVERY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          run=json.loads((root/'original-run.json').read_bytes())
+          assert run['id']==int(os.environ['ORIGINAL_RUN']) and type(run['run_attempt']) is int and run['run_attempt']==1
+          assert run['repository']['id']==1346720714 and run['head_repository']['id']==1346720714
+          assert run['head_branch']=='main' and run['head_sha']==os.environ['ORIGINAL_PUBLISHER'] and run['event']=='workflow_dispatch'
+          assert run['path']=='.github/workflows/callable-cli-release-publish.yml' and run['status']=='completed' and run['conclusion']=='failure'
+          jobs=json.loads((root/'original-jobs.json').read_bytes())
+          assert type(jobs['total_count']) is int and jobs['total_count']==len(jobs['jobs']) and len(jobs['jobs'])<100
+          selected=[j for j in jobs['jobs'] if j['id']==int(os.environ['ORIGINAL_JOB'])]
+          assert len(selected)==1
+          job=selected[0]
+          assert job['run_id']==run['id'] and type(job['run_attempt']) is int and job['run_attempt']==1 and job['head_sha']==run['head_sha']
+          assert job['name']=='Publish the admitted original CLI-only candidate' and job['status']=='completed' and job['conclusion']=='failure'
+          steps={s['name']:s for s in job['steps']}
+          assert len(steps)==len(job['steps'])
+          successful=['Bind disabled-by-default CLI admission and both source identities','Bind A ancestry and pin-only B changes','Download and verify the original A archive before consumption','Attest original A bytes under reviewed publisher B','Verify provenance and original package installation before effects','Observe both feeds and tag before any package effect','Prove Trusted Publishing authorization before the first package effect','Recheck current publisher B immediately before the first effect','Push original A package to GitHub Packages first','Read and verify GitHub raw bytes before the public push','Push those same original A bytes to nuget.org']
+          for name in successful: assert steps[name]['status']=='completed' and steps[name]['conclusion']=='success'
+          failed='Read public bytes and verify repository signature before comparison'
+          assert steps[failed]['conclusion']=='failure' and steps[failed]['status']=='completed'
+          for name in ['Validate public-only installed CLI and write A/B readback','Create successor tag and release only after both feeds and public install settle']:
+              assert steps[name]['conclusion']=='skipped'
+          assert [steps[name]['number'] for name in successful+[failed]]==sorted(steps[name]['number'] for name in successful+[failed])
+          artifact=json.loads((root/'original-artifact.json').read_bytes())
+          assert artifact['id']==int(os.environ['ORIGINAL_OBSERVATION']) and artifact['expired'] is False
+          assert artifact['name']=='cli-successor-publication-37979658494-1' and artifact['digest']=='sha256:'+os.environ['ORIGINAL_OBSERVATION_SHA']
+          assert artifact['workflow_run']['id']==run['id'] and artifact['workflow_run']['head_sha']==run['head_sha']
+          archive=root/'original-observation.zip'
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==os.environ['ORIGINAL_OBSERVATION_SHA']
+          with zipfile.ZipFile(archive) as z:
+              assert len(z.namelist())==len(set(z.namelist()))
+              assert z.getinfo('github.json').file_size<4096 and z.getinfo('candidate.zip').file_size<=104857600
+              original=json.loads(z.read('github.json'))
+              assert original=={'feed':'github-packages','candidateSha256':os.environ['PACKAGE_SHA'],'servedArchiveSha256':os.environ['PACKAGE_SHA'],'payloadMatch':True}
+              assert hashlib.sha256(z.read('candidate.zip')).hexdigest()==os.environ['ARCHIVE_SHA']
+          retained={'publisherSource':run['head_sha'],'runId':run['id'],'runAttempt':1,'jobId':job['id'],'observationArtifactId':artifact['id'],'observationArchiveSha256':os.environ['ORIGINAL_OBSERVATION_SHA'],'conclusion':'failure','publicReadback':'unresolved-after-404'}
+          (root/'original-publication.json').write_text(json.dumps(retained,sort_keys=True)+'\n')
+          PY_RECOVERY
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
       - name: Attest original A bytes under reviewed publisher B
+        if: inputs.readback_only != true
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
@@ -703,7 +767,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test -z "$(git ls-remote --tags origin refs/tags/v0.3.0)"
+          tags="$(git ls-remote --tags origin refs/tags/v0.3.0)"
+          test -z "$tags"
+          release_status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/v0.3.0")"
+          test "$release_status" = 404
+          if test "$READBACK_ONLY" = true; then exit 0; fi
           for feed in github nuget; do
             if test "$feed" = github; then
               url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
@@ -720,6 +788,7 @@ jobs:
             esac
           done
       - name: Prove Trusted Publishing authorization before the first package effect
+        if: inputs.readback_only != true
         id: successor-login
         uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
         with:
@@ -732,6 +801,7 @@ jobs:
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
           test "$(sha256sum "$CANDIDATE_OUTPUT/$PACKAGE_FILE" | cut -d' ' -f1)" = "$PACKAGE_SHA"
       - name: Push original A package to GitHub Packages first
+        if: inputs.readback_only != true
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
@@ -749,6 +819,7 @@ jobs:
           done
           python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github.nupkg" github-packages > "$READBACK_OUTPUT/github.json"
       - name: Push those same original A bytes to nuget.org
+        if: inputs.readback_only != true
         shell: bash
         run: >-
           dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE"
@@ -786,7 +857,9 @@ jobs:
             "$READBACK_OUTPUT/public-installed/fsgg-coordination" workspace-contract schema export "$name" > "$READBACK_OUTPUT/public-$name.schema.json"
             cmp "contracts/portable-workspace/v1/$name.schema.json" "$READBACK_OUTPUT/public-$name.schema.json"
           done
-          python3 eng/write-callable-cli-release-readback.py --cli-only --publisher "$GITHUB_SHA" \
+          original=()
+          if test "$READBACK_ONLY" = true; then original=(--original-publication "$READBACK_OUTPUT/original-publication.json"); fi
+          python3 eng/write-callable-cli-release-readback.py --cli-only --publisher "$GITHUB_SHA" "${original[@]}" \
             --source "$SOURCE_A" --tree "$TREE_A" --merge "$MERGE_A" --package-id "$PACKAGE_ID" \
             --version "$PACKAGE_VERSION" --package-sha256 "$PACKAGE_SHA" \
             --github-feed "$READBACK_OUTPUT/github.json" --nuget-feed "$READBACK_OUTPUT/nuget.json" \
@@ -797,6 +870,12 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          tags="$(git ls-remote --tags origin refs/tags/v0.3.0)"
+          test -z "$tags"
+          release_status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before-finalization.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/v0.3.0")"
+          test "$release_status" = 404
           gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/v0.3.0 -f sha="$SOURCE_A"
           gh release create v0.3.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title 'Coordination CLI 0.3.0' \
             --notes "Original CLI-only candidate source $SOURCE_A, publisher $GITHUB_SHA. Installed native consumer acceptance is separate." \
