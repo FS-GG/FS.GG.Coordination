@@ -154,6 +154,10 @@ module OrdinarySettlementAuthorityProfiles =
             IntegrityRulesetName = "ordinary-v2-main-integrity"
             WriterExcludes = Set.empty }
 
+    // Closed migration profile: rotation requires a newly qualified profile, not pointer substitution.
+    let productionMainEpochCommit = "26d1882af9293b264df17a1fa98515e108313fe5"
+    let productionMainEpochGeneration = 2L
+
 [<RequireQualifiedAccess>]
 module OrdinarySettlementPublicAnchor =
     let private fields (value: JsonElement) =
@@ -543,6 +547,69 @@ module OrdinarySettlementGitHubAuthority =
 
     let private combine (root: Uri) (path: string) = Uri(root, path)
 
+    /// Reads a closed logical epoch from a stable main snapshot, bound to its original immutable
+    /// commit and native ancestry. Unrelated main writes cannot consume a traversal budget.
+    let readMainEpochSnapshot (options: OrdinarySettlementGitHubAuthorityOptions) (transport: IOrdinaryGitHubTransport) =
+        let repository = repositoryPath options.Repository
+        let get path =
+            match transport.Send(
+                Rest { Method = Get; Uri = combine options.ApiBase path
+                       Headers = Map [ "Accept", "application/vnd.github+json"; "Authorization", "Bearer " + options.Token
+                                       "User-Agent", options.UserAgent; "X-GitHub-Api-Version", ApiVersion.value ApiVersion.required ]
+                       Body = None; ApiVersion = ApiVersion.required; Idempotency = ReplaySafe }) with
+            | Response value when value.StatusCode = 200 ->
+                try
+                    use document = JsonDocument.Parse value.Body
+                    if document.RootElement.ValueKind = JsonValueKind.Object then Ok(document.RootElement.Clone())
+                    else Error "authority-main-epoch-response"
+                with _ -> Error "authority-main-epoch-json"
+            | _ -> Error "authority-main-epoch-unavailable"
+        let readRef () =
+            get $"repos/{repository}/git/ref/heads/main"
+            |> Result.bind (fun root ->
+                let target = root.GetProperty("object")
+                let revision = target.GetProperty("sha").GetString()
+                if target.GetProperty("type").GetString() = "commit" && oid revision then Ok revision
+                else Error "authority-main-epoch-ref")
+        let file (revision: string) path =
+            get $"repos/{repository}/contents/{path}?ref={Uri.EscapeDataString revision}"
+            |> Result.bind (fun root ->
+                try
+                    let bytes = root.GetProperty("content").GetString().Replace("\n", "") |> Convert.FromBase64String
+                    if root.GetProperty("encoding").GetString() = "base64" && bytes.Length <= 1_000_000 then Ok bytes
+                    else Error "authority-main-epoch-content"
+                with _ -> Error "authority-main-epoch-content")
+        try
+            if not (oid options.ExpectedEpochCommit) then Error "authority-main-epoch-pin"
+            else
+                match readRef () with
+                | Error reason -> Error reason
+                | Ok before ->
+                    match file before "state/epoch/epoch-head.txt" with
+                    | Error reason -> Error reason
+                    | Ok pointer when pointer <> Encoding.ASCII.GetBytes(options.ExpectedEpochCommit + "\n") ->
+                        Error "authority-epoch-moved"
+                    | Ok _ ->
+                        let logical = options.ExpectedEpochCommit
+                        match file before "state/epoch/head.json", file before "state/epoch/event.json",
+                              file logical "head.json", file logical "event.json",
+                              get $"repos/{repository}/compare/{logical}...{before}", readRef () with
+                        | Ok head, Ok event, Ok originalHead, Ok originalEvent, Ok ancestry, Ok after when before = after ->
+                            let status = ancestry.GetProperty("status").GetString()
+                            if head <> originalHead || event <> originalEvent
+                               || ancestry.GetProperty("base_commit").GetProperty("sha").GetString() <> logical
+                               || ancestry.GetProperty("merge_base_commit").GetProperty("sha").GetString() <> logical
+                               || (status <> "ahead" && status <> "identical") then Error "authority-main-epoch-binding"
+                            else Ok(logical, head, event)
+                        | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error "authority-epoch-moved"
+                        | Error reason, _, _, _, _, _
+                        | _, Error reason, _, _, _, _
+                        | _, _, Error reason, _, _, _
+                        | _, _, _, Error reason, _, _
+                        | _, _, _, _, Error reason, _
+                        | _, _, _, _, _, Error reason -> Error reason
+        with _ -> Error "authority-main-epoch-binding"
+
     type Transport(options: OrdinarySettlementGitHubAuthorityOptions, transport: IOrdinaryGitHubTransport, storage: OrdinarySettlementGitStorage) =
         let repository = repositoryPath options.Repository
         let physicalAddress (address: AggregateAddress) =
@@ -787,32 +854,39 @@ module OrdinarySettlementGitHubAuthority =
                         if root.GetProperty("encoding").GetString() <> "base64" then Error "authority-epoch-encoding"
                         else root.GetProperty("content").GetString().Replace("\n", "") |> Convert.FromBase64String |> Ok
                     with _ -> Error "authority-epoch-content")
-            match refValue () with
+            let snapshot =
+                match storage with
+                | OrdinarySettlementGitStorage.MainDirectory -> readMainEpochSnapshot options transport
+                | OrdinarySettlementGitStorage.JournalBranches ->
+                    match refValue () with
+                    | Error reason -> Error reason
+                    | Ok before when before <> options.ExpectedEpochCommit -> Error "authority-epoch-moved"
+                    | Ok before ->
+                        match epochFile before "head.json", epochFile before "event.json", refValue () with
+                        | Ok headBytes, Ok eventBytes, Ok after when before = after -> Ok(before, headBytes, eventBytes)
+                        | _, _, Ok _ -> Error "authority-epoch-moved"
+                        | Error reason, _, _
+                        | _, Error reason, _
+                        | _, _, Error reason -> Error reason
+            match snapshot with
             | Error reason -> Error reason
-            | Ok before when before <> options.ExpectedEpochCommit -> Error "authority-epoch-moved"
-            | Ok before ->
-                match epochFile before "head.json", epochFile before "event.json", refValue () with
-                | Ok headBytes, Ok eventBytes, Ok after when before = after ->
-                    try
-                        use head = JsonDocument.Parse headBytes
-                        use event = JsonDocument.Parse eventBytes
-                        if head.RootElement.GetProperty("generation").GetInt64() <> options.ExpectedEpochGeneration
-                           || head.RootElement.GetProperty("eventDigest").GetString()
-                              <> (SHA256.HashData eventBytes |> Convert.ToHexString |> _.ToLowerInvariant())
-                           || event.RootElement.GetProperty("schema").GetString() <> "fsgg.github-substrate.epoch-event/1"
-                           || head.RootElement.GetProperty("aggregateId").GetString() <> epochAddress.CanonicalId
-                           || head.RootElement.GetProperty("aggregateDigest").GetString() <> epochAddress.Digest
-                           || head.RootElement.GetProperty("journalKind").GetString() <> "cutover"
-                           || head.RootElement.GetProperty("shard").GetString() <> epochAddress.Shard
-                           || event.RootElement.GetProperty("fleetId").GetString() <> options.EpochFleetId
-                           || event.RootElement.GetProperty("phase").GetString() <> "OpenV2" then
-                            Error "authority-epoch-moved"
-                        else Ok()
-                    with _ -> Error "authority-epoch-document"
-                | _, _, Ok _ -> Error "authority-epoch-moved"
-                | Error reason, _, _
-                | _, Error reason, _
-                | _, _, Error reason -> Error reason
+            | Ok(_, headBytes, eventBytes) ->
+                try
+                    use head = JsonDocument.Parse headBytes
+                    use event = JsonDocument.Parse eventBytes
+                    if head.RootElement.GetProperty("generation").GetInt64() <> options.ExpectedEpochGeneration
+                       || head.RootElement.GetProperty("eventDigest").GetString()
+                          <> (SHA256.HashData eventBytes |> Convert.ToHexString |> _.ToLowerInvariant())
+                       || event.RootElement.GetProperty("schema").GetString() <> "fsgg.github-substrate.epoch-event/1"
+                       || head.RootElement.GetProperty("aggregateId").GetString() <> epochAddress.CanonicalId
+                       || head.RootElement.GetProperty("aggregateDigest").GetString() <> epochAddress.Digest
+                       || head.RootElement.GetProperty("journalKind").GetString() <> "cutover"
+                       || head.RootElement.GetProperty("shard").GetString() <> epochAddress.Shard
+                       || event.RootElement.GetProperty("fleetId").GetString() <> options.EpochFleetId
+                       || event.RootElement.GetProperty("phase").GetString() <> "OpenV2" then
+                        Error "authority-epoch-moved"
+                    else Ok()
+                with _ -> Error "authority-epoch-document"
 
         let verifyCurrentProtection (address: AggregateAddress) appId =
             let read () =

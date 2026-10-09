@@ -336,7 +336,7 @@ module InstalledOrdinarySettlementProvider =
             else Ok(phase, generation, revision)
         with _ -> Error "epoch-document"
 
-    let private authorityEpoch (profile: OrdinarySettlementAuthorityProfile) (transport: IOrdinaryGitHubTransport) (token: string) =
+    let private legacyAuthorityEpoch (profile: OrdinarySettlementAuthorityProfile) (transport: IOrdinaryGitHubTransport) (token: string) =
         let repository = profile.Repository.Split('/') |> Array.map Uri.EscapeDataString |> String.concat "/"
         let epochRef = profile.EpochRef.Substring("refs/".Length)
         let readRef () =
@@ -359,6 +359,20 @@ module InstalledOrdinarySettlementProvider =
             | Error reason, _, _
             | _, Error reason, _
             | _, _, Error reason -> Error reason
+
+    let private authorityEpoch storage profile anchor transport token =
+        match storage with
+        | OrdinarySettlementGitStorage.JournalBranches -> legacyAuthorityEpoch profile transport token
+        | OrdinarySettlementGitStorage.MainDirectory ->
+            let options =
+                OrdinarySettlementPublicAnchor.transportOptions apiBase token userAgent profile anchor
+                    OrdinarySettlementAuthorityProfiles.productionMainEpochCommit
+                    OrdinarySettlementAuthorityProfiles.productionMainEpochGeneration
+            OrdinarySettlementGitHubAuthority.readMainEpochSnapshot options transport
+            |> Result.bind (fun (revision, head, event) -> validateEpochDocuments profile revision head event)
+            |> Result.bind (fun (phase, generation, revision) ->
+                if generation <> OrdinarySettlementAuthorityProfiles.productionMainEpochGeneration then Error "epoch-not-selected-main-profile"
+                else Ok(phase, generation, revision))
 
     let private selectedPolicySourceValid required (profile: SourceProfile) (root: JsonElement) =
         let mutable selected = Unchecked.defaultof<JsonElement>
@@ -485,7 +499,7 @@ module InstalledOrdinarySettlementProvider =
                         let client = new HttpClient(handler, true, Timeout = TimeSpan.FromSeconds 30.0)
                         let github = HttpOrdinaryGitHubTransport client :> IOrdinaryGitHubTransport
                         let! authorityToken = mintInstallationToken github appId anchor.Trust.InstallationId profile.RepositoryId appPrivateKey
-                        let! epoch, epochGeneration, epochCommit = authorityEpoch profile github authorityToken
+                        let! epoch, epochGeneration, epochCommit = authorityEpoch storage profile anchor github authorityToken
                         // Fence queued runs again after credential minting and the current epoch read,
                         // immediately before plan construction and signing. The child still receives no secrets.
                         let! _ = runObserver workspace observerAction receiptPath

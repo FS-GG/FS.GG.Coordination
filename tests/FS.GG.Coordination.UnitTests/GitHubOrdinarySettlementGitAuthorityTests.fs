@@ -208,7 +208,9 @@ type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?b
         member _.Send request =
             let rest = match request with Rest value -> value | _ -> failwith "REST required"
             requests.Add rest
-            let path = rest.Uri.AbsolutePath
+            let path =
+                rest.Uri.AbsolutePath.Replace("/contents/state/epoch/head.json", "/contents/head.json")
+                    .Replace("/contents/state/epoch/event.json", "/contents/event.json")
             match rest.Method with
             | Get when path = "/repos/FS-GG/FS.GG.Coordination.Authority" ->
                 githubResponse 200 "{\"id\":1351660651,\"full_name\":\"FS-GG/FS.GG.Coordination.Authority\"}"
@@ -222,6 +224,11 @@ type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?b
                 githubResponse 200 $"{{\"encoding\":\"base64\",\"content\":\"{encoded bytes}\"}}"
             | Get when path.EndsWith("/contents/event.json") ->
                 githubResponse 200 $"{{\"encoding\":\"base64\",\"content\":\"{encoded epochEvent}\"}}"
+            | Get when path.EndsWith("/contents/state/epoch/epoch-head.txt") ->
+                let currentEpochOid = if badEpoch then sha "8" else epochOid
+                githubResponse 200 (JsonSerializer.Serialize {| encoding = "base64"; content = encoded (Encoding.ASCII.GetBytes(currentEpochOid + "\n")) |})
+            | Get when path.Contains("/compare/") ->
+                githubResponse 200 (JsonSerializer.Serialize {| status = "ahead"; base_commit = {| sha = epochOid |}; merge_base_commit = {| sha = epochOid |} |})
             | Get when path.EndsWith("/rulesets/21872113") -> githubResponse 200 (storageRules writer)
             | Get when path.EndsWith("/rulesets/21872115") -> githubResponse 200 (storageRules integrity)
             | Get when path.Contains("/rules/branches/") -> githubResponse 200 effective
@@ -384,6 +391,7 @@ type private LocalGitMainTransport() =
     let mutable raceNextPatch = false
     let mutable loseNextReply = false
     let mutable patches = 0
+    let mutable epochHead = ""
     let run arguments input =
         let start = Diagnostics.ProcessStartInfo("git")
         start.WorkingDirectory <- directory
@@ -415,7 +423,23 @@ type private LocalGitMainTransport() =
         IO.File.WriteAllText(IO.Path.Combine(directory, "README.md"), "retained main content\n")
         git [ "add"; "README.md" ] None |> ignore
         git [ "commit"; "--quiet"; "-m"; "seed" ] None |> ignore
+        let event = "{\"fleetId\":\"fs-gg-production\",\"phase\":\"OpenV2\",\"schema\":\"fsgg.github-substrate.epoch-event/1\"}"
+        let digest = SHA256.HashData(Encoding.UTF8.GetBytes event) |> Convert.ToHexString |> _.ToLowerInvariant()
+        let head = $"{{\"aggregateDigest\":\"d546289f29b34a4967e27425acba1c9ad2feb4f4b2110f5db41a5544976cb363\",\"aggregateId\":\"fleet-cutover:fs-gg-production\",\"eventDigest\":\"{digest}\",\"generation\":7,\"journalKind\":\"cutover\",\"shard\":\"d5\"}}"
+        let headBlob = git [ "hash-object"; "-w"; "--stdin" ] (Some head)
+        let eventBlob = git [ "hash-object"; "-w"; "--stdin" ] (Some event)
+        let tree = git [ "mktree" ] (Some $"100644 blob {eventBlob}\tevent.json\n100644 blob {headBlob}\thead.json\n")
+        epochHead <- git [ "commit-tree"; tree ] (Some "original immutable epoch")
+        IO.Directory.CreateDirectory(IO.Path.Combine(directory, "state/epoch")) |> ignore
+        for path, bytes in [ "head.json", head; "event.json", event; "epoch-head.txt", epochHead + "\n" ] do
+            IO.File.WriteAllText(IO.Path.Combine(directory, "state/epoch", path), bytes)
+        git [ "add"; "state/epoch" ] None |> ignore
+        let main = git [ "rev-parse"; "refs/heads/main" ] None
+        let importedTree = git [ "write-tree" ] None
+        let imported = git [ "commit-tree"; importedTree; "-p"; main; "-p"; epochHead ] (Some "retain original epoch")
+        git [ "update-ref"; "refs/heads/main"; imported; main ] None |> ignore
     member _.Head = git [ "rev-parse"; "refs/heads/main" ] None
+    member _.EpochHead = epochHead
     member _.Read path =
         match run [ "show"; "refs/heads/main:" + path ] None with
         | 0, value, _ -> value
@@ -424,6 +448,12 @@ type private LocalGitMainTransport() =
     member _.RaceNextPatch with set value = raceNextPatch <- value
     member _.LoseNextReply with set value = loseNextReply <- value
     member _.RemoveMain() = git [ "update-ref"; "-d"; "refs/heads/main" ] None |> ignore
+    member _.AdvanceMain count =
+        for index in 1 .. count do
+            let current = git [ "rev-parse"; "refs/heads/main" ] None
+            let tree = git [ "rev-parse"; current + "^{tree}" ] None
+            let next = git [ "commit-tree"; tree; "-p"; current ] (Some $"unrelated main update {index}")
+            git [ "update-ref"; "refs/heads/main"; next; current ] None |> ignore
     interface IDisposable with
         member _.Dispose() = IO.Directory.Delete(directory, true)
     interface IOrdinaryGitHubTransport with
@@ -432,16 +462,22 @@ type private LocalGitMainTransport() =
             let path = Uri.UnescapeDataString rest.Uri.AbsolutePath
             let body () = JsonDocument.Parse rest.Body.Value
             match rest.Method with
+            | Get when path.Contains("/git/ref/heads/fsgg/v2/journal/cutover/") -> failwith "legacy epoch ref retired in this fixture"
             | Get when path.EndsWith("/git/ref/heads/main") ->
                 match run [ "rev-parse"; "--verify"; "refs/heads/main" ] None with
                 | 0, value, _ -> refResponse 200 (value.Trim())
                 | _ -> githubResponse 404 "{}"
-            | Get when path.Contains("/contents/state/ordinary-v2/") ->
+            | Get when path.Contains("/contents/state/") ->
                 let file = path.Substring(path.IndexOf("/contents/", StringComparison.Ordinal) + 10)
                 let revision = Uri.UnescapeDataString(rest.Uri.Query.Substring(5))
                 match run [ "show"; revision + ":" + file ] None with
                 | 0, value, _ -> githubResponse 200 (JsonSerializer.Serialize {| encoding = "base64"; content = Convert.ToBase64String(Encoding.UTF8.GetBytes value) |})
                 | _ -> githubResponse 404 "{}"
+            | Get when path.Contains("/compare/") ->
+                let revisions = path.Substring(path.IndexOf("/compare/", StringComparison.Ordinal) + 9).Split("...")
+                let ancestor = git [ "merge-base"; revisions[0]; revisions[1] ] None
+                let status = if ancestor = revisions[0] then "ahead" else "diverged"
+                githubResponse 200 (JsonSerializer.Serialize {| status = status; base_commit = {| sha = revisions[0] |}; merge_base_commit = {| sha = ancestor |} |})
             | Get when path.Contains("/git/commits/") ->
                 let revision = path.Substring(path.LastIndexOf('/') + 1)
                 let tree = git [ "rev-parse"; revision + "^{tree}" ] None
@@ -493,7 +529,7 @@ type private LocalGitMainTransport() =
 [<Fact>]
 let ``main storage completes and replays real local Git settlement preserving unrelated state`` () =
     use wire = new LocalGitMainTransport()
-    let transport = OrdinarySettlementGitHubAuthority.Transport(mainOptions, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
+    let transport = OrdinarySettlementGitHubAuthority.Transport({ mainOptions with ExpectedEpochCommit = wire.EpochHead }, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
     let otherAddress = ShardedJournalAdapter.address Operation "ordinary:101:another-pr" |> Result.defaultWith (string >> failwith)
     let other = { Address = otherAddress; Revision = None; Entries = Map.empty; Effects = Map.empty }
     let otherBytes = OrdinarySettlementAuthorityDocument.encode other
@@ -521,7 +557,7 @@ let ``main storage completes and replays real local Git settlement preserving un
 [<Fact>]
 let ``main storage refuses sibling race stale reads and absent main without bootstrap`` () =
     use wire = new LocalGitMainTransport()
-    let transport = OrdinarySettlementGitHubAuthority.Transport(mainOptions, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
+    let transport = OrdinarySettlementGitHubAuthority.Transport({ mainOptions with ExpectedEpochCommit = wire.EpochHead }, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
     let original = wire.Head
     wire.RaceNextPatch <- true
     Assert.Equal(SettlementCasConflict, transport.CompareExchangeDocument(address, Some original, [| 1uy |]))
@@ -570,3 +606,38 @@ let ``installed main profile pins separate native rulesets and retains logical e
         |> Encoding.UTF8.GetBytes
     Assert.True(OrdinarySettlementPublicAnchor.parseForStorage OrdinarySettlementGitStorage.MainDirectory profile (ReadOnlyMemory bytes) |> Result.isOk)
     Assert.Equal(Error "ordinary-settlement-anchor-binding", OrdinarySettlementPublicAnchor.parse OrdinarySettlementAuthorityProfiles.production (ReadOnlyMemory bytes))
+
+[<Fact>]
+let ``closed main epoch has no old branch dependency or shared write count expiry`` () =
+    use wire = new LocalGitMainTransport()
+    let options = { mainOptions with ExpectedEpochCommit = wire.EpochHead }
+    let before = OrdinarySettlementGitHubAuthority.readMainEpochSnapshot options wire |> Result.defaultWith failwith
+    wire.AdvanceMain 140
+    let after = OrdinarySettlementGitHubAuthority.readMainEpochSnapshot options wire |> Result.defaultWith failwith
+    Assert.Equal(before, after)
+    let transport = OrdinarySettlementGitHubAuthority.Transport(options, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
+    Assert.Equal(Ok(), transport.VerifyCurrentProtection(address, 9001L))
+
+[<Fact>]
+let ``closed main epoch refuses changed pointer content missing ancestry and moving snapshot`` () =
+    for mode in [ "pointer"; "content"; "ancestry"; "moving"; "missing" ] do
+        let baseWire = GitHubAuthorityTransport(mainDirectory = true) :> IOrdinaryGitHubTransport
+        let mutable mainReads = 0
+        let wire =
+            { new IOrdinaryGitHubTransport with
+                member _.Send request =
+                    let rest = match request with Rest value -> value | _ -> failwith "REST required"
+                    let path = rest.Uri.AbsolutePath
+                    if path.Contains("/git/ref/heads/fsgg/v2/journal/cutover/") then failwith "old epoch branch must not be read"
+                    if path.EndsWith("/git/ref/heads/main") then mainReads <- mainReads + 1
+                    if mode = "missing" && path.EndsWith("/contents/state/epoch/epoch-head.txt") then githubResponse 404 "{}"
+                    elif mode = "pointer" && path.EndsWith("/contents/state/epoch/epoch-head.txt") then
+                        githubResponse 200 (JsonSerializer.Serialize {| encoding = "base64"; content = Convert.ToBase64String(Encoding.ASCII.GetBytes(sha "8" + "\n")) |})
+                    elif mode = "content" && path.EndsWith("/contents/state/epoch/event.json") then
+                        githubResponse 200 (JsonSerializer.Serialize {| encoding = "base64"; content = Convert.ToBase64String(Encoding.UTF8.GetBytes "{}") |})
+                    elif mode = "ancestry" && path.Contains("/compare/") then
+                        githubResponse 200 (JsonSerializer.Serialize {| status = "diverged"; base_commit = {| sha = sha "9" |}; merge_base_commit = {| sha = sha "8" |} |})
+                    elif mode = "moving" && path.EndsWith("/git/ref/heads/main") && mainReads = 2 then
+                        githubResponse 200 (JsonSerializer.Serialize {| ``object`` = {| ``type`` = "commit"; sha = sha "b" |} |})
+                    else baseWire.Send request }
+        Assert.True(OrdinarySettlementGitHubAuthority.readMainEpochSnapshot mainOptions wire |> Result.isError, mode)
