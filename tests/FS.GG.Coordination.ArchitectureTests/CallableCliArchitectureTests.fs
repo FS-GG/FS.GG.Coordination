@@ -22,9 +22,9 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackAsTool>true</PackAsTool>"
             "<ToolCommandName>fsgg-coordination</ToolCommandName>"
             "<PackageId>FS.GG.Coordination.Cli</PackageId>"
-            "<Version>0.2.1</Version>"
-            "<PackageVersion>0.2.1</PackageVersion>"
-            "<PackageReleaseNotes>Adds the source-qualified Python portable workspace resolver while preserving the portable workspace v1 contract and published source profiles.</PackageReleaseNotes>"
+            "<Version>0.3.0</Version>"
+            "<PackageVersion>0.3.0</PackageVersion>"
+            "<PackageReleaseNotes>Adds opt-in protected-main ordinary settlement storage and CLI-only successor qualification while preserving legacy settlement routes and the portable workspace v1 contract.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
     let otherProjects =
@@ -63,7 +63,7 @@ let ``callable CLI release preparation binds reviewed version project and tag`` 
     let script = read "eng/callable-cli-release.fsx"
     for expected in
         [
-            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\"; \"0.2.1\" ]"
+            "[ \"0.1.1\"; \"0.1.2\"; \"0.1.3\"; \"0.1.4\"; \"0.1.5\"; \"0.1.6\"; \"0.1.7\"; \"0.2.0\"; \"0.2.1\"; \"0.3.0\" ]"
             "projectPackageVersion () = version"
             "let tag = $\"v{version}\""
             "root.GetProperty(\"tag\").GetString() = tag"
@@ -152,7 +152,14 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
 
     Assert.DoesNotContain("--skip-duplicate", workflow, StringComparison.Ordinal)
     Assert.DoesNotContain("actions/permissions/selected-actions", workflow, StringComparison.Ordinal)
-    Assert.DoesNotContain("NUGET_API_KEY }}", workflow.Replace("steps.nuget-login.outputs.NUGET_API_KEY }}", ""), StringComparison.Ordinal)
+    let withoutReviewedLoginOutputs =
+        workflow.Replace("steps.nuget-login.outputs.NUGET_API_KEY }}", "")
+            .Replace("steps.successor-login.outputs.NUGET_API_KEY }}", "")
+    Assert.DoesNotContain("NUGET_API_KEY }}", withoutReviewedLoginOutputs, StringComparison.Ordinal)
+    let successor = workflow.Substring(workflow.IndexOf("  cli_successor:", StringComparison.Ordinal))
+    Assert.Contains("PACKAGE_VERSION: 0.3.0", successor, StringComparison.Ordinal)
+    Assert.Contains("successor publication admission is disabled", successor, StringComparison.Ordinal)
+    Assert.Contains("steps.successor-login.outputs.NUGET_API_KEY }}", successor, StringComparison.Ordinal)
     let githubPush = workflow.IndexOf("nuget.pkg.github.com/FS-GG/index.json", StringComparison.Ordinal)
     let publicPush = workflow.IndexOf("api.nuget.org/v3/index.json", StringComparison.Ordinal)
     let releaseCollision = workflow.IndexOf("Observe release assets and refuse collisions before any package effect", StringComparison.Ordinal)
