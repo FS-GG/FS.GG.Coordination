@@ -584,8 +584,8 @@ jobs:
       PACKAGE_ID: FS.GG.Coordination.Cli
       PACKAGE_VERSION: 0.3.0
       PACKAGE_FILE: FS.GG.Coordination.Cli.0.3.0.nupkg
-      CANDIDATE_OUTPUT: ${{ runner.temp }}/cli-successor-candidate
-      READBACK_OUTPUT: ${{ runner.temp }}/cli-successor-readback
+      CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-cli-successor-candidate
+      READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-cli-successor-readback
     steps:
       - name: Check out reviewed publisher B without persisted credentials
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
