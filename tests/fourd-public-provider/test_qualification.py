@@ -17,7 +17,7 @@ qualify = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 sys.modules[SPEC.name] = qualify
 SPEC.loader.exec_module(qualify)
-WORKFLOW = ROOT / ".github/workflows/fourd-public-provider-qualification.yml"
+WORKFLOW = ROOT / "tests/fixtures/retired-workflows/fourd-public-provider-qualification.yml"
 
 
 def context(attempt="2"):

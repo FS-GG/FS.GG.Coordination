@@ -14,7 +14,7 @@ SPEC = importlib.util.spec_from_file_location(
 capacity = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(capacity)
-WORKFLOW = ROOT / ".github/workflows/fourd-public-provider-qualification.yml"
+WORKFLOW = ROOT / "tests/fixtures/retired-workflows/fourd-public-provider-qualification.yml"
 HELPER = ROOT / "eng/fourd-public-provider/capacity.py"
 
 
@@ -226,6 +226,12 @@ class ScreenTests(unittest.TestCase):
 
 
 class WorkflowSourceTests(unittest.TestCase):
+    def test_retired_workflow_is_fixture_only_with_original_bytes(self):
+        import hashlib
+        self.assertFalse((ROOT / ".github/workflows/fourd-public-provider-qualification.yml").exists())
+        archived = ROOT / "tests/fixtures/retired-workflows/fourd-public-provider-qualification.yml"
+        self.assertEqual("03e2c515ca58c045892135c2dc53fa8826fb2c0489af68ff49bd9a53dfc59d80", hashlib.sha256(archived.read_bytes()).hexdigest())
+
     def test_capacity_job_is_manual_fixed_and_has_no_credentials_or_private_effects(self):
         text = WORKFLOW.read_text()
         helper = HELPER.read_text()
