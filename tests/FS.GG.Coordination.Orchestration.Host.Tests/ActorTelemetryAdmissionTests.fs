@@ -31,6 +31,25 @@ let ``causal root child and retry retain exact canonical lineage and declaration
     Assert.True(ExecutionCausalAdmission.validate { child with ParentInvocationId = "foreign" } |> Result.isError)
 
 [<Fact>]
+let ``parent generation stays between declared root and child on direct and wire admission`` () =
+    let root = causal ()
+    let child = ExecutionCausalAdmission.create root.OriginalItemId "child" (Guid.NewGuid()) (Guid.NewGuid()) 2L Fixture.now root.Declaration (Some root) |> unwrap
+    let followUp = ExecutionCausalAdmission.create root.OriginalItemId "follow-up" (Guid.NewGuid()) (Guid.NewGuid()) 3L Fixture.now root.Declaration (Some child) |> unwrap
+    for valid in [ root; child; { followUp with Relation = "follow-up" } ] do
+        Assert.True(ExecutionCausalAdmission.validate valid |> Result.isOk)
+        Assert.Equal(valid, ExecutionCausalAdmission.encode valid |> ExecutionCausalAdmission.parse |> unwrap)
+    for generation in [ -1L; 0L; child.Generation; child.Generation + 1L ] do
+        let malformed =
+            { child with
+                ParentGeneration = Nullable generation
+                ParentInvocationId = ExecutionCausalAdmission.invocationId child.OriginalItemId child.ParentAttemptId.Value generation }
+        Assert.True(ExecutionCausalAdmission.validate malformed |> Result.isError)
+        Assert.True(ExecutionCausalAdmission.encode malformed |> ExecutionCausalAdmission.parse |> Result.isError)
+    let beforeRoot = { child with Generation = 0L; InvocationId = ExecutionCausalAdmission.invocationId child.OriginalItemId child.AttemptId 0L }
+    Assert.True(ExecutionCausalAdmission.validate beforeRoot |> Result.isError)
+    Assert.True(ExecutionCausalAdmission.validate { root with RootGeneration = -1L } |> Result.isError)
+
+[<Fact>]
 let ``declarations refuse invented purpose duplicate edges missing provenance and overflow`` () =
     let root = causal ()
     let edge = { OriginalItemId = "other-original"; InvocationId = "dependency"; SourceReference = "source:exact-admission" }

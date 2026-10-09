@@ -77,7 +77,8 @@ module ExecutionCausalAdmission =
                     not ((set [ "child"; "follow-up" ]).Contains value.Relation)
                     || not (text 128 value.ParentInvocationId) || value.Generation <= value.RootGeneration
                     || not value.ParentAttemptId.HasValue || not value.ParentGeneration.HasValue
-                    || value.ParentAttemptId.Value = Guid.Empty || value.ParentGeneration.Value >= value.Generation
+                    || value.ParentAttemptId.Value = Guid.Empty || value.ParentGeneration.Value < value.RootGeneration
+                    || value.ParentGeneration.Value >= value.Generation
                     || value.ParentInvocationId <> invocationId value.OriginalItemId value.ParentAttemptId.Value value.ParentGeneration.Value)
              || not (validDeclaration value.Declaration value.ParentInvocationId)
              || (value.Declaration.Dependencies |> Array.exists (fun edge -> edge.InvocationId = value.InvocationId)) then
