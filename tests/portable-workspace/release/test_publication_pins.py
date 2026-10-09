@@ -86,9 +86,9 @@ def verify_preflight(text: str) -> None:
             if url.startswith(namespace + "/versions?"):
                 if mode == "incomplete": return Response([{"name": str(i)} for i in range(100)])
                 if mode == "malformed": return Response([{"name": 3}])
-                return Response([{"name": "0.2.2" if mode == "org-collision" else "0.2.0"}])
+                return Response([{"name": "0.3.0" if mode == "org-collision" else "0.2.0"}])
             assert url == "https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/index.json"
-            return Response({"versions": ["0.2.2" if mode == "public-collision" else "0.2.0"]})
+            return Response({"versions": ["0.3.0" if mode == "public-collision" else "0.2.0"]})
         with tempfile.TemporaryDirectory() as directory:
             environment = {"REQUESTED_SOURCE": source, "GITHUB_SHA": source, "GITHUB_REF": "refs/heads/main",
                            "GITHUB_REPOSITORY": "FS-GG/FS.GG.Coordination", "GH_TOKEN": "fixture-only-token", "RUNNER_TEMP": directory}

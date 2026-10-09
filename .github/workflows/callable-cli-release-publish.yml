@@ -97,7 +97,7 @@ jobs:
           public_versions = public.get("versions") if isinstance(public, dict) else None
           if not isinstance(public_versions, list) or not all(isinstance(value, str) for value in public_versions):
               raise SystemExit("preflight public versions malformed")
-          proposed = "0.2.2"
+          proposed = "0.3.0"
           if proposed in versions or proposed in public_versions:
               raise SystemExit("preflight proposed successor version is occupied")
           after = read(api + "/repos/FS-GG/FS.GG.Coordination/git/ref/heads/main", True)
