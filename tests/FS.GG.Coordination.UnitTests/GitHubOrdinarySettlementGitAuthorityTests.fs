@@ -176,7 +176,7 @@ let private authorityOptions =
       EpochFleetId = "fs-gg-production"
       EpochRef = "refs/heads/fsgg/v2/journal/cutover/d5" }
 
-type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?badEpoch: bool, ?patchOutcome: TransportOutcome) =
+type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?badEpoch: bool, ?patchOutcome: TransportOutcome, ?mainDirectory: bool) =
     let requests = ResizeArray<RestRequest>()
     let badExclusion = defaultArg badExclusion false
     let oidA, oidB, oidC, oidD, oidE = sha "a", sha "b", sha "c", sha "d", sha "e"
@@ -198,6 +198,11 @@ type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?b
     let epochDigest = SHA256.HashData epochEvent |> Convert.ToHexString |> _.ToLowerInvariant()
     let epochOid = sha "9"
     let encoded bytes = Convert.ToBase64String bytes
+    let storageRules (body: string) =
+        if defaultArg mainDirectory false then
+            body.Replace("refs/heads/fsgg/v2/journal/**/*", "refs/heads/main")
+                .Replace("[\"refs/heads/fsgg/v2/journal/cutover/d5\"]", "[]")
+        else body
     member _.Requests = requests |> Seq.toList
     interface IOrdinaryGitHubTransport with
         member _.Send request =
@@ -217,10 +222,10 @@ type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?b
                 githubResponse 200 $"{{\"encoding\":\"base64\",\"content\":\"{encoded bytes}\"}}"
             | Get when path.EndsWith("/contents/event.json") ->
                 githubResponse 200 $"{{\"encoding\":\"base64\",\"content\":\"{encoded epochEvent}\"}}"
-            | Get when path.EndsWith("/rulesets/21872113") -> githubResponse 200 writer
-            | Get when path.EndsWith("/rulesets/21872115") -> githubResponse 200 integrity
+            | Get when path.EndsWith("/rulesets/21872113") -> githubResponse 200 (storageRules writer)
+            | Get when path.EndsWith("/rulesets/21872115") -> githubResponse 200 (storageRules integrity)
             | Get when path.Contains("/rules/branches/") -> githubResponse 200 effective
-            | Get when path.Contains("/contents/ordinary-v2/") -> githubResponse 404 "{}"
+            | Get when path.Contains("/contents/ordinary-v2/") || path.Contains("/contents/state/ordinary-v2/") -> githubResponse 404 "{}"
             | Get when path.Contains("/git/ref/") -> githubResponse 200 $"{{\"object\":{{\"type\":\"commit\",\"sha\":\"{oidA}\"}}}}"
             | Get when path.Contains("/git/commits/") -> githubResponse 200 $"{{\"tree\":{{\"sha\":\"{oidB}\"}}}}"
             | Post when path.EndsWith("/git/blobs") -> githubResponse 201 $"{{\"sha\":\"{oidC}\"}}"
@@ -356,3 +361,174 @@ let ``public anchor accepts only the pinned rehearsal repository and ruleset nam
     Assert.True(
         OrdinarySettlementPublicAnchor.parse OrdinarySettlementAuthorityProfiles.rehearsal (ReadOnlyMemory bytes)
         |> Result.isOk)
+
+let private mainOptions =
+    { authorityOptions with
+        WriterIncludes = Set [ "refs/heads/main" ]; WriterExcludes = Set.empty
+        IntegrityIncludes = Set [ "refs/heads/main" ]; IntegrityExcludes = Set.empty }
+
+[<Fact>]
+let ``main storage requires exact main protection and visible actors`` () =
+    let create options wire =
+        OrdinarySettlementGitHubAuthority.Transport(options, wire, OrdinarySettlementGitStorage.MainDirectory)
+        :> IOrdinarySettlementGitAuthorityTransport
+    Assert.Equal(Ok(), (create mainOptions (GitHubAuthorityTransport(mainDirectory = true))).VerifyCurrentProtection(address, 9001L))
+    Assert.Equal(Error "authority-ruleset-drift", (create authorityOptions (GitHubAuthorityTransport())).VerifyCurrentProtection(address, 9001L))
+    Assert.Equal(Error "authority-ruleset-drift", (create mainOptions (GitHubAuthorityTransport(mainDirectory = true, omitActors = true))).VerifyCurrentProtection(address, 9001L))
+
+/// Local Git supplies actual objects, trees, parents, and atomic refs; the HTTP seam supplies only
+/// the GitHub wire envelope and pinned synthetic protection/epoch observations. No remote effects.
+type private LocalGitMainTransport() =
+    let directory = IO.Path.Combine(IO.Path.GetTempPath(), "ordinary-main-" + Guid.NewGuid().ToString("N"))
+    let policy = GitHubAuthorityTransport(mainDirectory = true) :> IOrdinaryGitHubTransport
+    let mutable raceNextPatch = false
+    let mutable loseNextReply = false
+    let mutable patches = 0
+    let run arguments input =
+        let start = Diagnostics.ProcessStartInfo("git")
+        start.WorkingDirectory <- directory
+        start.RedirectStandardInput <- true
+        start.RedirectStandardOutput <- true
+        start.RedirectStandardError <- true
+        start.UseShellExecute <- false
+        for argument in arguments do start.ArgumentList.Add argument
+        for key, value in [ "GIT_AUTHOR_NAME", "fixture"; "GIT_AUTHOR_EMAIL", "fixture@example.invalid"
+                            "GIT_COMMITTER_NAME", "fixture"; "GIT_COMMITTER_EMAIL", "fixture@example.invalid"
+                            "GIT_CONFIG_NOSYSTEM", "1"; "GIT_CONFIG_GLOBAL", IO.Path.Combine(directory, "empty-config") ] do
+            start.Environment[key] <- value
+        use child = Diagnostics.Process.Start start
+        child.StandardInput.Write(defaultArg input "")
+        child.StandardInput.Close()
+        let output = child.StandardOutput.ReadToEnd()
+        let error = child.StandardError.ReadToEnd()
+        child.WaitForExit()
+        child.ExitCode, output, error
+    let git arguments input =
+        let code, output, error = run arguments input
+        if code <> 0 then failwithf "local Git failed: %A: %s" arguments error
+        output.TrimEnd('\n', '\r')
+    let refResponse status revision =
+        githubResponse status (JsonSerializer.Serialize {| ``object`` = {| ``type`` = "commit"; sha = revision |} |})
+    do
+        IO.Directory.CreateDirectory directory |> ignore
+        git [ "init"; "--initial-branch=main"; "--quiet" ] None |> ignore
+        IO.File.WriteAllText(IO.Path.Combine(directory, "README.md"), "retained main content\n")
+        git [ "add"; "README.md" ] None |> ignore
+        git [ "commit"; "--quiet"; "-m"; "seed" ] None |> ignore
+    member _.Head = git [ "rev-parse"; "refs/heads/main" ] None
+    member _.Read path =
+        match run [ "show"; "refs/heads/main:" + path ] None with
+        | 0, value, _ -> value
+        | _, _, error -> failwith error
+    member _.Patches = patches
+    member _.RaceNextPatch with set value = raceNextPatch <- value
+    member _.LoseNextReply with set value = loseNextReply <- value
+    member _.RemoveMain() = git [ "update-ref"; "-d"; "refs/heads/main" ] None |> ignore
+    interface IDisposable with
+        member _.Dispose() = IO.Directory.Delete(directory, true)
+    interface IOrdinaryGitHubTransport with
+        member _.Send request =
+            let rest = match request with Rest value -> value | _ -> failwith "REST required"
+            let path = Uri.UnescapeDataString rest.Uri.AbsolutePath
+            let body () = JsonDocument.Parse rest.Body.Value
+            match rest.Method with
+            | Get when path.EndsWith("/git/ref/heads/main") ->
+                match run [ "rev-parse"; "--verify"; "refs/heads/main" ] None with
+                | 0, value, _ -> refResponse 200 (value.Trim())
+                | _ -> githubResponse 404 "{}"
+            | Get when path.Contains("/contents/state/ordinary-v2/") ->
+                let file = path.Substring(path.IndexOf("/contents/", StringComparison.Ordinal) + 10)
+                let revision = Uri.UnescapeDataString(rest.Uri.Query.Substring(5))
+                match run [ "show"; revision + ":" + file ] None with
+                | 0, value, _ -> githubResponse 200 (JsonSerializer.Serialize {| encoding = "base64"; content = Convert.ToBase64String(Encoding.UTF8.GetBytes value) |})
+                | _ -> githubResponse 404 "{}"
+            | Get when path.Contains("/git/commits/") ->
+                let revision = path.Substring(path.LastIndexOf('/') + 1)
+                let tree = git [ "rev-parse"; revision + "^{tree}" ] None
+                githubResponse 200 (JsonSerializer.Serialize {| tree = {| sha = tree |} |})
+            | Post when path.EndsWith("/git/blobs") ->
+                use document = body ()
+                let bytes = Convert.FromBase64String(document.RootElement.GetProperty("content").GetString())
+                let blob = git [ "hash-object"; "-w"; "--stdin" ] (Some(Encoding.UTF8.GetString bytes))
+                githubResponse 201 (JsonSerializer.Serialize {| sha = blob |})
+            | Post when path.EndsWith("/git/trees") ->
+                use document = body ()
+                let root = document.RootElement
+                git [ "read-tree"; root.GetProperty("base_tree").GetString() ] None |> ignore
+                for entry in root.GetProperty("tree").EnumerateArray() do
+                    git [ "update-index"; "--add"; "--cacheinfo"; entry.GetProperty("mode").GetString()
+                          entry.GetProperty("sha").GetString(); entry.GetProperty("path").GetString() ] None |> ignore
+                let tree = git [ "write-tree" ] None
+                githubResponse 201 (JsonSerializer.Serialize {| sha = tree |})
+            | Post when path.EndsWith("/git/commits") ->
+                use document = body ()
+                let root = document.RootElement
+                let tree = root.GetProperty("tree").GetString()
+                let parents = root.GetProperty("parents").EnumerateArray() |> Seq.map _.GetString() |> Seq.toList
+                let arguments = [ "commit-tree"; tree ] @ (parents |> List.collect (fun parent -> [ "-p"; parent ]))
+                let revision = git arguments (Some(root.GetProperty("message").GetString()))
+                githubResponse 201 (JsonSerializer.Serialize {| sha = revision; tree = {| sha = tree |}; parents = parents |> List.map (fun parent -> {| sha = parent |}) |})
+            | Patch when path.EndsWith("/git/refs/heads/main") ->
+                use document = body ()
+                Assert.False(document.RootElement.GetProperty("force").GetBoolean())
+                let proposed = document.RootElement.GetProperty("sha").GetString()
+                let before = git [ "rev-parse"; "refs/heads/main" ] None
+                if raceNextPatch then
+                    raceNextPatch <- false
+                    let tree = git [ "rev-parse"; before + "^{tree}" ] None
+                    let sibling = git [ "commit-tree"; tree; "-p"; before ] (Some "competing main writer")
+                    git [ "update-ref"; "refs/heads/main"; sibling; before ] None |> ignore
+                let current = git [ "rev-parse"; "refs/heads/main" ] None
+                match run [ "merge-base"; "--is-ancestor"; current; proposed ] None with
+                | 0, _, _ ->
+                    match run [ "update-ref"; "refs/heads/main"; proposed; current ] None with
+                    | 0, _, _ ->
+                        patches <- patches + 1
+                        if loseNextReply then loseNextReply <- false; NetworkFailure
+                        else refResponse 200 proposed
+                    | _ -> githubResponse 422 "{}"
+                | _ -> githubResponse 422 "{}"
+            | _ -> policy.Send request
+
+[<Fact>]
+let ``main storage completes and replays real local Git settlement preserving unrelated state`` () =
+    use wire = new LocalGitMainTransport()
+    let transport = OrdinarySettlementGitHubAuthority.Transport(mainOptions, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
+    let otherAddress = ShardedJournalAdapter.address Operation "ordinary:101:another-pr" |> Result.defaultWith (string >> failwith)
+    let other = { Address = otherAddress; Revision = None; Entries = Map.empty; Effects = Map.empty }
+    let otherBytes = OrdinarySettlementAuthorityDocument.encode other
+    Assert.Equal(SettlementCasAccepted, transport.CompareExchangeDocument(otherAddress, Some wire.Head, otherBytes))
+    let runtime = OrdinarySettlementGitAuthority.Runtime(binding.AppId, transport)
+    let rsa, anchor, authorization = signed ()
+    use _key = rsa
+    wire.LoseNextReply <- true
+    let receipt =
+        match OrdinaryPostMergeSettlement.execute plan binding anchor authorization SettlementNoCut runtime with
+        | Ok(SettlementSucceeded value) -> value
+        | value -> failwithf "unexpected settlement: %A" value
+    Assert.Equal(5, wire.Patches)
+    Assert.Equal(Ok(SettlementAlreadyComplete receipt), OrdinaryPostMergeSettlement.execute plan binding anchor authorization SettlementNoCut runtime)
+    Assert.Equal(5, wire.Patches)
+    Assert.Equal("retained main content\n", wire.Read "README.md")
+    Assert.Equal(Encoding.UTF8.GetString otherBytes, wire.Read $"state/ordinary-v2/{otherAddress.Digest}.json")
+    match transport.ReadDocument address with
+    | SettlementDocumentPresent(revision, bytes) ->
+        let decoded = OrdinarySettlementAuthorityDocument.decode address (Some revision) (ReadOnlyMemory bytes) |> Result.defaultWith failwith
+        Assert.Equal(address, decoded.Address)
+        Assert.Equal(receipt, decoded.Effects[plan.OperationId])
+    | value -> failwithf "unexpected read: %A" value
+
+[<Fact>]
+let ``main storage refuses sibling race stale reads and absent main without bootstrap`` () =
+    use wire = new LocalGitMainTransport()
+    let transport = OrdinarySettlementGitHubAuthority.Transport(mainOptions, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
+    let original = wire.Head
+    wire.RaceNextPatch <- true
+    Assert.Equal(SettlementCasConflict, transport.CompareExchangeDocument(address, Some original, [| 1uy |]))
+    Assert.NotEqual(original, wire.Head)
+    Assert.Equal(SettlementCasConflict, transport.CompareExchangeDocument(address, Some original, [| 1uy |]))
+    Assert.Equal(0, wire.Patches)
+    wire.RemoveMain()
+    Assert.Equal(SettlementDocumentReadUnknown "authority-main-missing", transport.ReadDocument address)
+    Assert.Equal(SettlementCasConflict, transport.CompareExchangeDocument(address, None, [| 1uy |]))
+    Assert.Equal(0, wire.Patches)

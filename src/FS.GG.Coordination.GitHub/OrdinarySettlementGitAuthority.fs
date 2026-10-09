@@ -28,6 +28,13 @@ type IOrdinarySettlementGitAuthorityTransport =
         address: AggregateAddress * expectedParent: string option * canonicalDocument: byte array -> OrdinarySettlementCasOutcome
     abstract VerifyCurrentProtection: AggregateAddress * appId: int64 -> Result<unit, string>
 
+/// Physical storage selection; logical aggregate addresses and document bytes remain unchanged.
+/// MainDirectory requires an existing, independently protected main branch and explicit adoption.
+[<RequireQualifiedAccess>]
+type OrdinarySettlementGitStorage =
+    | JournalBranches
+    | MainDirectory
+
 type OrdinarySettlementGitHubAuthorityOptions =
     {
         ApiBase: Uri
@@ -514,20 +521,34 @@ module OrdinarySettlementGitHubAuthority =
     let private documentPath (address: AggregateAddress) =
         $"ordinary-v2/{address.Digest}.json"
 
-    let private contentPath (address: AggregateAddress) =
-        documentPath address
-        |> _.Split('/')
-        |> Array.map Uri.EscapeDataString
-        |> String.concat "/"
-
     let private branchPath (address: AggregateAddress) =
         address.Ref.Substring("refs/heads/".Length)
         |> Uri.EscapeDataString
 
     let private combine (root: Uri) (path: string) = Uri(root, path)
 
-    type Transport(options: OrdinarySettlementGitHubAuthorityOptions, transport: IOrdinaryGitHubTransport) =
+    type Transport(options: OrdinarySettlementGitHubAuthorityOptions, transport: IOrdinaryGitHubTransport, storage: OrdinarySettlementGitStorage) =
         let repository = repositoryPath options.Repository
+        let physicalAddress (address: AggregateAddress) =
+            match storage with
+            | OrdinarySettlementGitStorage.JournalBranches -> address
+            | OrdinarySettlementGitStorage.MainDirectory -> { address with Ref = "refs/heads/main" }
+        let refPath address = refPath (physicalAddress address)
+        let branchPath address = branchPath (physicalAddress address)
+        let documentPath address =
+            match storage with
+            | OrdinarySettlementGitStorage.JournalBranches -> documentPath address
+            | OrdinarySettlementGitStorage.MainDirectory -> "state/" + documentPath address
+        let contentPath address =
+            documentPath address |> _.Split('/') |> Array.map Uri.EscapeDataString |> String.concat "/"
+        let storageProtectionMatches () =
+            match storage with
+            | OrdinarySettlementGitStorage.JournalBranches -> true
+            | OrdinarySettlementGitStorage.MainDirectory ->
+                options.WriterIncludes = Set [ "refs/heads/main" ]
+                && options.IntegrityIncludes = Set [ "refs/heads/main" ]
+                && Set.isEmpty options.WriterExcludes
+                && Set.isEmpty options.IntegrityExcludes
 
         let request (methodValue: RestMethod) (path: string) (body: string option) (idempotency: IdempotencyClass) =
             let headers =
@@ -661,7 +682,7 @@ module OrdinarySettlementGitHubAuthority =
             body.Add("sha", proposed)
             match expected with
             | None ->
-                body.Add("ref", address.Ref)
+                body.Add("ref", (physicalAddress address).Ref)
                 request Post $"repos/{repository}/git/refs" (Some(body.ToJsonString())) NeverReplay
             | Some _ ->
                 body.Add("force", false)
@@ -801,7 +822,11 @@ module OrdinarySettlementGitHubAuthority =
                           "update", options.WriterRulesetId, "Repository", options.Repository
                           "deletion", options.IntegrityRulesetId, "Repository", options.Repository
                           "non_fast_forward", options.IntegrityRulesetId, "Repository", options.Repository ]
-                if firstWriter.GetProperty("id").GetInt64() <> options.WriterRulesetId
+                if not (storageProtectionMatches ())
+                   || (storage = OrdinarySettlementGitStorage.MainDirectory
+                       && (bypassAppIds firstWriter <> Some expectedWriters
+                           || bypassAppIds firstIntegrity <> Some Set.empty))
+                   || firstWriter.GetProperty("id").GetInt64() <> options.WriterRulesetId
                    || firstWriter.GetProperty("name").GetString() <> options.WriterRulesetName
                    || firstWriter.GetProperty("enforcement").GetString() <> "active"
                    || not (sameInstant options.WriterUpdatedAt (firstWriter.GetProperty("updated_at").GetString()))
@@ -825,10 +850,15 @@ module OrdinarySettlementGitHubAuthority =
             | Ok (), Ok (), Error reason, _
             | Ok (), Ok (), _, Error reason -> Error reason
 
+        /// Retains the original branch-backed constructor for all existing installed callers.
+        new(options, transport) = Transport(options, transport, OrdinarySettlementGitStorage.JournalBranches)
+
         interface IOrdinarySettlementGitAuthorityTransport with
             member _.ReadDocument address =
                 match readRef address with
                 | Error reason -> SettlementDocumentReadUnknown reason
+                | Ok None when storage = OrdinarySettlementGitStorage.MainDirectory ->
+                    SettlementDocumentReadUnknown "authority-main-missing"
                 | Ok None -> SettlementDocumentAbsent
                 | Ok(Some revision) ->
                     match readDocumentAt address revision with
@@ -839,6 +869,7 @@ module OrdinarySettlementGitHubAuthority =
             member _.CompareExchangeDocument(address, expectedParent, canonicalDocument) =
                 match readRef address with
                 | Error _ -> SettlementCasUnknown
+                | Ok None when storage = OrdinarySettlementGitStorage.MainDirectory -> SettlementCasConflict
                 | Ok actual when actual <> expectedParent -> SettlementCasConflict
                 | Ok _ ->
                     let result =
