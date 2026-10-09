@@ -178,7 +178,7 @@ let private authorityOptions =
       EpochFleetId = "fs-gg-production"
       EpochRef = "refs/heads/fsgg/v2/journal/cutover/d5" }
 
-type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?badEpoch: bool, ?patchOutcome: TransportOutcome, ?mainDirectory: bool) =
+type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?badEpoch: bool, ?patchOutcome: TransportOutcome, ?mainDirectory: bool, ?rewriteRules: (string -> string)) =
     let requests = ResizeArray<RestRequest>()
     let badExclusion = defaultArg badExclusion false
     let oidA, oidB, oidC, oidD, oidE = sha "a", sha "b", sha "c", sha "d", sha "e"
@@ -231,8 +231,8 @@ type private GitHubAuthorityTransport(?badExclusion: bool, ?omitActors: bool, ?b
                 githubResponse 200 (JsonSerializer.Serialize {| encoding = "base64"; content = encoded (Encoding.ASCII.GetBytes(currentEpochOid + "\n")) |})
             | Get when path.Contains("/compare/") ->
                 githubResponse 200 (JsonSerializer.Serialize {| status = "ahead"; base_commit = {| sha = epochOid |}; merge_base_commit = {| sha = epochOid |} |})
-            | Get when path.EndsWith("/rulesets/21872113") -> githubResponse 200 (storageRules writer)
-            | Get when path.EndsWith("/rulesets/21872115") -> githubResponse 200 (storageRules integrity)
+            | Get when path.EndsWith("/rulesets/21872113") -> githubResponse 200 (writer |> storageRules |> defaultArg rewriteRules id)
+            | Get when path.EndsWith("/rulesets/21872115") -> githubResponse 200 (integrity |> storageRules |> defaultArg rewriteRules id)
             | Get when path.Contains("/rules/branches/") -> githubResponse 200 effective
             | Get when path.Contains("/contents/ordinary-v2/") || path.Contains("/contents/state/ordinary-v2/") -> githubResponse 404 "{}"
             | Get when path.Contains("/git/ref/") -> githubResponse 200 $"{{\"object\":{{\"type\":\"commit\",\"sha\":\"{oidA}\"}}}}"
@@ -377,13 +377,23 @@ let private mainOptions =
         IntegrityIncludes = Set [ "refs/heads/main" ]; IntegrityExcludes = Set.empty }
 
 [<Fact>]
-let ``main storage requires exact main protection and visible actors`` () =
+let ``main storage binds exact main protection with anchored optional native actors`` () =
     let create options wire =
         OrdinarySettlementGitHubAuthority.Transport(options, wire, OrdinarySettlementGitStorage.MainDirectory)
         :> IOrdinarySettlementGitAuthorityTransport
     Assert.Equal(Ok(), (create mainOptions (GitHubAuthorityTransport(mainDirectory = true))).VerifyCurrentProtection(address, 9001L))
     Assert.Equal(Error "authority-ruleset-drift", (create authorityOptions (GitHubAuthorityTransport())).VerifyCurrentProtection(address, 9001L))
-    Assert.Equal(Error "authority-ruleset-drift", (create mainOptions (GitHubAuthorityTransport(mainDirectory = true, omitActors = true))).VerifyCurrentProtection(address, 9001L))
+    Assert.Equal(Ok(), (create mainOptions (GitHubAuthorityTransport(mainDirectory = true, omitActors = true))).VerifyCurrentProtection(address, 9001L))
+
+[<Theory>]
+[<InlineData(true, "34.606+02:00", "34.607+02:00")>]
+[<InlineData(false, "\"actor_id\":9001", "\"actor_id\":9002")>]
+[<InlineData(true, "refs/heads/main", "refs/heads/other")>]
+[<InlineData(true, "\"type\":\"update\"", "\"type\":\"deletion\"")>]
+let ``main anchored protection refuses precise version visible roster and scope drift`` (omitActors, before: string, after: string) =
+    let wire = GitHubAuthorityTransport(mainDirectory = true, omitActors = omitActors, rewriteRules = (fun text -> text.Replace(before, after)))
+    let transport = OrdinarySettlementGitHubAuthority.Transport(mainOptions, wire, OrdinarySettlementGitStorage.MainDirectory) :> IOrdinarySettlementGitAuthorityTransport
+    Assert.Equal(Error "authority-ruleset-drift", transport.VerifyCurrentProtection(address, 9001L))
 
 /// Local Git supplies actual objects, trees, parents, and atomic refs; the HTTP seam supplies only
 /// the GitHub wire envelope and pinned synthetic protection/epoch observations. No remote effects.
@@ -619,6 +629,10 @@ let ``main anchor is explicit and cannot substitute legacy protection`` () =
     Assert.Equal(Error "ordinary-settlement-anchor-binding", parse substituted)
     let excluded = main |> Encoding.UTF8.GetString |> _.Replace("\"exclude\":[]", "\"exclude\":[\"refs/heads/main\"]") |> Encoding.UTF8.GetBytes
     Assert.Equal(Error "ordinary-settlement-anchor-binding", parse excluded)
+    let missingIncumbent = main |> Encoding.UTF8.GetString |> _.Replace(",{\"actorId\":4882140,\"actorType\":\"Integration\",\"bypassMode\":\"always\"}", "") |> Encoding.UTF8.GetBytes
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", parse missingIncumbent)
+    let tooSoon = main |> Encoding.UTF8.GetString |> _.Replace("2026-09-24T00:00:00Z", "2026-09-09T09:26:30Z") |> Encoding.UTF8.GetBytes
+    Assert.Equal(Error "ordinary-settlement-anchor-binding", parse tooSoon)
 
 [<Fact>]
 let ``installed main profile pins separate native rulesets and retains logical epoch`` () =

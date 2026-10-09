@@ -6,11 +6,11 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>fsgg-coordination</ToolCommandName>
     <PackageId>FS.GG.Coordination.Cli</PackageId>
-    <Version>0.2.1</Version>
-    <PackageVersion>0.2.1</PackageVersion>
+    <Version>0.3.0</Version>
+    <PackageVersion>0.3.0</PackageVersion>
     <Authors>FS-GG</Authors>
     <Description>Callable FS.GG Coordination boundary. Production effects remain governed by authoritative epoch and journal policy.</Description>
-    <PackageReleaseNotes>Adds the source-qualified Python portable workspace resolver while preserving the portable workspace v1 contract and published source profiles.</PackageReleaseNotes>
+    <PackageReleaseNotes>Adds opt-in protected-main ordinary settlement storage and CLI-only successor qualification while preserving legacy settlement routes and the portable workspace v1 contract.</PackageReleaseNotes>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <RepositoryUrl>https://github.com/FS-GG/FS.GG.Coordination</RepositoryUrl>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

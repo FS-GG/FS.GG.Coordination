@@ -912,10 +912,10 @@ module OrdinarySettlementGitHubAuthority =
                           "update", options.WriterRulesetId, "Repository", options.Repository
                           "deletion", options.IntegrityRulesetId, "Repository", options.Repository
                           "non_fast_forward", options.IntegrityRulesetId, "Repository", options.Repository ]
+                // Both storage profiles use the enrolled complete actor roster and GitHub's
+                // accepted update-instant drift assumption. An omitted low-privilege roster
+                // remains unavailable; when returned, it must also match the anchor exactly.
                 if not (storageProtectionMatches ())
-                   || (storage = OrdinarySettlementGitStorage.MainDirectory
-                       && (bypassAppIds firstWriter <> Some expectedWriters
-                           || bypassAppIds firstIntegrity <> Some Set.empty))
                    || firstWriter.GetProperty("id").GetInt64() <> options.WriterRulesetId
                    || firstWriter.GetProperty("name").GetString() <> options.WriterRulesetName
                    || firstWriter.GetProperty("enforcement").GetString() <> "active"
