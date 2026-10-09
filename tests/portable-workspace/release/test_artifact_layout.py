@@ -66,6 +66,9 @@ def main() -> None:
     cli_only = workflow.split("\n  cli_only:", 1)[1]
     workflow = workflow.split("\n  cli_only:", 1)[0]
     check_cli_only(cli_only)
+    helper = (ROOT / "eng/callable-cli-release.fsx").read_text()
+    assert 'if version = "0.3.0" then' in helper
+    assert '"--execute-main-refusal"; installed; refusal' in helper
     assert "ARTIFACT_ROOT: /tmp/pw-artifact-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
     assert "EVIDENCE_ROOT: /tmp/pw-evidence-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
     assert 'install -d -m 0700 "$ARTIFACT_ROOT/evidence"' in workflow

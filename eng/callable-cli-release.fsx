@@ -185,6 +185,10 @@ match command with
         run repo "dotnet" [ "tool"; "install"; packageId; "--version"; version; "--tool-path"; installRoot; "--configfile"; config; "--no-cache" ]
         let installed = Path.Combine(installRoot, "fsgg-coordination")
         run scratch installed []
+        if version = "0.3.0" then
+            let refusal = Path.Combine(scratch, "installed-execute-main-refusal.json")
+            run repo "python3" [ "eng/test-callable-cli-installed-harness.py"; "--execute-main-refusal"; installed; refusal ]
+            printfn "%s" (File.ReadAllText refusal)
         for name in [ "toolchain-profile"; "command"; "result" ] do
             let expected = File.ReadAllBytes(Path.Combine(repo, "contracts", "portable-workspace", "v1", name + ".schema.json"))
             let actual = captureBytes scratch installed [ "workspace-contract"; "schema"; "export"; name ]
