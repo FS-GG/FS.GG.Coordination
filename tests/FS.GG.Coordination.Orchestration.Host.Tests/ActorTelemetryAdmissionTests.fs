@@ -108,7 +108,7 @@ let ``recovery queue is replay stable and partial census never claims complete c
         let admission = causal ()
         let request = Fixture.preparationRequest ()
         let route0: ExecutorRouteBinding =
-            { Schema = ExecutorWire.routeBindingSchema; BindingSha256 = ""
+            { Schema = (if admission.ParentAttemptId.HasValue then ExecutorWire.routeBindingSchemaV2 else ExecutorWire.routeBindingSchema); BindingSha256 = ""
               WorkItemPersistenceId = admission.MemberItemId; RouteId = request.RouteId
               RouteOperationId = admission.AssignmentId; ProcessOperationId = admission.AssignmentId
               AssignmentId = admission.AssignmentId; AttemptId = admission.AttemptId; CandidateId = request.CandidateId

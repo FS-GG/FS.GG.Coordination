@@ -298,7 +298,7 @@ type PostgreSqlStoreTests() =
                 Assert.Equal(fixture.GetProperty("admissionSha256").GetString(), RunnerWire.sha256 raw)
                 let admission = ExecutionCausalAdmission.parse raw |> Result.defaultWith failwith
                 let route0: ExecutorRouteBinding =
-                    { Schema = ExecutorWire.routeBindingSchema; BindingSha256 = ""
+                    { Schema = (if admission.ParentAttemptId.HasValue then ExecutorWire.routeBindingSchemaV2 else ExecutorWire.routeBindingSchema); BindingSha256 = ""
                       WorkItemPersistenceId = admission.MemberItemId; RouteId = Guid.NewGuid()
                       RouteOperationId = admission.AssignmentId; ProcessOperationId = admission.AssignmentId
                       AssignmentId = admission.AssignmentId; AttemptId = admission.AttemptId; CandidateId = Guid.NewGuid()
