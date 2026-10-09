@@ -5,6 +5,8 @@ from __future__ import annotations
 
 from pathlib import Path
 import tempfile
+import os
+import subprocess
 import zipfile
 
 
@@ -22,8 +24,51 @@ EXPECTED_ROOT_FILES = {
 }
 
 
+
+def check_cli_only(job: str) -> None:
+    assert "inputs.preparation_mode == 'cli-only'" in job
+    assert "podman" not in job and "portable-workspace" not in job
+    assert "nuget push" not in job and "contents: write" not in job
+    assert "callable-cli-only-${{ inputs.source }}" in job
+    assert "retention-days: 90" in job
+    prepare = job.split("- name: Prepare and install", 1)[1]
+    assert "callable-cli-release.fsx prepare" in prepare
+    assert "callable-cli-release.fsx verify" in prepare
+    assert "--locked-mode" in prepare
+    block = job.split("- name: Bind CLI-only source", 1)[1].split("- name: Set up", 1)[0]
+    shell = block.split("run: |\n", 1)[1]
+    shell = "\n".join(line[10:] for line in shell.splitlines() if line.strip())
+    with tempfile.TemporaryDirectory(prefix="cli-only-preflight-") as temporary:
+        root = Path(temporary)
+        git = root / "git"
+        git.write_text("#!/bin/sh\ncase \"$1\" in\n rev-parse) echo \"$OBSERVED_SOURCE\";;\n fetch) exit 0;;\n status) printf '%s' \"$DIRTY\";;\n *) exit 91;;\nesac\n")
+        git.chmod(0o700)
+        source = "a" * 40
+        env = dict(os.environ, PATH=str(root)+os.pathsep+os.environ["PATH"],
+                   GITHUB_REF="refs/heads/main", GITHUB_RUN_ATTEMPT="1",
+                   CANDIDATE_SOURCE=source, GITHUB_SHA=source, OBSERVED_SOURCE=source,
+                   CANDIDATE_VERSION="0.3.0", CANDIDATE_OUTPUT=str(root/"candidate"), DIRTY="")
+        cases = [{}, {"GITHUB_REF":"refs/heads/topic"}, {"GITHUB_RUN_ATTEMPT":"2"},
+                 {"CANDIDATE_SOURCE":"invalid"}, {"CANDIDATE_VERSION":"0.2.1"},
+                 {"GITHUB_SHA":"b"*40}, {"OBSERVED_SOURCE":"b"*40}, {"DIRTY":"M file"}]
+        for index, change in enumerate(cases):
+            result = subprocess.run(["bash", "-c", shell], env={**env, **change},
+                                    capture_output=True, timeout=5)
+            assert (result.returncode == 0) == (index == 0), (change, result.stderr)
+            assert not (root/"candidate").exists()
+        (root/"candidate").mkdir()
+        result = subprocess.run(["bash", "-c", shell], env=env, capture_output=True, timeout=5)
+        assert result.returncode != 0
+
+
 def main() -> None:
     workflow = (ROOT / ".github/workflows/callable-cli-release-prepare.yml").read_text()
+    cli_only = workflow.split("\n  cli_only:", 1)[1]
+    workflow = workflow.split("\n  cli_only:", 1)[0]
+    check_cli_only(cli_only)
+    helper = (ROOT / "eng/callable-cli-release.fsx").read_text()
+    assert 'if version = "0.3.0" then' in helper
+    assert '"--execute-main-refusal"; installed; refusal' in helper
     assert "ARTIFACT_ROOT: /tmp/pw-artifact-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
     assert "EVIDENCE_ROOT: /tmp/pw-evidence-${{ github.run_id }}-${{ github.run_attempt }}" in workflow
     assert 'install -d -m 0700 "$ARTIFACT_ROOT/evidence"' in workflow

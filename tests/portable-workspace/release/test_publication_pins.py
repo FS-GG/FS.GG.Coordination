@@ -43,8 +43,8 @@ def require_in_order(text: str, fragments: list[str]) -> None:
 
 def verify_preflight(text: str) -> None:
     preflight = text[text.index("  preflight:\n"):text.index("  publish:\n")]
-    assert "if: inputs.preflight_only == true" in preflight
-    assert "  publish:\n    if: inputs.preflight_only != true" in text
+    assert "if: inputs.preflight_only == true && !inputs.cli_only" in preflight
+    assert "  publish:\n    if: inputs.preflight_only != true && !inputs.cli_only" in text
     assert "preflight_only:\n" in text and "default: false\n        type: boolean" in text
     assert "packages: read" in preflight and "id-token: write" in preflight
     assert "packages: write" not in preflight and "contents: write" not in preflight
@@ -107,8 +107,108 @@ def verify_preflight(text: str) -> None:
                 assert "trustedPublishingLoginSucceeded" not in value
 
 
+
+def verify_successor(text: str) -> None:
+    import json, os, tempfile
+    from unittest.mock import patch
+    job = text.split("\n  cli_successor:",1)[1]
+    assert "inputs.cli_only && !inputs.preflight_only" in job
+    assert "dotnet pack" not in job and "portable-workspace-release" not in job
+    assert job.count('dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE"') == 2
+    require_in_order(job,["Bind disabled-by-default", "Bind A ancestry", "Download and verify", "Verify provenance", "Observe both feeds", "Recheck current publisher B", "Push original A package to GitHub", "Read and verify GitHub", "Push those same original A bytes", "verify repository signature", "write A/B readback", "only after both feeds"])
+    assert '--publisher "$GITHUB_SHA"' in job
+    assert 'test "$REQUESTED_PUBLISHER" = "$GITHUB_SHA"' in job
+    assert 'timeout 30s dotnet nuget verify' in job and 'head -c 65537' in job
+    assert 'git diff --name-only "$SOURCE_A" "$GITHUB_SHA"' in job
+    blocks = re.findall(r"python3 - <<'PY'\n(.*?)          PY\n",job,re.S)
+    assert len(blocks)==2
+    code = "\n".join(line[10:] for line in blocks[0].splitlines())
+    actual = json.loads((ROOT/'eng/callable-cli-successor-admission.json').read_text())
+    assert actual['enabled'] is False and actual['source'] is None
+    good = dict(actual,enabled=True,operation='publish-main-cli-030-fixture',source='a'*40,tree='b'*40,protectedMerge='c'*40,runId=1,artifactId=2,archiveSha256='d'*64,packageSha256='e'*64,manifestSha256='f'*64)
+    env=dict(OPERATION=good['operation'],REQUESTED_SOURCE=good['source'],REQUESTED_MERGE=good['protectedMerge'],REQUESTED_SHA256=good['packageSha256'],REQUESTED_PUBLISHER='1'*40)
+    cases=[actual,good,dict(good,runId=True),dict(good,source='0'*40),dict(good,packageSha256='wrong'),dict(good,operation='publish-v2-diag-01-4-cli-021'),dict(good,extra=True)]
+    with tempfile.TemporaryDirectory() as directory:
+        output=Path(directory)/'env'
+        for index,value in enumerate(cases):
+            output.unlink(missing_ok=True)
+            from io import StringIO
+            original_open=open
+            def fake_open(path,*args,**kwargs):
+                if path=='eng/callable-cli-successor-admission.json':return StringIO(json.dumps(value))
+                return original_open(path,*args,**kwargs)
+            with patch.dict(os.environ,{**env,'GITHUB_ENV':str(output)},clear=False),patch('builtins.open',fake_open):
+                failed=False
+                try:exec(compile(code,'actual-successor-admission','exec'),{})
+                except AssertionError:failed=True
+            assert failed == (index != 1)
+            assert output.exists() == (index == 1)
+
+    import importlib.util, subprocess
+    spec=importlib.util.spec_from_file_location('installed_harness',ROOT/'eng/test-callable-cli-installed-harness.py')
+    helper=importlib.util.module_from_spec(spec);spec.loader.exec_module(helper)
+    assert job.count('--execute-main-refusal')==2
+    with tempfile.TemporaryDirectory() as directory:
+        root=Path(directory);tool=root/'tool';tool.write_text('inert');output=root/'receipt'
+        expected=b'ordinary-settlement-refused:SettlementProviderUnavailable "missing-environment:FSGG_V2_PREFLIGHT_RECEIPT"\n'
+        cases=[(3,b'',expected),(0,b'',expected),(3,b'output',expected),(3,b'',b'unknown-command\n')]
+        for index,(status,stdout,stderr) in enumerate(cases):
+            output.unlink(missing_ok=True)
+            def fake_run(argv,**kwargs):
+                assert argv==[str(tool),'ordinary-settlement','execute-main']
+                assert kwargs['timeout']==15 and kwargs['capture_output']
+                assert not any(k.startswith(('FSGG_V2_','V2_ORDINARY_','GITHUB_')) or k=='GH_TOKEN' for k in kwargs['env'])
+                return subprocess.CompletedProcess(argv,status,stdout,stderr)
+            with patch.dict(os.environ,{'FSGG_V2_PREFLIGHT_RECEIPT':'polluted','GH_TOKEN':'fixture-secret'}),patch.object(helper.subprocess,'run',fake_run):
+                failed=False
+                try:helper.check_execute_main_refusal(tool,output)
+                except RuntimeError:failed=True
+            assert failed==(index!=0) and output.exists()==(index==0)
+
+    # Execute the original archive consumption block with bounded inert bytes.
+    import hashlib, zipfile
+    archive_code="\n".join(line[10:] for line in blocks[1].splitlines())
+    with tempfile.TemporaryDirectory() as directory:
+        base=Path(directory)
+        manifest=dict(schema='fsgg.coordination.callable-cli-release-preparation/1',packageId='FS.GG.Coordination.Cli',version='0.3.0',sourceCommit='a'*40,sourceTree='b'*40,packageSha256=hashlib.sha256(b'package').hexdigest(),publicationAuthorized=False,tagAuthorized=False)
+        manifest_bytes=json.dumps(manifest).encode()
+        env={'READBACK_OUTPUT':str(base),'PACKAGE_FILE':'FS.GG.Coordination.Cli.0.3.0.nupkg','PACKAGE_ID':'FS.GG.Coordination.Cli','PACKAGE_SHA':manifest['packageSha256'],'MANIFEST_SHA':hashlib.sha256(manifest_bytes).hexdigest(),'SOURCE_A':'a'*40,'TREE_A':'b'*40}
+        for case in ('good','extra','wrong-package','wrong-manifest','wrong-source'):
+            root=base/case;root.mkdir()
+            with zipfile.ZipFile(base/'candidate.zip','w') as z:
+                z.writestr(env['PACKAGE_FILE'],b'wrong' if case=='wrong-package' else b'package')
+                z.writestr('callable-cli-release-manifest.json',b'wrong' if case=='wrong-manifest' else manifest_bytes)
+                if case=='extra':z.writestr('../unexpected',b'bad')
+            change={'SOURCE_A':'c'*40} if case=='wrong-source' else {}
+            with patch.dict(os.environ,{**env,**change,'CANDIDATE_OUTPUT':str(root)},clear=False):
+                failed=False
+                try:exec(compile(archive_code,'actual-candidate-consumption','exec'),{})
+                except AssertionError:failed=True
+            assert failed == (case!='good')
+            assert not (base/'unexpected').exists()
+    # Exercise the actual bounded verifier call, including fault/timeout/output refusal.
+    import subprocess
+    signature=job.split('          if test "$signed" = true; then\n',1)[1].split('          fi\n',1)[0]
+    signature='if test "$signed" = true; then\n'+'\n'.join(line[10:] for line in signature.splitlines())+'\nfi\n'
+    with tempfile.TemporaryDirectory() as directory:
+        root=Path(directory)
+        (root/'dotnet').write_text('#!/bin/sh\necho called >> "$READBACK_OUTPUT/calls"\ncase "$MODE" in failure) exit 1;; oversize) head -c 70000 /dev/zero;; *) echo verified;; esac\n')
+        (root/'timeout').write_text('#!/bin/sh\ntest "$MODE" != timeout || exit 124\nshift; exec "$@"\n')
+        for name in ('dotnet','timeout'):(root/name).chmod(0o700)
+        for mode in ('success','failure','timeout','oversize','unsigned'):
+            (root/'calls').unlink(missing_ok=True)
+            env=dict(os.environ,PATH=str(root)+os.pathsep+os.environ['PATH'],MODE=mode,READBACK_OUTPUT=str(root),signed='false' if mode=='unsigned' else 'true')
+            run=subprocess.run(['bash','-c','set -euo pipefail\n'+signature],env=env,capture_output=True,timeout=5)
+            assert (run.returncode==0)==(mode in ('success','unsigned')),mode
+            assert (root/'calls').exists()==(mode not in ('timeout','unsigned'))
+            log=root/'signature-verification.txt'
+            if log.exists():assert log.stat().st_size<=65537
+
+
 def main() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
+    verify_successor(text)
+    text = text.split("\n  cli_successor:", 1)[0]
     verify_preflight(text)
     pins = dict(re.findall(r"^      (EXPECTED_[A-Z0-9_]+): ([^\n]+)$", text, re.MULTILINE))
     assert pins == EXPECTED

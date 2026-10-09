@@ -8,6 +8,15 @@ on:
         required: false
         default: false
         type: boolean
+      cli_only:
+        description: Select the separately admitted CLI-only successor
+        required: false
+        default: false
+        type: boolean
+      publisher_source:
+        description: Exact reviewed publisher B (CLI-only)
+        required: false
+        type: string
       operation:
         description: Exact protected operation identity
         required: false
@@ -37,7 +46,7 @@ concurrency:
 jobs:
   preflight:
     name: Read-only migration release feasibility
-    if: inputs.preflight_only == true
+    if: inputs.preflight_only == true && !inputs.cli_only
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -136,7 +145,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: inputs.preflight_only != true
+    if: inputs.preflight_only != true && !inputs.cli_only
     name: Qualify, publish, and read back exact portable CLI
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -556,3 +565,247 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
           compression-level: 0
+
+  cli_successor:
+    if: inputs.cli_only && !inputs.preflight_only
+    name: Publish the admitted original CLI-only candidate
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    permissions:
+      actions: read
+      contents: write
+      packages: write
+      id-token: write
+      attestations: write
+      artifact-metadata: write
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      PACKAGE_ID: FS.GG.Coordination.Cli
+      PACKAGE_VERSION: 0.3.0
+      PACKAGE_FILE: FS.GG.Coordination.Cli.0.3.0.nupkg
+      CANDIDATE_OUTPUT: /tmp/fsgg-${{ github.run_id }}-cli-successor-candidate
+      READBACK_OUTPUT: /tmp/fsgg-${{ github.run_id }}-cli-successor-readback
+    steps:
+      - name: Check out reviewed publisher B without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind disabled-by-default CLI admission and both source identities
+        shell: bash
+        env:
+          OPERATION: ${{ inputs.operation }}
+          REQUESTED_SOURCE: ${{ inputs.source }}
+          REQUESTED_MERGE: ${{ inputs.protected_merge }}
+          REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+          REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$REQUESTED_PUBLISHER" = "$GITHUB_SHA"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          python3 - <<'PY'
+          import json, os, re
+          a = json.load(open('eng/callable-cli-successor-admission.json'))
+          keys = {'schema','enabled','operation','version','source','tree','protectedMerge','runId','artifactId','archiveSha256','packageSha256','manifestSha256'}
+          assert set(a) == keys and a['schema'] == 'fsgg.coordination.cli-successor-admission/1'
+          assert a['enabled'] is True, 'successor publication admission is disabled'
+          assert a['version'] == '0.3.0'
+          assert isinstance(a['operation'], str) and re.fullmatch(r'publish-main-cli-030-[a-z0-9-]+',a['operation'])
+          for key in ('source','tree','protectedMerge'):
+              assert isinstance(a[key],str) and re.fullmatch('[0-9a-f]{40}',a[key]) and set(a[key]) != {'0'}
+          for key in ('archiveSha256','packageSha256','manifestSha256'):
+              assert isinstance(a[key],str) and re.fullmatch('[0-9a-f]{64}',a[key]) and set(a[key]) != {'0'}
+          for key in ('runId','artifactId'):
+              assert type(a[key]) is int and a[key] > 0
+          assert os.environ['OPERATION'] == a['operation']
+          assert os.environ['REQUESTED_SOURCE'] == a['source']
+          assert os.environ['REQUESTED_MERGE'] == a['protectedMerge']
+          assert os.environ['REQUESTED_SHA256'] == a['packageSha256']
+          assert re.fullmatch('[0-9a-f]{40}',os.environ['REQUESTED_PUBLISHER'])
+          with open(os.environ['GITHUB_ENV'],'a') as output:
+              for name,key in [('SOURCE_A','source'),('TREE_A','tree'),('MERGE_A','protectedMerge'),('CANDIDATE_RUN','runId'),('CANDIDATE_ARTIFACT','artifactId'),('ARCHIVE_SHA','archiveSha256'),('PACKAGE_SHA','packageSha256'),('MANIFEST_SHA','manifestSha256')]:
+                  output.write(f'{name}={a[key]}\n')
+          PY
+      - name: Bind A ancestry and pin-only B changes
+        shell: bash
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$SOURCE_A" "$GITHUB_SHA"
+          git merge-base --is-ancestor "$MERGE_A" "$GITHUB_SHA"
+          test "$(git rev-parse "$SOURCE_A^{tree}")" = "$TREE_A"
+          test "$(git rev-parse "$MERGE_A^{tree}")" = "$TREE_A"
+          while IFS= read -r path; do
+            case "$path" in
+              .github/workflows/callable-cli-release-publish.yml|eng/callable-cli-successor-admission.json|eng/write-callable-cli-release-readback.py|eng/test-callable-cli-installed-harness.py|tests/portable-workspace/release/test_publication_pins.py|tests/portable-workspace/release/test_release_readback.py|evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json) ;;
+              *) echo "::error::A-to-B contains a non-publication change: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$SOURCE_A" "$GITHUB_SHA")
+      - name: Download and verify the original A archive before consumption
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir "$CANDIDATE_OUTPUT" "$READBACK_OUTPUT"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$READBACK_OUTPUT/run.json"
+          jq -e --argjson run "$CANDIDATE_RUN" --arg source "$SOURCE_A" '.id == $run and .head_branch == "main" and .event == "workflow_dispatch" and .head_sha == $source and .run_attempt == 1 and .conclusion == "success" and .path == ".github/workflows/callable-cli-release-prepare.yml"' "$READBACK_OUTPUT/run.json" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT" > "$READBACK_OUTPUT/artifact.json"
+          jq -e --argjson artifact "$CANDIDATE_ARTIFACT" --argjson run "$CANDIDATE_RUN" --arg source "$SOURCE_A" --arg digest "sha256:$ARCHIVE_SHA" --arg name "callable-cli-only-$SOURCE_A" '.id == $artifact and .expired == false and .name == $name and .digest == $digest and .workflow_run.id == $run and .workflow_run.head_sha == $source' "$READBACK_OUTPUT/artifact.json" >/dev/null
+          curl --fail --silent --show-error --location --max-time 120 --max-filesize 104857600 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/candidate.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT/zip"
+          test "$(sha256sum "$READBACK_OUTPUT/candidate.zip" | cut -d' ' -f1)" = "$ARCHIVE_SHA"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ['CANDIDATE_OUTPUT'])
+          expected={os.environ['PACKAGE_FILE']:os.environ['PACKAGE_SHA'],'callable-cli-release-manifest.json':os.environ['MANIFEST_SHA']}
+          with zipfile.ZipFile(pathlib.Path(os.environ['READBACK_OUTPUT'])/'candidate.zip') as z:
+              assert len(z.infolist()) == 2 and set(z.namelist()) == set(expected)
+              for entry in z.infolist():
+                  assert 0 < entry.file_size <= 104857600 and (entry.external_attr >> 16) & 0o170000 != 0o120000
+                  data=z.read(entry)
+                  assert hashlib.sha256(data).hexdigest() == expected[entry.filename]
+                  with (root/entry.filename).open('xb') as f: f.write(data)
+          a=json.loads((root/'callable-cli-release-manifest.json').read_bytes())
+          assert a['schema']=='fsgg.coordination.callable-cli-release-preparation/1' and a['packageId']==os.environ['PACKAGE_ID'] and a['version']=='0.3.0'
+          assert a['sourceCommit']==os.environ['SOURCE_A'] and a['sourceTree']==os.environ['TREE_A'] and a['packageSha256']==os.environ['PACKAGE_SHA']
+          assert a['publicationAuthorized'] is False and a['tagAuthorized'] is False
+          PY
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Attest original A bytes under reviewed publisher B
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
+        with:
+          subject-path: ${{ env.CANDIDATE_OUTPUT }}/${{ env.PACKAGE_FILE }}
+      - name: Verify provenance and original package installation before effects
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh attestation verify "$CANDIDATE_OUTPUT/$PACKAGE_FILE" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml"
+          printf '%s\n' "<configuration><packageSources><clear/><add key=\"candidate\" value=\"$CANDIDATE_OUTPUT\"/></packageSources></configuration>" > "$READBACK_OUTPUT/candidate.config"
+          dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$READBACK_OUTPUT/installed" --configfile "$READBACK_OUTPUT/candidate.config" --no-cache
+          "$READBACK_OUTPUT/installed/fsgg-coordination"
+          python3 eng/test-callable-cli-installed-harness.py --execute-main-refusal "$READBACK_OUTPUT/installed/fsgg-coordination" "$READBACK_OUTPUT/candidate-main-refusal.json"
+          for name in toolchain-profile command result; do
+            "$READBACK_OUTPUT/installed/fsgg-coordination" workspace-contract schema export "$name" > "$READBACK_OUTPUT/$name.schema.json"
+            cmp "contracts/portable-workspace/v1/$name.schema.json" "$READBACK_OUTPUT/$name.schema.json"
+          done
+      - name: Observe both feeds and tag before any package effect
+        id: feeds
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -z "$(git ls-remote --tags origin refs/tags/v0.3.0)"
+          for feed in github nuget; do
+            if test "$feed" = github; then
+              url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+              auth=(--user "${GITHUB_ACTOR}:${GH_TOKEN}")
+            else
+              url="https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+              auth=()
+            fi
+            status="$(curl --silent --show-error --location --max-time 60 --max-filesize 104857600 "${auth[@]}" --output "$READBACK_OUTPUT/$feed.nupkg" --write-out '%{http_code}' "$url")"
+            case "$status" in
+              404) echo "${feed}_push=true" >> "$GITHUB_OUTPUT" ;;
+              200) echo "::error::successor feed already populated; preserve original result and select readback recovery, not another publication"; exit 1 ;;
+              *) echo "::error::unknown $feed observation HTTP $status"; exit 1 ;;
+            esac
+          done
+      - name: Prove Trusted Publishing authorization before the first package effect
+        id: successor-login
+        uses: NuGet/login@8d196754b4036150537f80ac539e15c2f1028841
+        with:
+          user: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+      - name: Recheck current publisher B immediately before the first effect
+        shell: bash
+        run: |
+          set -euo pipefail
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          test "$(sha256sum "$CANDIDATE_OUTPUT/$PACKAGE_FILE" | cut -d' ' -f1)" = "$PACKAGE_SHA"
+      - name: Push original A package to GitHub Packages first
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE" --source https://nuget.pkg.github.com/FS-GG/index.json --api-key "$GH_TOKEN"
+      - name: Read and verify GitHub raw bytes before the public push
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          url="https://nuget.pkg.github.com/fs-gg/download/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --location --max-time 20 --max-filesize 104857600 --user "${GITHUB_ACTOR}:${GH_TOKEN}" --output "$READBACK_OUTPUT/github.nupkg" "$url"; then break; fi
+            test "$attempt" != 30; sleep 5
+          done
+          python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/github.nupkg" github-packages > "$READBACK_OUTPUT/github.json"
+      - name: Push those same original A bytes to nuget.org
+        shell: bash
+        run: >-
+          dotnet nuget push "$CANDIDATE_OUTPUT/$PACKAGE_FILE"
+          --source https://api.nuget.org/v3/index.json
+          --api-key "${{ steps.successor-login.outputs.NUGET_API_KEY }}"
+      - name: Read public bytes and verify repository signature before comparison
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="https://api.nuget.org/v3-flatcontainer/fs.gg.coordination.cli/$PACKAGE_VERSION/fs.gg.coordination.cli.$PACKAGE_VERSION.nupkg"
+          for attempt in {1..30}; do
+            if curl --fail --silent --show-error --location --max-time 20 --max-filesize 104857600 --output "$READBACK_OUTPUT/nuget.nupkg" "$url"; then break; fi
+            test "$attempt" != 30; sleep 5
+          done
+          signed="$(python3 - "$READBACK_OUTPUT/nuget.nupkg" <<'PY'
+          import sys,zipfile
+          with zipfile.ZipFile(sys.argv[1]) as z:
+              assert len(z.namelist()) == len(set(z.namelist()))
+              print('true' if '.signature.p7s' in z.namelist() else 'false')
+          PY
+          )"
+          if test "$signed" = true; then
+            timeout 30s dotnet nuget verify "$READBACK_OUTPUT/nuget.nupkg" --all 2>&1 | head -c 65537 > "$READBACK_OUTPUT/signature-verification.txt"
+            test "$(stat --format=%s "$READBACK_OUTPUT/signature-verification.txt")" -le 65536
+          fi
+          python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$READBACK_OUTPUT/nuget.nupkg" nuget-org > "$READBACK_OUTPUT/nuget.json"
+      - name: Validate public-only installed CLI and write A/B readback
+        shell: bash
+        run: |
+          set -euo pipefail
+          printf '%s\n' '<configuration><packageSources><clear/><add key="public" value="https://api.nuget.org/v3/index.json"/></packageSources></configuration>' > "$READBACK_OUTPUT/public.config"
+          dotnet tool install "$PACKAGE_ID" --version "$PACKAGE_VERSION" --tool-path "$READBACK_OUTPUT/public-installed" --configfile "$READBACK_OUTPUT/public.config" --no-cache
+          python3 eng/test-callable-cli-installed-harness.py --execute-main-refusal "$READBACK_OUTPUT/public-installed/fsgg-coordination" "$READBACK_OUTPUT/public-main-refusal.json"
+          for name in toolchain-profile command result; do
+            "$READBACK_OUTPUT/public-installed/fsgg-coordination" workspace-contract schema export "$name" > "$READBACK_OUTPUT/public-$name.schema.json"
+            cmp "contracts/portable-workspace/v1/$name.schema.json" "$READBACK_OUTPUT/public-$name.schema.json"
+          done
+          python3 eng/write-callable-cli-release-readback.py --cli-only --publisher "$GITHUB_SHA" \
+            --source "$SOURCE_A" --tree "$TREE_A" --merge "$MERGE_A" --package-id "$PACKAGE_ID" \
+            --version "$PACKAGE_VERSION" --package-sha256 "$PACKAGE_SHA" \
+            --github-feed "$READBACK_OUTPUT/github.json" --nuget-feed "$READBACK_OUTPUT/nuget.json" \
+            --output "$READBACK_OUTPUT/release-readback.json"
+      - name: Create successor tag and release only after both feeds and public install settle
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/v0.3.0 -f sha="$SOURCE_A"
+          gh release create v0.3.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title 'Coordination CLI 0.3.0' \
+            --notes "Original CLI-only candidate source $SOURCE_A, publisher $GITHUB_SHA. Installed native consumer acceptance is separate." \
+            "$CANDIDATE_OUTPUT/$PACKAGE_FILE" "$CANDIDATE_OUTPUT/callable-cli-release-manifest.json" "$READBACK_OUTPUT/release-readback.json"
+      - name: Preserve original successor observation on success or failure
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: cli-successor-publication-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.READBACK_OUTPUT }}/
+          if-no-files-found: warn
+          retention-days: 90

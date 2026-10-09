@@ -5,7 +5,7 @@ open FS.GG.Coordination.GitHub
 
 [<RequireQualifiedAccess>]
 module OrdinarySettlementCommand =
-    let private usage = "ordinary-settlement <execute|rehearse>"
+    let private usage = "ordinary-settlement <execute|execute-main|rehearse>"
 
     let outcomeExitCode =
         function
@@ -37,6 +37,7 @@ module OrdinarySettlementCommand =
     let run arguments =
         match arguments |> Array.toList with
         | [ "execute" ] -> execute (InstalledOrdinarySettlementProvider.tryCreate ())
+        | [ "execute-main" ] -> execute (InstalledOrdinarySettlementProvider.tryCreateMain ())
         | [ "rehearse" ] -> execute (InstalledOrdinarySettlementProvider.tryCreateRehearsal ())
         | _ ->
             eprintfn "%s" usage

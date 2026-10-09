@@ -13,6 +13,7 @@ import pathlib
 import shutil
 import socket
 import subprocess
+import sys
 import tempfile
 import threading
 import urllib.request
@@ -238,7 +239,24 @@ def execute_scenario(command: pathlib.Path, env: dict[str, str], execution: path
         thread.join(timeout=5)
 
 
+def check_execute_main_refusal(tool: pathlib.Path, output: pathlib.Path) -> int:
+    # Required receipt is checked before observers, credentials, or native effects.
+    env = {key: value for key, value in os.environ.items()
+           if not key.startswith(("FSGG_V2_", "V2_ORDINARY_", "GITHUB_")) and key != "GH_TOKEN"}
+    actual = subprocess.run([str(tool.resolve(strict=True)), "ordinary-settlement", "execute-main"],
+                            env=env, capture_output=True, timeout=15, check=False)
+    expected = b'ordinary-settlement-refused:SettlementProviderUnavailable "missing-environment:FSGG_V2_PREFLIGHT_RECEIPT"\n'
+    if actual.returncode != 3 or actual.stdout != b"" or actual.stderr != expected:
+        raise RuntimeError("installed execute-main did not preserve the recognized credential-free refusal")
+    output.write_bytes(compact({"schema":"fsgg.coordination.installed-route-refusal/1",
+                               "command":"ordinary-settlement execute-main", "exit":3,
+                               "diagnostic":expected.decode().strip(), "nativePositive":False}) + b"\n")
+    return 0
+
+
 def main() -> int:
+    if len(sys.argv) == 4 and sys.argv[1] == "--execute-main-refusal":
+        return check_execute_main_refusal(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))
     parser = argparse.ArgumentParser()
     parser.add_argument("--contract", default=str(CONTRACT))
     args = parser.parse_args()

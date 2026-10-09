@@ -180,6 +180,7 @@ module InstalledOrdinarySettlementProvider =
     let private policyPath = "policy/v2-ci-ordinary-settlement.json"
     let private rehearsalPolicyPath = "policy/v2-ci-ordinary-settlement-rehearsal.json"
     let private anchorPath = "policy/v2-ci-ordinary-settlement-anchor.json"
+    let private mainAnchorPath = "policy/v2-ci-ordinary-settlement-main-anchor.json"
     let private rehearsalAnchorPath = "policy/v2-ci-ordinary-settlement-rehearsal-anchor.json"
     let private observerPath = "tools/v2-ci-ordinary-observe.py"
 
@@ -335,7 +336,7 @@ module InstalledOrdinarySettlementProvider =
             else Ok(phase, generation, revision)
         with _ -> Error "epoch-document"
 
-    let private authorityEpoch (profile: OrdinarySettlementAuthorityProfile) (transport: IOrdinaryGitHubTransport) (token: string) =
+    let private legacyAuthorityEpoch (profile: OrdinarySettlementAuthorityProfile) (transport: IOrdinaryGitHubTransport) (token: string) =
         let repository = profile.Repository.Split('/') |> Array.map Uri.EscapeDataString |> String.concat "/"
         let epochRef = profile.EpochRef.Substring("refs/".Length)
         let readRef () =
@@ -358,6 +359,20 @@ module InstalledOrdinarySettlementProvider =
             | Error reason, _, _
             | _, Error reason, _
             | _, _, Error reason -> Error reason
+
+    let private authorityEpoch storage profile anchor transport token =
+        match storage with
+        | OrdinarySettlementGitStorage.JournalBranches -> legacyAuthorityEpoch profile transport token
+        | OrdinarySettlementGitStorage.MainDirectory ->
+            let options =
+                OrdinarySettlementPublicAnchor.transportOptions apiBase token userAgent profile anchor
+                    OrdinarySettlementAuthorityProfiles.productionMainEpochCommit
+                    OrdinarySettlementAuthorityProfiles.productionMainEpochGeneration
+            OrdinarySettlementGitHubAuthority.readMainEpochSnapshot options transport
+            |> Result.bind (fun (revision, head, event) -> validateEpochDocuments profile revision head event)
+            |> Result.bind (fun (phase, generation, revision) ->
+                if generation <> OrdinarySettlementAuthorityProfiles.productionMainEpochGeneration then Error "epoch-not-selected-main-profile"
+                else Ok(phase, generation, revision))
 
     let private selectedPolicySourceValid required (profile: SourceProfile) (root: JsonElement) =
         let mutable selected = Unchecked.defaultof<JsonElement>
@@ -451,7 +466,7 @@ module InstalledOrdinarySettlementProvider =
             dotGitHubSourceProfile expectedEnvironment expectedPolicyId receiptBytes policyBytes
 
     type private Provider
-        (profile: OrdinarySettlementAuthorityProfile, sourceProfile: Result<SourceProfile, string>, receiptVariable,
+        (profile: OrdinarySettlementAuthorityProfile, storage: OrdinarySettlementGitStorage, sourceProfile: Result<SourceProfile, string>, receiptVariable,
          selectedPolicyPath, selectedAnchorPath, observerAction, rehearsal,
          appIdVariable, appPrivateKeyVariable, authorizerPrivateKeyVariable) =
         interface IOrdinarySettlementCommandProvider with
@@ -473,7 +488,7 @@ module InstalledOrdinarySettlementProvider =
                         let policyBytes = File.ReadAllBytes(Path.Combine(workspace, selectedPolicyPath))
                         let anchorBytes = File.ReadAllBytes(Path.Combine(workspace, selectedAnchorPath))
                         let receiptBytes = File.ReadAllBytes receiptPath
-                        let! anchor = OrdinarySettlementPublicAnchor.parse profile (ReadOnlyMemory anchorBytes)
+                        let! anchor = OrdinarySettlementPublicAnchor.parseForStorage storage profile (ReadOnlyMemory anchorBytes)
                         if anchor.Trust.AppId <> appId then return! Error "app-id-anchor"
                         let! source, head, tree, nodeId, baseSha, pr, policyDigest, checks =
                             validateReceiptFactsForSourceProfile
@@ -484,7 +499,7 @@ module InstalledOrdinarySettlementProvider =
                         let client = new HttpClient(handler, true, Timeout = TimeSpan.FromSeconds 30.0)
                         let github = HttpOrdinaryGitHubTransport client :> IOrdinaryGitHubTransport
                         let! authorityToken = mintInstallationToken github appId anchor.Trust.InstallationId profile.RepositoryId appPrivateKey
-                        let! epoch, epochGeneration, epochCommit = authorityEpoch profile github authorityToken
+                        let! epoch, epochGeneration, epochCommit = authorityEpoch storage profile anchor github authorityToken
                         // Fence queued runs again after credential minting and the current epoch read,
                         // immediately before plan construction and signing. The child still receives no secrets.
                         let! _ = runObserver workspace observerAction receiptPath
@@ -519,7 +534,7 @@ module InstalledOrdinarySettlementProvider =
                               Signature = authorizer.SignData(intent, HashAlgorithmName.SHA256, RSASignaturePadding.Pss) }
                         let effectTransport = RehearsalFaultTransport(github, fault) :> IOrdinaryGitHubTransport
                         let options = OrdinarySettlementPublicAnchor.transportOptions apiBase authorityToken userAgent profile anchor epochCommit epochGeneration
-                        let runtime = OrdinarySettlementGitAuthority.Runtime(appId, OrdinarySettlementGitHubAuthority.Transport(options, effectTransport))
+                        let runtime = OrdinarySettlementGitAuthority.Runtime(appId, OrdinarySettlementGitHubAuthority.Transport(options, effectTransport, storage))
                         return { Plan = plan; Credential = binding; Anchor = anchor.Trust; Authorization = authorization
                                  Runtime = runtime :> IOrdinaryPostMergeSettlementRuntime }
                     }
@@ -529,6 +544,7 @@ module InstalledOrdinarySettlementProvider =
         Some(
             Provider(
                 OrdinarySettlementAuthorityProfiles.production,
+                OrdinarySettlementGitStorage.JournalBranches,
                 selectSourceProfile (Environment.GetEnvironmentVariable "FSGG_V2_SOURCE_PROFILE"),
                 "FSGG_V2_PREFLIGHT_RECEIPT", policyPath, anchorPath, "verify", false,
                 "V2_ORDINARY_APP_ID", "V2_ORDINARY_APP_PRIVATE_KEY", "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY")
@@ -538,8 +554,20 @@ module InstalledOrdinarySettlementProvider =
         Some(
             Provider(
                 OrdinarySettlementAuthorityProfiles.rehearsal,
+                OrdinarySettlementGitStorage.JournalBranches,
                 Ok dotGitHubSourceProfile,
                 "FSGG_V2_REHEARSAL_PREFLIGHT_RECEIPT", rehearsalPolicyPath, rehearsalAnchorPath, "verify-rehearsal", true,
                 "V2_ORDINARY_REHEARSAL_APP_ID", "V2_ORDINARY_REHEARSAL_APP_PRIVATE_KEY",
                 "V2_ORDINARY_REHEARSAL_AUTHORIZER_PRIVATE_KEY")
+            :> IOrdinarySettlementCommandProvider)
+
+    /// Explicit command selection; no environment variable can replace the authority profile or path.
+    let tryCreateMain () =
+        Some(
+            Provider(
+                OrdinarySettlementAuthorityProfiles.productionMain,
+                OrdinarySettlementGitStorage.MainDirectory,
+                selectSourceProfile (Environment.GetEnvironmentVariable "FSGG_V2_SOURCE_PROFILE"),
+                "FSGG_V2_PREFLIGHT_RECEIPT", policyPath, mainAnchorPath, "verify-main", false,
+                "V2_ORDINARY_APP_ID", "V2_ORDINARY_APP_PRIVATE_KEY", "V2_ORDINARY_AUTHORIZER_PRIVATE_KEY")
             :> IOrdinarySettlementCommandProvider)

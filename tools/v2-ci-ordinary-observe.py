@@ -72,7 +72,8 @@ def current_file(repository: str, path: str, revision: str) -> bytes:
         raise QUALIFICATION.Refusal(f"current protected file malformed: {path}") from error
 
 
-def current_authority(repository: str, policy: dict, policy_path: pathlib.Path = POLICY_PATH) -> None:
+def current_authority(repository: str, policy: dict, policy_path: pathlib.Path = POLICY_PATH,
+                      *, main_storage: bool = False) -> None:
     """Fence a queued or rerun job against the present protected source."""
     before = api(f"repos/{repository}/git/ref/heads/main")
     revision = before.get("object", {}).get("sha") if isinstance(before, dict) else None
@@ -80,6 +81,8 @@ def current_authority(repository: str, policy: dict, policy_path: pathlib.Path =
         raise QUALIFICATION.Refusal("current main ref is malformed")
     paths = [str(policy_path.relative_to(ROOT)), policy["workflow"]["path"]]
     paths.append("policy/v2-ci-ordinary-settlement-anchor.json")
+    if main_storage:
+        paths.append("policy/v2-ci-ordinary-settlement-main-anchor.json")
     for path in paths:
         if current_file(repository, path, revision) != (ROOT / path).read_bytes():
             raise QUALIFICATION.Refusal(f"current protected authority changed: {path}")
@@ -225,7 +228,7 @@ def equivalent_tree(repository: str, head: str, source: str, base: str) -> str:
     return head_tree
 
 
-def observe(environ: dict[str, str]) -> dict:
+def observe(environ: dict[str, str], *, main_storage: bool = False) -> dict:
     policy_path = POLICY_PATH
     policy = QUALIFICATION.read_json(str(policy_path))
     source = environ.get("GITHUB_SHA", "")
@@ -262,7 +265,7 @@ def observe(environ: dict[str, str]) -> dict:
                               capture_output=True, text=True, cwd=ROOT).stdout.strip()
     if checkout != source:
         raise QUALIFICATION.Refusal("checkout differs from triggering source")
-    current_authority(policy["repository"], policy, policy_path)
+    current_authority(policy["repository"], policy, policy_path, main_storage=main_storage)
     run_id, attempt = environ.get("GITHUB_RUN_ID", ""), environ.get("GITHUB_RUN_ATTEMPT", "")
     if not run_id.isdecimal() or not attempt.isdecimal() or int(run_id) < 1 or int(attempt) < 1:
         raise QUALIFICATION.Refusal("invalid workflow run identity")
@@ -402,12 +405,12 @@ def observe(environ: dict[str, str]) -> dict:
 
 
 def main() -> int:
-    actions = ("produce", "verify")
+    actions = ("produce", "verify", "verify-main")
     if len(sys.argv) != 3 or sys.argv[1] not in actions:
-        print("usage: v2-ci-ordinary-observe.py produce|verify RECEIPT_PATH", file=sys.stderr)
+        print("usage: v2-ci-ordinary-observe.py produce|verify|verify-main RECEIPT_PATH", file=sys.stderr)
         return 2
     try:
-        actual = observe(dict(os.environ))
+        actual = observe(dict(os.environ), main_storage=sys.argv[1] == "verify-main")
         target = pathlib.Path(sys.argv[2])
         encoded = json.dumps(actual, sort_keys=True, separators=(",", ":")) + "\n"
         if sys.argv[1].startswith("produce"):

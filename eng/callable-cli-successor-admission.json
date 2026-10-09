@@ -1,0 +1,14 @@
+{
+  "schema": "fsgg.coordination.cli-successor-admission/1",
+  "enabled": false,
+  "operation": null,
+  "version": "0.3.0",
+  "source": null,
+  "tree": null,
+  "protectedMerge": null,
+  "runId": null,
+  "artifactId": null,
+  "archiveSha256": null,
+  "packageSha256": null,
+  "manifestSha256": null
+}

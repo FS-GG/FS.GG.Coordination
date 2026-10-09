@@ -28,6 +28,13 @@ type IOrdinarySettlementGitAuthorityTransport =
         address: AggregateAddress * expectedParent: string option * canonicalDocument: byte array -> OrdinarySettlementCasOutcome
     abstract VerifyCurrentProtection: AggregateAddress * appId: int64 -> Result<unit, string>
 
+/// Physical storage selection; logical aggregate addresses and document bytes remain unchanged.
+/// MainDirectory requires an existing, independently protected main branch and explicit adoption.
+[<RequireQualifiedAccess>]
+type OrdinarySettlementGitStorage =
+    | JournalBranches
+    | MainDirectory
+
 type OrdinarySettlementGitHubAuthorityOptions =
     {
         ApiBase: Uri
@@ -137,6 +144,20 @@ module OrdinarySettlementAuthorityProfiles =
         if profile = production then Ok production
         else Error "production-command-refuses-rehearsal-profile"
 
+    /// Explicit main-directory adoption profile; legacy production and its epoch remain unchanged.
+    let productionMain =
+        { production with
+            Name = "production-main"
+            WriterRulesetId = 24802693L
+            WriterRulesetName = "ordinary-v2-main-writer"
+            IntegrityRulesetId = 24802698L
+            IntegrityRulesetName = "ordinary-v2-main-integrity"
+            WriterExcludes = Set.empty }
+
+    // Closed migration profile: rotation requires a newly qualified profile, not pointer substitution.
+    let productionMainEpochCommit = "26d1882af9293b264df17a1fa98515e108313fe5"
+    let productionMainEpochGeneration = 2L
+
 [<RequireQualifiedAccess>]
 module OrdinarySettlementPublicAnchor =
     let private fields (value: JsonElement) =
@@ -164,7 +185,7 @@ module OrdinarySettlementPublicAnchor =
                 item.GetProperty("bypassMode").GetString())
             |> Set.ofSeq }
 
-    let parse (profile: OrdinarySettlementAuthorityProfile) (bytes: ReadOnlyMemory<byte>) =
+    let parseForStorage storage (profile: OrdinarySettlementAuthorityProfile) (bytes: ReadOnlyMemory<byte>) =
         try
             use document = JsonDocument.Parse bytes
             let root = document.RootElement
@@ -210,7 +231,10 @@ module OrdinarySettlementPublicAnchor =
                 not (isNull text) && text.Length = 64 && text |> Seq.forall (fun item -> Uri.IsHexDigit item && not (Char.IsUpper item))
             let validCommit (text: string) =
                 not (isNull text) && text.Length = 40 && text |> Seq.forall Uri.IsHexDigit
-            let expectedIncludes = Set [ "refs/heads/fsgg/v2/journal/**/*" ]
+            let expectedIncludes =
+                match storage with
+                | OrdinarySettlementGitStorage.JournalBranches -> Set [ "refs/heads/fsgg/v2/journal/**/*" ]
+                | OrdinarySettlementGitStorage.MainDirectory -> Set [ "refs/heads/main" ]
             let writerActors = value.WriterRuleset.BypassActors |> Set.map (fun (id, actorType, mode) -> id, actorType, mode)
             let expectedWriterActors =
                 Set.ofList ((value.Trust.AppId :: profile.RetainedWriterAppIds) |> List.map (fun id -> id, "Integration", "always"))
@@ -251,6 +275,7 @@ module OrdinarySettlementPublicAnchor =
                || not (DateTimeOffset.TryParse(value.WriterRuleset.UpdatedAt, &writerUpdated))
                || value.WriterRuleset.Includes <> expectedIncludes
                || value.WriterRuleset.Excludes <> profile.WriterExcludes
+               || (storage = OrdinarySettlementGitStorage.MainDirectory && not profile.WriterExcludes.IsEmpty)
                || value.WriterRuleset.Rules <> Set [ "creation"; "update" ]
                || writerActors <> expectedWriterActors
                || value.IntegrityRuleset.Id <> profile.IntegrityRulesetId
@@ -266,6 +291,8 @@ module OrdinarySettlementPublicAnchor =
                || accepted.ToUniversalTime() < integrityUpdated.ToUniversalTime().AddSeconds 60.0 then Error "ordinary-settlement-anchor-binding"
             else Ok value
         with _ -> Error "ordinary-settlement-anchor-json"
+
+    let parse profile bytes = parseForStorage OrdinarySettlementGitStorage.JournalBranches profile bytes
 
     let transportOptions apiBase token userAgent (profile: OrdinarySettlementAuthorityProfile) (anchor: OrdinarySettlementPublicAnchor)
         expectedEpochCommit expectedEpochGeneration =
@@ -514,20 +541,97 @@ module OrdinarySettlementGitHubAuthority =
     let private documentPath (address: AggregateAddress) =
         $"ordinary-v2/{address.Digest}.json"
 
-    let private contentPath (address: AggregateAddress) =
-        documentPath address
-        |> _.Split('/')
-        |> Array.map Uri.EscapeDataString
-        |> String.concat "/"
-
     let private branchPath (address: AggregateAddress) =
         address.Ref.Substring("refs/heads/".Length)
         |> Uri.EscapeDataString
 
     let private combine (root: Uri) (path: string) = Uri(root, path)
 
-    type Transport(options: OrdinarySettlementGitHubAuthorityOptions, transport: IOrdinaryGitHubTransport) =
+    /// Reads a closed logical epoch from a stable main snapshot, bound to its original immutable
+    /// commit and native ancestry. Unrelated main writes cannot consume a traversal budget.
+    let readMainEpochSnapshot (options: OrdinarySettlementGitHubAuthorityOptions) (transport: IOrdinaryGitHubTransport) =
         let repository = repositoryPath options.Repository
+        let get path =
+            match transport.Send(
+                Rest { Method = Get; Uri = combine options.ApiBase path
+                       Headers = Map [ "Accept", "application/vnd.github+json"; "Authorization", "Bearer " + options.Token
+                                       "User-Agent", options.UserAgent; "X-GitHub-Api-Version", ApiVersion.value ApiVersion.required ]
+                       Body = None; ApiVersion = ApiVersion.required; Idempotency = ReplaySafe }) with
+            | Response value when value.StatusCode = 200 ->
+                try
+                    use document = JsonDocument.Parse value.Body
+                    if document.RootElement.ValueKind = JsonValueKind.Object then Ok(document.RootElement.Clone())
+                    else Error "authority-main-epoch-response"
+                with _ -> Error "authority-main-epoch-json"
+            | _ -> Error "authority-main-epoch-unavailable"
+        let readRef () =
+            get $"repos/{repository}/git/ref/heads/main"
+            |> Result.bind (fun root ->
+                let target = root.GetProperty("object")
+                let revision = target.GetProperty("sha").GetString()
+                if target.GetProperty("type").GetString() = "commit" && oid revision then Ok revision
+                else Error "authority-main-epoch-ref")
+        let file (revision: string) path =
+            get $"repos/{repository}/contents/{path}?ref={Uri.EscapeDataString revision}"
+            |> Result.bind (fun root ->
+                try
+                    let bytes = root.GetProperty("content").GetString().Replace("\n", "") |> Convert.FromBase64String
+                    if root.GetProperty("encoding").GetString() = "base64" && bytes.Length <= 1_000_000 then Ok bytes
+                    else Error "authority-main-epoch-content"
+                with _ -> Error "authority-main-epoch-content")
+        try
+            if not (oid options.ExpectedEpochCommit) then Error "authority-main-epoch-pin"
+            else
+                match readRef () with
+                | Error reason -> Error reason
+                | Ok before ->
+                    match file before "state/epoch/epoch-head.txt" with
+                    | Error reason -> Error reason
+                    | Ok pointer when pointer <> Encoding.ASCII.GetBytes(options.ExpectedEpochCommit + "\n") ->
+                        Error "authority-epoch-moved"
+                    | Ok _ ->
+                        let logical = options.ExpectedEpochCommit
+                        match file before "state/epoch/head.json", file before "state/epoch/event.json",
+                              file logical "head.json", file logical "event.json",
+                              get $"repos/{repository}/compare/{logical}...{before}", readRef () with
+                        | Ok head, Ok event, Ok originalHead, Ok originalEvent, Ok ancestry, Ok after when before = after ->
+                            let status = ancestry.GetProperty("status").GetString()
+                            if head <> originalHead || event <> originalEvent
+                               || ancestry.GetProperty("base_commit").GetProperty("sha").GetString() <> logical
+                               || ancestry.GetProperty("merge_base_commit").GetProperty("sha").GetString() <> logical
+                               || (status <> "ahead" && status <> "identical") then Error "authority-main-epoch-binding"
+                            else Ok(logical, head, event)
+                        | Ok _, Ok _, Ok _, Ok _, Ok _, Ok _ -> Error "authority-epoch-moved"
+                        | Error reason, _, _, _, _, _
+                        | _, Error reason, _, _, _, _
+                        | _, _, Error reason, _, _, _
+                        | _, _, _, Error reason, _, _
+                        | _, _, _, _, Error reason, _
+                        | _, _, _, _, _, Error reason -> Error reason
+        with _ -> Error "authority-main-epoch-binding"
+
+    type Transport(options: OrdinarySettlementGitHubAuthorityOptions, transport: IOrdinaryGitHubTransport, storage: OrdinarySettlementGitStorage) =
+        let repository = repositoryPath options.Repository
+        let physicalAddress (address: AggregateAddress) =
+            match storage with
+            | OrdinarySettlementGitStorage.JournalBranches -> address
+            | OrdinarySettlementGitStorage.MainDirectory -> { address with Ref = "refs/heads/main" }
+        let refPath address = refPath (physicalAddress address)
+        let branchPath address = branchPath (physicalAddress address)
+        let documentPath address =
+            match storage with
+            | OrdinarySettlementGitStorage.JournalBranches -> documentPath address
+            | OrdinarySettlementGitStorage.MainDirectory -> "state/" + documentPath address
+        let contentPath address =
+            documentPath address |> _.Split('/') |> Array.map Uri.EscapeDataString |> String.concat "/"
+        let storageProtectionMatches () =
+            match storage with
+            | OrdinarySettlementGitStorage.JournalBranches -> true
+            | OrdinarySettlementGitStorage.MainDirectory ->
+                options.WriterIncludes = Set [ "refs/heads/main" ]
+                && options.IntegrityIncludes = Set [ "refs/heads/main" ]
+                && Set.isEmpty options.WriterExcludes
+                && Set.isEmpty options.IntegrityExcludes
 
         let request (methodValue: RestMethod) (path: string) (body: string option) (idempotency: IdempotencyClass) =
             let headers =
@@ -661,7 +765,7 @@ module OrdinarySettlementGitHubAuthority =
             body.Add("sha", proposed)
             match expected with
             | None ->
-                body.Add("ref", address.Ref)
+                body.Add("ref", (physicalAddress address).Ref)
                 request Post $"repos/{repository}/git/refs" (Some(body.ToJsonString())) NeverReplay
             | Some _ ->
                 body.Add("force", false)
@@ -750,32 +854,39 @@ module OrdinarySettlementGitHubAuthority =
                         if root.GetProperty("encoding").GetString() <> "base64" then Error "authority-epoch-encoding"
                         else root.GetProperty("content").GetString().Replace("\n", "") |> Convert.FromBase64String |> Ok
                     with _ -> Error "authority-epoch-content")
-            match refValue () with
+            let snapshot =
+                match storage with
+                | OrdinarySettlementGitStorage.MainDirectory -> readMainEpochSnapshot options transport
+                | OrdinarySettlementGitStorage.JournalBranches ->
+                    match refValue () with
+                    | Error reason -> Error reason
+                    | Ok before when before <> options.ExpectedEpochCommit -> Error "authority-epoch-moved"
+                    | Ok before ->
+                        match epochFile before "head.json", epochFile before "event.json", refValue () with
+                        | Ok headBytes, Ok eventBytes, Ok after when before = after -> Ok(before, headBytes, eventBytes)
+                        | _, _, Ok _ -> Error "authority-epoch-moved"
+                        | Error reason, _, _
+                        | _, Error reason, _
+                        | _, _, Error reason -> Error reason
+            match snapshot with
             | Error reason -> Error reason
-            | Ok before when before <> options.ExpectedEpochCommit -> Error "authority-epoch-moved"
-            | Ok before ->
-                match epochFile before "head.json", epochFile before "event.json", refValue () with
-                | Ok headBytes, Ok eventBytes, Ok after when before = after ->
-                    try
-                        use head = JsonDocument.Parse headBytes
-                        use event = JsonDocument.Parse eventBytes
-                        if head.RootElement.GetProperty("generation").GetInt64() <> options.ExpectedEpochGeneration
-                           || head.RootElement.GetProperty("eventDigest").GetString()
-                              <> (SHA256.HashData eventBytes |> Convert.ToHexString |> _.ToLowerInvariant())
-                           || event.RootElement.GetProperty("schema").GetString() <> "fsgg.github-substrate.epoch-event/1"
-                           || head.RootElement.GetProperty("aggregateId").GetString() <> epochAddress.CanonicalId
-                           || head.RootElement.GetProperty("aggregateDigest").GetString() <> epochAddress.Digest
-                           || head.RootElement.GetProperty("journalKind").GetString() <> "cutover"
-                           || head.RootElement.GetProperty("shard").GetString() <> epochAddress.Shard
-                           || event.RootElement.GetProperty("fleetId").GetString() <> options.EpochFleetId
-                           || event.RootElement.GetProperty("phase").GetString() <> "OpenV2" then
-                            Error "authority-epoch-moved"
-                        else Ok()
-                    with _ -> Error "authority-epoch-document"
-                | _, _, Ok _ -> Error "authority-epoch-moved"
-                | Error reason, _, _
-                | _, Error reason, _
-                | _, _, Error reason -> Error reason
+            | Ok(_, headBytes, eventBytes) ->
+                try
+                    use head = JsonDocument.Parse headBytes
+                    use event = JsonDocument.Parse eventBytes
+                    if head.RootElement.GetProperty("generation").GetInt64() <> options.ExpectedEpochGeneration
+                       || head.RootElement.GetProperty("eventDigest").GetString()
+                          <> (SHA256.HashData eventBytes |> Convert.ToHexString |> _.ToLowerInvariant())
+                       || event.RootElement.GetProperty("schema").GetString() <> "fsgg.github-substrate.epoch-event/1"
+                       || head.RootElement.GetProperty("aggregateId").GetString() <> epochAddress.CanonicalId
+                       || head.RootElement.GetProperty("aggregateDigest").GetString() <> epochAddress.Digest
+                       || head.RootElement.GetProperty("journalKind").GetString() <> "cutover"
+                       || head.RootElement.GetProperty("shard").GetString() <> epochAddress.Shard
+                       || event.RootElement.GetProperty("fleetId").GetString() <> options.EpochFleetId
+                       || event.RootElement.GetProperty("phase").GetString() <> "OpenV2" then
+                        Error "authority-epoch-moved"
+                    else Ok()
+                with _ -> Error "authority-epoch-document"
 
         let verifyCurrentProtection (address: AggregateAddress) appId =
             let read () =
@@ -801,7 +912,11 @@ module OrdinarySettlementGitHubAuthority =
                           "update", options.WriterRulesetId, "Repository", options.Repository
                           "deletion", options.IntegrityRulesetId, "Repository", options.Repository
                           "non_fast_forward", options.IntegrityRulesetId, "Repository", options.Repository ]
-                if firstWriter.GetProperty("id").GetInt64() <> options.WriterRulesetId
+                // Both storage profiles use the enrolled complete actor roster and GitHub's
+                // accepted update-instant drift assumption. An omitted low-privilege roster
+                // remains unavailable; when returned, it must also match the anchor exactly.
+                if not (storageProtectionMatches ())
+                   || firstWriter.GetProperty("id").GetInt64() <> options.WriterRulesetId
                    || firstWriter.GetProperty("name").GetString() <> options.WriterRulesetName
                    || firstWriter.GetProperty("enforcement").GetString() <> "active"
                    || not (sameInstant options.WriterUpdatedAt (firstWriter.GetProperty("updated_at").GetString()))
@@ -825,10 +940,15 @@ module OrdinarySettlementGitHubAuthority =
             | Ok (), Ok (), Error reason, _
             | Ok (), Ok (), _, Error reason -> Error reason
 
+        /// Retains the original branch-backed constructor for all existing installed callers.
+        new(options, transport) = Transport(options, transport, OrdinarySettlementGitStorage.JournalBranches)
+
         interface IOrdinarySettlementGitAuthorityTransport with
             member _.ReadDocument address =
                 match readRef address with
                 | Error reason -> SettlementDocumentReadUnknown reason
+                | Ok None when storage = OrdinarySettlementGitStorage.MainDirectory ->
+                    SettlementDocumentReadUnknown "authority-main-missing"
                 | Ok None -> SettlementDocumentAbsent
                 | Ok(Some revision) ->
                     match readDocumentAt address revision with
@@ -839,6 +959,7 @@ module OrdinarySettlementGitHubAuthority =
             member _.CompareExchangeDocument(address, expectedParent, canonicalDocument) =
                 match readRef address with
                 | Error _ -> SettlementCasUnknown
+                | Ok None when storage = OrdinarySettlementGitStorage.MainDirectory -> SettlementCasConflict
                 | Ok actual when actual <> expectedParent -> SettlementCasConflict
                 | Ok _ ->
                     let result =
