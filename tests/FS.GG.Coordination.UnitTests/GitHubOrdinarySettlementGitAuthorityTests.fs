@@ -682,17 +682,18 @@ let ``legacy transport state imports exactly then main replay preserves complete
     let legacyOptions = { authorityOptions with ExpectedEpochCommit = wire.EpochHead }
     let legacyTransport = OrdinarySettlementGitHubAuthority.Transport(legacyOptions, wire) :> IOrdinarySettlementGitAuthorityTransport
     let legacyRuntime = OrdinarySettlementGitAuthority.Runtime(binding.AppId, legacyTransport) :> IOrdinaryPostMergeSettlementRuntime
-    let rsa, anchor, authorization = signed ()
+    let originalPlan = { plan with EpochCommit = wire.EpochHead }
+    let rsa, anchor, authorization = signedFor originalPlan
     use _key = rsa
     let receipt =
-        match OrdinaryPostMergeSettlement.execute plan binding anchor authorization SettlementNoCut legacyRuntime with
+        match OrdinaryPostMergeSettlement.execute originalPlan binding anchor authorization SettlementNoCut legacyRuntime with
         | Ok(SettlementSucceeded value) -> value
         | value -> failwithf "unexpected original result: %A" value
     let pendingAddress =
         Seq.initInfinite (fun index -> ShardedJournalAdapter.address Operation $"ordinary:101:PR_pending_{index}")
         |> Seq.choose Result.toOption |> Seq.find (fun value -> value.Ref <> address.Ref)
     let pendingId = "ordinary-settlement:" + String.replicate 64 "2"
-    let pendingPlan = { plan with OperationId = pendingId; AttemptId = pendingId + ":attempt:1"; JournalAddress = pendingAddress }
+    let pendingPlan = { originalPlan with OperationId = pendingId; AttemptId = pendingId + ":attempt:1"; JournalAddress = pendingAddress }
     let pendingKey, pendingAnchor, pendingAuthorization = signedFor pendingPlan
     use _pendingKey = pendingKey
     let unknownRuntime =
@@ -723,7 +724,7 @@ let ``legacy transport state imports exactly then main replay preserves complete
     Assert.Equal<byte>(unresolvedBytes, bytesAt main pendingAddress)
     let runtime = OrdinarySettlementGitAuthority.Runtime(binding.AppId, main) :> IOrdinaryPostMergeSettlementRuntime
     Assert.Equal(Ok(SettlementAlreadyComplete receipt),
-                 OrdinaryPostMergeSettlement.execute plan binding anchor authorization SettlementNoCut runtime)
+                 OrdinaryPostMergeSettlement.execute originalPlan binding anchor authorization SettlementNoCut runtime)
     Assert.Equal(originalEffects, wire.Patches)
     let unresolved = OrdinarySettlementAuthorityDocument.decode pendingAddress None (ReadOnlyMemory(bytesAt main pendingAddress)) |> Result.defaultWith failwith
     Assert.Equal(SettlementIntentPersisted, unresolved.Entries[pendingId].Stage)
