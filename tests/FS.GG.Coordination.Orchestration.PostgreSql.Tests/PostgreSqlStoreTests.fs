@@ -285,7 +285,7 @@ type PostgreSqlStoreTests() =
             do! PostgreSqlExecutionSchema.migrate dataSource cancellationToken
             let options = { Fixture.options dataSource identity 0L with RuntimeSchemaVersion = 2 }
             let store = PostgreSqlExecutionStore options
-            let directory = Path.Combine(__SOURCE_DIRECTORY__, "..", "FS.GG.Coordination.Orchestration.Host.Tests", "Fixtures", "Learning", "CausalAdmission")
+            let directory = Path.Combine(AppContext.BaseDirectory, "Fixtures", "Learning", "CausalAdmission")
             let manifestBytes = File.ReadAllBytes(Path.Combine(directory, "manifest.json"))
             Assert.Equal("58de080758af83f2e243faf6995a44a529d00f810d43b2ac64753d14f59ce880", RunnerWire.sha256 manifestBytes)
             use manifest = JsonDocument.Parse manifestBytes
