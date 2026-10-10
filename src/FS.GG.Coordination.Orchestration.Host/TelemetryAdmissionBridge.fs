@@ -26,13 +26,21 @@ type TelemetryAdmissionBridge
             | Ok page ->
                 let gaps = ResizeArray<string>()
                 let mutable queued = 0
-                for _, admission, intent in page.Admissions do
-                    match ExecutionAdmissionFacts.prepare admission intent.Requested.Model intent.Requested.Effort with
-                    | Error reason -> gaps.Add reason
-                    | Ok(name, bytes) ->
-                        match publisher.Queue(name, bytes) with
-                        | Ok _ -> queued <- queued + 1
-                        | Error reason -> gaps.Add reason
+                for source in page.Admissions do
+                    let queue obligation projected =
+                        match projected with
+                        | Error reason -> gaps.Add(obligation + ":" + reason); false
+                        | Ok(name, bytes) ->
+                            match publisher.Queue(name, bytes) with
+                            | Ok _ -> true
+                            | Error reason -> gaps.Add(obligation + ":" + reason); false
+                    let legacyQueued =
+                        ExecutionAdmissionFacts.prepare source.Admission source.Intent.Requested.Model source.Intent.Requested.Effort
+                        |> queue "admission-facts"
+                    let declarationQueued =
+                        ExecutionCausalAdmissionFacts.prepare source.Admission source.AdmissionBytes source.RouteBindingSha256 source.LaunchIntentSha256
+                        |> queue "causal-declaration"
+                    if legacyQueued && declarationQueued then queued <- queued + 1
                 return { Observed = page.Admissions.Length; Queued = queued; NextCursor = page.NextCursor
                          Coverage = if gaps.Count > 0 then "publication-incomplete" else page.Coverage
                          Gaps = List.ofSeq gaps }
