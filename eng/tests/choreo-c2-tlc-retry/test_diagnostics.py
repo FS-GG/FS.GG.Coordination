@@ -4,6 +4,7 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
 import copy
@@ -15,6 +16,53 @@ spec.loader.exec_module(module)
 
 
 class DiagnosticControls(unittest.TestCase):
+    def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
+        for inherited in (False, True):
+            with self.subTest(inherited=inherited), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                gates = root / 'eng/bootstrap-gates'
+                gates.mkdir(parents=True)
+                shutil.copyfile(ROOT / 'eng/bootstrap-gates/canonical-quint-shard.sh', gates / 'canonical-quint-shard.sh')
+                (gates / 'canonical-quint.sh').write_text(
+                    '#!/usr/bin/env bash\nset -eu\nmkdir -p "$FSGG_QUINT_SHARD_ROOT"\nprintf "{}\\n" > "$FSGG_QUINT_RECEIPT"\n')
+                (root / 'eng/verify-choreo-c2-bounded.sh').write_text('''#!/usr/bin/env bash
+set -eu
+python3 - <<'PYFIXTURE'
+import importlib.util, json, os, pathlib, shutil
+source = pathlib.Path(os.environ['FIXTURE_COLLECTOR'])
+spec = importlib.util.spec_from_file_location('fixture_collector', source)
+collector = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(collector)
+scratch = pathlib.Path.cwd() / 'fixture-scratch'
+scratch.mkdir()
+report = {'schema': collector.RESULT_SCHEMA, 'commandExit': 0, 'commandAccepted': False,
+          'firstCause': {'type': 'ValueError', 'message': 'original post-TLC fixture cause'},
+          'additionalFailures': [], 'ownerReceipt': {'cleanup': 'observed-empty-group'},
+          'input': {'private': 'NEVER COPY'}}
+(scratch / 'runner.log.attempt-1.command.json').write_text(json.dumps(report))
+collector.capture(scratch, pathlib.Path(os.environ['FSGG_CHOREO_DIAGNOSTIC_ROOT']), 37)
+shutil.rmtree(scratch)
+PYFIXTURE
+exit 37
+''')
+                archive = root / 'toolchain.fixture'
+                archive.write_text('fixture-only; never executed or extracted')
+                shard_root = root / 'receipts'
+                destination = root / 'inherited-diagnostics' if inherited else shard_root / 'base-choreo-failure-diagnostics'
+                env = dict(os.environ, FSGG_QUINT_SHARD='base', FSGG_QUINT_TOOLCHAIN_ARCHIVE=str(archive),
+                           FSGG_QUINT_SHARD_ROOT=str(shard_root), FIXTURE_COLLECTOR=str(ROOT / 'eng/retain-choreo-c2-diagnostics.py'))
+                env.pop('FSGG_CHOREO_DIAGNOSTIC_ROOT', None)
+                if inherited:
+                    env['FSGG_CHOREO_DIAGNOSTIC_ROOT'] = str(destination)
+                result = subprocess.run(['bash', str(gates / 'canonical-quint-shard.sh')], cwd=root,
+                                        env=env, capture_output=True, timeout=10)
+                self.assertEqual(37, result.returncode, result.stderr)
+                self.assertFalse((root / 'fixture-scratch').exists())
+                artifact = json.loads((destination / 'failure.json').read_text())
+                self.assertEqual(37, artifact['originalExitCode'])
+                self.assertIn('original post-TLC fixture cause', json.dumps(artifact))
+                self.assertNotIn('NEVER COPY', json.dumps(artifact))
+
     def test_compiler_detail_survives_filtered_bounded_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); scratch = root / 'scratch'; scratch.mkdir()
