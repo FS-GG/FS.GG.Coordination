@@ -21,7 +21,7 @@ type ProcessGeneration =
     { Platform: string; ScopeId: string; Pid: int; BirthToken: string }
 type OwnerReference = { OwnerId: string; Evidence: EvidenceRef }
 type ObservationStamp =
-    { At: ClockStamp option; Scope: string; Provenance: EvidenceRef }
+    { At: ClockStamp option; Scope: string; Generation: ProcessGeneration option; Provenance: EvidenceRef }
 type Observation<'T> =
     | Known of 'T * ObservationStamp
     | Pending of Diagnostic
@@ -103,10 +103,10 @@ type ExecutionResult =
     { Identity: OperationIdentity; Phase: ExecutionPhase; Launch: LaunchObservation
       Exit: Observation<ProcessExit>; Stop: StopObservation
       Stdout: StreamCapture; Stderr: StreamCapture
-      ChargedTotalBytes: int64; EvidenceBytes: int64
+      ChargedTotalBytes: int64; EvidenceBytes: int64; TerminalEvidenceBytes: int64
       Capabilities: CapabilityObservation list; Limits: ObtainedLimit list
       Violations: Diagnostic list; FirstFailure: Failure option
-      AdditionalFailures: Failure list; OmittedFailures: int64
+      AdditionalFailures: Failure list; OmittedFailures: int64; OmittedDiagnosticDetails: int64
       Cleanup: CleanupResult; OriginalBudget: ExecutionBudget }
 
 type BudgetPhase = Work | Cleanup
@@ -123,7 +123,7 @@ type OutputChannel = Stdout | Stderr | SupervisorEvidence | Protocol | TerminalE
 type AppendResult = Accepted | RetireRequired of Diagnostic
 type OutputSnapshot =
     { Stdout: StreamCapture; Stderr: StreamCapture
-      ChargedTotal: int64; EvidenceBytes: int64; FirstFailure: Diagnostic option }
+      ChargedTotal: int64; EvidenceBytes: int64; TerminalEvidenceBytes: int64; FirstFailure: Diagnostic option }
 type IBoundedByteSink =
     abstract Append: OutputChannel * ReadOnlyMemory<byte> -> AppendResult
     abstract Snapshot: unit -> OutputSnapshot
@@ -146,4 +146,4 @@ type IProcessSessionFactory =
 
 type ContractLimits =
     { CodeBytes: int; MessageBytes: int; ReferenceBytes: int; CollectionEntries: int
-      RequestBytes: int; RequestEntries: int; ResultMetadataBytes: int; CaptureAllocationBytes: int }
+      RequestBytes: int; RequestEntries: int; ResultMetadataBytes: int; FirstCauseReserveBytes: int; CaptureAllocationBytes: int }

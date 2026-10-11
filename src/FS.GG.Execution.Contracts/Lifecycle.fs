@@ -4,7 +4,8 @@ open System.Text
 
 type LifecycleState = private
     { Command: CommandSpec; Result: ExecutionResult; LastTick: int64
-      LaunchConsumed: bool; TargetReleased: bool; Returned: bool }
+      LaunchConsumed: bool; TargetReleased: bool; TargetReleaseAt: int64 option; Returned: bool
+      StdoutTerminal: ReaderState option; StderrTerminal: ReaderState option }
 
 type LifecycleEvent =
     | BeginLaunch
@@ -42,50 +43,70 @@ module Lifecycle =
             let input = match command.Input with Closed -> Closed | Bytes memory -> Bytes(ReadOnlyMemory(memory.ToArray()))
             let result =
                 { Identity = identity; Phase = Prepared; Launch = NotStarted; Exit = Pending(note "exit-pending")
-                  Stop = NotRequested; Stdout = empty; Stderr = empty; ChargedTotalBytes = 0L; EvidenceBytes = 0L
-                  Capabilities = []; Limits = []; Violations = []; FirstFailure = None; AdditionalFailures = []; OmittedFailures = 0L
+                  Stop = NotRequested; Stdout = empty; Stderr = empty; ChargedTotalBytes = 0L; EvidenceBytes = 0L; TerminalEvidenceBytes = 0L
+                  Capabilities = []; Limits = []; Violations = []; FirstFailure = None; AdditionalFailures = []; OmittedFailures = 0L; OmittedDiagnosticDetails = 0L
                   Cleanup = { Disposition = CleanupUnknown; RequestedActions = []; LeaderTermination = Pending(note "termination-pending")
                               WorkloadEmpty = Unknown(note "workload-unknown"); OwnedChildrenReaped = Unknown(note "reaping-unknown")
                               LocalTasks = Unknown(note "tasks-unknown"); Unresolved = []; OmittedUnresolved = 0L; Custody = NoEffect }
                   OriginalBudget = budget }
             Ok { Command = { command with Input = input }; Result = result; LastTick = (Budget.describe budget).StartedAt
-                 LaunchConsumed = false; TargetReleased = false; Returned = false }
+                 LaunchConsumed = false; TargetReleased = false; TargetReleaseAt = None; Returned = false; StdoutTerminal = None; StderrTerminal = None }
     let private copyCapture (capture: StreamCapture) =
         { capture with Prefix = ReadOnlyMemory(capture.Prefix.ToArray()); Tail = ReadOnlyMemory(capture.Tail.ToArray()) }
     let snapshot state = { state.Result with Stdout = copyCapture state.Result.Stdout; Stderr = copyCapture state.Result.Stderr }
     let private positive = function Known(true,_) -> true | _ -> false
-    let private capabilityObtained capability result =
-        result.Capabilities |> List.exists (fun item -> item.Capability = capability && (match item.Obtained with Known _ -> true | _ -> false))
+    let private capabilityObtained capability (now: ClockStamp) (result: ExecutionResult) =
+        result.Capabilities |> List.exists (fun item -> item.Capability = capability && (match item.Obtained with Known(_,stamp) -> stamp.At = Some now | _ -> false))
     let private capabilityRequired capability state =
         state.Command.Capabilities |> List.exists (fun item -> item.Capability = capability && item.Required)
     let private settled = function Known(Settled,_) -> true | _ -> false
     let private knownReader = function Known(Eof,_) | Known(StoppedWithoutEof _,_) | Known(ReadFailed _,_) -> true | _ -> false
-    let private retainKnown oldValue newValue =
-        match oldValue,newValue with
-        | Known _, Known _ -> newValue
-        | Known _, _ -> oldValue
-        | Absent _, Unknown _ | Absent _, Pending _ | Absent _, Unavailable _ -> oldValue
-        | _, _ -> newValue
-    let private clockErrors now observationValue =
+    let private retainExit oldValue newValue =
+        // Exact-generation exit is irreversible; the original stamp stays with the fact.
+        match oldValue with Known _ -> oldValue | _ -> newValue
+    let private operationScope (state: LifecycleState) = state.Result.Identity.InvocationId.ToString("D")
+    let private processGeneration (state: LifecycleState) = match state.Result.Launch with Started g -> Some g | _ -> None
+    let private proofErrors (state: LifecycleState) (now: ClockStamp) (fresh: bool) (expected: ProcessGeneration option) observationValue =
         match observationValue with
         | Known(_, stamp) | Absent stamp ->
-            match stamp.At with
-            | Some at when at.Domain <> now.Domain || at.Ticks > now.Ticks -> [ { Code = "observation-clock-refused"; Field = "observation.at" } ]
-            | _ -> []
+            [ if stamp.Scope <> operationScope state then { Code = "observation-scope-refused"; Field = "observation.scope" }
+              if stamp.Generation <> expected then { Code = "observation-generation-refused"; Field = "observation.generation" }
+              match stamp.At with
+              | Some at ->
+                  let minimum = if expected.IsSome then (state.TargetReleaseAt |> Option.defaultValue (Budget.describe state.Result.OriginalBudget).StartedAt) else (Budget.describe state.Result.OriginalBudget).StartedAt
+                  if at.Domain <> now.Domain || at.Ticks > now.Ticks || at.Ticks < minimum || at.Ticks >= (Budget.describe state.Result.OriginalBudget).TotalExpiresAt then
+                      yield { Code = "observation-clock-refused"; Field = "observation.at" }
+                  elif fresh && at.Ticks <> now.Ticks then
+                      yield { Code = "observation-stale-refused"; Field = "observation.at" }
+              | None -> yield { Code = "observation-clock-required"; Field = "observation.at" } ]
         | _ -> []
-    let private metadataBytes (result: ExecutionResult) =
+    let private phaseAdvance current proposed =
+        // Work cannot reopen after retirement/return, and terminal settlement cannot regress.
+        match current, proposed with
+        | Terminal, _ -> Terminal
+        | Retiring, Terminal -> Terminal
+        | Retiring, _ -> Retiring
+        | Running, Prepared | Running, Starting -> Running
+        | Starting, Prepared -> Starting
+        | _ -> proposed
+    let private increment value = if value = Int64.MaxValue then value else value + 1L
+    let private omitCount value count = if count > Int64.MaxValue - value then Int64.MaxValue else value + count
+    let private measureMetadata (result: ExecutionResult) =
         // Conservative upper bound includes fixed record/enum/framing allowance and JSON escaping.
         let mutable total = 4096L
         let text (s: string) = total <- total + int64 (Encoding.UTF8.GetByteCount s) * 6L + 64L
         let evidence (e: EvidenceRef) = text e.Kind; text e.Reference; Option.iter text e.Digest
         let diagnostic (d: Diagnostic) = text d.Code; text d.Message; Option.iter evidence d.Evidence
-        let stamp (s: ObservationStamp) = text s.Scope; evidence s.Provenance
+        let stamp (s: ObservationStamp) =
+            total <- total + 512L
+            text s.Scope; evidence s.Provenance
+            s.Generation |> Option.iter (fun g -> total <- total + 128L; text g.Platform; text g.ScopeId; text g.BirthToken)
         let obs visit = function
             | Known(v,s) -> stamp s; visit v
             | Absent s -> stamp s
             | Pending d | Unknown d | Unavailable d | Invalid d | LimitExceeded d -> diagnostic d
         let generation (g: ProcessGeneration) = text g.Platform; text g.ScopeId; text g.BirthToken
-        let failure (f: Failure) = diagnostic f.Diagnostic
+        let failure (f: Failure) = total <- total + 512L; diagnostic f.Diagnostic
         text result.Identity.SourceDigest; text result.Identity.ProfileId; text result.Identity.ProfileDigest
         match result.Launch with Refused d | Ambiguous d -> diagnostic d | Started g -> generation g | _ -> ()
         match result.Stop with StopRefused d -> diagnostic d | _ -> ()
@@ -106,6 +127,37 @@ module Lifecycle =
         | AuthorityUnavailable d -> diagnostic d
         | NoEffect -> ()
         total
+    let metadataBytes state = measureMetadata state.Result
+    let private insertFailure command failure (result: ExecutionResult) =
+        let failure = { failure with Diagnostic = Validation.sanitizeDiagnostic command failure.Diagnostic }
+        let next = addFailure failure result
+        if measureMetadata next <= int64 Validation.limits.ResultMetadataBytes then next
+        else
+            match result.FirstFailure with
+            | Some _ -> { result with OmittedFailures = increment result.OmittedFailures }
+            | None ->
+                // Ordinary updates reserve space for this fixed-size minimal cause.
+                let compact = { failure with Diagnostic = { failure.Diagnostic with Message = "First-cause message/evidence omitted by metadata bound."; Evidence = None } }
+                { result with FirstFailure = Some compact; OmittedDiagnosticDetails = increment result.OmittedDiagnosticDetails }
+    let private compactObservation value =
+        let compact (d: Diagnostic) = { d with Message = "Observation detail omitted by metadata bound."; Evidence = None }
+        match value with
+        | Pending d -> Pending(compact d)
+        | Unavailable d -> Unavailable(compact d)
+        | Unknown d -> Unknown(compact d)
+        | Invalid d -> Invalid(compact d)
+        | LimitExceeded d -> LimitExceeded(compact d)
+        | _ -> value
+    let private recordViolation command now (diagnostic: Diagnostic) (result: ExecutionResult) =
+        let next = insertFailure command { Phase = result.Phase; Diagnostic = diagnostic; At = Some now } result
+        let next = { next with Phase = Retiring }
+        let withViolation = { next with Violations = next.Violations @ [ Validation.sanitizeDiagnostic command diagnostic ] }
+        if next.Violations.Length < Validation.limits.CollectionEntries && measureMetadata withViolation <= int64 Validation.limits.ResultMetadataBytes then withViolation
+        else
+            let compact = { diagnostic with Message = "Violation detail omitted by metadata bound."; Evidence = None }
+            let compactResult = { next with Violations = next.Violations @ [ compact ]; OmittedDiagnosticDetails = increment next.OmittedDiagnosticDetails }
+            if next.Violations.Length < Validation.limits.CollectionEntries && measureMetadata compactResult <= int64 Validation.limits.ResultMetadataBytes then compactResult
+            else { next with OmittedDiagnosticDetails = increment next.OmittedDiagnosticDetails }
     let private applyCore (now: ClockStamp) event (state: LifecycleState) =
         match Budget.remaining now state.Result.OriginalBudget with
         | Error _ -> refused "clock.domain-or-start"
@@ -117,8 +169,18 @@ module Lifecycle =
             elif view.TotalExpired && event <> ReturnRequested then refused "budget.total-expired"
             else
                 let finish (next: LifecycleState) =
-                    if metadataBytes next.Result > int64 Validation.limits.ResultMetadataBytes then refused "result.metadata-limit"
-                    else Ok { next with LastTick = now.Ticks }
+                    let limit = Validation.limits.ResultMetadataBytes - (if next.Result.FirstFailure.IsNone then Validation.limits.FirstCauseReserveBytes else 0)
+                    let rec fit (reported: ExecutionResult) =
+                        if measureMetadata reported <= int64 limit then Some reported
+                        elif reported.FirstFailure.IsSome && not reported.Cleanup.RequestedActions.IsEmpty then
+                            // Bounded secondary action evidence yields to the original cause/current
+                            // proof. Count each omitted diagnostic record; never discard violations.
+                            let actions = reported.Cleanup.RequestedActions |> List.rev |> List.tail |> List.rev
+                            fit { reported with Cleanup = { reported.Cleanup with RequestedActions = actions }; OmittedDiagnosticDetails = increment reported.OmittedDiagnosticDetails }
+                        else None
+                    match fit next.Result with
+                    | None -> refused "result.metadata-limit"
+                    | Some reported -> Ok { next with LastTick = now.Ticks; Result = { reported with Phase = phaseAdvance result.Phase reported.Phase } }
                 let update nextResult = finish { state with Result = nextResult }
                 let validated errors next = if errors.IsEmpty then next() else Error errors
                 match event with
@@ -126,7 +188,7 @@ module Lifecycle =
                     if state.LaunchConsumed || result.Stop <> NotRequested then refused "launch.already-consumed-or-stopped"
                     else finish { state with LaunchConsumed = true; Result = { result with Phase = Starting } }
                 | TargetReleaseRequested ->
-                    let missing = state.Command.Capabilities |> List.exists (fun r -> r.Required && not (capabilityObtained r.Capability result))
+                    let missing = state.Command.Capabilities |> List.exists (fun r -> r.Required && not (capabilityObtained r.Capability now result))
                     let requestedLimits =
                         [ if state.Command.Resources.MemoryBytes.IsSome then "memory"
                           if state.Command.Resources.CpuQuota.IsSome then "cpuQuota"
@@ -137,71 +199,133 @@ module Lifecycle =
                     let retainedOwnerMissing =
                         capabilityRequired BoundedReturnWithRetainedCustody state
                         && (match result.Cleanup.Custody with RetainedByOwner _ -> false | _ -> true)
-                    let limitsMissing = requestedLimits |> List.exists (fun name -> result.Limits |> List.exists (fun l -> l.Name = name && (match l.Actual,l.Assurance with Known _,Known _ -> true | _ -> false)) |> not)
+                    let limitsMissing = requestedLimits |> List.exists (fun name -> result.Limits |> List.exists (fun l -> l.Name = name && (match l.Actual,l.Assurance with Known(_,a),Known(_,b) -> a = b && a.At = Some now | _ -> false)) |> not)
                     if not state.LaunchConsumed || state.TargetReleased || missing || limitsMissing || retainedOwnerMissing || result.Stop <> NotRequested then refused "target.release-prerequisites"
                     else
                         let custody = match result.Cleanup.Custody with RetainedByOwner _ as retained -> retained | _ -> AuthorityUnavailable(note "authority-unreported")
-                        finish { state with TargetReleased = true; Result = { result with Cleanup = { result.Cleanup with Custody = custody } } }
+                        finish { state with TargetReleased = true; TargetReleaseAt = Some now.Ticks; Result = { result with Cleanup = { result.Cleanup with Custody = custody } } }
                 | LaunchObserved launch ->
-                    if not state.LaunchConsumed || result.Launch <> NotStarted then refused "launch.observation"
+                    let compatible =
+                        match result.Launch,launch with
+                        | NotStarted, (Started _ | Refused _ | Ambiguous _) -> true
+                        | Ambiguous _, (Started _ | Refused _ | Ambiguous _) -> true
+                        | Started old, Started next -> old = next
+                        | Refused old, Refused next -> old = next
+                        | _ -> false
+                    if not state.LaunchConsumed || not compatible then refused "launch.observation"
                     else
-                        let errors = match launch with Started g -> Validation.generation g | Refused d | Ambiguous d -> Validation.diagnostic d | NotStarted -> [ { Code = "invalid-value"; Field = "launch" } ]
+                        let errors =
+                            match launch with
+                            | Started g -> Validation.generation g @ (if g.ScopeId <> operationScope state then [ { Code = "process-scope-refused"; Field = "process.scope" } ] else [])
+                            | Refused d | Ambiguous d -> Validation.diagnostic d
+                            | NotStarted -> [ { Code = "invalid-value"; Field = "launch" } ]
                         if (match launch with Started _ -> not state.TargetReleased | _ -> false) then refused "launch.before-target-release"
                         else validated errors (fun () -> update { result with Launch = launch; Phase = match launch with Started _ -> Running | _ -> Retiring })
                 | CapabilitiesObtained values ->
-                    if state.TargetReleased || (values |> List.truncate (Validation.limits.CollectionEntries + 1) |> List.length) > Validation.limits.CollectionEntries || (values |> List.map _.Capability |> Set.ofList).Count <> values.Length then refused "capabilities.closed-or-duplicate"
-                    else validated (List.collect Validation.capability values @ (values |> List.collect (fun c -> clockErrors now c.Obtained))) (fun () ->
-                        let merged = values |> List.fold (fun current value ->
-                            match current |> List.tryFind (fun old -> old.Capability = value.Capability) with
-                            | Some old -> { value with Obtained = retainKnown old.Obtained value.Obtained } :: (current |> List.filter (fun old -> old.Capability <> value.Capability))
-                            | None -> value :: current) result.Capabilities
-                        if merged.Length > Validation.limits.CollectionEntries then refused "capabilities.limit" else update { result with Capabilities = merged })
+                    if (values |> List.truncate (Validation.limits.CollectionEntries + 1) |> List.length) > Validation.limits.CollectionEntries || (values |> List.map _.Capability |> Set.ofList).Count <> values.Length then refused "capabilities.duplicate-or-limit"
+                    else validated (List.collect Validation.capability values @ (values |> List.collect (fun c -> proofErrors state now true (processGeneration state) c.Obtained))) (fun () ->
+                        let current = values |> List.fold (fun old value -> value :: (old |> List.filter (fun prior -> prior.Capability <> value.Capability))) result.Capabilities
+                        if current.Length > Validation.limits.CollectionEntries then refused "capabilities.limit"
+                        else
+                            let next = { result with Capabilities = current }
+                            let limit = Validation.limits.ResultMetadataBytes - (if result.FirstFailure.IsNone then Validation.limits.FirstCauseReserveBytes else 0)
+                            let next =
+                                if measureMetadata next <= int64 limit then next
+                                else
+                                    let compact = current |> List.map (fun c -> { c with Obtained = compactObservation c.Obtained })
+                                    let omissions = List.zip current compact |> List.filter (fun (old, next) -> old <> next) |> List.length |> int64
+                                    { next with Capabilities = compact; OmittedDiagnosticDetails = omitCount next.OmittedDiagnosticDetails omissions }
+                            let violated = values |> List.choose (fun v -> match v.Obtained with LimitExceeded d -> Some d | _ -> None)
+                            update (violated |> List.fold (fun next d -> recordViolation state.Command now d next) next))
                 | LimitObserved value ->
-                    if state.TargetReleased then refused "limits.closed"
-                    else validated (Validation.obtainedLimit state.Command.Resources value @ clockErrors now value.Actual @ clockErrors now value.Assurance) (fun () ->
-                        let previous = result.Limits |> List.tryFind (fun old -> old.Name = value.Name)
-                        let joined = match previous with Some old -> { value with Actual = retainKnown old.Actual value.Actual; Assurance = retainKnown old.Assurance value.Assurance } | None -> value
-                        let current = result.Limits |> List.filter (fun old -> old.Name <> value.Name)
-                        update { result with Limits = joined :: current })
+                    let actualStamp = match value.Actual with Known(_,s) -> Some s | _ -> None
+                    let assuranceStamp = match value.Assurance with Known(_,s) -> Some s | _ -> None
+                    let bundleErrors = if actualStamp.IsSome && assuranceStamp.IsSome && actualStamp <> assuranceStamp then [ { Code = "limit-bundle-refused"; Field = "limit.provenance" } ] else []
+                    validated (Validation.obtainedLimit state.Command.Resources value @ bundleErrors @ proofErrors state now true (processGeneration state) value.Actual @ proofErrors state now true (processGeneration state) value.Assurance) (fun () ->
+                        // One latest whole bundle: incomplete values cannot inherit old proof.
+                        let next = { result with Limits = value :: (result.Limits |> List.filter (fun old -> old.Name <> value.Name)) }
+                        let limit = Validation.limits.ResultMetadataBytes - (if result.FirstFailure.IsNone then Validation.limits.FirstCauseReserveBytes else 0)
+                        let next =
+                            if measureMetadata next <= int64 limit then next
+                            else
+                                let compact = { value with Actual = compactObservation value.Actual; Assurance = compactObservation value.Assurance }
+                                let omissions = (if compact.Actual <> value.Actual then 1L else 0L) + (if compact.Assurance <> value.Assurance then 1L else 0L)
+                                { next with Limits = compact :: (result.Limits |> List.filter (fun old -> old.Name <> value.Name)); OmittedDiagnosticDetails = omitCount next.OmittedDiagnosticDetails omissions }
+                        let violated =
+                            [ match value.Actual with LimitExceeded d -> yield d | _ -> ()
+                              match value.Assurance with LimitExceeded d -> yield d | _ -> () ]
+                        update (violated |> List.fold (fun next d -> recordViolation state.Command now d next) next))
                 | ExitObserved value ->
-                    if not state.TargetReleased then refused "exit.before-release"
-                    else validated (Validation.observation value @ clockErrors now value) (fun () ->
+                    let positiveWithoutGeneration = match value with Known _ -> (processGeneration state).IsNone | _ -> false
+                    if positiveWithoutGeneration || (not state.TargetReleased && result.Launch <> NotStarted && (match result.Launch with Refused _ -> false | _ -> true)) then refused "exit.without-generation"
+                    else validated (Validation.observation value @ proofErrors state now false (processGeneration state) value) (fun () ->
                         match result.Exit,value with
                         | Known(old,_), Known(next,_) when old <> next -> refused "exit.contradiction"
-                        | _ -> update { result with Exit = retainKnown result.Exit value; Phase = Retiring })
+                        | _ -> update { result with Exit = retainExit result.Exit value; Phase = Retiring })
                 | StopRequested reason ->
                     let stop = match result.Stop with NotRequested -> Requested(reason, now) | previous -> previous
                     update { result with Stop = stop; Phase = Retiring }
                 | ReaderObserved(channel, value) ->
                     let nested = match value with Known(StoppedWithoutEof d,_) | Known(ReadFailed d,_) -> Validation.diagnostic d | _ -> []
-                    validated (Validation.observation value @ nested @ clockErrors now value) (fun () ->
-                        let retain old =
-                            match old,value with Known(Eof,_), Known(next,_) when next <> Eof -> None | _ -> Some(retainKnown old value)
-                        match channel with
-                        | Stdout -> match retain result.Stdout.Reader with Some v -> update { result with Stdout = { result.Stdout with Reader = v } } | _ -> refused "reader.eof-regression"
-                        | Stderr -> match retain result.Stderr.Reader with Some v -> update { result with Stderr = { result.Stderr with Reader = v } } | _ -> refused "reader.eof-regression"
-                        | _ -> refused "reader.channel")
+                    let knownWithoutGeneration = match value with Known _ -> (processGeneration state).IsNone | _ -> false
+                    if knownWithoutGeneration then refused "reader.without-generation"
+                    else validated (Validation.observation value @ nested @ proofErrors state now false (processGeneration state) value) (fun () ->
+                        let terminal = match channel with Stdout -> state.StdoutTerminal | Stderr -> state.StderrTerminal | _ -> None
+                        let incoming = match value with Known(v,_) -> Some v | _ -> None
+                        let isTerminal = function Eof | StoppedWithoutEof _ | ReadFailed _ -> true | _ -> false
+                        let contradicted = match terminal,incoming with Some old,Some next -> old <> next | _ -> false
+                        let observed =
+                            let old = match channel with Stdout -> result.Stdout.Reader | Stderr -> result.Stderr.Reader | _ -> Pending(note "invalid-channel")
+                            match old with Known(v,_) when isTerminal v -> old | _ -> value
+                        let next =
+                            match channel with
+                            | Stdout -> Some { result with Stdout = { result.Stdout with Reader = observed } }
+                            | Stderr -> Some { result with Stderr = { result.Stderr with Reader = observed } }
+                            | _ -> None
+                        if contradicted then refused "reader.terminal-contradiction"
+                        else
+                            match next with
+                            | None -> refused "reader.channel"
+                            | Some next ->
+                                let terminal = match terminal,incoming with None,Some v when isTerminal v -> Some v | _ -> terminal
+                                let nextState =
+                                    match channel with Stdout -> { state with StdoutTerminal = terminal } | Stderr -> { state with StderrTerminal = terminal } | _ -> state
+                                let originalLimit = Validation.limits.ResultMetadataBytes - (if result.FirstFailure.IsNone then Validation.limits.FirstCauseReserveBytes else 0)
+                                let next =
+                                    if measureMetadata next <= int64 originalLimit then next
+                                    else
+                                        // Retain the bounded per-reader terminal outcome privately; publish
+                                        // explicit omitted evidence without allowing a reader retry.
+                                        let omitted = Unknown(note "reader-proof-omitted-by-metadata")
+                                        let omittedResult = match channel with Stdout -> { next with Stdout = { next.Stdout with Reader = omitted } } | _ -> { next with Stderr = { next.Stderr with Reader = omitted } }
+                                        { omittedResult with OmittedDiagnosticDetails = increment omittedResult.OmittedDiagnosticDetails }
+                                match value with
+                                | Known(ReadFailed d,_) when (match state.StdoutTerminal,state.StderrTerminal,channel with Some(ReadFailed _),_,Stdout | _,Some(ReadFailed _),Stderr -> false | _ -> true) ->
+                                    let failed = insertFailure state.Command { Phase = result.Phase; Diagnostic = d; At = Some now } next
+                                    finish { nextState with Result = { failed with Phase = Retiring; Stop = match failed.Stop with NotRequested -> Requested(SinkFailure,now) | old -> old } }
+                                | _ -> finish { nextState with Result = next })
                 | OutputObserved value ->
                     validated (Validation.output state.Command.Capture value) (fun () ->
-                        if value.ChargedTotal < result.ChargedTotalBytes || value.EvidenceBytes < result.EvidenceBytes || value.Stdout.Totals.Observed < result.Stdout.Totals.Observed || value.Stderr.Totals.Observed < result.Stderr.Totals.Observed then refused "output.regression"
+                        if value.ChargedTotal < result.ChargedTotalBytes || value.EvidenceBytes < result.EvidenceBytes || value.TerminalEvidenceBytes < result.TerminalEvidenceBytes || value.Stdout.Totals.Observed < result.Stdout.Totals.Observed || value.Stderr.Totals.Observed < result.Stderr.Totals.Observed then refused "output.regression"
                         else
                             let next = { result with Stdout = { (copyCapture value.Stdout) with Reader = result.Stdout.Reader }; Stderr = { (copyCapture value.Stderr) with Reader = result.Stderr.Reader }
-                                                     ChargedTotalBytes = value.ChargedTotal; EvidenceBytes = value.EvidenceBytes }
+                                                     ChargedTotalBytes = value.ChargedTotal; EvidenceBytes = value.EvidenceBytes; TerminalEvidenceBytes = value.TerminalEvidenceBytes }
                             match value.FirstFailure with
                             | None -> update next
                             | Some d ->
-                                let failed = addFailure { Phase = result.Phase; Diagnostic = Validation.sanitizeDiagnostic state.Command d; At = Some now } next
+                                let failed = insertFailure state.Command { Phase = result.Phase; Diagnostic = d; At = Some now } next
                                 update { failed with Phase = Retiring; Stop = match failed.Stop with NotRequested -> Requested(OutputLimit,now) | old -> old })
                 | RetirementActionRequested diagnostic ->
                     validated (Validation.diagnostic diagnostic) (fun () ->
                         if result.Cleanup.RequestedActions.Length >= Validation.limits.CollectionEntries then refused "cleanup.actions-limit"
                         else update { result with Phase = Retiring; Cleanup = { result.Cleanup with RequestedActions = result.Cleanup.RequestedActions @ [ Validation.sanitizeDiagnostic state.Command diagnostic ] } })
                 | CleanupObserved value ->
-                    let value = { value with LeaderTermination = retainKnown result.Cleanup.LeaderTermination value.LeaderTermination
-                                             WorkloadEmpty = retainKnown result.Cleanup.WorkloadEmpty value.WorkloadEmpty
-                                             OwnedChildrenReaped = retainKnown result.Cleanup.OwnedChildrenReaped value.OwnedChildrenReaped }
-                    validated (Validation.cleanup value @ clockErrors now value.LeaderTermination @ clockErrors now value.WorkloadEmpty @ clockErrors now value.OwnedChildrenReaped @ clockErrors now value.LocalTasks) (fun () ->
-                        let noEffect = (not state.TargetReleased && match result.Launch with NotStarted | Refused _ -> true | _ -> false)
+                    let expected = processGeneration state
+                    let releasedProof = match value.Custody with Released stamp -> proofErrors state now true expected (Absent stamp) | _ -> []
+                    let scopeErrors = value.Unresolved |> List.truncate (Validation.limits.CollectionEntries + 1) |> List.collect (fun g -> if g.ScopeId = operationScope state then [] else [ { Code = "process-scope-refused"; Field = "cleanup.unresolved" } ])
+                    validated (Validation.cleanup value @ scopeErrors @ releasedProof @ proofErrors state now true expected value.LeaderTermination @ proofErrors state now true expected value.WorkloadEmpty @ proofErrors state now true expected value.OwnedChildrenReaped @ proofErrors state now true expected value.LocalTasks) (fun () ->
+                        // Latest complete evidence bundle; never combine old emptiness/termination.
+                        let noEffect = match result.Launch with Refused _ -> true | NotStarted -> not state.TargetReleased | _ -> false
                         let complete =
                             if noEffect then value.Custody = NoEffect && settled value.LocalTasks
                             else positive value.LeaderTermination && settled value.LocalTasks && knownReader result.Stdout.Reader && knownReader result.Stderr.Reader
@@ -215,23 +339,17 @@ module Lifecycle =
                         if not custodyAllowed || (value.Disposition = Complete && not complete) || (result.Cleanup.Disposition = Complete && value.Disposition <> Complete) then refused "cleanup.proof"
                         else
                             let phase = if value.Disposition = Complete then Terminal elif result.Phase = Prepared || result.Phase = Starting then result.Phase else Retiring
-                            update { result with Cleanup = value; Phase = phase })
+                            let next = { result with Cleanup = value; Phase = phase }
+                            let violated =
+                                [ match value.LeaderTermination with LimitExceeded d -> yield d | _ -> ()
+                                  match value.WorkloadEmpty with LimitExceeded d -> yield d | _ -> ()
+                                  match value.OwnedChildrenReaped with LimitExceeded d -> yield d | _ -> ()
+                                  match value.LocalTasks with LimitExceeded d -> yield d | _ -> () ]
+                            update (violated |> List.fold (fun next d -> recordViolation state.Command now d next) next))
                 | FailureObserved failure ->
                     let clockError = match failure.At with Some at when at.Domain <> now.Domain || at.Ticks > now.Ticks || at.Ticks < (Budget.describe result.OriginalBudget).StartedAt -> [ { Code = "failure-clock-refused"; Field = "failure.at" } ] | _ -> []
                     validated (Validation.diagnostic failure.Diagnostic @ clockError) (fun () ->
-                        let failure = { failure with Diagnostic = Validation.sanitizeDiagnostic state.Command failure.Diagnostic }
-                        let next = { (addFailure failure result) with Phase = if result.Phase = Terminal then Terminal else Retiring }
-                        if metadataBytes next <= int64 Validation.limits.ResultMetadataBytes then update next
-                        else
-                            match result.FirstFailure with
-                            | Some _ ->
-                                // Secondary reporting/cleanup cannot displace the first cause.
-                                let omitted = if result.OmittedFailures = Int64.MaxValue then Int64.MaxValue else result.OmittedFailures + 1L
-                                update { result with OmittedFailures = omitted; Phase = if result.Phase = Terminal then Terminal else Retiring }
-                            | None ->
-                                // Keep original cause code/phase/time; explicitly mark omitted message/evidence.
-                                let compact = { failure with Diagnostic = { failure.Diagnostic with Message = "Diagnostic detail omitted by result metadata bound."; Evidence = None } }
-                                update { result with FirstFailure = Some compact; OmittedFailures = 1L; Phase = Retiring })
+                        update { (insertFailure state.Command failure result) with Phase = Retiring })
                 | ReturnRequested ->
                     finish { state with Returned = true; Result = { result with Phase = if result.Cleanup.Disposition = Complete then Terminal else Retiring } }
 

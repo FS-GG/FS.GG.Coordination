@@ -10,8 +10,6 @@ module Samples =
     let ok = function Ok value -> value | Error error -> failwithf "Unexpected refusal: %A" error
     let diagnostic code = { Code = code; Message = "Finite diagnostic."; Evidence = None }
     let evidence = { Kind = "fixture"; Reference = "fixture:contract-control"; Digest = None }
-    let stamp = { At = Some(now 100L); Scope = "fixture"; Provenance = evidence }
-    let known value = Known(value,stamp)
     let capture =
         { TotalBytes = 64L; TerminalReserveBytes = 8; StdoutPrefixBytes = 4; StdoutTailBytes = 4
           StderrPrefixBytes = 4; StderrTailBytes = 4; ReadChunkBytes = 32; MaximumFrameBytes = 32; MaximumIncompleteLineBytes = 16 }
@@ -23,7 +21,11 @@ module Samples =
     let identity = { InvocationId = Guid.Parse "c8fc952a-486f-48c5-9d7b-c1cecb22f954"; Execution = None; LaunchOrdinal = 0UL
                      SourceDigest = String.replicate 64 "a"; ProfileId = "ordinary-fixture"; ProfileDigest = String.replicate 64 "b" }
     let budget = Budget.create (now 100L) (TimeSpan.FromSeconds 10.) (TimeSpan.FromSeconds 2.) |> ok
-    let generation = { Platform = "fixture"; ScopeId = "scope"; Pid = 42; BirthToken = "birth-1" }
+    let generation = { Platform = "fixture"; ScopeId = identity.InvocationId.ToString("D"); Pid = 42; BirthToken = "birth-1" }
+    let stamp = { At = Some(now 100L); Scope = identity.InvocationId.ToString("D"); Generation = Some generation; Provenance = evidence }
+    let known value = Known(value,stamp)
+    let beforeStamp = { stamp with Generation = None }
+    let knownBefore value = Known(value,beforeStamp)
     let prepared () = Lifecycle.prepare command identity budget |> ok
     let apply event state = Lifecycle.apply (now 100L) event state |> ok
     let launched () = prepared() |> apply BeginLaunch |> apply TargetReleaseRequested |> apply (LaunchObserved(Started generation))
@@ -157,7 +159,7 @@ module ContractTests =
         let command = { command with Capabilities = [ { Capability = BoundedReturnWithRetainedCustody; Required = true } ] }
         let state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch
         Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
-        let state = state |> apply (CapabilitiesObtained [ { Capability = BoundedReturnWithRetainedCustody; Obtained = known evidence } ])
+        let state = state |> apply (CapabilitiesObtained [ { Capability = BoundedReturnWithRetainedCustody; Obtained = knownBefore evidence } ])
         Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
         let cleanup = { (Lifecycle.snapshot state).Cleanup with Custody = RetainedByOwner { OwnerId = "fixture-owner"; Evidence = evidence } }
         let state = state |> apply (CleanupObserved cleanup) |> apply TargetReleaseRequested
@@ -257,3 +259,211 @@ module ContractTests =
         Assert.Equal("launch-failure",result.FirstFailure.Value.Diagnostic.Code)
         Assert.DoesNotContain("argument-secret",result.FirstFailure.Value.Diagnostic.Message)
         Assert.DoesNotContain("environment-secret",result.FirstFailure.Value.Diagnostic.Message)
+
+    [<Fact>]
+    let ``ordinary overflow retains first cause while affordable terminal evidence is admitted`` () =
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stderr,memory (Array.zeroCreate 28)) |> ignore
+        let refusal = sink.Append(Stdout,memory [| 1uy |])
+        Assert.True(match refusal with RetireRequired _ -> true | _ -> false)
+        let original = sink.Snapshot().FirstFailure
+        Assert.Equal(Accepted,sink.Append(TerminalEvidence,memory (Array.zeroCreate 7)))
+        Assert.Equal(original,sink.Snapshot().FirstFailure)
+        Assert.Equal(7L,sink.Snapshot().TerminalEvidenceBytes)
+        Assert.Equal(64L,sink.Snapshot().ChargedTotal)
+        Assert.True(match sink.Append(TerminalEvidence,memory [| 1uy |]) with RetireRequired _ -> true | _ -> false)
+        Assert.Equal(original,sink.Snapshot().FirstFailure)
+
+    [<Fact>]
+    let ``oversized chunk failure still permits a finite terminal report`` () =
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 33)) |> ignore
+        let first = sink.Snapshot().FirstFailure
+        Assert.Equal(Accepted,sink.Append(TerminalEvidence,memory [| 1uy; 2uy |]))
+        Assert.Equal(first,sink.Snapshot().FirstFailure)
+        Assert.True(match sink.Append(Protocol,memory [| 1uy |]) with RetireRequired _ -> true | _ -> false)
+
+    [<Fact>]
+    let ``forged ordinary subtotal or terminal category cannot bypass carved reserve`` () =
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stderr,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stdout,memory [| 1uy |]) |> ignore
+        let bad = { (sink.Snapshot()) with FirstFailure = None }
+        Assert.NotEmpty(Validation.output capture bad)
+        Assert.NotEmpty(Validation.output capture { bad with TerminalEvidenceBytes = 1L })
+
+    [<Theory>]
+    [<InlineData("unavailable")>]
+    [<InlineData("unknown")>]
+    [<InlineData("limit-exceeded")>]
+    let ``new mutable capability uncertainty or violation invalidates release proof`` (kind: string) =
+        let command = { command with Capabilities = [ { Capability = StableLeaderIdentity; Required = true } ] }
+        let state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch
+        let state = state |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = knownBefore evidence } ])
+        let observation = match kind with "unavailable" -> Unavailable(diagnostic "cap-lost") | "unknown" -> Unknown(diagnostic "cap-unknown") | _ -> LimitExceeded(diagnostic "cap-violation")
+        let state = state |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = observation } ])
+        Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
+        if kind = "limit-exceeded" then
+            let recovered = state |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = knownBefore evidence } ])
+            Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested recovered |> Result.isError)
+            Assert.Equal("cap-violation",(Lifecycle.snapshot recovered).FirstFailure.Value.Diagnostic.Code)
+            Assert.NotEmpty((Lifecycle.snapshot recovered).Violations)
+
+    [<Fact>]
+    let ``incomplete or split limit bundle cannot inherit older amount proof`` () =
+        let command = { command with Resources = { resources with MemoryBytes = Some { Value = 1024L; Assurance = Enforced } } }
+        let state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch
+        let limit = { Name = "memory"; Unit = "bytes"; Requested = "1024"; Actual = knownBefore "1024"; Assurance = knownBefore Enforced }
+        let state = state |> apply (LimitObserved limit)
+        let state = state |> apply (LimitObserved { limit with Actual = Unknown(diagnostic "amount-unavailable") })
+        Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
+        let split = { limit with Assurance = Known(Enforced,{ beforeStamp with At = Some(now 101L) }) }
+        Assert.True(Lifecycle.apply (now 101L) (LimitObserved split) state |> Result.isError)
+
+    [<Fact>]
+    let ``old empty scope is not merged into new incomplete cleanup proof`` () =
+        let command = { command with Capabilities = [ { Capability = WorkloadEmptyObservation; Required = true } ] }
+        let state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch |> apply (CapabilitiesObtained [ { Capability = WorkloadEmptyObservation; Obtained = knownBefore evidence } ]) |> apply TargetReleaseRequested |> apply (LaunchObserved(Started generation))
+        let state = state |> apply (ReaderObserved(Stdout,known Eof)) |> apply (ReaderObserved(Stderr,known Eof))
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with Disposition = Incomplete; LeaderTermination = known true; WorkloadEmpty = known true; LocalTasks = known Outstanding }
+        let state = state |> apply (CleanupObserved cleanup)
+        let partial = { cleanup with Disposition = Complete; WorkloadEmpty = Unknown(diagnostic "empty-unknown"); LocalTasks = known Settled }
+        Assert.True(Lifecycle.apply (now 100L) (CleanupObserved partial) state |> Result.isError)
+        let partial = { partial with Disposition = Incomplete }
+        let state = state |> apply (CleanupObserved partial)
+        Assert.True(match (Lifecycle.snapshot state).Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+
+    [<Theory>]
+    [<InlineData("cancel")>]
+    [<InlineData("return")>]
+    let ``late start after cancel or return remains retiring`` (kind: string) =
+        let state = prepared() |> apply BeginLaunch |> apply TargetReleaseRequested
+        let state = if kind = "cancel" then state |> apply (StopRequested CallerCancellation) else state |> apply ReturnRequested
+        let state = state |> apply (LaunchObserved(Started generation))
+        Assert.Equal(Retiring,(Lifecycle.snapshot state).Phase)
+        Assert.Equal(Started generation,(Lifecycle.snapshot state).Launch)
+        Assert.True(Lifecycle.apply (now 100L) BeginLaunch state |> Result.isError)
+
+    [<Fact>]
+    let ``terminal duplicates do not reopen phase and reader failure cannot become EOF`` () =
+        let failed = launched() |> apply (ReaderObserved(Stdout,known(ReadFailed(diagnostic "read-original"))))
+        Assert.Equal("read-original",(Lifecycle.snapshot failed).FirstFailure.Value.Diagnostic.Code)
+        Assert.True(Lifecycle.apply (now 100L) (ReaderObserved(Stdout,known Eof)) failed |> Result.isError)
+        Assert.True(Lifecycle.apply (now 100L) (ReaderObserved(Stdout,known Reading)) failed |> Result.isError)
+        let state = launched() |> apply (ExitObserved(known(Exited 0))) |> apply (ReaderObserved(Stdout,known Eof)) |> apply (ReaderObserved(Stderr,known Eof))
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with Disposition = Complete; LeaderTermination = known true; LocalTasks = known Settled }
+        let state = state |> apply (CleanupObserved cleanup) |> apply (ExitObserved(known(Exited 0))) |> apply (StopRequested CallerCancellation)
+        Assert.Equal(Terminal,(Lifecycle.snapshot state).Phase)
+
+    [<Fact>]
+    let ``confirmed missing executable is no effect after release request but ambiguity is not`` () =
+        let state = prepared() |> apply BeginLaunch |> apply TargetReleaseRequested
+        let refused = state |> apply (LaunchObserved(Refused(diagnostic "missing-executable")))
+        let cleanup = { (Lifecycle.snapshot refused).Cleanup with Disposition = Complete; LocalTasks = knownBefore Settled; Custody = NoEffect }
+        Assert.Equal(Terminal,(refused |> apply (CleanupObserved cleanup) |> Lifecycle.snapshot).Phase)
+        let ambiguous = state |> apply (LaunchObserved(Ambiguous(diagnostic "launch-unknown")))
+        Assert.True(Lifecycle.apply (now 100L) (CleanupObserved cleanup) ambiguous |> Result.isError)
+
+    [<Theory>]
+    [<InlineData("scope")>]
+    [<InlineData("invocation")>]
+    [<InlineData("pre-start")>]
+    let ``foreign operation scope or pre-start capability proof cannot release target`` (kind: string) =
+        let command = { command with Capabilities = [ { Capability = StableLeaderIdentity; Required = true } ] }
+        let state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch
+        let bad = match kind with "scope" -> { beforeStamp with Scope = "foreign-scope" } | "invocation" -> { beforeStamp with Scope = Guid.NewGuid().ToString("D") } | _ -> { beforeStamp with At = Some(now 99L) }
+        Assert.True(Lifecycle.apply (now 100L) (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = Known(evidence,bad) } ]) state |> Result.isError)
+        Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
+
+    [<Theory>]
+    [<InlineData("birth")>]
+    [<InlineData("scope")>]
+    [<InlineData("pre-start")>]
+    [<InlineData("missing-generation")>]
+    let ``foreign or old terminal evidence cannot supply exit or cleanup completion`` (kind: string) =
+        let state = launched() |> apply (ReaderObserved(Stdout,known Eof)) |> apply (ReaderObserved(Stderr,known Eof))
+        let bad = match kind with "birth" -> { stamp with Generation = Some { generation with BirthToken = "other-birth" } } | "scope" -> { stamp with Scope = "foreign-scope" } | "pre-start" -> { stamp with At = Some(now 99L) } | _ -> { stamp with Generation = None }
+        Assert.True(Lifecycle.apply (now 100L) (ExitObserved(Known(Exited 0,bad))) state |> Result.isError)
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with Disposition = Complete; LeaderTermination = Known(true,bad); LocalTasks = known Settled }
+        Assert.True(Lifecycle.apply (now 100L) (CleanupObserved cleanup) state |> Result.isError)
+
+    let private metadataPressure () =
+        let mutable state = launched()
+        let detail = { (diagnostic "retirement-action") with Message = String.replicate 128 "x" }
+        for _ in 1 .. Validation.limits.CollectionEntries do
+            match Lifecycle.apply (now 100L) (RetirementActionRequested detail) state with Ok next -> state <- next | Error _ -> ()
+        Assert.True(Lifecycle.metadataBytes state > 50000L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 (Validation.limits.ResultMetadataBytes - Validation.limits.FirstCauseReserveBytes))
+        state
+
+    [<Fact>]
+    let ``first explicit cause survives preexisting metadata pressure with truthful omissions`` () =
+        let state = metadataPressure()
+        let original = { Phase = Retiring; Diagnostic = { (diagnostic "first-original-cause") with Message = String.replicate 4096 "y" }; At = Some(now 100L) }
+        let state = state |> apply (FailureObserved original)
+        let result = Lifecycle.snapshot state
+        Assert.Equal("first-original-cause",result.FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(original.At,result.FirstFailure.Value.At)
+        Assert.Equal(0L,result.OmittedFailures)
+        Assert.Equal(1L,result.OmittedDiagnosticDetails)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        let state = state |> apply (FailureObserved { original with Diagnostic = { original.Diagnostic with Code = "reporting-secondary" } })
+        Assert.Equal("first-original-cause",(Lifecycle.snapshot state).FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(1L,(Lifecycle.snapshot state).OmittedFailures)
+
+    [<Fact>]
+    let ``actual output overflow retains original cause under preexisting metadata pressure`` () =
+        let state = metadataPressure()
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stderr,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stdout,memory [| 1uy |]) |> ignore
+        let state = state |> apply (OutputObserved(sink.Snapshot()))
+        Assert.Equal("output-byte-limit",(Lifecycle.snapshot state).FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(Some(now 100L),(Lifecycle.snapshot state).FirstFailure.Value.At)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+
+    [<Fact>]
+    let ``reader failure under metadata pressure retains cause and terminal outcome even if detail is omitted`` () =
+        let state = metadataPressure()
+        let proof = { stamp with Provenance = { evidence with Reference = String.replicate 2048 "z" } }
+        let failed = { (diagnostic "reader-original-cause") with Message = String.replicate 4096 "y" }
+        let state = state |> apply (ReaderObserved(Stdout,Known(ReadFailed failed,proof)))
+        Assert.Equal("reader-original-cause",(Lifecycle.snapshot state).FirstFailure.Value.Diagnostic.Code)
+        Assert.True((Lifecycle.snapshot state).OmittedDiagnosticDetails > 0L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        Assert.True(Lifecycle.apply (now 100L) (ReaderObserved(Stdout,known Eof)) state |> Result.isError)
+
+    [<Fact>]
+    let ``mutable violation under metadata pressure blocks release and remains latched after new known proof`` () =
+        let state = metadataPressure()
+        let original = { (diagnostic "resource-original-cause") with Message = String.replicate 4096 "y" }
+        let state = state |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = LimitExceeded original } ])
+        Assert.Equal("resource-original-cause",(Lifecycle.snapshot state).FirstFailure.Value.Diagnostic.Code)
+        let state = state |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = known evidence } ])
+        Assert.Equal("resource-original-cause",(Lifecycle.snapshot state).FirstFailure.Value.Diagnostic.Code)
+        Assert.NotEmpty((Lifecycle.snapshot state).Violations)
+        Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
+
+    [<Fact>]
+    let ``valid operation proof must be revalidated at release and process birth cannot change`` () =
+        let command = { command with Capabilities = [ { Capability = StableLeaderIdentity; Required = true } ] }
+        let state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = knownBefore evidence } ])
+        Assert.True(Lifecycle.apply (now 101L) TargetReleaseRequested state |> Result.isError)
+        let fresh = Known(evidence,{ beforeStamp with At = Some(now 101L) })
+        let state = Lifecycle.apply (now 101L) (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = fresh } ]) state |> ok
+        let state = Lifecycle.apply (now 101L) TargetReleaseRequested state |> ok
+        let state = Lifecycle.apply (now 101L) (LaunchObserved(Started generation)) state |> ok
+        Assert.True(Lifecycle.apply (now 101L) (LaunchObserved(Started { generation with BirthToken = "other-birth" })) state |> Result.isError)
+        Assert.True(Lifecycle.apply (now 101L) (LaunchObserved(Started { generation with Pid = 0 })) state |> Result.isError)
+
+    [<Fact>]
+    let ``terminal proof before original target-release window is refused`` () =
+        let state = prepared() |> apply BeginLaunch
+        let state = Lifecycle.apply (now 110L) TargetReleaseRequested state |> ok
+        let state = Lifecycle.apply (now 120L) (LaunchObserved(Started generation)) state |> ok
+        Assert.True(Lifecycle.apply (now 120L) (ExitObserved(known(Exited 0))) state |> Result.isError)
+        let valid = Known(Exited 0,{ stamp with At = Some(now 115L) })
+        Assert.True(Lifecycle.apply (now 120L) (ExitObserved valid) state |> Result.isOk)

@@ -23,7 +23,9 @@ restore lost budget authority. No conversion from persisted UTC creates a new bu
 observed input once through a shared lock before retention. Evidence/protocol bytes
 also spend the total ledger; only terminal evidence can spend the carved reserve.
 Overflow or an oversized chunk requires retirement and retains no bytes from that
-chunk. Captured bytes remain bytes. Prefix/tail do not overlap; omission counts are
+chunk. The first failure stays latched; bounded TerminalEvidence may still spend its
+carved reserve and remaining total. Its charged category is explicit in snapshots. Captured bytes remain bytes.
+Prefix/tail do not overlap; omission counts are
 observed minus retained, not unread child output. Snapshot copies cannot mutate the
 sink. This interface has no user callback, file writer or unbounded queue. Frame and
 incremental-decoder adapters must enforce the declared frame/line bounds separately.
@@ -33,7 +35,9 @@ The reducer separates launch, leader exit, stop request, stream EOF, local tasks
 workload emptiness and reaping. Launch is consumed once, ambiguity does not retry,
 and release requires obtained capabilities/limits. Stable process generations are
 evidence, never numeric-PID authority. First failure survives later failure records;
-collections and result metadata have finite bounds. `Complete` requires positive
+collections and result metadata have finite bounds. A 2KiB reserve within the existing
+64KiB metadata ceiling preserves the first minimal cause; omitted diagnostic details
+and omitted secondary failures are counted separately. `Complete` requires positive
 proof for the declared cleanup obligations; pending EOF is not supplied by exit0.
 
 An existing caller retains `IProcessSession` before launch. Backend methods spend
@@ -53,3 +57,18 @@ The selected plan is the existing .github shared-process-supervision owning plan
 plus its .2 contract selection. .2-A source review, .2-B deterministic build/tests
 and .2-C disposable fixture evidence are separate boundaries. No publication,
 consumer adoption or existing custody/profile change follows from these sources.
+
+Observation scope is the prepared InvocationId in canonical Guid D format. The
+platform-qualified ProcessGeneration carries that operation scope alongside its
+platform/birth identity; backend-specific kernel scope joins remain in its qualified
+provenance. Known/absent proofs require the original clock domain and operation
+window. Pre-effect capabilities/limits have no target generation and must be
+revalidated at the release stamp. Process/reader/cleanup proofs carry the exact
+observed generation. Mutable capabilities, whole limit bundles and cleanup bundles
+replace older values; uncertainty cannot inherit old Known proof. Positive violations
+stay latched. Exact-generation exit and terminal reader outcomes retain immutable
+original provenance. Two bounded private terminal reader outcomes prevent a later
+EOF from replacing an omitted failure proof. Secondary retirement-action details
+may yield to the first cause/current proof, with each omission counted. The phase table keeps late starts Retiring after stop/return
+and duplicate terminal evidence Terminal. A release request is not an observed
+start: confirmed launch refusal may report NoEffect; ambiguity cannot.

@@ -36,8 +36,8 @@ type private RetainedSession(command, identity, budget, clock: IMonotonicClock, 
                 | Ok _ ->
                     apply BeginLaunch
                     let previous = (Lifecycle.snapshot state).Cleanup
-                    apply (CleanupObserved { previous with Custody = RetainedByOwner owner; LocalTasks = Samples.known Outstanding })
-                    apply (CapabilitiesObtained [ { Capability = BoundedReturnWithRetainedCustody; Obtained = Samples.known Samples.evidence } ])
+                    apply (CleanupObserved { previous with Custody = RetainedByOwner owner; LocalTasks = Samples.knownBefore Outstanding })
+                    apply (CapabilitiesObtained [ { Capability = BoundedReturnWithRetainedCustody; Obtained = Samples.knownBefore Samples.evidence } ])
                     apply TargetReleaseRequested
                     apply (LaunchObserved(Started Samples.generation))
                     started <- true

@@ -8,7 +8,7 @@ open System.Text
 module Validation =
     let limits =
         { CodeBytes = 64; MessageBytes = 4096; ReferenceBytes = 2048; CollectionEntries = 64
-          RequestBytes = 256 * 1024; RequestEntries = 4096; ResultMetadataBytes = 64 * 1024; CaptureAllocationBytes = 256 * 1024 }
+          RequestBytes = 256 * 1024; RequestEntries = 4096; ResultMetadataBytes = 64 * 1024; FirstCauseReserveBytes = 2048; CaptureAllocationBytes = 256 * 1024 }
 
     let private error field = { Code = "invalid-value"; Field = field }
     let private bytes (value: string) = if isNull value then Int32.MaxValue else Encoding.UTF8.GetByteCount value
@@ -48,8 +48,14 @@ module Validation =
             if omitted || Encoding.UTF8.GetByteCount result > maximum then "Redacted diagnostic detail omitted." else result
         { value with Message = redact limits.MessageBytes value.Message
                      Evidence = value.Evidence |> Option.map (fun evidence -> { evidence with Reference = redact limits.ReferenceBytes evidence.Reference }) }
+    let generation (value: ProcessGeneration) =
+        text "process.platform" limits.CodeBytes value.Platform
+        @ text "process.scope" limits.ReferenceBytes value.ScopeId
+        @ text "process.birth" limits.ReferenceBytes value.BirthToken
+        @ (if value.Pid <= 0 then [ error "process.pid" ] else [])
     let private stamp (value: ObservationStamp) =
         text "observation.scope" limits.ReferenceBytes value.Scope @ evidence value.Provenance
+        @ (value.Generation |> Option.map generation |> Option.defaultValue [])
         @ (match value.At with
            | Some at when at.Domain.Id = Guid.Empty || at.Domain.Frequency <= 0L || at.Ticks < 0L -> [ error "observation.clock" ]
            | _ -> [])
@@ -57,11 +63,6 @@ module Validation =
         match value with
         | Known(_, at) | Absent at -> stamp at
         | Pending d | Unavailable d | Unknown d | Invalid d | LimitExceeded d -> diagnostic d
-    let generation (value: ProcessGeneration) =
-        text "process.platform" limits.CodeBytes value.Platform
-        @ text "process.scope" limits.ReferenceBytes value.ScopeId
-        @ text "process.birth" limits.ReferenceBytes value.BirthToken
-        @ (if value.Pid <= 0 then [ error "process.pid" ] else [])
     let identity (value: OperationIdentity) =
         (if value.InvocationId = Guid.Empty then [ error "identity.invocation" ] else [])
         @ digest "identity.source" value.SourceDigest
@@ -175,8 +176,9 @@ module Validation =
         stream policy.StdoutPrefixBytes policy.StdoutTailBytes value.Stdout
         @ stream policy.StderrPrefixBytes policy.StderrTailBytes value.Stderr
         @ (value.FirstFailure |> Option.map diagnostic |> Option.defaultValue [])
-        @ [ if value.EvidenceBytes < 0L || value.ChargedTotal < 0L || out > Int64.MaxValue - err || out + err > Int64.MaxValue - value.EvidenceBytes || value.ChargedTotal <> out + err + value.EvidenceBytes then error "output.ledger"
-            if value.ChargedTotal > policy.TotalBytes && value.FirstFailure.IsNone then error "output.overflow" ]
+        @ [ if value.TerminalEvidenceBytes < 0L || value.TerminalEvidenceBytes > value.EvidenceBytes then error "output.terminal-ledger"
+            if value.EvidenceBytes < 0L || value.ChargedTotal < 0L || out > Int64.MaxValue - err || out + err > Int64.MaxValue - value.EvidenceBytes || value.ChargedTotal <> out + err + value.EvidenceBytes then error "output.ledger"
+            if value.FirstFailure.IsNone && (value.ChargedTotal > policy.TotalBytes || value.ChargedTotal - value.TerminalEvidenceBytes > policy.TotalBytes - int64 policy.TerminalReserveBytes || value.TerminalEvidenceBytes > int64 policy.TerminalReserveBytes) then error "output.overflow" ]
     let capability (value: CapabilityObservation) =
         observation value.Obtained
         @ (match value.Obtained with Known(e,_) -> evidence e | _ -> [])

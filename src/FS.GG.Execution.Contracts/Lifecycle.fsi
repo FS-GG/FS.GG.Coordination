@@ -22,3 +22,4 @@ module Lifecycle =
     val prepare: CommandSpec -> OperationIdentity -> ExecutionBudget -> Result<LifecycleState,ValidationError list>
     val apply: ClockStamp -> LifecycleEvent -> LifecycleState -> Result<LifecycleState,ValidationError list>
     val snapshot: LifecycleState -> ExecutionResult
+    val metadataBytes: LifecycleState -> int64

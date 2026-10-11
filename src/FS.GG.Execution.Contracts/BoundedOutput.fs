@@ -43,6 +43,7 @@ module BoundedOutput =
             let mutable total = 0L
             let mutable ordinary = 0L
             let mutable evidence = 0L
+            let mutable terminal = 0L
             let mutable first: Diagnostic option = None
             let add current count =
                 if int64 count > Int64.MaxValue - current then Int64.MaxValue, true else current + int64 count, false
@@ -62,19 +63,30 @@ module BoundedOutput =
                                 let nextEvidence, overflow = add evidence bytes.Length
                                 evidence <- nextEvidence
                                 counterWrap <- counterWrap || overflow
-                            if channel <> TerminalEvidence then
+                            if channel = TerminalEvidence then
+                                let nextTerminal, overflow = add terminal bytes.Length
+                                terminal <- nextTerminal
+                                counterWrap <- counterWrap || overflow
+                            else
                                 let nextOrdinary, overflow = add ordinary bytes.Length
                                 ordinary <- nextOrdinary
                                 counterWrap <- counterWrap || overflow
-                            if counterWrap then fail "output-counter-limit"
-                            elif bytes.Length > policy.ReadChunkBytes then fail "output-chunk-limit"
-                            elif total > policy.TotalBytes || ordinary > policy.TotalBytes - int64 policy.TerminalReserveBytes then fail "output-byte-limit"
-                            match first with
-                            | Some diagnostic -> RetireRequired diagnostic
-                            | None ->
+                            let currentViolation =
+                                if counterWrap then Some "output-counter-limit"
+                                elif bytes.Length > policy.ReadChunkBytes then Some "output-chunk-limit"
+                                elif total > policy.TotalBytes then Some "output-byte-limit"
+                                elif channel = TerminalEvidence && terminal > int64 policy.TerminalReserveBytes then Some "output-terminal-limit"
+                                elif channel <> TerminalEvidence && ordinary > policy.TotalBytes - int64 policy.TerminalReserveBytes then Some "output-byte-limit"
+                                else None
+                            Option.iter fail currentViolation
+                            match currentViolation, first, channel with
+                            | None, _, TerminalEvidence -> Accepted
+                            | _, Some diagnostic, _ -> RetireRequired diagnostic
+                            | None, None, _ ->
                                 match channel with Stdout -> stdout.Retain bytes | Stderr -> stderr.Retain bytes | _ -> ()
-                                Accepted)
+                                Accepted
+                            | Some code, None, _ -> RetireRequired { Code = code; Message = "Output admission requires retirement."; Evidence = None })
                     member _.Snapshot() =
                         lock gate (fun () ->
                             { Stdout = stdout.Snapshot(); Stderr = stderr.Snapshot()
-                              ChargedTotal = total; EvidenceBytes = evidence; FirstFailure = first }) }
+                              ChargedTotal = total; EvidenceBytes = evidence; TerminalEvidenceBytes = terminal; FirstFailure = first }) }
