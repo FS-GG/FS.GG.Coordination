@@ -337,6 +337,72 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
+    def test_denied_fd_direct_child_probe_requires_fresh_terminal_original_birth(self):
+        from unittest.mock import Mock, patch
+        row={'pid':101,'start':20,'pgid':101,'state':'R'}
+        for operation in ('directory','readlink'):
+            for disposition in ('absent','replaced','zombie','live','unknown','changed-group','still-running','poll-error'):
+                with self.subTest(operation=operation,disposition=disposition):
+                    original=PermissionError('original FD denial')
+                    next_birth = None if disposition == 'absent' else dict(row,start=21) if disposition == 'replaced' else dict(row,state='Z') if disposition == 'zombie' else dict(row,pgid=999) if disposition == 'changed-group' else PermissionError('fresh birth unknown') if disposition == 'unknown' else row
+                    observe=Mock(side_effect=[row,next_birth])
+                    probe=Mock(return_value=None if disposition == 'still-running' else 0)
+                    if disposition == 'poll-error': probe.side_effect=OSError('original Popen observation failed')
+                    additional=[]; retained={'entries':[],'omitted':0}
+                    with patch.object(module.Path,'iterdir',side_effect=original if operation == 'directory' else None,
+                                      return_value=[Path('/proc/101/fd/7')]), \
+                         patch.object(module.os,'readlink',side_effect=original):
+                        if disposition in ('absent','replaced','zombie'):
+                            self.assertEqual([],module.owned_fd_targets(row,observe,additional,terminal_probe=probe,denial_observations=retained))
+                        else:
+                            with self.assertRaises(PermissionError) as caught:
+                                module.owned_fd_targets(row,observe,additional,terminal_probe=probe,denial_observations=retained)
+                            self.assertIs(original,caught.exception)
+                    probe.assert_called_once()
+                    self.assertEqual(operation,retained['entries'][0]['operation'])
+                    self.assertEqual(row,retained['entries'][0]['freshBeforeTerminalPoll'])
+                    self.assertEqual(disposition == 'still-running' or disposition == 'poll-error',observe.call_count == 1)
+                    self.assertEqual(disposition in ('unknown','changed-group','poll-error'),bool(additional))
+
+    def test_denied_fd_probe_does_not_run_after_unknown_or_changed_group_and_observations_are_bounded(self):
+        from unittest.mock import Mock, patch
+        row={'pid':101,'start':20,'pgid':101,'state':'S'}
+        for fresh in (PermissionError('unknown birth'),dict(row,pgid=999),row):
+            with self.subTest(fresh=fresh):
+                original=PermissionError('original FD denial'); probe=Mock()
+                retained={'entries':[{}]*6,'omitted':0}; additional=[]
+                observe=Mock(side_effect=fresh) if isinstance(fresh,BaseException) else Mock(return_value=fresh)
+                with patch.object(module.Path,'iterdir',side_effect=original):
+                    with self.assertRaises(PermissionError) as caught:
+                        module.owned_fd_targets(row,observe,additional,terminal_probe=probe if isinstance(fresh,BaseException) or fresh['pgid'] != row['pgid'] else None,denial_observations=retained)
+                    self.assertIs(original,caught.exception)
+                probe.assert_not_called(); self.assertEqual(6,len(retained['entries'])); self.assertEqual(1,retained['omitted'])
+
+    def test_reaping_in_denied_fd_probe_cannot_bypass_owner_terminal_callback(self):
+        from unittest.mock import Mock, patch
+        with tempfile.TemporaryDirectory() as tmp:
+            spec=importlib.util.spec_from_file_location('fixture_owner',ROOT/'eng/shared_process_owner.py')
+            owner=importlib.util.module_from_spec(spec); spec.loader.exec_module(owner)
+            leader={'pid':101,'start':20,'pgid':101,'ppid':os.getpid(),'state':'S','rss':1}
+            child=Mock(pid=101,returncode=0); child.poll.return_value=0
+            observe=Mock(side_effect=[leader,None]); events=[]; retained={'entries':[],'omitted':0}
+            def hook(event,*args):
+                events.append(event)
+                if event == 'poll':
+                    original=PermissionError('transition FD denial')
+                    with patch.object(module.Path,'iterdir',side_effect=original):
+                        self.assertEqual([],module.owned_fd_targets(leader,observe,terminal_probe=child.poll,denial_observations=retained))
+                if event == 'child-exit-observed': self.assertGreaterEqual(child.poll.call_count,2)
+            with patch.object(owner.subprocess,'Popen',return_value=child), \
+                 patch.object(owner,'proc',side_effect=lambda pid: leader if pid == 101 else dict(leader,pid=pid)), \
+                 patch.object(owner,'census',return_value=[]), \
+                 patch.object(owner,'observed_escapes',return_value=[]),patch.object(owner.os,'killpg'):
+                owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,str(Path(tmp)/'run.log'),
+                          control=hook,observe_child_exit=True)
+            self.assertEqual(1,events.count('child-exit-observed'))
+            self.assertLess(events.index('poll'),events.index('child-exit-observed'))
+            self.assertEqual(0,retained['entries'][0]['terminalExit'])
+
     def test_actual_retirement_path_fresh_sole_server_and_live_unknown_foreign_refusals(self):
         from unittest.mock import Mock, patch
         server={'pid':102,'start':21,'pgid':101,'state':'S'}
@@ -440,6 +506,8 @@ class CommandInterfaceControls(unittest.TestCase):
                'exitMembers':[], 'originalServerStopRequests':[],
                'ownerReceipt':{'exitObservation':{'code':0,'members':[{'pid':103,'start':22,'pgid':101,'state':'S','private':'NEVER COPY'}], 'omittedMembers':0}},
                'input':{'private':'NEVER COPY'}}
+        value['ownerReceipt']['leader']={'pid':101,'start':20,'pgid':101,'state':'S','private':'NEVER COPY'}
+        value['fdDenialObservations']={'entries':[{'operation':'directory','before':{'pid':101,'start':20,'pgid':101,'state':'R'},'freshBeforeTerminalPoll':{'pid':101,'start':20,'pgid':101,'state':'R'},'terminalPollAttempted':True,'terminalExit':0,'freshAfterTerminalPoll':None,'observationFailure':None,'private':'NEVER COPY'}],'omitted':0}
         summary=module.lifecycle_summary(value)
         self.assertEqual([],summary['adapterExitMembership']['members'])
         self.assertEqual(103,summary['ownerExitObservation']['membership']['members'][0]['pid'])

@@ -36,43 +36,72 @@ def filtered(raw, scratch):
     return '\n'.join(lines)
 
 
-def owned_fd_targets(row, observe_birth, additional_failures=None):
-    """A denied FD read is terminal only with a fresh original-birth observation."""
-    def terminal_after_denial(error):
-        try:
-            fresh = observe_birth(row['pid'])
-        except Exception as observation_error:
-            if additional_failures is not None:
-                additional_failures.append(failure_record(observation_error))
-            raise error from observation_error
-        if fresh is None or fresh['start'] != row['start']:
-            return []
-        if fresh['pgid'] != row['pgid']:
-            group_error = ValueError('server group changed during denied FD observation')
-            if additional_failures is not None:
-                additional_failures.append(failure_record(group_error))
-            raise error from group_error
-        if fresh['state'] == 'Z':
-            return []
+def owned_fd_targets(row, observe_birth, additional_failures=None, *, terminal_probe=None,
+                     denial_observations=None):
+    """Denied access needs fresh terminal original-birth proof; live/unknown refuse."""
+    def identity(value):
+        return None if value is None else {k:value[k] for k in ('pid','start','pgid','state')}
+    def terminal_after_denial(error, operation):
+        observation = {'operation':operation, 'before':identity(row),
+                       'freshBeforeTerminalPoll':None, 'terminalPollAttempted':False,
+                       'terminalExit':None, 'freshAfterTerminalPoll':None,
+                       'observationFailure':None}
+        if denial_observations is not None:
+            if len(denial_observations['entries']) < 6:
+                denial_observations['entries'].append(observation)
+            else:
+                denial_observations['omitted'] += 1
+        def fresh_birth(field):
+            try:
+                fresh = observe_birth(row['pid'])
+                observation[field] = identity(fresh)
+                return fresh
+            except Exception as observation_error:
+                observation['observationFailure'] = failure_record(observation_error)
+                if additional_failures is not None:
+                    additional_failures.append(failure_record(observation_error))
+                raise error from observation_error
+        def terminal(fresh):
+            # A replacement only proves this original birth is absent. It never
+            # authenticates or grants signal authority over the replacement.
+            if fresh is None or fresh['start'] != row['start']: return True
+            if fresh['pgid'] != row['pgid']:
+                group_error = ValueError('server group changed during denied FD observation')
+                observation['observationFailure'] = failure_record(group_error)
+                if additional_failures is not None:
+                    additional_failures.append(failure_record(group_error))
+                raise error from group_error
+            return fresh['state'] == 'Z'
+        if terminal(fresh_birth('freshBeforeTerminalPoll')): return []
+        # Only the caller-authenticated direct-child Popen may supply this probe.
+        # One nonblocking poll plus a new birth read; no retries, sleeps or waiver
+        # for a still-live or unreadable original birth.
+        if terminal_probe is not None:
+            observation['terminalPollAttempted'] = True
+            try:
+                code = terminal_probe()
+                if code is not None and type(code) is not int: raise ValueError('original Popen terminal status type')
+                observation['terminalExit'] = code
+            except Exception as poll_error:
+                observation['observationFailure'] = failure_record(poll_error)
+                if additional_failures is not None:
+                    additional_failures.append(failure_record(poll_error))
+                raise error from poll_error
+            if code is not None and terminal(fresh_birth('freshAfterTerminalPoll')): return []
         raise error
     try:
         entries = list((Path('/proc') / str(row['pid']) / 'fd').iterdir())
     except FileNotFoundError:
         return []
     except PermissionError as error:
-        return terminal_after_denial(error)
-    if len(entries) > 256:
-        raise ValueError('server FD cap')
+        return terminal_after_denial(error, 'directory')
+    if len(entries) > 256: raise ValueError('server FD cap')
     targets = []
     for entry in entries:
-        try:
-            targets.append(os.readlink(entry))
-        except FileNotFoundError:
-            continue
-        except PermissionError as error:
-            return terminal_after_denial(error)
+        try: targets.append(os.readlink(entry))
+        except FileNotFoundError: continue
+        except PermissionError as error: return terminal_after_denial(error, 'readlink')
     return targets
-
 
 
 def lifecycle_summary(value):
@@ -113,7 +142,32 @@ def lifecycle_summary(value):
             disposition = stop.get('disposition')
             if disposition not in ('sent','already-terminal'): raise ValueError('stop disposition')
             projected_stops.append(dict(identity, disposition=disposition))
-    return {'serverBirths':identities(value.get('originalServerBirths'), ('pid','start')),
+    denials = value.get('fdDenialObservations')
+    projected_denials = None
+    if denials is not None:
+        if (not isinstance(denials,dict) or not isinstance(denials.get('entries'),list)
+                or type(denials.get('omitted')) is not int or denials['omitted'] < 0):
+            raise ValueError('FD denial observation shape')
+        projected_denials = {'entries':[], 'omitted':denials['omitted']+max(0,len(denials['entries'])-6)}
+        for denial in denials['entries'][:6]:
+            if denial.get('operation') not in ('directory','readlink') or type(denial.get('terminalPollAttempted')) is not bool:
+                raise ValueError('FD denial operation')
+            code = denial.get('terminalExit')
+            if code is not None and type(code) is not int: raise ValueError('FD denial terminal exit')
+            item = {k:denial.get(k) for k in ('operation','terminalPollAttempted','terminalExit')}
+            for key in ('before','freshBeforeTerminalPoll','freshAfterTerminalPoll'):
+                row = denial.get(key)
+                item[key] = None if row is None else identities([row],('pid','start','pgid','state'))['members'][0]
+            error = denial.get('observationFailure')
+            if error is not None:
+                if not isinstance(error,dict): raise ValueError('FD denial observation failure')
+                error = {k:filtered(str(error.get(k,'')).encode()[:512],Path('/proc')) for k in ('type','message')}
+            item['observationFailure'] = error
+            projected_denials['entries'].append(item)
+    owner_leader = (value.get('ownerReceipt') or {}).get('leader')
+    return {'ownerLeader':None if owner_leader is None else identities([owner_leader],('pid','start','pgid','state'))['members'][0],
+            'fdDenials':projected_denials,
+            'serverBirths':identities(value.get('originalServerBirths'), ('pid','start')),
             'adapterExitMembership':identities(value.get('exitMembers'), ('pid','start')),
             'ownerExitObservation':projected, 'stopRequests':projected_stops,
             'omittedStopRequests':None if stops is None else max(0,len(stops)-6)}
@@ -416,6 +470,7 @@ def execute_command(seconds, log_path, endpoint, argv):
     output = Path(log_path).absolute(); owner_path = Path(__file__).with_name('shared_process_owner.py')
     spec = None; servers = set(); known = set(); original_exit = 1; exit_members = {'members':None}
     server_handles = {}; stop_requests = []; disk_samples = []; disk_omitted = 0; last_disk = None
+    fd_denials = {'entries':[], 'omitted':0}
     mutable_root = Path.cwd()
     def sample_disk(cutoff, force=False):
         nonlocal last_disk, disk_omitted
@@ -455,7 +510,16 @@ def execute_command(seconds, log_path, endpoint, argv):
         if len(known) + 1 > spec['maximumGenerations']: raise ValueError('generation cap')
         inodes = listeners(); matched = set()
         for row in rows:
-            for target in owned_fd_targets(row, owner.proc, additional):
+            def terminal_probe():
+                checkpoint()
+                return child.poll()
+            # Match the original authenticated owner leader before allowing its
+            # existing Popen to reap. The owner will still observe terminal code
+            # itself and invoke its required opt-in retirement callback.
+            probe = terminal_probe if (child.pid == leader['pid'] == row['pid']
+                    and row['start'] == leader['start'] and row['pgid'] == leader['pgid']) else None
+            for target in owned_fd_targets(row, owner.proc, additional,
+                                          terminal_probe=probe, denial_observations=fd_denials):
                 if target.startswith('socket:[') and target[8:-1] in inodes:
                     fresh = owner.proc(row['pid'])
                     if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
@@ -582,7 +646,7 @@ def execute_command(seconds, log_path, endpoint, argv):
     result = dict(schema=RESULT_SCHEMA, commandExit=original_exit, commandAccepted=first is None,
                   firstCause=failure_record(first), additionalFailures=additional,
                   ownerReceipt=receipt, originalServerBirths=[{'pid':p, 'start':s} for p,s in sorted(servers)],
-                  originalServerStopRequests=stop_requests,
+                  originalServerStopRequests=stop_requests, fdDenialObservations=fd_denials,
                   exitMembers=None if exit_members['members'] is None else [{'pid':p, 'start':s} for p,s in sorted(exit_members['members'])],
                   diskSamples=disk_samples, omittedDiskSamples=disk_omitted,
                   input=spec, cleanupObservedAt=time.monotonic(), modelCheckingRequired=True,
