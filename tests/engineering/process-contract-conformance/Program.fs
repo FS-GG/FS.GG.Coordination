@@ -233,7 +233,7 @@ module Program =
         while not settled do
             let delay = Budget.clip (clock.Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> Support.ok
             Support.require (delay > TimeSpan.Zero) "production-original-cleanup-budget-expired"
-            Task.Delay(delay).GetAwaiter().GetResult()
+            System.Threading.Tasks.Task.Delay(delay).GetAwaiter().GetResult()
             observed <- session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
             settled <- match observed.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false
         let observedAt = clock.Now()
