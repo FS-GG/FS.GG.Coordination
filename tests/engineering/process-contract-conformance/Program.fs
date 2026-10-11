@@ -16,7 +16,13 @@ type CaseReceipt =
       FinalExit: string; FinalStdoutReader: string; FinalStderrReader: string; FirstCause: string; FirstCauseMessage: string; FirstCausePhase: string; FirstCauseAtTicks: int64
       StdoutCharged: int64; StdoutRetained: int64; StderrCharged: int64; StderrRetained: int64
       StdoutPrefixBase64: string; StderrPrefixBase64: string; MetadataBytesBound: int
-      Cleanup: string; Custody: string; LocalReleased: bool; ObserverErrors: string array }
+      Cleanup: string; Custody: string; LocalReleased: bool; ObserverErrors: string array
+      ClockDomain: string; ClockFrequency: int64; StartedAtTicks: int64; WorkExpiresAtTicks: int64; TotalExpiresAtTicks: int64
+      RunReturnAtTicks: int64; CallerObservedRunAtTicks: int64; RetirementReturnedAtTicks: int64; ReleaseDecisionAtTicks: int64; FinalObservedAtTicks: int64
+      HelperStartGateAtTicks: int64; HelperStartedAtTicks: int64; TargetReleaseGateAtTicks: int64; TargetReleasedAtTicks: int64; TargetWasUncancelled: bool
+      LeaderPid: int; LeaderBirth: string; LeaderScope: string; InitialLocalPending: bool
+      EarlyReleaseProbed: bool; EarlyDecisionAtTicks: int64; EarlyLocalPending: bool; EarlyReleaseRefused: bool
+      WorkStopAtTicks: int64; RunAfterWorkTicks: int64 }
 
 module Program =
     let private hash (path: string) = Convert.ToHexStringLower(SHA256.HashData(File.ReadAllBytes path))
@@ -49,6 +55,49 @@ module Program =
           Input = Bytes(ReadOnlyMemory<byte>([|byte 'G'|])); Capture = capture
           Capabilities = [ { Capability = BoundedReturnWithRetainedCustody; Required = true } ]
           Resources = { MemoryBytes = None; CpuQuota = None; CpuAffinity = None; MaxKernelTasks = None; MaxOwnedProcesses = None; MaxClrProcesses = None } }
+    let private sourceControls (python: string) (fixture: string) (work: string) (source: string) (profile: string) (profileDigest: string) (owner: OwnerReference) =
+        // Finite reducer/gate controls, no native effect or authority acquisition.
+        let names = ResizeArray<string>()
+        let check condition name = Support.require condition name; names.Add name
+        let identity: OperationIdentity = { InvocationId = Guid.NewGuid(); Execution = None; LaunchOrdinal = 0UL
+                                           SourceDigest = source; ProfileId = profile; ProfileDigest = profileDigest }
+        let domain: ClockDomain = { Id = Guid.NewGuid(); Frequency = 1000L }
+        let at (ticks: int64) : ClockStamp = { Domain = domain; Ticks = ticks }
+        let original = Budget.create (at 1000L) (TimeSpan.FromSeconds 3.0) (TimeSpan.FromSeconds 2.5) |> Support.ok
+        let description = Budget.describe original
+        let generation: ProcessGeneration = { Platform = "linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = 1; BirthToken = "synthetic-reducer-control" }
+        let stamp (tick: int64) (leader: ProcessGeneration option) : ObservationStamp =
+            { At = Some(at tick); Scope = identity.InvocationId.ToString("D"); Generation = leader; Provenance = owner.Evidence }
+        let apply (tick: int64) (event: LifecycleEvent) (current: LifecycleState) = Lifecycle.apply (at tick) event current |> Support.ok
+        let prepare () = Lifecycle.prepare (command python fixture work "literal-normal") identity original |> Support.ok
+        let begun = prepare() |> apply 1000L BeginLaunch
+        let retained = Support.currentCleanup (Lifecycle.snapshot begun).Cleanup (stamp 1100L None) None Outstanding (RetainedByOwner owner)
+        let capability: CapabilityObservation = { Capability = BoundedReturnWithRetainedCustody; Obtained = Known(owner.Evidence,stamp 1100L None) }
+        let running = begun |> apply 1100L (CleanupObserved retained) |> apply 1100L (CapabilitiesObtained [capability])
+                            |> apply 1100L TargetReleaseRequested |> apply 1101L (LaunchObserved(Started generation))
+                            |> apply 1102L (ReaderObserved(Stdout,Known(Eof,stamp 1102L (Some generation))))
+                            |> apply 1103L (ReaderObserved(Stderr,Known(Eof,stamp 1103L (Some generation))))
+        let settled = Support.currentCleanup (Lifecycle.snapshot running).Cleanup (stamp 1104L (Some generation)) (Some true) Settled (RetainedByOwner owner)
+        check (Lifecycle.apply (at 1105L) (CleanupObserved settled) running |> Result.isError) "C1-stale-settled-bundle-refused"
+        let settledState = running |> apply 1104L (CleanupObserved settled)
+        check ((Lifecycle.snapshot settledState).Cleanup.LocalTasks = Known(Settled,stamp 1104L (Some generation))) "C1-fresh-settled-bundle-admitted"
+        let releaseStamp = stamp 1105L (Some generation)
+        let released = Support.currentCleanup (Lifecycle.snapshot settledState).Cleanup releaseStamp (Some true) Settled (Released releaseStamp)
+        check (Lifecycle.apply (at 1106L) (CleanupObserved released) settledState |> Result.isError) "C1-stale-released-bundle-refused"
+        let releasedState = settledState |> apply 1105L (CleanupObserved released)
+        check ((Lifecycle.snapshot releasedState).Cleanup.Custody = Released releaseStamp) "C1-fresh-release-admitted"
+        let missing = prepare() |> apply 1000L BeginLaunch |> apply 1101L (LaunchObserved(Refused(Support.diagnostic "missing-executable")))
+        let noEffect = Support.currentCleanup (Lifecycle.snapshot missing).Cleanup (stamp 1102L None) None Settled NoEffect
+        check (Lifecycle.apply (at 1103L) (CleanupObserved noEffect) missing |> Result.isError) "C1-stale-no-effect-bundle-refused"
+        let missingState = missing |> apply 1102L (CleanupObserved noEffect)
+        check ((Lifecycle.snapshot missingState).Cleanup.Custody = NoEffect) "C1-fresh-no-effect-admitted"
+        check (Support.workReleaseDecision (Budget.remaining (at 1100L) original) false = Ok ()) "C2-current-uncancelled-release"
+        check (Support.workReleaseDecision (Budget.remaining (at 1600L) original) false = Error "work-deadline") "C2-startup-elapsed-release-refused"
+        check (Support.workReleaseDecision (Budget.remaining (at 1100L) original) true = Error "caller-cancelled") "C2-startup-cancelled-release-refused"
+        check (Support.workReleaseDecision (Budget.remaining (at 1600L) original) true = Error "caller-cancelled") "C2-elapsed-and-cancelled-release-refused"
+        check (Support.workReleaseDecision (Error ClockDomainMismatch) false = Error "startup-budget-refused") "C2-invalid-clock-release-refused"
+        check (Budget.describe original = description) "C2-original-expiries-unchanged"
+        names.ToArray()
     let private runCase (python: string) (fixture: string) (work: string) (source: string) (profile: string) (profileDigest: string) (owner: OwnerReference) (case: string) =
         let identity: OperationIdentity = { InvocationId = Guid.NewGuid(); Execution = None; LaunchOrdinal = 0UL
                                            SourceDigest = source; ProfileId = profile; ProfileDigest = profileDigest }
@@ -58,10 +107,20 @@ module Program =
         use cancellation = new CancellationTokenSource()
         if case = "prestart-cancel" then cancellation.Cancel()
         elif case = "caller-cancel" then cancellation.CancelAfter(TimeSpan.FromMilliseconds 100.0)
+        let original = Budget.describe lease.Budget
         let initial = session.RunAsync(cancellation.Token).GetAwaiter().GetResult()
+        let callerObservedRunAt = lease.Now()
+        let early = if List.contains case [ "held-writer"; "deadline"; "caller-cancel" ] then Some(lease.ProbeRelease()) else None
         lease.RetireWithinOriginalBudgetAsync().GetAwaiter().GetResult()
-        let released = match session.TryRelease() with ResourcesReleased -> true | ReleaseRefused _ -> false
+        let retirementAt = lease.Now()
+        let releaseDecision,releaseAt,_ = lease.ProbeRelease()
+        let released = match releaseDecision with ResourcesReleased -> true | ReleaseRefused _ -> false
         let final = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        let finalAt = lease.Now()
+        let earlyAt,earlyPending,earlyRefused =
+            match early with
+            | Some(decision,at,pending) -> at.Ticks,pending,(match decision with ReleaseRefused _ -> true | ResourcesReleased -> false)
+            | None -> -1L,false,false
         let checks = ResizeArray<string>()
         let failures = ResizeArray<string>()
         let check condition name = if condition then checks.Add name else failures.Add name
@@ -70,6 +129,13 @@ module Program =
         check (final.Cleanup.Disposition <> Complete) "no-fabricated-whole-workload-completion"
         check (final.FirstFailure = initial.FirstFailure) "original-first-cause-message-phase-time-preserved"
         check (lease.MetadataBytes <= int64 Validation.limits.ResultMetadataBytes) "actual-metadata-bound"
+        check (callerObservedRunAt.Domain = original.Domain && retirementAt.Domain = original.Domain && releaseAt.Domain = original.Domain && finalAt.Domain = original.Domain) "same-original-clock-domain"
+        check (original.StartedAt <= lease.InitialReturnTick && lease.InitialReturnTick <= callerObservedRunAt.Ticks
+               && callerObservedRunAt.Ticks <= retirementAt.Ticks && retirementAt.Ticks <= releaseAt.Ticks && releaseAt.Ticks <= finalAt.Ticks
+               && finalAt.Ticks < original.TotalExpiresAt) "actual-run-cleanup-release-inside-original-total-window"
+        if early.IsSome then
+            check (lease.InitialReturnPending && earlyPending && earlyRefused) "observed-pending-lease-refuses-early-release"
+            check (callerObservedRunAt.Ticks <= earlyAt && earlyAt <= retirementAt.Ticks) "actual-early-decision-within-original-order"
         let finalEof = Support.readerLabel final.Stdout.Reader = "eof" && Support.readerLabel final.Stderr.Reader = "eof"
         match case with
         | "missing" ->
@@ -80,6 +146,11 @@ module Program =
             check (match final.Stop with Requested(CallerCancellation,_) -> true | _ -> false) "prestart-original-stop-request"
             check (final.Cleanup.Custody = NoEffect) "prestart-no-effect-custody"
         | _ ->
+            check (original.StartedAt <= lease.HelperStartGateTick && lease.HelperStartGateTick < original.WorkExpiresAt
+                   && lease.HelperStartGateTick <= lease.HelperStartedTick) "helper-current-work-gate"
+            check (lease.TargetWasUncancelled && lease.HelperStartedTick <= lease.TargetReleaseGateTick
+                   && lease.TargetReleaseGateTick <= lease.TargetReleasedTick && lease.TargetReleasedTick < original.WorkExpiresAt) "actual-G-release-current-uncancelled-work-window"
+            check (match lease.Generation with Some leader -> leader.ScopeId = identity.InvocationId.ToString("D") && leader.Pid > 0 && leader.BirthToken <> "" | None -> false) "original-observed-leader-generation"
             check (Support.exitLabel final.Exit = "exited:0") "real-leader-exit-zero"
             check finalEof "both-real-readers-eof"
             check (custodyLabel final.Cleanup.Custody = "released-local") "local-custody-separated-from-whole-workload"
@@ -117,7 +188,20 @@ module Program =
               StdoutCharged = final.Stdout.Totals.Charged; StdoutRetained = final.Stdout.Totals.Retained; StderrCharged = final.Stderr.Totals.Charged; StderrRetained = final.Stderr.Totals.Retained
               StdoutPrefixBase64 = Convert.ToBase64String(final.Stdout.Prefix.Span); StderrPrefixBase64 = Convert.ToBase64String(final.Stderr.Prefix.Span)
               MetadataBytesBound = int lease.MetadataBytes; Cleanup = label final.Cleanup.Disposition; Custody = custodyLabel final.Cleanup.Custody
-              LocalReleased = released; ObserverErrors = lease.ObserverErrors }
+              LocalReleased = released; ObserverErrors = lease.ObserverErrors
+              ClockDomain = original.Domain.Id.ToString("D"); ClockFrequency = original.Domain.Frequency
+              StartedAtTicks = original.StartedAt; WorkExpiresAtTicks = original.WorkExpiresAt; TotalExpiresAtTicks = original.TotalExpiresAt
+              RunReturnAtTicks = lease.InitialReturnTick; CallerObservedRunAtTicks = callerObservedRunAt.Ticks; RetirementReturnedAtTicks = retirementAt.Ticks
+              ReleaseDecisionAtTicks = releaseAt.Ticks; FinalObservedAtTicks = finalAt.Ticks
+              HelperStartGateAtTicks = lease.HelperStartGateTick; HelperStartedAtTicks = lease.HelperStartedTick
+              TargetReleaseGateAtTicks = lease.TargetReleaseGateTick; TargetReleasedAtTicks = lease.TargetReleasedTick; TargetWasUncancelled = lease.TargetWasUncancelled
+              LeaderPid = lease.Generation |> Option.map(fun leader -> leader.Pid) |> Option.defaultValue 0
+              LeaderBirth = lease.Generation |> Option.map(fun leader -> leader.BirthToken) |> Option.defaultValue ""
+              LeaderScope = lease.Generation |> Option.map(fun leader -> leader.ScopeId) |> Option.defaultValue ""
+              InitialLocalPending = lease.InitialReturnPending; EarlyReleaseProbed = early.IsSome; EarlyDecisionAtTicks = earlyAt
+              EarlyLocalPending = earlyPending; EarlyReleaseRefused = earlyRefused
+              WorkStopAtTicks = match initial.Stop with Requested(_,at) -> at.Ticks | _ -> -1L
+              RunAfterWorkTicks = max 0L (lease.InitialReturnTick - original.WorkExpiresAt) }
         receipt
     [<EntryPoint>]
     let main (argv: string array) =
@@ -126,6 +210,7 @@ module Program =
         let mutable reportFailure = ""
         let mutable output: string option = None
         let mutable stage = "preflight"
+        let mutable controls: string array = [||]
         try
             Support.require (argv.Length = 2) "descriptor-and-digest-required"
             Support.require (OperatingSystem.IsLinux() && Environment.GetEnvironmentVariable("HOME") = "/home/developer") "literal-home-linux-profile"
@@ -161,8 +246,17 @@ module Program =
             let absent = Path.Combine(work,"intentionally-absent-python")
             Support.require (not (File.Exists absent || Directory.Exists absent)) "missing-fixture-path-not-absent"
             let owner: OwnerReference = { OwnerId = text profile "profileId"; Evidence = { Kind = "qualified-independent-owner"; Reference = qualification; Digest = Some(hash qualification) } }
-            let source = text root "sourceDigest"
+            let sourceManifest = pin(root.GetProperty("sourceManifestPin"))
+            Support.require (FileInfo(sourceManifest).Length <= 2097152L) "source-manifest-bound"
+            use sourceDocument = JsonDocument.Parse(File.ReadAllBytes sourceManifest)
+            let source = hash sourceManifest
+            Support.require (source = text root "sourceDigest" && text sourceDocument.RootElement "revision" = text root "sourceRevision") "selected-source-SHA256-and-revision-join"
+            let sourceFiles = sourceDocument.RootElement.GetProperty("files").EnumerateArray() |> Seq.toArray
+            Support.require (sourceFiles.Length = 68) "selected-source-population"
+            for sourceFile in sourceFiles do pin sourceFile |> ignore
             let profileDigest = hash qualification
+            stage <- "source-controls"
+            controls <- sourceControls python fixture work source owner.OwnerId profileDigest owner
             let mutable continueCases = true
             for case in selected do
                 if continueCases then
@@ -176,7 +270,7 @@ module Program =
         with error ->
             originalFailure <- stage + ": " + (Support.exceptionDiagnostic "caller-original" error).Message
         let allAccepted = originalFailure = "" && receipts.Count > 0 && (receipts |> Seq.forall(fun result -> result.Accepted))
-        let body = {| Schema = "fsgg.proc.dot2-C-case-results/1"; Accepted = allAccepted; Cases = receipts.ToArray(); OriginalFailure = originalFailure
+        let body = {| Schema = "fsgg.proc.dot2-C-case-results/1"; Accepted = allAccepted; Cases = receipts.ToArray(); OriginalFailure = originalFailure; SourceControls = controls
                       Scope = "Test-only actual Contracts observations; external owner custody is separate; no whole-workload containment claim." |}
         try
             let raw = JsonSerializer.SerializeToUtf8Bytes(body)

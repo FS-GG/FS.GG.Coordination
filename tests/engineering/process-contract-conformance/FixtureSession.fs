@@ -14,6 +14,19 @@ module Support =
         let message = error.GetType().Name + ": " + error.Message
         { Code = code; Message = if message.Length > 900 then message.Substring(0,900) + " [detail omitted]" else message; Evidence = None }
     let require (condition: bool) (code: string) = if not condition then invalidOp code
+    let workReleaseDecision (view: Result<BudgetView,BudgetFailure>) (cancelled: bool) : Result<unit,string> =
+        if cancelled then Error "caller-cancelled"
+        else
+            match view with
+            | Ok value when not value.WorkExpired && not value.TotalExpired && value.WorkRemaining > TimeSpan.Zero -> Ok ()
+            | Ok _ -> Error "work-deadline"
+            | Error _ -> Error "startup-budget-refused"
+    let currentCleanup (prior: CleanupResult) (stamp: ObservationStamp) (leader: bool option) (local: TaskState) (custody: CustodyState) : CleanupResult =
+        { prior with Disposition = Incomplete; Custody = custody
+                     LeaderTermination = match leader with Some value -> Known(value,stamp) | None -> Unknown(diagnostic "leader-not-observed")
+                     LocalTasks = Known(local,stamp)
+                     WorkloadEmpty = Unknown(diagnostic "whole-workload-not-established")
+                     OwnedChildrenReaped = Unknown(diagnostic "descendant-reaping-not-established") }
     let ok (value: Result<'T,'E>) : 'T = match value with Ok result -> result | Error _ -> invalidOp "contract-refused"
     let birth (pid: int) =
         let raw = File.ReadAllText($"/proc/{pid}/stat")
@@ -45,6 +58,13 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
     let mutable ambiguous = false
     let mutable released = false
     let mutable generation: ProcessGeneration option = None
+    let mutable helperStartGateTick = -1L
+    let mutable helperStartedTick = -1L
+    let mutable targetReleaseGateTick = -1L
+    let mutable targetReleasedTick = -1L
+    let mutable targetWasUncancelled = false
+    let mutable initialReturnTick = -1L
+    let mutable initialReturnPending = false
     let mutable stdoutTask: Task = Task.CompletedTask
     let mutable stderrTask: Task = Task.CompletedTask
     let mutable exitTask: Task = Task.CompletedTask
@@ -60,19 +80,52 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
     let stampAt (at: ClockStamp) : ObservationStamp =
         { At = Some at; Scope = identity.InvocationId.ToString("D"); Generation = generation; Provenance = owner.Evidence }
     let known (value: 'T) : Observation<'T> = Known(value,stampAt(clock.Now()))
-    let recordFailure (diagnostic: Diagnostic) =
-        lock gate (fun () ->
-            let current = Lifecycle.snapshot state
-            let at = clock.Now()
-            applyAt at (FailureObserved { Phase = current.Phase; Diagnostic = diagnostic; At = Some at }) |> ignore)
+    let recordFailureAt (at: ClockStamp) (diagnostic: Diagnostic) =
+        let current = Lifecycle.snapshot state
+        applyAt at (FailureObserved { Phase = current.Phase; Diagnostic = diagnostic; At = Some at }) |> ignore
+    let recordFailure (diagnostic: Diagnostic) = lock gate (fun () -> recordFailureAt (clock.Now()) diagnostic)
     let firstFailure (code: string) = recordFailure (Support.diagnostic code)
     let localSettled () = released || (started && stdoutTask.IsCompleted && stderrTask.IsCompleted && exitTask.IsCompleted)
     let updateCleanup () =
-        if started && not released && localSettled() && childProcess.HasExited then
-            let prior = (snapshot()).Cleanup
-            apply (CleanupObserved { prior with Disposition = Incomplete; LeaderTermination = known true; LocalTasks = known Settled
-                                                WorkloadEmpty = Unknown(Support.diagnostic "whole-workload-not-established")
-                                                OwnedChildrenReaped = Unknown(Support.diagnostic "descendant-reaping-not-established") }) |> ignore
+        lock gate (fun () ->
+            if started && not released && localSettled() && childProcess.HasExited then
+                let at = clock.Now()
+                let prior = (Lifecycle.snapshot state).Cleanup
+                let fresh = Support.currentCleanup prior (stampAt at) (Some true) Settled prior.Custody
+                applyAt at (CleanupObserved fresh) |> ignore)
+    let releaseProbe () : ReleaseResult * ClockStamp * bool =
+        lock gate (fun () ->
+            let pending = started && not (localSettled())
+            let leaderTerminated = started && not released && not ambiguous && not pending && childProcess.HasExited
+            let at = clock.Now()
+            let decision =
+                if released then ResourcesReleased
+                elif ambiguous || pending then ReleaseRefused(Support.diagnostic "original-local-obligations-pending")
+                elif started then
+                    // Reobserve the whole mutable bundle at this decision tick; no old
+                    // positive cleanup evidence is borrowed for a fresh release event.
+                    if leaderTerminated then
+                        let stamp = stampAt at
+                        let prior = (Lifecycle.snapshot state).Cleanup
+                        let fresh = Support.currentCleanup prior stamp (Some true) Settled (Released stamp)
+                        if applyAt at (CleanupObserved fresh) then
+                            childProcess.Dispose()
+                            released <- true
+                            ResourcesReleased
+                        else ReleaseRefused(Support.diagnostic "original-cleanup-proof-refused")
+                    else ReleaseRefused(Support.diagnostic "original-local-proof-missing")
+                else
+                    childProcess.Dispose()
+                    released <- true
+                    ResourcesReleased
+            decision,at,pending)
+    let allowEffectAt (at: ClockStamp) (cancellation: CancellationToken) =
+        match Support.workReleaseDecision (Budget.remaining at budget) cancellation.IsCancellationRequested with
+        | Ok () -> true
+        | Error code ->
+            recordFailureAt at (Support.diagnostic code)
+            applyAt at (StopRequested(if code = "caller-cancelled" then CallerCancellation else WorkDeadline)) |> ignore
+            false
     let pump (channel: OutputChannel) (stream: Stream) : Task =
         task {
             let buffer = Array.zeroCreate<byte> command.Capture.ReadChunkBytes
@@ -106,15 +159,11 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
             with error ->
                 apply (ReaderObserved(channel,known(ReadFailed(Support.exceptionDiagnostic "fixture-reader-failed" error)))) |> ignore
         } :> Task
-    let start () =
+    let start (cancellation: CancellationToken) =
         Support.require (not attempted && not released) "start-already-consumed"
         attempted <- true
         let at = clock.Now()
         Support.require (applyAt at BeginLaunch) "begin-refused"
-        let prior = (snapshot()).Cleanup
-        Support.require (applyAt at (CleanupObserved { prior with Custody = RetainedByOwner owner; LocalTasks = Known(Outstanding,stampAt at) })) "retained-owner-refused"
-        Support.require (applyAt at (CapabilitiesObtained [ { Capability = BoundedReturnWithRetainedCustody; Obtained = Known(owner.Evidence,stampAt at) } ])) "capability-refused"
-        Support.require (applyAt at TargetReleaseRequested) "target-release-refused"
         let info = ProcessStartInfo(command.Executable)
         info.UseShellExecute <- false
         info.WorkingDirectory <- command.WorkingDirectory
@@ -129,34 +178,82 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
         | _ -> invalidOp "fixture-environment-must-be-literal-replace"
         childProcess.StartInfo <- info
         try
-            if not (childProcess.Start()) then
-                ambiguous <- true
-                apply (LaunchObserved(Ambiguous(Support.diagnostic "fixture-start-ambiguous"))) |> ignore
-            else
-                started <- true
-                let actual: ProcessGeneration = { Platform = "linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = childProcess.Id; BirthToken = Support.birth childProcess.Id }
-                generation <- Some actual
-                Support.require (apply (LaunchObserved(Started actual))) "started-observation-refused"
-                apply (ReaderObserved(Stdout,known Reading)) |> ignore
-                apply (ReaderObserved(Stderr,known Reading)) |> ignore
-                stdoutTask <- pump Stdout childProcess.StandardOutput.BaseStream
-                stderrTask <- pump Stderr childProcess.StandardError.BaseStream
-                exitTask <- (task {
-                    try
-                        do! childProcess.WaitForExitAsync()
-                        apply (ExitObserved(known(Exited childProcess.ExitCode))) |> ignore
-                    with _ -> addObserverError "fixture-exit-observation-failed"
-                } :> Task)
-                match command.Input with
-                | Bytes value ->
-                    childProcess.StandardInput.BaseStream.Write(value.Span)
-                    childProcess.StandardInput.Close()
-                | Closed -> childProcess.StandardInput.Close()
+            let mayStart =
+                lock gate (fun () ->
+                    let current = clock.Now()
+                    if allowEffectAt current cancellation then
+                        let stamp = stampAt current
+                        let prior = (Lifecycle.snapshot state).Cleanup
+                        let fresh = Support.currentCleanup prior stamp None Outstanding (RetainedByOwner owner)
+                        Support.require (applyAt current (CleanupObserved fresh)) "retained-owner-refused"
+                        Support.require (applyAt current (CapabilitiesObtained [ { Capability = BoundedReturnWithRetainedCustody; Obtained = Known(owner.Evidence,stamp) } ])) "capability-refused"
+                        Support.require (applyAt current TargetReleaseRequested) "helper-release-refused"
+                        helperStartGateTick <- current.Ticks
+                        true
+                    else
+                        applyAt current (LaunchObserved(Refused(Support.diagnostic "helper-launch-not-released"))) |> ignore
+                        let prior = (Lifecycle.snapshot state).Cleanup
+                        applyAt current (CleanupObserved(Support.currentCleanup prior (stampAt current) None Settled NoEffect)) |> ignore
+                        false)
+            if mayStart then
+                // Process.Start releases only the finite gated helper. G is a separate
+                // actual target-output release and gets its own current budget check.
+                let startResult =
+                    lock gate (fun () ->
+                        let current = clock.Now()
+                        if allowEffectAt current cancellation then
+                            helperStartGateTick <- current.Ticks
+                            Some(childProcess.Start())
+                        else
+                            applyAt current (LaunchObserved(Refused(Support.diagnostic "helper-launch-not-released"))) |> ignore
+                            let prior = (Lifecycle.snapshot state).Cleanup
+                            applyAt current (CleanupObserved(Support.currentCleanup prior (stampAt current) None Settled NoEffect)) |> ignore
+                            None)
+                match startResult with
+                | None -> ()
+                | Some false ->
+                    ambiguous <- true
+                    apply (LaunchObserved(Ambiguous(Support.diagnostic "fixture-start-ambiguous"))) |> ignore
+                | Some true ->
+                    started <- true
+                    helperStartedTick <- (clock.Now()).Ticks
+                    let actual: ProcessGeneration = { Platform = "linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = childProcess.Id; BirthToken = Support.birth childProcess.Id }
+                    generation <- Some actual
+                    Support.require (apply (LaunchObserved(Started actual))) "started-observation-refused"
+                    apply (ReaderObserved(Stdout,known Reading)) |> ignore
+                    apply (ReaderObserved(Stderr,known Reading)) |> ignore
+                    stdoutTask <- pump Stdout childProcess.StandardOutput.BaseStream
+                    stderrTask <- pump Stderr childProcess.StandardError.BaseStream
+                    exitTask <- (task {
+                        try
+                            do! childProcess.WaitForExitAsync()
+                            apply (ExitObserved(known(Exited childProcess.ExitCode))) |> ignore
+                        with _ -> addObserverError "fixture-exit-observation-failed"
+                    } :> Task)
+                    lock gate (fun () ->
+                        // The retained Process handle must still observe this original
+                        // live leader, and the descriptive birth must still join it.
+                        let live = not childProcess.HasExited && Support.birth childProcess.Id = actual.BirthToken
+                        let current = clock.Now()
+                        if not live then recordFailureAt current (Support.diagnostic "helper-not-live-at-target-release")
+                        elif allowEffectAt current cancellation then
+                            targetReleaseGateTick <- current.Ticks
+                            targetWasUncancelled <- true
+                            match command.Input with
+                            | Bytes value ->
+                                childProcess.StandardInput.BaseStream.Write(value.Span)
+                                targetReleasedTick <- (clock.Now()).Ticks
+                            | Closed -> ()
+                        // Denied G closes the finite helper gate and keeps all already
+                        // started tasks/handles in this lease for original cleanup.
+                        childProcess.StandardInput.Close())
         with
         | :? Win32Exception as error when not started && error.NativeErrorCode = 2 ->
-            apply (LaunchObserved(Refused(Support.diagnostic "missing-executable"))) |> ignore
-            let prior = (snapshot()).Cleanup
-            apply (CleanupObserved { prior with Custody = NoEffect; LocalTasks = known Settled }) |> ignore
+            lock gate (fun () ->
+                let current = clock.Now()
+                applyAt current (LaunchObserved(Refused(Support.diagnostic "missing-executable"))) |> ignore
+                let prior = (Lifecycle.snapshot state).Cleanup
+                applyAt current (CleanupObserved(Support.currentCleanup prior (stampAt current) None Settled NoEffect)) |> ignore)
         | error ->
             ambiguous <- true
             if not started then apply (LaunchObserved(Ambiguous(Support.exceptionDiagnostic "fixture-start-unclassified" error))) |> ignore
@@ -184,9 +281,24 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
                     match Budget.clip (clock.Now()) Work (TimeSpan.FromMilliseconds 5.0) budget with
                     | Ok delay -> do! Task.Delay(delay)
                     | Error _ -> observing <- false
-            apply ReturnRequested |> ignore
-            return snapshot()
+            return lock gate (fun () ->
+                let at = clock.Now()
+                applyAt at ReturnRequested |> ignore
+                if initialReturnTick < 0L then
+                    initialReturnTick <- at.Ticks
+                    initialReturnPending <- started && not (localSettled())
+                Lifecycle.snapshot state)
         }
+    member _.Now() = clock.Now()
+    member _.InitialReturnTick = initialReturnTick
+    member _.InitialReturnPending = initialReturnPending
+    member _.Generation = generation
+    member _.HelperStartGateTick = helperStartGateTick
+    member _.HelperStartedTick = helperStartedTick
+    member _.TargetReleaseGateTick = targetReleaseGateTick
+    member _.TargetReleasedTick = targetReleasedTick
+    member _.TargetWasUncancelled = targetWasUncancelled
+    member _.ProbeRelease() = releaseProbe()
     member _.MetadataBytes = lock gate (fun () -> Lifecycle.metadataBytes state)
     member _.Budget = budget
     member _.ObserverErrors = lock gate (fun () -> observerErrors.ToArray())
@@ -210,7 +322,7 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
                 if cancellation.IsCancellationRequested then
                     attempted <- true
                     apply (StopRequested CallerCancellation) |> ignore
-                else start()
+                else start cancellation
             boundedObserve cancellation
         member _.ObserveAsync cancellation = boundedObserve cancellation
         member _.RequestStopAsync(reason, _) =
@@ -218,20 +330,5 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
             | Ok _ -> apply (StopRequested reason) |> ignore; Task.FromResult((snapshot()).Stop)
             | Error _ -> Task.FromResult(StopRefused(Support.diagnostic "original-time-expired"))
         member _.TryRelease() =
-            if released then ResourcesReleased
-            elif ambiguous || (started && not localSettled()) then ReleaseRefused(Support.diagnostic "original-local-obligations-pending")
-            elif started then
-                updateCleanup()
-                match (snapshot()).Cleanup.LocalTasks,(snapshot()).Cleanup.LeaderTermination with
-                | Known(Settled,_),Known(true,_) ->
-                    let prior = (snapshot()).Cleanup
-                    if apply (CleanupObserved { prior with Custody = Released(stampAt(clock.Now())) }) then
-                        childProcess.Dispose()
-                        released <- true
-                        ResourcesReleased
-                    else ReleaseRefused(Support.diagnostic "original-cleanup-proof-refused")
-                | _ -> ReleaseRefused(Support.diagnostic "original-local-proof-missing")
-            else
-                childProcess.Dispose()
-                released <- true
-                ResourcesReleased
+            let decision,_,_ = releaseProbe()
+            decision

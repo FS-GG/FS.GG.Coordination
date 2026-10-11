@@ -25,7 +25,9 @@ Incomplete. Process disposal alone cannot qualify it.
 
 No fixture can start without the exact one-use descriptor/digest, literal HOME,
 Linux profile, current direct independent owner birth, accepted owner profile,
-fixture/interpreter hashes and loaded caller/Contracts assembly hashes. An inherited
+fixture/interpreter hashes and loaded caller/Contracts assembly hashes. The selected
+source manifest's SHA256 is the operation source digest; its Git revision stays a
+separate field, and all 68 source inputs must still match before any lease is made. An inherited
 writer additionally requires explicit qualified inherited-writer support. The owner
 profile must actually retain its demonstrated scope across caller failure/exit;
 booleans or evidence strings are not native authority. The independent outer owner
@@ -47,3 +49,27 @@ case snapshots remain independent from subsequent local cleanup observations. A
 passing case never upgrades external sampled custody to containment or a complete
 workload. .2 completion still requires actual selected disposable fixture evidence;
 .3 backend and consumer adoption are outside this caller.
+
+
+Mutable cleanup and release bundles are constructed from current local observations
+under one lease gate, with one captured event tick for all proof fields. Positive
+old mutable evidence is not reused. A fresh original-work/cancellation check guards
+both actual helper launch and stdin G release. G also requires the retained Process
+to observe the original live birth; denial closes stdin and retains started tasks
+and handles for original cleanup. Helper launch, the G gate and G completion are
+recorded separately. The finite gate is not an ownership mechanism.
+
+Receipts expose original domain/frequency/start/work/total expiry, Run snapshot and
+caller observation ticks, later cleanup/release ticks, work-stop timing and the
+original observed leader PID/birth/scope. Acceptance refuses observations outside
+the original total window; actual work overrun remains visible, without claiming
+hard managed scheduling. Held-writer/deadline/cancel probe TryRelease before waiting
+for cleanup and require actual pending obligations plus refusal at that decision.
+A legitimate settled race is safe but leaves pending-refusal coverage unobserved.
+
+Twelve finite preflight controls use the actual cleanup-bundle constructor/reducer
+with advancing synthetic ticks and the actual original-budget release predicate.
+They check stale versus fresh settled/released/no-effect bundles and current,
+elapsed, cancelled or invalid-clock startup decisions. Synthetic reducer generations
+are control data, not native birth or ownership evidence. These controls are source
+prepared and unexecuted here; they do not rerun or alter the 69 accepted controls.
