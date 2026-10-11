@@ -27,7 +27,7 @@ module Samples =
         { new IMonotonicClock with member _.Now() = { Domain = domain; Ticks = Stopwatch.GetTimestamp() } }
     let prepareWith (command: CommandSpec) clock total reserve =
         let budget = Budget.create ((clock: IMonotonicClock).Now()) total reserve |> ok
-        let session = ProcessSessions.createFactory().Prepare(command,identity(),budget,liveClock,owner) |> ok
+        let session = ProcessSessions.createFactory().Prepare(command,identity(),budget,clock,owner) |> ok
         session,budget
     let prepare command = prepareWith command (clock()) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.)
 
