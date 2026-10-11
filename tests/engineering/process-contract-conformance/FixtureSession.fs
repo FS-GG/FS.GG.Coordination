@@ -12,7 +12,7 @@ module Support =
     let diagnostic (code: string) : Diagnostic = { Code = code; Message = "Finite fixture observation."; Evidence = None }
     let exceptionDiagnostic (code: string) (error: exn) : Diagnostic =
         let message = error.GetType().Name + ": " + error.Message
-        { Code = code; Message = if message.Length > 900 then message.Substring(0,900) + " [detail omitted]" else message; Evidence = None }
+        { Code = code; Message = (if message.Length > 900 then message.Substring(0,900) + " [detail omitted]" else message); Evidence = None }
     let require (condition: bool) (code: string) = if not condition then invalidOp code
     let workReleaseDecision (view: Result<BudgetView,BudgetFailure>) (cancelled: bool) : Result<unit,string> =
         if cancelled then Error "caller-cancelled"
@@ -74,7 +74,9 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
         lock gate (fun () ->
             match Lifecycle.apply at event state with
             | Ok next -> state <- next; true
-            | Error _ -> if observerErrors.Count < 16 then observerErrors.Add "contract-observation-refused"; false)
+            | Error _ ->
+                if observerErrors.Count < 16 then observerErrors.Add "contract-observation-refused"
+                false)
     let apply (event: LifecycleEvent) = lock gate (fun () -> applyAt (clock.Now()) event)
     let snapshot () = lock gate (fun () -> Lifecycle.snapshot state)
     let stampAt (at: ClockStamp) : ObservationStamp =

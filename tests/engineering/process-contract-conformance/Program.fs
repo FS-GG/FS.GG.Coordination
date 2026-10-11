@@ -59,8 +59,13 @@ module Program =
         // Finite reducer/gate controls, no native effect or authority acquisition.
         let names = ResizeArray<string>()
         let check condition name = Support.require condition name; names.Add name
-        let identity: OperationIdentity = { InvocationId = Guid.NewGuid(); Execution = None; LaunchOrdinal = 0UL
-                                           SourceDigest = source; ProfileId = profile; ProfileDigest = profileDigest }
+        let identity: OperationIdentity =
+            { InvocationId = Guid.NewGuid()
+              Execution = None
+              LaunchOrdinal = 0UL
+              SourceDigest = source
+              ProfileId = profile
+              ProfileDigest = profileDigest }
         let domain: ClockDomain = { Id = Guid.NewGuid(); Frequency = 1000L }
         let at (ticks: int64) : ClockStamp = { Domain = domain; Ticks = ticks }
         let original = Budget.create (at 1000L) (TimeSpan.FromSeconds 3.0) (TimeSpan.FromSeconds 2.5) |> Support.ok
@@ -99,10 +104,15 @@ module Program =
         check (Budget.describe original = description) "C2-original-expiries-unchanged"
         names.ToArray()
     let private runCase (python: string) (fixture: string) (work: string) (source: string) (profile: string) (profileDigest: string) (owner: OwnerReference) (case: string) =
-        let identity: OperationIdentity = { InvocationId = Guid.NewGuid(); Execution = None; LaunchOrdinal = 0UL
-                                           SourceDigest = source; ProfileId = profile; ProfileDigest = profileDigest }
+        let identity: OperationIdentity =
+            { InvocationId = Guid.NewGuid()
+              Execution = None
+              LaunchOrdinal = 0UL
+              SourceDigest = source
+              ProfileId = profile
+              ProfileDigest = profileDigest }
         // Session remains reachable by this caller across bounded Run and finite original cleanup.
-        let lease = FixtureSession(command python fixture work case,identity,owner,case = "failed-sink")
+        let lease: FixtureSession = FixtureSession(command python fixture work case,identity,owner,(case = "failed-sink"))
         let session = lease :> IProcessSession
         use cancellation = new CancellationTokenSource()
         if case = "prestart-cancel" then cancellation.Cancel()
