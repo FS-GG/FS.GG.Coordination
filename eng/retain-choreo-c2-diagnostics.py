@@ -36,17 +36,22 @@ def filtered(raw, scratch):
     return '\n'.join(lines)
 
 
-def owned_fd_targets(row, observe_birth):
+def owned_fd_targets(row, observe_birth, additional_failures=None):
     """A denied FD read is terminal only with a fresh original-birth observation."""
     def terminal_after_denial(error):
         try:
             fresh = observe_birth(row['pid'])
         except Exception as observation_error:
+            if additional_failures is not None:
+                additional_failures.append(failure_record(observation_error))
             raise error from observation_error
         if fresh is None or fresh['start'] != row['start']:
             return []
         if fresh['pgid'] != row['pgid']:
-            raise ValueError('server group changed during denied FD observation') from error
+            group_error = ValueError('server group changed during denied FD observation')
+            if additional_failures is not None:
+                additional_failures.append(failure_record(group_error))
+            raise error from group_error
         if fresh['state'] == 'Z':
             return []
         raise error
@@ -355,7 +360,7 @@ def execute_command(seconds, log_path, endpoint, argv):
         if len(known) + 1 > spec['maximumGenerations']: raise ValueError('generation cap')
         inodes = listeners(); matched = set()
         for row in rows:
-            for target in owned_fd_targets(row, owner.proc):
+            for target in owned_fd_targets(row, owner.proc, additional):
                 if target.startswith('socket:[') and target[8:-1] in inodes:
                     fresh = owner.proc(row['pid'])
                     if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):

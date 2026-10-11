@@ -348,18 +348,21 @@ class CommandInterfaceControls(unittest.TestCase):
                 with self.subTest(operation=operation, fresh=fresh):
                     error = PermissionError('original denied FD observation')
                     observe = Mock(return_value=fresh)
+                    additional = []
                     with patch.object(module.Path, 'iterdir', side_effect=error if operation == 'directory' else None,
                                       return_value=[Path('/proc/101/fd/7')]), \
                          patch.object(module.os, 'readlink', side_effect=error):
                         if terminal:
-                            self.assertEqual([], module.owned_fd_targets(row, observe))
-                        elif fresh['pgid'] != row['pgid']:
-                            with self.assertRaisesRegex(ValueError, 'server group changed'):
-                                module.owned_fd_targets(row, observe)
+                            self.assertEqual([], module.owned_fd_targets(row, observe, additional))
                         else:
                             with self.assertRaises(PermissionError) as caught:
-                                module.owned_fd_targets(row, observe)
+                                module.owned_fd_targets(row, observe, additional)
                             self.assertIs(error, caught.exception)
+                        if fresh is not None and fresh['start'] == row['start'] and fresh['pgid'] != row['pgid']:
+                            self.assertEqual('ValueError', additional[0]['type'])
+                            self.assertIn('server group changed', additional[0]['message'])
+                        else:
+                            self.assertEqual([], additional)
                     observe.assert_called_once_with(row['pid'])
 
     def test_fd_observation_retains_targets_bounds_and_unknown_birth_failure(self):
@@ -372,10 +375,12 @@ class CommandInterfaceControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, 'server FD cap'):
                 module.owned_fd_targets(row, Mock())
         original = PermissionError('original denied FD observation')
+        additional = []
         with patch.object(module.Path, 'iterdir', side_effect=original):
             with self.assertRaises(PermissionError) as caught:
-                module.owned_fd_targets(row, Mock(side_effect=PermissionError('fresh birth unreadable')))
+                module.owned_fd_targets(row, Mock(side_effect=PermissionError('fresh birth unreadable')), additional)
             self.assertIs(original, caught.exception)
+            self.assertEqual([module.failure_record(PermissionError('fresh birth unreadable'))], additional)
 
     def spec(self):
         return dict(schema=module.COMMAND_SCHEMA, role='verify', argv=['/quint','verify','/model'],
