@@ -328,7 +328,8 @@
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
-          "FSharp.Core": "[10.1.302, )"
+          "FSharp.Core": "[10.1.302, )",
+          "FS.GG.Execution.Contracts": "[1.0.0, )"
         }
       },
       "fs.gg.coordination.orchestration.execution.codex": {
@@ -395,6 +396,12 @@
           "FS.GG.Coordination.Orchestration.Pilot": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.PostgreSql": "[1.0.0, )",
           "FS.GG.Coordination.Orchestration.Runner.Protocol": "[1.0.0, )",
+          "FSharp.Core": "[10.1.302, )"
+        }
+      },
+      "fs.gg.execution.contracts": {
+        "type": "Project",
+        "dependencies": {
           "FSharp.Core": "[10.1.302, )"
         }
       }

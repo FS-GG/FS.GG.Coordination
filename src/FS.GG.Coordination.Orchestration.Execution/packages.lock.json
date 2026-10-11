@@ -77,6 +77,12 @@
         "dependencies": {
           "System.Drawing.Common": "6.0.0"
         }
+      },
+      "fs.gg.execution.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
+        }
       }
     }
   }

@@ -320,7 +320,8 @@
         "type": "Project",
         "dependencies": {
           "Akka": "[1.5.71, )",
-          "FSharp.Core": "[10.1.302, )"
+          "FSharp.Core": "[10.1.302, )",
+          "FS.GG.Execution.Contracts": "[1.0.0, )"
         }
       },
       "fs.gg.coordination.orchestration.execution.codex": {
@@ -406,6 +407,12 @@
         "contentHash": "CXo1iLk+SoLQ5elyKwfs8vVJinjQCYFsqtaA8gYtofKe0bGYGW+n/NV9cWbo6ET1RKNyha3IxMme17WfVCbu6w==",
         "dependencies": {
           "AGUI.Abstractions": "1.0.0"
+        }
+      },
+      "fs.gg.execution.contracts": {
+        "type": "Project",
+        "dependencies": {
+          "FSharp.Core": "[10.1.302, )"
         }
       }
     }

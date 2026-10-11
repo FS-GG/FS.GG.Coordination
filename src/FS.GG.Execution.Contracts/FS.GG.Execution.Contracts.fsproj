@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup>
+    <Compile Include="Types.fsi" /><Compile Include="Types.fs" />
+    <Compile Include="Validation.fsi" /><Compile Include="Validation.fs" />
+    <Compile Include="Budget.fsi" /><Compile Include="Budget.fs" />
+    <Compile Include="BoundedOutput.fsi" /><Compile Include="BoundedOutput.fs" />
+    <Compile Include="Lifecycle.fsi" /><Compile Include="Lifecycle.fs" />
+    <None Include="README.md" />
+  </ItemGroup>
+</Project>
