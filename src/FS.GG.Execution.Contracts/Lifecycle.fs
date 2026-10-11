@@ -7,7 +7,7 @@ type LifecycleState =
         { Command: CommandSpec; Result: ExecutionResult; LastTick: int64
           LaunchConsumed: bool; TargetReleased: bool; TargetReleaseAt: int64 option; Returned: bool; CleanupWasComplete: bool
           StdoutTerminal: ReaderState option; StderrTerminal: ReaderState option
-          ExitTerminal: Observation<ProcessExit> option }
+          ExitTerminal: Observation<ProcessExit> option; OutputFailure: Diagnostic option }
 
 type LifecycleEvent =
     | BeginLaunch
@@ -52,7 +52,7 @@ module Lifecycle =
                               LocalTasks = Unknown(note "tasks-unknown"); Unresolved = []; OmittedUnresolved = 0L; Custody = NoEffect }
                   OriginalBudget = budget }
             Ok { Command = { command with Input = input }; Result = result; LastTick = (Budget.describe budget).StartedAt
-                 LaunchConsumed = false; TargetReleased = false; TargetReleaseAt = None; Returned = false; CleanupWasComplete = false; StdoutTerminal = None; StderrTerminal = None; ExitTerminal = None }
+                 LaunchConsumed = false; TargetReleased = false; TargetReleaseAt = None; Returned = false; CleanupWasComplete = false; StdoutTerminal = None; StderrTerminal = None; ExitTerminal = None; OutputFailure = None }
     let private copyCapture (capture: StreamCapture) =
         { capture with Prefix = ReadOnlyMemory(capture.Prefix.ToArray()); Tail = ReadOnlyMemory(capture.Tail.ToArray()) }
     let snapshot state = { state.Result with Stdout = copyCapture state.Result.Stdout; Stderr = copyCapture state.Result.Stderr }
@@ -425,8 +425,16 @@ module Lifecycle =
                             match value.FirstFailure with
                             | None -> update next
                             | Some d ->
-                                let failed = insertFailure state.Command { Phase = result.Phase; Diagnostic = d; At = Some now } next
-                                update { failed with Phase = Retiring; Stop = match failed.Stop with NotRequested -> Requested(OutputLimit,now) | old -> old })
+                                // The sink snapshot is cumulative: its latched first cause is one event.
+                                // Keep this bounded history separate from projected public diagnostics.
+                                let diagnostic = Validation.sanitizeDiagnostic state.Command d
+                                match state.OutputFailure with
+                                | Some original when original = diagnostic -> update next
+                                | Some _ -> refused "output.first-failure-changed"
+                                | None ->
+                                    let failed = insertFailure state.Command { Phase = result.Phase; Diagnostic = diagnostic; At = Some now } next
+                                    finish { state with OutputFailure = Some diagnostic
+                                                        Result = { failed with Phase = Retiring; Stop = match failed.Stop with NotRequested -> Requested(OutputLimit,now) | old -> old } })
                 | RetirementActionRequested diagnostic ->
                     validated (Validation.diagnostic diagnostic) (fun () ->
                         if result.Cleanup.RequestedActions.Length >= Validation.limits.CollectionEntries then refused "cleanup.actions-limit"

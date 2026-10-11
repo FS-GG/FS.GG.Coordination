@@ -611,3 +611,73 @@ module ContractTests =
         let uncertainExit = state |> apply (ExitObserved(Unknown uncertain)) |> Lifecycle.snapshot
         Assert.True(match uncertainExit.Exit with Unknown _ -> true | _ -> false)
         Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
+
+
+    [<Fact>]
+    let ``actual cumulative output snapshots ingest the latched failure only once`` () =
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 32)) |> ignore
+        sink.Append(Stderr,memory (Array.zeroCreate 32)) |> ignore
+        let mutable state = launched() |> apply (OutputObserved(sink.Snapshot()))
+        let original = (Lifecycle.snapshot state).FirstFailure.Value
+        Assert.Equal(Running,original.Phase)
+        Assert.Equal(Some(now 100L),original.At)
+        for index in 1 .. 128 do
+            sink.Append(Stdout,memory (Array.zeroCreate 32)) |> ignore
+            state <- Lifecycle.apply (now (100L + int64 index)) (OutputObserved(sink.Snapshot())) state |> ok
+            let result = Lifecycle.snapshot state
+            Assert.Equal<Failure>(original,result.FirstFailure.Value)
+            Assert.Empty(result.AdditionalFailures)
+            Assert.Equal(0L,result.OmittedFailures)
+            Assert.Equal((sink.Snapshot()).ChargedTotal,result.ChargedTotalBytes)
+            Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        let current = sink.Snapshot()
+        let changed = { current with FirstFailure = Some { current.FirstFailure.Value with Code = "different-output-failure" } }
+        Assert.True(Lifecycle.apply (now 228L) (OutputObserved changed) state |> Result.isError)
+
+    [<Fact>]
+    let ``latched output failure is independent of explicit failure events`` () =
+        let first = { Phase = Running; Diagnostic = diagnostic "unrelated-original"; At = Some(now 100L) }
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 32)) |> ignore
+        sink.Append(Stderr,memory (Array.zeroCreate 32)) |> ignore
+        let mutable state = launched() |> apply (FailureObserved first) |> apply (OutputObserved(sink.Snapshot()))
+        let outputFailure = (Lifecycle.snapshot state).AdditionalFailures |> List.exactlyOne
+        for index in 1 .. 16 do
+            sink.Append(Stderr,memory (Array.zeroCreate 32)) |> ignore
+            state <- Lifecycle.apply (now (100L + int64 index)) (OutputObserved(sink.Snapshot())) state |> ok
+        let result = Lifecycle.snapshot state
+        Assert.Equal<Failure>(first,result.FirstFailure.Value)
+        Assert.Equal<Failure>(outputFailure,result.AdditionalFailures |> List.exactlyOne)
+        Assert.Equal(0L,result.OmittedFailures)
+        state <- Lifecycle.apply (now 116L) (FailureObserved outputFailure) state |> ok
+        Assert.Equal(2,(Lifecycle.snapshot state).AdditionalFailures.Length)
+        Assert.Equal<Failure>(first,(Lifecycle.snapshot state).FirstFailure.Value)
+
+    [<Fact>]
+    let ``output failure history survives metadata projection without restoring omitted detail`` () =
+        let sink = BoundedOutput.create capture |> ok
+        sink.Append(Stdout,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stderr,memory (Array.zeroCreate 28)) |> ignore
+        sink.Append(Stdout,memory [| 1uy |]) |> ignore
+        let state = nonActionMetadataPressure() |> apply (OutputObserved(sink.Snapshot()))
+        let failure letter = { (diagnostic (String.replicate 64 letter)) with Message = String.replicate 4096 "x" }
+        let cleanup =
+            { (Lifecycle.snapshot state).Cleanup with
+                LeaderTermination = LimitExceeded(failure "l")
+                WorkloadEmpty = LimitExceeded(failure "e")
+                OwnedChildrenReaped = LimitExceeded(failure "r")
+                LocalTasks = LimitExceeded(failure "t") }
+        let mutable state = state |> apply (CleanupObserved cleanup)
+        let projected = Lifecycle.snapshot state
+        Assert.True(projected.OmittedDiagnosticDetails > 0L)
+        Assert.Equal("Omitted.",projected.FirstFailure.Value.Diagnostic.Message)
+        for index in 1 .. 16 do
+            sink.Append(Stdout,memory (Array.zeroCreate 32)) |> ignore
+            state <- Lifecycle.apply (now (100L + int64 index)) (OutputObserved(sink.Snapshot())) state |> ok
+            let result = Lifecycle.snapshot state
+            Assert.Equal<Failure>(projected.FirstFailure.Value,result.FirstFailure.Value)
+            Assert.Equal(projected.AdditionalFailures.Length,result.AdditionalFailures.Length)
+            Assert.Equal(projected.OmittedFailures,result.OmittedFailures)
+            Assert.Equal((sink.Snapshot()).ChargedTotal,result.ChargedTotalBytes)
+            Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
