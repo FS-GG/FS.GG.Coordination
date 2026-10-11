@@ -6,6 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
+import copy
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('choreo_diagnostics', ROOT / 'eng/retain-choreo-c2-diagnostics.py')
@@ -29,6 +30,24 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual(37, value['originalExitCode'])
             self.assertEqual('compiler-server', value['logs'][0]['source'])
             self.assertEqual(0o600, (root / 'diagnostics/failure.json').stat().st_mode & 0o777)
+
+    def test_typed_command_cause_survives_without_input_or_arbitrary_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); scratch = root / 'scratch'; scratch.mkdir()
+            report = {'schema': module.RESULT_SCHEMA, 'commandExit': 37, 'commandAccepted': False,
+                      'firstCause': {'type': 'RuntimeError', 'message': 'original failed command'},
+                      'additionalFailures': [{'type': 'ValueError', 'message': 'secondary reporting'}],
+                      'ownerReceipt': {'firstCause': 'original owner', 'cleanup': 'observed-empty-group'},
+                      'input': {'private': 'NEVER COPY'}}
+            (scratch / 'runner.log.attempt-1.command.json').write_text(json.dumps(report))
+            (scratch / 'foreign.json').write_text('NEVER COPY')
+            value = module.capture(scratch, root / 'diagnostics', 37)
+            text = json.dumps(value)
+            self.assertIn('original failed command', text)
+            self.assertIn('secondary reporting', text)
+            self.assertIn('observed-empty-group', text)
+            self.assertNotIn('NEVER COPY', text)
+            self.assertEqual('owned-command', value['logs'][0]['source'])
 
     def test_large_file_retains_head_and_tail_with_explicit_omission(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -93,7 +112,10 @@ exit 0
 '''); quint.chmod(0o755)
             dest = root / 'diagnostics'
             if stale: dest.mkdir()
-            env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], RUNNER_TEMP=str(root), FSGG_QUINT_BIN=str(quint), FSGG_CHOREO_DIAGNOSTIC_ROOT=str(dest), FAKE_SUCCESS='yes' if success else 'no')
+            quint_home = root / 'quint-home'
+            jar = quint_home / 'apalache-dist-0.56.1/apalache/lib/apalache.jar'
+            jar.parent.mkdir(parents=True); jar.write_text('fake JAR; never executed')
+            env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], RUNNER_TEMP=str(root), FSGG_QUINT_BIN=str(quint), FSGG_CHOREO_DIAGNOSTIC_ROOT=str(dest), FAKE_SUCCESS='yes' if success else 'no', JAVA_HOME=str(root), QUINT_HOME=str(quint_home))
             env.pop('FSGG_QUINT_TOOLCHAIN_ARCHIVE', None)
             result = subprocess.run(['bash', str(ROOT / 'eng/verify-choreo-c2-bounded.sh')], env=env, capture_output=True, text=True, timeout=10)
             self.assertFalse(list(root.glob('fsgg-choreo-c2-bounded.*')))
@@ -240,6 +262,79 @@ class ParityDiagnosticControls(unittest.TestCase):
             with patch.dict(os.environ, FSGG_CHOREO_DIAGNOSTIC_ROOT=str(Path(tmp) / 'diagnostics')), patch.object(m, 'export_legacy', side_effect=original), patch.object(m.runpy, 'run_path', side_effect=SystemExit(99)), patch.object(m.sys, 'stderr', BrokenSink()):
                 with self.assertRaises(RuntimeError) as actual: m.main()
             self.assertIs(original, actual.exception)
+
+
+class CommandInterfaceControls(unittest.TestCase):
+    def spec(self):
+        return dict(schema=module.COMMAND_SCHEMA, role='verify', argv=['/quint','verify','/model'],
+                    pins=[{'path':'/input'+str(i),'bytes':10,'sha256':'a'*64} for i in range(5)], aliases=[],
+                    semanticToolchainId=module.TOOLCHAIN_ID, archiveSha256='b'*64,
+                    started=100.0, workDeadline=250.0, totalDeadline=280.0, workSeconds=150,
+                    cleanupSeconds=30, rssBytes=6*1024**3, logBytes=8*1024**2, maximumGenerations=6,
+                    endpoint=19822, jvmArgs=['-Xmx1024m','-Xms64m'],
+                    tlcConfig={'maxHeap':'-Xmx2G','stackSize':'-Xss64m','workers':1})
+
+    def test_actual_shape_separates_semantic_identity_from_archive_bytes(self):
+        result = module.command_preflight(self.spec(), now=101)
+        self.assertTrue(result['passed'])
+        self.assertNotEqual(self.spec()['semanticToolchainId'], self.spec()['archiveSha256'])
+
+    def test_resource_clock_and_actual_field_contradictions_refuse(self):
+        replacements = [('role','watch'), ('semanticToolchainId','b'*64), ('archiveSha256','not-a-digest'),
+                        ('workDeadline',251), ('totalDeadline',281), ('started',float('nan')),
+                        ('jvmArgs',['-Xmx4096m']), ('rssBytes',2*1024**3), ('maximumGenerations',7),
+                        ('tlcConfig',{'maxHeap':'-Xmx8G','stackSize':'-Xss515m','workers':'auto'})]
+        for field, value in replacements:
+            with self.subTest(field=field):
+                spec = self.spec(); spec[field] = value
+                with self.assertRaises(ValueError): module.command_preflight(spec, now=101)
+        with self.assertRaises(ValueError): module.command_preflight(self.spec(), now=250)
+        spec = self.spec(); del spec['pins']
+        with self.assertRaises(ValueError): module.command_preflight(spec, now=101)
+
+    def test_at_watch_does_not_repurpose_a_dispatch_runtime_entry(self):
+        self.assertEqual('watch', module.command_role('credential-entry','watch'))
+        with self.assertRaises(ValueError): module.command_role('dispatch-runtime-entry','watch')
+        self.assertEqual('dispatch', module.command_role('dispatch-runtime-entry','dispatch'))
+
+    def test_actual_launch_grant_uses_original_sixty_seconds(self):
+        module.validate_launch_grant({'startedAtEpoch':1000,'launchBeforeEpoch':1060})
+        for grant in [{'startedAtEpoch':1000,'absoluteDeadlineEpoch':1060},
+                      {'startedAtEpoch':1000,'launchBeforeEpoch':1120},
+                      {'startedAtEpoch':float('nan'),'launchBeforeEpoch':float('nan')}]:
+            with self.assertRaises(ValueError): module.validate_launch_grant(grant)
+
+    def test_actual_extraction_fields_do_not_establish_compiler_acceptance(self):
+        receipt = dict(accepted=True, selectedManifestSha256='a'*64,
+                       allSelectedBytesAndModesVerified=True, extractedCodeExecuted=False, providerRequests=0)
+        self.assertEqual({'extractionAccepted':True,'compilerAccepted':False,'ciAccepted':False},
+                         module.extraction_receipt_join(receipt,'a'*64))
+        wrong = copy.deepcopy(receipt); del wrong['allSelectedBytesAndModesVerified']
+        wrong['allBytesModesVerified'] = True
+        with self.assertRaises(ValueError): module.extraction_receipt_join(wrong,'a'*64)
+        with self.assertRaises(ValueError): module.extraction_receipt_join(receipt,'b'*64)
+        with self.assertRaises(ValueError): module.extraction_receipt_join(receipt,None)
+        wrong = copy.deepcopy(receipt); wrong['providerRequests'] = False
+        with self.assertRaises(ValueError): module.extraction_receipt_join(wrong,'a'*64)
+
+    def test_expected_server_retirement_cannot_accept_foreign_live_descendants(self):
+        receipt = {'exit':0,'firstCause':'RuntimeError: child exited with live owned-group descendants'}
+        self.assertTrue(module.expected_server_retirement(receipt,{(101,20)},{(101,20)}))
+        for servers, members in [(set(),set()), ({(101,20)},{(101,20),(102,21)}),
+                                 ({(101,20)},{(101,19)}), ({(101,20),(102,21)},{(101,20),(102,21)})]:
+            with self.subTest(servers=servers,members=members):
+                self.assertFalse(module.expected_server_retirement(receipt,servers,members))
+        receipt['exit'] = 37
+        self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)}))
+
+    def test_first_failure_projection_is_serializable_bounded_and_filters_secrets(self):
+        original = module.failure_record(RuntimeError('original compiler failure'))
+        secondary = module.failure_record(OSError('report failed'))
+        body = json.loads(json.dumps({'firstCause':original,'additionalFailures':[secondary]}))
+        self.assertEqual('original compiler failure',body['firstCause']['message'])
+        self.assertEqual('report failed',body['additionalFailures'][0]['message'])
+        self.assertLessEqual(len(module.failure_record(ValueError('x'*4096))['message']),512)
+        self.assertNotIn('synthetic-secret',module.failure_record(ValueError('Authorization: Bearer synthetic-secret'))['message'])
 
 
 if __name__ == '__main__': unittest.main()

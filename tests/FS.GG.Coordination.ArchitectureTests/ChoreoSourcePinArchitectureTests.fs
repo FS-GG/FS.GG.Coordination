@@ -346,7 +346,12 @@ let ``hosted writer Choreo bounded roots cover provider and runner fault schedul
     let tlcWrapper =
         File.ReadAllText(Path.Combine(root, "eng/run-choreo-c2-tlc.sh"))
 
-    Assert.Contains("timeout --signal=TERM --kill-after=10s", tlcWrapper)
+    Assert.Contains("python3 -I -S -B", tlcWrapper)
+    Assert.Contains("retain-choreo-c2-diagnostics.py", tlcWrapper)
+    let ownedAdapter = File.ReadAllText(Path.Combine(root, "eng/retain-choreo-c2-diagnostics.py"))
+    Assert.Contains("shared_process_owner.py", ownedAdapter)
+    Assert.Contains("signal.pidfd_send_signal", ownedAdapter)
+    Assert.Contains("observed-empty-group", ownedAdapter)
     Assert.Contains("execution-timeout-after-parser", tlcWrapper)
     Assert.Contains("APALACHE_STARTUP_RETRY count=1 command=verify", tlcWrapper)
     Assert.Contains("run_attempt 2", tlcWrapper)

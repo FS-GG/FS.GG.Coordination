@@ -49,6 +49,10 @@ fi
 test -x "$quint_bin"
 command -v java >/dev/null
 printf '%s  %s\n' "$quint_sha" "$quint_bin" | sha256sum --check --status
+export JVM_ARGS='-Xmx1024m -Xms64m'
+test -n "${JAVA_HOME:-}" && test -n "${QUINT_HOME:-}"
+printf '%s  %s\n' '4753c0ebb2cbb266e2c6ac19ab5ca3827d726cc80fd1fc5d7c1eeb64736cd60b' \
+  "$QUINT_HOME/apalache-dist-0.56.1/apalache/lib/apalache.jar" | sha256sum --check --status
 
 model="$scratch_root/choreo-c2-bounded.qnt"
 test_model="$scratch_root/choreo-c2-tests.qnt"

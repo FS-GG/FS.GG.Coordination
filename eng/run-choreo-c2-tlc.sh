@@ -10,6 +10,7 @@ budget_seconds="$1"
 result_log="$2"
 endpoint_base="$3"
 shift 4
+adapter="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" && pwd)/retain-choreo-c2-diagnostics.py"
 
 [[ "$budget_seconds" =~ ^[1-9][0-9]*$ ]]
 [[ "$endpoint_base" =~ ^[1-9][0-9]*$ ]]
@@ -22,13 +23,12 @@ run_attempt() {
   local endpoint=$((endpoint_base + attempt - 1))
   local status
 
-  if timeout --signal=TERM --kill-after=10s "${budget_seconds}s" \
-    "$@" --server-endpoint "localhost:$endpoint" 2>&1 | tee "$attempt_log"; then
+  if python3 -I -S -B "$adapter" command "$budget_seconds" "$attempt_log" "$endpoint" -- "$@"; then
     status=0
   else
-    status="${PIPESTATUS[0]}"
+    status="$?"
   fi
-  cp -- "$attempt_log" "$result_log"
+  [[ ! -f "$attempt_log" ]] || cp -- "$attempt_log" "$result_log"
   return "$status"
 }
 
