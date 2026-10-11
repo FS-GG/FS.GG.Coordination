@@ -337,6 +337,46 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
+    def test_denied_fd_observation_requires_fresh_terminal_original_birth(self):
+        from unittest.mock import Mock, patch
+        row = dict(pid=101, start=20, pgid=101, state='R')
+        vectors = [(None, True), (dict(row, start=21), True),
+                   (dict(row, state='Z'), True), (dict(row), False),
+                   (dict(row, state='S'), False), (dict(row, state='Z', pgid=102), False)]
+        for operation in ('directory', 'link'):
+            for fresh, terminal in vectors:
+                with self.subTest(operation=operation, fresh=fresh):
+                    error = PermissionError('original denied FD observation')
+                    observe = Mock(return_value=fresh)
+                    with patch.object(module.Path, 'iterdir', side_effect=error if operation == 'directory' else None,
+                                      return_value=[Path('/proc/101/fd/7')]), \
+                         patch.object(module.os, 'readlink', side_effect=error):
+                        if terminal:
+                            self.assertEqual([], module.owned_fd_targets(row, observe))
+                        elif fresh['pgid'] != row['pgid']:
+                            with self.assertRaisesRegex(ValueError, 'server group changed'):
+                                module.owned_fd_targets(row, observe)
+                        else:
+                            with self.assertRaises(PermissionError) as caught:
+                                module.owned_fd_targets(row, observe)
+                            self.assertIs(error, caught.exception)
+                    observe.assert_called_once_with(row['pid'])
+
+    def test_fd_observation_retains_targets_bounds_and_unknown_birth_failure(self):
+        from unittest.mock import Mock, patch
+        row = dict(pid=101, start=20, pgid=101, state='R')
+        with patch.object(module.Path, 'iterdir', return_value=[Path('/proc/101/fd/7')]), \
+             patch.object(module.os, 'readlink', return_value='socket:[123]'):
+            self.assertEqual(['socket:[123]'], module.owned_fd_targets(row, Mock()))
+        with patch.object(module.Path, 'iterdir', return_value=[Path('/proc/101/fd/7')] * 257):
+            with self.assertRaisesRegex(ValueError, 'server FD cap'):
+                module.owned_fd_targets(row, Mock())
+        original = PermissionError('original denied FD observation')
+        with patch.object(module.Path, 'iterdir', side_effect=original):
+            with self.assertRaises(PermissionError) as caught:
+                module.owned_fd_targets(row, Mock(side_effect=PermissionError('fresh birth unreadable')))
+            self.assertIs(original, caught.exception)
+
     def spec(self):
         return dict(schema=module.COMMAND_SCHEMA, role='verify', argv=['/quint','verify','/model'],
                     pins=[{'path':'/input'+str(i),'bytes':10,'sha256':'a'*64} for i in range(5)], aliases=[],

@@ -36,6 +36,39 @@ def filtered(raw, scratch):
     return '\n'.join(lines)
 
 
+def owned_fd_targets(row, observe_birth):
+    """A denied FD read is terminal only with a fresh original-birth observation."""
+    def terminal_after_denial(error):
+        try:
+            fresh = observe_birth(row['pid'])
+        except Exception as observation_error:
+            raise error from observation_error
+        if fresh is None or fresh['start'] != row['start']:
+            return []
+        if fresh['pgid'] != row['pgid']:
+            raise ValueError('server group changed during denied FD observation') from error
+        if fresh['state'] == 'Z':
+            return []
+        raise error
+    try:
+        entries = list((Path('/proc') / str(row['pid']) / 'fd').iterdir())
+    except FileNotFoundError:
+        return []
+    except PermissionError as error:
+        return terminal_after_denial(error)
+    if len(entries) > 256:
+        raise ValueError('server FD cap')
+    targets = []
+    for entry in entries:
+        try:
+            targets.append(os.readlink(entry))
+        except FileNotFoundError:
+            continue
+        except PermissionError as error:
+            return terminal_after_denial(error)
+    return targets
+
+
 def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MAX_OUTPUT):
     """Bound enumeration, nofollow reads, head/tail retention and output bytes."""
     if not 1024 <= max_output <= MAX_OUTPUT:
@@ -322,13 +355,7 @@ def execute_command(seconds, log_path, endpoint, argv):
         if len(known) + 1 > spec['maximumGenerations']: raise ValueError('generation cap')
         inodes = listeners(); matched = set()
         for row in rows:
-            directory = Path('/proc') / str(row['pid']) / 'fd'
-            try: entries = list(directory.iterdir())
-            except FileNotFoundError: continue
-            if len(entries) > 256: raise ValueError('server FD cap')
-            for entry in entries:
-                try: target = os.readlink(entry)
-                except FileNotFoundError: continue
+            for target in owned_fd_targets(row, owner.proc):
                 if target.startswith('socket:[') and target[8:-1] in inodes:
                     fresh = owner.proc(row['pid'])
                     if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
