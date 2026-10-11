@@ -164,9 +164,44 @@ def lifecycle_summary(value):
                 error = {k:filtered(str(error.get(k,'')).encode()[:512],Path('/proc')) for k in ('type','message')}
             item['observationFailure'] = error
             projected_denials['entries'].append(item)
+    endpoint = value.get('endpointObservations')
+    projected_endpoint = None
+    if endpoint is not None:
+        if (not isinstance(endpoint,dict) or not isinstance(endpoint.get('entries'),list)
+                or type(endpoint.get('omitted')) is not int or endpoint['omitted'] < 0):
+            raise ValueError('endpoint observation shape')
+        projected_endpoint = {'entries':[], 'omitted':endpoint['omitted']+max(0,len(endpoint['entries'])-2)}
+        for entry in endpoint['entries'][-2:]:
+            if (entry.get('event') not in ('after-birth','poll','child-exit-observed','before-success')
+                    or type(entry.get('attempt')) is not int or entry['attempt'] not in (1,2)
+                    or entry.get('disposition') not in ('pending','changed','proved','refused')):
+                raise ValueError('endpoint observation event')
+            item = {k:entry[k] for k in ('event','attempt','disposition')}
+            for key in ('beforeInodes','afterInodes','matchedInodes'):
+                snapshot = entry.get(key)
+                if snapshot is None: item[key] = None; continue
+                if (not isinstance(snapshot,dict) or not isinstance(snapshot.get('values'),list)
+                        or type(snapshot.get('omitted')) is not int or snapshot['omitted'] < 0
+                        or any(type(x) is not str or not x.isascii() or not x.isdigit() or len(x)>20 for x in snapshot['values'])):
+                    raise ValueError('endpoint inode snapshot')
+                item[key] = {'values':snapshot['values'][:6], 'omitted':snapshot['omitted']+max(0,len(snapshot['values'])-6)}
+            for key in ('beforeMembers','afterMembers'):
+                snapshot = entry.get(key)
+                if snapshot is None: item[key] = None; continue
+                if (not isinstance(snapshot,dict) or not isinstance(snapshot.get('members'),list)
+                        or type(snapshot.get('omittedMembers')) is not int or snapshot['omittedMembers'] < 0):
+                    raise ValueError('endpoint membership snapshot')
+                item[key] = identities(snapshot['members'][:6], ('pid','start','pgid','state'))
+                item[key]['omittedMembers'] = snapshot['omittedMembers']+max(0,len(snapshot['members'])-6)
+            error = entry.get('failure')
+            if error is not None:
+                if not isinstance(error,dict): raise ValueError('endpoint failure shape')
+                error = {k:filtered(str(error.get(k,'')).encode()[:512],Path('/proc')) for k in ('type','message')}
+            item['failure'] = error
+            projected_endpoint['entries'].append(item)
     owner_leader = (value.get('ownerReceipt') or {}).get('leader')
     return {'ownerLeader':None if owner_leader is None else identities([owner_leader],('pid','start','pgid','state'))['members'][0],
-            'fdDenials':projected_denials,
+            'fdDenials':projected_denials, 'endpointObservations':projected_endpoint,
             'serverBirths':identities(value.get('originalServerBirths'), ('pid','start')),
             'adapterExitMembership':identities(value.get('exitMembers'), ('pid','start')),
             'ownerExitObservation':projected, 'stopRequests':projected_stops,
@@ -236,7 +271,12 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
                                 except (ValueError, TypeError, AttributeError) as projection_error:
                                     summary['lifecycle'] = {'projectionFailure':failure_record(projection_error)}
                                     coverage.append('lifecycle-fields-unavailable')
-                                first = json.dumps(summary, ensure_ascii=True).encode()[:FILE_BYTES]
+                                encoded = json.dumps(summary, ensure_ascii=True).encode()
+                                if len(encoded) > FILE_BYTES:
+                                    summary['lifecycle'] = {'projectionFailure':failure_record(ValueError('lifecycle summary byte cap'))}
+                                    coverage.append('lifecycle-byte-bound')
+                                    encoded = json.dumps(summary, ensure_ascii=True).encode()
+                                first = encoded[:FILE_BYTES]
                                 last = b''
                             except (ValueError, TypeError, AttributeError):
                                 coverage.append('command-report-unavailable'); continue
@@ -255,7 +295,7 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
                                     'ordinal': len(records), 'observedBytes': before.st_size,
                                     'truncated': before.st_size > FILE_BYTES,
                                     'stable': stable,
-                                    'text': filtered(first + (b'\n[head/tail omitted]\n' if before.st_size > FILE_BYTES else b'') + last, scratch)})
+                                    'text': filtered(first + (b'\n[head/tail omitted]\n' if not command_report and before.st_size > FILE_BYTES else b'') + last, scratch)})
         finally:
             os.close(fd)
     if not records:
@@ -465,50 +505,80 @@ def retire_original_server(owner, child, leader, servers, handles, stop_requests
 
 
 def observe_endpoint_ownership(owner, child, leader, servers, handles, known, checkpoint,
-                               maximum_generations, listener_inodes, additional, fd_denials):
-    """Fresh current-listener ownership, independently of full group custody census."""
-    def membership():
+                               maximum_generations, listener_inodes, additional, fd_denials,
+                               endpoint_observations=None, event='poll'):
+    """Reobserve one known transition; a second complete sampled proof must be stable.
+
+    Listeners or members may change after their final samples. This does not
+    establish atomic exclusivity, continuous containment or descendant reaping.
+    """
+    def inode_summary(inodes):
+        if inodes is None: return None
+        return {'values':sorted(inodes)[:6], 'omitted':max(0,len(inodes)-6)}
+    def member_summary(rows):
+        if rows is None: return None
+        return {'members':[{k:row[k] for k in ('pid','start','pgid','state')} for row in rows[:6]],
+                'omittedMembers':max(0,len(rows)-6)}
+    def membership(observation, field):
         checkpoint()
         rows = owner.census(leader['pgid'])
+        observation[field] = member_summary(rows)
         checkpoint()
         known.update((row['pid'], row['start']) for row in rows)
         if len(known) + 1 > maximum_generations: raise ValueError('generation cap')
         return rows
-    rows = membership()
-    inodes = listener_inodes(); checkpoint(); matched = set(); proved = set()
-    # Previously authenticated server births are candidates, never reusable proof.
-    # Each current inode still needs a new FD read and a fresh birth/group join.
-    rows.sort(key=lambda row: (row['pid'], row['start']) not in handles)
-    for row in rows:
-        if matched == inodes: break
-        checkpoint()
-        def terminal_probe():
+    for attempt in (1,2):
+        observation = {'event':event, 'attempt':attempt, 'disposition':'pending',
+                       'beforeMembers':None, 'afterMembers':None, 'beforeInodes':None,
+                       'afterInodes':None, 'matchedInodes':None, 'failure':None}
+        if endpoint_observations is not None:
+            if len(endpoint_observations['entries']) >= 2:
+                endpoint_observations['entries'].pop(0); endpoint_observations['omitted'] += 1
+            endpoint_observations['entries'].append(observation)
+        try:
+            rows = membership(observation,'beforeMembers')
+            inodes = listener_inodes(); observation['beforeInodes'] = inode_summary(inodes)
+            checkpoint(); matched = set(); proved = set()
+            # Candidates only: every attempt needs new FD and birth/group evidence.
+            rows.sort(key=lambda row: (row['pid'], row['start']) not in handles)
+            for row in rows:
+                if matched == inodes: break
+                checkpoint()
+                def terminal_probe():
+                    checkpoint()
+                    return child.poll()
+                probe = terminal_probe if (child.pid == leader['pid'] == row['pid']
+                        and row['start'] == leader['start'] and row['pgid'] == leader['pgid']) else None
+                for target in owned_fd_targets(row, owner.proc, additional,
+                                              terminal_probe=probe, denial_observations=fd_denials):
+                    if target.startswith('socket:[') and target[8:-1] in inodes:
+                        fresh = owner.proc(row['pid'])
+                        if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
+                            raise ValueError('server birth join')
+                        birth = (row['pid'], row['start'])
+                        matched.add(target[8:-1]); servers.add(birth); proved.add(birth)
+                        if birth not in handles:
+                            handle = os.pidfd_open(row['pid'])
+                            after = owner.proc(row['pid'])
+                            if after is None or (after['start'], after['pgid']) != (row['start'], leader['pgid']):
+                                os.close(handle); raise ValueError('server pidfd birth join')
+                            handles[birth] = handle
+            observation['matchedInodes'] = inode_summary(matched)
+            if matched != inodes: raise ValueError('foreign endpoint listener')
+            after_rows = membership(observation,'afterMembers')
+            after_births = {(row['pid'],row['start']) for row in after_rows if row['pgid'] == leader['pgid']}
+            if not proved <= after_births: raise ValueError('server membership changed during endpoint observation')
+            after_inodes = listener_inodes(); observation['afterInodes'] = inode_summary(after_inodes)
             checkpoint()
-            return child.poll()
-        probe = terminal_probe if (child.pid == leader['pid'] == row['pid']
-                and row['start'] == leader['start'] and row['pgid'] == leader['pgid']) else None
-        for target in owned_fd_targets(row, owner.proc, additional,
-                                      terminal_probe=probe, denial_observations=fd_denials):
-            if target.startswith('socket:[') and target[8:-1] in inodes:
-                fresh = owner.proc(row['pid'])
-                if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
-                    raise ValueError('server birth join')
-                birth = (row['pid'], row['start'])
-                matched.add(target[8:-1]); servers.add(birth); proved.add(birth)
-                if birth not in handles:
-                    handle = os.pidfd_open(row['pid'])
-                    after = owner.proc(row['pid'])
-                    if after is None or (after['start'], after['pgid']) != (row['start'], leader['pgid']):
-                        os.close(handle); raise ValueError('server pidfd birth join')
-                    handles[birth] = handle
-    # Empty endpoints still require both complete custody censuses and a stable
-    # listener snapshot. No callback, generation or retirement obligation is skipped.
-    after_rows = membership()
-    after_births = {(row['pid'],row['start']) for row in after_rows if row['pgid'] == leader['pgid']}
-    if not proved <= after_births: raise ValueError('server membership changed during endpoint observation')
-    after_inodes = listener_inodes(); checkpoint()
-    if after_inodes != inodes: raise ValueError('endpoint listeners changed during ownership observation')
-    if matched != inodes: raise ValueError('foreign endpoint listener')
+            if after_inodes != inodes:
+                observation['disposition'] = 'changed'
+                if attempt == 1: continue
+                raise ValueError('endpoint listeners changed during ownership observation')
+            observation['disposition'] = 'proved'
+            return
+        except BaseException as error:
+            observation['disposition'] = 'refused'; observation['failure'] = failure_record(error)
+            raise
 
 
 def execute_command(seconds, log_path, endpoint, argv):
@@ -518,6 +588,7 @@ def execute_command(seconds, log_path, endpoint, argv):
     spec = None; servers = set(); known = set(); original_exit = 1; exit_members = {'members':None}
     server_handles = {}; stop_requests = []; disk_samples = []; disk_omitted = 0; last_disk = None
     fd_denials = {'entries':[], 'omitted':0}
+    endpoint_observations = {'entries':[], 'omitted':0}
     mutable_root = Path.cwd()
     def sample_disk(cutoff, force=False):
         nonlocal last_disk, disk_omitted
@@ -553,7 +624,8 @@ def execute_command(seconds, log_path, endpoint, argv):
         if event == 'before-popen' and listeners(): raise ValueError('endpoint already listening')
         if leader is None: return
         observe_endpoint_ownership(owner, child, leader, servers, server_handles, known,
-                                   checkpoint, spec['maximumGenerations'], listeners, additional, fd_denials)
+                                   checkpoint, spec['maximumGenerations'], listeners, additional, fd_denials,
+                                   endpoint_observations, event)
         if event == 'child-exit-observed':
             retire_original_server(owner, child, leader, servers, server_handles, stop_requests, checkpoint, known, spec['maximumGenerations'], exit_members)
     try:
@@ -668,10 +740,11 @@ def execute_command(seconds, log_path, endpoint, argv):
                   firstCause=failure_record(first), additionalFailures=additional,
                   ownerReceipt=receipt, originalServerBirths=[{'pid':p, 'start':s} for p,s in sorted(servers)],
                   originalServerStopRequests=stop_requests, fdDenialObservations=fd_denials,
+                  endpointObservations=endpoint_observations,
                   exitMembers=None if exit_members['members'] is None else [{'pid':p, 'start':s} for p,s in sorted(exit_members['members'])],
                   diskSamples=disk_samples, omittedDiskSamples=disk_omitted,
                   input=spec, cleanupObservedAt=time.monotonic(), modelCheckingRequired=True,
-                  limitation='sampled owned group; no hard containment or descendant reaping')
+                  limitation='sampled current listener ownership and owned group; changes after the last observation are not covered; no hard containment or descendant reaping')
     try:
         if spec is not None and time.monotonic() >= spec['totalDeadline']:
             raise TimeoutError('original result deadline')

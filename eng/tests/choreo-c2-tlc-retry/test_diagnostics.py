@@ -358,13 +358,13 @@ class CommandInterfaceControls(unittest.TestCase):
     def test_empty_endpoint_still_observes_both_censuses_and_listener_stability(self):
         from unittest.mock import Mock, patch
         leader={'pid':101,'start':20,'pgid':101,'state':'R'}
-        for disposition in ('empty','listener-appeared','unknown-census','generation-cap'):
+        for disposition in ('empty','unknown-census','generation-cap'):
             with self.subTest(disposition=disposition):
                 owner=Mock(); known=set(); rows=[leader]
                 if disposition == 'generation-cap': rows += [dict(leader,pid=i,start=i) for i in range(102,107)]
                 original=PermissionError('fresh custody census unknown')
                 owner.census.side_effect=[list(rows),original if disposition == 'unknown-census' else list(rows)]
-                listeners=Mock(side_effect=[set(),{'999'} if disposition == 'listener-appeared' else set()])
+                listeners=Mock(side_effect=[set(),set()])
                 with patch.object(module,'owned_fd_targets') as reads:
                     if disposition == 'empty':
                         module.observe_endpoint_ownership(owner,Mock(pid=101),leader,set(),{},known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
@@ -379,14 +379,14 @@ class CommandInterfaceControls(unittest.TestCase):
         from unittest.mock import Mock, patch
         leader={'pid':101,'start':20,'pgid':101,'state':'R'}
         server={'pid':102,'start':21,'pgid':101,'state':'S'}
-        for disposition in ('replaced','changed-group','unknown-birth','membership-changed','listener-changed','foreign-inode','needed-denial'):
+        for disposition in ('replaced','changed-group','unknown-birth','membership-changed','foreign-inode','needed-denial'):
             with self.subTest(disposition=disposition):
                 original=PermissionError('required FD ownership denied')
                 owner=Mock(); owner.census.side_effect=[[leader,server],[leader] if disposition == 'membership-changed' else [leader,server]]
                 owner.proc.side_effect=original if disposition == 'unknown-birth' else None
                 owner.proc.return_value=dict(server,start=22) if disposition == 'replaced' else dict(server,pgid=999) if disposition == 'changed-group' else server
                 inodes={'123','999'} if disposition == 'foreign-inode' else {'123'}
-                listeners=Mock(side_effect=[inodes,{'456'} if disposition == 'listener-changed' else inodes])
+                listeners=Mock(side_effect=[inodes,inodes])
                 def targets(row,*args,**kwargs):
                     if disposition == 'needed-denial' or row['pid'] == 101: raise original
                     return ['socket:[123]']
@@ -410,6 +410,95 @@ class CommandInterfaceControls(unittest.TestCase):
         receipt={'firstCause':'RuntimeError: child exited with live owned-group descendants','exit':0,'leader':leader,
                  'exitObservation':{'code':0,'members':[server,foreign],'omittedMembers':0}}
         self.assertFalse(module.expected_server_retirement(receipt,servers,observed['members'],stops))
+
+    def test_one_known_listener_transition_requires_a_fresh_complete_stable_proof(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        for event,sets in [('after-birth',[set(),{'123'},{'123'},{'123'}]),
+                           ('poll',[{'123'},{'456'},{'456'},{'456'}]),
+                           ('before-success',[{'123'},{'456'},{'456'},{'456'}]),
+                           ('child-exit-observed',[{'123'},set(),set(),set()])]:
+            with self.subTest(event=event):
+                order=[]; pending=list(sets); owner=Mock(); retained={'entries':[],'omitted':0}
+                def census(group): order.append('census'); return [leader,server]
+                def listeners(): order.append('listeners'); return pending.pop(0)
+                def birth(pid): order.append('birth'); return server
+                def targets(row,*args,**kwargs): order.append('fd'); return ['socket:[123]','socket:[456]']
+                owner.census.side_effect=census; owner.proc.side_effect=birth
+                with patch.object(module,'owned_fd_targets',side_effect=targets):
+                    module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained,event)
+                per_proof=['census','listeners','fd','birth','census','listeners']
+                no_fd=['census','listeners','census','listeners']
+                self.assertEqual((no_fd if event=='after-birth' else per_proof)+(no_fd if event=='child-exit-observed' else per_proof),order)
+                self.assertEqual([1,2],[x['attempt'] for x in retained['entries']])
+                self.assertEqual(['changed','proved'],[x['disposition'] for x in retained['entries']])
+                for ordinal,entry in enumerate(retained['entries']):
+                    self.assertEqual(event,entry['event']); self.assertIsNone(entry['failure'])
+                    self.assertEqual(sorted(sets[ordinal*2]),entry['beforeInodes']['values'])
+                    self.assertEqual(sorted(sets[ordinal*2+1]),entry['afterInodes']['values'])
+                    self.assertEqual(2,len(entry['beforeMembers']['members'])); self.assertEqual(2,len(entry['afterMembers']['members']))
+
+    def test_two_known_listener_transitions_refuse_and_preserve_both_snapshots(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}; server=dict(leader,pid=102,start=21,state='S')
+        owner=Mock(); owner.census.return_value=[leader,server]; owner.proc.return_value=server
+        retained={'entries':[],'omitted':0}; listeners=Mock(side_effect=[{'123'},{'456'},{'456'},{'789'}])
+        with patch.object(module,'owned_fd_targets',return_value=['socket:[123]','socket:[456]']):
+            with self.assertRaisesRegex(ValueError,'endpoint listeners changed during ownership observation'):
+                module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+        self.assertEqual(4,owner.census.call_count); self.assertEqual(4,listeners.call_count)
+        self.assertEqual(['changed','refused'],[x['disposition'] for x in retained['entries']])
+        self.assertEqual(['123'],retained['entries'][0]['beforeInodes']['values']); self.assertEqual(['456'],retained['entries'][0]['afterInodes']['values'])
+        self.assertEqual(['456'],retained['entries'][1]['beforeInodes']['values']); self.assertEqual(['789'],retained['entries'][1]['afterInodes']['values'])
+        self.assertEqual('ValueError',retained['entries'][1]['failure']['type'])
+
+    def test_uncertain_endpoint_error_cannot_be_overwritten_by_a_later_stable_state(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}; server=dict(leader,pid=102,start=21,state='S')
+        for kind in ('fd','census','listener','birth','foreign','changed-group','deadline','generation'):
+            with self.subTest(kind=kind):
+                original=TimeoutError('original deadline') if kind=='deadline' else PermissionError('original '+kind+' observation')
+                owner=Mock(); owner.census.return_value=[leader,server]; owner.proc.return_value=dict(server,pgid=999) if kind=='changed-group' else server
+                if kind=='census': owner.census.side_effect=original
+                if kind=='birth': owner.proc.side_effect=original
+                listeners=Mock(return_value={'123'})
+                if kind=='listener': listeners.side_effect=original
+                checkpoint=Mock(side_effect=original if kind=='deadline' else None)
+                known={(pid,pid) for pid in range(200,207)} if kind=='generation' else set()
+                retained={'entries':[],'omitted':0}
+                with patch.object(module,'owned_fd_targets',side_effect=original if kind=='fd' else None,
+                                  return_value=[] if kind=='foreign' else ['socket:[123]']):
+                    with self.assertRaises(ValueError if kind in ('foreign','changed-group','generation') else type(original)) as caught:
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},known,checkpoint,6,listeners,[],{'entries':[],'omitted':0},retained)
+                if kind not in ('foreign','changed-group','generation'): self.assertIs(original,caught.exception)
+                self.assertEqual(1,len(retained['entries'])); self.assertEqual('refused',retained['entries'][0]['disposition'])
+                self.assertEqual(type(caught.exception).__name__,retained['entries'][0]['failure']['type'])
+                self.assertLessEqual(listeners.call_count,1)
+        # A known transition does not make a later denial retryable or replaceable.
+        original=PermissionError('second proof required FD denied')
+        owner=Mock(); owner.census.side_effect=lambda group:[leader,server]; owner.proc.return_value=server
+        retained={'entries':[],'omitted':0}; listeners=Mock(side_effect=[{'123'},{'456'},{'456'},{'456'}])
+        with patch.object(module,'owned_fd_targets',side_effect=[['socket:[123]'],original]) as reads:
+            with self.assertRaises(PermissionError) as caught:
+                module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+        self.assertIs(original,caught.exception); self.assertEqual(2,reads.call_count)
+        self.assertEqual(3,owner.census.call_count); self.assertEqual(3,listeners.call_count)
+        self.assertEqual(['changed','refused'],[x['disposition'] for x in retained['entries']])
+        self.assertEqual('PermissionError',retained['entries'][1]['failure']['type'])
+        self.assertIsNone(retained['entries'][1]['afterInodes'])
+
+    def test_lifecycle_byte_cap_retains_structured_primary_cause(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); scratch=root/'scratch'; scratch.mkdir(); large=10**120
+            cause={'type':'PermissionError','message':'original observation refusal'}
+            value={'schema':module.RESULT_SCHEMA,'commandExit':0,'commandAccepted':False,'firstCause':cause,'additionalFailures':[],
+                   'ownerReceipt':{'exitObservation':{'code':0,'members':[{'pid':large+i,'start':large,'pgid':large,'state':'S'} for i in range(32)],'omittedMembers':0}}}
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value))
+            artifact=module.capture(scratch,root/'diagnostics',1)
+            retained=json.loads(artifact['logs'][0]['text'])
+            self.assertEqual(cause,retained['firstCause']); self.assertIn('lifecycle-byte-bound',artifact['omittedCoverage'])
+            self.assertEqual('lifecycle summary byte cap',retained['lifecycle']['projectionFailure']['message'])
 
     def test_denied_fd_direct_child_probe_requires_fresh_terminal_original_birth(self):
         from unittest.mock import Mock, patch
@@ -582,7 +671,13 @@ class CommandInterfaceControls(unittest.TestCase):
                'input':{'private':'NEVER COPY'}}
         value['ownerReceipt']['leader']={'pid':101,'start':20,'pgid':101,'state':'S','private':'NEVER COPY'}
         value['fdDenialObservations']={'entries':[{'operation':'directory','before':{'pid':101,'start':20,'pgid':101,'state':'R'},'freshBeforeTerminalPoll':{'pid':101,'start':20,'pgid':101,'state':'R'},'terminalPollAttempted':True,'terminalExit':0,'freshAfterTerminalPoll':None,'observationFailure':None,'private':'NEVER COPY'}],'omitted':0}
+        value['endpointObservations']={'entries':[{'event':'poll','attempt':2,'disposition':'refused',
+            'beforeInodes':{'values':['123'],'omitted':0,'private':'NEVER COPY'},'afterInodes':{'values':['456'],'omitted':0},
+            'matchedInodes':{'values':['123'],'omitted':0},'beforeMembers':{'members':[{'pid':102,'start':21,'pgid':101,'state':'S'}],'omittedMembers':0},
+            'afterMembers':None,'failure':{'type':'ValueError','message':'endpoint changed'},'private':'NEVER COPY'}],'omitted':9}
         summary=module.lifecycle_summary(value)
+        self.assertEqual(9,summary['endpointObservations']['omitted'])
+        self.assertEqual(['456'],summary['endpointObservations']['entries'][0]['afterInodes']['values'])
         self.assertEqual([],summary['adapterExitMembership']['members'])
         self.assertEqual(103,summary['ownerExitObservation']['membership']['members'][0]['pid'])
         self.assertNotIn('NEVER COPY',json.dumps(summary))
