@@ -14,7 +14,7 @@ module Validation =
     let private bytes (value: string) = if isNull value then Int32.MaxValue else Encoding.UTF8.GetByteCount value
     let private text field maximum value =
         if String.IsNullOrWhiteSpace value || bytes value > maximum || value.IndexOf('\000') >= 0 then [ error field ] else []
-    let private hex value =
+    let private hex (value: string) =
         not (isNull value) && value.Length = 64 && (value |> Seq.forall Uri.IsHexDigit)
     let private digest field value = if hex value then [] else [ error field ]
     let private entries field values =
@@ -98,7 +98,7 @@ module Validation =
            | Some ids when ids.IsEmpty || ids.Length > limits.CollectionEntries || List.exists (fun i -> i < 0) ids || (Set.ofList ids).Count <> ids.Length -> [ error "resources.affinity" ]
            | _ -> [])
     let private commandCore (value: CommandSpec) =
-        let safe field v = if isNull v || v.IndexOf('\000') >= 0 then [ error field ] else []
+        let safe field (v: string) = if isNull v || v.IndexOf('\000') >= 0 then [ error field ] else []
         let environment =
             match value.Environment with
             | Inherit overrides -> [], overrides

@@ -71,8 +71,8 @@ module Lifecycle =
     let private proofErrors (state: LifecycleState) (now: ClockStamp) (fresh: bool) (expected: ProcessGeneration option) observationValue =
         match observationValue with
         | Known(_, stamp) | Absent stamp ->
-            [ if stamp.Scope <> operationScope state then { Code = "observation-scope-refused"; Field = "observation.scope" }
-              if stamp.Generation <> expected then { Code = "observation-generation-refused"; Field = "observation.generation" }
+            [ if stamp.Scope <> operationScope state then yield { Code = "observation-scope-refused"; Field = "observation.scope" }
+              if stamp.Generation <> expected then yield { Code = "observation-generation-refused"; Field = "observation.generation" }
               match stamp.At with
               | Some at ->
                   let minimum = if expected.IsSome then (state.TargetReleaseAt |> Option.defaultValue (Budget.describe state.Result.OriginalBudget).StartedAt) else (Budget.describe state.Result.OriginalBudget).StartedAt
@@ -284,7 +284,7 @@ module Lifecycle =
                     | None -> refused "result.metadata-limit"
                     | Some reported -> Ok { next with LastTick = now.Ticks; Result = { reported with Phase = phaseAdvance result.Phase reported.Phase } }
                 let update nextResult = finish { state with Result = nextResult }
-                let validated errors next = if errors.IsEmpty then next() else Error errors
+                let validated (errors: ValidationError list) next = if errors.IsEmpty then next() else Error errors
                 match event with
                 | BeginLaunch ->
                     if state.LaunchConsumed || result.Stop <> NotRequested then refused "launch.already-consumed-or-stopped"
