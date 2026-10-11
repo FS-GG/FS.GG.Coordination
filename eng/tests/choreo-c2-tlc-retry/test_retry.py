@@ -68,6 +68,8 @@ class ChoreoC2TlcRetryTests(unittest.TestCase):
             jar = quint_home / 'apalache-dist-0.56.1/apalache/lib/apalache.jar'
             jar.parent.mkdir(parents=True); jar.write_text('fake JAR input; never executed')
             model = root / 'fixture.qnt'; model.write_text('fake model input')
+            (root / 'tmp').mkdir()
+            environment['TMPDIR'] = str(root / 'tmp')
             environment.update(
                 {
                     "FAKE_MODE": mode,
@@ -78,7 +80,7 @@ class ChoreoC2TlcRetryTests(unittest.TestCase):
             )
             result = subprocess.run(
                 ["bash", str(WRAPPER), "1", str(result_log), "29820", "--", str(command), "verify", str(model)],
-                cwd=ROOT,
+                cwd=root,
                 env=environment,
                 text=True,
                 capture_output=True,

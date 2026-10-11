@@ -77,6 +77,8 @@ test_names="$(awk '
 ' "$test_model")"
 test -n "$test_names"
 
+mkdir "$scratch_root/tmp"
+export TMPDIR="$scratch_root/tmp"
 cd "$scratch_root"
 "$quint_bin" typecheck "$model"
 "$quint_bin" test "$test_model" \

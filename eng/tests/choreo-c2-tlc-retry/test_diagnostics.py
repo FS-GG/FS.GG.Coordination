@@ -122,6 +122,28 @@ exit 0
             value = json.loads((dest / 'failure.json').read_text()) if (dest / 'failure.json').exists() else None
             return result, value
 
+    def test_existing_disk_inventory_bounds_generated_scope_without_following_links(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / 'regular').write_text('generated')
+            outside = root.parent / 'outside-does-not-exist'
+            (root / 'external').symlink_to(outside)
+            observed = module.census(root, 100, clock=lambda: 1)
+            self.assertEqual(3, observed['objects'])
+            self.assertEqual(1, observed['fixtureSymlinks'])
+            self.assertFalse(observed['linkTraversal'])
+            (root / 'sparse').touch()
+            with (root / 'sparse').open('r+b') as file: file.truncate(1073741825)
+            with self.assertRaisesRegex(RuntimeError, 'disk-byte-cap'):
+                module.census(root, 100, clock=lambda: 1)
+            (root / 'sparse').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'disk-byte-cap'):
+                module.census(root, 100, limit=0, clock=lambda: 1)
+            with self.assertRaisesRegex(RuntimeError, 'disk-budget'):
+                module.census(root, 1, clock=lambda: 1)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            with self.assertRaisesRegex(RuntimeError, 'disk-special-file'):
+                module.census(root, 100, clock=lambda: 1)
+
     def test_actual_gate_preserves_exit_and_cleans_scratch(self):
         result, value = self.run_gate()
         self.assertEqual(37, result.returncode, result.stderr)
@@ -272,7 +294,11 @@ class CommandInterfaceControls(unittest.TestCase):
                     started=100.0, workDeadline=250.0, totalDeadline=280.0, workSeconds=150,
                     cleanupSeconds=30, rssBytes=6*1024**3, logBytes=8*1024**2, maximumGenerations=6,
                     endpoint=19822, jvmArgs=['-Xmx1024m','-Xms64m'],
-                    tlcConfig={'maxHeap':'-Xmx2G','stackSize':'-Xss64m','workers':1})
+                    tlcConfig={'maxHeap':'-Xmx2G','stackSize':'-Xss64m','workers':1},
+                    mutableScope={'cwd':'/scope','tmpdir':'/scope/tmp','diskBytes':1073741824,
+                                  'inventorySeconds':1,'maximumEntries':25000,'sampleIntervalSeconds':.5,
+                                  'javaToolOptions':'-Djava.io.tmpdir=/scope/tmp',
+                                  'denoDir':'/scope/cache/deno','xdgCacheHome':'/scope/cache'})
 
     def test_actual_shape_separates_semantic_identity_from_archive_bytes(self):
         result = module.command_preflight(self.spec(), now=101)

@@ -138,6 +138,23 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
     return document
 
 
+DISK_LIMIT = 1073741824
+
+def require(ok, message):
+    if not ok: raise RuntimeError(message)
+
+# Same non-following disk inventory as the qualified single-controller route.
+def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic):
+    logical=allocated=objects=links=0;stack=[root]
+    while stack:
+        require(clock()<deadline,'disk-budget');path=stack.pop();s=path.lstat();objects+=1
+        require(objects<=25000,'disk-population-cap');logical+=s.st_size;allocated+=s.st_blocks*512
+        require(max(logical,allocated)<=limit,'disk-byte-cap')
+        if stat.S_ISDIR(s.st_mode):stack.extend(path.iterdir())
+        elif stat.S_ISLNK(s.st_mode):links+=1
+        else:require(stat.S_ISREG(s.st_mode),'disk-special-file')
+    return {'objects':objects,'logicalBytes':logical,'allocatedBytes':allocated,'fixtureSymlinks':links,'linkTraversal':False}
+
 COMMAND_SCHEMA = 'fsgg.canonical.owned-command/1'
 RESULT_SCHEMA = 'fsgg.canonical.command-result/1'
 OWNER_SHA = '14ba6985a1702419cc5c31fa76e165b2fd90164eb372ae91fe070a2b4a7c0057'
@@ -187,7 +204,7 @@ def command_preflight(spec, *, now):
     """Pure shape/role/budget joins; filesystem checks happen against actual pins."""
     required = {'schema', 'role', 'argv', 'pins', 'aliases', 'semanticToolchainId', 'archiveSha256',
                 'started', 'workDeadline', 'totalDeadline', 'workSeconds', 'cleanupSeconds',
-                'rssBytes', 'logBytes', 'maximumGenerations', 'endpoint', 'jvmArgs', 'tlcConfig'}
+                'rssBytes', 'logBytes', 'maximumGenerations', 'endpoint', 'jvmArgs', 'tlcConfig', 'mutableScope'}
     if set(spec) != required or spec['schema'] != COMMAND_SCHEMA:
         raise ValueError('command schema')
     command_role('canonical-quint', spec['role'])
@@ -211,6 +228,16 @@ def command_preflight(spec, *, now):
             or spec['maximumGenerations'] != 6 or spec['jvmArgs'] != ['-Xmx1024m', '-Xms64m']
             or spec['tlcConfig'] != {'maxHeap': '-Xmx2G', 'stackSize': '-Xss64m', 'workers': 1}):
         raise ValueError('command resource joins')
+    scope = spec['mutableScope']
+    if (set(scope) != {'cwd', 'tmpdir', 'diskBytes', 'inventorySeconds', 'maximumEntries', 'sampleIntervalSeconds', 'javaToolOptions', 'denoDir', 'xdgCacheHome'}
+            or type(scope['cwd']) is not str or not Path(scope['cwd']).is_absolute()
+            or scope['tmpdir'] != str(Path(scope['cwd']) / 'tmp')
+            or scope['diskBytes'] != DISK_LIMIT or scope['inventorySeconds'] != 1
+            or scope['maximumEntries'] != 25000 or scope['sampleIntervalSeconds'] != .5
+            or scope['javaToolOptions'] != '-Djava.io.tmpdir=' + scope['tmpdir']
+            or scope['denoDir'] != str(Path(scope['cwd']) / 'cache/deno')
+            or scope['xdgCacheHome'] != str(Path(scope['cwd']) / 'cache')):
+        raise ValueError('mutable scope resource join')
     if type(spec['endpoint']) is not int or not 1024 <= spec['endpoint'] <= 65535:
         raise ValueError('command endpoint')
     if len(spec['pins']) < 4 or len(spec['pins']) > 8:
@@ -254,7 +281,22 @@ def execute_command(seconds, log_path, endpoint, argv):
     started = time.monotonic(); first = None; additional = []; receipt = None; returned = None
     output = Path(log_path).absolute(); owner_path = Path(__file__).with_name('shared_process_owner.py')
     spec = None; servers = set(); known = set(); original_exit = 1; exit_members = set()
-    server_handles = {}; stop_requests = []
+    server_handles = {}; stop_requests = []; disk_samples = []; disk_omitted = 0; last_disk = None
+    mutable_root = Path.cwd()
+    def sample_disk(cutoff, force=False):
+        nonlocal last_disk, disk_omitted
+        now = time.monotonic()
+        if spec is not None:
+            current_tmp = Path(spec['mutableScope']['tmpdir'])
+            require(current_tmp.resolve(strict=True) == current_tmp and current_tmp.is_dir(), 'tmp-scope-retargeted')
+        if force or last_disk is None or now - last_disk >= .5:
+            observed = census(mutable_root, min(cutoff, now + 1), limit=DISK_LIMIT - 384 * 1024)
+            require(observed['objects'] < 25000, 'disk-report-entry-reserve')
+            observed['reportReserveBytes'] = 384 * 1024
+            observed['observedAt'] = time.monotonic()
+            if len(disk_samples) == 64:
+                disk_samples.pop(0); disk_omitted += 1
+            disk_samples.append(observed); last_disk = observed['observedAt']
     def checkpoint():
         if time.monotonic() >= spec['workDeadline']:
             raise TimeoutError('original canonical work deadline')
@@ -272,6 +314,7 @@ def execute_command(seconds, log_path, endpoint, argv):
         nonlocal exit_members
         if event == 'after-cleanup': return
         checkpoint()
+        sample_disk(spec['workDeadline'], force=event in ('before-popen','after-birth','before-success'))
         if event == 'before-popen' and listeners(): raise ValueError('endpoint already listening')
         if leader is None: return
         rows = owner.census(leader['pgid'])
@@ -315,6 +358,11 @@ def execute_command(seconds, log_path, endpoint, argv):
     try:
         seconds, endpoint = int(seconds), int(endpoint)
         argv = list(argv)
+        tmpdir = mutable_root / 'tmp'
+        if (output.parent != mutable_root or output.exists()
+                or Path(os.environ.get('TMPDIR','')).absolute() != tmpdir
+                or tmpdir.resolve(strict=True) != tmpdir or not tmpdir.is_dir()):
+            raise ValueError('exclusive cwd/log/TMPDIR scope join')
         if not hasattr(os, 'pidfd_open') or not hasattr(signal, 'pidfd_send_signal'):
             raise ValueError('original-server pidfd capability unavailable')
         model = Path(argv[2]); java = Path(os.environ['JAVA_HOME']) / 'bin/java'
@@ -335,7 +383,11 @@ def execute_command(seconds, log_path, endpoint, argv):
                     started=started, workDeadline=started+seconds, totalDeadline=started+seconds+30,
                     workSeconds=seconds, cleanupSeconds=30, rssBytes=6*1024**3, logBytes=8*1024**2,
                     maximumGenerations=6, endpoint=endpoint, jvmArgs=['-Xmx1024m', '-Xms64m'],
-                    tlcConfig={'maxHeap':'-Xmx2G', 'stackSize':'-Xss64m', 'workers':1})
+                    tlcConfig={'maxHeap':'-Xmx2G', 'stackSize':'-Xss64m', 'workers':1},
+                    mutableScope={'cwd':str(mutable_root), 'tmpdir':str(tmpdir), 'diskBytes':DISK_LIMIT,
+                                  'inventorySeconds':1, 'maximumEntries':25000, 'sampleIntervalSeconds':.5,
+                                  'javaToolOptions':'-Djava.io.tmpdir='+str(tmpdir),
+                                  'denoDir':str(mutable_root/'cache/deno'), 'xdgCacheHome':str(mutable_root/'cache')})
         command_preflight(spec, now=time.monotonic())
         for row in pins:
             if pin_file(row['path']) != row: raise ValueError('command input drift')
@@ -356,6 +408,10 @@ def execute_command(seconds, log_path, endpoint, argv):
                if k in ('JAVA_HOME','QUINT_HOME','FSGG_QUINT_HOME','PATH','HOME','TMPDIR','LANG','LC_ALL','TZ')
                or k.startswith('FAKE_')}
         env['JVM_ARGS'] = ' '.join(spec['jvmArgs'])
+        env['TMPDIR'] = spec['mutableScope']['tmpdir']
+        env['JAVA_TOOL_OPTIONS'] = spec['mutableScope']['javaToolOptions']
+        env['DENO_DIR'] = spec['mutableScope']['denoDir']
+        env['XDG_CACHE_HOME'] = spec['mutableScope']['xdgCacheHome']
         stage_error = None
         try:
             # Count both retained log and its public copy, reserving metadata.
@@ -384,6 +440,7 @@ def execute_command(seconds, log_path, endpoint, argv):
                 or receipt['cleanup'] != 'observed-empty-group' or receipt['residual'] or receipt['escapedResidual']
                 or receipt['additionalFailures'] or time.monotonic() >= spec['totalDeadline']):
             raise ValueError('command retirement unqualified')
+        sample_disk(spec['totalDeadline'], force=True)
         for row in pins:
             if pin_file(row['path']) != row: raise ValueError('post command input drift')
         for row in aliases:
@@ -410,11 +467,14 @@ def execute_command(seconds, log_path, endpoint, argv):
                   firstCause=failure_record(first), additionalFailures=additional,
                   ownerReceipt=receipt, originalServerBirths=[{'pid':p, 'start':s} for p,s in sorted(servers)],
                   originalServerStopRequests=stop_requests,
+                  diskSamples=disk_samples, omittedDiskSamples=disk_omitted,
                   input=spec, cleanupObservedAt=time.monotonic(), modelCheckingRequired=True,
                   limitation='sampled owned group; no hard containment or descendant reaping')
     try:
         if spec is not None and time.monotonic() >= spec['totalDeadline']:
             raise TimeoutError('original result deadline')
+        if spec is not None: sample_disk(spec['totalDeadline'], force=True)
+        result['omittedDiskSamples'] = disk_omitted
         body = json.dumps(result, ensure_ascii=True, indent=2)
         if len(body.encode()) > MAX_OUTPUT: raise ValueError('command result metadata cap')
         with Path(str(output)+'.command.json').open('x') as stream: stream.write(body+'\n')
