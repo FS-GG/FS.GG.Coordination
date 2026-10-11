@@ -39,7 +39,7 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
     let gate = obj()
     let mutable state = Lifecycle.prepare command identity budget |> Support.ok
     let sink = BoundedOutput.create command.Capture |> Support.ok
-    let process = new Process()
+    let childProcess = new Process()
     let mutable attempted = false
     let mutable started = false
     let mutable ambiguous = false
@@ -68,7 +68,7 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
     let firstFailure (code: string) = recordFailure (Support.diagnostic code)
     let localSettled () = released || (started && stdoutTask.IsCompleted && stderrTask.IsCompleted && exitTask.IsCompleted)
     let updateCleanup () =
-        if started && not released && localSettled() && process.HasExited then
+        if started && not released && localSettled() && childProcess.HasExited then
             let prior = (snapshot()).Cleanup
             apply (CleanupObserved { prior with Disposition = Incomplete; LeaderTermination = known true; LocalTasks = known Settled
                                                 WorkloadEmpty = Unknown(Support.diagnostic "whole-workload-not-established")
@@ -127,31 +127,31 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
             info.Environment.Clear()
             for KeyValue(key,value) in values do info.Environment[key] <- value
         | _ -> invalidOp "fixture-environment-must-be-literal-replace"
-        process.StartInfo <- info
+        childProcess.StartInfo <- info
         try
-            if not (process.Start()) then
+            if not (childProcess.Start()) then
                 ambiguous <- true
                 apply (LaunchObserved(Ambiguous(Support.diagnostic "fixture-start-ambiguous"))) |> ignore
             else
                 started <- true
-                let actual: ProcessGeneration = { Platform = "linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = process.Id; BirthToken = Support.birth process.Id }
+                let actual: ProcessGeneration = { Platform = "linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = childProcess.Id; BirthToken = Support.birth childProcess.Id }
                 generation <- Some actual
                 Support.require (apply (LaunchObserved(Started actual))) "started-observation-refused"
                 apply (ReaderObserved(Stdout,known Reading)) |> ignore
                 apply (ReaderObserved(Stderr,known Reading)) |> ignore
-                stdoutTask <- pump Stdout process.StandardOutput.BaseStream
-                stderrTask <- pump Stderr process.StandardError.BaseStream
+                stdoutTask <- pump Stdout childProcess.StandardOutput.BaseStream
+                stderrTask <- pump Stderr childProcess.StandardError.BaseStream
                 exitTask <- (task {
                     try
-                        do! process.WaitForExitAsync()
-                        apply (ExitObserved(known(Exited process.ExitCode))) |> ignore
+                        do! childProcess.WaitForExitAsync()
+                        apply (ExitObserved(known(Exited childProcess.ExitCode))) |> ignore
                     with _ -> addObserverError "fixture-exit-observation-failed"
                 } :> Task)
                 match command.Input with
                 | Bytes value ->
-                    process.StandardInput.BaseStream.Write(value.Span)
-                    process.StandardInput.Close()
-                | Closed -> process.StandardInput.Close()
+                    childProcess.StandardInput.BaseStream.Write(value.Span)
+                    childProcess.StandardInput.Close()
+                | Closed -> childProcess.StandardInput.Close()
         with
         | :? Win32Exception as error when not started && error.NativeErrorCode = 2 ->
             apply (LaunchObserved(Refused(Support.diagnostic "missing-executable"))) |> ignore
@@ -226,12 +226,12 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
                 | Known(Settled,_),Known(true,_) ->
                     let prior = (snapshot()).Cleanup
                     if apply (CleanupObserved { prior with Custody = Released(stampAt(clock.Now())) }) then
-                        process.Dispose()
+                        childProcess.Dispose()
                         released <- true
                         ResourcesReleased
                     else ReleaseRefused(Support.diagnostic "original-cleanup-proof-refused")
                 | _ -> ReleaseRefused(Support.diagnostic "original-local-proof-missing")
             else
-                process.Dispose()
+                childProcess.Dispose()
                 released <- true
                 ResourcesReleased
