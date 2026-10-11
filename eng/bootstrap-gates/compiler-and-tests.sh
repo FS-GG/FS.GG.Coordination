@@ -8,7 +8,7 @@ if [[ -n "$(git status --porcelain --untracked-files=all)" ]]; then
   exit 3
 fi
 dotnet restore FS.GG.Coordination.sln --locked-mode
-python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics.py DiagnosticControls.test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup CommandInterfaceControls
+PYTHONDONTWRITEBYTECODE=1 python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics.py DiagnosticControls.test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup CommandInterfaceControls
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
 dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
 dotnet test tests/FS.GG.Coordination.Orchestration.Host.Tests/FS.GG.Coordination.Orchestration.Host.Tests.fsproj --configuration Release --no-build --no-restore
