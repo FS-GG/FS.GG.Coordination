@@ -30,6 +30,12 @@ case "$obligation" in
     dotnet restore "$project" --locked-mode
     dotnet test "$project" -c Release --no-restore --no-build --logger "trx;LogFileName=$obligation.trx" --results-directory "$results"
     python eng/validate-test-census.py "$results/$obligation.trx" "$obligation" "$started_ns"
+    if [[ "$obligation" == unit ]]; then
+      process_project="tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj"
+      dotnet restore "$process_project" --locked-mode
+      dotnet test "$process_project" -c Release --no-restore --no-build --logger "trx;LogFileName=process-sessions.trx" --results-directory "$results"
+      python eng/validate-test-census.py "$results/process-sessions.trx" "process-sessions" "$started_ns"
+    fi
     ;;
   formal) echo "formal partition is executed only by the bounded shard fanout" >&2; exit 1 ;;
   security) bash eng/bootstrap-gates/dependency-and-security.sh ;;

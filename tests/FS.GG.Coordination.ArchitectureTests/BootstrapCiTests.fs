@@ -136,6 +136,8 @@ let private vulnerabilityJson projectCount vulnerable =
             "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
             "src/FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj"
             "tests/FS.GG.Execution.Contracts.Tests/FS.GG.Execution.Contracts.Tests.fsproj"
+            "src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj"
+            "tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj"
             "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
             "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
             "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj"
@@ -1456,7 +1458,7 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 27 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 29 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
@@ -1464,7 +1466,7 @@ let ``complete vulnerability report is accepted`` () =
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
 [<InlineData(25, false, "vulnerability-report-completeness")>]
-[<InlineData(27, true, "vulnerable-package")>]
+[<InlineData(29, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error =
         validateVulnerability (vulnerabilityJson projectCount vulnerable)
@@ -1509,7 +1511,7 @@ let ``incomplete vulnerability parameters are rejected`` () =
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
     let report =
-        (vulnerabilityJson 27 false)
+        (vulnerabilityJson 29 false)
             .Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
 
     let exitCode, _, error = validateVulnerability report
@@ -1519,9 +1521,11 @@ let ``same-count wrong-project vulnerability report is rejected`` () =
 [<Theory>]
 [<InlineData("src/FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj")>]
 [<InlineData("tests/FS.GG.Execution.Contracts.Tests/FS.GG.Execution.Contracts.Tests.fsproj")>]
+[<InlineData("src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj")>]
+[<InlineData("tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj")>]
 let ``same-count vulnerability report requires each process contracts project`` project =
     let report =
-        (vulnerabilityJson 27 false).Replace(project, "src/Unexpected/Unexpected.fsproj")
+        (vulnerabilityJson 29 false).Replace(project, "src/Unexpected/Unexpected.fsproj")
 
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)

@@ -334,3 +334,14 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
         member _.TryRelease() =
             let decision,_,_ = releaseProbe()
             decision
+
+// The production path supplies its own original caller budget/clock and retains
+// the returned real session. It does not import the bridge's procfs/gated-start
+// implementation, failed-sink injection or qualification claims.
+module ProductionFixture =
+    let prepare (command: CommandSpec) identity owner total reserve =
+        let domain = { Id = Guid.NewGuid(); Frequency = Stopwatch.Frequency }
+        let clock = { new IMonotonicClock with member _.Now() = { Domain = domain; Ticks = Stopwatch.GetTimestamp() } }
+        let budget = Budget.create (clock.Now()) total reserve |> Support.ok
+        let session = FS.GG.Execution.Processes.ProcessSessions.createFactory().Prepare(command,identity,budget,clock,owner) |> Support.ok
+        session,clock,budget
