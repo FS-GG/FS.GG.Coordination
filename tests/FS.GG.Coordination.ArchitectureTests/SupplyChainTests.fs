@@ -118,7 +118,7 @@ let ``candidate supply chain proves positive and independent negative controls``
 [<Fact>]
 let ``candidate package portable symbols assembly and pdb are reproducible across unequal roots`` () =
     let exitCode, output, error = runReproducibilityTest ()
-    Assert.True(exitCode = 0, $"candidate reproducibility failed with exit code {exitCode}: {error}{output}")
+    Assert.True((exitCode = 0), $"candidate reproducibility failed with exit code {exitCode}: {error}{output}")
     Assert.Equal("", error)
     Assert.Contains("SUPPLY_CHAIN_REPRODUCIBLE package=", output)
 

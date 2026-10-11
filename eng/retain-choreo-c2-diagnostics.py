@@ -74,6 +74,50 @@ def owned_fd_targets(row, observe_birth, additional_failures=None):
     return targets
 
 
+
+def lifecycle_summary(value):
+    """Bound identity-only lifecycle fields; never project arbitrary result/input data."""
+    def identities(rows, keys):
+        if rows is None: return None
+        if not isinstance(rows, list): raise ValueError('lifecycle identity shape')
+        selected = []
+        for row in rows[:32]:
+            if not isinstance(row, dict): raise ValueError('lifecycle identity row')
+            item = {}
+            for key in keys:
+                entry = row.get(key)
+                if key == 'state':
+                    if type(entry) is not str or len(entry) != 1: raise ValueError('lifecycle state')
+                elif type(entry) is not int or entry < 0:
+                    raise ValueError('lifecycle identity')
+                item[key] = entry
+            selected.append(item)
+        return {'members':selected, 'omittedMembers':max(0,len(rows)-32)}
+    observation = (value.get('ownerReceipt') or {}).get('exitObservation')
+    projected = None
+    if observation is not None:
+        if not isinstance(observation, dict): raise ValueError('exit observation shape')
+        code = observation.get('code')
+        if type(code) is not int: raise ValueError('exit observation code')
+        omitted = observation.get('omittedMembers')
+        if omitted is not None and (type(omitted) is not int or omitted < 0): raise ValueError('exit omission shape')
+        projected = {'code':code, 'membership':identities(observation.get('members'), ('pid','start','pgid','state')),
+                     'omittedMembers':omitted}
+    stops = value.get('originalServerStopRequests')
+    projected_stops = None
+    if stops is not None:
+        if not isinstance(stops,list): raise ValueError('stop requests shape')
+        projected_stops = []
+        for stop in stops[:6]:
+            identity = identities([stop], ('pid','start','signal'))['members'][0]
+            disposition = stop.get('disposition')
+            if disposition not in ('sent','already-terminal'): raise ValueError('stop disposition')
+            projected_stops.append(dict(identity, disposition=disposition))
+    return {'serverBirths':identities(value.get('originalServerBirths'), ('pid','start')),
+            'adapterExitMembership':identities(value.get('exitMembers'), ('pid','start')),
+            'ownerExitObservation':projected, 'stopRequests':projected_stops,
+            'omittedStopRequests':None if stops is None else max(0,len(stops)-6)}
+
 def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MAX_OUTPUT):
     """Bound enumeration, nofollow reads, head/tail retention and output bytes."""
     if not 1024 <= max_output <= MAX_OUTPUT:
@@ -133,6 +177,7 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
                                 owned = value.get('ownerReceipt') or {}
                                 summary = {key:value.get(key) for key in ('schema','commandExit','commandAccepted','firstCause','additionalFailures')}
                                 summary['owner'] = {key:owned.get(key) for key in ('firstCause','additionalFailures','cleanup','custody','exit','birthIdentityUnavailable')}
+                                summary['lifecycle'] = lifecycle_summary(value)
                                 first = json.dumps(summary, ensure_ascii=True).encode()[:FILE_BYTES]
                                 last = b''
                             except (ValueError, TypeError, AttributeError):
@@ -195,7 +240,7 @@ def census(root,deadline,limit=DISK_LIMIT,clock=time.monotonic):
 
 COMMAND_SCHEMA = 'fsgg.canonical.owned-command/1'
 RESULT_SCHEMA = 'fsgg.canonical.command-result/1'
-OWNER_SHA = '14ba6985a1702419cc5c31fa76e165b2fd90164eb372ae91fe070a2b4a7c0057'
+OWNER_SHA = 'c07c9a6afedc2f977a9611772d52266f298b9fd136378511fd3f4c6ba52e76db'
 TOOLCHAIN_ID = '79b32dacc5bb150e23c4017eef16f3f688cde062441583d5ea1ffa5cc9e62486'
 
 
@@ -306,19 +351,48 @@ def extraction_receipt_join(receipt, manifest_sha):
     return {'extractionAccepted': True, 'compilerAccepted': False, 'ciAccepted': False}
 
 
-def expected_server_retirement(receipt, server_births, exit_members):
+def expected_server_retirement(receipt, server_births, exit_members, stop_requests):
     """Only the explicitly observed original server may explain live-child retirement."""
     if receipt['firstCause'] != 'RuntimeError: child exited with live owned-group descendants':
         return receipt['firstCause'] is None
-    return (len(server_births) == 1 and receipt['exit'] == 0
-            and set(exit_members) == set(server_births))
+    return (exit_members is not None and len(server_births) == 1 and receipt['exit'] == 0
+            and set(exit_members) == set(server_births) and len(stop_requests) == 1
+            and (stop_requests[0]['pid'], stop_requests[0]['start']) in server_births
+            and stop_requests[0]['signal'] == signal.SIGTERM
+            and stop_requests[0]['disposition'] in ('sent', 'already-terminal'))
+
+
+def retire_original_server(owner, child, leader, servers, handles, stop_requests, checkpoint, known, maximum_generations, membership_observation):
+    """Fresh post-exit membership and held pidfd only; unknown/live status refuses."""
+    if child.returncode is None: raise ValueError('server retirement without observed child exit')
+    rows = owner.census(leader['pgid'])
+    members = {(row['pid'], row['start']) for row in rows}
+    membership_observation['members'] = members
+    known.update(members)
+    if len(known) + 1 > maximum_generations: raise ValueError('generation cap')
+    # The role owns exactly its authenticated compiler server. A running leader
+    # sampled before the owner poll cannot participate in this fresh census.
+    if child.returncode == 0 and len(servers) == 1 and members == servers and not stop_requests:
+        birth = next(iter(servers)); checkpoint()
+        fresh = owner.proc(birth[0])
+        if fresh is None: return members
+        if (fresh['start'], fresh['pgid']) != (birth[1], leader['pgid']):
+            raise ValueError('server retirement birth join')
+        try:
+            signal.pidfd_send_signal(handles[birth], signal.SIGTERM)
+            disposition = 'sent'
+        except ProcessLookupError:
+            disposition = 'already-terminal'
+        stop_requests.append({'pid':birth[0], 'start':birth[1], 'signal':15,
+                              'disposition':disposition, 'at':time.monotonic()})
+    return members
 
 
 def execute_command(seconds, log_path, endpoint, argv):
     """Existing canonical adapter with one exact shared owner; no nested supervisor."""
     started = time.monotonic(); first = None; additional = []; receipt = None; returned = None
     output = Path(log_path).absolute(); owner_path = Path(__file__).with_name('shared_process_owner.py')
-    spec = None; servers = set(); known = set(); original_exit = 1; exit_members = set()
+    spec = None; servers = set(); known = set(); original_exit = 1; exit_members = {'members':None}
     server_handles = {}; stop_requests = []; disk_samples = []; disk_omitted = 0; last_disk = None
     mutable_root = Path.cwd()
     def sample_disk(cutoff, force=False):
@@ -349,7 +423,6 @@ def execute_command(seconds, log_path, endpoint, argv):
                     found.add(fields[9])
         return found
     def control(event, child, leader, observed):
-        nonlocal exit_members
         if event == 'after-cleanup': return
         checkpoint()
         sample_disk(spec['workDeadline'], force=event in ('before-popen','after-birth','before-success'))
@@ -374,19 +447,8 @@ def execute_command(seconds, log_path, endpoint, argv):
                             os.close(handle); raise ValueError('server pidfd birth join')
                         server_handles[birth] = handle
         if matched != inodes: raise ValueError('foreign endpoint listener')
-        if child.poll() is not None:
-            exit_members = {(row['pid'], row['start']) for row in rows}
-            # This role owns exactly its authenticated compiler server. Retirement
-            # is requested on its held handle, never on a PID parsed from a log.
-            if child.returncode == 0 and len(servers) == 1 and exit_members == servers and not stop_requests:
-                birth = next(iter(servers)); checkpoint()
-                try:
-                    signal.pidfd_send_signal(server_handles[birth], signal.SIGTERM)
-                    disposition = 'sent'
-                except ProcessLookupError:
-                    disposition = 'already-terminal'
-                stop_requests.append({'pid':birth[0], 'start':birth[1], 'signal':15,
-                                      'disposition':disposition, 'at':time.monotonic()})
+        if event == 'child-exit-observed':
+            retire_original_server(owner, child, leader, servers, server_handles, stop_requests, checkpoint, known, spec['maximumGenerations'], exit_members)
     try:
         seconds, endpoint = int(seconds), int(endpoint)
         argv = list(argv)
@@ -449,7 +511,7 @@ def execute_command(seconds, log_path, endpoint, argv):
             # Count both retained log and its public copy, reserving metadata.
             log_cap = (spec['logBytes'] - 384 * 1024) // 2
             returned = owner.run(actual_argv, os.getcwd(), env, spec['workDeadline'], 30, spec['rssBytes'],
-                                 str(output), log_cap, control=control)
+                                 str(output), log_cap, control=control, observe_child_exit=True)
         except BaseException as error: stage_error = error
         try:
             receipt = json.loads(Path(str(output)+'.result.json').read_text())
@@ -467,7 +529,7 @@ def execute_command(seconds, log_path, endpoint, argv):
                 raise stage_error
             raise ValueError('owner receipt identity')
         original_exit = receipt['exit'] if receipt['exit'] is not None else 1
-        if stage_error is not None and not expected_server_retirement(receipt, servers, exit_members): raise stage_error
+        if stage_error is not None and not expected_server_retirement(receipt, servers, exit_members['members'], stop_requests): raise stage_error
         if (receipt['birthIdentityUnavailable'] or receipt['custody'] != 'observed-owned-group'
                 or receipt['cleanup'] != 'observed-empty-group' or receipt['residual'] or receipt['escapedResidual']
                 or receipt['additionalFailures'] or time.monotonic() >= spec['totalDeadline']):
@@ -499,6 +561,7 @@ def execute_command(seconds, log_path, endpoint, argv):
                   firstCause=failure_record(first), additionalFailures=additional,
                   ownerReceipt=receipt, originalServerBirths=[{'pid':p, 'start':s} for p,s in sorted(servers)],
                   originalServerStopRequests=stop_requests,
+                  exitMembers=None if exit_members['members'] is None else [{'pid':p, 'start':s} for p,s in sorted(exit_members['members'])],
                   diskSamples=disk_samples, omittedDiskSamples=disk_omitted,
                   input=spec, cleanupObservedAt=time.monotonic(), modelCheckingRequired=True,
                   limitation='sampled owned group; no hard containment or descendant reaping')

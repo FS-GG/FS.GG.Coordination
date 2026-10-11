@@ -337,6 +337,122 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
+    def test_actual_retirement_path_fresh_sole_server_and_live_unknown_foreign_refusals(self):
+        from unittest.mock import Mock, patch
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        leader={'pid':101,'start':20,'pgid':101,'state':'S'}
+        for kind in ('sole','empty','foreign','multiple','replaced','changed-group','unknown','live','nonzero','generation-cap'):
+            with self.subTest(kind=kind):
+                child=Mock(returncode=None if kind == 'live' else 37 if kind == 'nonzero' else 0)
+                rows=[] if kind == 'empty' else [server,leader] if kind in ('foreign','multiple') else [server]
+                owner=Mock(); owner.census.return_value=rows
+                owner.proc.return_value=dict(server,start=22) if kind == 'replaced' else dict(server,pgid=999) if kind == 'changed-group' else server
+                if kind == 'unknown': owner.proc.side_effect=PermissionError('unknown birth')
+                servers={(102,21),(103,22)} if kind == 'multiple' else {(102,21)}
+                stops=[]; known=set(); checkpoint=Mock(); observation={'members':None}
+                with patch.object(module.signal,'pidfd_send_signal') as send:
+                    args=(owner,child,leader,servers,{(102,21):77},stops,checkpoint,known,1 if kind == 'generation-cap' else 6,observation)
+                    if kind in ('replaced','changed-group','unknown','live','generation-cap'):
+                        with self.assertRaises((ValueError,PermissionError)): module.retire_original_server(*args)
+                    else:
+                        members=module.retire_original_server(*args)
+                        self.assertEqual({(r['pid'],r['start']) for r in rows},members)
+                    if kind == 'sole':
+                        send.assert_called_once_with(77,module.signal.SIGTERM)
+                        self.assertEqual((102,21),(stops[0]['pid'],stops[0]['start']))
+                    else:
+                        send.assert_not_called(); self.assertEqual([],stops)
+                    child.poll.assert_not_called()
+                    if kind == 'live': self.assertIsNone(observation['members'])
+                    else: self.assertEqual({(r['pid'],r['start']) for r in rows},observation['members'])
+
+    def test_opt_in_owner_exit_hook_precedes_fresh_refusal_and_preserves_default_events(self):
+        from unittest.mock import Mock, patch
+        for opt_in in (False, True):
+            for remaining in ([], [{'pid':102,'start':21,'pgid':101,'state':'S','rss':1}]):
+                with self.subTest(opt_in=opt_in, remaining=remaining), tempfile.TemporaryDirectory() as tmp:
+                    spec = importlib.util.spec_from_file_location('fixture_owner', ROOT / 'eng/shared_process_owner.py')
+                    owner = importlib.util.module_from_spec(spec); spec.loader.exec_module(owner)
+                    leader = {'pid':101,'start':20,'pgid':101,'ppid':os.getpid(),'state':'S','rss':1}
+                    child = Mock(pid=101, returncode=0); child.poll.return_value=0
+                    events = []; observations = []
+                    def hook(event, child, birth, known):
+                        events.append(event)
+                        if event == 'child-exit-observed':
+                            self.assertGreater(child.poll.call_count,0)
+                            self.assertEqual(1, census.call_count)
+                            observations.append(dict(known))
+                    with patch.object(owner.subprocess,'Popen',return_value=child), \
+                         patch.object(owner,'proc',side_effect=lambda pid: leader if pid == 101 else dict(leader,pid=pid,pgid=pid)), \
+                         patch.object(owner,'census',side_effect=[[leader],remaining,[],[],[]]) as census, \
+                         patch.object(owner,'observed_escapes',return_value=[]), \
+                         patch.object(owner.os,'killpg') as killpg:
+                        log = str(Path(tmp)/'run.log')
+                        if remaining:
+                            with self.assertRaisesRegex(RuntimeError,'live owned-group descendants'):
+                                owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,log,
+                                          control=hook,observe_child_exit=opt_in)
+                        else:
+                            owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,log,
+                                      control=hook,observe_child_exit=opt_in)
+                    self.assertEqual(opt_in,'child-exit-observed' in events)
+                    self.assertEqual(['before-popen','after-birth','poll'],events[:3])
+                    self.assertEqual('after-cleanup',events[-1])
+                    receipt = json.loads(Path(log+'.result.json').read_text())
+                    self.assertEqual(remaining and [{'pid':102,'start':21,'pgid':101,'state':'S'}] or [],receipt['exitObservation']['members'])
+                    self.assertEqual('observed-empty-group',receipt['cleanup'])
+
+    def test_unknown_birth_and_hook_failure_do_not_license_terminal_success(self):
+        from unittest.mock import Mock, patch
+        for unknown in (False,True):
+            with self.subTest(unknown=unknown), tempfile.TemporaryDirectory() as tmp:
+                spec = importlib.util.spec_from_file_location('fixture_owner', ROOT / 'eng/shared_process_owner.py')
+                owner = importlib.util.module_from_spec(spec); spec.loader.exec_module(owner)
+                leader = {'pid':101,'start':20,'pgid':101,'ppid':os.getpid(),'state':'S','rss':1}
+                child=Mock(pid=101,returncode=0); child.poll.return_value=0
+                original=PermissionError('terminal observation unavailable'); events=[]
+                def hook(event,*args):
+                    events.append(event)
+                    if event == 'child-exit-observed': raise original
+                with patch.object(owner.subprocess,'Popen',return_value=child), \
+                     patch.object(owner,'proc',side_effect=lambda pid: None if unknown else dict(leader,pid=pid)), \
+                     patch.object(owner,'census',return_value=[]), \
+                     patch.object(owner,'observed_escapes',return_value=[]), \
+                     patch.object(owner.os,'killpg') as killpg, patch.object(owner.os,'kill') as kill:
+                    log=str(Path(tmp)/'run.log')
+                    with self.assertRaises(BaseException) as caught:
+                        owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,log,
+                                  control=hook,observe_child_exit=True)
+                    if unknown:
+                        self.assertNotIn('child-exit-observed',events)
+                        killpg.assert_not_called(); kill.assert_not_called()
+                    else:
+                        self.assertIs(original,caught.exception)
+                receipt=json.loads(Path(log+'.result.json').read_text())
+                self.assertEqual(unknown,receipt['birthIdentityUnavailable'])
+                self.assertIsNone(receipt['exitObservation'] if unknown else receipt['exitObservation']['members'])
+
+    def test_lifecycle_projection_preserves_unknown_empty_and_refusing_identity(self):
+        unknown=module.lifecycle_summary({'ownerReceipt':{}})
+        self.assertIsNone(unknown['adapterExitMembership'])
+        self.assertIsNone(unknown['ownerExitObservation'])
+        value={'originalServerBirths':[{'pid':102,'start':21,'private':'NEVER COPY'}],
+               'exitMembers':[], 'originalServerStopRequests':[],
+               'ownerReceipt':{'exitObservation':{'code':0,'members':[{'pid':103,'start':22,'pgid':101,'state':'S','private':'NEVER COPY'}], 'omittedMembers':0}},
+               'input':{'private':'NEVER COPY'}}
+        summary=module.lifecycle_summary(value)
+        self.assertEqual([],summary['adapterExitMembership']['members'])
+        self.assertEqual(103,summary['ownerExitObservation']['membership']['members'][0]['pid'])
+        self.assertNotIn('NEVER COPY',json.dumps(summary))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); scratch=root/'scratch'; scratch.mkdir()
+            value.update(schema=module.RESULT_SCHEMA,commandExit=0,commandAccepted=False,firstCause={'type':'RuntimeError','message':'live owned-group descendants'},additionalFailures=[])
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value))
+            artifact=module.capture(scratch,root/'diagnostics',1)
+            retained=json.loads(artifact['logs'][0]['text'])
+            self.assertEqual(summary,retained['lifecycle'])
+            self.assertNotIn('NEVER COPY',json.dumps(artifact))
+
     def test_denied_fd_observation_requires_fresh_terminal_original_birth(self):
         from unittest.mock import Mock, patch
         row = dict(pid=101, start=20, pgid=101, state='R')
@@ -440,13 +556,15 @@ class CommandInterfaceControls(unittest.TestCase):
 
     def test_expected_server_retirement_cannot_accept_foreign_live_descendants(self):
         receipt = {'exit':0,'firstCause':'RuntimeError: child exited with live owned-group descendants'}
-        self.assertTrue(module.expected_server_retirement(receipt,{(101,20)},{(101,20)}))
+        stops = [{'pid':101,'start':20,'signal':15,'disposition':'sent'}]
+        self.assertTrue(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},stops))
+        self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},[]))
         for servers, members in [(set(),set()), ({(101,20)},{(101,20),(102,21)}),
-                                 ({(101,20)},{(101,19)}), ({(101,20),(102,21)},{(101,20),(102,21)})]:
+                                 ({(101,20)},{(101,19)}), ({(101,20)},None), ({(101,20),(102,21)},{(101,20),(102,21)})]:
             with self.subTest(servers=servers,members=members):
-                self.assertFalse(module.expected_server_retirement(receipt,servers,members))
+                self.assertFalse(module.expected_server_retirement(receipt,servers,members,stops))
         receipt['exit'] = 37
-        self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)}))
+        self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},stops))
 
     def test_first_failure_projection_is_serializable_bounded_and_filters_secrets(self):
         original = module.failure_record(RuntimeError('original compiler failure'))

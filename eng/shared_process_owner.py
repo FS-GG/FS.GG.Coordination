@@ -40,11 +40,12 @@ def observed_escapes(leader, known):
     return [r for r in all_rows if known.get(r['pid'])==r['start'] and r['pgid']!=leader['pgid'] and r['state']!='Z']
 
 def run(argv, cwd, env, deadline, cleanup_seconds, rss_limit, out,
-        output_cap=10*1024*1024, control=None):
-    """Retain a receipt even when a spawned child's birth cannot be authenticated."""
+        output_cap=10*1024*1024, control=None, observe_child_exit=False):
+    """Retain birth/custody evidence; opt-in terminal hook precedes fresh refusal census."""
     inherited=os.getpid(); output=pathlib.Path(out); output.parent.mkdir(exist_ok=True)
     leader=None; child=None; known={}; escaped=[]; rows=[]; residual=[]; escape_residual=[]
     primary=None; additional=[]; peak=0; cleanup='unknown'; result=None; birth_unknown=False
+    exit_observation=None
     hook=control if control is not None else lambda event, child, leader, known: None
     log=output.open('xb')
     try:
@@ -73,7 +74,13 @@ def run(argv, cwd, env, deadline, cleanup_seconds, rss_limit, out,
             if time.monotonic()>=deadline:raise TimeoutError('original stage deadline exhausted')
             code=child.poll()
             if code is not None:
+                # Existing users retain their event set. The opted-in hook observes
+                # terminal status before the owner makes its fresh refusal decision.
+                exit_observation={'code':code,'members':None,'omittedMembers':None}
+                if observe_child_exit:hook('child-exit-observed',child,leader,known)
                 rows=census(child.pid)
+                exit_observation['members']=[{k:r[k] for k in ('pid','start','pgid','state')} for r in rows[:32]]
+                exit_observation['omittedMembers']=max(0,len(rows)-32)
                 if rows:raise RuntimeError('child exited with live owned-group descendants')
                 if code:raise RuntimeError('command failed with exit '+str(code))
                 break
@@ -130,7 +137,7 @@ def run(argv, cwd, env, deadline, cleanup_seconds, rss_limit, out,
             if primary is None:primary=error
             else:additional.append('output-close:'+describe(error))
         result={'argv':argv,'leader':leader,'ownedPopenPid':child.pid if child else None,
-            'birthIdentityUnavailable':birth_unknown,'exit':final_exit,
+            'birthIdentityUnavailable':birth_unknown,'exit':final_exit,'exitObservation':exit_observation,
             'firstCause':describe(primary) if primary else None,
             'additionalFailures':additional,'cleanup':cleanup,'residual':residual,
             'escapedDescendants':escaped,'escapedResidual':escape_residual,
