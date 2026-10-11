@@ -337,6 +337,80 @@ class ParityDiagnosticControls(unittest.TestCase):
 
 
 class CommandInterfaceControls(unittest.TestCase):
+    def test_current_endpoint_proof_prioritizes_server_without_reading_irrelevant_denied_leader(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        rows=[leader,server]; owner=Mock(); owner.census.side_effect=[list(rows),list(rows)]
+        owner.proc.return_value=server; child=Mock(pid=101,returncode=None)
+        known=set(); servers={(102,21)}; handles={(102,21):7}; original=PermissionError('live leader FD denial')
+        def targets(row,*args,**kwargs):
+            if row['pid'] == 101: raise original
+            return ['socket:[123]']
+        listeners=Mock(side_effect=[{'123'},{'123'}])
+        with patch.object(module,'owned_fd_targets',side_effect=targets) as reads:
+            module.observe_endpoint_ownership(owner,child,leader,servers,handles,known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
+        self.assertEqual([102],[call.args[0]['pid'] for call in reads.call_args_list])
+        self.assertEqual({(101,20),(102,21)},known)
+        self.assertEqual(2,owner.census.call_count); self.assertEqual(2,listeners.call_count)
+        child.poll.assert_not_called(); owner.proc.assert_called_once_with(102)
+
+    def test_empty_endpoint_still_observes_both_censuses_and_listener_stability(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        for disposition in ('empty','listener-appeared','unknown-census','generation-cap'):
+            with self.subTest(disposition=disposition):
+                owner=Mock(); known=set(); rows=[leader]
+                if disposition == 'generation-cap': rows += [dict(leader,pid=i,start=i) for i in range(102,107)]
+                original=PermissionError('fresh custody census unknown')
+                owner.census.side_effect=[list(rows),original if disposition == 'unknown-census' else list(rows)]
+                listeners=Mock(side_effect=[set(),{'999'} if disposition == 'listener-appeared' else set()])
+                with patch.object(module,'owned_fd_targets') as reads:
+                    if disposition == 'empty':
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,set(),{},known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
+                        self.assertEqual(2,owner.census.call_count); self.assertEqual(2,listeners.call_count)
+                    else:
+                        with self.assertRaises(PermissionError if disposition == 'unknown-census' else ValueError) as caught:
+                            module.observe_endpoint_ownership(owner,Mock(pid=101),leader,set(),{},known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
+                        if disposition == 'unknown-census': self.assertIs(original,caught.exception)
+                    reads.assert_not_called()
+
+    def test_endpoint_proof_refuses_replaced_unknown_changed_or_unmatched_ownership(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        for disposition in ('replaced','changed-group','unknown-birth','membership-changed','listener-changed','foreign-inode','needed-denial'):
+            with self.subTest(disposition=disposition):
+                original=PermissionError('required FD ownership denied')
+                owner=Mock(); owner.census.side_effect=[[leader,server],[leader] if disposition == 'membership-changed' else [leader,server]]
+                owner.proc.side_effect=original if disposition == 'unknown-birth' else None
+                owner.proc.return_value=dict(server,start=22) if disposition == 'replaced' else dict(server,pgid=999) if disposition == 'changed-group' else server
+                inodes={'123','999'} if disposition == 'foreign-inode' else {'123'}
+                listeners=Mock(side_effect=[inodes,{'456'} if disposition == 'listener-changed' else inodes])
+                def targets(row,*args,**kwargs):
+                    if disposition == 'needed-denial' or row['pid'] == 101: raise original
+                    return ['socket:[123]']
+                with patch.object(module,'owned_fd_targets',side_effect=targets):
+                    with self.assertRaises(PermissionError if disposition in ('unknown-birth','foreign-inode','needed-denial') else ValueError) as caught:
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0})
+                    if disposition in ('unknown-birth','foreign-inode','needed-denial'): self.assertIs(original,caught.exception)
+
+    def test_endpoint_proof_retains_foreign_custody_member_for_refusing_retirement(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        foreign={'pid':103,'start':22,'pgid':101,'state':'S'}
+        owner=Mock(); owner.census.side_effect=[[leader,server],[leader,server,foreign],[server,foreign]]
+        owner.proc.return_value=server; known=set(); servers={(102,21)}; handles={(102,21):7}; stops=[]; observed={'members':None}
+        with patch.object(module,'owned_fd_targets',return_value=['socket:[123]']), patch.object(module.signal,'pidfd_send_signal') as signals:
+            module.observe_endpoint_ownership(owner,Mock(pid=101),leader,servers,handles,known,Mock(),6,Mock(side_effect=[{'123'},{'123'}]),[],{'entries':[],'omitted':0})
+            self.assertIn((103,22),known)
+            module.retire_original_server(owner,Mock(returncode=0),leader,servers,handles,stops,Mock(),known,6,observed)
+            signals.assert_not_called()
+        receipt={'firstCause':'RuntimeError: child exited with live owned-group descendants','exit':0,'leader':leader,
+                 'exitObservation':{'code':0,'members':[server,foreign],'omittedMembers':0}}
+        self.assertFalse(module.expected_server_retirement(receipt,servers,observed['members'],stops))
+
     def test_denied_fd_direct_child_probe_requires_fresh_terminal_original_birth(self):
         from unittest.mock import Mock, patch
         row={'pid':101,'start':20,'pgid':101,'state':'R'}

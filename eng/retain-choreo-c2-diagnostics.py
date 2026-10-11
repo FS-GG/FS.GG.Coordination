@@ -464,6 +464,53 @@ def retire_original_server(owner, child, leader, servers, handles, stop_requests
     return members
 
 
+def observe_endpoint_ownership(owner, child, leader, servers, handles, known, checkpoint,
+                               maximum_generations, listener_inodes, additional, fd_denials):
+    """Fresh current-listener ownership, independently of full group custody census."""
+    def membership():
+        checkpoint()
+        rows = owner.census(leader['pgid'])
+        checkpoint()
+        known.update((row['pid'], row['start']) for row in rows)
+        if len(known) + 1 > maximum_generations: raise ValueError('generation cap')
+        return rows
+    rows = membership()
+    inodes = listener_inodes(); checkpoint(); matched = set(); proved = set()
+    # Previously authenticated server births are candidates, never reusable proof.
+    # Each current inode still needs a new FD read and a fresh birth/group join.
+    rows.sort(key=lambda row: (row['pid'], row['start']) not in handles)
+    for row in rows:
+        if matched == inodes: break
+        checkpoint()
+        def terminal_probe():
+            checkpoint()
+            return child.poll()
+        probe = terminal_probe if (child.pid == leader['pid'] == row['pid']
+                and row['start'] == leader['start'] and row['pgid'] == leader['pgid']) else None
+        for target in owned_fd_targets(row, owner.proc, additional,
+                                      terminal_probe=probe, denial_observations=fd_denials):
+            if target.startswith('socket:[') and target[8:-1] in inodes:
+                fresh = owner.proc(row['pid'])
+                if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
+                    raise ValueError('server birth join')
+                birth = (row['pid'], row['start'])
+                matched.add(target[8:-1]); servers.add(birth); proved.add(birth)
+                if birth not in handles:
+                    handle = os.pidfd_open(row['pid'])
+                    after = owner.proc(row['pid'])
+                    if after is None or (after['start'], after['pgid']) != (row['start'], leader['pgid']):
+                        os.close(handle); raise ValueError('server pidfd birth join')
+                    handles[birth] = handle
+    # Empty endpoints still require both complete custody censuses and a stable
+    # listener snapshot. No callback, generation or retirement obligation is skipped.
+    after_rows = membership()
+    after_births = {(row['pid'],row['start']) for row in after_rows if row['pgid'] == leader['pgid']}
+    if not proved <= after_births: raise ValueError('server membership changed during endpoint observation')
+    after_inodes = listener_inodes(); checkpoint()
+    if after_inodes != inodes: raise ValueError('endpoint listeners changed during ownership observation')
+    if matched != inodes: raise ValueError('foreign endpoint listener')
+
+
 def execute_command(seconds, log_path, endpoint, argv):
     """Existing canonical adapter with one exact shared owner; no nested supervisor."""
     started = time.monotonic(); first = None; additional = []; receipt = None; returned = None
@@ -505,34 +552,8 @@ def execute_command(seconds, log_path, endpoint, argv):
         sample_disk(spec['workDeadline'], force=event in ('before-popen','after-birth','before-success'))
         if event == 'before-popen' and listeners(): raise ValueError('endpoint already listening')
         if leader is None: return
-        rows = owner.census(leader['pgid'])
-        known.update((row['pid'], row['start']) for row in rows)
-        if len(known) + 1 > spec['maximumGenerations']: raise ValueError('generation cap')
-        inodes = listeners(); matched = set()
-        for row in rows:
-            def terminal_probe():
-                checkpoint()
-                return child.poll()
-            # Match the original authenticated owner leader before allowing its
-            # existing Popen to reap. The owner will still observe terminal code
-            # itself and invoke its required opt-in retirement callback.
-            probe = terminal_probe if (child.pid == leader['pid'] == row['pid']
-                    and row['start'] == leader['start'] and row['pgid'] == leader['pgid']) else None
-            for target in owned_fd_targets(row, owner.proc, additional,
-                                          terminal_probe=probe, denial_observations=fd_denials):
-                if target.startswith('socket:[') and target[8:-1] in inodes:
-                    fresh = owner.proc(row['pid'])
-                    if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
-                        raise ValueError('server birth join')
-                    matched.add(target[8:-1]); servers.add((row['pid'], row['start']))
-                    birth = (row['pid'], row['start'])
-                    if birth not in server_handles:
-                        handle = os.pidfd_open(row['pid'])
-                        after = owner.proc(row['pid'])
-                        if after is None or (after['start'], after['pgid']) != (row['start'], leader['pgid']):
-                            os.close(handle); raise ValueError('server pidfd birth join')
-                        server_handles[birth] = handle
-        if matched != inodes: raise ValueError('foreign endpoint listener')
+        observe_endpoint_ownership(owner, child, leader, servers, server_handles, known,
+                                   checkpoint, spec['maximumGenerations'], listeners, additional, fd_denials)
         if event == 'child-exit-observed':
             retire_original_server(owner, child, leader, servers, server_handles, stop_requests, checkpoint, known, spec['maximumGenerations'], exit_members)
     try:
