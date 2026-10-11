@@ -1133,8 +1133,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
 
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
-    // One explicit failure-diagnostic collector binding joins the formal source inventory.
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 303)
+    // The finite census adds only Contracts and Contracts.Tests to the existing plan.
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 305)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
