@@ -276,7 +276,37 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
                                     summary['lifecycle'] = {'projectionFailure':failure_record(ValueError('lifecycle summary byte cap'))}
                                     coverage.append('lifecycle-byte-bound')
                                     encoded = json.dumps(summary, ensure_ascii=True).encode()
-                                first = encoded[:FILE_BYTES]
+                                if len(encoded) > FILE_BYTES:
+                                    # Never slice typed JSON. Retain the primary types/messages
+                                    # with explicit character omissions; omit secondary arrays.
+                                    # Two (40+224)-character causes use at most6336 escaped
+                                    # UTF-8 bytes, leaving room for fixed fields/counts below8192.
+                                    def bounded_cause(value):
+                                        if value is None: return None, None
+                                        if not isinstance(value,dict): return None, {'unavailable':True}
+                                        kind=str(value.get('type','')); message=str(value.get('message',''))
+                                        return {'type':kind[:40], 'message':message[:224]}, {
+                                            'typeCharacters':max(0,len(kind)-40),
+                                            'messageCharacters':max(0,len(message)-224),
+                                            'otherFields':len(set(value)-{'type','message'})}
+                                    primary, primary_omitted = bounded_cause(summary['firstCause'])
+                                    owner_primary, owner_omitted = bounded_cause(summary['owner']['firstCause'])
+                                    secondary = summary.get('additionalFailures')
+                                    owner_secondary = summary['owner'].get('additionalFailures')
+                                    summary = {'schema':RESULT_SCHEMA,
+                                        'commandExit':summary['commandExit'] if type(summary['commandExit']) is int and -255<=summary['commandExit']<=255 else None,
+                                        'commandAccepted':summary['commandAccepted'] if type(summary['commandAccepted']) is bool else None,
+                                        'firstCause':primary, 'additionalFailures':[],
+                                        'owner':{'firstCause':owner_primary,'additionalFailures':[]},
+                                        'lifecycle':{'projectionFailure':failure_record(ValueError('typed summary byte cap'))},
+                                        'omittedProjection':{'firstCause':primary_omitted,'ownerFirstCause':owner_omitted,
+                                            'additionalFailures':len(secondary) if isinstance(secondary,list) else None,
+                                            'ownerAdditionalFailures':len(owner_secondary) if isinstance(owner_secondary,list) else None,
+                                            'ownerFields':len(set(summary['owner'])-{'firstCause','additionalFailures'}), 'lifecycle':True}}
+                                    coverage.append('typed-summary-byte-bound')
+                                    encoded = json.dumps(summary, ensure_ascii=True).encode()
+                                if len(encoded) > FILE_BYTES: raise ValueError('bounded typed summary exceeds byte cap')
+                                first = encoded
                                 last = b''
                             except (ValueError, TypeError, AttributeError):
                                 coverage.append('command-report-unavailable'); continue

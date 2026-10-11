@@ -499,6 +499,22 @@ class CommandInterfaceControls(unittest.TestCase):
             retained=json.loads(artifact['logs'][0]['text'])
             self.assertEqual(cause,retained['firstCause']); self.assertIn('lifecycle-byte-bound',artifact['omittedCoverage'])
             self.assertEqual('lifecycle summary byte cap',retained['lifecycle']['projectionFailure']['message'])
+            # Non-lifecycle overflow must also remain complete typed JSON.
+            large_message='original primary observation '+('\u2603'*16000)
+            cause={'type':'PermissionError','message':large_message}
+            value={'schema':module.RESULT_SCHEMA,'commandExit':0,'commandAccepted':False,
+                   'firstCause':cause,'additionalFailures':[{'type':'ValueError','message':'secondary '*100} for _ in range(8)],
+                   'ownerReceipt':{'firstCause':cause,'additionalFailures':[{'type':'RuntimeError','message':'owner secondary '*100} for _ in range(7)]}}
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value,ensure_ascii=False))
+            artifact=module.capture(scratch,root/'overflow-diagnostics',1)
+            retained=json.loads(artifact['logs'][0]['text'])
+            self.assertEqual({'type':'PermissionError','message':large_message[:224]},retained['firstCause'])
+            self.assertEqual(retained['firstCause'],retained['owner']['firstCause'])
+            omissions=retained['omittedProjection']
+            self.assertEqual(len(large_message)-224,omissions['firstCause']['messageCharacters'])
+            self.assertEqual(8,omissions['additionalFailures']); self.assertEqual(7,omissions['ownerAdditionalFailures'])
+            self.assertIn('typed-summary-byte-bound',artifact['omittedCoverage'])
+            self.assertLessEqual(len(artifact['logs'][0]['text'].encode()),module.FILE_BYTES)
 
     def test_denied_fd_direct_child_probe_requires_fresh_terminal_original_birth(self):
         from unittest.mock import Mock, patch
