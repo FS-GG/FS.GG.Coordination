@@ -203,6 +203,8 @@ exit 0
     def test_collector_is_in_formal_source_identity_and_only_existing_artifact(self):
         plan = json.loads((ROOT / 'eng/bootstrap-qualification-plan.json').read_text())
         self.assertIn('eng/retain-choreo-c2-diagnostics.py', plan['formalReuse']['exactPaths'])
+        self.assertIn('eng/shared_process_owner.py', plan['formalReuse']['exactPaths'])
+        self.assertIn('eng/run-choreo-c2-tlc.sh', plan['formalReuse']['exactPaths'])
         script = (ROOT / 'eng/optimistic-run-formal-fragment.sh').read_text()
         self.assertIn('FSGG_CHOREO_DIAGNOSTIC_ROOT="$fragment/choreo-failure-diagnostics"', script)
 
