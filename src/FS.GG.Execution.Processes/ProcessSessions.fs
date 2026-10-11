@@ -16,7 +16,7 @@ module ProcessSessions =
     // No callbacks, registry or detached reaper: the caller owns this object before Run.
     // Every asynchronous BCL operation and its Process remain fields of that object.
     type private Session(command: CommandSpec, identity: OperationIdentity, budget: ExecutionBudget,
-                         clock: IMonotonicClock, owner: OwnerReference, initial: LifecycleState, sink: IBoundedByteSink) =
+                         clock: IMonotonicClock, owner: OwnerReference, preparedAt: ClockStamp, initial: LifecycleState, sink: IBoundedByteSink) =
         let gate = obj()
         let mutable state = initial
         let mutable runConsumed = false
@@ -42,14 +42,24 @@ module ProcessSessions =
         let mutable stopTask: Task option = None
         let mutable privateFailure: Failure option = None
         let mutable omittedPrivateFailures = 0L
+        let mutable lastAcceptedClockTick = preparedAt.Ticks
 
         let increment value = if value = Int64.MaxValue then value else value + 1L
         let remember code =
             let failure = { Phase = (Lifecycle.snapshot state).Phase; Diagnostic = note code; At = None }
             if privateFailure.IsNone then privateFailure <- Some failure
             else omittedPrivateFailures <- increment omittedPrivateFailures
+        // Every caller holds gate. Passive observations and every subsequent effect
+        // share one accepted clock watermark; discarding a snapshot transition cannot
+        // discard the monotonic history that constrains a later launch or stop.
         let now () =
-            try Ok(clock.Now())
+            try
+                let at = clock.Now()
+                match Budget.remaining at budget with
+                | Ok _ when at.Ticks >= lastAcceptedClockTick ->
+                    lastAcceptedClockTick <- at.Ticks
+                    Ok at
+                | _ -> remember "clock-observation-refused"; Error()
             with _ -> remember "clock-observation-failed"; Error()
         let applyAt at event =
             match Lifecycle.apply at event state with
@@ -333,6 +343,28 @@ module ProcessSessions =
                     snapshot())
             }
 
+        let observeNow (cancellation: CancellationToken) : Task<ExecutionResult> =
+            let observed =
+                lock gate (fun () ->
+                    if cancellation.IsCancellationRequested && not released then stop CallerCancellation
+                    match now() with
+                    | Ok at ->
+                        // Validate against the reducer's accepted clock history without committing
+                        // ReturnRequested: an observation must not close a prepared/in-flight launch.
+                        match Lifecycle.apply at ReturnRequested state, budgetAt at with
+                        | Ok _, Ok view ->
+                            if view.WorkExpired && not (allSettled()) && (Lifecycle.snapshot state).Stop = NotRequested then
+                                stop WorkDeadline
+                            ensureStop()
+                            // Prepared NoEffect is not terminal cleanup. Refresh only once Run or
+                            // an explicit stop has consumed the launch/retirement decision.
+                            if runConsumed || (Lifecycle.snapshot state).Stop <> NotRequested then
+                                refreshCleanup()
+                        | _ -> remember "observation-clock-refused"
+                    | Error _ -> ()
+                    snapshot())
+            Task.FromResult observed
+
         interface IProcessSession with
             member _.Identity = identity
             member _.Owner = owner
@@ -352,7 +384,7 @@ module ProcessSessions =
                             | Error _ -> remember "launch-clock-refused"
                         | Error _ -> ())
                 boundedObserve false cancellation
-            member _.ObserveAsync cancellation = boundedObserve true cancellation
+            member _.ObserveAsync cancellation = observeNow cancellation
             member _.RequestStopAsync(reason,cancellation) =
                 let observed =
                     lock gate (fun () ->
@@ -430,12 +462,13 @@ module ProcessSessions =
                                 { Disposition = Incomplete; RequestedActions = []; LeaderTermination = Unknown(note "unstarted")
                                   WorkloadEmpty = Unknown(note "unsupported"); OwnedChildrenReaped = Unknown(note "unsupported")
                                   LocalTasks = Unknown(note "unstarted"); Unresolved = []; OmittedUnresolved = 0L; Custody = RetainedByOwner owner }
-                        let clockErrors =
+                        let preparedAt,clockErrors =
                             try
-                                match Budget.remaining (clock.Now()) budget with
-                                | Ok view when not view.WorkExpired -> []
-                                | _ -> [error "invalid-live-budget" "budget"]
-                            with _ -> [error "invalid-live-clock" "clock"]
+                                let at = clock.Now()
+                                match Budget.remaining at budget with
+                                | Ok view when not view.WorkExpired -> Some at,[]
+                                | _ -> None,[error "invalid-live-budget" "budget"]
+                            with _ -> None,[error "invalid-live-clock" "clock"]
                         let errors = ownerErrors @ unsupported @ resourceErrors @ clockErrors
                                      @ (if OperatingSystem.IsLinux() then [] else [error "unsupported-platform" "platform"])
                         if not errors.IsEmpty then Error errors
@@ -443,8 +476,9 @@ module ProcessSessions =
                             // Copy caller-owned input before retaining it; all other request collections
                             // are immutable validated F# values, and capture allocates only after refusal.
                             let copied = { command with Input = match command.Input with Closed -> Closed | Bytes bytes -> Bytes(ReadOnlyMemory<byte>(bytes.ToArray())) }
-                            match Lifecycle.prepare copied identity budget,BoundedOutput.create copied.Capture with
-                            | Ok initial,Ok sink -> Ok(Session(copied,identity,budget,clock,owner,initial,sink) :> IProcessSession)
-                            | Error errors,_ | _,Error errors -> Error errors
+                            match Lifecycle.prepare copied identity budget,BoundedOutput.create copied.Capture,preparedAt with
+                            | Ok initial,Ok sink,Some at -> Ok(Session(copied,identity,budget,clock,owner,at,initial,sink) :> IProcessSession)
+                            | Error errors,_,_ | _,Error errors,_ -> Error errors
+                            | _,_,None -> Error [error "invalid-live-clock" "clock"]
                 with
                 | :? ArgumentException | :? NullReferenceException | :? OverflowException -> Error [error "invalid-request" "request.structure"] }

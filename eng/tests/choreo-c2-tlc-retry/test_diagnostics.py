@@ -530,6 +530,148 @@ class CommandInterfaceControls(unittest.TestCase):
                 projected=module.lifecycle_summary({'endpointObservations':retained})
                 self.assertEqual(scan,projected['endpointObservations']['entries'][0]['fdScans'][0])
 
+    @staticmethod
+    def _endpoint_prior_proof(server):
+        members={'members':[dict(server)],'omittedMembers':0}
+        inodes={'values':['123'],'omitted':0}
+        return {'event':'poll','attempt':1,'disposition':'proved','failure':None,
+                'beforeMembers':members,'afterMembers':members,
+                'beforeInodes':dict(inodes),'afterInodes':dict(inodes),'matchedInodes':dict(inodes),
+                'fdScans':[{'before':dict(server),'disposition':'scanned','missingReadlinks':0,
+                            'socketInodes':dict(inodes)}]}
+
+    def test_known_unmatched_listener_disappearance_requires_second_full_stable_proof(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        owner=Mock(); owner.census.return_value=[server]; owner.proc.return_value=server
+        retained={'entries':[self._endpoint_prior_proof(server)],'omitted':0}; order=[]
+        sets=[{'123'},set(),set(),set()]
+        def listeners(): order.append('listener'); return sets.pop(0)
+        def targets(row,*args,**kwargs):
+            order.append('fd'); scan=kwargs['scan_observation']
+            scan['disposition']='scanned'; scan['socketInodes']={'values':['999'],'omitted':0}
+            return ['socket:[999]']
+        def census(group): order.append('census'); return [server]
+        owner.census.side_effect=census
+        with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+            module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+            signals.assert_not_called()
+        self.assertEqual(['changed','proved'],[entry['disposition'] for entry in retained['entries']])
+        self.assertEqual(4,owner.census.call_count)
+        self.assertEqual(['census','listener','fd','census','listener','census','listener','census','listener'],order)
+        first,second=retained['entries']
+        self.assertEqual({'type':'ValueError','message':'foreign endpoint listener'},first['failure'])
+        self.assertEqual(['123'],first['beforeInodes']['values']); self.assertEqual([],first['afterInodes']['values'])
+        self.assertEqual([],second['beforeInodes']['values']); self.assertEqual([],second['afterInodes']['values'])
+        self.assertEqual(1,len(first['fdScans'])); self.assertEqual([],second['fdScans'])
+        self.assertEqual([server],second['beforeMembers']['members']); self.assertEqual([server],second['afterMembers']['members'])
+
+    def test_unknown_mismatch_cannot_use_listener_disappearance_as_ownership(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        foreign=dict(server,pid=103,start=22)
+        for fault in ('foreign-member','replaced-member','missing-readlink','socket-omission','unknown-state','birth-replaced','birth-absent','unretained-handle','previous-error'):
+            with self.subTest(fault=fault):
+                owner=Mock(); owner.census.side_effect=[[server],[server,foreign] if fault=='foreign-member' else [dict(server,start=22)] if fault=='replaced-member' else [server]]
+                owner.proc.return_value=None if fault=='birth-absent' else dict(server,start=22) if fault=='birth-replaced' else dict(server,state='?') if fault=='unknown-state' else server
+                retained={'entries':[self._endpoint_prior_proof(server)],'omitted':0}; additional=[{'type':'PermissionError','message':'earlier unknown observation'}] if fault=='previous-error' else []
+                listeners=Mock(side_effect=[{'123'},set()])
+                def targets(row,*args,**kwargs):
+                    scan=kwargs['scan_observation']; scan['disposition']='scanned'
+                    scan['missingReadlinks']=1 if fault=='missing-readlink' else 0
+                    scan['socketInodes']={'values':['999'],'omitted':1 if fault=='socket-omission' else 0}
+                    return ['socket:[999]']
+                with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+                    with self.assertRaisesRegex(ValueError,'^foreign endpoint listener$'):
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{} if fault=='unretained-handle' else {(102,21):7},set(),Mock(),6,listeners,additional,{'entries':[],'omitted':0},retained)
+                    signals.assert_not_called()
+                self.assertEqual(2,len(retained['entries'])); self.assertEqual('refused',retained['entries'][-1]['disposition'])
+                self.assertEqual(2,listeners.call_count); self.assertEqual(2,owner.census.call_count)
+
+    def test_second_unmatched_disappearance_refuses_and_keeps_both_attempts(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}; server=dict(leader,pid=102,start=21,state='S')
+        owner=Mock(); owner.census.return_value=[server]; owner.proc.return_value=server
+        retained={'entries':[self._endpoint_prior_proof(server)],'omitted':0}; listeners=Mock(side_effect=[{'123'},set(),{'456'},set()])
+        def targets(row,*args,**kwargs):
+            scan=kwargs['scan_observation']; scan['disposition']='scanned'; scan['socketInodes']={'values':['999'],'omitted':0}
+            return ['socket:[999]']
+        with patch.object(module,'owned_fd_targets',side_effect=targets):
+            with self.assertRaisesRegex(ValueError,'^foreign endpoint listener$'):
+                module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+        self.assertEqual(['changed','refused'],[entry['disposition'] for entry in retained['entries']])
+        self.assertEqual(4,listeners.call_count); self.assertEqual(4,owner.census.call_count)
+
+    def test_disappearance_requires_exact_complete_prior_owned_inode_proof(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server=dict(leader,pid=102,start=21,state='S')
+        faults=('no-prior','prior-refused','prior-failure','prior-before-omitted',
+                'prior-after-changed','prior-matched-missing','prior-members-omitted',
+                'prior-members-changed','prior-foreign-group','prior-unknown-member',
+                'prior-replaced-birth','prior-scan-group','prior-scan-denied',
+                'prior-readlink-missing','prior-socket-omitted','prior-socket-foreign')
+        for fault in faults:
+            with self.subTest(fault=fault):
+                prior=self._endpoint_prior_proof(server)
+                if fault=='prior-refused': prior['disposition']='refused'
+                if fault=='prior-failure': prior['failure']={'type':'ValueError','message':'earlier refusal'}
+                if fault=='prior-before-omitted': prior['beforeInodes']['omitted']=1
+                if fault=='prior-after-changed': prior['afterInodes']['values']=['456']
+                if fault=='prior-matched-missing': prior['matchedInodes']['values']=[]
+                if fault=='prior-members-omitted': prior['beforeMembers']['omittedMembers']=1
+                if fault=='prior-members-changed': prior['afterMembers']={'members':[],'omittedMembers':0}
+                if fault=='prior-foreign-group': prior['beforeMembers']['members'][0]['pgid']=999
+                if fault=='prior-unknown-member': prior['beforeMembers']['members'][0]['state']='?'
+                scan=prior['fdScans'][0]
+                if fault=='prior-replaced-birth': scan['before']['start']=22
+                if fault=='prior-scan-group': scan['before']['pgid']=999
+                if fault=='prior-scan-denied': scan['disposition']='denied'
+                if fault=='prior-readlink-missing': scan['missingReadlinks']=1
+                if fault=='prior-socket-omitted': scan['socketInodes']['omitted']=1
+                if fault=='prior-socket-foreign': scan['socketInodes']['values']=['999']
+                retained={'entries':[] if fault=='no-prior' else [prior],'omitted':0}
+                owner=Mock(); owner.census.return_value=[server]; owner.proc.return_value=server
+                listeners=Mock(side_effect=[{'123'},set()])
+                def targets(row,*args,**kwargs):
+                    scan=kwargs['scan_observation']; scan['disposition']='scanned'
+                    scan['socketInodes']={'values':['999'],'omitted':0}
+                    return ['socket:[999]']
+                with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+                    with self.assertRaisesRegex(ValueError,'^foreign endpoint listener$'):
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+                    signals.assert_not_called()
+                self.assertEqual('refused',retained['entries'][-1]['disposition'])
+                self.assertEqual(2,listeners.call_count); self.assertEqual(2,owner.census.call_count)
+
+    def test_prior_owned_disappearance_cannot_supply_second_current_proof(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server=dict(leader,pid=102,start=21,state='S')
+        for fault in ('fresh-foreign-inode','fresh-fd-denial','fresh-replaced-birth','fresh-listener-change'):
+            with self.subTest(fault=fault):
+                retained={'entries':[self._endpoint_prior_proof(server)],'omitted':0}
+                owner=Mock(); owner.census.return_value=[server]; owner.proc.return_value=server
+                listeners=Mock(side_effect=[{'123'},set(),{'456'}, {'789'} if fault=='fresh-listener-change' else {'456'}])
+                reads=0
+                def targets(row,*args,**kwargs):
+                    nonlocal reads
+                    reads+=1
+                    scan=kwargs['scan_observation']; scan['disposition']='scanned'
+                    scan['socketInodes']={'values':['999'],'omitted':0}
+                    if reads==1: return ['socket:[999]']
+                    if fault=='fresh-fd-denial': raise PermissionError('fresh unknown FD observation')
+                    if fault=='fresh-replaced-birth': owner.proc.return_value=dict(server,start=22)
+                    return ['socket:[999]'] if fault=='fresh-foreign-inode' else ['socket:[456]']
+                with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+                    with self.assertRaises((ValueError,PermissionError)):
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+                    signals.assert_not_called()
+                self.assertEqual(['changed','refused'],[entry['disposition'] for entry in retained['entries']])
+                self.assertEqual('foreign endpoint listener',retained['entries'][0]['failure']['message'])
+
     def test_fd_scan_diagnostics_bound_socket_inodes_and_distinguish_disappearance(self):
         from unittest.mock import Mock, patch
         row={'pid':102,'start':21,'pgid':101,'state':'S'}

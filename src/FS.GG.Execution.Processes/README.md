@@ -36,3 +36,18 @@ reader proof and the original unexpired cleanup window. After total expiry,
 later settle. Late facts do not rewrite original in-budget proof. The caller's
 separately admitted administrative retirement remains an owner obligation; this
 interface supplies no fresh administrative budget or automatic disposal success.
+
+`RunAsync` retains its bounded execution wait. `ObserveAsync` immediately returns
+one truthful current snapshot under the retained session lock; it does not wait for
+leader exit, EOF or local settlement. Cancellation and original work expiry still
+request retirement within the original total. Observation before Run does not
+consume launch, and observing an in-flight launch does not close its release gate.
+Original clock history is validated without committing a return event. Observation
+never grants release or later budget authority.
+
+A caller that needs early-exit drain timing retains the actual session and Run task,
+observes independently, and starts its drain grace at the observed exit stamp,
+clipped to the same original total. Its response can precede actual local settlement;
+the explicitly admitted outer caller continues to own all tasks/resources until
+lawful release or reports an unresolved retirement obligation. This source alone
+does not establish the SDD test-lifetime integration or consumer adoption.

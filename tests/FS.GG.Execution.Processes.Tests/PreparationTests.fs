@@ -29,7 +29,7 @@ module Samples =
     let prepareWith (command: CommandSpec) clock total reserve =
         let budget = Budget.create ((clock: IMonotonicClock).Now()) total reserve |> ok
         let session = ProcessSessions.createFactory().Prepare(command,identity(),budget,clock,owner) |> ok
-        session,budget
+        session,budget,clock
     let prepare command = prepareWith command (clock()) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.)
 
 module PreparationTests =
@@ -78,7 +78,7 @@ module PreparationTests =
 
     [<Fact>]
     let ``pre-cancellation repeated runs and release never launch a prepared session`` () =
-        let session,budget = prepare command
+        let session,budget,_ = prepare command
         let first = session.RunAsync(CancellationToken(true)).GetAwaiter().GetResult()
         let second = session.RunAsync(CancellationToken.None).GetAwaiter().GetResult()
         Assert.Equal(NotStarted,first.Launch)
@@ -90,15 +90,56 @@ module PreparationTests =
 
     [<Fact>]
     let ``stop before run and expired work cannot acquire a fresh launch window`` () =
-        let session,_ = prepare command
+        let session,_,_ = prepare command
         session.RequestStopAsync(CallerCancellation,CancellationToken.None).GetAwaiter().GetResult() |> ignore
         Assert.Equal(NotStarted,session.RunAsync(CancellationToken.None).GetAwaiter().GetResult().Launch)
         let domain = { Id = Guid.NewGuid(); Frequency = 1000L }
         let mutable ticks = 1000L
         let clock = { new IMonotonicClock with member _.Now() = { Domain = domain; Ticks = ticks } }
-        let expired,budget = prepareWith command clock (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.)
+        let expired,budget,_ = prepareWith command clock (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.)
         ticks <- 2000L
+        let passiveExpired = expired.ObserveAsync(CancellationToken.None)
+        Assert.True(passiveExpired.IsCompleted)
+        Assert.Equal(NotStarted, passiveExpired.Result.Launch)
         let result = expired.RunAsync(CancellationToken.None).GetAwaiter().GetResult()
         Assert.Equal(NotStarted,result.Launch)
         Assert.Equal(Budget.describe budget,Budget.describe result.OriginalBudget)
         Assert.True(match result.Stop with Requested(WorkDeadline,_) -> true | _ -> false)
+
+    [<Fact>]
+    let ``passive observation validates original clock without granting a lease`` () =
+        for fault in [ "regression"; "domain" ] do
+            for predecessor in [ "prepare"; "observe" ] do
+                for nextCall in [ "observe"; "run"; "stop"; "cancel-observe" ] do
+                    let domain = { Id = Guid.NewGuid(); Frequency = 1000L }
+                    let mutable observedDomain = domain
+                    let mutable ticks = 1000L
+                    let mutable reads = 0
+                    let liveClock =
+                        { new IMonotonicClock with
+                            member _.Now() =
+                                reads <- reads + 1
+                                if reads = 2 then ticks <- 1100L
+                                { Domain = observedDomain; Ticks = ticks } }
+                    let session,budget,_ = prepareWith command liveClock (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.)
+                    if predecessor = "observe" then
+                        let first = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+                        Assert.Equal(Prepared, first.Phase)
+                        Assert.Equal(NotStarted, first.Launch)
+                    if fault = "regression" then ticks <- 1099L
+                    else observedDomain <- { domain with Id = Guid.NewGuid() }
+                    let result =
+                        match nextCall with
+                        | "run" -> session.RunAsync(CancellationToken.None).GetAwaiter().GetResult()
+                        | "stop" ->
+                            let stop = session.RequestStopAsync(CallerCancellation, CancellationToken.None).GetAwaiter().GetResult()
+                            Assert.True(match stop with StopRefused _ -> true | _ -> false)
+                            session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+                        | "cancel-observe" -> session.ObserveAsync(CancellationToken(true)).GetAwaiter().GetResult()
+                        | _ -> session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+                    Assert.Equal(NotStarted, result.Launch)
+                    Assert.Equal(NotRequested, result.Stop)
+                    Assert.Equal(Budget.describe budget, Budget.describe result.OriginalBudget)
+                    Assert.Equal("clock-observation-refused", result.FirstFailure.Value.Diagnostic.Code)
+                    // No native launch was requested. The admitted test owner retains this
+                    // refused local session through terminal readback; no fresh lease is granted.

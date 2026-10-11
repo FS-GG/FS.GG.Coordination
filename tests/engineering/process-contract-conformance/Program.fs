@@ -226,7 +226,16 @@ module Program =
         let runAt = clock.Now()
         let earlyRelease =
             if case = "held-writer" then Some(session.TryRelease()) else None
-        let observed = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        // Observe is a current snapshot, not a hidden cleanup wait. The existing owner
+        // explicitly retains the session and spends only this original remaining total.
+        let mutable observed = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        let mutable settled = match observed.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false
+        while not settled do
+            let delay = Budget.clip (clock.Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> Support.ok
+            Support.require (delay > TimeSpan.Zero) "production-original-cleanup-budget-expired"
+            Task.Delay(delay).GetAwaiter().GetResult()
+            observed <- session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+            settled <- match observed.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false
         let observedAt = clock.Now()
         let decision = session.TryRelease()
         let releaseAt = clock.Now()
