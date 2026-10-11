@@ -1140,10 +1140,10 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
-    // Bounded artifact discovery and resumable recovery add guarded shell paths.
-    Assert.InRange(gateLines, 1, 850)
-    // The hosted diagnostic preservation fixture adds one distinct invocation.
-    Assert.InRange(uniqueGateLines, 1, 631)
+    // Producer restore/test/TRX census adds nine guarded lines to the existing shell budget.
+    Assert.InRange(gateLines, 1, 859)
+    // Those producer invocations add nine distinct lines while preserving the prior headroom.
+    Assert.InRange(uniqueGateLines, 1, 640)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
