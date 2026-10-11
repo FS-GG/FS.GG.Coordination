@@ -177,7 +177,11 @@ def capture(scratch, destination, status, *, clock=time.monotonic, max_output=MA
                                 owned = value.get('ownerReceipt') or {}
                                 summary = {key:value.get(key) for key in ('schema','commandExit','commandAccepted','firstCause','additionalFailures')}
                                 summary['owner'] = {key:owned.get(key) for key in ('firstCause','additionalFailures','cleanup','custody','exit','birthIdentityUnavailable')}
-                                summary['lifecycle'] = lifecycle_summary(value)
+                                try:
+                                    summary['lifecycle'] = lifecycle_summary(value)
+                                except (ValueError, TypeError, AttributeError) as projection_error:
+                                    summary['lifecycle'] = {'projectionFailure':failure_record(projection_error)}
+                                    coverage.append('lifecycle-fields-unavailable')
                                 first = json.dumps(summary, ensure_ascii=True).encode()[:FILE_BYTES]
                                 last = b''
                             except (ValueError, TypeError, AttributeError):
@@ -355,11 +359,29 @@ def expected_server_retirement(receipt, server_births, exit_members, stop_reques
     """Only the explicitly observed original server may explain live-child retirement."""
     if receipt['firstCause'] != 'RuntimeError: child exited with live owned-group descendants':
         return receipt['firstCause'] is None
-    return (exit_members is not None and len(server_births) == 1 and receipt['exit'] == 0
-            and set(exit_members) == set(server_births) and len(stop_requests) == 1
-            and (stop_requests[0]['pid'], stop_requests[0]['start']) in server_births
-            and stop_requests[0]['signal'] == signal.SIGTERM
-            and stop_requests[0]['disposition'] in ('sent', 'already-terminal'))
+    observation = receipt.get('exitObservation')
+    leader = receipt.get('leader')
+    if not isinstance(observation, dict) or not isinstance(leader, dict): return False
+    members = observation.get('members')
+    if (type(observation.get('code')) is not int or observation['code'] != 0
+            or type(observation.get('omittedMembers')) is not int or observation['omittedMembers'] != 0
+            or not isinstance(members, list) or len(members) != 1): return False
+    member = members[0]
+    if (not isinstance(member, dict) or type(member.get('pid')) is not int
+            or type(member.get('start')) is not int or type(member.get('pgid')) is not int
+            or type(leader.get('pgid')) is not int or member['pgid'] != leader['pgid']
+            or type(member.get('state')) is not str or len(member['state']) != 1 or member['state'] == 'Z'):
+        return False
+    if (not isinstance(stop_requests, list) or len(stop_requests) != 1
+            or not isinstance(stop_requests[0], dict)): return False
+    stop = stop_requests[0]
+    if type(stop.get('pid')) is not int or type(stop.get('start')) is not int: return False
+    refusing_births = {(member['pid'], member['start'])}
+    return (refusing_births == set(server_births)
+            and exit_members is not None and len(server_births) == 1 and receipt['exit'] == 0
+            and set(exit_members) == set(server_births) and (stop['pid'], stop['start']) in server_births
+            and type(stop.get('signal')) is int and stop['signal'] == signal.SIGTERM
+            and stop.get('disposition') in ('sent', 'already-terminal'))
 
 
 def retire_original_server(owner, child, leader, servers, handles, stop_requests, checkpoint, known, maximum_generations, membership_observation):

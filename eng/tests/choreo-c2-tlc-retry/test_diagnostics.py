@@ -452,6 +452,12 @@ class CommandInterfaceControls(unittest.TestCase):
             retained=json.loads(artifact['logs'][0]['text'])
             self.assertEqual(summary,retained['lifecycle'])
             self.assertNotIn('NEVER COPY',json.dumps(artifact))
+            value['ownerReceipt']['exitObservation']['omittedMembers'] = {'private':'NEVER COPY'}
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value))
+            malformed=module.capture(scratch,root/'malformed-diagnostics',1)
+            self.assertIn('live owned-group descendants',malformed['logs'][0]['text'])
+            self.assertIn('lifecycle-fields-unavailable',malformed['omittedCoverage'])
+            self.assertNotIn('NEVER COPY',json.dumps(malformed))
 
     def test_denied_fd_observation_requires_fresh_terminal_original_birth(self):
         from unittest.mock import Mock, patch
@@ -555,7 +561,9 @@ class CommandInterfaceControls(unittest.TestCase):
         with self.assertRaises(ValueError): module.extraction_receipt_join(wrong,'a'*64)
 
     def test_expected_server_retirement_cannot_accept_foreign_live_descendants(self):
-        receipt = {'exit':0,'firstCause':'RuntimeError: child exited with live owned-group descendants'}
+        receipt = {'exit':0,'firstCause':'RuntimeError: child exited with live owned-group descendants',
+                   'leader':{'pgid':101},'exitObservation':{'code':0,'omittedMembers':0,
+                   'members':[{'pid':101,'start':20,'pgid':101,'state':'S'}]}}
         stops = [{'pid':101,'start':20,'signal':15,'disposition':'sent'}]
         self.assertTrue(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},stops))
         self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},[]))
@@ -563,6 +571,17 @@ class CommandInterfaceControls(unittest.TestCase):
                                  ({(101,20)},{(101,19)}), ({(101,20)},None), ({(101,20),(102,21)},{(101,20),(102,21)})]:
             with self.subTest(servers=servers,members=members):
                 self.assertFalse(module.expected_server_retirement(receipt,servers,members,stops))
+        for observation in (None, {}, {'code':0,'members':None,'omittedMembers':None},
+                            {'code':0,'members':[],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':20,'pgid':101,'state':'S'}, {'pid':102,'start':21,'pgid':101,'state':'S'}],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':19,'pgid':101,'state':'S'}],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':20,'pgid':999,'state':'S'}],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':20,'pgid':101,'state':'S'}],'omittedMembers':1}):
+            with self.subTest(ownerObservation=observation):
+                later = copy.deepcopy(receipt); later['exitObservation'] = observation
+                # Adapter sole-server membership and recorded stop never waive
+                # the owner's later unknown/foreign/replaced/partial refusal.
+                self.assertFalse(module.expected_server_retirement(later,{(101,20)},{(101,20)},stops))
         receipt['exit'] = 37
         self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},stops))
 
