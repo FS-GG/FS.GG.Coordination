@@ -116,17 +116,17 @@ module ProcessSessions =
                         let target =
                             lock gate (fun () ->
                                 match now(),child with
-                                | Ok at,Some process ->
+                                | Ok at,Some targetProcess ->
                                     match budgetAt at with
                                     | Ok view when not view.TotalExpired && not leaderExited && not ambiguous ->
-                                        if applyAt at (RetirementActionRequested(note "bcl-leader-stop-requested")) then Some process else None
+                                        if applyAt at (RetirementActionRequested(note "bcl-leader-stop-requested")) then Some targetProcess else None
                                     | _ -> None
                                 | _ -> None)
                         match target with
-                        | Some process ->
+                        | Some targetProcess ->
                             // BCL Unix kill is best effort, not stable-birth or tree authority.
                             // The retained direct-child Process is never reopened from a PID.
-                            if not process.HasExited then process.Kill()
+                            if not targetProcess.HasExited then targetProcess.Kill()
                         | None -> ()
                     with _ -> lock gate (fun () -> recordFailure "bcl-leader-stop-failed")
                 finally
@@ -206,12 +206,12 @@ module ProcessSessions =
                     with _ -> lock gate (fun () -> recordFailure "bcl-stdin-close-failed")
                     lock gate (fun () -> inputDone <- true; refreshCleanup())
             } :> Task
-        let waitExit (process: Process) : Task =
+        let waitExit (targetProcess: Process) : Task =
             task {
                 try
                     try
-                        do! process.WaitForExitAsync(CancellationToken.None)
-                        let exitCode = process.ExitCode
+                        do! targetProcess.WaitForExitAsync(CancellationToken.None)
+                        let exitCode = targetProcess.ExitCode
                         lock gate (fun () ->
                             leaderExited <- true
                             match now() with
@@ -249,10 +249,10 @@ module ProcessSessions =
                 let mutable startConfirmed = false
                 try
                     try
-                        let process = new Process(StartInfo = startInfo())
+                        let targetProcess = new Process(StartInfo = startInfo())
                         let permitted =
                             lock gate (fun () ->
-                                child <- Some process
+                                child <- Some targetProcess
                                 match now() with
                                 | Ok at ->
                                     match budgetAt at with
@@ -273,17 +273,17 @@ module ProcessSessions =
                             // Native Start runs outside the observation lock. A concurrent stop
                             // after commitment retains this in-flight attempt, then retires it;
                             // it is never mislabeled NoEffect or retried as another launch.
-                            if process.Start() then
+                            if targetProcess.Start() then
                                 startConfirmed <- true
                                 lock gate (fun () ->
-                                    let actual = { Platform = "bcl-linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = process.Id; BirthToken = "retained-process:" + Guid.NewGuid().ToString("N") }
+                                    let actual = { Platform = "bcl-linux"; ScopeId = identity.InvocationId.ToString("D"); Pid = targetProcess.Id; BirthToken = "retained-process:" + Guid.NewGuid().ToString("N") }
                                     generation <- Some actual
                                     apply (LaunchObserved(Started actual)) |> ignore
                                     stdoutDone <- false; stderrDone <- false; inputDone <- false; exitDone <- false
-                                    stdoutTask <- Some(runTask (fun () -> pump Stdout process.StandardOutput.BaseStream))
-                                    stderrTask <- Some(runTask (fun () -> pump Stderr process.StandardError.BaseStream))
-                                    inputTask <- Some(runTask (fun () -> writeInput process.StandardInput.BaseStream))
-                                    exitTask <- Some(runTask (fun () -> waitExit process)))
+                                    stdoutTask <- Some(runTask (fun () -> pump Stdout targetProcess.StandardOutput.BaseStream))
+                                    stderrTask <- Some(runTask (fun () -> pump Stderr targetProcess.StandardError.BaseStream))
+                                    inputTask <- Some(runTask (fun () -> writeInput targetProcess.StandardInput.BaseStream))
+                                    exitTask <- Some(runTask (fun () -> waitExit targetProcess)))
                             else
                                 lock gate (fun () ->
                                     ambiguous <- true
@@ -315,7 +315,7 @@ module ProcessSessions =
                             | Ok at ->
                                 match budgetAt at with
                                 | Ok view ->
-                                    if view.WorkExpired && not allSettled() && (Lifecycle.snapshot state).Stop = NotRequested then stop WorkDeadline
+                                    if view.WorkExpired && not (allSettled()) && (Lifecycle.snapshot state).Stop = NotRequested then stop WorkDeadline
                                     ensureStop()
                                     refreshCleanup()
                                     let stopping = (Lifecycle.snapshot state).Stop <> NotRequested
