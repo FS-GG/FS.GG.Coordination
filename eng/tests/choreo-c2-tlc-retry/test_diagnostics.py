@@ -474,7 +474,7 @@ class CommandInterfaceControls(unittest.TestCase):
                 if kind not in ('foreign','changed-group','generation'): self.assertIs(original,caught.exception)
                 self.assertEqual(1,len(retained['entries'])); self.assertEqual('refused',retained['entries'][0]['disposition'])
                 self.assertEqual(type(caught.exception).__name__,retained['entries'][0]['failure']['type'])
-                self.assertLessEqual(listeners.call_count,1)
+                self.assertLessEqual(listeners.call_count,2 if kind=='foreign' else 1)
         # A known transition does not make a later denial retryable or replaceable.
         original=PermissionError('second proof required FD denied')
         owner=Mock(); owner.census.side_effect=lambda group:[leader,server]; owner.proc.return_value=server
@@ -487,6 +487,65 @@ class CommandInterfaceControls(unittest.TestCase):
         self.assertEqual(['changed','refused'],[x['disposition'] for x in retained['entries']])
         self.assertEqual('PermissionError',retained['entries'][1]['failure']['type'])
         self.assertIsNone(retained['entries'][1]['afterInodes'])
+
+    def test_mismatched_listener_diagnostics_never_replace_original_refusal(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        for kind in ('stable-foreign','listener-disappeared','birth-absent','birth-replaced',
+                     'post-census-denied','post-birth-denied','post-listener-denied','deadline'):
+            with self.subTest(kind=kind):
+                owner=Mock(); secondary=PermissionError('diagnostic '+kind)
+                owner.census.side_effect=[[server],secondary if kind=='post-census-denied' else [server]]
+                owner.proc.side_effect=secondary if kind=='post-birth-denied' else None
+                owner.proc.return_value=None if kind=='birth-absent' else dict(server,start=22) if kind=='birth-replaced' else server
+                listeners=Mock(side_effect=[{'123'},secondary if kind=='post-listener-denied' else set() if kind=='listener-disappeared' else {'123'}])
+                after_read=False
+                def targets(row,*args,**kwargs):
+                    nonlocal after_read
+                    scan=kwargs['scan_observation']; scan['disposition']='scanned'
+                    scan['socketInodes']={'values':['999'],'omitted':0}
+                    after_read=True
+                    return ['socket:[999]']
+                def checkpoint():
+                    if kind=='deadline' and after_read: raise TimeoutError('original diagnostic deadline')
+                retained={'entries':[],'omitted':0}; additional=[]; child=Mock(pid=101)
+                with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+                    with self.assertRaisesRegex(ValueError,'^foreign endpoint listener$') as caught:
+                        module.observe_endpoint_ownership(owner,child,leader,{(102,21)},{(102,21):7},set(),checkpoint,6,listeners,additional,{'entries':[],'omitted':0},retained)
+                    signals.assert_not_called(); child.poll.assert_not_called()
+                self.assertEqual(1,len(retained['entries']))
+                entry=retained['entries'][0]; self.assertEqual('refused',entry['disposition'])
+                self.assertEqual({'type':'ValueError','message':'foreign endpoint listener'},entry['failure'])
+                self.assertEqual(['123'],entry['beforeInodes']['values']); self.assertEqual([],entry['matchedInodes']['values'])
+                scan=entry['fdScans'][0]; self.assertEqual(server,scan['before'])
+                self.assertEqual(['999'],scan['socketInodes']['values'])
+                if kind in ('post-census-denied','post-birth-denied','post-listener-denied','deadline'):
+                    self.assertTrue(additional); self.assertEqual('TimeoutError' if kind=='deadline' else 'PermissionError',additional[0]['type'])
+                else: self.assertEqual([],additional)
+                if kind=='listener-disappeared': self.assertEqual([],entry['afterInodes']['values'])
+                if kind=='birth-absent': self.assertTrue(scan['afterMismatchObserved']); self.assertIsNone(scan['afterMismatchBirth'])
+                if kind=='birth-replaced': self.assertEqual(22,scan['afterMismatchBirth']['start'])
+                if kind in ('post-birth-denied','deadline'): self.assertFalse(scan['afterMismatchObserved'])
+                projected=module.lifecycle_summary({'endpointObservations':retained})
+                self.assertEqual(scan,projected['endpointObservations']['entries'][0]['fdScans'][0])
+
+    def test_fd_scan_diagnostics_bound_socket_inodes_and_distinguish_disappearance(self):
+        from unittest.mock import Mock, patch
+        row={'pid':102,'start':21,'pgid':101,'state':'S'}
+        def fresh_scan():
+            return {'before':row,'disposition':'pending','missingReadlinks':0,
+                    'socketInodes':{'values':[],'omitted':0},'afterMismatchObserved':False,'afterMismatchBirth':None}
+        missing=fresh_scan()
+        with patch.object(module.Path,'iterdir',side_effect=FileNotFoundError()):
+            self.assertEqual([],module.owned_fd_targets(row,Mock(),scan_observation=missing))
+        self.assertEqual('directory-missing',missing['disposition'])
+        scan=fresh_scan(); targets=['socket:['+str(i)+']' for i in range(8)]
+        reads=targets+[FileNotFoundError()]
+        with patch.object(module.Path,'iterdir',return_value=iter(range(9))), patch.object(module.os,'readlink',side_effect=reads):
+            self.assertEqual(targets,module.owned_fd_targets(row,Mock(),scan_observation=scan))
+        self.assertEqual('scanned',scan['disposition']); self.assertEqual(1,scan['missingReadlinks'])
+        self.assertEqual({'values':[str(i) for i in range(6)],'omitted':2},scan['socketInodes'])
 
     def test_lifecycle_byte_cap_retains_structured_primary_cause(self):
         with tempfile.TemporaryDirectory() as tmp:
