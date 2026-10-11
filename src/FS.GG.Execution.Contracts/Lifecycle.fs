@@ -5,7 +5,8 @@ open System.Text
 type LifecycleState = private
     { Command: CommandSpec; Result: ExecutionResult; LastTick: int64
       LaunchConsumed: bool; TargetReleased: bool; TargetReleaseAt: int64 option; Returned: bool; CleanupWasComplete: bool
-      StdoutTerminal: ReaderState option; StderrTerminal: ReaderState option }
+      StdoutTerminal: ReaderState option; StderrTerminal: ReaderState option
+      ExitTerminal: Observation<ProcessExit> option }
 
 type LifecycleEvent =
     | BeginLaunch
@@ -50,7 +51,7 @@ module Lifecycle =
                               LocalTasks = Unknown(note "tasks-unknown"); Unresolved = []; OmittedUnresolved = 0L; Custody = NoEffect }
                   OriginalBudget = budget }
             Ok { Command = { command with Input = input }; Result = result; LastTick = (Budget.describe budget).StartedAt
-                 LaunchConsumed = false; TargetReleased = false; TargetReleaseAt = None; Returned = false; CleanupWasComplete = false; StdoutTerminal = None; StderrTerminal = None }
+                 LaunchConsumed = false; TargetReleased = false; TargetReleaseAt = None; Returned = false; CleanupWasComplete = false; StdoutTerminal = None; StderrTerminal = None; ExitTerminal = None }
     let private copyCapture (capture: StreamCapture) =
         { capture with Prefix = ReadOnlyMemory(capture.Prefix.ToArray()); Tail = ReadOnlyMemory(capture.Tail.ToArray()) }
     let snapshot state = { state.Result with Stdout = copyCapture state.Result.Stdout; Stderr = copyCapture state.Result.Stderr }
@@ -163,6 +164,11 @@ module Lifecycle =
         let cleanup = result.Cleanup
         let next =
             { result with
+                Exit = observation result.Exit
+                Stdout = { result.Stdout with Reader = observation result.Stdout.Reader }
+                Stderr = { result.Stderr with Reader = observation result.Stderr.Reader }
+                Launch = match result.Launch with Refused d -> Refused(diagnostic d) | Ambiguous d -> Ambiguous(diagnostic d) | other -> other
+                Stop = match result.Stop with StopRefused d -> StopRefused(diagnostic d) | other -> other
                 Capabilities = result.Capabilities |> List.map (fun c -> { c with Obtained = observation c.Obtained })
                 Limits = result.Limits |> List.map (fun l -> { l with Actual = observation l.Actual; Assurance = observation l.Assurance })
                 FirstFailure = result.FirstFailure |> Option.map (fun f -> { f with Diagnostic = diagnostic f.Diagnostic })
@@ -197,6 +203,12 @@ module Lifecycle =
             match value with
             | Known _ | Absent _ -> omissions <- increment omissions; Unknown(note "proof-omitted-by-metadata")
             | _ -> value
+        let reader value =
+            match value with
+            | Known(ReadFailed d,_) | Known(StoppedWithoutEof d,_) ->
+                omissions <- increment omissions
+                Unknown { d with Message = "Omitted."; Evidence = None }
+            | _ -> observation value
         let cleanup = result.Cleanup
         let custody =
             match cleanup.Custody with
@@ -204,8 +216,9 @@ module Lifecycle =
             | other -> other
         let projected =
             { result with
-                Stdout = { result.Stdout with Reader = observation result.Stdout.Reader }
-                Stderr = { result.Stderr with Reader = observation result.Stderr.Reader }
+                Exit = observation result.Exit
+                Stdout = { result.Stdout with Reader = reader result.Stdout.Reader }
+                Stderr = { result.Stderr with Reader = reader result.Stderr.Reader }
                 AdditionalFailures = []; OmittedFailures = omitCount result.OmittedFailures (int64 result.AdditionalFailures.Length)
                 Cleanup = { cleanup with LeaderTermination = observation cleanup.LeaderTermination
                                          WorkloadEmpty = observation cleanup.WorkloadEmpty
@@ -347,9 +360,15 @@ module Lifecycle =
                     let positiveWithoutGeneration = match value with Known _ -> (processGeneration state).IsNone | _ -> false
                     if positiveWithoutGeneration || (not state.TargetReleased && result.Launch <> NotStarted && (match result.Launch with Refused _ -> false | _ -> true)) then refused "exit.without-generation"
                     else validated (Validation.observation value @ proofErrors state now false (processGeneration state) value) (fun () ->
-                        match result.Exit,value with
-                        | Known(old,_), Known(next,_) when old <> next -> refused "exit.contradiction"
-                        | _ -> update { result with Exit = retainExit result.Exit value; Phase = Retiring })
+                        match state.ExitTerminal,value with
+                        | Some(Known(old,_)), Known(next,_) when old <> next -> refused "exit.contradiction"
+                        | _ ->
+                            let terminal = match state.ExitTerminal,value with None,Known _ -> Some value | _ -> state.ExitTerminal
+                            let observed =
+                                match value,state.ExitTerminal with
+                                | Known _,Some original -> original
+                                | _ -> retainExit result.Exit value
+                            finish { state with ExitTerminal = terminal; Result = { result with Exit = observed; Phase = Retiring } })
                 | StopRequested reason ->
                     let stop = match result.Stop with NotRequested -> Requested(reason, now) | previous -> previous
                     update { result with Stop = stop; Phase = Retiring }
@@ -384,7 +403,11 @@ module Lifecycle =
                                     else
                                         // Retain the bounded per-reader terminal outcome privately; publish
                                         // explicit omitted evidence without allowing a reader retry.
-                                        let omitted = Unknown(note "reader-proof-omitted-by-metadata")
+                                        let omitted =
+                                            match value with
+                                            | Known(ReadFailed d,_) | Known(StoppedWithoutEof d,_) -> Unknown { d with Message = "Omitted."; Evidence = None }
+                                            | Known _ | Absent _ -> Unknown(note "reader-proof-omitted-by-metadata")
+                                            | other -> compactObservation other
                                         let omittedResult = match channel with Stdout -> { next with Stdout = { next.Stdout with Reader = omitted } } | _ -> { next with Stderr = { next.Stderr with Reader = omitted } }
                                         { omittedResult with OmittedDiagnosticDetails = increment omittedResult.OmittedDiagnosticDetails }
                                 match value with

@@ -79,3 +79,9 @@ bundle can project Incomplete with unavailable custody and counted unresolved
 generations. Private actual-completion history only rejects contradictory later
 bundles; it never restores omitted public proof or grants release authority.
 The first cause keeps its originating event phase and original timestamp.
+
+The final failure-priority projection also omits unretainable public exit proof.
+One bounded private exact-generation exit observation retains original terminal
+history and rejects a contradictory later exit. A later uncertain observation
+does not recreate omitted public proof. All textual observation statuses and
+launch/refusal diagnostics are compacted before this final projection.

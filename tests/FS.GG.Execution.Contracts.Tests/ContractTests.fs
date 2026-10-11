@@ -564,3 +564,50 @@ module ContractTests =
         Assert.True(match result.Cleanup.LeaderTermination with LimitExceeded d -> d.Code = "cleanup-large-unresolved-original" | _ -> false)
         Assert.True(result.OmittedDiagnosticDetails > 0L)
         Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+
+    [<Fact>]
+    let ``maximal immutable and mutable metadata still retains an original capability failure`` () =
+        let affinity = [ for i in 0 .. 63 -> 1000000000 + i ]
+        let maximum value = { Value = value; Assurance = Enforced }
+        let resources = { MemoryBytes = Some(maximum Int64.MaxValue); CpuQuota = Some(maximum { Quota = TimeSpan.MaxValue; Period = TimeSpan.MaxValue }); CpuAffinity = Some affinity
+                          MaxKernelTasks = Some(maximum Int32.MaxValue); MaxOwnedProcesses = Some(maximum Int32.MaxValue); MaxClrProcesses = Some(maximum Int32.MaxValue) }
+        let command = { command with Resources = resources }
+        let identity = { identity with ProfileId = String.replicate 64 "i" }
+        let generation = { generation with Platform = String.replicate 64 "p"; BirthToken = String.replicate 2048 "b" }
+        let small = { beforeStamp with Scope = identity.InvocationId.ToString("D") }
+        let tuples = [ "memory","bytes",string Int64.MaxValue; "cpuQuota","ticks-per-period",$"{TimeSpan.MaxValue.Ticks}/{TimeSpan.MaxValue.Ticks}"; "cpuAffinity","cpu-ids",String.Join(",",affinity)
+                       "kernelTasks","kernel-tasks",string Int32.MaxValue; "ownedProcesses","process-generations",string Int32.MaxValue; "clrProcesses","classified-clr-hosts",string Int32.MaxValue ]
+        let mutable state = Lifecycle.prepare command identity budget |> ok |> apply BeginLaunch
+        for name,unit,requested in tuples do
+            state <- state |> apply (LimitObserved { Name = name; Unit = unit; Requested = requested; Actual = Known(requested,small); Assurance = Known(Enforced,small) })
+        state <- state |> apply TargetReleaseRequested |> apply (LaunchObserved(Started generation))
+        let uncertain = diagnostic (String.replicate 64 "u") |> fun d -> { d with Message = "Omitted." }
+        for name,unit,requested in tuples do
+            state <- state |> apply (LimitObserved { Name = name; Unit = unit; Requested = requested; Actual = Unknown uncertain; Assurance = Unknown uncertain })
+        let proof = { stamp with Generation = Some generation; Provenance = { Kind = String.replicate 64 "k"; Reference = String.replicate 2048 "r"; Digest = Some(String.replicate 64 "d") } }
+        state <- state |> apply (ExitObserved(Known(Exited 0,proof)))
+        Assert.Empty((Lifecycle.snapshot state).Capabilities)
+        Assert.Empty((Lifecycle.snapshot state).Cleanup.RequestedActions)
+        Assert.True(Lifecycle.metadataBytes state > 59000L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 (Validation.limits.ResultMetadataBytes - Validation.limits.FirstCauseReserveBytes))
+        let capabilities = [ StableLeaderIdentity; OwnedDescendantObservation; ContainmentBeforeTarget; PidNamespaceIsolation; UserNamespaceIsolation; MountNamespaceIsolation; NetworkIsolation
+                             WorkloadEmptyObservation; OwnedChildReaping; AggregateMemoryLimit; AggregateCpuQuota; KernelTaskLimit; OwnerSurvivalCleanup; BoundedReturnWithRetainedCustody ]
+        let batch = capabilities |> List.mapi (fun index capability -> { Capability = capability; Obtained = LimitExceeded { Code = String.replicate 63 "v" + string (char (65 + index)); Message = "Omitted."; Evidence = None } })
+        state <- state |> apply (CapabilitiesObtained batch)
+        let result = Lifecycle.snapshot state
+        Assert.Equal(String.replicate 63 "v" + "A",result.FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(Retiring,result.FirstFailure.Value.Phase)
+        Assert.Equal(Some(now 100L),result.FirstFailure.Value.At)
+        Assert.Equal(Retiring,result.Phase)
+        Assert.Equal(14,result.Capabilities.Length)
+        for item in result.Capabilities do Assert.True(match item.Obtained with LimitExceeded d -> d.Code.Length = 64 | _ -> false)
+        for item in result.Limits do
+            Assert.True(match item.Actual with Unknown d -> d.Code = String.replicate 64 "u" | _ -> false)
+            Assert.True(match item.Assurance with Unknown d -> d.Code = String.replicate 64 "u" | _ -> false)
+        Assert.True(match result.Exit with Unknown _ -> true | _ -> false)
+        Assert.True(result.OmittedDiagnosticDetails > 0L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        Assert.True(Lifecycle.apply (now 100L) (ExitObserved(Known(Exited 1,proof))) state |> Result.isError)
+        let uncertainExit = state |> apply (ExitObserved(Unknown uncertain)) |> Lifecycle.snapshot
+        Assert.True(match uncertainExit.Exit with Unknown _ -> true | _ -> false)
+        Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
