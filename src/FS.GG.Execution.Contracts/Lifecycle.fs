@@ -2,11 +2,12 @@ namespace FS.GG.Execution.Contracts
 open System
 open System.Text
 
-type LifecycleState = private
-    { Command: CommandSpec; Result: ExecutionResult; LastTick: int64
-      LaunchConsumed: bool; TargetReleased: bool; TargetReleaseAt: int64 option; Returned: bool; CleanupWasComplete: bool
-      StdoutTerminal: ReaderState option; StderrTerminal: ReaderState option
-      ExitTerminal: Observation<ProcessExit> option }
+type LifecycleState =
+    private
+        { Command: CommandSpec; Result: ExecutionResult; LastTick: int64
+          LaunchConsumed: bool; TargetReleased: bool; TargetReleaseAt: int64 option; Returned: bool; CleanupWasComplete: bool
+          StdoutTerminal: ReaderState option; StderrTerminal: ReaderState option
+          ExitTerminal: Observation<ProcessExit> option }
 
 type LifecycleEvent =
     | BeginLaunch
