@@ -8,4 +8,4 @@ export FSGG_QUINT_FORMAL_SHARD="$FSGG_QUINT_SHARD"
 export FSGG_QUINT_RECEIPT="$FSGG_QUINT_SHARD_ROOT/$FSGG_QUINT_SHARD.json"
 bash eng/bootstrap-gates/canonical-quint.sh
 test -s "$FSGG_QUINT_RECEIPT"
-[[ "$FSGG_QUINT_SHARD" != base ]] || bash eng/verify-choreo-c2-bounded.sh
+[[ "$FSGG_QUINT_SHARD" != base ]] || FSGG_CHOREO_DIAGNOSTIC_ROOT="${FSGG_CHOREO_DIAGNOSTIC_ROOT:-$FSGG_QUINT_SHARD_ROOT/base-choreo-failure-diagnostics}" bash eng/verify-choreo-c2-bounded.sh

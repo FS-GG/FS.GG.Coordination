@@ -128,6 +128,13 @@ jobs:
           name: canonical-quint-shard-${{ matrix.shard }}
           path: ${{ env.FSGG_QUINT_SHARD_ROOT }}/${{ matrix.shard }}.json
           if-no-files-found: error
+      - name: Upload bounded choreography failure diagnostics
+        if: ${{ always() && matrix.shard == 'base' }}
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: choreography-failure-diagnostics-${{ matrix.shard }}
+          path: ${{ env.FSGG_QUINT_SHARD_ROOT }}/base-choreo-failure-diagnostics/failure.json
+          if-no-files-found: warn
 
   canonical-quint-performance:
     name: canonical-quint-performance

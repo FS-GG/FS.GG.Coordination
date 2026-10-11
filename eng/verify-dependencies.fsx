@@ -148,7 +148,8 @@ let private allowedDependencies =
             "FS.GG.Coordination.Orchestration.Pilot",
             Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
             "FS.GG.Coordination.Orchestration.Runner.Protocol", Set.empty
-            "FS.GG.Coordination.Orchestration.Execution", Set.empty
+            "FS.GG.Execution.Contracts", Set.empty
+            "FS.GG.Coordination.Orchestration.Execution", Set.singleton "FS.GG.Execution.Contracts"
             "FS.GG.Coordination.Orchestration.Execution.Codex",
             Set.singleton "FS.GG.Coordination.Orchestration.Execution"
             "FS.GG.Coordination.Orchestration.Execution.AgentFramework",
@@ -314,7 +315,11 @@ let private inspectProject (path: string) =
         |> List.map (fun value -> violation name value "checkout-relative-package-source-forbidden")
 
     let transportViolations =
-        if name = "FS.GG.Coordination.Protocol" || name = "FS.GG.Coordination.Core" then
+        if
+            name = "FS.GG.Coordination.Protocol"
+            || name = "FS.GG.Coordination.Core"
+            || name = "FS.GG.Execution.Contracts"
+        then
             let referenceViolations =
                 [
                     yield! valuesNamed "PackageReference" document

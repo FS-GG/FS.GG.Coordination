@@ -54,7 +54,7 @@ class ChoreoC2TlcRetryTests(unittest.TestCase):
                         ;;
                     esac
                     """
-                ),
+                ).lstrip(),
                 encoding="utf-8",
             )
             command.chmod(0o755)
@@ -62,21 +62,32 @@ class ChoreoC2TlcRetryTests(unittest.TestCase):
             count_file = root / "count"
             arguments_file = root / "arguments"
             environment = os.environ.copy()
+            java_home = root / 'java-home'; (java_home / 'bin').mkdir(parents=True)
+            (java_home / 'bin/java').write_text('fake Java input; never executed')
+            quint_home = root / 'quint-home'
+            jar = quint_home / 'apalache-dist-0.56.1/apalache/lib/apalache.jar'
+            jar.parent.mkdir(parents=True); jar.write_text('fake JAR input; never executed')
+            model = root / 'fixture.qnt'; model.write_text('fake model input')
+            (root / 'tmp').mkdir()
+            environment['TMPDIR'] = str(root / 'tmp')
             environment.update(
                 {
                     "FAKE_MODE": mode,
                     "FAKE_COUNT_FILE": str(count_file),
                     "FAKE_ARGUMENTS_FILE": str(arguments_file),
+                    "JAVA_HOME": str(java_home), "QUINT_HOME": str(quint_home),
                 }
             )
             result = subprocess.run(
-                ["bash", str(WRAPPER), "1", str(result_log), "29820", "--", str(command), "verify"],
-                cwd=ROOT,
+                ["bash", str(WRAPPER), "1", str(result_log), "29820", "--", str(command), "verify", str(model)],
+                cwd=root,
                 env=environment,
                 text=True,
                 capture_output=True,
                 check=False,
             )
+            reports = '\n'.join(p.read_text() for p in root.glob('*.command.json'))
+            self.assertTrue(count_file.exists(), result.stderr + result.stdout + reports)
             count = int(count_file.read_text(encoding="utf-8"))
             arguments = arguments_file.read_text(encoding="utf-8").splitlines()
             return result, count, arguments, result_log.read_text(encoding="utf-8")

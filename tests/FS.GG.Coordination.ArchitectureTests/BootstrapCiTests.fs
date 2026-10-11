@@ -134,6 +134,8 @@ let private vulnerabilityJson projectCount vulnerable =
             "src/FS.GG.Coordination.Orchestration.Runner.Client/FS.GG.Coordination.Orchestration.Runner.Client.fsproj"
             "src/FS.GG.Coordination.Protocol/FS.GG.Coordination.Protocol.fsproj"
             "src/FS.GG.Coordination.Qualification.Contracts/FS.GG.Coordination.Qualification.Contracts.fsproj"
+            "src/FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj"
+            "tests/FS.GG.Execution.Contracts.Tests/FS.GG.Execution.Contracts.Tests.fsproj"
             "tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj"
             "tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj"
             "tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests/FS.GG.Coordination.Orchestration.Execution.Codex.Tests.fsproj"
@@ -1131,14 +1133,15 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
         File.ReadAllText(Path.Combine(repositoryRoot, ".github/workflows/bootstrap-qualification.yml"))
 
     Assert.InRange(lineCount ".github/workflows/bootstrap-qualification.yml", 1, 620)
-    // One explicit failure-diagnostic collector binding joins the formal source inventory.
-    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 303)
+    // The finite census and exact owner/wrapper selectors keep the plan bounded.
+    Assert.InRange(lineCount "eng/bootstrap-qualification-plan.json", 1, 307)
     Assert.InRange(lineCount "eng/bootstrap-ci.fsx", 1, 26)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/BootstrapCi.fs", 1, 2500)
     Assert.InRange(lineCount "src/FS.GG.Coordination.Qualification.Contracts/QualificationReuse.fs", 1, 1500)
     // Bounded artifact discovery and resumable recovery add guarded shell paths.
     Assert.InRange(gateLines, 1, 850)
-    Assert.InRange(uniqueGateLines, 1, 630)
+    // The hosted diagnostic preservation fixture adds one distinct invocation.
+    Assert.InRange(uniqueGateLines, 1, 631)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
@@ -1453,14 +1456,15 @@ let ``workflow comments cannot bypass the exact byte contract`` () =
 
 [<Fact>]
 let ``complete vulnerability report is accepted`` () =
-    let exitCode, output, error = validateVulnerability (vulnerabilityJson 25 false)
+    let exitCode, output, error = validateVulnerability (vulnerabilityJson 27 false)
     Assert.Equal(0, exitCode)
     Assert.Equal("BOOTSTRAP_CI_OK mode=vulnerability", output)
     Assert.Equal("", error)
 
 [<Theory>]
 [<InlineData(16, false, "vulnerability-report-completeness")>]
-[<InlineData(25, true, "vulnerable-package")>]
+[<InlineData(25, false, "vulnerability-report-completeness")>]
+[<InlineData(27, true, "vulnerable-package")>]
 let ``partial and vulnerable reports are rejected`` projectCount vulnerable rule =
     let exitCode, _, error =
         validateVulnerability (vulnerabilityJson projectCount vulnerable)
@@ -1505,8 +1509,19 @@ let ``incomplete vulnerability parameters are rejected`` () =
 [<Fact>]
 let ``same-count wrong-project vulnerability report is rejected`` () =
     let report =
-        (vulnerabilityJson 25 false)
+        (vulnerabilityJson 27 false)
             .Replace("src/FS.GG.Coordination.App/FS.GG.Coordination.App.fsproj", "src/Wrong/Wrong.fsproj")
+
+    let exitCode, _, error = validateVulnerability report
+    Assert.NotEqual(0, exitCode)
+    Assert.Contains("rule=vulnerability-report-completeness", error)
+
+[<Theory>]
+[<InlineData("src/FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj")>]
+[<InlineData("tests/FS.GG.Execution.Contracts.Tests/FS.GG.Execution.Contracts.Tests.fsproj")>]
+let ``same-count vulnerability report requires each process contracts project`` project =
+    let report =
+        (vulnerabilityJson 27 false).Replace(project, "src/Unexpected/Unexpected.fsproj")
 
     let exitCode, _, error = validateVulnerability report
     Assert.NotEqual(0, exitCode)

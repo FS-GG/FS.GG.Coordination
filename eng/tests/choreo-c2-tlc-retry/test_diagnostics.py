@@ -4,8 +4,10 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import shutil
 import tempfile
 import unittest
+import copy
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('choreo_diagnostics', ROOT / 'eng/retain-choreo-c2-diagnostics.py')
@@ -14,6 +16,53 @@ spec.loader.exec_module(module)
 
 
 class DiagnosticControls(unittest.TestCase):
+    def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
+        for inherited in (False, True):
+            with self.subTest(inherited=inherited), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                gates = root / 'eng/bootstrap-gates'
+                gates.mkdir(parents=True)
+                shutil.copyfile(ROOT / 'eng/bootstrap-gates/canonical-quint-shard.sh', gates / 'canonical-quint-shard.sh')
+                (gates / 'canonical-quint.sh').write_text(
+                    '#!/usr/bin/env bash\nset -eu\nmkdir -p "$FSGG_QUINT_SHARD_ROOT"\nprintf "{}\\n" > "$FSGG_QUINT_RECEIPT"\n')
+                (root / 'eng/verify-choreo-c2-bounded.sh').write_text('''#!/usr/bin/env bash
+set -eu
+python3 - <<'PYFIXTURE'
+import importlib.util, json, os, pathlib, shutil
+source = pathlib.Path(os.environ['FIXTURE_COLLECTOR'])
+spec = importlib.util.spec_from_file_location('fixture_collector', source)
+collector = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(collector)
+scratch = pathlib.Path.cwd() / 'fixture-scratch'
+scratch.mkdir()
+report = {'schema': collector.RESULT_SCHEMA, 'commandExit': 0, 'commandAccepted': False,
+          'firstCause': {'type': 'ValueError', 'message': 'original post-TLC fixture cause'},
+          'additionalFailures': [], 'ownerReceipt': {'cleanup': 'observed-empty-group'},
+          'input': {'private': 'NEVER COPY'}}
+(scratch / 'runner.log.attempt-1.command.json').write_text(json.dumps(report))
+collector.capture(scratch, pathlib.Path(os.environ['FSGG_CHOREO_DIAGNOSTIC_ROOT']), 37)
+shutil.rmtree(scratch)
+PYFIXTURE
+exit 37
+''')
+                archive = root / 'toolchain.fixture'
+                archive.write_text('fixture-only; never executed or extracted')
+                shard_root = root / 'receipts'
+                destination = root / 'inherited-diagnostics' if inherited else shard_root / 'base-choreo-failure-diagnostics'
+                env = dict(os.environ, FSGG_QUINT_SHARD='base', FSGG_QUINT_TOOLCHAIN_ARCHIVE=str(archive),
+                           FSGG_QUINT_SHARD_ROOT=str(shard_root), FIXTURE_COLLECTOR=str(ROOT / 'eng/retain-choreo-c2-diagnostics.py'))
+                env.pop('FSGG_CHOREO_DIAGNOSTIC_ROOT', None)
+                if inherited:
+                    env['FSGG_CHOREO_DIAGNOSTIC_ROOT'] = str(destination)
+                result = subprocess.run(['bash', str(gates / 'canonical-quint-shard.sh')], cwd=root,
+                                        env=env, capture_output=True, timeout=10)
+                self.assertEqual(37, result.returncode, result.stderr)
+                self.assertFalse((root / 'fixture-scratch').exists())
+                artifact = json.loads((destination / 'failure.json').read_text())
+                self.assertEqual(37, artifact['originalExitCode'])
+                self.assertIn('original post-TLC fixture cause', json.dumps(artifact))
+                self.assertNotIn('NEVER COPY', json.dumps(artifact))
+
     def test_compiler_detail_survives_filtered_bounded_copy(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp); scratch = root / 'scratch'; scratch.mkdir()
@@ -29,6 +78,24 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual(37, value['originalExitCode'])
             self.assertEqual('compiler-server', value['logs'][0]['source'])
             self.assertEqual(0o600, (root / 'diagnostics/failure.json').stat().st_mode & 0o777)
+
+    def test_typed_command_cause_survives_without_input_or_arbitrary_json(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); scratch = root / 'scratch'; scratch.mkdir()
+            report = {'schema': module.RESULT_SCHEMA, 'commandExit': 37, 'commandAccepted': False,
+                      'firstCause': {'type': 'RuntimeError', 'message': 'original failed command'},
+                      'additionalFailures': [{'type': 'ValueError', 'message': 'secondary reporting'}],
+                      'ownerReceipt': {'firstCause': 'original owner', 'cleanup': 'observed-empty-group'},
+                      'input': {'private': 'NEVER COPY'}}
+            (scratch / 'runner.log.attempt-1.command.json').write_text(json.dumps(report))
+            (scratch / 'foreign.json').write_text('NEVER COPY')
+            value = module.capture(scratch, root / 'diagnostics', 37)
+            text = json.dumps(value)
+            self.assertIn('original failed command', text)
+            self.assertIn('secondary reporting', text)
+            self.assertIn('observed-empty-group', text)
+            self.assertNotIn('NEVER COPY', text)
+            self.assertEqual('owned-command', value['logs'][0]['source'])
 
     def test_large_file_retains_head_and_tail_with_explicit_omission(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -93,12 +160,37 @@ exit 0
 '''); quint.chmod(0o755)
             dest = root / 'diagnostics'
             if stale: dest.mkdir()
-            env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], RUNNER_TEMP=str(root), FSGG_QUINT_BIN=str(quint), FSGG_CHOREO_DIAGNOSTIC_ROOT=str(dest), FAKE_SUCCESS='yes' if success else 'no')
+            quint_home = root / 'quint-home'
+            jar = quint_home / 'apalache-dist-0.56.1/apalache/lib/apalache.jar'
+            jar.parent.mkdir(parents=True); jar.write_text('fake JAR; never executed')
+            env = dict(os.environ, PATH=str(binary) + ':' + os.environ['PATH'], RUNNER_TEMP=str(root), FSGG_QUINT_BIN=str(quint), FSGG_CHOREO_DIAGNOSTIC_ROOT=str(dest), FAKE_SUCCESS='yes' if success else 'no', JAVA_HOME=str(root), QUINT_HOME=str(quint_home))
             env.pop('FSGG_QUINT_TOOLCHAIN_ARCHIVE', None)
             result = subprocess.run(['bash', str(ROOT / 'eng/verify-choreo-c2-bounded.sh')], env=env, capture_output=True, text=True, timeout=10)
             self.assertFalse(list(root.glob('fsgg-choreo-c2-bounded.*')))
             value = json.loads((dest / 'failure.json').read_text()) if (dest / 'failure.json').exists() else None
             return result, value
+
+    def test_existing_disk_inventory_bounds_generated_scope_without_following_links(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); (root / 'regular').write_text('generated')
+            outside = root.parent / 'outside-does-not-exist'
+            (root / 'external').symlink_to(outside)
+            observed = module.census(root, 100, clock=lambda: 1)
+            self.assertEqual(3, observed['objects'])
+            self.assertEqual(1, observed['fixtureSymlinks'])
+            self.assertFalse(observed['linkTraversal'])
+            (root / 'sparse').touch()
+            with (root / 'sparse').open('r+b') as file: file.truncate(1073741825)
+            with self.assertRaisesRegex(RuntimeError, 'disk-byte-cap'):
+                module.census(root, 100, clock=lambda: 1)
+            (root / 'sparse').unlink()
+            with self.assertRaisesRegex(RuntimeError, 'disk-byte-cap'):
+                module.census(root, 100, limit=0, clock=lambda: 1)
+            with self.assertRaisesRegex(RuntimeError, 'disk-budget'):
+                module.census(root, 1, clock=lambda: 1)
+            fifo = root / 'fifo'; os.mkfifo(fifo)
+            with self.assertRaisesRegex(RuntimeError, 'disk-special-file'):
+                module.census(root, 100, clock=lambda: 1)
 
     def test_actual_gate_preserves_exit_and_cleans_scratch(self):
         result, value = self.run_gate()
@@ -159,6 +251,8 @@ exit 0
     def test_collector_is_in_formal_source_identity_and_only_existing_artifact(self):
         plan = json.loads((ROOT / 'eng/bootstrap-qualification-plan.json').read_text())
         self.assertIn('eng/retain-choreo-c2-diagnostics.py', plan['formalReuse']['exactPaths'])
+        self.assertIn('eng/shared_process_owner.py', plan['formalReuse']['exactPaths'])
+        self.assertIn('eng/run-choreo-c2-tlc.sh', plan['formalReuse']['exactPaths'])
         script = (ROOT / 'eng/optimistic-run-formal-fragment.sh').read_text()
         self.assertIn('FSGG_CHOREO_DIAGNOSTIC_ROOT="$fragment/choreo-failure-diagnostics"', script)
 
@@ -240,6 +334,518 @@ class ParityDiagnosticControls(unittest.TestCase):
             with patch.dict(os.environ, FSGG_CHOREO_DIAGNOSTIC_ROOT=str(Path(tmp) / 'diagnostics')), patch.object(m, 'export_legacy', side_effect=original), patch.object(m.runpy, 'run_path', side_effect=SystemExit(99)), patch.object(m.sys, 'stderr', BrokenSink()):
                 with self.assertRaises(RuntimeError) as actual: m.main()
             self.assertIs(original, actual.exception)
+
+
+class CommandInterfaceControls(unittest.TestCase):
+    def test_current_endpoint_proof_prioritizes_server_without_reading_irrelevant_denied_leader(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        rows=[leader,server]; owner=Mock(); owner.census.side_effect=[list(rows),list(rows)]
+        owner.proc.return_value=server; child=Mock(pid=101,returncode=None)
+        known=set(); servers={(102,21)}; handles={(102,21):7}; original=PermissionError('live leader FD denial')
+        def targets(row,*args,**kwargs):
+            if row['pid'] == 101: raise original
+            return ['socket:[123]']
+        listeners=Mock(side_effect=[{'123'},{'123'}])
+        with patch.object(module,'owned_fd_targets',side_effect=targets) as reads:
+            module.observe_endpoint_ownership(owner,child,leader,servers,handles,known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
+        self.assertEqual([102],[call.args[0]['pid'] for call in reads.call_args_list])
+        self.assertEqual({(101,20),(102,21)},known)
+        self.assertEqual(2,owner.census.call_count); self.assertEqual(2,listeners.call_count)
+        child.poll.assert_not_called(); owner.proc.assert_called_once_with(102)
+
+    def test_empty_endpoint_still_observes_both_censuses_and_listener_stability(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        for disposition in ('empty','unknown-census','generation-cap'):
+            with self.subTest(disposition=disposition):
+                owner=Mock(); known=set(); rows=[leader]
+                if disposition == 'generation-cap': rows += [dict(leader,pid=i,start=i) for i in range(102,107)]
+                original=PermissionError('fresh custody census unknown')
+                owner.census.side_effect=[list(rows),original if disposition == 'unknown-census' else list(rows)]
+                listeners=Mock(side_effect=[set(),set()])
+                with patch.object(module,'owned_fd_targets') as reads:
+                    if disposition == 'empty':
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,set(),{},known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
+                        self.assertEqual(2,owner.census.call_count); self.assertEqual(2,listeners.call_count)
+                    else:
+                        with self.assertRaises(PermissionError if disposition == 'unknown-census' else ValueError) as caught:
+                            module.observe_endpoint_ownership(owner,Mock(pid=101),leader,set(),{},known,Mock(),6,listeners,[],{'entries':[],'omitted':0})
+                        if disposition == 'unknown-census': self.assertIs(original,caught.exception)
+                    reads.assert_not_called()
+
+    def test_endpoint_proof_refuses_replaced_unknown_changed_or_unmatched_ownership(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        for disposition in ('replaced','changed-group','unknown-birth','membership-changed','foreign-inode','needed-denial'):
+            with self.subTest(disposition=disposition):
+                original=PermissionError('required FD ownership denied')
+                owner=Mock(); owner.census.side_effect=[[leader,server],[leader] if disposition == 'membership-changed' else [leader,server]]
+                owner.proc.side_effect=original if disposition == 'unknown-birth' else None
+                owner.proc.return_value=dict(server,start=22) if disposition == 'replaced' else dict(server,pgid=999) if disposition == 'changed-group' else server
+                inodes={'123','999'} if disposition == 'foreign-inode' else {'123'}
+                listeners=Mock(side_effect=[inodes,inodes])
+                def targets(row,*args,**kwargs):
+                    if disposition == 'needed-denial' or row['pid'] == 101: raise original
+                    return ['socket:[123]']
+                with patch.object(module,'owned_fd_targets',side_effect=targets):
+                    with self.assertRaises(PermissionError if disposition in ('unknown-birth','foreign-inode','needed-denial') else ValueError) as caught:
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0})
+                    if disposition in ('unknown-birth','foreign-inode','needed-denial'): self.assertIs(original,caught.exception)
+
+    def test_endpoint_proof_retains_foreign_custody_member_for_refusing_retirement(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        foreign={'pid':103,'start':22,'pgid':101,'state':'S'}
+        owner=Mock(); owner.census.side_effect=[[leader,server],[leader,server,foreign],[server,foreign]]
+        owner.proc.return_value=server; known=set(); servers={(102,21)}; handles={(102,21):7}; stops=[]; observed={'members':None}
+        with patch.object(module,'owned_fd_targets',return_value=['socket:[123]']), patch.object(module.signal,'pidfd_send_signal') as signals:
+            module.observe_endpoint_ownership(owner,Mock(pid=101),leader,servers,handles,known,Mock(),6,Mock(side_effect=[{'123'},{'123'}]),[],{'entries':[],'omitted':0})
+            self.assertIn((103,22),known)
+            module.retire_original_server(owner,Mock(returncode=0),leader,servers,handles,stops,Mock(),known,6,observed)
+            signals.assert_not_called()
+        receipt={'firstCause':'RuntimeError: child exited with live owned-group descendants','exit':0,'leader':leader,
+                 'exitObservation':{'code':0,'members':[server,foreign],'omittedMembers':0}}
+        self.assertFalse(module.expected_server_retirement(receipt,servers,observed['members'],stops))
+
+    def test_one_known_listener_transition_requires_a_fresh_complete_stable_proof(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        for event,sets in [('after-birth',[set(),{'123'},{'123'},{'123'}]),
+                           ('poll',[{'123'},{'456'},{'456'},{'456'}]),
+                           ('before-success',[{'123'},{'456'},{'456'},{'456'}]),
+                           ('child-exit-observed',[{'123'},set(),set(),set()])]:
+            with self.subTest(event=event):
+                order=[]; pending=list(sets); owner=Mock(); retained={'entries':[],'omitted':0}
+                def census(group): order.append('census'); return [leader,server]
+                def listeners(): order.append('listeners'); return pending.pop(0)
+                def birth(pid): order.append('birth'); return server
+                def targets(row,*args,**kwargs): order.append('fd'); return ['socket:[123]','socket:[456]']
+                owner.census.side_effect=census; owner.proc.side_effect=birth
+                with patch.object(module,'owned_fd_targets',side_effect=targets):
+                    module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained,event)
+                per_proof=['census','listeners','fd','birth','census','listeners']
+                no_fd=['census','listeners','census','listeners']
+                self.assertEqual((no_fd if event=='after-birth' else per_proof)+(no_fd if event=='child-exit-observed' else per_proof),order)
+                self.assertEqual([1,2],[x['attempt'] for x in retained['entries']])
+                self.assertEqual(['changed','proved'],[x['disposition'] for x in retained['entries']])
+                for ordinal,entry in enumerate(retained['entries']):
+                    self.assertEqual(event,entry['event']); self.assertIsNone(entry['failure'])
+                    self.assertEqual(sorted(sets[ordinal*2]),entry['beforeInodes']['values'])
+                    self.assertEqual(sorted(sets[ordinal*2+1]),entry['afterInodes']['values'])
+                    self.assertEqual(2,len(entry['beforeMembers']['members'])); self.assertEqual(2,len(entry['afterMembers']['members']))
+
+    def test_two_known_listener_transitions_refuse_and_preserve_both_snapshots(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}; server=dict(leader,pid=102,start=21,state='S')
+        owner=Mock(); owner.census.return_value=[leader,server]; owner.proc.return_value=server
+        retained={'entries':[],'omitted':0}; listeners=Mock(side_effect=[{'123'},{'456'},{'456'},{'789'}])
+        with patch.object(module,'owned_fd_targets',return_value=['socket:[123]','socket:[456]']):
+            with self.assertRaisesRegex(ValueError,'endpoint listeners changed during ownership observation'):
+                module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+        self.assertEqual(4,owner.census.call_count); self.assertEqual(4,listeners.call_count)
+        self.assertEqual(['changed','refused'],[x['disposition'] for x in retained['entries']])
+        self.assertEqual(['123'],retained['entries'][0]['beforeInodes']['values']); self.assertEqual(['456'],retained['entries'][0]['afterInodes']['values'])
+        self.assertEqual(['456'],retained['entries'][1]['beforeInodes']['values']); self.assertEqual(['789'],retained['entries'][1]['afterInodes']['values'])
+        self.assertEqual('ValueError',retained['entries'][1]['failure']['type'])
+
+    def test_uncertain_endpoint_error_cannot_be_overwritten_by_a_later_stable_state(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'R'}; server=dict(leader,pid=102,start=21,state='S')
+        for kind in ('fd','census','listener','birth','foreign','changed-group','deadline','generation'):
+            with self.subTest(kind=kind):
+                original=TimeoutError('original deadline') if kind=='deadline' else PermissionError('original '+kind+' observation')
+                owner=Mock(); owner.census.return_value=[leader,server]; owner.proc.return_value=dict(server,pgid=999) if kind=='changed-group' else server
+                if kind=='census': owner.census.side_effect=original
+                if kind=='birth': owner.proc.side_effect=original
+                listeners=Mock(return_value={'123'})
+                if kind=='listener': listeners.side_effect=original
+                checkpoint=Mock(side_effect=original if kind=='deadline' else None)
+                known={(pid,pid) for pid in range(200,207)} if kind=='generation' else set()
+                retained={'entries':[],'omitted':0}
+                with patch.object(module,'owned_fd_targets',side_effect=original if kind=='fd' else None,
+                                  return_value=[] if kind=='foreign' else ['socket:[123]']):
+                    with self.assertRaises(ValueError if kind in ('foreign','changed-group','generation') else type(original)) as caught:
+                        module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},known,checkpoint,6,listeners,[],{'entries':[],'omitted':0},retained)
+                if kind not in ('foreign','changed-group','generation'): self.assertIs(original,caught.exception)
+                self.assertEqual(1,len(retained['entries'])); self.assertEqual('refused',retained['entries'][0]['disposition'])
+                self.assertEqual(type(caught.exception).__name__,retained['entries'][0]['failure']['type'])
+                self.assertLessEqual(listeners.call_count,1)
+        # A known transition does not make a later denial retryable or replaceable.
+        original=PermissionError('second proof required FD denied')
+        owner=Mock(); owner.census.side_effect=lambda group:[leader,server]; owner.proc.return_value=server
+        retained={'entries':[],'omitted':0}; listeners=Mock(side_effect=[{'123'},{'456'},{'456'},{'456'}])
+        with patch.object(module,'owned_fd_targets',side_effect=[['socket:[123]'],original]) as reads:
+            with self.assertRaises(PermissionError) as caught:
+                module.observe_endpoint_ownership(owner,Mock(pid=101),leader,{(102,21)},{(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+        self.assertIs(original,caught.exception); self.assertEqual(2,reads.call_count)
+        self.assertEqual(3,owner.census.call_count); self.assertEqual(3,listeners.call_count)
+        self.assertEqual(['changed','refused'],[x['disposition'] for x in retained['entries']])
+        self.assertEqual('PermissionError',retained['entries'][1]['failure']['type'])
+        self.assertIsNone(retained['entries'][1]['afterInodes'])
+
+    def test_lifecycle_byte_cap_retains_structured_primary_cause(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); scratch=root/'scratch'; scratch.mkdir(); large=10**120
+            cause={'type':'PermissionError','message':'original observation refusal'}
+            value={'schema':module.RESULT_SCHEMA,'commandExit':0,'commandAccepted':False,'firstCause':cause,'additionalFailures':[],
+                   'ownerReceipt':{'exitObservation':{'code':0,'members':[{'pid':large+i,'start':large,'pgid':large,'state':'S'} for i in range(32)],'omittedMembers':0}}}
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value))
+            artifact=module.capture(scratch,root/'diagnostics',1)
+            retained=json.loads(artifact['logs'][0]['text'])
+            self.assertEqual(cause,retained['firstCause']); self.assertIn('lifecycle-byte-bound',artifact['omittedCoverage'])
+            self.assertEqual('lifecycle summary byte cap',retained['lifecycle']['projectionFailure']['message'])
+            # Non-lifecycle overflow must also remain complete typed JSON.
+            large_message='original primary observation '+('\u2603'*16000)
+            cause={'type':'PermissionError','message':large_message}
+            value={'schema':module.RESULT_SCHEMA,'commandExit':0,'commandAccepted':False,
+                   'firstCause':cause,'additionalFailures':[{'type':'ValueError','message':'secondary '*100} for _ in range(8)],
+                   'ownerReceipt':{'firstCause':cause,'additionalFailures':[{'type':'RuntimeError','message':'owner secondary '*100} for _ in range(7)]}}
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value,ensure_ascii=False))
+            artifact=module.capture(scratch,root/'overflow-diagnostics',1)
+            retained=json.loads(artifact['logs'][0]['text'])
+            self.assertEqual({'type':'PermissionError','message':large_message[:224]},retained['firstCause'])
+            self.assertEqual(retained['firstCause'],retained['owner']['firstCause'])
+            omissions=retained['omittedProjection']
+            self.assertEqual(len(large_message)-224,omissions['firstCause']['messageCharacters'])
+            self.assertEqual(8,omissions['additionalFailures']); self.assertEqual(7,omissions['ownerAdditionalFailures'])
+            self.assertIn('typed-summary-byte-bound',artifact['omittedCoverage'])
+            self.assertLessEqual(len(artifact['logs'][0]['text'].encode()),module.FILE_BYTES)
+
+    def test_denied_fd_direct_child_probe_requires_fresh_terminal_original_birth(self):
+        from unittest.mock import Mock, patch
+        row={'pid':101,'start':20,'pgid':101,'state':'R'}
+        for operation in ('directory','readlink'):
+            for disposition in ('absent','replaced','zombie','live','unknown','changed-group','still-running','poll-error'):
+                with self.subTest(operation=operation,disposition=disposition):
+                    original=PermissionError('original FD denial')
+                    next_birth = None if disposition == 'absent' else dict(row,start=21) if disposition == 'replaced' else dict(row,state='Z') if disposition == 'zombie' else dict(row,pgid=999) if disposition == 'changed-group' else PermissionError('fresh birth unknown') if disposition == 'unknown' else row
+                    observe=Mock(side_effect=[row,next_birth])
+                    probe=Mock(return_value=None if disposition == 'still-running' else 0)
+                    if disposition == 'poll-error': probe.side_effect=OSError('original Popen observation failed')
+                    additional=[]; retained={'entries':[],'omitted':0}
+                    with patch.object(module.Path,'iterdir',side_effect=original if operation == 'directory' else None,
+                                      return_value=[Path('/proc/101/fd/7')]), \
+                         patch.object(module.os,'readlink',side_effect=original):
+                        if disposition in ('absent','replaced','zombie'):
+                            self.assertEqual([],module.owned_fd_targets(row,observe,additional,terminal_probe=probe,denial_observations=retained))
+                        else:
+                            with self.assertRaises(PermissionError) as caught:
+                                module.owned_fd_targets(row,observe,additional,terminal_probe=probe,denial_observations=retained)
+                            self.assertIs(original,caught.exception)
+                    probe.assert_called_once()
+                    self.assertEqual(operation,retained['entries'][0]['operation'])
+                    self.assertEqual(row,retained['entries'][0]['freshBeforeTerminalPoll'])
+                    self.assertEqual(disposition == 'still-running' or disposition == 'poll-error',observe.call_count == 1)
+                    self.assertEqual(disposition in ('unknown','changed-group','poll-error'),bool(additional))
+
+    def test_denied_fd_probe_does_not_run_after_unknown_or_changed_group_and_observations_are_bounded(self):
+        from unittest.mock import Mock, patch
+        row={'pid':101,'start':20,'pgid':101,'state':'S'}
+        for fresh in (PermissionError('unknown birth'),dict(row,pgid=999),row):
+            with self.subTest(fresh=fresh):
+                original=PermissionError('original FD denial'); probe=Mock()
+                retained={'entries':[{}]*6,'omitted':0}; additional=[]
+                observe=Mock(side_effect=fresh) if isinstance(fresh,BaseException) else Mock(return_value=fresh)
+                with patch.object(module.Path,'iterdir',side_effect=original):
+                    with self.assertRaises(PermissionError) as caught:
+                        module.owned_fd_targets(row,observe,additional,terminal_probe=probe if isinstance(fresh,BaseException) or fresh['pgid'] != row['pgid'] else None,denial_observations=retained)
+                    self.assertIs(original,caught.exception)
+                probe.assert_not_called(); self.assertEqual(6,len(retained['entries'])); self.assertEqual(1,retained['omitted'])
+
+    def test_reaping_in_denied_fd_probe_cannot_bypass_owner_terminal_callback(self):
+        from unittest.mock import Mock, patch
+        with tempfile.TemporaryDirectory() as tmp:
+            spec=importlib.util.spec_from_file_location('fixture_owner',ROOT/'eng/shared_process_owner.py')
+            owner=importlib.util.module_from_spec(spec); spec.loader.exec_module(owner)
+            leader={'pid':101,'start':20,'pgid':101,'ppid':os.getpid(),'state':'S','rss':1}
+            child=Mock(pid=101,returncode=0); child.poll.return_value=0
+            observe=Mock(side_effect=[leader,None]); events=[]; retained={'entries':[],'omitted':0}
+            def hook(event,*args):
+                events.append(event)
+                if event == 'poll':
+                    original=PermissionError('transition FD denial')
+                    with patch.object(module.Path,'iterdir',side_effect=original):
+                        self.assertEqual([],module.owned_fd_targets(leader,observe,terminal_probe=child.poll,denial_observations=retained))
+                if event == 'child-exit-observed': self.assertGreaterEqual(child.poll.call_count,2)
+            with patch.object(owner.subprocess,'Popen',return_value=child), \
+                 patch.object(owner,'proc',side_effect=lambda pid: leader if pid == 101 else dict(leader,pid=pid)), \
+                 patch.object(owner,'census',return_value=[]), \
+                 patch.object(owner,'observed_escapes',return_value=[]),patch.object(owner.os,'killpg'):
+                owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,str(Path(tmp)/'run.log'),
+                          control=hook,observe_child_exit=True)
+            self.assertEqual(1,events.count('child-exit-observed'))
+            self.assertLess(events.index('poll'),events.index('child-exit-observed'))
+            self.assertEqual(0,retained['entries'][0]['terminalExit'])
+
+    def test_actual_retirement_path_fresh_sole_server_and_live_unknown_foreign_refusals(self):
+        from unittest.mock import Mock, patch
+        server={'pid':102,'start':21,'pgid':101,'state':'S'}
+        leader={'pid':101,'start':20,'pgid':101,'state':'S'}
+        for kind in ('sole','empty','foreign','multiple','replaced','changed-group','unknown','live','nonzero','generation-cap'):
+            with self.subTest(kind=kind):
+                child=Mock(returncode=None if kind == 'live' else 37 if kind == 'nonzero' else 0)
+                rows=[] if kind == 'empty' else [server,leader] if kind in ('foreign','multiple') else [server]
+                owner=Mock(); owner.census.return_value=rows
+                owner.proc.return_value=dict(server,start=22) if kind == 'replaced' else dict(server,pgid=999) if kind == 'changed-group' else server
+                if kind == 'unknown': owner.proc.side_effect=PermissionError('unknown birth')
+                servers={(102,21),(103,22)} if kind == 'multiple' else {(102,21)}
+                stops=[]; known=set(); checkpoint=Mock(); observation={'members':None}
+                with patch.object(module.signal,'pidfd_send_signal') as send:
+                    args=(owner,child,leader,servers,{(102,21):77},stops,checkpoint,known,1 if kind == 'generation-cap' else 6,observation)
+                    if kind in ('replaced','changed-group','unknown','live','generation-cap'):
+                        with self.assertRaises((ValueError,PermissionError)): module.retire_original_server(*args)
+                    else:
+                        members=module.retire_original_server(*args)
+                        self.assertEqual({(r['pid'],r['start']) for r in rows},members)
+                    if kind == 'sole':
+                        send.assert_called_once_with(77,module.signal.SIGTERM)
+                        self.assertEqual((102,21),(stops[0]['pid'],stops[0]['start']))
+                    else:
+                        send.assert_not_called(); self.assertEqual([],stops)
+                    child.poll.assert_not_called()
+                    if kind == 'live': self.assertIsNone(observation['members'])
+                    else: self.assertEqual({(r['pid'],r['start']) for r in rows},observation['members'])
+
+    def test_opt_in_owner_exit_hook_precedes_fresh_refusal_and_preserves_default_events(self):
+        from unittest.mock import Mock, patch
+        for opt_in in (False, True):
+            for remaining in ([], [{'pid':102,'start':21,'pgid':101,'state':'S','rss':1}]):
+                with self.subTest(opt_in=opt_in, remaining=remaining), tempfile.TemporaryDirectory() as tmp:
+                    spec = importlib.util.spec_from_file_location('fixture_owner', ROOT / 'eng/shared_process_owner.py')
+                    owner = importlib.util.module_from_spec(spec); spec.loader.exec_module(owner)
+                    leader = {'pid':101,'start':20,'pgid':101,'ppid':os.getpid(),'state':'S','rss':1}
+                    child = Mock(pid=101, returncode=0); child.poll.return_value=0
+                    events = []; observations = []
+                    def hook(event, child, birth, known):
+                        events.append(event)
+                        if event == 'child-exit-observed':
+                            self.assertGreater(child.poll.call_count,0)
+                            self.assertEqual(1, census.call_count)
+                            observations.append(dict(known))
+                    with patch.object(owner.subprocess,'Popen',return_value=child), \
+                         patch.object(owner,'proc',side_effect=lambda pid: leader if pid == 101 else dict(leader,pid=pid,pgid=pid)), \
+                         patch.object(owner,'census',side_effect=[[leader],remaining,[],[],[]]) as census, \
+                         patch.object(owner,'observed_escapes',return_value=[]), \
+                         patch.object(owner.os,'killpg') as killpg:
+                        log = str(Path(tmp)/'run.log')
+                        if remaining:
+                            with self.assertRaisesRegex(RuntimeError,'live owned-group descendants'):
+                                owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,log,
+                                          control=hook,observe_child_exit=opt_in)
+                        else:
+                            owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,log,
+                                      control=hook,observe_child_exit=opt_in)
+                    self.assertEqual(opt_in,'child-exit-observed' in events)
+                    self.assertEqual(['before-popen','after-birth','poll'],events[:3])
+                    self.assertEqual('after-cleanup',events[-1])
+                    receipt = json.loads(Path(log+'.result.json').read_text())
+                    self.assertEqual(remaining and [{'pid':102,'start':21,'pgid':101,'state':'S'}] or [],receipt['exitObservation']['members'])
+                    self.assertEqual('observed-empty-group',receipt['cleanup'])
+
+    def test_unknown_birth_and_hook_failure_do_not_license_terminal_success(self):
+        from unittest.mock import Mock, patch
+        for unknown in (False,True):
+            with self.subTest(unknown=unknown), tempfile.TemporaryDirectory() as tmp:
+                spec = importlib.util.spec_from_file_location('fixture_owner', ROOT / 'eng/shared_process_owner.py')
+                owner = importlib.util.module_from_spec(spec); spec.loader.exec_module(owner)
+                leader = {'pid':101,'start':20,'pgid':101,'ppid':os.getpid(),'state':'S','rss':1}
+                child=Mock(pid=101,returncode=0); child.poll.return_value=0
+                original=PermissionError('terminal observation unavailable'); events=[]
+                def hook(event,*args):
+                    events.append(event)
+                    if event == 'child-exit-observed': raise original
+                with patch.object(owner.subprocess,'Popen',return_value=child), \
+                     patch.object(owner,'proc',side_effect=lambda pid: None if unknown else dict(leader,pid=pid)), \
+                     patch.object(owner,'census',return_value=[]), \
+                     patch.object(owner,'observed_escapes',return_value=[]), \
+                     patch.object(owner.os,'killpg') as killpg, patch.object(owner.os,'kill') as kill:
+                    log=str(Path(tmp)/'run.log')
+                    with self.assertRaises(BaseException) as caught:
+                        owner.run(['fixture'],tmp,{},owner.time.monotonic()+10,0,100,log,
+                                  control=hook,observe_child_exit=True)
+                    if unknown:
+                        self.assertNotIn('child-exit-observed',events)
+                        killpg.assert_not_called(); kill.assert_not_called()
+                    else:
+                        self.assertIs(original,caught.exception)
+                receipt=json.loads(Path(log+'.result.json').read_text())
+                self.assertEqual(unknown,receipt['birthIdentityUnavailable'])
+                self.assertIsNone(receipt['exitObservation'] if unknown else receipt['exitObservation']['members'])
+
+    def test_lifecycle_projection_preserves_unknown_empty_and_refusing_identity(self):
+        unknown=module.lifecycle_summary({'ownerReceipt':{}})
+        self.assertIsNone(unknown['adapterExitMembership'])
+        self.assertIsNone(unknown['ownerExitObservation'])
+        value={'originalServerBirths':[{'pid':102,'start':21,'private':'NEVER COPY'}],
+               'exitMembers':[], 'originalServerStopRequests':[],
+               'ownerReceipt':{'exitObservation':{'code':0,'members':[{'pid':103,'start':22,'pgid':101,'state':'S','private':'NEVER COPY'}], 'omittedMembers':0}},
+               'input':{'private':'NEVER COPY'}}
+        value['ownerReceipt']['leader']={'pid':101,'start':20,'pgid':101,'state':'S','private':'NEVER COPY'}
+        value['fdDenialObservations']={'entries':[{'operation':'directory','before':{'pid':101,'start':20,'pgid':101,'state':'R'},'freshBeforeTerminalPoll':{'pid':101,'start':20,'pgid':101,'state':'R'},'terminalPollAttempted':True,'terminalExit':0,'freshAfterTerminalPoll':None,'observationFailure':None,'private':'NEVER COPY'}],'omitted':0}
+        value['endpointObservations']={'entries':[{'event':'poll','attempt':2,'disposition':'refused',
+            'beforeInodes':{'values':['123'],'omitted':0,'private':'NEVER COPY'},'afterInodes':{'values':['456'],'omitted':0},
+            'matchedInodes':{'values':['123'],'omitted':0},'beforeMembers':{'members':[{'pid':102,'start':21,'pgid':101,'state':'S'}],'omittedMembers':0},
+            'afterMembers':None,'failure':{'type':'ValueError','message':'endpoint changed'},'private':'NEVER COPY'}],'omitted':9}
+        summary=module.lifecycle_summary(value)
+        self.assertEqual(9,summary['endpointObservations']['omitted'])
+        self.assertEqual(['456'],summary['endpointObservations']['entries'][0]['afterInodes']['values'])
+        self.assertEqual([],summary['adapterExitMembership']['members'])
+        self.assertEqual(103,summary['ownerExitObservation']['membership']['members'][0]['pid'])
+        self.assertNotIn('NEVER COPY',json.dumps(summary))
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp); scratch=root/'scratch'; scratch.mkdir()
+            value.update(schema=module.RESULT_SCHEMA,commandExit=0,commandAccepted=False,firstCause={'type':'RuntimeError','message':'live owned-group descendants'},additionalFailures=[])
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value))
+            artifact=module.capture(scratch,root/'diagnostics',1)
+            retained=json.loads(artifact['logs'][0]['text'])
+            self.assertEqual(summary,retained['lifecycle'])
+            self.assertNotIn('NEVER COPY',json.dumps(artifact))
+            value['ownerReceipt']['exitObservation']['omittedMembers'] = {'private':'NEVER COPY'}
+            (scratch/'runner.log.attempt-1.command.json').write_text(json.dumps(value))
+            malformed=module.capture(scratch,root/'malformed-diagnostics',1)
+            self.assertIn('live owned-group descendants',malformed['logs'][0]['text'])
+            self.assertIn('lifecycle-fields-unavailable',malformed['omittedCoverage'])
+            self.assertNotIn('NEVER COPY',json.dumps(malformed))
+
+    def test_denied_fd_observation_requires_fresh_terminal_original_birth(self):
+        from unittest.mock import Mock, patch
+        row = dict(pid=101, start=20, pgid=101, state='R')
+        vectors = [(None, True), (dict(row, start=21), True),
+                   (dict(row, state='Z'), True), (dict(row), False),
+                   (dict(row, state='S'), False), (dict(row, state='Z', pgid=102), False)]
+        for operation in ('directory', 'link'):
+            for fresh, terminal in vectors:
+                with self.subTest(operation=operation, fresh=fresh):
+                    error = PermissionError('original denied FD observation')
+                    observe = Mock(return_value=fresh)
+                    additional = []
+                    with patch.object(module.Path, 'iterdir', side_effect=error if operation == 'directory' else None,
+                                      return_value=[Path('/proc/101/fd/7')]), \
+                         patch.object(module.os, 'readlink', side_effect=error):
+                        if terminal:
+                            self.assertEqual([], module.owned_fd_targets(row, observe, additional))
+                        else:
+                            with self.assertRaises(PermissionError) as caught:
+                                module.owned_fd_targets(row, observe, additional)
+                            self.assertIs(error, caught.exception)
+                        if fresh is not None and fresh['start'] == row['start'] and fresh['pgid'] != row['pgid']:
+                            self.assertEqual('ValueError', additional[0]['type'])
+                            self.assertIn('server group changed', additional[0]['message'])
+                        else:
+                            self.assertEqual([], additional)
+                    observe.assert_called_once_with(row['pid'])
+
+    def test_fd_observation_retains_targets_bounds_and_unknown_birth_failure(self):
+        from unittest.mock import Mock, patch
+        row = dict(pid=101, start=20, pgid=101, state='R')
+        with patch.object(module.Path, 'iterdir', return_value=[Path('/proc/101/fd/7')]), \
+             patch.object(module.os, 'readlink', return_value='socket:[123]'):
+            self.assertEqual(['socket:[123]'], module.owned_fd_targets(row, Mock()))
+        with patch.object(module.Path, 'iterdir', return_value=[Path('/proc/101/fd/7')] * 257):
+            with self.assertRaisesRegex(ValueError, 'server FD cap'):
+                module.owned_fd_targets(row, Mock())
+        original = PermissionError('original denied FD observation')
+        additional = []
+        with patch.object(module.Path, 'iterdir', side_effect=original):
+            with self.assertRaises(PermissionError) as caught:
+                module.owned_fd_targets(row, Mock(side_effect=PermissionError('fresh birth unreadable')), additional)
+            self.assertIs(original, caught.exception)
+            self.assertEqual([module.failure_record(PermissionError('fresh birth unreadable'))], additional)
+
+    def spec(self):
+        return dict(schema=module.COMMAND_SCHEMA, role='verify', argv=['/quint','verify','/model'],
+                    pins=[{'path':'/input'+str(i),'bytes':10,'sha256':'a'*64} for i in range(5)], aliases=[],
+                    semanticToolchainId=module.TOOLCHAIN_ID, archiveSha256='b'*64,
+                    started=100.0, workDeadline=250.0, totalDeadline=280.0, workSeconds=150,
+                    cleanupSeconds=30, rssBytes=6*1024**3, logBytes=8*1024**2, maximumGenerations=6,
+                    endpoint=19822, jvmArgs=['-Xmx1024m','-Xms64m'],
+                    tlcConfig={'maxHeap':'-Xmx2G','stackSize':'-Xss64m','workers':1},
+                    mutableScope={'cwd':'/scope','tmpdir':'/scope/tmp','diskBytes':1073741824,
+                                  'inventorySeconds':1,'maximumEntries':25000,'sampleIntervalSeconds':.5,
+                                  'javaToolOptions':'-Djava.io.tmpdir=/scope/tmp',
+                                  'denoDir':'/scope/cache/deno','xdgCacheHome':'/scope/cache'})
+
+    def test_actual_shape_separates_semantic_identity_from_archive_bytes(self):
+        result = module.command_preflight(self.spec(), now=101)
+        self.assertTrue(result['passed'])
+        self.assertNotEqual(self.spec()['semanticToolchainId'], self.spec()['archiveSha256'])
+
+    def test_resource_clock_and_actual_field_contradictions_refuse(self):
+        replacements = [('role','watch'), ('semanticToolchainId','b'*64), ('archiveSha256','not-a-digest'),
+                        ('workDeadline',251), ('totalDeadline',281), ('started',float('nan')),
+                        ('jvmArgs',['-Xmx4096m']), ('rssBytes',2*1024**3), ('maximumGenerations',7),
+                        ('tlcConfig',{'maxHeap':'-Xmx8G','stackSize':'-Xss515m','workers':'auto'})]
+        for field, value in replacements:
+            with self.subTest(field=field):
+                spec = self.spec(); spec[field] = value
+                with self.assertRaises(ValueError): module.command_preflight(spec, now=101)
+        with self.assertRaises(ValueError): module.command_preflight(self.spec(), now=250)
+        spec = self.spec(); del spec['pins']
+        with self.assertRaises(ValueError): module.command_preflight(spec, now=101)
+
+    def test_at_watch_does_not_repurpose_a_dispatch_runtime_entry(self):
+        self.assertEqual('watch', module.command_role('credential-entry','watch'))
+        with self.assertRaises(ValueError): module.command_role('dispatch-runtime-entry','watch')
+        self.assertEqual('dispatch', module.command_role('dispatch-runtime-entry','dispatch'))
+
+    def test_actual_launch_grant_uses_original_sixty_seconds(self):
+        module.validate_launch_grant({'startedAtEpoch':1000,'launchBeforeEpoch':1060})
+        for grant in [{'startedAtEpoch':1000,'absoluteDeadlineEpoch':1060},
+                      {'startedAtEpoch':1000,'launchBeforeEpoch':1120},
+                      {'startedAtEpoch':float('nan'),'launchBeforeEpoch':float('nan')}]:
+            with self.assertRaises(ValueError): module.validate_launch_grant(grant)
+
+    def test_actual_extraction_fields_do_not_establish_compiler_acceptance(self):
+        receipt = dict(accepted=True, selectedManifestSha256='a'*64,
+                       allSelectedBytesAndModesVerified=True, extractedCodeExecuted=False, providerRequests=0)
+        self.assertEqual({'extractionAccepted':True,'compilerAccepted':False,'ciAccepted':False},
+                         module.extraction_receipt_join(receipt,'a'*64))
+        wrong = copy.deepcopy(receipt); del wrong['allSelectedBytesAndModesVerified']
+        wrong['allBytesModesVerified'] = True
+        with self.assertRaises(ValueError): module.extraction_receipt_join(wrong,'a'*64)
+        with self.assertRaises(ValueError): module.extraction_receipt_join(receipt,'b'*64)
+        with self.assertRaises(ValueError): module.extraction_receipt_join(receipt,None)
+        wrong = copy.deepcopy(receipt); wrong['providerRequests'] = False
+        with self.assertRaises(ValueError): module.extraction_receipt_join(wrong,'a'*64)
+
+    def test_expected_server_retirement_cannot_accept_foreign_live_descendants(self):
+        receipt = {'exit':0,'firstCause':'RuntimeError: child exited with live owned-group descendants',
+                   'leader':{'pgid':101},'exitObservation':{'code':0,'omittedMembers':0,
+                   'members':[{'pid':101,'start':20,'pgid':101,'state':'S'}]}}
+        stops = [{'pid':101,'start':20,'signal':15,'disposition':'sent'}]
+        self.assertTrue(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},stops))
+        self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},[]))
+        for servers, members in [(set(),set()), ({(101,20)},{(101,20),(102,21)}),
+                                 ({(101,20)},{(101,19)}), ({(101,20)},None), ({(101,20),(102,21)},{(101,20),(102,21)})]:
+            with self.subTest(servers=servers,members=members):
+                self.assertFalse(module.expected_server_retirement(receipt,servers,members,stops))
+        for observation in (None, {}, {'code':0,'members':None,'omittedMembers':None},
+                            {'code':0,'members':[],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':20,'pgid':101,'state':'S'}, {'pid':102,'start':21,'pgid':101,'state':'S'}],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':19,'pgid':101,'state':'S'}],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':20,'pgid':999,'state':'S'}],'omittedMembers':0},
+                            {'code':0,'members':[{'pid':101,'start':20,'pgid':101,'state':'S'}],'omittedMembers':1}):
+            with self.subTest(ownerObservation=observation):
+                later = copy.deepcopy(receipt); later['exitObservation'] = observation
+                # Adapter sole-server membership and recorded stop never waive
+                # the owner's later unknown/foreign/replaced/partial refusal.
+                self.assertFalse(module.expected_server_retirement(later,{(101,20)},{(101,20)},stops))
+        receipt['exit'] = 37
+        self.assertFalse(module.expected_server_retirement(receipt,{(101,20)},{(101,20)},stops))
+
+    def test_first_failure_projection_is_serializable_bounded_and_filters_secrets(self):
+        original = module.failure_record(RuntimeError('original compiler failure'))
+        secondary = module.failure_record(OSError('report failed'))
+        body = json.loads(json.dumps({'firstCause':original,'additionalFailures':[secondary]}))
+        self.assertEqual('original compiler failure',body['firstCause']['message'])
+        self.assertEqual('report failed',body['additionalFailures'][0]['message'])
+        self.assertLessEqual(len(module.failure_record(ValueError('x'*4096))['message']),512)
+        self.assertNotIn('synthetic-secret',module.failure_record(ValueError('Authorization: Bearer synthetic-secret'))['message'])
 
 
 if __name__ == '__main__': unittest.main()
