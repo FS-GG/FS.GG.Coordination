@@ -72,3 +72,10 @@ EOF from replacing an omitted failure proof. Secondary retirement-action details
 may yield to the first cause/current proof, with each omission counted. The phase table keeps late starts Retiring after stop/return
 and duplicate terminal evidence Terminal. A release request is not an observed
 start: confirmed launch refusal may report NoEffect; ambiguity cannot.
+
+When failure-bearing metadata cannot fit, the reducer first compacts diagnostic
+details, then reports omitted positive proof as Unknown. An oversized cleanup
+bundle can project Incomplete with unavailable custody and counted unresolved
+generations. Private actual-completion history only rejects contradictory later
+bundles; it never restores omitted public proof or grants release authority.
+The first cause keeps its originating event phase and original timestamp.

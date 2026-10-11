@@ -467,3 +467,100 @@ module ContractTests =
         Assert.True(Lifecycle.apply (now 120L) (ExitObserved(known(Exited 0))) state |> Result.isError)
         let valid = Known(Exited 0,{ stamp with At = Some(now 115L) })
         Assert.True(Lifecycle.apply (now 120L) (ExitObserved valid) state |> Result.isOk)
+
+    let private nonActionMetadataPressure () =
+        let proof = { stamp with Provenance = { evidence with Reference = String.replicate 2048 "p" } }
+        let value = { evidence with Reference = String.replicate 2048 "v" }
+        let state = launched() |> apply (CapabilitiesObtained [ { Capability = StableLeaderIdentity; Obtained = Known(value,proof) }; { Capability = WorkloadEmptyObservation; Obtained = Known(value,proof) } ])
+        Assert.Empty((Lifecycle.snapshot state).Cleanup.RequestedActions)
+        Assert.True(Lifecycle.metadataBytes state > 50000L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 (Validation.limits.ResultMetadataBytes - Validation.limits.FirstCauseReserveBytes))
+        state
+
+    [<Fact>]
+    let ``cleanup violation keeps original first cause under no action evidence pressure`` () =
+        let state = nonActionMetadataPressure()
+        let failure = { (diagnostic "cleanup-original") with Message = String.replicate 4096 "x" }
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with LeaderTermination = LimitExceeded failure }
+        let state = state |> apply (CleanupObserved cleanup)
+        let result = Lifecycle.snapshot state
+        Assert.Equal("cleanup-original",result.FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(Running,result.FirstFailure.Value.Phase)
+        Assert.Equal(Some(now 100L),result.FirstFailure.Value.At)
+        Assert.Equal(Retiring,result.Phase)
+        Assert.Equal(CleanupUnknown,result.Cleanup.Disposition)
+        Assert.True(match result.Cleanup.LeaderTermination with LimitExceeded d -> d.Code = "cleanup-original" | _ -> false)
+        Assert.True(result.OmittedDiagnosticDetails > 0L)
+        Assert.Equal(0L,result.OmittedFailures)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        Assert.True(Lifecycle.apply (now 100L) TargetReleaseRequested state |> Result.isError)
+
+    [<Fact>]
+    let ``simultaneous cleanup violations preserve maximum codes and negative facts within metadata cap`` () =
+        let state = nonActionMetadataPressure()
+        let failure letter = { (diagnostic (String.replicate Validation.limits.CodeBytes letter)) with Message = String.replicate Validation.limits.MessageBytes "x" }
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with LeaderTermination = LimitExceeded(failure "l"); WorkloadEmpty = LimitExceeded(failure "e"); OwnedChildrenReaped = LimitExceeded(failure "r"); LocalTasks = LimitExceeded(failure "t") }
+        let state = state |> apply (CleanupObserved cleanup)
+        let result = Lifecycle.snapshot state
+        Assert.Equal(String.replicate 64 "l",result.FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(Running,result.FirstFailure.Value.Phase)
+        Assert.Equal(Some(now 100L),result.FirstFailure.Value.At)
+        Assert.Equal(Retiring,result.Phase)
+        Assert.Equal(CleanupUnknown,result.Cleanup.Disposition)
+        Assert.True(match result.Cleanup.LeaderTermination with LimitExceeded d -> d.Code = String.replicate 64 "l" | _ -> false)
+        Assert.True(match result.Cleanup.WorkloadEmpty with LimitExceeded d -> d.Code = String.replicate 64 "e" | _ -> false)
+        Assert.True(match result.Cleanup.OwnedChildrenReaped with LimitExceeded d -> d.Code = String.replicate 64 "r" | _ -> false)
+        Assert.True(match result.Cleanup.LocalTasks with LimitExceeded d -> d.Code = String.replicate 64 "t" | _ -> false)
+        Assert.True(result.OmittedDiagnosticDetails > 0L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        Assert.True(Lifecycle.apply (now 100L) (CleanupObserved { cleanup with Disposition = Complete }) state |> Result.isError)
+
+    [<Fact>]
+    let ``oversized complete cleanup projects uncertainty and keeps actual completion history`` () =
+        let generation = { generation with BirthToken = String.replicate 2048 "b" }
+        let stamp = { stamp with Generation = Some generation }
+        let known value = Known(value,stamp)
+        let proof = { stamp with Provenance = { evidence with Reference = String.replicate 2048 "p" } }
+        let state = prepared() |> apply BeginLaunch |> apply TargetReleaseRequested |> apply (LaunchObserved(Started generation))
+        let state = state |> apply (ReaderObserved(Stdout,known Eof)) |> apply (ReaderObserved(Stderr,known Eof))
+        let failure = { (diagnostic "cleanup-large-proof-original") with Message = String.replicate 4096 "x" }
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with Disposition = Complete; LeaderTermination = Known(true,proof); LocalTasks = Known(Settled,proof); WorkloadEmpty = LimitExceeded failure; Custody = Released proof }
+        let state = state |> apply (CleanupObserved cleanup)
+        let result = Lifecycle.snapshot state
+        Assert.Equal(Terminal,result.Phase)
+        Assert.Equal("cleanup-large-proof-original",result.FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(Running,result.FirstFailure.Value.Phase)
+        Assert.Equal(Some(now 100L),result.FirstFailure.Value.At)
+        Assert.Equal(Incomplete,result.Cleanup.Disposition)
+        Assert.True(match result.Cleanup.LeaderTermination with Unknown _ -> true | _ -> false)
+        Assert.True(match result.Cleanup.LocalTasks with Unknown _ -> true | _ -> false)
+        Assert.True(match result.Cleanup.Custody with AuthorityUnavailable _ -> true | _ -> false)
+        Assert.True(match result.Cleanup.WorkloadEmpty with LimitExceeded d -> d.Code = "cleanup-large-proof-original" | _ -> false)
+        Assert.True(result.OmittedDiagnosticDetails > 0L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+        Assert.True(Lifecycle.apply (now 100L) (CleanupObserved { cleanup with Disposition = Incomplete }) state |> Result.isError)
+        let returned = state |> apply ReturnRequested |> Lifecycle.snapshot
+        Assert.Equal(Terminal,returned.Phase)
+        Assert.Equal(Incomplete,returned.Cleanup.Disposition)
+        Assert.True(match returned.Cleanup.LeaderTermination with Unknown _ -> true | _ -> false)
+
+    [<Fact>]
+    let ``oversized unresolved and custody evidence preserve unknowns with truthful omissions`` () =
+        let state = launched()
+        let unknowns = [ for i in 1 .. Validation.limits.CollectionEntries -> { generation with Pid = 100 + i; BirthToken = String.replicate 2048 (string (char (65 + i % 26))) } ]
+        let failure = { (diagnostic "cleanup-large-unresolved-original") with Message = String.replicate 4096 "x" }
+        let retained = { OwnerId = String.replicate 64 "o"; Evidence = { evidence with Reference = String.replicate 2048 "p" } }
+        let cleanup = { (Lifecycle.snapshot state).Cleanup with Disposition = Incomplete; LeaderTermination = LimitExceeded failure; Unresolved = unknowns; OmittedUnresolved = Int64.MaxValue - 1L; Custody = RetainedByOwner retained }
+        let state = state |> apply (CleanupObserved cleanup)
+        let result = Lifecycle.snapshot state
+        Assert.Equal("cleanup-large-unresolved-original",result.FirstFailure.Value.Diagnostic.Code)
+        Assert.Equal(Running,result.FirstFailure.Value.Phase)
+        Assert.Equal(Some(now 100L),result.FirstFailure.Value.At)
+        Assert.Equal(Incomplete,result.Cleanup.Disposition)
+        Assert.Empty(result.Cleanup.Unresolved)
+        Assert.Equal(Int64.MaxValue,result.Cleanup.OmittedUnresolved)
+        Assert.True(match result.Cleanup.Custody with AuthorityUnavailable _ -> true | _ -> false)
+        Assert.True(match result.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+        Assert.True(match result.Cleanup.LeaderTermination with LimitExceeded d -> d.Code = "cleanup-large-unresolved-original" | _ -> false)
+        Assert.True(result.OmittedDiagnosticDetails > 0L)
+        Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
