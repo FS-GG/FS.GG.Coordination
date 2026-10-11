@@ -62,14 +62,16 @@ let private withRepositoryMutation mutate verify =
 let ``production graph satisfies dependency policy`` () =
     let exitCode, output, error = runVerifier repositoryRoot
     Assert.Equal(0, exitCode)
-    Assert.Equal("DEPENDENCY_POLICY_OK projects=16", output)
+    Assert.Equal("DEPENDENCY_POLICY_OK projects=17", output)
     Assert.Equal("", error)
 
-[<Fact>]
-let ``process contracts reject a provider project edge`` () =
+[<Theory>]
+[<InlineData("FS.GG.Execution.Contracts")>]
+[<InlineData("FS.GG.Execution.Processes")>]
+let ``process layers reject a provider project edge`` (project: string) =
     withRepositoryMutation
         (fun root ->
-            let path = Path.Combine(root, "src/FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj")
+            let path = Path.Combine(root, "src", project, project + ".fsproj")
             let document = XDocument.Load path
             document.Root.Add(
                 XElement(
@@ -85,15 +87,17 @@ let ``process contracts reject a provider project edge`` () =
             let exitCode, _, error = runVerifier root
             Assert.NotEqual(0, exitCode)
             Assert.Contains(
-                "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Execution.Contracts dependency=FS.GG.Coordination.GitHub rule=project-edge-not-allowed",
+                $"DEPENDENCY_POLICY_VIOLATION project={project} dependency=FS.GG.Coordination.GitHub rule=project-edge-not-allowed",
                 error
             ))
 
-[<Fact>]
-let ``process contracts reject a host runtime reference`` () =
+[<Theory>]
+[<InlineData("FS.GG.Execution.Contracts")>]
+[<InlineData("FS.GG.Execution.Processes")>]
+let ``process layers reject a host runtime reference`` (project: string) =
     withRepositoryMutation
         (fun root ->
-            let path = Path.Combine(root, "src/FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj")
+            let path = Path.Combine(root, "src", project, project + ".fsproj")
             let document = XDocument.Load path
             document.Root.Add(
                 XElement(
@@ -109,7 +113,7 @@ let ``process contracts reject a host runtime reference`` () =
             let exitCode, _, error = runVerifier root
             Assert.NotEqual(0, exitCode)
             Assert.Contains(
-                "DEPENDENCY_POLICY_VIOLATION project=FS.GG.Execution.Contracts dependency=Microsoft.AspNetCore.App rule=runtime-reference-not-allowed-in-pure-layer",
+                $"DEPENDENCY_POLICY_VIOLATION project={project} dependency=Microsoft.AspNetCore.App rule=runtime-reference-not-allowed-in-pure-layer",
                 error
             ))
 

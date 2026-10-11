@@ -522,96 +522,104 @@ let ``installed source refuses digest mismatch replacement and truncation before
                 stream.WriteByte 0xffuy)
 
         for mutation in [ "replacement"; "truncation" ] do
-            use value = fixtureWithExecutable (writeSparseExecutable (128L * 1024L * 1024L))
+            use value = fixtureWithExecutable (writeSparseExecutable (2L * 1024L * 1024L))
 
             let receipts =
                 ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
 
-            let source =
-                LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
-                :> ILearningInstalledReadinessSource
-
-            let operation: Task<Result<LearningInstalledReadinessSnapshot, string>> =
-                Task.Run<Result<LearningInstalledReadinessSnapshot, string>>(
-                    Func<Task<Result<LearningInstalledReadinessSnapshot, string>>>(fun () ->
-                        source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None))
-                )
-
             let mutable mutations = 0
 
-            while not operation.IsCompleted && mutations < 64 do
+            let afterFirstRead () =
+                Assert.Equal(0, receipts.Calls)
+
                 if mutation = "replacement" then
-                    let replacement = value.Executable + $".replacement-%d{mutations}"
-                    writeSparseExecutable (128L * 1024L * 1024L) replacement
+                    let replacement = value.Executable + ".replacement"
+                    writeSparseExecutable (2L * 1024L * 1024L) replacement
                     File.SetUnixFileMode(
                         replacement,
                         UnixFileMode.UserRead ||| UnixFileMode.UserWrite ||| UnixFileMode.UserExecute
                     )
+                    Assert.Equal(shaFile value.Executable, shaFile replacement)
                     File.Move(replacement, value.Executable, true)
                 else
                     use stream = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
-                    stream.SetLength(1024L + int64 mutations)
+                    stream.SetLength 1024L
 
                 mutations <- mutations + 1
-                Thread.Yield() |> ignore
 
-            let! result = operation
-            Assert.True(mutations > 0)
-            Assert.True(Result.isError result)
+            let source =
+                LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts, afterFirstRead)
+                :> ILearningInstalledReadinessSource
+
+            let! result = source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None)
+            Assert.Equal(1, mutations)
+
+            let expected =
+                if mutation = "replacement" then
+                    "learning-installed-file-changed"
+                else
+                    "learning-installed-file-truncated"
+
+            Assert.Equal<Result<LearningInstalledReadinessSnapshot, string>>(Error expected, result)
             Assert.Equal(0, receipts.Calls)
     }
 
 [<Fact>]
 let ``installed source refuses same inode prefix mutation even when mtime is restored`` () =
     task {
-        use value = fixtureWithExecutable (writeSparseExecutable 286594376L)
+        use value = fixtureWithExecutable (writeSparseExecutable (2L * 1024L * 1024L))
 
         let receipts =
             ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
 
+        let originalModified = File.GetLastWriteTimeUtc value.Executable
+        let originalSha = shaFile value.Executable
+        let mutable mutations = 0
+
+        let afterFirstRead () =
+            Assert.Equal(0, receipts.Calls)
+            // The prefix has already entered the digest; only retained custody detects this rewrite.
+            use writer = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
+            writer.Position <- 0L
+            writer.WriteByte 0x58uy
+            writer.Flush true
+            File.SetLastWriteTimeUtc(value.Executable, originalModified)
+            mutations <- mutations + 1
+
         let source =
-            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts)
+            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts, afterFirstRead)
             :> ILearningInstalledReadinessSource
 
-        let originalModified = File.GetLastWriteTimeUtc value.Executable
-
-        let operation: Task<Result<LearningInstalledReadinessSnapshot, string>> =
-            Task.Run<Result<LearningInstalledReadinessSnapshot, string>>(
-                Func<Task<Result<LearningInstalledReadinessSnapshot, string>>>(fun () ->
-                    source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None))
-            )
-
-        let descriptorRoot = $"/proc/%d{Environment.ProcessId}/fd"
-        let deadline = DateTime.UtcNow.AddSeconds 5.
-        let mutable opened = false
-
-        while not opened && not operation.IsCompleted && DateTime.UtcNow < deadline do
-            opened <-
-                Directory.EnumerateFiles descriptorRoot
-                |> Seq.exists (fun descriptor ->
-                    try
-                        let target = File.ResolveLinkTarget(descriptor, false)
-                        not (isNull target) && target.FullName = value.Executable
-                    with
-                    | :? IOException
-                    | :? UnauthorizedAccessException -> false)
-
-            if not opened then
-                Thread.Yield() |> ignore
-
-        Assert.True(opened, "production executable descriptor was not observed")
-        Thread.Sleep 10
-
-        use writer = File.Open(value.Executable, FileMode.Open, FileAccess.Write, FileShare.ReadWrite)
-        writer.Position <- 0L
-        writer.WriteByte 0x58uy
-        writer.Flush true
-        File.SetLastWriteTimeUtc(value.Executable, originalModified)
-
-        let! result = operation
-        Assert.True(Result.isError result)
+        let! result = source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None)
+        Assert.Equal(1, mutations)
+        Assert.Equal<Result<LearningInstalledReadinessSnapshot, string>>(Error "learning-installed-file-changed", result)
         Assert.Equal(originalModified, File.GetLastWriteTimeUtc value.Executable)
+        Assert.NotEqual(originalSha, shaFile value.Executable)
         Assert.Equal(0, receipts.Calls)
+    }
+
+[<Fact>]
+let ``executable read observation runs once without changing installed readiness authority`` () =
+    task {
+        use value = fixtureWithExecutable (writeSparseExecutable (2L * 1024L * 1024L))
+
+        let receipts =
+            ReceiptSource(successReceipt (value.Now.AddMinutes(-1.)) (value.Now.AddMinutes 3.))
+
+        let mutable observations = 0
+
+        let afterFirstRead () =
+            Assert.Equal(0, receipts.Calls)
+            observations <- observations + 1
+
+        let source =
+            LearningInstalledReadinessSource(FixedClock(value.Now), value.Options, receipts, afterFirstRead)
+            :> ILearningInstalledReadinessSource
+
+        let! result = source.ReadLearningInstalledReadiness(value.Query, CancellationToken.None)
+        Assert.True(Result.isOk result)
+        Assert.Equal(1, observations)
+        Assert.Equal(1, receipts.Calls)
     }
 
 

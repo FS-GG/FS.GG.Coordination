@@ -37,7 +37,7 @@ def filtered(raw, scratch):
 
 
 def owned_fd_targets(row, observe_birth, additional_failures=None, *, terminal_probe=None,
-                     denial_observations=None):
+                     denial_observations=None, scan_observation=None):
     """Denied access needs fresh terminal original-birth proof; live/unknown refuse."""
     def identity(value):
         return None if value is None else {k:value[k] for k in ('pid','start','pgid','state')}
@@ -92,15 +92,28 @@ def owned_fd_targets(row, observe_birth, additional_failures=None, *, terminal_p
     try:
         entries = list((Path('/proc') / str(row['pid']) / 'fd').iterdir())
     except FileNotFoundError:
+        if scan_observation is not None: scan_observation['disposition'] = 'directory-missing'
         return []
     except PermissionError as error:
+        if scan_observation is not None: scan_observation['disposition'] = 'directory-denied'
         return terminal_after_denial(error, 'directory')
     if len(entries) > 256: raise ValueError('server FD cap')
     targets = []
     for entry in entries:
         try: targets.append(os.readlink(entry))
-        except FileNotFoundError: continue
-        except PermissionError as error: return terminal_after_denial(error, 'readlink')
+        except FileNotFoundError:
+            if scan_observation is not None: scan_observation['missingReadlinks'] += 1
+            continue
+        except PermissionError as error:
+            if scan_observation is not None: scan_observation['disposition'] = 'readlink-denied'
+            return terminal_after_denial(error, 'readlink')
+    if scan_observation is not None:
+        sockets = sorted({target[8:-1] for target in targets
+                          if target.startswith('socket:[') and target.endswith(']')
+                          and target[8:-1].isascii() and target[8:-1].isdigit()
+                          and len(target[8:-1]) <= 20})
+        scan_observation['disposition'] = 'scanned'
+        scan_observation['socketInodes'] = {'values':sockets[:6], 'omitted':max(0,len(sockets)-6)}
     return targets
 
 
@@ -198,6 +211,25 @@ def lifecycle_summary(value):
                 if not isinstance(error,dict): raise ValueError('endpoint failure shape')
                 error = {k:filtered(str(error.get(k,'')).encode()[:512],Path('/proc')) for k in ('type','message')}
             item['failure'] = error
+            scans = entry.get('fdScans', [])
+            if not isinstance(scans,list) or len(scans)>6: raise ValueError('endpoint FD scan population')
+            item['fdScans'] = []
+            for scan in scans:
+                if (scan.get('disposition') not in ('pending','scanned','directory-missing','directory-denied','readlink-denied')
+                        or type(scan.get('missingReadlinks')) is not int or not 0<=scan['missingReadlinks']<=256
+                        or type(scan.get('afterMismatchObserved')) is not bool):
+                    raise ValueError('endpoint FD scan shape')
+                selected = {k:scan[k] for k in ('disposition','missingReadlinks','afterMismatchObserved')}
+                for key in ('before','afterMismatchBirth'):
+                    row=scan.get(key)
+                    selected[key]=None if row is None else identities([row],('pid','start','pgid','state'))['members'][0]
+                sockets=scan.get('socketInodes')
+                if (not isinstance(sockets,dict) or not isinstance(sockets.get('values'),list)
+                        or len(sockets['values'])>6 or type(sockets.get('omitted')) is not int or sockets['omitted']<0
+                        or any(type(x) is not str or not x.isascii() or not x.isdigit() or len(x)>20 for x in sockets['values'])):
+                    raise ValueError('endpoint FD socket snapshot')
+                selected['socketInodes']={'values':list(sockets['values']),'omitted':sockets['omitted']}
+                item['fdScans'].append(selected)
             projected_endpoint['entries'].append(item)
     owner_leader = (value.get('ownerReceipt') or {}).get('leader')
     return {'ownerLeader':None if owner_leader is None else identities([owner_leader],('pid','start','pgid','state'))['members'][0],
@@ -557,10 +589,13 @@ def observe_endpoint_ownership(owner, child, leader, servers, handles, known, ch
         known.update((row['pid'], row['start']) for row in rows)
         if len(known) + 1 > maximum_generations: raise ValueError('generation cap')
         return rows
+    # Internal prior sampled proof may classify disappearance, never current authority.
+    prior = (endpoint_observations['entries'][-1] if endpoint_observations is not None
+             and endpoint_observations['entries'] else None)
     for attempt in (1,2):
         observation = {'event':event, 'attempt':attempt, 'disposition':'pending',
                        'beforeMembers':None, 'afterMembers':None, 'beforeInodes':None,
-                       'afterInodes':None, 'matchedInodes':None, 'failure':None}
+                       'afterInodes':None, 'matchedInodes':None, 'failure':None, 'fdScans':[]}
         if endpoint_observations is not None:
             if len(endpoint_observations['entries']) >= 2:
                 endpoint_observations['entries'].pop(0); endpoint_observations['omitted'] += 1
@@ -579,8 +614,14 @@ def observe_endpoint_ownership(owner, child, leader, servers, handles, known, ch
                     return child.poll()
                 probe = terminal_probe if (child.pid == leader['pid'] == row['pid']
                         and row['start'] == leader['start'] and row['pgid'] == leader['pgid']) else None
+                scan={'before':{k:row[k] for k in ('pid','start','pgid','state')},
+                      'disposition':'pending','missingReadlinks':0,
+                      'socketInodes':{'values':[],'omitted':0},
+                      'afterMismatchObserved':False,'afterMismatchBirth':None}
+                observation['fdScans'].append(scan)
                 for target in owned_fd_targets(row, owner.proc, additional,
-                                              terminal_probe=probe, denial_observations=fd_denials):
+                                              terminal_probe=probe, denial_observations=fd_denials,
+                                              scan_observation=scan):
                     if target.startswith('socket:[') and target[8:-1] in inodes:
                         fresh = owner.proc(row['pid'])
                         if fresh is None or (fresh['start'], fresh['pgid']) != (row['start'], leader['pgid']):
@@ -594,7 +635,82 @@ def observe_endpoint_ownership(owner, child, leader, servers, handles, known, ch
                                 os.close(handle); raise ValueError('server pidfd birth join')
                             handles[birth] = handle
             observation['matchedInodes'] = inode_summary(matched)
-            if matched != inodes: raise ValueError('foreign endpoint listener')
+            if matched != inodes:
+                # Capture the exact mismatch before classifying a single fully known
+                # disappearance. Empty later state alone never supplies ownership,
+                # terminal birth, retirement or a substitute for a fresh full proof.
+                primary = ValueError('foreign endpoint listener')
+                try: membership(observation,'afterMembers')
+                except BaseException as error: additional.append(failure_record(error))
+                for scan in observation['fdScans']:
+                    try:
+                        checkpoint()
+                        fresh = owner.proc(scan['before']['pid'])
+                        scan['afterMismatchBirth'] = None if fresh is None else {k:fresh[k] for k in ('pid','start','pgid','state')}
+                        scan['afterMismatchObserved'] = True
+                    except BaseException as error: additional.append(failure_record(error))
+                try:
+                    checkpoint()
+                    observation['afterInodes'] = inode_summary(listener_inodes())
+                    checkpoint()
+                except BaseException as error: additional.append(failure_record(error))
+                before_members = observation['beforeMembers']
+                after_members = observation['afterMembers']
+                before_listeners = observation['beforeInodes']
+                after_listeners = observation['afterInodes']
+                def complete_births(value):
+                    if value is None or value['omittedMembers']: return None
+                    rows = value['members']
+                    births = {(row['pid'],row['start']) for row in rows}
+                    if len(births) != len(rows) or any(row['pgid'] != leader['pgid']
+                            or row['state'] not in ('R','S','D','T','t','I') for row in rows): return None
+                    return births
+                def prior_owned_disappearance():
+                    if prior is None or prior['disposition'] != 'proved' or prior['failure'] is not None:
+                        return False
+                    summaries = [prior[field] for field in ('beforeInodes','afterInodes','matchedInodes')]
+                    if any(value is None or value['omitted'] for value in summaries): return False
+                    prior_inodes = set(summaries[0]['values'])
+                    if any(set(value['values']) != prior_inodes for value in summaries[1:]): return False
+                    missing = inodes - matched
+                    if not missing or not missing <= prior_inodes: return False
+                    prior_before = complete_births(prior['beforeMembers'])
+                    prior_after = complete_births(prior['afterMembers'])
+                    if prior_before is None or prior_before != prior_after or not servers <= prior_before:
+                        return False
+                    # Handles are retained append-only until the outer owner retires.
+                    # Exact original birth plus its still-retained pidfd and prior FD
+                    # ownership classify only these inodes, never later listener sets.
+                    prior_scans = [scan for scan in prior['fdScans']
+                                   if (scan['before']['pid'],scan['before']['start']) in servers]
+                    return len(prior_scans) == 1 and all(
+                        scan['before']['pgid'] == leader['pgid']
+                        and (scan['before']['pid'],scan['before']['start']) in handles
+                        and scan['disposition'] == 'scanned' and not scan['missingReadlinks']
+                        and not scan['socketInodes']['omitted']
+                        and missing <= set(scan['socketInodes']['values']) for scan in prior_scans)
+                # Only the already authenticated sole server can explain this known
+                # temporal disappearance. Unknown/foreign/replaced birth, incomplete
+                # FD evidence or any diagnostic error remains the original refusal.
+                scans = observation['fdScans']
+                disappeared = (attempt == 1 and not additional and len(servers) == 1
+                    and prior_owned_disappearance()
+                    and complete_births(before_members) == servers
+                    and complete_births(after_members) == servers
+                    and before_listeners is not None and not before_listeners['omitted']
+                    and after_listeners is not None and not after_listeners['omitted']
+                    and bool(scans) and all(scan['disposition'] == 'scanned'
+                        and scan['missingReadlinks'] == 0 and not scan['socketInodes']['omitted']
+                        and scan['afterMismatchObserved'] and scan['afterMismatchBirth'] is not None
+                        and (scan['before']['pid'],scan['before']['start']) in handles
+                        and scan['before'] == scan['afterMismatchBirth']
+                        and scan['before']['state'] in ('R','S','D','T','t','I') for scan in scans)
+                    and (inodes - matched).isdisjoint(set(after_listeners['values'])))
+                if disappeared:
+                    observation['disposition'] = 'changed'
+                    observation['failure'] = failure_record(primary)
+                    continue
+                raise primary
             after_rows = membership(observation,'afterMembers')
             after_births = {(row['pid'],row['start']) for row in after_rows if row['pgid'] == leader['pgid']}
             if not proved <= after_births: raise ValueError('server membership changed during endpoint observation')

@@ -278,7 +278,7 @@ module internal LinuxFiles =
     let readExecutable maximumBytes expectedUid path =
         readPrivate maximumBytes expectedUid (set [ 0o500us; 0o700us; 0o555us; 0o755us ]) path
 
-    let hashExecutable maximumBytes expectedUid (token: CancellationToken) path =
+    let hashExecutable maximumBytes expectedUid (token: CancellationToken) (afterFirstRead: unit -> unit) path =
         try
             if not (canonicalAbsolutePath path) then
                 Error "learning-installed-path-refused"
@@ -323,6 +323,10 @@ module internal LinuxFiles =
                                     failure <- Some "learning-installed-file-truncated"
                                 else
                                     digest.AppendData(buffer, 0, count)
+
+                                    if remaining = before.Identity.Size then
+                                        afterFirstRead ()
+
                                     remaining <- remaining - uint64 count
 
                         match failure with
@@ -463,11 +467,12 @@ module private LearningInstalledReadinessCodec =
         else
             Some(Path.Combine(root, name))
 
-type LearningInstalledReadinessSource
+type LearningInstalledReadinessSource internal
     (
         clock: TimeProvider,
         options: LearningInstalledReadinessOptions,
-        producerReceipts: ILearningInstalledProducerReceiptSource
+        producerReceipts: ILearningInstalledProducerReceiptSource,
+        afterFirstExecutableRead: unit -> unit
     ) =
 
     let privateModes = set [ 0o400us; 0o600us ]
@@ -895,6 +900,7 @@ type LearningInstalledReadinessSource
                                     (512 * 1024 * 1024)
                                     options.ExpectedExecutableOwnerUid
                                     token
+                                    afterFirstExecutableRead
                                     executable
                             with
                             | Error reason -> return Error reason
@@ -1148,6 +1154,14 @@ type LearningInstalledReadinessSource
                     | _ -> return Error "learning-installed-custody-refused"
                 | _ -> return Error "learning-installed-custody-unavailable"
         }
+
+    new
+        (
+            clock: TimeProvider,
+            options: LearningInstalledReadinessOptions,
+            producerReceipts: ILearningInstalledProducerReceiptSource
+        ) =
+        LearningInstalledReadinessSource(clock, options, producerReceipts, ignore)
 
     interface ILearningInstalledReadinessSource with
         member _.ReadLearningInstalledReadiness(query, token) = read query token

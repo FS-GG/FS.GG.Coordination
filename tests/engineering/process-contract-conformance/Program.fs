@@ -213,9 +213,92 @@ module Program =
               WorkStopAtTicks = match initial.Stop with Requested(_,at) -> at.Ticks | _ -> -1L
               RunAfterWorkTicks = max 0L (lease.InitialReturnTick - original.WorkExpiresAt) }
         receipt
+
+    let private runProductionCase python fixture work source profile profileDigest owner total reserve case =
+        let identity: OperationIdentity =
+            { InvocationId = Guid.NewGuid(); Execution = None; LaunchOrdinal = 0UL
+              SourceDigest = source; ProfileId = profile; ProfileDigest = profileDigest }
+        let session,clock,budget = ProductionFixture.prepare (command python fixture work case) identity owner total reserve
+        use cancellation = new CancellationTokenSource()
+        if case = "prestart-cancel" then cancellation.Cancel()
+        elif case = "caller-cancel" then cancellation.CancelAfter(TimeSpan.FromMilliseconds 100.)
+        let initial = session.RunAsync(cancellation.Token).GetAwaiter().GetResult()
+        let runAt = clock.Now()
+        let earlyRelease =
+            if case = "held-writer" then Some(session.TryRelease()) else None
+        // Observe is a current snapshot, not a hidden cleanup wait. The existing owner
+        // explicitly retains the session and spends only this original remaining total.
+        let mutable observed = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        let mutable settled = match observed.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false
+        while not settled do
+            let delay = Budget.clip (clock.Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> Support.ok
+            Support.require (delay > TimeSpan.Zero) "production-original-cleanup-budget-expired"
+            System.Threading.Tasks.Task.Delay(delay).GetAwaiter().GetResult()
+            observed <- session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+            settled <- match observed.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false
+        let observedAt = clock.Now()
+        let decision = session.TryRelease()
+        let releaseAt = clock.Now()
+        let released = match decision with ResourcesReleased -> true | _ -> false
+        let final = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        let finalAt = clock.Now()
+        let original = Budget.describe budget
+        let checks = ResizeArray<string>()
+        let failures = ResizeArray<string>()
+        let check condition name = if condition then checks.Add name else failures.Add name
+        let eof = Support.readerLabel final.Stdout.Reader = "eof" && Support.readerLabel final.Stderr.Reader = "eof"
+        check released "actual-production-local-release"
+        check (initial.FirstFailure = observed.FirstFailure && observed.FirstFailure = final.FirstFailure) "actual-production-first-cause-preserved"
+        check (Budget.describe final.OriginalBudget = original) "actual-production-original-budget-preserved"
+        check (runAt.Domain = original.Domain && observedAt.Domain = original.Domain && releaseAt.Domain = original.Domain && finalAt.Domain = original.Domain
+               && original.StartedAt <= runAt.Ticks && runAt.Ticks <= observedAt.Ticks && observedAt.Ticks <= releaseAt.Ticks
+               && releaseAt.Ticks <= finalAt.Ticks && finalAt.Ticks < original.TotalExpiresAt) "actual-production-fixed-total-window"
+        match case with
+        | "missing" ->
+            check (match final.Launch with Refused diagnostic -> diagnostic.Code = "missing-executable" | _ -> false) "actual-production-confirmed-missing"
+            check (final.Cleanup.Custody = NoEffect) "actual-production-missing-no-effect"
+        | "prestart-cancel" ->
+            check (final.Launch = NotStarted && final.Cleanup.Custody = NoEffect) "actual-production-pre-cancel-zero-launch"
+            check (match final.Stop with Requested(CallerCancellation,_) -> true | _ -> false) "actual-production-pre-cancel-stop"
+        | _ ->
+            check (match final.Launch with Started generation -> generation.Pid > 0 && generation.ScopeId = identity.InvocationId.ToString("D") | _ -> false) "actual-production-retained-process-generation"
+            check (match final.Exit with Known(Exited _,_) -> true | _ -> false) "actual-production-leader-exit-observed"
+            check eof "actual-production-independent-stream-eof"
+            check (final.Cleanup.Disposition = Incomplete && (match final.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+                   && (match final.Cleanup.OwnedChildrenReaped with Unknown _ -> true | _ -> false)) "actual-production-no-descendant-proof"
+            match case with
+            | "literal-normal" ->
+                let expectedOut = Array.append (Encoding.ASCII.GetBytes("argv/env-ok\n")) [|for i in 0 .. 255 -> byte i|]
+                let expectedErr = [|for i in 255 .. -1 .. 0 -> byte i|]
+                check (final.Stdout.Prefix.ToArray() = expectedOut && final.Stderr.Prefix.ToArray() = expectedErr) "actual-production-literal-binary-output"
+                check (final.FirstFailure.IsNone && Support.exitLabel final.Exit = "exited:0") "actual-production-normal-success"
+            | "flood" ->
+                check (initial.FirstFailure.IsSome && final.ChargedTotalBytes > 3840L
+                       && final.Stdout.Totals.Retained <= 640L && final.Stderr.Totals.Retained <= 640L) "actual-production-overflow-charge-before-retention"
+                check (match final.Stop with Requested(OutputLimit,_) -> true | _ -> false) "actual-production-overflow-stop"
+            | "held-writer" ->
+                check (Support.exitLabel initial.Exit = "exited:0" && (Support.readerLabel initial.Stdout.Reader <> "eof" || Support.readerLabel initial.Stderr.Reader <> "eof")) "actual-production-exit-distinct-from-held-writer"
+                check (match earlyRelease with Some(ReleaseRefused _) -> true | _ -> false) "actual-production-held-reader-release-refused"
+            | "deadline" -> check (match initial.Stop with Requested(WorkDeadline,_) -> true | _ -> false) "actual-production-deadline-stop"
+            | "caller-cancel" -> check (match initial.Stop with Requested(CallerCancellation,_) -> true | _ -> false) "actual-production-caller-stop"
+            | _ -> invalidOp "production-case-unselected"
+        {| Case = case; InvocationId = identity.InvocationId.ToString("D"); Accepted = failures.Count = 0
+           Checks = checks.ToArray(); Failures = failures.ToArray(); LocalReleased = released
+           InitialExit = Support.exitLabel initial.Exit; FinalExit = Support.exitLabel final.Exit
+           InitialStdoutReader = Support.readerLabel initial.Stdout.Reader; InitialStderrReader = Support.readerLabel initial.Stderr.Reader
+           FinalStdoutReader = Support.readerLabel final.Stdout.Reader; FinalStderrReader = Support.readerLabel final.Stderr.Reader
+           FirstCause = code final.FirstFailure; ChargedTotalBytes = final.ChargedTotalBytes
+           StdoutRetainedBytes = final.Stdout.Totals.Retained; StderrRetainedBytes = final.Stderr.Totals.Retained
+           Cleanup = label final.Cleanup.Disposition; Custody = custodyLabel final.Cleanup.Custody
+           ClockDomain = original.Domain.Id.ToString("D"); ClockFrequency = original.Domain.Frequency
+           StartedAtTicks = original.StartedAt; WorkExpiresAtTicks = original.WorkExpiresAt; TotalExpiresAtTicks = original.TotalExpiresAt
+           RunReturnedAtTicks = runAt.Ticks; ObservedAtTicks = observedAt.Ticks; ReleaseDecisionAtTicks = releaseAt.Ticks; FinalObservedAtTicks = finalAt.Ticks |}
+
     [<EntryPoint>]
     let main (argv: string array) =
         let receipts = ResizeArray<CaseReceipt>()
+        let productionReceipts = ResizeArray<_>()
+        let mutable production = false
         let mutable originalFailure = ""
         let mutable reportFailure = ""
         let mutable output: string option = None
@@ -228,10 +311,13 @@ module Program =
             Support.require (FileInfo(descriptorPath).Length <= 2097152L && hash descriptorPath = argv[1]) "descriptor-digest-bound"
             use document = JsonDocument.Parse(File.ReadAllBytes descriptorPath)
             let root = document.RootElement
-            Support.require (text root "schema" = "fsgg.proc.dot2-C-native/1" && flag root "operationAdmitted" && flag root "sourceAccepted") "native-source-admission-required"
+            let schema = text root "schema"
+            production <- schema = "fsgg.proc.dot3-B-native/1"
+            Support.require ((production || schema = "fsgg.proc.dot2-C-native/1") && flag root "operationAdmitted" && flag root "sourceAccepted") "native-source-admission-required"
             let selected = root.GetProperty("cases").EnumerateArray() |> Seq.map (fun value -> value.GetString() |> Option.ofObj |> Option.defaultWith(fun () -> invalidOp "null-case")) |> Seq.toList
             Support.require (not selected.IsEmpty && selected.Length <= cases.Length && (Set.ofList selected).Count = selected.Length) "case-population"
             Support.require (selected = (cases |> List.filter (fun value -> List.contains value selected))) "frozen-case-order"
+            if production then Support.require (not (List.contains "failed-sink" selected)) "production-has-no-test-sink-injection"
             let profile = root.GetProperty("ownerProfile")
             Support.require (flag profile "qualified" && flag profile "retainsAfterCallerExit") "independent-owner-route-unqualified"
             if List.contains "held-writer" selected then Support.require (flag profile "inheritedWriterQualified") "inherited-writer-owner-route-unqualified"
@@ -246,6 +332,9 @@ module Program =
             let fixture = pin(root.GetProperty("fixturePin"))
             let contracts = pin(root.GetProperty("contractsPin"))
             Support.require (Path.GetFullPath(typeof<ExecutionResult>.Assembly.Location) = contracts) "loaded-contracts-assembly"
+            if production then
+                let producer = pin(root.GetProperty("producerPin"))
+                Support.require (Path.GetFullPath(FS.GG.Execution.Processes.ProcessSessions.createFactory().GetType().Assembly.Location) = producer) "loaded-production-assembly"
             let caller = pin(root.GetProperty("callerPin"))
             Support.require (Path.GetFullPath(Assembly.GetExecutingAssembly().Location) = caller) "loaded-caller-assembly"
             let work = Path.GetFullPath(text root "operationDirectory")
@@ -262,28 +351,50 @@ module Program =
             let source = hash sourceManifest
             Support.require (source = text root "sourceDigest" && text sourceDocument.RootElement "revision" = text root "sourceRevision") "selected-source-SHA256-and-revision-join"
             let sourceFiles = sourceDocument.RootElement.GetProperty("files").EnumerateArray() |> Seq.toArray
-            Support.require (sourceFiles.Length = 68) "selected-source-population"
+            if production then
+                let expected = root.GetProperty("sourceFileCount").GetInt32()
+                Support.require (expected >= 68 && expected <= 128 && sourceFiles.Length = expected) "production-selected-source-population"
+            else Support.require (sourceFiles.Length = 68) "selected-source-population"
             for sourceFile in sourceFiles do pin sourceFile |> ignore
             let profileDigest = hash qualification
             stage <- "source-controls"
             controls <- sourceControls python fixture work source owner.OwnerId profileDigest owner
             let mutable continueCases = true
+            let total,reserve =
+                if production then
+                    let caseBudget = root.GetProperty("caseBudget")
+                    let totalMs = caseBudget.GetProperty("totalMilliseconds").GetInt32()
+                    let reserveMs = caseBudget.GetProperty("cleanupReserveMilliseconds").GetInt32()
+                    Support.require (totalMs > reserveMs && totalMs <= 10000 && reserveMs > 0) "production-case-budget-bound"
+                    TimeSpan.FromMilliseconds(float totalMs),TimeSpan.FromMilliseconds(float reserveMs)
+                else TimeSpan.Zero,TimeSpan.Zero
             for case in selected do
                 if continueCases then
                     stage <- case
-                    let result = runCase python fixture work source owner.OwnerId profileDigest owner case
-                    receipts.Add result
-                    // No dependent continuation after unknown custody. Ordinary semantic failure
-                    // can be retained while later independent cases run only after proven local release.
-                    if not result.LocalReleased || result.ObserverErrors.Length > 0 then continueCases <- false
-            Support.require (receipts.Count = selected.Length) "remaining-cases-prerequisite-blocked"
+                    if production then
+                        let result = runProductionCase python fixture work source owner.OwnerId profileDigest owner total reserve case
+                        productionReceipts.Add result
+                        if not result.LocalReleased then continueCases <- false
+                    else
+                        let result = runCase python fixture work source owner.OwnerId profileDigest owner case
+                        receipts.Add result
+                        // No dependent continuation after unknown custody. Ordinary semantic failure
+                        // can be retained while later independent cases run only after proven local release.
+                        if not result.LocalReleased || result.ObserverErrors.Length > 0 then continueCases <- false
+            Support.require ((if production then productionReceipts.Count else receipts.Count) = selected.Length) "remaining-cases-prerequisite-blocked"
         with error ->
             originalFailure <- stage + ": " + (Support.exceptionDiagnostic "caller-original" error).Message
-        let allAccepted = originalFailure = "" && receipts.Count > 0 && (receipts |> Seq.forall(fun result -> result.Accepted))
-        let body = {| Schema = "fsgg.proc.dot2-C-case-results/1"; Accepted = allAccepted; Cases = receipts.ToArray(); OriginalFailure = originalFailure; SourceControls = controls
-                      Scope = "Test-only actual Contracts observations; external owner custody is separate; no whole-workload containment claim." |}
+        let allAccepted =
+            originalFailure = "" && (if production then productionReceipts.Count > 0 && (productionReceipts |> Seq.forall(fun result -> result.Accepted))
+                                    else receipts.Count > 0 && (receipts |> Seq.forall(fun result -> result.Accepted)))
         try
-            let raw = JsonSerializer.SerializeToUtf8Bytes(body)
+            let raw =
+                if production then
+                    JsonSerializer.SerializeToUtf8Bytes {| Schema = "fsgg.proc.dot3-B-case-results/1"; Accepted = allAccepted; Cases = productionReceipts.ToArray(); OriginalFailure = originalFailure; SourceControls = controls
+                                                           Scope = "Actual production BCL sessions; caller retains custody; qualified outer owner remains independent; no containment/reaping proof." |}
+                else
+                    JsonSerializer.SerializeToUtf8Bytes {| Schema = "fsgg.proc.dot2-C-case-results/1"; Accepted = allAccepted; Cases = receipts.ToArray(); OriginalFailure = originalFailure; SourceControls = controls
+                                                           Scope = "Test-only actual Contracts observations; external owner custody is separate; no whole-workload containment claim." |}
             Support.require (raw.Length <= 65536) "finite-case-report"
             match output with Some path -> File.WriteAllBytes(path,raw) | None -> ()
             Console.Out.WriteLine(Encoding.UTF8.GetString raw)

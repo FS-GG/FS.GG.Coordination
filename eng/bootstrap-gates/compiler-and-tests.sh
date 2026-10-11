@@ -11,6 +11,9 @@ dotnet restore FS.GG.Coordination.sln --locked-mode
 PYTHONDONTWRITEBYTECODE=1 python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics.py DiagnosticControls.test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup CommandInterfaceControls
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
 dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
+process_started_ns="$(date +%s%N)"
+dotnet test tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=process-sessions.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-process-sessions"
+python eng/validate-test-census.py "$RUNNER_TEMP/compiler-and-tests-process-sessions/process-sessions.trx" "process-sessions" "$process_started_ns"
 dotnet test tests/FS.GG.Coordination.Orchestration.Host.Tests/FS.GG.Coordination.Orchestration.Host.Tests.fsproj --configuration Release --no-build --no-restore
 dotnet test tests/FS.GG.Coordination.ArchitectureTests/FS.GG.Coordination.ArchitectureTests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=architecture-tests.trx" --results-directory artifacts/test-results/70-gs2-03-1-qualification-manifest
 bash tests/telemetry-native-collector-installation/run-ci.sh

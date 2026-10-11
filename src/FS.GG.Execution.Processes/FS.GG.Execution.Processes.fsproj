@@ -1,0 +1,5 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup><TargetFramework>net10.0</TargetFramework><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><IsPackable>false</IsPackable></PropertyGroup>
+  <ItemGroup><Compile Include="ProcessSessions.fsi" /><Compile Include="ProcessSessions.fs" /><None Include="README.md" /></ItemGroup>
+  <ItemGroup><ProjectReference Include="../FS.GG.Execution.Contracts/FS.GG.Execution.Contracts.fsproj" /></ItemGroup>
+</Project>

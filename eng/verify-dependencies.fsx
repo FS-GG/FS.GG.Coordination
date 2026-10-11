@@ -149,6 +149,7 @@ let private allowedDependencies =
             Set.ofList [ "FS.GG.Coordination.Core"; "FS.GG.Coordination.Protocol" ]
             "FS.GG.Coordination.Orchestration.Runner.Protocol", Set.empty
             "FS.GG.Execution.Contracts", Set.empty
+            "FS.GG.Execution.Processes", Set.singleton "FS.GG.Execution.Contracts"
             "FS.GG.Coordination.Orchestration.Execution", Set.singleton "FS.GG.Execution.Contracts"
             "FS.GG.Coordination.Orchestration.Execution.Codex",
             Set.singleton "FS.GG.Coordination.Orchestration.Execution"
@@ -319,6 +320,7 @@ let private inspectProject (path: string) =
             name = "FS.GG.Coordination.Protocol"
             || name = "FS.GG.Coordination.Core"
             || name = "FS.GG.Execution.Contracts"
+            || name = "FS.GG.Execution.Processes"
         then
             let referenceViolations =
                 [
