@@ -77,7 +77,7 @@ module ProcessSessionTests =
 
     [<Fact>]
     let ``concurrent runs share one launch and snapshots cannot mutate retained capture`` () =
-        let path = Path.Combine("/tmp","fsgg-proc-launch-" + Guid.NewGuid().ToString("N"))
+        let path = Path.Combine(Path.GetTempPath(),"fsgg-proc-launch-" + Guid.NewGuid().ToString("N"))
         let session,_ = prepare { command with Arguments = [ "-c"; "printf x >> \"$1\"; printf original"; "fixture"; path ] }
         try
             let calls = [| for _ in 1 .. 8 -> session.RunAsync(CancellationToken.None) |]
@@ -118,7 +118,7 @@ module ProcessSessionTests =
 
     [<Fact>]
     let ``missing executable has confirmed no effect without echoing command secrets`` () =
-        let absent = "/tmp/fsgg-proc-absent-" + Guid.NewGuid().ToString("N")
+        let absent = Path.Combine(Path.GetTempPath(),"fsgg-proc-absent-" + Guid.NewGuid().ToString("N"))
         let session,_ = prepare { command with Executable = absent; Arguments = [ "private-argument" ]; Environment = Replace(Map.ofList [ "SECRET","private-environment" ]) }
         let initial = session.RunAsync(CancellationToken.None).GetAwaiter().GetResult()
         let final = settle session

@@ -1,6 +1,7 @@
 namespace FS.GG.Execution.Processes.Tests
 
 open System
+open System.IO
 open System.Diagnostics
 open System.Threading
 open Xunit
@@ -19,7 +20,7 @@ module Samples =
         { TotalBytes = 4096L; TerminalReserveBytes = 256; StdoutPrefixBytes = 1024; StdoutTailBytes = 256
           StderrPrefixBytes = 1024; StderrTailBytes = 256; ReadChunkBytes = 512; MaximumFrameBytes = 1024; MaximumIncompleteLineBytes = 1024 }
     let command =
-        { Executable = "/bin/sh"; Arguments = [ "-c"; "exit 0" ]; WorkingDirectory = "/tmp"
+        { Executable = "/bin/sh"; Arguments = [ "-c"; "exit 0" ]; WorkingDirectory = Path.GetTempPath()
           Environment = Replace Map.empty; Input = Closed; Capture = capture
           Capabilities = [ { Capability = BoundedReturnWithRetainedCustody; Required = true } ]; Resources = resources }
     let clock () =
