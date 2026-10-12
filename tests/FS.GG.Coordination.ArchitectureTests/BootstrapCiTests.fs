@@ -42,7 +42,7 @@ let private runGateWithoutRepositorySubject gateId root =
     startInfo.ArgumentList.Add(Path.Combine(repositoryRoot, $"eng/bootstrap-gates/%s{gateId}.sh"))
     startInfo.WorkingDirectory <- root
 
-    if gateId = "bootstrap-recovery" then
+    if gateId = "bootstrap-recovery" || gateId = "compiler-and-tests" then
         let fakeBin = Directory.CreateDirectory(Path.Combine(root, "fake-bin"))
         let fakeCurl = Path.Combine(fakeBin.FullName, "curl")
 
@@ -1050,7 +1050,8 @@ let ``stable gate entry point refuses a removed repository subject`` gateId expe
     withScratch $"fsgg-bootstrap-gate-inversion-%s{gateId}-" (fun root ->
         let exitCode, output, error = runGateWithoutRepositorySubject gateId root
         Assert.NotEqual(0, exitCode)
-        Assert.Contains(expectedSubject, output + error))
+        Assert.Contains(expectedSubject, output + error)
+        Assert.DoesNotContain("unexpected-external-tool-fetch", output + error))
 
 [<Fact>]
 let ``performance evidence retains five source-linked timing samples and every acceptance threshold`` () =
