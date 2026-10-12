@@ -141,7 +141,7 @@ def main():
             assert (readback/'candidate-bindings.json').exists()==(mode=='good'),mode
     gate=installed_job.split('          set -euo pipefail\n',1)[1].split('      - name: Run actual shared pair guards',1)[0]
     gate='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in gate.splitlines())
-    for mode in ('good','package-change','bad-source','bad-run','bad-hash'):
+    for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor'):
         with tempfile.TemporaryDirectory(prefix='pair-installed-source-test-') as temporary:
             root=Path(temporary);stub=root/'git'
             stub.write_text("""#!/usr/bin/python3
@@ -153,6 +153,7 @@ if args[0]=='diff':print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if o
             stub.chmod(0o700)
             env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,
                  'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_SHA':'9'*40,
+                 'EXECUTOR_SOURCE':'8'*40 if mode=='moved-executor' else '9'*40,
                  'SOURCE_A':'z'*40 if mode=='bad-source' else 'a'*40,'CANDIDATE_RUN':'true' if mode=='bad-run' else '1',
                  'CANDIDATE_ARTIFACT':'3','ARCHIVE_SHA':'x'*64 if mode=='bad-hash' else 'c'*64,'CANDIDATE_VERSION':'0.2.0',
                  'CANDIDATE_OUTPUT':str(root/'candidate'),'READBACK_OUTPUT':str(root/'readback'),'GITHUB_ENV':str(root/'env')}
@@ -248,6 +249,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=5 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=6 selectors=exclusive')
 
 if __name__=='__main__':main()
