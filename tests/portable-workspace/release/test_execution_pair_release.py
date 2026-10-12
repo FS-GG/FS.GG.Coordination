@@ -34,7 +34,56 @@ def admission():
                'githubRepository':'FS-GG/FS.GG.Coordination','publisherWorkflow':'.github/workflows/callable-cli-release-publish.yml','evidenceSha256':'f'*64},
             'tagProtection':{'rulesetId':4,'policySha256':'1'*64}}
 
+def installed_isolation_diagnostic_controls():
+    # Inert SDK substitute drives the actual maintained caller; no CLR/native acceptance.
+    check = runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))['check_execution_pair']
+    for mode in ('good', 'escaped-path', 'extra-folder', 'trailing-slash', 'oversized'):
+        with tempfile.TemporaryDirectory(prefix='pair-isolation-diagnostic-test-') as temporary:
+            candidate=Path(temporary); rows=[]
+            for id in IDS:
+                archive=candidate/(id+'.0.2.0.nupkg')
+                with zipfile.ZipFile(archive,'w') as z: z.writestr('lib/net10.0/'+id+'.dll',id.encode())
+                rows.append({'packageId':id,'file':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest()})
+            write(candidate/'execution-pair-release-manifest.json',{'profile':'execution-pair','version':'0.2.0','packages':rows})
+            calls=[]; observed={}
+            def fake_sdk(command, *, cwd, env):
+                calls.append(command[1]); root=Path(cwd); packages=str(root/'packages'); folder=packages+os.sep
+                assert env['NUGET_PACKAGES']==packages and env['TMPDIR']==str(root/'tmp')
+                if command[1]=='restore': (root/'effective-isolation.txt').write_text('PAIR_EFFECTIVE_ISOLATION_OK\n')
+                if command[1]=='build':
+                    restore={'packagesPath':packages,'fallbackFolders':[],'sources':{str(candidate.resolve()):{},'https://api.nuget.org/v3/index.json':{}}}
+                    folders={folder:{}}
+                    if mode=='escaped-path': restore['packagesPath']='/outside-cache'
+                    if mode=='extra-folder': folders['/sdk-home/fallback/']={}; restore['fallbackFolders']=['/sdk-home/fallback/']
+                    if mode=='trailing-slash': restore['packagesPath']=folder
+                    if mode=='oversized': restore['packagesPath']='/'+'x'*5000
+                    observed.update({'expectedPackagesPath':packages,'expectedPackageFolders':[folder],
+                                     'observedPackagesPath':restore['packagesPath'],'observedPackageFolders':list(folders),
+                                     'observedFallbackFolders':restore['fallbackFolders'],'observedSources':list(restore['sources'])})
+                    write(root/'obj/project.assets.json',{'packageFolders':folders,'project':{'restore':restore},
+                                                        'libraries':{name:{'type':'package'} for name in ['FSharp.Core/10.1.302',*(id+'/0.2.0' for id in IDS)]}})
+                    references=[]
+                    for id in IDS:
+                        compiler=root/'packages'/id.lower()/'0.2.0/lib/net10.0'/(id+'.dll'); compiler.parent.mkdir(parents=True);compiler.write_bytes(id.encode()); references.append(str(compiler))
+                        target=root/'bin/Release/net10.0'/(id+'.dll');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(id.encode())
+                    (root/'compiler-pair-references.txt').write_text('\n'.join(references)+'\n')
+                return subprocess.CompletedProcess(command,0,'EXECUTION_PAIR_INSTALLED_LOAD_OK\n' if len(calls)==3 else '', '')
+            original=check.__globals__['run']; check.__globals__['run']=fake_sdk; output=candidate/'proof.json'
+            try:
+                try: check(candidate,'candidate',output); refused=False
+                except RuntimeError as error:
+                    refused=True; message=str(error); prefix='effective NuGet package/fallback folder escaped isolation: '
+                    assert message.startswith(prefix),message
+                    if mode=='oversized': assert message==prefix+'observed path fields exceed the 4096-byte diagnostic bound'
+                    else: assert json.loads(message[len(prefix):])==observed
+                    assert len(message.encode())<=len(prefix)+4096
+            finally: check.__globals__['run']=original
+            assert refused==(mode!='good') and output.exists()==(mode=='good'),mode
+            assert calls[:2]==['restore','build']
+            assert (len(calls)==3 and calls[2].endswith('/PairInstalled.dll')) if mode=='good' else len(calls)==2
+
 def main():
+    installed_isolation_diagnostic_controls()
     workflow=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
     prepare=(ROOT/'.github/workflows/callable-cli-release-prepare.yml').read_text()
     assert "if: inputs.preparation_mode == 'portable'" in prepare
@@ -268,6 +317,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=8 publisher-source=5 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=8 publisher-source=5 isolation-diagnostics=5 selectors=exclusive')
 
 if __name__=='__main__':main()

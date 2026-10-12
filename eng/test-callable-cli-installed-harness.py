@@ -379,7 +379,14 @@ printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
         assets = json.loads((root / "obj/project.assets.json").read_bytes())
         expected_folder = str((root / "packages").resolve()) + os.sep
         if set(assets["packageFolders"]) != {expected_folder} or assets["project"]["restore"]["packagesPath"] != str(root / "packages"):
-            raise RuntimeError("effective NuGet package/fallback folder escaped isolation")
+            restore = assets["project"]["restore"]
+            details = json.dumps({"expectedPackagesPath": str(root / "packages"), "expectedPackageFolders": [expected_folder],
+                                  "observedPackagesPath": restore["packagesPath"], "observedPackageFolders": list(assets["packageFolders"]),
+                                  "observedFallbackFolders": restore.get("fallbackFolders", []), "observedSources": list(restore.get("sources", {}))},
+                                 sort_keys=True, separators=(",", ":"))
+            if len(details.encode("utf-8")) > 4096:
+                details = "observed path fields exceed the 4096-byte diagnostic bound"
+            raise RuntimeError("effective NuGet package/fallback folder escaped isolation: " + details)
         if assets["project"]["restore"].get("fallbackFolders", []) or set(assets["project"]["restore"]["sources"]) != ({str(candidate.resolve()), "https://api.nuget.org/v3/index.json"} if mode == "candidate" else {"https://api.nuget.org/v3/index.json"}):
             raise RuntimeError("effective NuGet source/fallback configuration changed")
         if set(assets["libraries"]) != {"FSharp.Core/10.1.302", *(id + "/0.2.0" for id in ids)} or any(row["type"] != "package" for row in assets["libraries"].values()):
