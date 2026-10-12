@@ -148,10 +148,17 @@ def main():
     desired=json.loads((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_text())
     keys=('target','enforcement','conditions','bypass_actors','rules')
     policy={key:desired[key] for key in keys}
-    for mode in ('good','unprotected-component','inactive','bypass','deleted-signature-rule','foreign-ruleset','wrong-pin'):
+    for mode in ('good','good-omitted-tag-parameters','update-enabled','update-numeric-zero','update-null','update-unknown-parameter','update-unknown-field','unprotected-component','inactive','bypass','deleted-signature-rule','foreign-ruleset','wrong-pin'):
         with tempfile.TemporaryDirectory(prefix='pair-protection-test-') as temporary:
             root=Path(temporary);readback=root/'readback';readback.mkdir()
             live=copy.deepcopy(policy); live['id']=4
+            update=next(rule for rule in live['rules'] if rule['type']=='update')
+            if mode=='good-omitted-tag-parameters':update.pop('parameters')
+            if mode=='update-enabled':update['parameters']['update_allows_fetch_and_merge']=True
+            if mode=='update-numeric-zero':update['parameters']['update_allows_fetch_and_merge']=0
+            if mode=='update-null':update['parameters']=None
+            if mode=='update-unknown-parameter':update['parameters']['ignored']=False
+            if mode=='update-unknown-field':update['ignored']=False
             if mode=='unprotected-component':live['conditions']['ref_name']['include'].remove('refs/tags/execution/v*')
             if mode=='inactive':live['enforcement']='disabled'
             if mode=='bypass':live['bypass_actors']=[{'actor_id':1,'actor_type':'Integration','bypass_mode':'always'}]
@@ -168,7 +175,7 @@ def main():
                     try:exec(actual,{})
                     except (AssertionError,KeyError,TypeError):refused=True
             finally:os.chdir(old)
-            assert refused==(mode!='good'),mode
+            assert refused==(mode not in {'good','good-omitted-tag-parameters'}),mode
     # Exercise the actual four-cell shell loop with a finite inert curl replacement.
     gate=job.split('      - name: Observe four feed cells and component protection before first push\n',1)[1].split('          for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do\n',1)[1]
     gate='for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do\n'+gate.split('      - name: Obtain selected',1)[0]
@@ -193,6 +200,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=7 four-feed-cells=3 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 selectors=exclusive')
 
 if __name__=='__main__':main()

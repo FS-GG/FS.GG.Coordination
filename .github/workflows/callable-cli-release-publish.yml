@@ -1072,6 +1072,17 @@ jobs:
           policy={key:actual[key] for key in ('target','enforcement','conditions','bypass_actors','rules')}
           desired=json.load(open('eng/repository-settings/release-tag-ruleset.json'))
           expected={key:desired[key] for key in policy}
+          # Tag update rules may omit the optional branch-only parameters object.
+          # Normalize only that exact shape; explicit false is the sole allowed value.
+          assert policy['target']=='tag' and isinstance(policy['rules'],list) and len(policy['rules'])==4
+          updates=[rule for rule in policy['rules'] if rule.get('type')=='update']
+          assert len(updates)==1
+          update=updates[0]
+          if set(update)=={'type'}:
+              update['parameters']={'update_allows_fetch_and_merge':False}
+          assert set(update)=={'type','parameters'} and isinstance(update['parameters'],dict)
+          assert set(update['parameters'])=={'update_allows_fetch_and_merge'}
+          assert update['parameters']['update_allows_fetch_and_merge'] is False
           assert policy==expected and actual['id']==a['tagProtection']['rulesetId']
           assert policy['target']=='tag' and policy['enforcement']=='active' and policy['bypass_actors']==[]
           assert policy['conditions']=={'ref_name':{'include':['refs/tags/v*','refs/tags/execution/v*'],'exclude':[]}}
