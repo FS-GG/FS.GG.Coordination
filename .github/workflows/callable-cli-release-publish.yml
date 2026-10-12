@@ -985,7 +985,7 @@ jobs:
           while IFS= read -r path; do
             test -z "$path" && continue
             case "$path" in
-              .github/workflows/callable-cli-release-publish.yml|eng/execution-pair-release-admission.json|eng/write-callable-cli-release-readback.py|eng/repository-settings/desired.json|eng/repository-settings/release-tag-ruleset.json|tests/portable-workspace/release/test_execution_pair_release.py) ;;
+              .github/workflows/callable-cli-release-prepare.yml|.github/workflows/callable-cli-release-publish.yml|eng/test-callable-cli-installed-harness.py|eng/execution-pair-release-admission.json|eng/write-callable-cli-release-readback.py|eng/repository-settings/desired.json|eng/repository-settings/release-tag-ruleset.json|tests/portable-workspace/release/test_execution_pair_release.py) ;;
               *) echo "::error::pair A-to-B contains a non-publication change: $path"; exit 1 ;;
             esac
           done <<< "$changed_paths"
