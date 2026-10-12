@@ -1,11 +1,27 @@
 <Project Sdk="Microsoft.NET.Sdk">
-  <PropertyGroup><TargetFramework>net10.0</TargetFramework><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile><IsPackable>false</IsPackable></PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
+    <IsPackable>true</IsPackable>
+    <PackageId>FS.GG.Execution.Contracts</PackageId>
+    <Version>0.2.0</Version>
+    <PackageVersion>0.2.0</PackageVersion>
+    <Authors>FS-GG</Authors>
+    <Description>Portable bounded process requests, monotonic budgets, retained session contracts and lifecycle observations.</Description>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <RepositoryType>git</RepositoryType>
+    <RepositoryUrl>https://github.com/FS-GG/FS.GG.Coordination</RepositoryUrl>
+    <PublishRepositoryUrl>true</PublishRepositoryUrl>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+  </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fsi" /><Compile Include="Types.fs" />
     <Compile Include="Validation.fsi" /><Compile Include="Validation.fs" />
     <Compile Include="Budget.fsi" /><Compile Include="Budget.fs" />
     <Compile Include="BoundedOutput.fsi" /><Compile Include="BoundedOutput.fs" />
     <Compile Include="Lifecycle.fsi" /><Compile Include="Lifecycle.fs" />
-    <None Include="README.md" />
+    <None Include="README.md" Pack="true" PackagePath="/" />
+    <None Include="*.fsi" Pack="true" PackagePath="api/" />
   </ItemGroup>
 </Project>

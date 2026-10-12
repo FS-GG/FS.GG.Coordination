@@ -64,7 +64,7 @@ time.sleep(.06)
 
             result, rows
 
-        let (code, _, _, elapsed, peak), timeoutRows = invoke "timeout" 180
+        let (code, _, _, elapsed, peak), timeoutRows = invoke "timeout" 1000
 
         check
             "timeout-success"

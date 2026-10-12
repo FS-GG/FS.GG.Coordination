@@ -63,7 +63,7 @@ def check_cli_only(job: str) -> None:
 
 def main() -> None:
     workflow = (ROOT / ".github/workflows/callable-cli-release-prepare.yml").read_text()
-    cli_only = workflow.split("\n  cli_only:", 1)[1]
+    cli_only = workflow.split("\n  cli_only:", 1)[1].split("\n  execution_pair:",1)[0]
     workflow = workflow.split("\n  cli_only:", 1)[0]
     check_cli_only(cli_only)
     helper = (ROOT / "eng/callable-cli-release.fsx").read_text()

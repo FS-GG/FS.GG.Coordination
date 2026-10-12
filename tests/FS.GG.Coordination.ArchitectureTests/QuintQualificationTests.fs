@@ -624,7 +624,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     Assert.Equal("6e7c4dab87d0db93c5ab205249f0936290b3e0a7a931b36b5f631c8313d8ea7f", digest prefix)
     let fragment = File.ReadAllText(Path.Combine(root, "tests/FS.GG.Coordination.ArchitectureTests/Fixtures/quint-accounting-controls.fsx.fragment"))
     Assert.True(Encoding.UTF8.GetByteCount(fragment) <= 32768)
-    Assert.Equal("c36035d4ddd27852a1374037f2f9d71ec079fc2d374105b82a5e948780d2c753", digest fragment)
+    Assert.Equal("0cb026147d6cee22119d640b75a8939723dd8894fbd10a23ea693bb49958f376", digest fragment)
     Assert.StartsWith(marker, fragment)
     Assert.EndsWith("    exit 0\n\n", fragment)
     let scratch = Directory.CreateTempSubdirectory("fsgg-focused-accounting-test-")

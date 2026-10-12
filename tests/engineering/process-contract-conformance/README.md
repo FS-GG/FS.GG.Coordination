@@ -73,3 +73,19 @@ They check stale versus fresh settled/released/no-effect bundles and current,
 elapsed, cancelled or invalid-clock startup decisions. Synthetic reducer generations
 are control data, not native birth or ownership evidence. These controls are source
 prepared and unexecuted here; they do not rerun or alter the 69 accepted controls.
+
+## Additive producer retirement preparation
+
+The production fixture now accepts an explicit retirement policy through
+`ProductionFixture.prepareWithRetirement`; the existing `prepare` route keeps
+DirectChild and its original seven-case behavior. Public portable Contracts and
+the test-only .2 bridge remain unchanged. The tree policy is best effort only and
+retains the same process/stop task through its original budget.
+
+A direct-child negative control must record the observed live descendant and
+pending local readers before the independently admitted outer stage retires its
+owned scope. It cannot claim local release or complete tree custody to make a
+passing receipt. The existing stage guard/profile adaptation is still preparation;
+no negative execution or new owner route is accepted by these source changes.
+The unchanged 30-second descendant/200ms workload body is also exercised by the
+additive FsQuint caller-owned API in its separate candidate receiver tests.

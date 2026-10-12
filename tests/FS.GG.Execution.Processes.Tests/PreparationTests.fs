@@ -143,3 +143,28 @@ module PreparationTests =
                     Assert.Equal("clock-observation-refused", result.FirstFailure.Value.Diagnostic.Code)
                     // No native launch was requested. The admitted test owner retains this
                     // refused local session through terminal readback; no fresh lease is granted.
+
+    [<Fact>]
+    let ``tree retirement never supplies unsupported containment identity or reaping`` () =
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.) |> ok
+        for policy in [ RetirementPolicy.DirectChild; RetirementPolicy.BestEffortProcessTree ] do
+            let factory = ProcessSessions.createFactoryWithRetirement policy
+            for capability in [ StableLeaderIdentity; OwnedDescendantObservation; ContainmentBeforeTarget; WorkloadEmptyObservation; OwnedChildReaping; OwnerSurvivalCleanup ] do
+                Assert.True(factory.Prepare({ command with Capabilities = [ { Capability = capability; Required = true } ] },identity(),budget,liveClock,owner) |> Result.isError)
+            let session = factory.Prepare(command,identity(),budget,liveClock,owner) |> ok
+            let cancelled = session.RunAsync(CancellationToken(true)).GetAwaiter().GetResult()
+            Assert.Equal(NotStarted,cancelled.Launch)
+            Assert.Equal(NoEffect,cancelled.Cleanup.Custody)
+            Assert.Equal(ResourcesReleased,session.TryRelease())
+
+    [<Fact>]
+    let ``invalid explicit retirement policy refuses before native work`` () =
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.) |> ok
+        let factory = ProcessSessions.createFactoryWithRetirement Unchecked.defaultof<RetirementPolicy>
+        let result = factory.Prepare(command,identity(),budget,liveClock,owner)
+        Assert.True(result |> Result.isError)
+        match result with
+        | Error errors -> Assert.Contains(errors,fun error -> error.Code = "invalid-retirement-policy")
+        | Ok _ -> failwith "Invalid policy created a session."
