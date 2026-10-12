@@ -16,10 +16,28 @@ on:
           - portable
           - cli-only
           - execution-pair
+          - execution-pair-installed
       version:
         description: Proposed package version (preparation only)
         required: true
         default: 0.2.1
+        type: string
+
+      executor_source:
+        description: Exact reviewed protected executor revision (installed mode only)
+        required: false
+        type: string
+      candidate_run_id:
+        description: Original successful Execution pair preparation run (installed mode only)
+        required: false
+        type: string
+      candidate_artifact_id:
+        description: Original immutable pair artifact (installed mode only)
+        required: false
+        type: string
+      candidate_archive_sha256:
+        description: Reviewed original archive SHA256 (installed mode only)
+        required: false
         type: string
 
 permissions:
@@ -402,6 +420,125 @@ jobs:
         with:
           name: execution-pair-${{ inputs.source }}
           path: ${{ env.CANDIDATE_OUTPUT }}/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+  execution_pair_installed:
+    if: inputs.preparation_mode == 'execution-pair-installed'
+    name: Verify original Execution pair installed load without publication
+    permissions:
+      contents: read
+      actions: read
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      DOTNET_PROCESSOR_COUNT: 4
+      CANDIDATE_OUTPUT: /tmp/coord-execution-installed-${{ github.run_id }}-${{ github.run_attempt }}
+      READBACK_OUTPUT: /tmp/coord-execution-installed-proof-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out exact protected executor without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind original candidate and nonpublishing executor inputs
+        shell: bash
+        env:
+          SOURCE_A: ${{ inputs.source }}
+          EXECUTOR_SOURCE: ${{ inputs.executor_source }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+          CANDIDATE_RUN: ${{ inputs.candidate_run_id }}
+          CANDIDATE_ARTIFACT: ${{ inputs.candidate_artifact_id }}
+          ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
+          [[ "$SOURCE_A" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$EXECUTOR_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          test "$EXECUTOR_SOURCE" = "$GITHUB_SHA"
+          [[ "$CANDIDATE_RUN" =~ ^[1-9][0-9]{0,18}$ ]]
+          [[ "$CANDIDATE_ARTIFACT" =~ ^[1-9][0-9]{0,18}$ ]]
+          [[ "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]]
+          test "$CANDIDATE_VERSION" = 0.2.0
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
+          git merge-base --is-ancestor "$SOURCE_A" "$GITHUB_SHA"
+          changed_paths="$(git diff --name-only "$SOURCE_A" "$GITHUB_SHA")"
+          while IFS= read -r path; do
+            test -z "$path" && continue
+            case "$path" in
+              .github/workflows/callable-cli-release-prepare.yml|.github/workflows/callable-cli-release-publish.yml|eng/test-callable-cli-installed-harness.py|tests/portable-workspace/release/test_execution_pair_release.py|evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json) ;;
+              *) echo "::error::candidate-to-executor changed package or unsupported source: $path"; exit 1 ;;
+            esac
+          done <<< "$changed_paths"
+          test -z "$(git status --porcelain)"
+          test ! -e "$CANDIDATE_OUTPUT"
+          test ! -e "$READBACK_OUTPUT"
+          mkdir "$CANDIDATE_OUTPUT" "$READBACK_OUTPUT"
+          for name in SOURCE_A CANDIDATE_RUN CANDIDATE_ARTIFACT ARCHIVE_SHA; do
+            printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
+          done
+      - name: Run actual shared pair guards before installed qualification
+        run: python3 tests/portable-workspace/release/test_execution_pair_release.py
+      - name: Authenticate the original pair archive without repacking
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN" > "$READBACK_OUTPUT/run.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CANDIDATE_RUN/attempts/1/jobs?per_page=100" > "$READBACK_OUTPUT/jobs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT" > "$READBACK_OUTPUT/artifact.json"
+          curl --fail --silent --show-error --location --max-time 120 --max-filesize 50331648 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/candidate.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT/zip"
+          python3 - <<'PY_PAIR_INSTALLED_BINDINGS'
+          import hashlib,json,os,pathlib,zipfile
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          archive=root/'candidate.zip'
+          assert 0<archive.stat().st_size<=50331648
+          assert hashlib.sha256(archive.read_bytes()).hexdigest()==os.environ['ARCHIVE_SHA']
+          with zipfile.ZipFile(archive) as z:
+              entry=z.getinfo('execution-pair-release-manifest.json')
+              assert 0<entry.file_size<=1048576
+              raw=z.read(entry)
+          manifest=json.loads(raw)
+          assert manifest['sourceCommit']==os.environ['SOURCE_A']
+          jobs=json.loads((root/'jobs.json').read_bytes())
+          selected=[job for job in jobs['jobs'] if job['name']=='Prepare the routine Execution pair without publication']
+          assert len(selected)==1
+          admission=json.load(open('eng/execution-pair-release-admission.json'))
+          assert admission['enabled'] is False
+          admission.update(source=os.environ['SOURCE_A'],tree=manifest['sourceTree'],protectedMerge=os.environ['SOURCE_A'],runId=int(os.environ['CANDIDATE_RUN']),jobId=selected[0]['id'],artifactId=int(os.environ['CANDIDATE_ARTIFACT']),archiveSha256=os.environ['ARCHIVE_SHA'],manifestSha256=hashlib.sha256(raw).hexdigest(),packages={row['packageId']:row['sha256'] for row in manifest['packages']})
+          # This is the existing disabled admission shape, bound only for offline
+          # artifact verification. It supplies no namespace or effect capability.
+          (root/'candidate-bindings.json').write_text(json.dumps(admission))
+          PY_PAIR_INSTALLED_BINDINGS
+          python3 eng/test-callable-cli-installed-harness.py --execution-pair-artifact \
+            "$READBACK_OUTPUT/candidate-bindings.json" "$READBACK_OUTPUT" "$CANDIDATE_OUTPUT"
+      - name: Set up the pinned .NET SDK for package-only installed load
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Verify original payload and actual isolated compiler and runtime
+        shell: bash
+        run: |
+          set -euo pipefail
+          dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
+            --source "$SOURCE_A" --version 0.2.0 --output "$CANDIDATE_OUTPUT"
+          python3 eng/test-callable-cli-installed-harness.py --execution-pair \
+            "$CANDIDATE_OUTPUT" candidate "$READBACK_OUTPUT/candidate-load.json"
+      - name: Retain original installed proof and candidate identity
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: execution-pair-installed-${{ inputs.source }}-${{ github.run_id }}
+          path: ${{ env.READBACK_OUTPUT }}/
           if-no-files-found: error
           retention-days: 90
           compression-level: 0

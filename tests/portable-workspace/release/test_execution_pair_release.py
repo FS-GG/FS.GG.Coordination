@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import re
+import runpy
 import subprocess
 import tempfile
 import zipfile
@@ -19,8 +20,8 @@ def write(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(value, separators=(',', ':')))
 
-def heredoc(marker):
-    text = (ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
+def heredoc(marker,workflow='publish'):
+    text = (ROOT/('.github/workflows/callable-cli-release-'+workflow+'.yml')).read_text()
     code = text.split("          python3 - <<'"+marker+"'\n",1)[1].split('          '+marker+'\n',1)[0]
     return compile('\n'.join(line[10:] for line in code.splitlines()),marker,'exec')
 
@@ -71,7 +72,7 @@ def main():
             finally:os.chdir(old)
             assert refused == (name!='good'), name
             assert (root/'env').exists()==(name=='good'),name
-    guard=heredoc('PY_PAIR_ARCHIVE')
+    extract=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))['extract_execution_pair_artifact']
     with tempfile.TemporaryDirectory(prefix='pair-archive-test-') as temporary:
         root=Path(temporary);readback=root/'readback';readback.mkdir()
         a=admission();manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair',
@@ -107,10 +108,77 @@ def main():
             out=root/mode;out.mkdir();old=Path.cwd();os.chdir(root);refused=False
             try:
                 with patch.dict(os.environ,{'READBACK_OUTPUT':str(readback),'CANDIDATE_OUTPUT':str(out)},clear=True):
-                    try:exec(guard,{})
+                    try:extract(Path('eng/execution-pair-release-admission.json'),readback,out)
                     except (AssertionError,KeyError,TypeError):refused=True
             finally:os.chdir(old)
             assert refused==(mode!='good'),mode
+    # Exercise the real nonpublishing installed job's input/archive bindings.
+    installed_job=prepare.split('  execution_pair_installed:\n',1)[1]
+    assert "if: inputs.preparation_mode == 'execution-pair-installed'" in installed_job
+    assert '      contents: read\n      actions: read\n' in installed_job
+    assert 'id-token:' not in installed_job and 'packages:' not in installed_job
+    assert 'nuget push' not in installed_job and 'dotnet pack' not in installed_job
+    assert 'gh release' not in installed_job and 'git tag' not in installed_job
+    assert installed_job.index('--execution-pair-artifact') < installed_job.index('candidate "$READBACK_OUTPUT/candidate-load.json"')
+    bind=heredoc('PY_PAIR_INSTALLED_BINDINGS','prepare')
+    for mode in ('good','changed-archive','foreign-source','wrong-job','enabled'):
+        with tempfile.TemporaryDirectory(prefix='pair-installed-bindings-test-') as temporary:
+            root=Path(temporary);readback=root/'readback';readback.mkdir()
+            m={'sourceCommit':'a'*40,'sourceTree':'b'*40,'packages':[{'packageId':id,'sha256':str(i+1)*64} for i,id in enumerate(IDS)]}
+            with zipfile.ZipFile(readback/'candidate.zip','w') as z:z.writestr('execution-pair-release-manifest.json',json.dumps(m))
+            a=admission();a['enabled']=mode=='enabled'
+            write(root/'eng/execution-pair-release-admission.json',a)
+            write(readback/'jobs.json',{'jobs':[{'id':2,'name':'foreign' if mode=='wrong-job' else 'Prepare the routine Execution pair without publication'}]})
+            env={'READBACK_OUTPUT':str(readback),'ARCHIVE_SHA':'0'*64 if mode=='changed-archive' else hashlib.sha256((readback/'candidate.zip').read_bytes()).hexdigest(),
+                 'SOURCE_A':'c'*40 if mode=='foreign-source' else 'a'*40,'CANDIDATE_RUN':'1','CANDIDATE_ARTIFACT':'3'}
+            old=Path.cwd();os.chdir(root);refused=False
+            try:
+                with patch.dict(os.environ,env,clear=True):
+                    try:exec(bind,{})
+                    except (AssertionError,KeyError,TypeError):refused=True
+            finally:os.chdir(old)
+            assert refused==(mode!='good'),mode
+            assert (readback/'candidate-bindings.json').exists()==(mode=='good'),mode
+    gate=installed_job.split('          set -euo pipefail\n',1)[1].split('      - name: Run actual shared pair guards',1)[0]
+    gate='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in gate.splitlines())
+    for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor','diff-failure','metadata-change'):
+        with tempfile.TemporaryDirectory(prefix='pair-installed-source-test-') as temporary:
+            root=Path(temporary);stub=root/'git'
+            stub.write_text("""#!/usr/bin/python3
+import os,sys
+args=sys.argv[1:]
+if args[0]=='diff' and os.environ['FIXTURE_MODE']=='diff-failure':sys.exit(1)
+if args[0]=='rev-parse':print(os.environ['GITHUB_SHA'])
+if args[0]=='diff':print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if os.environ['FIXTURE_MODE']=='package-change' else 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json' if os.environ['FIXTURE_MODE']=='metadata-change' else '.github/workflows/callable-cli-release-prepare.yml')
+""")
+            stub.chmod(0o700)
+            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,
+                 'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_SHA':'9'*40,
+                 'EXECUTOR_SOURCE':'8'*40 if mode=='moved-executor' else '9'*40,
+                 'SOURCE_A':'z'*40 if mode=='bad-source' else 'a'*40,'CANDIDATE_RUN':'true' if mode=='bad-run' else '1',
+                 'CANDIDATE_ARTIFACT':'3','ARCHIVE_SHA':'x'*64 if mode=='bad-hash' else 'c'*64,'CANDIDATE_VERSION':'0.2.0',
+                 'CANDIDATE_OUTPUT':str(root/'candidate'),'READBACK_OUTPUT':str(root/'readback'),'GITHUB_ENV':str(root/'env')}
+            result=subprocess.run(['bash','-c',gate],env=env,capture_output=True,timeout=5)
+            assert (result.returncode==0)==(mode in {'good','metadata-change'}),(mode,result.stderr)
+            assert (root/'env').exists()==(mode in {'good','metadata-change'}),mode
+    publisher_source=job.split('      - name: Bind pair A ancestry and publication-only B changes\n',1)[1].split('      - name: Authenticate and extract',1)[0]
+    publisher_source=publisher_source.split('          set -euo pipefail\n',1)[1]
+    publisher_source='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in publisher_source.splitlines())
+    for mode in ('good','proof-change','diff-failure','package-change','metadata-change'):
+        with tempfile.TemporaryDirectory(prefix='pair-publisher-source-test-') as temporary:
+            root=Path(temporary);stub=root/'git'
+            stub.write_text("""#!/usr/bin/python3
+import os,sys
+args=sys.argv[1:]
+if args[0]=='diff':
+    if os.environ['FIXTURE_MODE']=='diff-failure':sys.exit(1)
+    print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if os.environ['FIXTURE_MODE']=='package-change' else 'eng/test-callable-cli-installed-harness.py' if os.environ['FIXTURE_MODE']=='proof-change' else 'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json' if os.environ['FIXTURE_MODE']=='metadata-change' else 'eng/execution-pair-release-admission.json')
+if args[0]=='rev-parse':print(os.environ['TREE_A'])
+""")
+            stub.chmod(0o700)
+            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,'SOURCE_A':'a'*40,'MERGE_A':'a'*40,'TREE_A':'b'*40,'GITHUB_SHA':'9'*40}
+            result=subprocess.run(['bash','-c',publisher_source],env=env,capture_output=True,timeout=5)
+            assert (result.returncode==0)==(mode in {'good','proof-change','metadata-change'}),(mode,result.stderr)
     with tempfile.TemporaryDirectory(prefix='pair-readback-test-') as temporary:
         root=Path(temporary)
         manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair',
@@ -200,6 +268,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=8 publisher-source=5 selectors=exclusive')
 
 if __name__=='__main__':main()

@@ -255,6 +255,40 @@ def check_execute_main_refusal(tool: pathlib.Path, output: pathlib.Path) -> int:
 
 
 
+def extract_execution_pair_artifact(admission: pathlib.Path, root: pathlib.Path, out: pathlib.Path) -> int:
+    """Verify/extract the original three-file pair artifact; grants no effect authority."""
+    a=json.loads(admission.read_bytes())
+    for name in ('run.json','jobs.json','artifact.json'): assert 0<(root/name).stat().st_size<=4194304
+    run=json.loads((root/'run.json').read_bytes())
+    assert run['id']==a['runId'] and run['repository']['id']==1346720714 and run['head_repository']['id']==1346720714
+    assert run['head_branch']=='main' and run['event']=='workflow_dispatch' and run['head_sha']==a['source'] and type(run['run_attempt']) is int and run['run_attempt']==1
+    assert run['status']=='completed' and run['conclusion']=='success' and run['path']=='.github/workflows/callable-cli-release-prepare.yml'
+    jobs=json.loads((root/'jobs.json').read_bytes())
+    assert type(jobs['total_count']) is int and jobs['total_count']==len(jobs['jobs']) and len(jobs['jobs'])<100
+    selected=[job for job in jobs['jobs'] if job['id']==a['jobId']]; assert len(selected)==1
+    job=selected[0]
+    assert job['run_id']==a['runId'] and type(job['run_attempt']) is int and job['run_attempt']==1 and job['head_sha']==a['source']
+    assert job['name']=='Prepare the routine Execution pair without publication' and job['status']=='completed' and job['conclusion']=='success'
+    artifact=json.loads((root/'artifact.json').read_bytes())
+    assert artifact['id']==a['artifactId'] and artifact['expired'] is False and artifact['name']=='execution-pair-'+a['source'] and artifact['digest']=='sha256:'+a['archiveSha256']
+    assert artifact['workflow_run']['id']==a['runId'] and artifact['workflow_run']['head_sha']==a['source']
+    archive=root/'candidate.zip'; assert 0<archive.stat().st_size<=50331648 and hashlib.sha256(archive.read_bytes()).hexdigest()==a['archiveSha256']
+    expected={id+'.0.2.0.nupkg':value for id,value in a['packages'].items()}; expected['execution-pair-release-manifest.json']=a['manifestSha256']
+    with zipfile.ZipFile(archive) as z:
+        assert len(z.infolist())==3 and set(z.namelist())==set(expected)
+        for entry in z.infolist():
+            cap=1048576 if entry.filename.endswith('.json') else 16777216
+            assert 0<entry.file_size<=cap and (entry.external_attr>>16)&0o170000!=0o120000
+            data=z.read(entry); assert hashlib.sha256(data).hexdigest()==expected[entry.filename]
+            with (out/entry.filename).open('xb') as target: target.write(data)
+    manifest=json.loads((out/'execution-pair-release-manifest.json').read_bytes())
+    assert manifest['schema']=='fsgg.coordination.execution-pair-release-preparation/1' and manifest['profile']=='execution-pair'
+    assert manifest['version']==a['version'] and manifest['tag']==a['tag'] and manifest['sourceCommit']==a['source'] and manifest['sourceTree']==a['tree']
+    assert manifest['publicationAuthorized'] is False and manifest['tagAuthorized'] is False and manifest['ownership']['reservation']=='unreserved'
+    assert len(manifest['packages'])==2 and {row['packageId']:row['sha256'] for row in manifest['packages']}==a['packages']
+    for row in manifest['packages']: assert row['file']==row['packageId']+'.0.2.0.nupkg'
+    return 0
+
 def write_pair_installed_project(root: pathlib.Path) -> tuple[pathlib.Path, list[str]]:
     import xml.etree.ElementTree as ET
     project = root / "PairInstalled.fsproj"
@@ -373,6 +407,8 @@ printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
     return 0
 
 def main() -> int:
+    if len(sys.argv) == 5 and sys.argv[1] == "--execution-pair-artifact":
+        return extract_execution_pair_artifact(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]))
     if len(sys.argv) == 5 and sys.argv[1] == "--execution-pair":
         return check_execution_pair(pathlib.Path(sys.argv[2]), sys.argv[3], pathlib.Path(sys.argv[4]))
     if len(sys.argv) == 4 and sys.argv[1] == "--execute-main-refusal":
