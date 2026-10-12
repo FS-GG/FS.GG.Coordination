@@ -192,10 +192,20 @@ let ``historical live provisioning receipt remains independently verifiable`` ()
              "\"httpStatus\":204,\"method\":\"GET\",\"name\":\"main-ruleset\"",
              "RS-RULESET-RESPONSE")>]
 [<InlineData("rulesets/1\"", "rulesets/9\"", "RS-RULESET-RESPONSE")>]
-[<InlineData("\"digest\":\"9", "\"digest\":\"8", "RS-RECEIPT-DIGEST")>]
-[<InlineData("\"preStateSha256\":\"f", "\"preStateSha256\":\"8", "RS-PRESTATE-DIGEST")>]
 let ``validator rejects material receipt mutation`` oldValue newValue expectedRule =
     withMutation oldValue newValue (fun path ->
+        let exitCode, output = verify desiredPath fixturePreStatePath path
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains(expectedRule, output))
+
+[<Theory>]
+[<InlineData("digest", "RS-RECEIPT-DIGEST")>]
+[<InlineData("preStateSha256", "RS-PRESTATE-DIGEST")>]
+let ``validator rejects current receipt digest mutation`` (property: string) expectedRule =
+    use fixture = JsonDocument.Parse(File.ReadAllText(fixturePath))
+    let original = fixture.RootElement.GetProperty(property).GetString()
+    let replacement = (if original.[0] = '0' then "1" else "0") + original.Substring(1)
+    withMutation ($"\"{property}\":\"{original}\"") ($"\"{property}\":\"{replacement}\"") (fun path ->
         let exitCode, output = verify desiredPath fixturePreStatePath path
         Assert.NotEqual(0, exitCode)
         Assert.Contains(expectedRule, output))

@@ -14,7 +14,7 @@ let private root =
 let private read relative = File.ReadAllText(Path.Combine(root, relative))
 
 [<Fact>]
-let ``callable CLI is the only explicitly packable stable tool boundary`` () =
+let ``callable CLI is the sole stable tool alongside the explicit Execution libraries`` () =
     let project = read "src/FS.GG.Coordination.Cli/FS.GG.Coordination.Cli.fsproj"
     for expected in
         [
@@ -27,10 +27,22 @@ let ``callable CLI is the only explicitly packable stable tool boundary`` () =
             "<PackageReleaseNotes>Adds opt-in protected-main ordinary settlement storage and CLI-only successor qualification while preserving legacy settlement routes and the portable workspace v1 contract.</PackageReleaseNotes>"
         ] do Assert.Contains(expected, project, StringComparison.Ordinal)
 
-    let otherProjects =
-        Directory.GetFiles(Path.Combine(root, "src"), "*.fsproj", SearchOption.AllDirectories)
-        |> Array.filter (fun path -> not (path.EndsWith("FS.GG.Coordination.Cli.fsproj", StringComparison.Ordinal)))
-    Assert.All(otherProjects, fun path -> Assert.DoesNotContain("<IsPackable>true</IsPackable>", File.ReadAllText path, StringComparison.Ordinal))
+    let allowedPackableProjects =
+        [ "FS.GG.Coordination.Cli.fsproj"; "FS.GG.Execution.Contracts.fsproj"; "FS.GG.Execution.Processes.fsproj" ]
+        |> List.sort
+    let allProjects = Directory.GetFiles(Path.Combine(root, "src"), "*.fsproj", SearchOption.AllDirectories)
+    let actualPackableProjects =
+        allProjects
+        |> Array.filter (fun path -> (File.ReadAllText path).Contains("<IsPackable>true</IsPackable>", StringComparison.Ordinal))
+        |> Array.map Path.GetFileName
+        |> Array.toList
+        |> List.sort
+    Assert.Equal<string list>(allowedPackableProjects, actualPackableProjects)
+    for id in [ "FS.GG.Execution.Contracts"; "FS.GG.Execution.Processes" ] do
+        let library = read $"src/{id}/{id}.fsproj"
+        Assert.DoesNotContain("<PackAsTool>true</PackAsTool>", library, StringComparison.Ordinal)
+        Assert.Contains($"<PackageId>{id}</PackageId>", library, StringComparison.Ordinal)
+        Assert.Contains("<PackageVersion>0.2.0</PackageVersion>", library, StringComparison.Ordinal)
 
 [<Fact>]
 let ``release preparation route has no publication tag or credential authority`` () =
@@ -155,6 +167,7 @@ let ``protected publication route preserves exact bytes ordering and recovery bo
     let withoutReviewedLoginOutputs =
         workflow.Replace("steps.nuget-login.outputs.NUGET_API_KEY }}", "")
             .Replace("steps.successor-login.outputs.NUGET_API_KEY }}", "")
+            .Replace("steps.pair-login.outputs.NUGET_API_KEY }}", "")
     Assert.DoesNotContain("NUGET_API_KEY }}", withoutReviewedLoginOutputs, StringComparison.Ordinal)
     let successor = workflow.Substring(workflow.IndexOf("  cli_successor:", StringComparison.Ordinal))
     Assert.Contains("PACKAGE_VERSION: 0.3.0", successor, StringComparison.Ordinal)
