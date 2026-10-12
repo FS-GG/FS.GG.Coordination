@@ -423,6 +423,9 @@ jobs:
   execution_pair_installed:
     if: inputs.preparation_mode == 'execution-pair-installed'
     name: Verify original Execution pair installed load without publication
+    permissions:
+      contents: read
+      actions: read
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     env:

@@ -115,6 +115,8 @@ def main():
     # Exercise the real nonpublishing installed job's input/archive bindings.
     installed_job=prepare.split('  execution_pair_installed:\n',1)[1]
     assert "if: inputs.preparation_mode == 'execution-pair-installed'" in installed_job
+    assert '      contents: read\n      actions: read\n' in installed_job
+    assert 'id-token:' not in installed_job and 'packages:' not in installed_job
     assert 'nuget push' not in installed_job and 'dotnet pack' not in installed_job
     assert 'gh release' not in installed_job and 'git tag' not in installed_job
     assert installed_job.index('--execution-pair-artifact') < installed_job.index('candidate "$READBACK_OUTPUT/candidate-load.json"')
