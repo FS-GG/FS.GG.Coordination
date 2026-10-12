@@ -161,6 +161,24 @@ if args[0]=='diff':print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if o
             result=subprocess.run(['bash','-c',gate],env=env,capture_output=True,timeout=5)
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             assert (root/'env').exists()==(mode=='good'),mode
+    publisher_source=job.split('      - name: Bind pair A ancestry and publication-only B changes\n',1)[1].split('      - name: Authenticate and extract',1)[0]
+    publisher_source=publisher_source.split('          set -euo pipefail\n',1)[1]
+    publisher_source='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in publisher_source.splitlines())
+    for mode in ('good','diff-failure','package-change'):
+        with tempfile.TemporaryDirectory(prefix='pair-publisher-source-test-') as temporary:
+            root=Path(temporary);stub=root/'git'
+            stub.write_text("""#!/usr/bin/python3
+import os,sys
+args=sys.argv[1:]
+if args[0]=='diff':
+    if os.environ['FIXTURE_MODE']=='diff-failure':sys.exit(1)
+    print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if os.environ['FIXTURE_MODE']=='package-change' else 'eng/execution-pair-release-admission.json')
+if args[0]=='rev-parse':print(os.environ['TREE_A'])
+""")
+            stub.chmod(0o700)
+            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,'SOURCE_A':'a'*40,'MERGE_A':'a'*40,'TREE_A':'b'*40,'GITHUB_SHA':'9'*40}
+            result=subprocess.run(['bash','-c',publisher_source],env=env,capture_output=True,timeout=5)
+            assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
     with tempfile.TemporaryDirectory(prefix='pair-readback-test-') as temporary:
         root=Path(temporary)
         manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair',
@@ -250,6 +268,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=7 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=7 publisher-source=3 selectors=exclusive')
 
 if __name__=='__main__':main()
