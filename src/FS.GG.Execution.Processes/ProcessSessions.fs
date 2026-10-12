@@ -9,14 +9,20 @@ open System.Threading.Tasks
 open FS.GG.Execution.Contracts
 
 [<RequireQualifiedAccess>]
+type RetirementPolicy =
+    | DirectChild
+    | BestEffortProcessTree
+
+[<RequireQualifiedAccess>]
 module ProcessSessions =
     let private note code = { Code = code; Message = "BCL session observation."; Evidence = None }
     let private error code field = { Code = code; Field = field }
 
-    // No callbacks, registry or detached reaper: the caller owns this object before Run.
+    // Public factories expose no callbacks, registry or detached reaper.
+    // Friend tests can replace only this retained instance's native retirement leaf.
     // Every asynchronous BCL operation and its Process remain fields of that object.
     type private Session(command: CommandSpec, identity: OperationIdentity, budget: ExecutionBudget,
-                         clock: IMonotonicClock, owner: OwnerReference, preparedAt: ClockStamp, initial: LifecycleState, sink: IBoundedByteSink) =
+                         clock: IMonotonicClock, owner: OwnerReference, preparedAt: ClockStamp, initial: LifecycleState, sink: IBoundedByteSink, retirement: RetirementPolicy, retire: Process -> bool -> unit) =
         let gate = obj()
         let mutable state = initial
         let mutable runConsumed = false
@@ -129,21 +135,49 @@ module ProcessSessions =
                                 | Ok at,Some targetProcess ->
                                     match budgetAt at with
                                     | Ok view when not view.TotalExpired && not leaderExited && not ambiguous ->
-                                        if applyAt at (RetirementActionRequested(note "bcl-leader-stop-requested")) then Some targetProcess else None
+                                        let code = if retirement = RetirementPolicy.DirectChild then "bcl-leader-stop-requested" else "bcl-tree-policy-requested"
+                                        if applyAt at (RetirementActionRequested(note code)) then Some targetProcess else None
                                     | _ -> None
                                 | _ -> None)
                         match target with
                         | Some targetProcess ->
-                            // BCL Unix kill is best effort, not stable-birth or tree authority.
-                            // The retained direct-child Process is never reopened from a PID.
-                            if not targetProcess.HasExited then targetProcess.Kill()
+                            // The retained Process is never reopened from a numeric PID.
+                            // Tree traversal is synchronous/noncancellable and remains this exact
+                            // retained StopTask. Return/exit never establish whole-tree completion.
+                            match retirement with
+                            | RetirementPolicy.DirectChild ->
+                                if not targetProcess.HasExited then retire targetProcess false
+                            | RetirementPolicy.BestEffortProcessTree ->
+                                if targetProcess.HasExited then
+                                    lock gate (fun () -> apply (RetirementActionRequested(note "bcl-tree-leader-exited-unavailable")) |> ignore)
+                                else
+                                    let committed =
+                                        lock gate (fun () ->
+                                            match now() with
+                                            | Ok at ->
+                                                match budgetAt at with
+                                                | Ok view when not view.TotalExpired ->
+                                                    applyAt at (RetirementActionRequested(note "bcl-tree-stop-committed"))
+                                                | _ -> false
+                                            | Error _ -> false)
+                                    if committed then retire targetProcess true
                         | None -> ()
-                    with _ -> lock gate (fun () -> recordFailure "bcl-leader-stop-failed")
+                    with _ -> lock gate (fun () -> recordFailure (if retirement = RetirementPolicy.DirectChild then "bcl-leader-stop-failed" else "bcl-tree-stop-failed"))
                 finally
                     lock gate (fun () -> stopDone <- true; refreshCleanup())
             } :> Task
         let ensureStop () =
             let requested = match (Lifecycle.snapshot state).Stop with Requested _ -> true | _ -> false
+            if requested && not stopConsumed && launchDone && launchAttempted && not ambiguous && leaderExited
+               && retirement = RetirementPolicy.BestEffortProcessTree then
+                match now() with
+                | Ok at ->
+                    match budgetAt at with
+                    | Ok view when not view.TotalExpired ->
+                        stopConsumed <- true
+                        applyAt at (RetirementActionRequested(note "bcl-tree-leader-exited-unavailable")) |> ignore
+                    | _ -> ()
+                | Error _ -> ()
             if requested && not stopConsumed && launchDone && launchAttempted && not ambiguous && not leaderExited then
                 match now() with
                 | Ok at ->
@@ -439,11 +473,14 @@ module ProcessSessions =
                             | _ -> ReleaseRefused(note "original-time-expired")
                         | Error _ -> ReleaseRefused(note "clock-observation-failed"))
 
-    let createFactory () =
+    let private createFactoryWithAction retirement (retire: Process -> bool -> unit) =
         { new IProcessSessionFactory with
             member _.Prepare(command,identity,budget,clock,owner) =
                 try
-                    let requestErrors = Validation.command command @ Validation.identity identity
+                    let policyErrors =
+                        [ if obj.ReferenceEquals(retirement,null) then error "invalid-retirement-policy" "retirement"
+                          if obj.ReferenceEquals(retire,null) then error "invalid-retirement-action" "retirement" ]
+                    let requestErrors = policyErrors @ Validation.command command @ Validation.identity identity
                     if not requestErrors.IsEmpty then Error requestErrors
                     else
                         let unsupported =
@@ -477,8 +514,17 @@ module ProcessSessions =
                             // are immutable validated F# values, and capture allocates only after refusal.
                             let copied = { command with Input = match command.Input with Closed -> Closed | Bytes bytes -> Bytes(ReadOnlyMemory<byte>(bytes.ToArray())) }
                             match Lifecycle.prepare copied identity budget,BoundedOutput.create copied.Capture,preparedAt with
-                            | Ok initial,Ok sink,Some at -> Ok(Session(copied,identity,budget,clock,owner,at,initial,sink) :> IProcessSession)
+                            | Ok initial,Ok sink,Some at -> Ok(Session(copied,identity,budget,clock,owner,at,initial,sink,retirement,retire) :> IProcessSession)
                             | Error errors,_,_ | _,Error errors,_ -> Error errors
                             | _,_,None -> Error [error "invalid-live-clock" "clock"]
                 with
                 | :? ArgumentException | :? NullReferenceException | :? OverflowException -> Error [error "invalid-request" "request.structure"] }
+
+    let private bclRetire (target: Process) tree =
+        if tree then target.Kill(true) else target.Kill()
+
+    let internal createFactoryForTesting retirement retire = createFactoryWithAction retirement retire
+
+    let createFactoryWithRetirement retirement = createFactoryWithAction retirement bclRetire
+
+    let createFactory () = createFactoryWithRetirement RetirementPolicy.DirectChild

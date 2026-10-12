@@ -241,3 +241,120 @@ module ProcessSessionTests =
         Assert.Equal(Budget.describe budget,Budget.describe final.OriginalBudget)
         // The admitted outer test owner is responsible for later administrative
         // resource retirement. The interface deliberately has no fresh-admission API.
+
+    [<Fact>]
+    let ``opt in tree retirement stops an observed child while local release stays separate`` () =
+        let marker = Path.Combine(Path.GetTempPath(),"fsgg-proc-tree-" + Guid.NewGuid().ToString("N"))
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 6.) (TimeSpan.FromSeconds 5.) |> ok
+        let selected = { command with Arguments = [ "-c"; "/bin/sleep 30 & child=$!; printf '%s' \"$child\" > \"$1\"; wait"; "fixture"; marker ] }
+        let factory = ProcessSessions.createFactoryWithRetirement RetirementPolicy.BestEffortProcessTree
+        let session = factory.Prepare(selected,identity(),budget,liveClock,owner) |> ok
+        let running = session.RunAsync(CancellationToken.None)
+        let mutable localReleased = false
+        try
+            let initial = running.GetAwaiter().GetResult()
+            Assert.True(File.Exists marker,"tree fixture must actually create its descendant witness")
+            let childPid = Int32.Parse(File.ReadAllText marker)
+            let final = settle liveClock budget session
+            localReleased <- true
+            let executing =
+                try
+                    let stat = File.ReadAllText(sprintf "/proc/%d/stat" childPid)
+                    let state = stat.Substring(stat.LastIndexOf(')') + 2).Split(' ')[0]
+                    state <> "Z" && state <> "X"
+                with :? FileNotFoundException | :? DirectoryNotFoundException -> false
+            Assert.False(executing,"observed fixture child must no longer execute before local acceptance")
+            Assert.True(match initial.Stop with Requested(WorkDeadline,_) -> true | _ -> false)
+            Assert.True(final.Cleanup.RequestedActions |> List.exists (fun action -> action.Code = "bcl-tree-stop-committed"))
+            Assert.True(match final.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+            Assert.True(match final.Cleanup.OwnedChildrenReaped with Unknown _ -> true | _ -> false)
+            Assert.Equal(Incomplete,final.Cleanup.Disposition)
+            Assert.Equal(initial.FirstFailure,final.FirstFailure)
+        with original ->
+            // The admitted test owner retains actual session/task if this fixture fails.
+            original.Data["RetainedTreeSession"] <- session
+            original.Data["RetainedTreeRunTask"] <- running
+            original.Data["RetainedTreeMarker"] <- marker
+            reraise()
+        if localReleased then File.Delete marker
+
+    [<Fact>]
+    let ``delayed tree leaf retains real stop task and refuses release until it settles`` () =
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 6.) (TimeSpan.FromSeconds 5.) |> ok
+        use entered = new ManualResetEventSlim(false)
+        use allowAction = new ManualResetEventSlim(false)
+        let mutable retainedTarget: System.Diagnostics.Process option = None
+        let action (target: System.Diagnostics.Process) tree =
+            retainedTarget <- Some target
+            Assert.True(tree)
+            entered.Set()
+            let remaining = Budget.clip (liveClock.Now()) Cleanup TimeSpan.MaxValue budget |> ok
+            if not (allowAction.Wait remaining) then raise (TimeoutException("Original action gate expired."))
+            target.Kill(true)
+        let factory = ProcessSessions.createFactoryForTesting RetirementPolicy.BestEffortProcessTree action
+        let session = factory.Prepare({ command with Arguments = [ "-c"; "while :; do :; done" ] },identity(),budget,liveClock,owner) |> ok
+        let running = session.RunAsync(CancellationToken.None)
+        try
+            observeUntil liveClock budget (fun result -> match result.Launch with Started _ -> true | _ -> false) session |> ignore
+            session.RequestStopAsync(CallerCancellation,CancellationToken.None).GetAwaiter().GetResult() |> ignore
+            let remaining = Budget.clip (liveClock.Now()) Cleanup TimeSpan.MaxValue budget |> ok
+            Assert.True(entered.Wait remaining,"actual stop leaf entry must precede passive observation")
+            let passive = session.ObserveAsync(CancellationToken.None)
+            Assert.True(passive.IsCompleted,"synchronous tree action must not hold the observation gate")
+            Assert.True(match passive.Result.Cleanup.LocalTasks with Known(Outstanding,_) -> true | _ -> false)
+            Assert.True(match session.TryRelease() with ReleaseRefused diagnostic -> diagnostic.Code = "local-obligations-pending" | _ -> false)
+            allowAction.Set()
+            let initial = running.GetAwaiter().GetResult()
+            let final = settle liveClock budget session
+            Assert.Equal(initial.FirstFailure,final.FirstFailure)
+            Assert.True(match final.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+        with original ->
+            allowAction.Set()
+            original.Data["RetainedTreeSession"] <- session
+            original.Data["RetainedTreeRunTask"] <- running
+            original.Data["RetainedTreeActionProcess"] <- retainedTarget
+            reraise()
+
+    [<Fact>]
+    let ``failed tree leaf preserves first cause and needs independently owned retirement`` () =
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 6.) (TimeSpan.FromSeconds 5.) |> ok
+        let mutable retainedTarget: System.Diagnostics.Process option = None
+        let mutable actions = 0
+        let action (target: System.Diagnostics.Process) tree =
+            Assert.True(tree)
+            retainedTarget <- Some target
+            actions <- actions + 1
+            raise (IOException("Controlled native leaf failure."))
+        let factory = ProcessSessions.createFactoryForTesting RetirementPolicy.BestEffortProcessTree action
+        let session = factory.Prepare({ command with Arguments = [ "-c"; "while :; do :; done" ] },identity(),budget,liveClock,owner) |> ok
+        let running = session.RunAsync(CancellationToken.None)
+        let hasFailure (result: ExecutionResult) =
+            (result.FirstFailure |> Option.exists (fun failure -> failure.Diagnostic.Code = "bcl-tree-stop-failed"))
+            || (result.AdditionalFailures |> List.exists (fun failure -> failure.Diagnostic.Code = "bcl-tree-stop-failed"))
+        try
+            observeUntil liveClock budget (fun result -> match result.Launch with Started _ -> true | _ -> false) session |> ignore
+            session.RequestStopAsync(CallerCancellation,CancellationToken.None).GetAwaiter().GetResult() |> ignore
+            let failed = observeUntil liveClock budget hasFailure session
+            Assert.Equal(1,actions)
+            Assert.True(match session.TryRelease() with ReleaseRefused _ -> true | _ -> false)
+            Assert.True(match failed.Cleanup.LocalTasks with Known(Outstanding,_) -> true | _ -> false)
+            // This admitted outer fixture owner retains the exact callback Process.
+            // It retires that fixture independently; the consumed inner action is never retried.
+            let remaining = Budget.clip (liveClock.Now()) Cleanup TimeSpan.MaxValue budget |> ok
+            Assert.True(remaining > TimeSpan.Zero)
+            let target = retainedTarget |> Option.defaultWith (fun () -> failwith "Missing original leaf Process.")
+            if not target.HasExited then target.Kill(true)
+            running.GetAwaiter().GetResult() |> ignore
+            let final = settle liveClock budget session
+            Assert.Equal(1,actions)
+            Assert.True(hasFailure final)
+            Assert.Equal(failed.FirstFailure,final.FirstFailure)
+            Assert.True(match final.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+        with original ->
+            original.Data["RetainedFailedTreeSession"] <- session
+            original.Data["RetainedFailedTreeRunTask"] <- running
+            original.Data["RetainedFailedTreeActionProcess"] <- retainedTarget
+            reraise()

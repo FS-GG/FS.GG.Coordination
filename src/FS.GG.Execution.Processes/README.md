@@ -51,3 +51,18 @@ clipped to the same original total. Its response can precede actual local settle
 the explicitly admitted outer caller continues to own all tasks/resources until
 lawful release or reports an unresolved retirement obligation. This source alone
 does not establish the SDD test-lifetime integration or consumer adoption.
+
+
+`createFactory()` preserves direct-child retirement. `createFactoryWithRetirement
+RetirementPolicy.BestEffortProcessTree` explicitly selects the retained BCL process's
+best-effort tree traversal. Bind the policy into the caller's profile identity.
+The synchronous traversal runs outside the observation lock and remains the same
+retained StopTask; it may continue after bounded return. Local release refuses while
+that task is pending. No fresh cleanup time or second signal is acquired after expiry.
+
+Tree mode does not provide stable descendant identity, containment, complete tree
+termination, workload emptiness, reaping, or supervisor-death cleanup. Required strong
+capabilities still refuse before launch. Leader exit and pipe EOF do not prove descendant
+retirement; a leader already gone makes tree retirement unavailable. Caller-owned
+qualification must independently verify its restricted attached-descendant fixture.
+The API is source preparation pending fresh qualification of changed bytes.

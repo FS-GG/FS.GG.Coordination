@@ -339,9 +339,13 @@ type FixtureSession(command: CommandSpec, identity: OperationIdentity, owner: Ow
 // the returned real session. It does not import the bridge's procfs/gated-start
 // implementation, failed-sink injection or qualification claims.
 module ProductionFixture =
-    let prepare (command: CommandSpec) identity owner total reserve =
+    let prepareWithRetirement retirement (command: CommandSpec) identity owner total reserve =
         let domain = { Id = Guid.NewGuid(); Frequency = Stopwatch.Frequency }
         let clock = { new IMonotonicClock with member _.Now() = { Domain = domain; Ticks = Stopwatch.GetTimestamp() } }
         let budget = Budget.create (clock.Now()) total reserve |> Support.ok
-        let session = FS.GG.Execution.Processes.ProcessSessions.createFactory().Prepare(command,identity,budget,clock,owner) |> Support.ok
+        let factory = FS.GG.Execution.Processes.ProcessSessions.createFactoryWithRetirement retirement
+        let session = factory.Prepare(command,identity,budget,clock,owner) |> Support.ok
         session,clock,budget
+
+    let prepare (command: CommandSpec) identity owner total reserve =
+        prepareWithRetirement FS.GG.Execution.Processes.RetirementPolicy.DirectChild command identity owner total reserve
