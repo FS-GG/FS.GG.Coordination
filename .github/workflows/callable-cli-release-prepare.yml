@@ -470,12 +470,14 @@ jobs:
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
           git merge-base --is-ancestor "$SOURCE_A" "$GITHUB_SHA"
+          changed_paths="$(git diff --name-only "$SOURCE_A" "$GITHUB_SHA")"
           while IFS= read -r path; do
+            test -z "$path" && continue
             case "$path" in
               .github/workflows/callable-cli-release-prepare.yml|.github/workflows/callable-cli-release-publish.yml|eng/test-callable-cli-installed-harness.py|tests/portable-workspace/release/test_execution_pair_release.py) ;;
               *) echo "::error::candidate-to-executor changed package or unsupported source: $path"; exit 1 ;;
             esac
-          done < <(git diff --name-only "$SOURCE_A" "$GITHUB_SHA")
+          done <<< "$changed_paths"
           test -z "$(git status --porcelain)"
           test ! -e "$CANDIDATE_OUTPUT"
           test ! -e "$READBACK_OUTPUT"

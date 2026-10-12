@@ -141,12 +141,13 @@ def main():
             assert (readback/'candidate-bindings.json').exists()==(mode=='good'),mode
     gate=installed_job.split('          set -euo pipefail\n',1)[1].split('      - name: Run actual shared pair guards',1)[0]
     gate='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in gate.splitlines())
-    for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor'):
+    for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor','diff-failure'):
         with tempfile.TemporaryDirectory(prefix='pair-installed-source-test-') as temporary:
             root=Path(temporary);stub=root/'git'
             stub.write_text("""#!/usr/bin/python3
 import os,sys
 args=sys.argv[1:]
+if args[0]=='diff' and os.environ['FIXTURE_MODE']=='diff-failure':sys.exit(1)
 if args[0]=='rev-parse':print(os.environ['GITHUB_SHA'])
 if args[0]=='diff':print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if os.environ['FIXTURE_MODE']=='package-change' else '.github/workflows/callable-cli-release-prepare.yml')
 """)
@@ -249,6 +250,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=6 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=7 selectors=exclusive')
 
 if __name__=='__main__':main()
