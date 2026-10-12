@@ -37,7 +37,9 @@ def admission():
 def installed_isolation_diagnostic_controls():
     # Inert SDK substitute drives the actual maintained caller; no CLR/native acceptance.
     check = runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))['check_execution_pair']
-    for mode in ('good', 'escaped-path', 'extra-folder', 'trailing-slash', 'oversized'):
+    for mode in ('good', 'bare-folder', 'escaped-path', 'extra-folder', 'sdk-folder', 'missing-folder',
+                 'descendant-folder', 'parent-folder', 'double-slash', 'case-variant', 'duplicate-folders',
+                 'trailing-slash', 'oversized'):
         with tempfile.TemporaryDirectory(prefix='pair-isolation-diagnostic-test-') as temporary:
             candidate=Path(temporary); rows=[]
             for id in IDS:
@@ -55,9 +57,17 @@ def installed_isolation_diagnostic_controls():
                     folders={folder:{}}
                     if mode=='escaped-path': restore['packagesPath']='/outside-cache'
                     if mode=='extra-folder': folders['/sdk-home/fallback/']={}; restore['fallbackFolders']=['/sdk-home/fallback/']
+                    if mode=='bare-folder': folders={packages:{}}
+                    if mode=='sdk-folder': folders={'/sdk-home/fallback/':{}}
+                    if mode=='missing-folder': folders={}
+                    if mode=='descendant-folder': folders={folder+'extra':{}}
+                    if mode=='parent-folder': folders={folder+'..':{}}
+                    if mode=='double-slash': folders={folder+os.sep:{}}
+                    if mode=='case-variant': folders={packages.upper():{}}
+                    if mode=='duplicate-folders': folders={packages:{},folder:{}}
                     if mode=='trailing-slash': restore['packagesPath']=folder
                     if mode=='oversized': restore['packagesPath']='/'+'x'*5000
-                    observed.update({'expectedPackagesPath':packages,'expectedPackageFolders':[folder],
+                    observed.update({'expectedPackagesPath':packages,'expectedPackageFolders':sorted([packages,folder]),
                                      'observedPackagesPath':restore['packagesPath'],'observedPackageFolders':list(folders),
                                      'observedFallbackFolders':restore['fallbackFolders'],'observedSources':list(restore['sources'])})
                     write(root/'obj/project.assets.json',{'packageFolders':folders,'project':{'restore':restore},
@@ -78,9 +88,10 @@ def installed_isolation_diagnostic_controls():
                     else: assert json.loads(message[len(prefix):])==observed
                     assert len(message.encode())<=len(prefix)+4096
             finally: check.__globals__['run']=original
-            assert refused==(mode!='good') and output.exists()==(mode=='good'),mode
+            accepted=mode in ('good','bare-folder')
+            assert refused==(not accepted) and output.exists()==accepted,mode
             assert calls[:2]==['restore','build']
-            assert (len(calls)==3 and calls[2].endswith('/PairInstalled.dll')) if mode=='good' else len(calls)==2
+            assert (len(calls)==3 and calls[2].endswith('/PairInstalled.dll')) if accepted else len(calls)==2
 
 def main():
     installed_isolation_diagnostic_controls()
@@ -317,6 +328,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=8 publisher-source=5 isolation-diagnostics=5 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=8 publisher-source=5 isolation-diagnostics=13 selectors=exclusive')
 
 if __name__=='__main__':main()

@@ -377,10 +377,11 @@ printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
         compiled = root / "bin/Release/net10.0"
         joins = []
         assets = json.loads((root / "obj/project.assets.json").read_bytes())
-        expected_folder = str((root / "packages").resolve()) + os.sep
-        if set(assets["packageFolders"]) != {expected_folder} or assets["project"]["restore"]["packagesPath"] != str(root / "packages"):
+        expected_folder = str(root / "packages")
+        expected_folders = {expected_folder, expected_folder + os.sep}
+        if len(assets["packageFolders"]) != 1 or not set(assets["packageFolders"]).issubset(expected_folders) or assets["project"]["restore"]["packagesPath"] != str(root / "packages"):
             restore = assets["project"]["restore"]
-            details = json.dumps({"expectedPackagesPath": str(root / "packages"), "expectedPackageFolders": [expected_folder],
+            details = json.dumps({"expectedPackagesPath": str(root / "packages"), "expectedPackageFolders": sorted(expected_folders),
                                   "observedPackagesPath": restore["packagesPath"], "observedPackageFolders": list(assets["packageFolders"]),
                                   "observedFallbackFolders": restore.get("fallbackFolders", []), "observedSources": list(restore.get("sources", {}))},
                                  sort_keys=True, separators=(",", ":"))
