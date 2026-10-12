@@ -254,7 +254,127 @@ def check_execute_main_refusal(tool: pathlib.Path, output: pathlib.Path) -> int:
     return 0
 
 
+
+def write_pair_installed_project(root: pathlib.Path) -> tuple[pathlib.Path, list[str]]:
+    import xml.etree.ElementTree as ET
+    project = root / "PairInstalled.fsproj"
+    project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup><ItemGroup><Compile Include="Program.fs"/><PackageReference Include="FSharp.Core" Version="[10.1.302]"/><PackageReference Include="FS.GG.Execution.Contracts" Version="[0.2.0]"/><PackageReference Include="FS.GG.Execution.Processes" Version="[0.2.0]"/></ItemGroup></Project>')
+    isolation = {"ImportDirectoryBuildProps": "false", "ImportDirectoryBuildTargets": "false",
+                 "ImportDirectoryPackagesProps": "false", "ManagePackageVersionsCentrally": "false",
+                 "DisableImplicitLibraryPacksFolder": "true", "DisableImplicitFSharpCoreReference": "true",
+                 "RestoreFallbackFolders": "", "RestoreAdditionalProjectFallbackFolders": "",
+                 "EnableTargetingPackDownload": "false", "EnableRuntimePackDownload": "false", "UsePackageDownload": "false"}
+    # Global properties take effect before parent-import discovery or SDK implicit packs.
+    # The actual evaluated SDK project must meet them before collecting restore inputs.
+    doc = ET.parse(project); top = doc.getroot()
+    target = ET.SubElement(top, "Target", Name="VerifyPairIsolation", BeforeTargets="CollectPackageReferences;CollectPackageDownloads;Build", DependsOnTargets="ProcessFrameworkReferences")
+    for name, value in isolation.items():
+        ET.SubElement(target, "Error", Condition="'$(" + name + ")' != '" + value + "'", Text="pair isolation property changed: " + name)
+    ET.SubElement(target, "Error", Condition="'@(PackageDownload)' != ''", Text="pair unexpected PackageDownload")
+    ET.SubElement(target, "Error", Condition="'@(PackageReference->Count())' != '3'", Text="pair unexpected PackageReference population")
+    ET.SubElement(target, "WriteLinesToFile", File=str(root / "effective-isolation.txt"), Lines="PAIR_EFFECTIVE_ISOLATION_OK", Overwrite="true")
+    references = ET.SubElement(top, "Target", Name="VerifyPairCompilerInputs", AfterTargets="ResolveReferences", BeforeTargets="CoreCompile")
+    items = ET.SubElement(references, "ItemGroup")
+    ET.SubElement(items, "PairCompilerInput", Include="@(ReferencePath)", Condition="'%(ReferencePath.Filename)' == 'FS.GG.Execution.Contracts' Or '%(ReferencePath.Filename)' == 'FS.GG.Execution.Processes'")
+    ET.SubElement(references, "Error", Condition="'@(ProjectReference)' != ''", Text="pair producer project reference forbidden")
+    ET.SubElement(references, "Error", Condition="'@(PairCompilerInput->Count())' != '2'", Text="pair compiler reference population changed")
+    ET.SubElement(references, "WriteLinesToFile", File=str(root / "compiler-pair-references.txt"), Lines="@(PairCompilerInput->'%(FullPath)')", Overwrite="true")
+    doc.write(project, encoding="utf-8", xml_declaration=True)
+    properties = ["-p:" + name + "=" + value for name, value in isolation.items()]
+    return project, properties
+
+def check_execution_pair(candidate: pathlib.Path, mode: str, output: pathlib.Path) -> int:
+    """Compile/load libraries from isolated package inputs; no process fixture/adoption claim."""
+    if mode not in {"candidate", "public"}:
+        raise RuntimeError("Execution pair input mode changed")
+    ids = ("FS.GG.Execution.Contracts", "FS.GG.Execution.Processes")
+    manifest = json.loads((candidate / "execution-pair-release-manifest.json").read_bytes())
+    if manifest["profile"] != "execution-pair" or manifest["version"] != "0.2.0":
+        raise RuntimeError("Execution pair manifest identity changed")
+    rows = manifest["packages"]
+    if len(rows) != 2 or {row["packageId"] for row in rows} != set(ids):
+        raise RuntimeError("Execution pair member population changed")
+    expected_dlls = {}
+    for row in rows:
+        archive = candidate / row["file"]
+        if digest(archive.read_bytes()) != row["sha256"]:
+            raise RuntimeError("Execution pair archive changed")
+        with zipfile.ZipFile(archive) as package:
+            expected_dlls[row["packageId"]] = package.read("lib/net10.0/" + row["packageId"] + ".dll")
+    with tempfile.TemporaryDirectory(prefix="fsgg-execution-installed-") as temporary:
+        root = pathlib.Path(temporary)
+        environment = {key: value for key, value in os.environ.items() if key in {"PATH", "HOME", "LANG", "LC_ALL", "DOTNET_ROOT"}}
+        environment.update({"DOTNET_CLI_HOME": str(root / "dotnet-home"), "NUGET_PACKAGES": str(root / "packages"),
+                            "NUGET_HTTP_CACHE_PATH": str(root / "http-cache"), "DOTNET_NOLOGO": "1", "DOTNET_CLI_TELEMETRY_OPTOUT": "1", "DOTNET_PROCESSOR_COUNT": "4"})
+        (root / "tmp").mkdir()
+        environment.update(TMPDIR=str(root / "tmp"), TEMP=str(root / "tmp"), TMP=str(root / "tmp"))
+        shutil.copyfile(ROOT / "global.json", root / "global.json")
+        # Explicit source-only/private feeds and pre-existing caches are inaccessible to restore.
+        import xml.etree.ElementTree as ET
+        config = ET.Element("configuration")
+        sources = ET.SubElement(config, "packageSources")
+        ET.SubElement(sources, "clear")
+        if mode == "candidate": ET.SubElement(sources, "add", key="candidate", value=str(candidate.resolve(strict=True)))
+        ET.SubElement(sources, "add", key="public", value="https://api.nuget.org/v3/index.json")
+        ET.SubElement(ET.SubElement(config, "fallbackPackageFolders"), "clear")
+        mapping = ET.SubElement(config, "packageSourceMapping")
+        if mode == "candidate":
+            candidate_mapping = ET.SubElement(mapping, "packageSource", key="candidate")
+            for id in ids: ET.SubElement(candidate_mapping, "package", pattern=id)
+        public_mapping = ET.SubElement(mapping, "packageSource", key="public")
+        for id in (("FSharp.Core",) if mode == "candidate" else ids + ("FSharp.Core",)):
+            ET.SubElement(public_mapping, "package", pattern=id)
+        config_path = root / "NuGet.Config"
+        ET.ElementTree(config).write(config_path, encoding="utf-8", xml_declaration=True)
+        project, properties = write_pair_installed_project(root)
+        (root / "Program.fs").write_text("""open System
+open FS.GG.Execution.Contracts
+open FS.GG.Execution.Processes
+let factory: IProcessSessionFactory = ProcessSessions.createFactory()
+if isNull (box factory) then failwith "missing installed factory"
+let errors = Validation.identity { InvocationId = Guid.Empty; Execution = None; LaunchOrdinal = 0UL; SourceDigest = ""; ProfileId = ""; ProfileDigest = "" }
+if List.isEmpty errors then failwith "invalid identity unexpectedly accepted"
+printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
+""")
+        run(["dotnet", "restore", str(project), "--configfile", str(config_path), "--no-cache", "--disable-parallel", "-p:NuGetAudit=false", *properties], cwd=root, env=environment)
+        if (root / "effective-isolation.txt").read_bytes().strip() != b"PAIR_EFFECTIVE_ISOLATION_OK":
+            raise RuntimeError("effective restore isolation guard did not execute")
+        run(["dotnet", "build", str(project), "--no-restore", "--configuration", "Release", "--disable-build-servers", "-m:1", "-p:UseSharedCompilation=false", *properties], cwd=root, env=environment)
+        compiled = root / "bin/Release/net10.0"
+        joins = []
+        assets = json.loads((root / "obj/project.assets.json").read_bytes())
+        expected_folder = str((root / "packages").resolve()) + os.sep
+        if set(assets["packageFolders"]) != {expected_folder} or assets["project"]["restore"]["packagesPath"] != str(root / "packages"):
+            raise RuntimeError("effective NuGet package/fallback folder escaped isolation")
+        if assets["project"]["restore"].get("fallbackFolders", []) or set(assets["project"]["restore"]["sources"]) != ({str(candidate.resolve()), "https://api.nuget.org/v3/index.json"} if mode == "candidate" else {"https://api.nuget.org/v3/index.json"}):
+            raise RuntimeError("effective NuGet source/fallback configuration changed")
+        if set(assets["libraries"]) != {"FSharp.Core/10.1.302", *(id + "/0.2.0" for id in ids)} or any(row["type"] != "package" for row in assets["libraries"].values()):
+            raise RuntimeError("effective installed dependency population changed")
+        compiler_paths = (root / "compiler-pair-references.txt").read_text().splitlines()
+        expected_paths = {(root / "packages" / id.lower() / "0.2.0" / "lib/net10.0" / (id + ".dll")).resolve(strict=True) for id in ids}
+        if len(compiler_paths) != 2 or {pathlib.Path(value).resolve(strict=True) for value in compiler_paths} != expected_paths:
+            raise RuntimeError("actual pair compiler references escaped isolated installed packages")
+        for id in ids:
+            compiler = next(path for path in expected_paths if path.name == id + ".dll")
+            if compiler.read_bytes() != expected_dlls[id]: raise RuntimeError("actual pair compiler bytes differ from candidate payload")
+            if id + "/0.2.0" not in assets["libraries"] or assets["libraries"][id + "/0.2.0"]["type"] != "package":
+                raise RuntimeError("Execution pair did not resolve as exact installed package")
+            actual = (compiled / (id + ".dll")).read_bytes()
+            if actual != expected_dlls[id]: raise RuntimeError("Installed pair runtime differs from original candidate payload")
+            joins.append({"packageId": id, "version": "0.2.0", "runtimeSha256": digest(actual)})
+        actual = run(["dotnet", str(compiled / "PairInstalled.dll")], cwd=root, env=environment)
+        if actual.stdout != "EXECUTION_PAIR_INSTALLED_LOAD_OK\n" or actual.stderr:
+            raise RuntimeError("Installed pair did not produce exact bounded load marker")
+        output.parent.mkdir(parents=True, exist_ok=True)
+        output.write_bytes(compact({"schema": "fsgg.coordination.execution-pair-installed-load/1", "mode": mode,
+                                   "producerProjectReferenced": False, "packageInputsOnly": True, "physicalSourceExclusionEstablished": False,
+                                   "privateCachesUnavailable": True, "effectiveProjectIsolationGuard": True, "effectiveNuGetFoldersVerified": True, "actualCompilerReferencesVerified": True, "publicOnly": mode == "public",
+                                   "packages": joins, "nativeFixtureInvoked": False, "consumerAdoptionAccepted": False}) + b"\n")
+    return 0
+
 def main() -> int:
+    if len(sys.argv) == 5 and sys.argv[1] == "--execution-pair":
+        return check_execution_pair(pathlib.Path(sys.argv[2]), sys.argv[3], pathlib.Path(sys.argv[4]))
     if len(sys.argv) == 4 and sys.argv[1] == "--execute-main-refusal":
         return check_execute_main_refusal(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]))
     parser = argparse.ArgumentParser()

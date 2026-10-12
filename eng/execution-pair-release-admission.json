@@ -1,0 +1,22 @@
+{
+  "schema": "fsgg.coordination.execution-pair-admission/1",
+  "profile": "execution-pair",
+  "enabled": false,
+  "operation": null,
+  "version": "0.2.0",
+  "tag": "execution/v0.2.0",
+  "source": null,
+  "tree": null,
+  "protectedMerge": null,
+  "runId": null,
+  "artifactId": null,
+  "archiveSha256": null,
+  "manifestSha256": null,
+  "packages": {
+    "FS.GG.Execution.Contracts": null,
+    "FS.GG.Execution.Processes": null
+  },
+  "namespaceEntitlement": null,
+  "tagProtection": null,
+  "jobId": null
+}

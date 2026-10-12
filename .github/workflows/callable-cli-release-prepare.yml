@@ -8,13 +8,14 @@ on:
         required: true
         type: string
       preparation_mode:
-        description: Select the existing portable set or the CLI-only successor
+        description: Select one exclusive portable, CLI-only or routine Execution pair candidate
         required: true
         default: portable
         type: choice
         options:
           - portable
           - cli-only
+          - execution-pair
       version:
         description: Proposed package version (preparation only)
         required: true
@@ -35,7 +36,7 @@ concurrency:
 # separate state-machine model. Reassess if those interactions are added.
 jobs:
   prepare:
-    if: inputs.preparation_mode != 'cli-only'
+    if: inputs.preparation_mode == 'portable'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
@@ -337,6 +338,69 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: callable-cli-only-${{ inputs.source }}
+          path: ${{ env.CANDIDATE_OUTPUT }}/
+          if-no-files-found: error
+          retention-days: 90
+          compression-level: 0
+
+  execution_pair:
+    if: inputs.preparation_mode == 'execution-pair'
+    name: Prepare the routine Execution pair without publication
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      DOTNET_CLI_TELEMETRY_OPTOUT: 1
+      DOTNET_NOLOGO: 1
+      DOTNET_PROCESSOR_COUNT: 4
+      CANDIDATE_OUTPUT: /tmp/coord-execution-${{ github.run_id }}-${{ github.run_attempt }}
+    steps:
+      - name: Check out exact pair source without persisted credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ inputs.source }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Bind protected pair source and prospective version
+        shell: bash
+        env:
+          CANDIDATE_SOURCE: ${{ inputs.source }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          [[ "$CANDIDATE_SOURCE" =~ ^[0-9a-f]{40}$ ]]
+          test "$CANDIDATE_VERSION" = 0.2.0
+          test "$CANDIDATE_SOURCE" = "$GITHUB_SHA"
+          test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
+          git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
+          test "$(git rev-parse refs/remotes/origin/main)" = "$CANDIDATE_SOURCE"
+          test -z "$(git status --porcelain)"
+          test ! -e "$CANDIDATE_OUTPUT"
+      - name: Run actual inert pair guards before costly preparation
+        run: python3 tests/portable-workspace/release/test_execution_pair_release.py
+      - name: Set up the pinned .NET SDK
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
+        with:
+          global-json-file: global.json
+      - name: Prepare and verify the exact two library packages
+        shell: bash
+        env:
+          CANDIDATE_SOURCE: ${{ inputs.source }}
+          CANDIDATE_VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          dotnet fsi eng/callable-cli-release.fsx check-profile --profile execution-pair \
+            --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
+          dotnet restore src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj --locked-mode
+          dotnet fsi eng/callable-cli-release.fsx prepare --profile execution-pair \
+            --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
+          dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
+            --source "$CANDIDATE_SOURCE" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
+      - name: Retain the original pair candidate
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: execution-pair-${{ inputs.source }}
           path: ${{ env.CANDIDATE_OUTPUT }}/
           if-no-files-found: error
           retention-days: 90

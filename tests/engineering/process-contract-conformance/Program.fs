@@ -294,6 +294,150 @@ module Program =
            StartedAtTicks = original.StartedAt; WorkExpiresAtTicks = original.WorkExpiresAt; TotalExpiresAtTicks = original.TotalExpiresAt
            RunReturnedAtTicks = runAt.Ticks; ObservedAtTicks = observedAt.Ticks; ReleaseDecisionAtTicks = releaseAt.Ticks; FinalObservedAtTicks = finalAt.Ticks |}
 
+    // Separate expected-negative route. The CLR caller remains the reachable
+    // owner while the existing independent stage observes this finite receipt.
+    // It never signals descendants or mistakes outer cleanup for inner retirement.
+    let private runDirectChildNegative (shell: string) (sleep: string) (work: string) (source: string) (profile: string) (profileDigest: string) (owner: OwnerReference) =
+        let body = "sleep 30 &\necho $! > child.pid\nwait\n"
+        let command: CommandSpec =
+            { Executable = shell; Arguments = [ "-c"; body ]; WorkingDirectory = work
+              Environment = Replace(Map.ofList [ "HOME","/home/developer"; "PATH",Path.GetDirectoryName sleep; "LC_ALL","C.UTF-8" ])
+              Input = Closed
+              Capture = { TotalBytes = 4096L; TerminalReserveBytes = 256
+                          StdoutPrefixBytes = 512; StdoutTailBytes = 128
+                          StderrPrefixBytes = 512; StderrTailBytes = 128
+                          ReadChunkBytes = 512; MaximumFrameBytes = 1024; MaximumIncompleteLineBytes = 1024 }
+              Capabilities = [ { Capability = BoundedReturnWithRetainedCustody; Required = true } ]
+              Resources = { MemoryBytes = None; CpuQuota = None; CpuAffinity = None; MaxKernelTasks = None; MaxOwnedProcesses = None; MaxClrProcesses = None } }
+        let identity: OperationIdentity =
+            { InvocationId = Guid.NewGuid(); Execution = None; LaunchOrdinal = 0UL
+              SourceDigest = source; ProfileId = profile; ProfileDigest = profileDigest }
+        let session,clock,budget = ProductionFixture.prepareWithRetirement FS.GG.Execution.Processes.RetirementPolicy.DirectChild command identity owner (TimeSpan.FromMilliseconds 5200.) (TimeSpan.FromMilliseconds 5000.)
+        let stat pid =
+            let raw = File.ReadAllText(sprintf "/proc/%d/stat" pid)
+            let fields = raw.Substring(raw.LastIndexOf(')') + 2).Split(' ',StringSplitOptions.RemoveEmptyEntries)
+            Int32.Parse fields[1],Int32.Parse fields[2],Int64.Parse fields[19],fields[0]
+        let callerPid = Environment.ProcessId
+        let _,callerGroup,callerBirth,_ = stat callerPid
+        Support.require (callerGroup = callerPid) "negative-caller-owned-stage-group"
+        let mutable running: System.Threading.Tasks.Task<ExecutionResult> option = None
+        let mutable childWitness: (int * int64 * int * int64) option = None
+        let childFile = Path.Combine(work,"child.pid")
+        Support.require (not (File.Exists childFile || Directory.Exists childFile)) "negative-one-use-child-witness-file"
+        try
+            let actualRun = session.RunAsync(CancellationToken.None)
+            running <- Some actualRun
+            while childWitness.IsNone do
+                let remaining = Budget.remaining (clock.Now()) budget |> Support.ok
+                Support.require (not remaining.WorkExpired) "negative-child-witness-before-work-expiry"
+                if File.Exists childFile then
+                    Support.require (FileInfo(childFile).Length <= 32L && not (File.GetAttributes(childFile).HasFlag(FileAttributes.ReparsePoint))) "negative-child-pid-byte-cap"
+                    let childPid = File.ReadAllText(childFile).Trim() |> Int32.Parse
+                    let childParent,childGroup,childBirth,state = stat childPid
+                    let actual = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+                    let leaderPid = match actual.Launch with Started generation -> generation.Pid | _ -> invalidOp "negative-leader-not-started"
+                    let _,leaderGroup,leaderBirth,_ = stat leaderPid
+                    Support.require (childParent = leaderPid && childGroup = callerGroup && leaderGroup = callerGroup && state <> "Z" && state <> "X") "negative-original-child-parent-group"
+                    Support.require (Path.GetFullPath(File.ResolveLinkTarget(sprintf "/proc/%d/exe" childPid,true).FullName) = sleep) "negative-original-sleep-executable"
+                    childWitness <- Some(childPid,childBirth,leaderPid,leaderBirth)
+                else
+                    let delay = Budget.clip (clock.Now()) Work (TimeSpan.FromMilliseconds 1.) budget |> Support.ok
+                    Support.require (delay > TimeSpan.Zero) "negative-original-work-window"
+                    System.Threading.Tasks.Task.Delay(delay).GetAwaiter().GetResult()
+            let initial = running.Value.GetAwaiter().GetResult()
+            let mutable leaderObserved = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+            let mutable leaderExited = match leaderObserved.Exit with Known(Exited _,_) -> true | _ -> false
+            while not leaderExited do
+                let delay = Budget.clip (clock.Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> Support.ok
+                Support.require (delay > TimeSpan.Zero) "negative-leader-exit-not-observed-in-original-total"
+                System.Threading.Tasks.Task.Delay(delay).GetAwaiter().GetResult()
+                leaderObserved <- session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+                leaderExited <- match leaderObserved.Exit with Known(Exited _,_) -> true | _ -> false
+            let childPid,childBirth,leaderPid,leaderBirth = childWitness.Value
+            let _,childGroup,observedBirth,state = stat childPid
+            let release = session.TryRelease()
+            let observed = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+            let original = Budget.describe budget
+            let at = clock.Now()
+            Support.require (observedBirth = childBirth && childGroup = callerGroup && state <> "Z" && state <> "X") "negative-child-still-executing-before-outer-cleanup"
+            Support.require (match observed.Exit with Known(Exited _,_) -> true | _ -> false) "negative-leader-exit-observed"
+            Support.require (match initial.Stop with Requested(WorkDeadline,_) -> true | _ -> false) "negative-original-work-deadline"
+            Support.require (match release with ReleaseRefused _ -> true | _ -> false) "negative-local-release-refused"
+            Support.require (match observed.Cleanup.LocalTasks with Known(Outstanding,_) | Unknown _ -> true | _ -> false) "negative-local-tasks-not-settled"
+            Support.require (observed.Cleanup.Disposition <> Complete && (match observed.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)) "negative-no-inner-workload-proof"
+            Support.require (initial.FirstFailure = observed.FirstFailure && at.Domain = original.Domain && at.Ticks < original.TotalExpiresAt) "negative-first-cause-original-total"
+            Support.require (initial.Stop = observed.Stop && Budget.describe observed.OriginalBudget = original) "negative-stop-and-original-budget-preserved"
+            let receipt =
+                {| Schema = "fsgg.proc.direct-child-expected-pending/1"; Case = "direct-child-negative"
+                   ExpectedDescendantRetirementFailed = true; InnerLocalReleased = false; InnerWorkloadEmpty = "unknown"
+                   InnerLocalTasks = (match observed.Cleanup.LocalTasks with Known(Outstanding,_) -> "outstanding" | _ -> "unknown")
+                   InnerCleanup = label observed.Cleanup.Disposition; InnerCustody = custodyLabel observed.Cleanup.Custody
+                   InvocationId = identity.InvocationId.ToString("D"); SourceDigest = source; ProfileDigest = profileDigest
+                   CallerPid = callerPid; CallerBirth = callerBirth; OwnedGroup = callerGroup
+                   ChildPid = childPid; ChildBirth = childBirth; ChildObservedState = state
+                   LeaderPid = leaderPid; LeaderBirth = leaderBirth; OriginalChildParent = leaderPid
+                   InitialExit = Support.exitLabel initial.Exit; ObservedLeaderExit = Support.exitLabel observed.Exit
+                   InitialFirstCause = code initial.FirstFailure; FirstCause = code observed.FirstFailure
+                   FirstFailurePreserved = (initial.FirstFailure = observed.FirstFailure)
+                   InitialStopReason = (match initial.Stop with Requested(WorkDeadline,_) -> "work-deadline" | _ -> "unexpected")
+                   ObservedStopReason = (match observed.Stop with Requested(WorkDeadline,_) -> "work-deadline" | _ -> "unexpected")
+                   InitialStopAtTicks = (match initial.Stop with Requested(_,stamp) -> stamp.Ticks | _ -> -1L)
+                   ObservedStopAtTicks = (match observed.Stop with Requested(_,stamp) -> stamp.Ticks | _ -> -1L)
+                   InitialStopClockDomain = (match initial.Stop with Requested(_,stamp) -> stamp.Domain.Id.ToString("D") | _ -> "")
+                   ObservedStopClockDomain = (match observed.Stop with Requested(_,stamp) -> stamp.Domain.Id.ToString("D") | _ -> "")
+                   StartedAtTicks = original.StartedAt
+                   WorkExpiresAtTicks = original.WorkExpiresAt; TotalExpiresAtTicks = original.TotalExpiresAt; ReceiptAtTicks = at.Ticks
+                   ClockDomain = original.Domain.Id.ToString("D"); ClockFrequency = original.Domain.Frequency
+                   Scope = "Inner DirectChild expected nonretirement only; caller retains session/task. Outer retirement receipt required separately." |}
+            let raw = JsonSerializer.SerializeToUtf8Bytes receipt
+            Support.require (raw.Length <= 8192) "negative-finite-pending-receipt"
+            let pending = Path.Combine(work,"expected-pending.json")
+            Support.require (not (File.Exists pending)) "negative-one-use-pending-receipt"
+            let temporary = pending + ".tmp"
+            Support.require (not (File.Exists temporary)) "negative-one-use-temporary-receipt"
+            use output = new FileStream(temporary,FileMode.CreateNew,FileAccess.Write,FileShare.None)
+            output.Write raw
+            output.Flush(true)
+            output.Dispose()
+            File.Move(temporary,pending)
+            // The existing stage owner consumes the receipt while this caller is alive.
+            // If it does not, fail at the original total; never await natural sleep30.
+            while true do
+                let delay = Budget.clip (clock.Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> Support.ok
+                Support.require (delay > TimeSpan.Zero) "negative-outer-owner-did-not-retire-within-original-total"
+                session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult() |> ignore
+                GC.KeepAlive session
+                GC.KeepAlive running
+                System.Threading.Tasks.Task.Delay(delay).GetAwaiter().GetResult()
+        with originalError ->
+            // Preserve failures without dropping the live session/task. The outer
+            // poll hook consumes a failure receipt or its original stage cutoff.
+            originalError.Data["RetainedNegativeSession"] <- session
+            originalError.Data["RetainedNegativeRunTask"] <- running
+            try
+                let original = Budget.describe budget
+                let raw = JsonSerializer.SerializeToUtf8Bytes
+                              {| Schema = "fsgg.proc.direct-child-negative-failure/1"
+                                 CallerPid = callerPid; CallerBirth = callerBirth; OwnedGroup = callerGroup
+                                 SourceDigest = source; ProfileDigest = profileDigest
+                                 OriginalFailure = originalError.GetType().Name + ": " + originalError.Message
+                                 StartedAtTicks = original.StartedAt; TotalExpiresAtTicks = original.TotalExpiresAt
+                                 ChildWitness = childWitness |}
+                Support.require (raw.Length <= 8192) "negative-finite-failure-receipt"
+                let target = Path.Combine(work,"negative-failure.json")
+                let temporary = target + ".tmp"
+                File.WriteAllBytes(temporary,raw)
+                File.Move(temporary,target)
+            with _ -> () // Missing receipt never qualifies; original outer cutoff still owns retirement.
+            let mutable remaining = Budget.remaining (clock.Now()) budget |> Support.ok
+            while not remaining.TotalExpired do
+                let delay = Budget.clip (clock.Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> Support.ok
+                if delay > TimeSpan.Zero then System.Threading.Tasks.Task.Delay(delay).GetAwaiter().GetResult()
+                GC.KeepAlive session
+                GC.KeepAlive running
+                remaining <- Budget.remaining (clock.Now()) budget |> Support.ok
+            raise originalError
+
     [<EntryPoint>]
     let main (argv: string array) =
         let receipts = ResizeArray<CaseReceipt>()
@@ -316,7 +460,8 @@ module Program =
             Support.require ((production || schema = "fsgg.proc.dot2-C-native/1") && flag root "operationAdmitted" && flag root "sourceAccepted") "native-source-admission-required"
             let selected = root.GetProperty("cases").EnumerateArray() |> Seq.map (fun value -> value.GetString() |> Option.ofObj |> Option.defaultWith(fun () -> invalidOp "null-case")) |> Seq.toList
             Support.require (not selected.IsEmpty && selected.Length <= cases.Length && (Set.ofList selected).Count = selected.Length) "case-population"
-            Support.require (selected = (cases |> List.filter (fun value -> List.contains value selected))) "frozen-case-order"
+            let separateNegative = production && selected = [ "direct-child-negative" ]
+            Support.require (separateNegative || selected = (cases |> List.filter (fun value -> List.contains value selected))) "frozen-case-order"
             if production then Support.require (not (List.contains "failed-sink" selected)) "production-has-no-test-sink-injection"
             let profile = root.GetProperty("ownerProfile")
             Support.require (flag profile "qualified" && flag profile "retainsAfterCallerExit") "independent-owner-route-unqualified"
@@ -368,6 +513,11 @@ module Program =
                     Support.require (totalMs > reserveMs && totalMs <= 10000 && reserveMs > 0) "production-case-budget-bound"
                     TimeSpan.FromMilliseconds(float totalMs),TimeSpan.FromMilliseconds(float reserveMs)
                 else TimeSpan.Zero,TimeSpan.Zero
+            if separateNegative then
+                Support.require (flag root "expectedPendingNegative" && total = TimeSpan.FromMilliseconds 5200. && reserve = TimeSpan.FromMilliseconds 5000.) "negative-explicit-fixed-profile"
+                let shell = pin(root.GetProperty("shellPin"))
+                let sleep = pin(root.GetProperty("sleepPin"))
+                runDirectChildNegative shell sleep work source owner.OwnerId profileDigest owner
             for case in selected do
                 if continueCases then
                     stage <- case

@@ -1,10 +1,15 @@
 # BCL process sessions
 
-V2-PROC-01.3 source preparation over unchanged `Execution.Contracts`. This isolated
-net10.0 producer is non-packable and depends only on Contracts and BCL/FSharp.Core.
+V2-PROC-01.3 BCL sessions over unchanged `Execution.Contracts`. This
+net10.0 library depends only on Contracts and BCL/FSharp.Core.
 Its signature exports `ProcessSessions.createFactory`; session implementation and
 native process handles stay private. Source preparation is not runtime qualification
 or publication. Initial qualification targets .NET 10 on Linux.
+
+The routine package candidate is version 0.2.0 and depends on the paired
+`FS.GG.Execution.Contracts` 0.2.0. The package includes its source signature in
+`api/`, XML documentation and this capability description. Public publication and
+installed-consumer acceptance remain separate from source qualification.
 
 The caller supplies and retains a prepared session, owner reference, live clock and
 original budget before calling Run. Work and cleanup expire at the original fixed

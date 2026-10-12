@@ -94,7 +94,9 @@ let command, options =
 
 let source = required "--source" options
 let output = required "--output" options |> Path.GetFullPath
-let version = options |> Map.tryFind "--version" |> Option.defaultValue "0.1.1"
+let profile = options |> Map.tryFind "--profile" |> Option.defaultValue "cli"
+require (profile = "cli" || profile = "execution-pair") "profile must be cli or execution-pair"
+let version = options |> Map.tryFind "--version" |> Option.defaultValue (if profile = "execution-pair" then "0.2.0" else "0.1.1")
 let packageId = "FS.GG.Coordination.Cli"
 let packageName = $"{packageId}.{version}.nupkg"
 let packagePath = Path.Combine(output, packageName)
@@ -125,7 +127,169 @@ let verify () =
     require (root.GetProperty("ownership").GetProperty("reservation").GetString() = "unreserved") "package identity must remain unreserved"
     printfn "CALLABLE_CLI_RELEASE_VERIFIED source=%s package=%s sha256=%s" source packageName (sha256 packagePath)
 
+
+// The pair uses the same prepare/verify entry point and immutable candidate boundary.
+// Historical CLI manifests and publication admissions remain a separate profile.
+let pairIds = [ "FS.GG.Execution.Contracts"; "FS.GG.Execution.Processes" ]
+let pairManifestPath = Path.Combine(output, "execution-pair-release-manifest.json")
+let pairTag = $"execution/v{version}"
+let pairProject id = Path.Combine(repo, "src", id, id + ".fsproj")
+let pairFile id = $"{id}.{version}.nupkg"
+let pairPath id = Path.Combine(output, pairFile id)
+let localElement (parent: XElement) name =
+    parent.Descendants() |> Seq.filter (fun element -> element.Name.LocalName = name) |> Seq.exactlyOne
+let packageProperty (path: string) (name: string) =
+    let document = XDocument.Load(path: string)
+    document.Descendants(XName.Get name) |> Seq.exactlyOne |> _.Value
+
+let pairMembersSupported (id: string) (names: string array) =
+    let metadata = names |> Array.filter (fun name -> name.StartsWith("package/services/metadata/core-properties/",StringComparison.Ordinal))
+    if metadata.Length <> 1 || Set.count(Set.ofArray names) <> names.Length then false
+    else
+        let leaf = Path.GetFileName metadata[0]
+        let validMetadata = leaf = "nuget.psmdcp" || System.Text.RegularExpressions.Regex.IsMatch(leaf,"^[0-9a-fA-F]{32}\\.psmdcp$")
+        let expected =
+            Set.ofList ["_rels/.rels"; "[Content_Types].xml"; id + ".nuspec"; metadata[0]; "README.md"; $"lib/net10.0/{id}.dll"; $"lib/net10.0/{id}.xml"]
+            |> Set.union (Directory.GetFiles(Path.GetDirectoryName(pairProject id),"*.fsi") |> Array.map (fun path -> "api/" + Path.GetFileName path) |> Set.ofArray)
+        validMetadata && Set.ofArray names = expected
+
+let checkPairMemberControls () =
+    // Independently stated library package contract, not a model of the validator.
+    for id,signatures in ["FS.GG.Execution.Contracts",["Types.fsi";"Validation.fsi";"Budget.fsi";"BoundedOutput.fsi";"Lifecycle.fsi"]; "FS.GG.Execution.Processes",["ProcessSessions.fsi"]] do
+        let supported = ["_rels/.rels";"[Content_Types].xml";id + ".nuspec";"package/services/metadata/core-properties/nuget.psmdcp";"README.md";$"lib/net10.0/{id}.dll";$"lib/net10.0/{id}.xml"] @ (signatures |> List.map (fun name -> "api/" + name)) |> List.toArray
+        require (pairMembersSupported id supported) "supported library member control refused"
+        require (not(pairMembersSupported id (Array.append supported [|"build/transitive.targets"|]))) "package build target control accepted"
+        require (not(pairMembersSupported id (Array.append supported [|"content/unsafe.exe"|]))) "executable content control accepted"
+
+let inspectPairPackage (id: string) (path: string) =
+    require (FileInfo(path).Length > 0L && FileInfo(path).Length <= 16777216L) "pair package exceeds its finite archive bound"
+    use archive = ZipFile.OpenRead path
+    let entries = archive.Entries |> Seq.toArray
+    let names = entries |> Array.map _.FullName
+    require (entries.Length <= 64 && Set.count(Set.ofArray names) = entries.Length) "pair package member population invalid"
+    for entry in entries do
+        require (entry.Length <= 8388608L && not (entry.FullName.StartsWith("/", StringComparison.Ordinal)) && not (entry.FullName.Contains("\\")) && not (entry.FullName.Split('/') |> Array.contains "..")) "unsafe or oversized pair package member"
+        require ((entry.ExternalAttributes >>> 16) &&& 0o170000 <> 0o120000) "pair package contains a symlink"
+    let bytes name =
+        let entry = entries |> Array.filter (fun item -> item.FullName = name) |> Array.exactlyOne
+        use stream = entry.Open()
+        use memory = new MemoryStream()
+        stream.CopyTo memory
+        memory.ToArray()
+    let nuspec = id + ".nuspec"
+    require (pairMembersSupported id names) "pair package contains unsupported or missing members"
+    use specification = new MemoryStream(bytes nuspec)
+    let metadata = XDocument.Load(specification).Root |> fun root -> localElement root "metadata"
+    require ((localElement metadata "id").Value = id && (localElement metadata "version").Value = version) "pair nuspec identity mismatch"
+    let repository = localElement metadata "repository"
+    require (repository.Attribute(XName.Get "type").Value = "git" && repository.Attribute(XName.Get "url").Value = "https://github.com/FS-GG/FS.GG.Coordination" && repository.Attribute(XName.Get "commit").Value = source) "pair repository provenance mismatch"
+    let license = localElement metadata "license"
+    require (license.Attribute(XName.Get "type").Value = "expression" && license.Value = "MIT") "pair license mismatch"
+    require ((localElement metadata "readme").Value = "README.md" && not (String.IsNullOrWhiteSpace((localElement metadata "description").Value)) && (localElement metadata "description").Value <> "Package Description") "pair descriptive metadata missing"
+    let projectRoot = Path.GetDirectoryName(pairProject id)
+    require ((bytes "README.md").AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(projectRoot,"README.md")).AsSpan())) "pair packaged readme differs from source"
+    let apiNames = Directory.GetFiles(projectRoot, "*.fsi") |> Array.map Path.GetFileName |> Array.sort
+    require ((names |> Array.filter (fun name -> name.StartsWith("api/",StringComparison.Ordinal)) |> Array.sort) = (apiNames |> Array.map (fun name -> "api/" + name))) "pair API signature population mismatch"
+    for name in apiNames do
+        require ((bytes ("api/" + name)).AsSpan().SequenceEqual(File.ReadAllBytes(Path.Combine(projectRoot,name)).AsSpan())) "pair packaged API signature differs from source"
+    let assemblyName = $"lib/net10.0/{id}.dll"
+    require ((names |> Array.filter (fun name -> name.EndsWith(".dll",StringComparison.Ordinal))) = [|assemblyName|]) "pair assembly population mismatch"
+    require ((bytes ($"lib/net10.0/{id}.xml")).Length > 0) "pair XML documentation missing"
+    require (names |> Array.forall (fun name -> not (name.StartsWith("tools/",StringComparison.Ordinal) || name.StartsWith("runtimes/",StringComparison.Ordinal) || name = ".signature.p7s"))) "pair includes unexpected executable/native/signature assets"
+    let dependencies = metadata.Descendants() |> Seq.filter (fun element -> element.Name.LocalName = "dependency") |> Seq.toArray
+    let depIds = dependencies |> Array.map (fun element -> element.Attribute(XName.Get "id").Value.ToLowerInvariant()) |> Array.sort
+    let expected = if id = "FS.GG.Execution.Contracts" then [|"fsharp.core"|] else [|"fs.gg.execution.contracts";"fsharp.core"|] |> Array.sort
+    require (depIds = expected) "pair dependency direction/population mismatch"
+    if id = "FS.GG.Execution.Processes" then
+        let dependency = dependencies |> Array.find (fun element -> element.Attribute(XName.Get "id").Value = "FS.GG.Execution.Contracts")
+        let range = dependency.Attribute(XName.Get "version").Value.Replace(" ","")
+        require (range = version || range = $"[{version},)" || range = $"[{version}]") "pair Contracts dependency version mismatch"
+    let result = JsonObject()
+    result.Add("packageId",id)
+    result.Add("file",pairFile id)
+    result.Add("sha256",sha256 path)
+    result.Add("bytes",FileInfo(path).Length)
+    let assemblySha: string = bytes assemblyName |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
+    result.Add("assemblySha256",assemblySha)
+    result
+
+let verifyPair () =
+    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be prepared"
+    require (File.Exists pairManifestPath) "pair manifest is missing"
+    require (Set.ofArray(Directory.GetFiles(output) |> Array.map Path.GetFileName) = Set.ofList [pairFile pairIds[0];pairFile pairIds[1];Path.GetFileName pairManifestPath]) "pair candidate must contain exactly two packages and its manifest"
+    use document = JsonDocument.Parse(File.ReadAllBytes pairManifestPath)
+    let root = document.RootElement
+    require (root.GetProperty("schema").GetString() = "fsgg.coordination.execution-pair-release-preparation/1" && root.GetProperty("profile").GetString() = "execution-pair") "pair manifest profile mismatch"
+    require (root.GetProperty("version").GetString() = version && root.GetProperty("tag").GetString() = pairTag && root.GetProperty("sourceCommit").GetString() = source) "pair manifest source/version/tag mismatch"
+    require (root.GetProperty("sourceTree").GetString() = capture repo "git" ["rev-parse";source + "^{tree}"]) "pair manifest tree mismatch"
+    require (not (root.GetProperty("publicationAuthorized").GetBoolean()) && not (root.GetProperty("tagAuthorized").GetBoolean()) && root.GetProperty("ownership").GetProperty("reservation").GetString() = "unreserved") "pair preparation cannot authorize effects"
+    let members = root.GetProperty("packages").EnumerateArray() |> Seq.toArray
+    require (members.Length = 2) "pair manifest member population mismatch"
+    for id in pairIds do
+        let memberRow = members |> Array.filter (fun item -> item.GetProperty("packageId").GetString() = id) |> Array.exactlyOne
+        let actual = inspectPairPackage id (pairPath id)
+        require (memberRow.GetRawText() = actual.ToJsonString()) "pair manifest member differs from actual package"
+    printfn "EXECUTION_PAIR_RELEASE_VERIFIED source=%s version=%s" source version
+
+let preparePair () =
+    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be prepared"
+    require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
+    require (capture repo "git" ["rev-parse";"HEAD"] = source && String.IsNullOrWhiteSpace(capture repo "git" ["status";"--porcelain"])) "pair source must be exact clean HEAD"
+    require (String.IsNullOrWhiteSpace(capture repo "git" ["tag";"--list";pairTag])) "pair component tag already exists"
+    for id in pairIds do
+        require (packageProperty (pairProject id) "PackageId" = id && packageProperty (pairProject id) "PackageVersion" = version && packageProperty (pairProject id) "IsPackable" = "true") "pair project metadata mismatch"
+    require (not (Directory.Exists output) || Directory.GetFileSystemEntries(output).Length = 0) "pair output must be empty"
+    Directory.CreateDirectory output |> ignore
+    let scratch = Path.Combine(Path.GetTempPath(),"fsgg-execution-pair-" + Guid.NewGuid().ToString("N"))
+    try
+        let first,second = Path.Combine(scratch,"first"),Path.Combine(scratch,"second-independent-root")
+        Directory.CreateDirectory first |> ignore
+        Directory.CreateDirectory second |> ignore
+        for target in [first;second] do
+            for id in pairIds do
+                run repo "dotnet" ["pack";pairProject id;"--configuration";"Release";"--output";target;"--no-restore";"-p:ContinuousIntegrationBuild=true";"-p:Deterministic=true";$"-p:RepositoryCommit={source}";"-p:RepositoryBranch=main"]
+                canonicalize (Path.Combine(target,pairFile id))
+        for id in pairIds do
+            let a,b = File.ReadAllBytes(Path.Combine(first,pairFile id)),File.ReadAllBytes(Path.Combine(second,pairFile id))
+            require (a.AsSpan().SequenceEqual(b.AsSpan())) "pair candidate bytes differ across independent output roots"
+            File.Copy(Path.Combine(first,pairFile id),pairPath id)
+        let manifest = JsonObject()
+        manifest.Add("schema","fsgg.coordination.execution-pair-release-preparation/1")
+        manifest.Add("profile","execution-pair")
+        manifest.Add("sourceCommit",source)
+        manifest.Add("sourceTree",capture repo "git" ["rev-parse";source + "^{tree}"])
+        manifest.Add("version",version)
+        manifest.Add("tag",pairTag)
+        manifest.Add("publicationAuthorized",false)
+        manifest.Add("tagAuthorized",false)
+        manifest.Add("publicationOrder","github-packages-pair-then-identical-nuget-org-inputs")
+        let ownership = JsonObject()
+        ownership.Add("reservation","unreserved")
+        ownership.Add("githubPackages","not-observed-by-preparation")
+        ownership.Add("nugetOrg","not-observed-by-preparation")
+        manifest.Add("ownership",ownership)
+        let members = JsonArray()
+        for id in pairIds do members.Add(inspectPairPackage id (pairPath id))
+        manifest.Add("packages",members)
+        File.WriteAllText(pairManifestPath,manifest.ToJsonString() + "\n",UTF8Encoding(false))
+        verifyPair ()
+        printfn "EXECUTION_PAIR_RELEASE_PREPARED source=%s version=%s" source version
+    finally
+        if Directory.Exists scratch then Directory.Delete(scratch,true)
+
 match command with
+| "inspect" when profile = "execution-pair" ->
+    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be inspected"
+    for id in pairIds do inspectPairPackage id (pairPath id) |> ignore
+    printfn "EXECUTION_PAIR_MEMBERS_INSPECTED version=%s publicationAuthorized=false" version
+| "check-profile" when profile = "execution-pair" ->
+    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be prepared"
+    for id in pairIds do
+        require (packageProperty (pairProject id) "PackageId" = id && packageProperty (pairProject id) "PackageVersion" = version && packageProperty (pairProject id) "IsPackable" = "true") "pair project metadata mismatch"
+    checkPairMemberControls ()
+    printfn "EXECUTION_PAIR_PROFILE_CHECKED version=%s publicationAuthorized=false" version
+| "prepare" when profile = "execution-pair" -> preparePair ()
+| "verify" when profile = "execution-pair" -> verifyPair ()
 | "prepare" ->
     require
         (Set.contains version (Set.ofList [ "0.1.1"; "0.1.2"; "0.1.3"; "0.1.4"; "0.1.5"; "0.1.6"; "0.1.7"; "0.2.0"; "0.2.1"; "0.3.0" ]))

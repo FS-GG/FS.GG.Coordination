@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 from pathlib import Path
 import sys
@@ -36,7 +37,56 @@ def feed(path: Path, name: str, package_sha256: str) -> dict[str, object]:
     return value
 
 
+
+def pair_readback(arguments: list[str]) -> int:
+    parser = argparse.ArgumentParser()
+    for name in ("publisher", "source", "tree", "merge", "manifest-sha256"):
+        parser.add_argument("--" + name, required=True)
+    for name in ("manifest", "feed-root", "installed", "output"):
+        parser.add_argument("--" + name, required=True, type=Path)
+    args = parser.parse_args(arguments)
+    for identity in (args.publisher, args.source, args.tree, args.merge): sha(identity, 40)
+    sha(args.manifest_sha256, 64)
+    raw = args.manifest.read_bytes()
+    if hashlib.sha256(raw).hexdigest() != args.manifest_sha256: refuse("pair manifest digest changed")
+    manifest = json.loads(raw)
+    ids = {"FS.GG.Execution.Contracts", "FS.GG.Execution.Processes"}
+    if (manifest["schema"] != "fsgg.coordination.execution-pair-release-preparation/1" or manifest["profile"] != "execution-pair"
+        or manifest["version"] != "0.2.0" or manifest["tag"] != "execution/v0.2.0"
+        or manifest["sourceCommit"] != args.source or manifest["sourceTree"] != args.tree
+        or manifest["publicationAuthorized"] is not False or manifest["tagAuthorized"] is not False
+        or len(manifest["packages"]) != 2 or {row["packageId"] for row in manifest["packages"]} != ids):
+        refuse("pair manifest source/member identity changed")
+    installed = json.loads(args.installed.read_bytes())
+    if (installed["schema"] != "fsgg.coordination.execution-pair-installed-load/1" or installed["mode"] != "public"
+        or installed["publicOnly"] is not True or installed["producerProjectReferenced"] is not False
+        or installed["packageInputsOnly"] is not True or installed["physicalSourceExclusionEstablished"] is not False
+        or installed["privateCachesUnavailable"] is not True or installed["effectiveProjectIsolationGuard"] is not True
+        or installed["effectiveNuGetFoldersVerified"] is not True or installed["actualCompilerReferencesVerified"] is not True
+        or installed["nativeFixtureInvoked"] is not False
+        or installed["consumerAdoptionAccepted"] is not False or len(installed["packages"]) != 2
+        or {row["packageId"] for row in installed["packages"]} != ids): refuse("pair public installed-load proof missing")
+    members = []
+    for row in sorted(manifest["packages"], key=lambda row: row["packageId"]):
+        sha(row["sha256"], 64); sha(row["assemblySha256"], 64)
+        actual = [item for item in installed["packages"] if item["packageId"] == row["packageId"]]
+        if actual != [{"packageId": row["packageId"], "version": "0.2.0", "runtimeSha256": row["assemblySha256"]}]: refuse("pair installed runtime join changed")
+        github = feed(args.feed_root / (row["packageId"] + ".github.json"), "github-packages", row["sha256"])
+        if github["servedArchiveSha256"] != row["sha256"]: refuse("pair GitHub raw archive identity changed")
+        members.append({"packageId": row["packageId"], "candidateSha256": row["sha256"], "assemblySha256": row["assemblySha256"],
+                        "githubPackages": github,
+                        "nugetOrg": feed(args.feed_root / (row["packageId"] + ".nuget.json"), "nuget-org", row["sha256"])})
+    value = {"schema": "fsgg.coordination.execution-pair-release-readback/1", "profile": "execution-pair", "publisherSource": args.publisher,
+             "source": args.source, "sourceTree": args.tree, "protectedMerge": args.merge, "version": "0.2.0", "tag": "execution/v0.2.0",
+             "manifestSha256": args.manifest_sha256, "packages": members, "installedLoad": installed,
+             "consumerAdoptionAccepted": False}
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
+    return 0
+
 def main() -> int:
+    if len(sys.argv) > 1 and sys.argv[1] == "--execution-pair":
+        return pair_readback(sys.argv[2:])
     parser = argparse.ArgumentParser()
     parser.add_argument("--cli-only", action="store_true")
     parser.add_argument("--publisher", help="Reviewed publisher B for CLI-only source A")

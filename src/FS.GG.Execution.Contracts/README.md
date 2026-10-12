@@ -1,9 +1,14 @@
 # Portable process contracts
 
-This non-packable net10.0 project is V2-PROC-01.2 source work. It depends only on
+This net10.0 library is the portable V2-PROC-01 contract surface. It depends only on
 BCL/FSharp.Core. It defines bounded values, live monotonic budgets, a shared memory
 byte ledger, pure lifecycle observations and session interfaces. It launches no
 process and implements no production backend, native lease, journal or service.
+
+The routine package candidate is version 0.2.0, paired with
+`FS.GG.Execution.Processes` 0.2.0. Packaging source does not establish publication
+or installed-consumer acceptance. The package includes the source signatures in
+`api/`, XML documentation and this capability description.
 
 `Types.fsi`, `Budget.fsi`, `BoundedOutput.fsi`, `Lifecycle.fsi` and `Validation.fsi`
 are the source API. `ExecutionBudget` and `LifecycleState` representations are hidden.

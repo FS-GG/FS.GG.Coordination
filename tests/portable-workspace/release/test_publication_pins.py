@@ -169,7 +169,7 @@ def verify_recovery(job: str) -> None:
 def verify_successor(text: str) -> None:
     import json, os, tempfile
     from unittest.mock import patch
-    job = text.split("\n  cli_successor:",1)[1]
+    job = text.split("\n  cli_successor:",1)[1].split("\n  execution_pair:",1)[0]
     verify_recovery(job)
     assert "inputs.cli_only && !inputs.preflight_only" in job
     assert "dotnet pack" not in job and "portable-workspace-release" not in job
