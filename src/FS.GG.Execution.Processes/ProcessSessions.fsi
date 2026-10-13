@@ -24,3 +24,11 @@ module ProcessSessions =
     val internal createFactoryForTesting:
         retirement: RetirementPolicy ->
         retire: (System.Diagnostics.Process -> bool -> unit) -> IProcessSessionFactory
+
+    /// Closed BOM-aware decoded-text mode with shared1024-character UTF8 admission.
+    /// Reuses the original session lifecycle, deadlines, native task custody and release.
+    val createTextFactory: unit -> ITextProcessSessionFactory
+
+    /// Selects the same explicit best-effort retirement leaf for decoded-text capture.
+    /// Text snapshots preserve exact immutable UTF16 chunks and separate transport totals.
+    val createTextFactoryWithRetirement: RetirementPolicy -> ITextProcessSessionFactory

@@ -17,8 +17,10 @@ module PublicSurfaceTests =
         Assert.Contains(exported, fun api -> api = typeof<RetirementPolicy>)
         let api = assembly.GetType("FS.GG.Execution.Processes.ProcessSessions",true)
         let methods = api.GetMethods(BindingFlags.Public ||| BindingFlags.Static ||| BindingFlags.DeclaredOnly)
-        Assert.Equal<string>([| "createFactory"; "createFactoryWithRetirement" |],methods |> Array.map _.Name |> Array.sort)
-        for methodInfo in methods do Assert.Equal(typeof<IProcessSessionFactory>,methodInfo.ReturnType)
+        Assert.Equal<string>([| "createFactory"; "createFactoryWithRetirement"; "createTextFactory"; "createTextFactoryWithRetirement" |],methods |> Array.map _.Name |> Array.sort)
+        for methodInfo in methods do
+            let expected = if methodInfo.Name.StartsWith("createText") then typeof<ITextProcessSessionFactory> else typeof<IProcessSessionFactory>
+            Assert.Equal(expected,methodInfo.ReturnType)
         let selection = methods |> Array.find (fun methodInfo -> methodInfo.Name = "createFactoryWithRetirement")
         Assert.Equal(typeof<RetirementPolicy>,Assert.Single(selection.GetParameters()).ParameterType)
 

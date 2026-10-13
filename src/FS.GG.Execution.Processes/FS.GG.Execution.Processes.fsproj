@@ -4,8 +4,8 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <IsPackable>true</IsPackable>
     <PackageId>FS.GG.Execution.Processes</PackageId>
-    <Version>0.2.0</Version>
-    <PackageVersion>0.2.0</PackageVersion>
+    <Version>0.3.0</Version>
+    <PackageVersion>0.3.0</PackageVersion>
     <Authors>FS-GG</Authors>
     <Description>Caller-retained BCL process sessions with bounded observation and explicit best-effort retirement policies.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -16,7 +16,7 @@
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" /><Compile Include="ProcessSessions.fsi" /><Compile Include="ProcessSessions.fs" />
+    <Compile Include="AssemblyInfo.fs" /><Compile Include="BoundedText.fs" /><Compile Include="ProcessSessions.fsi" /><Compile Include="ProcessSessions.fs" />
     <None Include="README.md" Pack="true" PackagePath="/" />
     <None Include="*.fsi" Pack="true" PackagePath="api/" />
   </ItemGroup>

@@ -388,7 +388,7 @@ jobs:
           test "$GITHUB_REF" = refs/heads/main
           test "$GITHUB_RUN_ATTEMPT" = 1
           [[ "$CANDIDATE_SOURCE" =~ ^[0-9a-f]{40}$ ]]
-          test "$CANDIDATE_VERSION" = 0.2.0
+          test "$CANDIDATE_VERSION" = 0.3.0
           test "$CANDIDATE_SOURCE" = "$GITHUB_SHA"
           test "$(git rev-parse HEAD)" = "$CANDIDATE_SOURCE"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
@@ -465,7 +465,7 @@ jobs:
           [[ "$CANDIDATE_RUN" =~ ^[1-9][0-9]{0,18}$ ]]
           [[ "$CANDIDATE_ARTIFACT" =~ ^[1-9][0-9]{0,18}$ ]]
           [[ "$ARCHIVE_SHA" =~ ^[0-9a-f]{64}$ ]]
-          test "$CANDIDATE_VERSION" = 0.2.0
+          test "$CANDIDATE_VERSION" = 0.3.0
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
@@ -482,7 +482,7 @@ jobs:
           test ! -e "$CANDIDATE_OUTPUT"
           test ! -e "$READBACK_OUTPUT"
           mkdir "$CANDIDATE_OUTPUT" "$READBACK_OUTPUT"
-          for name in SOURCE_A CANDIDATE_RUN CANDIDATE_ARTIFACT ARCHIVE_SHA; do
+          for name in SOURCE_A CANDIDATE_VERSION CANDIDATE_RUN CANDIDATE_ARTIFACT ARCHIVE_SHA; do
             printf '%s=%s\n' "$name" "${!name}" >> "$GITHUB_ENV"
           done
       - name: Run actual shared pair guards before installed qualification
@@ -508,13 +508,17 @@ jobs:
               assert 0<entry.file_size<=1048576
               raw=z.read(entry)
           manifest=json.loads(raw)
+          version=os.environ['CANDIDATE_VERSION']
+          assert version=='0.3.0'
+          assert manifest['version']==version
+          assert manifest['tag']=='execution/v'+version
           assert manifest['sourceCommit']==os.environ['SOURCE_A']
           jobs=json.loads((root/'jobs.json').read_bytes())
           selected=[job for job in jobs['jobs'] if job['name']=='Prepare the routine Execution pair without publication']
           assert len(selected)==1
           admission=json.load(open('eng/execution-pair-release-admission.json'))
           assert admission['enabled'] is False
-          admission.update(source=os.environ['SOURCE_A'],tree=manifest['sourceTree'],protectedMerge=os.environ['SOURCE_A'],runId=int(os.environ['CANDIDATE_RUN']),jobId=selected[0]['id'],artifactId=int(os.environ['CANDIDATE_ARTIFACT']),archiveSha256=os.environ['ARCHIVE_SHA'],manifestSha256=hashlib.sha256(raw).hexdigest(),packages={row['packageId']:row['sha256'] for row in manifest['packages']})
+          admission.update(version=version,tag='execution/v'+version,source=os.environ['SOURCE_A'],tree=manifest['sourceTree'],protectedMerge=os.environ['SOURCE_A'],runId=int(os.environ['CANDIDATE_RUN']),jobId=selected[0]['id'],artifactId=int(os.environ['CANDIDATE_ARTIFACT']),archiveSha256=os.environ['ARCHIVE_SHA'],manifestSha256=hashlib.sha256(raw).hexdigest(),packages={row['packageId']:row['sha256'] for row in manifest['packages']})
           # This is the existing disabled admission shape, bound only for offline
           # artifact verification. It supplies no namespace or effect capability.
           (root/'candidate-bindings.json').write_text(json.dumps(admission))
@@ -530,7 +534,7 @@ jobs:
         run: |
           set -euo pipefail
           dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
-            --source "$SOURCE_A" --version 0.2.0 --output "$CANDIDATE_OUTPUT"
+            --source "$SOURCE_A" --version "$CANDIDATE_VERSION" --output "$CANDIDATE_OUTPUT"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair \
             "$CANDIDATE_OUTPUT" candidate "$READBACK_OUTPUT/candidate-load.json"
       - name: Retain original installed proof and candidate identity

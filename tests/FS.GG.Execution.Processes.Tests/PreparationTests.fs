@@ -168,3 +168,24 @@ module PreparationTests =
         match result with
         | Error errors -> Assert.Contains(errors,fun error -> error.Code = "invalid-retirement-policy")
         | Ok _ -> failwith "Invalid policy created a session."
+
+    [<Fact>]
+    let ``text mode refuses invalid finite caps and unsupported guarantees before launch`` () =
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.) |> ok
+        let request: TextCommandSpec =
+            { Executable = command.Executable; Arguments = command.Arguments; WorkingDirectory = command.WorkingDirectory
+              Environment = command.Environment; Input = Closed; Capabilities = command.Capabilities; Resources = resources
+              TextCapture = { MaximumDecodedUtf8Bytes = 400000L; TerminalReserveBytes = 2048 } }
+        let factory = ProcessSessions.createTextFactory()
+        for cap in [0L;-1L;Int64.MaxValue] do
+            Assert.True(factory.Prepare({request with TextCapture = {request.TextCapture with MaximumDecodedUtf8Bytes = cap}},identity(),budget,liveClock,owner) |> Result.isError)
+        for reserve in [0;2047;Int32.MaxValue] do
+            Assert.True(factory.Prepare({request with TextCapture = {request.TextCapture with TerminalReserveBytes = reserve}},identity(),budget,liveClock,owner) |> Result.isError)
+        Assert.True(factory.Prepare({request with Capabilities = [{Capability = OwnedChildReaping; Required = true}]},identity(),budget,liveClock,owner) |> Result.isError)
+        let cancelled = factory.Prepare(request,identity(),budget,liveClock,owner) |> ok
+        let result = cancelled.RunAsync(CancellationToken(true)).GetAwaiter().GetResult()
+        Assert.Equal(NotStarted,result.Process.Launch)
+        Assert.Empty(result.Text.Stdout.Chunks)
+        Assert.Equal(NoEffect,result.Process.Cleanup.Custody)
+        Assert.Equal(ResourcesReleased,cancelled.TryRelease())

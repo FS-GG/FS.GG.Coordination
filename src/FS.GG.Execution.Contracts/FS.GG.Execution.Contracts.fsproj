@@ -4,8 +4,8 @@
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <IsPackable>true</IsPackable>
     <PackageId>FS.GG.Execution.Contracts</PackageId>
-    <Version>0.2.0</Version>
-    <PackageVersion>0.2.0</PackageVersion>
+    <Version>0.3.0</Version>
+    <PackageVersion>0.3.0</PackageVersion>
     <Authors>FS-GG</Authors>
     <Description>Portable bounded process requests, monotonic budgets, retained session contracts and lifecycle observations.</Description>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>

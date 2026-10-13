@@ -68,6 +68,22 @@ type CommandSpec =
       Environment: EnvironmentSpec; Input: InputSpec; Capture: CapturePolicy
       Capabilities: CapabilityRequirement list; Resources: ResourceLimits }
 
+/// Decoded admission uses the runtime BOM-aware replacement decoder and1024-character reads.
+type TextCapturePolicy =
+    { MaximumDecodedUtf8Bytes: int64; TerminalReserveBytes: int }
+
+/// Conservative capture allocation/copy bounds; these do not enforce whole-process RSS.
+type TextCaptureBounds =
+    { MaximumDecodedUtf8Bytes: int64; MaximumRawTransportBytes: int64
+      PreparedCaptureBytes: int64; RetainedCaptureBytes: int64; ObservationCopyBytes: int64
+      ReaderByteBufferBytes: int; ReaderCharacterChunkSize: int; TerminalReserveBytes: int }
+
+/// A closed text-mode request; raw byte capture remains an independent unchanged API.
+type TextCommandSpec =
+    { Executable: string; Arguments: string list; WorkingDirectory: string
+      Environment: EnvironmentSpec; Input: InputSpec; TextCapture: TextCapturePolicy
+      Capabilities: CapabilityRequirement list; Resources: ResourceLimits }
+
 // A description cannot be used to restore live budget authority.
 type ExecutionBudget = internal { Domain: ClockDomain; StartedAt: int64; WorkExpiresAt: int64; TotalExpiresAt: int64 }
 
@@ -147,3 +163,31 @@ type IProcessSessionFactory =
 type ContractLimits =
     { CodeBytes: int; MessageBytes: int; ReferenceBytes: int; CollectionEntries: int
       RequestBytes: int; RequestEntries: int; ResultMetadataBytes: int; FirstCauseReserveBytes: int; CaptureAllocationBytes: int }
+
+
+/// Chunks preserve exact UTF16 code units, including a surrogate split across read boundaries.
+/// Concatenating them is caller-owned; charged UTF8 bytes are never recomputed from the chunks.
+type TextStreamCapture =
+    { Chunks: string list; ObservedDecodedUtf8Bytes: int64; AdmittedDecodedUtf8Bytes: int64
+      RetainedUtf16CodeUnits: int64; RawTransportBytes: int64; OmittedDecodedUtf8Bytes: int64
+      Reader: Observation<ReaderState> }
+type TextOutputSnapshot =
+    { Stdout: TextStreamCapture; Stderr: TextStreamCapture
+      ChargedDecodedUtf8Bytes: int64; RawTransportBytes: int64; FirstFailure: Diagnostic option
+      SnapshotComplete: bool }
+/// Process status and text are captured together under the same session gate.
+/// Process.Stdout/Stderr intentionally contain no raw payload; their omitted-byte totals
+/// describe the transport-only ledger, independently of complete admitted text.
+type TextExecutionResult =
+    { Process: ExecutionResult; Text: TextOutputSnapshot; Bounds: TextCaptureBounds }
+type ITextProcessSession =
+    abstract Identity: OperationIdentity
+    abstract Owner: OwnerReference
+    abstract RunAsync: CancellationToken -> Task<TextExecutionResult>
+    abstract ObserveAsync: CancellationToken -> Task<TextExecutionResult>
+    abstract RequestStopAsync: StopReason * CancellationToken -> Task<StopObservation>
+    abstract TryRelease: unit -> ReleaseResult
+type ITextProcessSessionFactory =
+    abstract Prepare:
+        TextCommandSpec * OperationIdentity * ExecutionBudget * IMonotonicClock * OwnerReference
+            -> Result<ITextProcessSession,ValidationError list>
