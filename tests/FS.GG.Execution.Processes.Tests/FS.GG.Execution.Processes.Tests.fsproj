@@ -3,4 +3,5 @@
   <ItemGroup><Compile Include="AssemblyInfo.fs" /><Compile Include="PreparationTests.fs" /><Compile Include="ProcessSessionTests.fs" /><Compile Include="PublicSurfaceTests.fs" /><None Include="README.md" /></ItemGroup>
   <ItemGroup><PackageReference Include="Microsoft.NET.Test.Sdk" /><PackageReference Include="xunit" /><PackageReference Include="xunit.runner.visualstudio" PrivateAssets="all" /></ItemGroup>
   <ItemGroup><ProjectReference Include="../../src/FS.GG.Execution.Processes/FS.GG.Execution.Processes.fsproj" /></ItemGroup>
+  <ItemGroup><None Include="../FS.GG.Execution.Contracts.Tests/Fixtures/fixture.py" Link="Fixtures/fixture.py" CopyToOutputDirectory="PreserveNewest" /></ItemGroup>
 </Project>

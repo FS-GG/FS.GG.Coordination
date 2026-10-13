@@ -96,7 +96,7 @@ let source = required "--source" options
 let output = required "--output" options |> Path.GetFullPath
 let profile = options |> Map.tryFind "--profile" |> Option.defaultValue "cli"
 require (profile = "cli" || profile = "execution-pair") "profile must be cli or execution-pair"
-let version = options |> Map.tryFind "--version" |> Option.defaultValue (if profile = "execution-pair" then "0.2.0" else "0.1.1")
+let version = options |> Map.tryFind "--version" |> Option.defaultValue (if profile = "execution-pair" then "0.3.0" else "0.1.1")
 let packageId = "FS.GG.Coordination.Cli"
 let packageName = $"{packageId}.{version}.nupkg"
 let packagePath = Path.Combine(output, packageName)
@@ -214,7 +214,7 @@ let inspectPairPackage (id: string) (path: string) =
     result
 
 let verifyPair () =
-    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be prepared"
+    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
     require (File.Exists pairManifestPath) "pair manifest is missing"
     require (Set.ofArray(Directory.GetFiles(output) |> Array.map Path.GetFileName) = Set.ofList [pairFile pairIds[0];pairFile pairIds[1];Path.GetFileName pairManifestPath]) "pair candidate must contain exactly two packages and its manifest"
     use document = JsonDocument.Parse(File.ReadAllBytes pairManifestPath)
@@ -232,7 +232,7 @@ let verifyPair () =
     printfn "EXECUTION_PAIR_RELEASE_VERIFIED source=%s version=%s" source version
 
 let preparePair () =
-    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be prepared"
+    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
     require (source.Length = 40 && source |> Seq.forall Uri.IsHexDigit) "source must be an exact 40-character Git SHA"
     require (capture repo "git" ["rev-parse";"HEAD"] = source && String.IsNullOrWhiteSpace(capture repo "git" ["status";"--porcelain"])) "pair source must be exact clean HEAD"
     require (String.IsNullOrWhiteSpace(capture repo "git" ["tag";"--list";pairTag])) "pair component tag already exists"
@@ -279,11 +279,11 @@ let preparePair () =
 
 match command with
 | "inspect" when profile = "execution-pair" ->
-    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be inspected"
+    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be inspected"
     for id in pairIds do inspectPairPackage id (pairPath id) |> ignore
     printfn "EXECUTION_PAIR_MEMBERS_INSPECTED version=%s publicationAuthorized=false" version
 | "check-profile" when profile = "execution-pair" ->
-    require (version = "0.2.0") "only selected Execution pair 0.2.0 may be prepared"
+    require (version = "0.3.0") "only selected Execution pair 0.3.0 may be prepared"
     for id in pairIds do
         require (packageProperty (pairProject id) "PackageId" = id && packageProperty (pairProject id) "PackageVersion" = version && packageProperty (pairProject id) "IsPackable" = "true") "pair project metadata mismatch"
     checkPairMemberControls ()

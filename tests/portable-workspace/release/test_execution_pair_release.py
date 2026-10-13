@@ -38,26 +38,33 @@ def admission():
                'githubRepository':'FS-GG/FS.GG.Coordination','publisherWorkflow':'.github/workflows/callable-cli-release-publish.yml','evidenceSha256':'f'*64},
             'tagProtection':{'rulesetId':4,'policySha256':'1'*64}}
 
-def installed_isolation_diagnostic_controls():
+def installed_isolation_diagnostic_controls(version, installed_mode="candidate"):
     # Inert SDK substitute drives the actual maintained caller; no CLR/native acceptance.
     check = runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))['check_execution_pair']
     for mode in ('good', 'bare-folder', 'escaped-path', 'extra-folder', 'sdk-folder', 'missing-folder',
                  'descendant-folder', 'parent-folder', 'double-slash', 'case-variant', 'duplicate-folders',
-                 'trailing-slash', 'oversized'):
+                 'trailing-slash', 'oversized', 'mixed-assets', 'mixed-compiler', 'wrong-runtime'):
         with tempfile.TemporaryDirectory(prefix='pair-isolation-diagnostic-test-') as temporary:
             candidate=Path(temporary); rows=[]
             for id in IDS:
-                archive=candidate/(id+'.0.2.0.nupkg')
+                archive=candidate/(id+'.'+version+'.nupkg')
                 with zipfile.ZipFile(archive,'w') as z: z.writestr('lib/net10.0/'+id+'.dll',id.encode())
                 rows.append({'packageId':id,'file':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest()})
-            write(candidate/'execution-pair-release-manifest.json',{'profile':'execution-pair','version':'0.2.0','packages':rows})
+            write(candidate/'execution-pair-release-manifest.json',{'profile':'execution-pair','version':version,'tag':'execution/v'+version,'packages':rows})
             calls=[]; observed={}
             def fake_sdk(command, *, cwd, env):
                 calls.append(command[1]); root=Path(cwd); packages=str(root/'packages'); folder=packages+os.sep
                 assert env['NUGET_PACKAGES']==packages and env['TMPDIR']==str(root/'tmp')
-                if command[1]=='restore': (root/'effective-isolation.txt').write_text('PAIR_EFFECTIVE_ISOLATION_OK\n')
+                if command[1]=='restore':
+                    import xml.etree.ElementTree as ET
+                    references={row.attrib['Include']:row.attrib['Version'] for row in ET.parse(root/'PairInstalled.fsproj').getroot().findall('.//PackageReference')}
+                    assert references=={'FSharp.Core':'[10.1.302]', **{id:'['+version+']' for id in IDS}}
+                    smoke=(root/'Program.fs').read_text()
+                    assert ('let textFactory: ITextProcessSessionFactory = ProcessSessions.createTextFactory()' in smoke)==(version=='0.3.0')
+                    assert '.RunAsync' not in smoke and '.Prepare(' not in smoke
+                    (root/'effective-isolation.txt').write_text('PAIR_EFFECTIVE_ISOLATION_OK\n')
                 if command[1]=='build':
-                    restore={'packagesPath':packages,'fallbackFolders':[],'sources':{str(candidate.resolve()):{},'https://api.nuget.org/v3/index.json':{}}}
+                    restore={'packagesPath':packages,'fallbackFolders':[],'sources':{**({str(candidate.resolve()):{}} if installed_mode=='candidate' else {}),'https://api.nuget.org/v3/index.json':{}}}
                     folders={folder:{}}
                     if mode=='escaped-path': restore['packagesPath']='/outside-cache'
                     if mode=='extra-folder': folders['/sdk-home/fallback/']={}; restore['fallbackFolders']=['/sdk-home/fallback/']
@@ -74,21 +81,27 @@ def installed_isolation_diagnostic_controls():
                     observed.update({'expectedPackagesPath':packages,'expectedPackageFolders':sorted([packages,folder]),
                                      'observedPackagesPath':restore['packagesPath'],'observedPackageFolders':list(folders),
                                      'observedFallbackFolders':restore['fallbackFolders'],'observedSources':list(restore['sources'])})
-                    write(root/'obj/project.assets.json',{'packageFolders':folders,'project':{'restore':restore},
-                                                        'libraries':{name:{'type':'package'} for name in ['FSharp.Core/10.1.302',*(id+'/0.2.0' for id in IDS)]}})
+                    libraries={name:{'type':'package'} for name in ['FSharp.Core/10.1.302',*(id+'/'+version for id in IDS)]}
+                    if mode=='mixed-assets': libraries[IDS[0]+'/0.1.0']=libraries.pop(IDS[0]+'/'+version)
+                    write(root/'obj/project.assets.json',{'packageFolders':folders,'project':{'restore':restore},'libraries':libraries})
                     references=[]
                     for id in IDS:
-                        compiler=root/'packages'/id.lower()/'0.2.0/lib/net10.0'/(id+'.dll'); compiler.parent.mkdir(parents=True);compiler.write_bytes(id.encode()); references.append(str(compiler))
-                        target=root/'bin/Release/net10.0'/(id+'.dll');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(id.encode())
+                        compiler=root/'packages'/id.lower()/version/'lib/net10.0'/(id+'.dll'); compiler.parent.mkdir(parents=True);compiler.write_bytes(id.encode())
+                        if mode=='mixed-compiler' and id==IDS[0]:
+                            wrong=root/'packages'/id.lower()/'0.1.0/lib/net10.0'/(id+'.dll');wrong.parent.mkdir(parents=True);wrong.write_bytes(id.encode());references.append(str(wrong))
+                        else: references.append(str(compiler))
+                        target=root/'bin/Release/net10.0'/(id+'.dll');target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(b'wrong-runtime' if mode=='wrong-runtime' and id==IDS[0] else id.encode())
                     (root/'compiler-pair-references.txt').write_text('\n'.join(references)+'\n')
                 return subprocess.CompletedProcess(command,0,'EXECUTION_PAIR_INSTALLED_LOAD_OK\n' if len(calls)==3 else '', '')
             original=check.__globals__['run']; check.__globals__['run']=fake_sdk; output=candidate/'proof.json'
             try:
-                try: check(candidate,'candidate',output); refused=False
+                try: check(candidate,installed_mode,output); refused=False
                 except RuntimeError as error:
                     refused=True; message=str(error); prefix='effective NuGet package/fallback folder escaped isolation: '
-                    assert message.startswith(prefix),message
-                    if mode=='oversized': assert message==prefix+'observed path fields exceed the 4096-byte diagnostic bound'
+                    if mode in {'mixed-assets','mixed-compiler','wrong-runtime'}:
+                        expected={'mixed-assets':'effective installed dependency population changed','mixed-compiler':'actual pair compiler references escaped isolated installed packages','wrong-runtime':'Installed pair runtime differs from original candidate payload'}
+                        assert message==expected[mode],message
+                    elif mode=='oversized': assert message==prefix+'observed path fields exceed the 4096-byte diagnostic bound'
                     else: assert json.loads(message[len(prefix):])==observed
                     assert len(message.encode())<=len(prefix)+4096
             finally: check.__globals__['run']=original
@@ -280,9 +293,90 @@ def pair_observation_controls():
     assert a['enabled'] is False and a['operation'] is None and a['namespaceEntitlement'] is None
     print('PAIR_OBSERVATION_INERT_CONTROLS passed cases='+str(len(modes))+' transport=11 selectors=16 read-only/no-eligibility')
 
+def archive_controls(version):
+    extract=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))['extract_execution_pair_artifact']
+    with tempfile.TemporaryDirectory(prefix='pair-archive-test-') as temporary:
+        root=Path(temporary);readback=root/'readback';readback.mkdir()
+        a=admission();a.update(version=version,tag='execution/v'+version);manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair',
+            'version':version,'tag':'execution/v'+version,'sourceCommit':a['source'],'sourceTree':a['tree'],
+            'publicationAuthorized':False,'tagAuthorized':False,'ownership':{'reservation':'unreserved'},
+            'packages':[{'packageId':id,'file':id+'.'+version+'.nupkg','sha256':hashlib.sha256(id.encode()).hexdigest()} for id in IDS]}
+        payloads={id+'.'+version+'.nupkg':id.encode() for id in IDS}
+        payloads['execution-pair-release-manifest.json']=json.dumps(manifest,separators=(',',':')).encode()
+        a['manifestSha256']=hashlib.sha256(payloads['execution-pair-release-manifest.json']).hexdigest()
+        a['packages']={row['packageId']:row['sha256'] for row in manifest['packages']}
+        run={'id':1,'repository':{'id':1346720714},'head_repository':{'id':1346720714},'head_branch':'main',
+             'event':'workflow_dispatch','head_sha':a['source'],'run_attempt':1,'status':'completed','conclusion':'success',
+             'path':'.github/workflows/callable-cli-release-prepare.yml'}
+        jobs={'total_count':1,'jobs':[{'id':2,'run_id':1,'run_attempt':1,'head_sha':a['source'],
+             'name':'Prepare the routine Execution pair without publication','status':'completed','conclusion':'success'}]}
+        for mode in ('good','extra-member','duplicate-member','wrong-hash','wrong-run','wrong-job','expired','wrong-version','wrong-tag','mixed-member'):
+            archive=readback/'candidate.zip'
+            with zipfile.ZipFile(archive,'w') as z:
+                for filename,data in payloads.items():
+                    if mode=='mixed-member' and filename.startswith(IDS[0]):filename=IDS[0]+'.0.1.0.nupkg'
+                    z.writestr(filename,data)
+                if mode=='extra-member':z.writestr('unselected',b'bad')
+                if mode=='duplicate-member':z.writestr(next(iter(payloads)),b'duplicate')
+            a['archiveSha256']=hashlib.sha256(archive.read_bytes()).hexdigest()
+            current=copy.deepcopy(a)
+            if mode=='wrong-version':current['version']='0.4.0'
+            if mode=='wrong-tag':current['tag']='execution/v0.1.0'
+            if mode=='wrong-hash':current['packages'][IDS[0]]='0'*64
+            artifact={'id':3,'expired':mode=='expired','name':'execution-pair-'+a['source'],'digest':'sha256:'+a['archiveSha256'],
+                      'workflow_run':{'id':1,'head_sha':a['source']}}
+            selectedrun=copy.deepcopy(run)
+            if mode=='wrong-run':selectedrun['run_attempt']=2
+            selectedjobs=copy.deepcopy(jobs)
+            if mode=='wrong-job':selectedjobs['jobs'][0]['name']='Prepare the CLI-only successor without publication'
+            write(root/'eng/execution-pair-release-admission.json',current)
+            write(readback/'run.json',selectedrun);write(readback/'jobs.json',selectedjobs);write(readback/'artifact.json',artifact)
+            out=root/mode;out.mkdir();old=Path.cwd();os.chdir(root);refused=False
+            try:
+                with patch.dict(os.environ,{'READBACK_OUTPUT':str(readback),'CANDIDATE_OUTPUT':str(out)},clear=True):
+                    try:extract(Path('eng/execution-pair-release-admission.json'),readback,out)
+                    except (AssertionError,KeyError,TypeError,RuntimeError):refused=True
+            finally:os.chdir(old)
+            assert refused==(mode!='good'),mode
+
+def installed_version_preflight_controls():
+    helper=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
+    check=helper['check_execution_pair']
+    for version in ('0.2.0','0.3.0'):
+        for mode in ('unsupported-version','wrong-tag','wrong-contracts-file','wrong-processes-file'):
+            with tempfile.TemporaryDirectory(prefix='pair-version-preflight-test-') as temporary:
+                root=Path(temporary);rows=[]
+                for id in IDS:
+                    archive=root/(id+'.'+version+'.nupkg')
+                    with zipfile.ZipFile(archive,'w') as z:z.writestr('lib/net10.0/'+id+'.dll',id.encode())
+                    rows.append({'packageId':id,'file':archive.name,'sha256':hashlib.sha256(archive.read_bytes()).hexdigest()})
+                manifest={'profile':'execution-pair','version':version,'tag':'execution/v'+version,'packages':rows}
+                if mode=='unsupported-version':manifest['version']='0.4.0'
+                if mode=='wrong-tag':manifest['tag']='execution/v0.1.0'
+                if mode=='wrong-contracts-file':rows[0]['file']=IDS[0]+'.0.1.0.nupkg'
+                if mode=='wrong-processes-file':rows[1]['file']=IDS[1]+'.0.1.0.nupkg'
+                write(root/'execution-pair-release-manifest.json',manifest)
+                original=check.__globals__['run'];calls=[]
+                def forbidden_sdk(*args,**kwargs):calls.append(args);raise AssertionError('SDK launched for refused version/tag/member')
+                check.__globals__['run']=forbidden_sdk
+                try:
+                    try:check(root,'candidate',root/'proof.json');refused=False
+                    except RuntimeError:refused=True
+                finally:check.__globals__['run']=original
+                assert refused and not calls and not (root/'proof.json').exists(),(version,mode)
+    for version in ('0.4.0','[0.3.0]','0.3.0\"/>'):
+        with tempfile.TemporaryDirectory(prefix='pair-version-project-test-') as temporary:
+            root=Path(temporary)
+            try:helper['write_pair_installed_project'](root,version);refused=False
+            except RuntimeError:refused=True
+            assert refused and not (root/'PairInstalled.fsproj').exists()
+
 def main():
     pair_observation_controls()
-    installed_isolation_diagnostic_controls()
+    installed_version_preflight_controls()
+    for version in ("0.2.0","0.3.0"):
+        installed_isolation_diagnostic_controls(version)
+    installed_isolation_diagnostic_controls("0.3.0","public")
     workflow=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
     prepare=(ROOT/'.github/workflows/callable-cli-release-prepare.yml').read_text()
     assert "if: inputs.preparation_mode == 'portable'" in prepare
@@ -320,46 +414,7 @@ def main():
             finally:os.chdir(old)
             assert refused == (name!='good'), name
             assert (root/'env').exists()==(name=='good'),name
-    extract=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))['extract_execution_pair_artifact']
-    with tempfile.TemporaryDirectory(prefix='pair-archive-test-') as temporary:
-        root=Path(temporary);readback=root/'readback';readback.mkdir()
-        a=admission();manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair',
-            'version':'0.2.0','tag':'execution/v0.2.0','sourceCommit':a['source'],'sourceTree':a['tree'],
-            'publicationAuthorized':False,'tagAuthorized':False,'ownership':{'reservation':'unreserved'},
-            'packages':[{'packageId':id,'file':id+'.0.2.0.nupkg','sha256':hashlib.sha256(id.encode()).hexdigest()} for id in IDS]}
-        payloads={id+'.0.2.0.nupkg':id.encode() for id in IDS}
-        payloads['execution-pair-release-manifest.json']=json.dumps(manifest,separators=(',',':')).encode()
-        a['manifestSha256']=hashlib.sha256(payloads['execution-pair-release-manifest.json']).hexdigest()
-        a['packages']={row['packageId']:row['sha256'] for row in manifest['packages']}
-        run={'id':1,'repository':{'id':1346720714},'head_repository':{'id':1346720714},'head_branch':'main',
-             'event':'workflow_dispatch','head_sha':a['source'],'run_attempt':1,'status':'completed','conclusion':'success',
-             'path':'.github/workflows/callable-cli-release-prepare.yml'}
-        jobs={'total_count':1,'jobs':[{'id':2,'run_id':1,'run_attempt':1,'head_sha':a['source'],
-             'name':'Prepare the routine Execution pair without publication','status':'completed','conclusion':'success'}]}
-        for mode in ('good','extra-member','duplicate-member','wrong-hash','wrong-run','wrong-job','expired'):
-            archive=readback/'candidate.zip'
-            with zipfile.ZipFile(archive,'w') as z:
-                for filename,data in payloads.items():z.writestr(filename,data)
-                if mode=='extra-member':z.writestr('unselected',b'bad')
-                if mode=='duplicate-member':z.writestr(next(iter(payloads)),b'duplicate')
-            a['archiveSha256']=hashlib.sha256(archive.read_bytes()).hexdigest()
-            current=copy.deepcopy(a)
-            if mode=='wrong-hash':current['packages'][IDS[0]]='0'*64
-            artifact={'id':3,'expired':mode=='expired','name':'execution-pair-'+a['source'],'digest':'sha256:'+a['archiveSha256'],
-                      'workflow_run':{'id':1,'head_sha':a['source']}}
-            selectedrun=copy.deepcopy(run)
-            if mode=='wrong-run':selectedrun['run_attempt']=2
-            selectedjobs=copy.deepcopy(jobs)
-            if mode=='wrong-job':selectedjobs['jobs'][0]['name']='Prepare the CLI-only successor without publication'
-            write(root/'eng/execution-pair-release-admission.json',current)
-            write(readback/'run.json',selectedrun);write(readback/'jobs.json',selectedjobs);write(readback/'artifact.json',artifact)
-            out=root/mode;out.mkdir();old=Path.cwd();os.chdir(root);refused=False
-            try:
-                with patch.dict(os.environ,{'READBACK_OUTPUT':str(readback),'CANDIDATE_OUTPUT':str(out)},clear=True):
-                    try:extract(Path('eng/execution-pair-release-admission.json'),readback,out)
-                    except (AssertionError,KeyError,TypeError):refused=True
-            finally:os.chdir(old)
-            assert refused==(mode!='good'),mode
+    for version in ('0.2.0','0.3.0'): archive_controls(version)
     # Exercise the real nonpublishing installed job's input/archive bindings.
     installed_job=prepare.split('  execution_pair_installed:\n',1)[1]
     assert "if: inputs.preparation_mode == 'execution-pair-installed'" in installed_job
@@ -369,16 +424,17 @@ def main():
     assert 'gh release' not in installed_job and 'git tag' not in installed_job
     assert installed_job.index('--execution-pair-artifact') < installed_job.index('candidate "$READBACK_OUTPUT/candidate-load.json"')
     bind=heredoc('PY_PAIR_INSTALLED_BINDINGS','prepare')
-    for mode in ('good','changed-archive','foreign-source','wrong-job','enabled'):
+    for mode in ('good','changed-archive','foreign-source','wrong-job','enabled','wrong-version','wrong-tag','old-manifest'):
         with tempfile.TemporaryDirectory(prefix='pair-installed-bindings-test-') as temporary:
             root=Path(temporary);readback=root/'readback';readback.mkdir()
-            m={'sourceCommit':'a'*40,'sourceTree':'b'*40,'packages':[{'packageId':id,'sha256':str(i+1)*64} for i,id in enumerate(IDS)]}
+            m={'version':'0.2.0' if mode=='old-manifest' else '0.3.0','tag':'execution/v0.2.0' if mode=='old-manifest' else 'execution/v0.3.0','sourceCommit':'a'*40,'sourceTree':'b'*40,'packages':[{'packageId':id,'sha256':str(i+1)*64} for i,id in enumerate(IDS)]}
+            if mode=='wrong-tag':m['tag']='execution/v0.2.0'
             with zipfile.ZipFile(readback/'candidate.zip','w') as z:z.writestr('execution-pair-release-manifest.json',json.dumps(m))
-            a=admission();a['enabled']=mode=='enabled'
+            a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes());a['enabled']=mode=='enabled'
             write(root/'eng/execution-pair-release-admission.json',a)
             write(readback/'jobs.json',{'jobs':[{'id':2,'name':'foreign' if mode=='wrong-job' else 'Prepare the routine Execution pair without publication'}]})
             env={'READBACK_OUTPUT':str(readback),'ARCHIVE_SHA':'0'*64 if mode=='changed-archive' else hashlib.sha256((readback/'candidate.zip').read_bytes()).hexdigest(),
-                 'SOURCE_A':'c'*40 if mode=='foreign-source' else 'a'*40,'CANDIDATE_RUN':'1','CANDIDATE_ARTIFACT':'3'}
+                 'SOURCE_A':'c'*40 if mode=='foreign-source' else 'a'*40,'CANDIDATE_VERSION':'0.2.0' if mode=='wrong-version' else '0.3.0','CANDIDATE_RUN':'1','CANDIDATE_ARTIFACT':'3'}
             old=Path.cwd();os.chdir(root);refused=False
             try:
                 with patch.dict(os.environ,env,clear=True):
@@ -387,9 +443,14 @@ def main():
             finally:os.chdir(old)
             assert refused==(mode!='good'),mode
             assert (readback/'candidate-bindings.json').exists()==(mode=='good'),mode
+            assert json.loads((root/'eng/execution-pair-release-admission.json').read_bytes())==a
+            if mode=='good':
+                bound=json.loads((readback/'candidate-bindings.json').read_bytes())
+                assert bound['version']=='0.3.0' and bound['tag']=='execution/v0.3.0' and bound['enabled'] is False
+                for key in ('operation','namespaceEntitlement','tagProtection'):assert bound[key]==a[key] is None
     gate=installed_job.split('          set -euo pipefail\n',1)[1].split('      - name: Run actual shared pair guards',1)[0]
     gate='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in gate.splitlines())
-    for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor','diff-failure','metadata-change'):
+    for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor','diff-failure','metadata-change','bad-version'):
         with tempfile.TemporaryDirectory(prefix='pair-installed-source-test-') as temporary:
             root=Path(temporary);stub=root/'git'
             stub.write_text("""#!/usr/bin/python3
@@ -404,11 +465,12 @@ if args[0]=='diff':print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if o
                  'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_SHA':'9'*40,
                  'EXECUTOR_SOURCE':'8'*40 if mode=='moved-executor' else '9'*40,
                  'SOURCE_A':'z'*40 if mode=='bad-source' else 'a'*40,'CANDIDATE_RUN':'true' if mode=='bad-run' else '1',
-                 'CANDIDATE_ARTIFACT':'3','ARCHIVE_SHA':'x'*64 if mode=='bad-hash' else 'c'*64,'CANDIDATE_VERSION':'0.2.0',
+                 'CANDIDATE_ARTIFACT':'3','ARCHIVE_SHA':'x'*64 if mode=='bad-hash' else 'c'*64,'CANDIDATE_VERSION':'0.2.0' if mode=='bad-version' else '0.3.0',
                  'CANDIDATE_OUTPUT':str(root/'candidate'),'READBACK_OUTPUT':str(root/'readback'),'GITHUB_ENV':str(root/'env')}
             result=subprocess.run(['bash','-c',gate],env=env,capture_output=True,timeout=5)
             assert (result.returncode==0)==(mode in {'good','metadata-change'}),(mode,result.stderr)
             assert (root/'env').exists()==(mode in {'good','metadata-change'}),mode
+            if mode in {'good','metadata-change'}:assert 'CANDIDATE_VERSION=0.3.0\n' in (root/'env').read_text()
     publisher_source=job.split('      - name: Bind pair A ancestry and publication-only B changes\n',1)[1].split('      - name: Authenticate and extract',1)[0]
     publisher_source=publisher_source.split('          set -euo pipefail\n',1)[1]
     publisher_source='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in publisher_source.splitlines())
@@ -516,6 +578,6 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=7 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=5 installed-source=8 publisher-source=5 isolation-diagnostics=13 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=20 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=8 installed-source=9 publisher-source=5 isolation-and-byte-joins=48 version-preflight=11 selectors=exclusive')
 
 if __name__=='__main__':main()

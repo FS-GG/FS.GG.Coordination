@@ -259,9 +259,18 @@ def check_execute_main_refusal(tool: pathlib.Path, output: pathlib.Path) -> int:
 
 
 
+def pair_version(version: str) -> str:
+    """Finite historical/current package profiles; never selects preparation/publication."""
+    if version not in ("0.2.0", "0.3.0"):
+        raise RuntimeError("Execution pair version is outside the finite reviewed profiles")
+    return version
+
 def extract_execution_pair_artifact(admission: pathlib.Path, root: pathlib.Path, out: pathlib.Path) -> int:
     """Verify/extract the original three-file pair artifact; grants no effect authority."""
     a=json.loads(admission.read_bytes())
+    version=pair_version(a['version'])
+    assert a['tag']=='execution/v'+version
+    assert set(a['packages'])=={'FS.GG.Execution.Contracts','FS.GG.Execution.Processes'}
     for name in ('run.json','jobs.json','artifact.json'): assert 0<(root/name).stat().st_size<=4194304
     run=json.loads((root/'run.json').read_bytes())
     assert run['id']==a['runId'] and run['repository']['id']==1346720714 and run['head_repository']['id']==1346720714
@@ -277,7 +286,7 @@ def extract_execution_pair_artifact(admission: pathlib.Path, root: pathlib.Path,
     assert artifact['id']==a['artifactId'] and artifact['expired'] is False and artifact['name']=='execution-pair-'+a['source'] and artifact['digest']=='sha256:'+a['archiveSha256']
     assert artifact['workflow_run']['id']==a['runId'] and artifact['workflow_run']['head_sha']==a['source']
     archive=root/'candidate.zip'; assert 0<archive.stat().st_size<=50331648 and hashlib.sha256(archive.read_bytes()).hexdigest()==a['archiveSha256']
-    expected={id+'.0.2.0.nupkg':value for id,value in a['packages'].items()}; expected['execution-pair-release-manifest.json']=a['manifestSha256']
+    expected={id+'.'+version+'.nupkg':value for id,value in a['packages'].items()}; expected['execution-pair-release-manifest.json']=a['manifestSha256']
     with zipfile.ZipFile(archive) as z:
         assert len(z.infolist())==3 and set(z.namelist())==set(expected)
         for entry in z.infolist():
@@ -290,13 +299,14 @@ def extract_execution_pair_artifact(admission: pathlib.Path, root: pathlib.Path,
     assert manifest['version']==a['version'] and manifest['tag']==a['tag'] and manifest['sourceCommit']==a['source'] and manifest['sourceTree']==a['tree']
     assert manifest['publicationAuthorized'] is False and manifest['tagAuthorized'] is False and manifest['ownership']['reservation']=='unreserved'
     assert len(manifest['packages'])==2 and {row['packageId']:row['sha256'] for row in manifest['packages']}==a['packages']
-    for row in manifest['packages']: assert row['file']==row['packageId']+'.0.2.0.nupkg'
+    for row in manifest['packages']: assert row['file']==row['packageId']+'.'+version+'.nupkg'
     return 0
 
-def write_pair_installed_project(root: pathlib.Path) -> tuple[pathlib.Path, list[str]]:
+def write_pair_installed_project(root: pathlib.Path, version: str) -> tuple[pathlib.Path, list[str]]:
     import xml.etree.ElementTree as ET
+    version=pair_version(version)
     project = root / "PairInstalled.fsproj"
-    project.write_text('<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup><ItemGroup><Compile Include="Program.fs"/><PackageReference Include="FSharp.Core" Version="[10.1.302]"/><PackageReference Include="FS.GG.Execution.Contracts" Version="[0.2.0]"/><PackageReference Include="FS.GG.Execution.Processes" Version="[0.2.0]"/></ItemGroup></Project>')
+    project.write_text(f'<Project Sdk="Microsoft.NET.Sdk"><PropertyGroup><OutputType>Exe</OutputType><TargetFramework>net10.0</TargetFramework><DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference><RestorePackagesWithLockFile>true</RestorePackagesWithLockFile></PropertyGroup><ItemGroup><Compile Include="Program.fs"/><PackageReference Include="FSharp.Core" Version="[10.1.302]"/><PackageReference Include="FS.GG.Execution.Contracts" Version="[{version}]"/><PackageReference Include="FS.GG.Execution.Processes" Version="[{version}]"/></ItemGroup></Project>')
     isolation = {"ImportDirectoryBuildProps": "false", "ImportDirectoryBuildTargets": "false",
                  "ImportDirectoryPackagesProps": "false", "ManagePackageVersionsCentrally": "false",
                  "DisableImplicitLibraryPacksFolder": "true", "DisableImplicitFSharpCoreReference": "true",
@@ -327,13 +337,16 @@ def check_execution_pair(candidate: pathlib.Path, mode: str, output: pathlib.Pat
         raise RuntimeError("Execution pair input mode changed")
     ids = ("FS.GG.Execution.Contracts", "FS.GG.Execution.Processes")
     manifest = json.loads((candidate / "execution-pair-release-manifest.json").read_bytes())
-    if manifest["profile"] != "execution-pair" or manifest["version"] != "0.2.0":
+    version=pair_version(manifest["version"])
+    if manifest["profile"] != "execution-pair" or manifest["tag"] != "execution/v"+version:
         raise RuntimeError("Execution pair manifest identity changed")
     rows = manifest["packages"]
     if len(rows) != 2 or {row["packageId"] for row in rows} != set(ids):
         raise RuntimeError("Execution pair member population changed")
     expected_dlls = {}
     for row in rows:
+        if row["file"] != row["packageId"]+"."+version+".nupkg":
+            raise RuntimeError("Execution pair member filename differs from selected version")
         archive = candidate / row["file"]
         if digest(archive.read_bytes()) != row["sha256"]:
             raise RuntimeError("Execution pair archive changed")
@@ -364,13 +377,14 @@ def check_execution_pair(candidate: pathlib.Path, mode: str, output: pathlib.Pat
             ET.SubElement(public_mapping, "package", pattern=id)
         config_path = root / "NuGet.Config"
         ET.ElementTree(config).write(config_path, encoding="utf-8", xml_declaration=True)
-        project, properties = write_pair_installed_project(root)
+        project, properties = write_pair_installed_project(root,version)
+        typed_factory = ("let textFactory: ITextProcessSessionFactory = ProcessSessions.createTextFactory()\nif isNull (box textFactory) then failwith \"missing installed text factory\"\n" if version == "0.3.0" else "")
         (root / "Program.fs").write_text("""open System
 open FS.GG.Execution.Contracts
 open FS.GG.Execution.Processes
 let factory: IProcessSessionFactory = ProcessSessions.createFactory()
 if isNull (box factory) then failwith "missing installed factory"
-let errors = Validation.identity { InvocationId = Guid.Empty; Execution = None; LaunchOrdinal = 0UL; SourceDigest = ""; ProfileId = ""; ProfileDigest = "" }
+""" + typed_factory + """let errors = Validation.identity { InvocationId = Guid.Empty; Execution = None; LaunchOrdinal = 0UL; SourceDigest = ""; ProfileId = ""; ProfileDigest = "" }
 if List.isEmpty errors then failwith "invalid identity unexpectedly accepted"
 printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
 """)
@@ -394,20 +408,20 @@ printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
             raise RuntimeError("effective NuGet package/fallback folder escaped isolation: " + details)
         if assets["project"]["restore"].get("fallbackFolders", []) or set(assets["project"]["restore"]["sources"]) != ({str(candidate.resolve()), "https://api.nuget.org/v3/index.json"} if mode == "candidate" else {"https://api.nuget.org/v3/index.json"}):
             raise RuntimeError("effective NuGet source/fallback configuration changed")
-        if set(assets["libraries"]) != {"FSharp.Core/10.1.302", *(id + "/0.2.0" for id in ids)} or any(row["type"] != "package" for row in assets["libraries"].values()):
+        if set(assets["libraries"]) != {"FSharp.Core/10.1.302", *(id + "/" + version for id in ids)} or any(row["type"] != "package" for row in assets["libraries"].values()):
             raise RuntimeError("effective installed dependency population changed")
         compiler_paths = (root / "compiler-pair-references.txt").read_text().splitlines()
-        expected_paths = {(root / "packages" / id.lower() / "0.2.0" / "lib/net10.0" / (id + ".dll")).resolve(strict=True) for id in ids}
+        expected_paths = {(root / "packages" / id.lower() / version / "lib/net10.0" / (id + ".dll")).resolve(strict=True) for id in ids}
         if len(compiler_paths) != 2 or {pathlib.Path(value).resolve(strict=True) for value in compiler_paths} != expected_paths:
             raise RuntimeError("actual pair compiler references escaped isolated installed packages")
         for id in ids:
             compiler = next(path for path in expected_paths if path.name == id + ".dll")
             if compiler.read_bytes() != expected_dlls[id]: raise RuntimeError("actual pair compiler bytes differ from candidate payload")
-            if id + "/0.2.0" not in assets["libraries"] or assets["libraries"][id + "/0.2.0"]["type"] != "package":
+            if id + "/" + version not in assets["libraries"] or assets["libraries"][id + "/" + version]["type"] != "package":
                 raise RuntimeError("Execution pair did not resolve as exact installed package")
             actual = (compiled / (id + ".dll")).read_bytes()
             if actual != expected_dlls[id]: raise RuntimeError("Installed pair runtime differs from original candidate payload")
-            joins.append({"packageId": id, "version": "0.2.0", "runtimeSha256": digest(actual)})
+            joins.append({"packageId": id, "version": version, "runtimeSha256": digest(actual)})
         actual = run(["dotnet", str(compiled / "PairInstalled.dll")], cwd=root, env=environment)
         if actual.stdout != "EXECUTION_PAIR_INSTALLED_LOAD_OK\n" or actual.stderr:
             raise RuntimeError("Installed pair did not produce exact bounded load marker")

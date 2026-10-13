@@ -31,6 +31,44 @@ elif case in ("ordinary-dual", "ordinary-overflow"):
         worker.start()
     for worker in workers:
         worker.join()
+elif case in ("text-large-stdout", "text-large-stderr", "text-large-mixed", "text-exact", "text-over"):
+    counts = {"text-large-stdout": (300000, 0), "text-large-stderr": (0, 300000),
+              "text-large-mixed": (150000, 150000), "text-exact": (200000, 200000),
+              "text-over": (200001, 200000)}[case]
+    def emit(fd, count, value):
+        try:
+            while count:
+                block = value * min(count, 1024)
+                written = os.write(fd, block)
+                count -= written
+        except BrokenPipeError:
+            pass
+    workers = [threading.Thread(target=emit, args=(1, counts[0], b"O")),
+               threading.Thread(target=emit, args=(2, counts[1], b"E"))]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join()
+    if case.startswith("text-large"):
+        emit(1, 1, b"1")
+        os.write(1, b" passing\n")
+elif case == "text-surrogate":
+    payload = b"A" * 1023 + "😀".encode("utf-8")
+    if os.write(1, payload) != len(payload):
+        raise ValueError("short atomic fixture write")
+elif case == "text-encoding":
+    mode = sys.argv[2]
+    value = "café😀\n"
+    payloads = {"utf8": value.encode("utf-8"), "utf8-bom": b"\xef\xbb\xbf" + value.encode("utf-8"),
+                "utf16le": b"\xff\xfe" + value.encode("utf-16-le"),
+                "utf16be": b"\xfe\xff" + value.encode("utf-16-be"),
+                "utf32le": b"\xff\xfe\x00\x00" + value.encode("utf-32-le"),
+                "utf32be": b"\x00\x00\xfe\xff" + value.encode("utf-32-be"),
+                "malformed": b"A\xffB\xe2\x82", "utf32-large": b"\xff\xfe\x00\x00" + ("X" * 300000).encode("utf-32-le")}
+    payload = payloads[mode]
+    while payload:
+        written = os.write(1, payload[:1024])
+        payload = payload[written:]
 elif case in ("ordinary-deadline", "ordinary-cancel"):
     os.write(1, b"started\n")
     time.sleep(1.5)

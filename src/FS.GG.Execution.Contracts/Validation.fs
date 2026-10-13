@@ -146,6 +146,41 @@ module Validation =
             else commandCore value
         with
         | :? ArgumentException | :? NullReferenceException | :? OverflowException -> [ error "command.structure" ]
+    let textCapture (value: TextCapturePolicy) =
+        // UTF32 ASCII consumes4 raw bytes for each1-byte decoded UTF8 charge.
+        // Per channel reserve:4 BOM bytes,3 pending decoder bytes,1024 prefetched
+        // bytes, and one unadmitted1024-character read at4 raw bytes/code unit.
+        let transportSlack = 2L * (4L + 3L + 1024L + 4L * 1024L)
+        let captureErrors =
+            [ if value.MaximumDecodedUtf8Bytes <= 0L then error "text.decoded-limit"
+              if value.TerminalReserveBytes < limits.FirstCauseReserveBytes || value.TerminalReserveBytes > limits.ResultMetadataBytes then error "text.terminal-reserve"
+              if value.MaximumDecodedUtf8Bytes > (Int64.MaxValue - transportSlack - int64 limits.ResultMetadataBytes - 65536L) / 4L then error "text.bound-overflow" ]
+        if not captureErrors.IsEmpty then Error captureErrors
+        else
+            let maximum = value.MaximumDecodedUtf8Bytes
+            let chunks = maximum / 1024L + (if maximum % 1024L = 0L then 0L else 1L) + 2L
+            Ok { MaximumDecodedUtf8Bytes = maximum; MaximumRawTransportBytes = 4L * maximum + transportSlack
+                 PreparedCaptureBytes = 32768L; RetainedCaptureBytes = 2L * maximum + 128L * chunks + 8192L
+                 ObservationCopyBytes = 64L * chunks + 8192L
+                 ReaderByteBufferBytes = 1024; ReaderCharacterChunkSize = 1024; TerminalReserveBytes = value.TerminalReserveBytes }
+
+    let textCommand (value: TextCommandSpec) =
+        match textCapture value.TextCapture with
+        | Error errors -> Error errors
+        | Ok bounds ->
+            // No byte retention is requested: the unchanged reducer validates actual
+            // transport accounting while the closed text mode retains decoded characters.
+            let request: CommandSpec =
+                { Executable = value.Executable; Arguments = value.Arguments; WorkingDirectory = value.WorkingDirectory
+                  Environment = value.Environment; Input = value.Input; Capabilities = value.Capabilities; Resources = value.Resources
+                  Capture = { TotalBytes = bounds.MaximumRawTransportBytes + int64 bounds.TerminalReserveBytes
+                              TerminalReserveBytes = bounds.TerminalReserveBytes; StdoutPrefixBytes = 0; StdoutTailBytes = 0
+                              StderrPrefixBytes = 0; StderrTailBytes = 0; ReadChunkBytes = bounds.ReaderByteBufferBytes
+                              MaximumFrameBytes = 1024; MaximumIncompleteLineBytes = 1024 } }
+            match command request with
+            | [] -> Ok(request,bounds)
+            | errors -> Error errors
+
     let private cleanupCore (value: CleanupResult) =
         entries "cleanup.actions" value.RequestedActions @ (value.RequestedActions |> List.collect diagnostic)
         @ entries "cleanup.unresolved" value.Unresolved @ (value.Unresolved |> List.collect generation)

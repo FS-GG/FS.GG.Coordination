@@ -10,6 +10,8 @@ module Validation =
     val generation: ProcessGeneration -> ValidationError list
     val capture: CapturePolicy -> ValidationError list
     val command: CommandSpec -> ValidationError list
+    val textCapture: TextCapturePolicy -> Result<TextCaptureBounds,ValidationError list>
+    val textCommand: TextCommandSpec -> Result<CommandSpec * TextCaptureBounds,ValidationError list>
     val cleanup: CleanupResult -> ValidationError list
     val output: CapturePolicy -> OutputSnapshot -> ValidationError list
     val capability: CapabilityObservation -> ValidationError list

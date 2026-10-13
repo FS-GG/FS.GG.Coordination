@@ -199,10 +199,19 @@ module ProcessSessionTests =
 
     [<Fact>]
     let ``actual stdin failure stays bounded without exposing request secrets`` () =
-        let payload = Array.create 32768 (byte 's')
-        let session,budget,liveClock = prepare { command with Arguments = [ "-c"; "exec 0<&-; /bin/sleep 0.1" ]; Input = Bytes(ReadOnlyMemory<byte>(payload)) }
+        let payload = Array.create (192 * 1024) (byte 's')
+        // No reader can drain this pipe: report its actual capacity before closing
+        // stdin. When the admitted input exceeds that capacity, even a parent write
+        // that starts before this child runs cannot complete successfully.
+        let script = "import fcntl,os,time; capacity=fcntl.fcntl(0,fcntl.F_GETPIPE_SZ); os.write(1,(str(capacity)+'\\n').encode('ascii')); os.close(0); time.sleep(0.1)"
+        let session,budget,liveClock =
+            prepare { command with Executable = "/usr/bin/python3"; Arguments = [ "-c"; script ]; Input = Bytes(ReadOnlyMemory<byte>(payload)) }
         session.RunAsync(CancellationToken.None).GetAwaiter().GetResult() |> ignore
         let final = settle liveClock budget session
+        let parsed,capacity = Int32.TryParse((text final.Stdout).Trim())
+        Assert.True(parsed, "closed-reader fixture must report its actual stdin pipe capacity")
+        Assert.True(capacity > 0 && capacity < payload.Length, "admitted input must exceed the observed stdin pipe capacity")
+        Assert.True(final.FirstFailure.IsSome, "the observed closed reader must cause the bounded stdin write to fail")
         Assert.Equal("bcl-stdin-write-failed",final.FirstFailure.Value.Diagnostic.Code)
         Assert.Equal("BCL session observation.",final.FirstFailure.Value.Diagnostic.Message)
         Assert.True(match final.Stop with Requested(SinkFailure,_) -> true | _ -> false)
@@ -357,4 +366,262 @@ module ProcessSessionTests =
             original.Data["RetainedFailedTreeSession"] <- session
             original.Data["RetainedFailedTreeRunTask"] <- running
             original.Data["RetainedFailedTreeActionProcess"] <- retainedTarget
+            reraise()
+
+module TextProcessSessionTests =
+    open Samples
+    let private decoded (capture: TextStreamCapture) = String.concat "" capture.Chunks
+    let private fixture = Path.Combine(AppContext.BaseDirectory,"Fixtures","fixture.py")
+    let private request maximum arguments : TextCommandSpec =
+        { Executable = "/usr/bin/python3"; Arguments = fixture :: arguments; WorkingDirectory = Path.GetTempPath()
+          Environment = Replace Map.empty; Input = Bytes(ReadOnlyMemory<byte>([|byte 'G'|]))
+          TextCapture = { MaximumDecodedUtf8Bytes = maximum; TerminalReserveBytes = 2048 }
+          Capabilities = command.Capabilities; Resources = resources }
+    let private prepareText request total reserve =
+        let liveClock = clock()
+        let budget = Budget.create (liveClock.Now()) total reserve |> ok
+        let session = ProcessSessions.createTextFactoryWithRetirement(RetirementPolicy.BestEffortProcessTree).Prepare(request,identity(),budget,liveClock,owner) |> ok
+        session,budget,liveClock
+    let private settleText liveClock budget (session: ITextProcessSession) =
+        let mutable result = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        while not (match result.Process.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false) do
+            let delay = Budget.clip ((liveClock: IMonotonicClock).Now()) Cleanup (TimeSpan.FromMilliseconds 5.) budget |> ok
+            Assert.True(delay > TimeSpan.Zero,"original text cleanup budget expired")
+            Task.Delay(delay).GetAwaiter().GetResult()
+            result <- session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        Assert.Equal(ResourcesReleased,session.TryRelease())
+        Assert.Equal(ResourcesReleased,session.TryRelease())
+        session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+    let private runText maximum arguments =
+        let session,budget,liveClock = prepareText (request maximum arguments) (TimeSpan.FromSeconds 8.) (TimeSpan.FromSeconds 5.)
+        let running = session.RunAsync(CancellationToken.None)
+        running.GetAwaiter().GetResult() |> ignore
+        let result = settleText liveClock budget session
+        Assert.True(running.IsCompleted)
+        Assert.Equal(Budget.describe budget,Budget.describe result.Process.OriginalBudget)
+        Assert.True(result.Text.SnapshotComplete)
+        result
+    let private successful result =
+        Assert.True(result.Process.FirstFailure.IsNone,sprintf "%A" result.Process.FirstFailure)
+        Assert.True(result.Text.FirstFailure.IsNone)
+        Assert.Equal(NotRequested,result.Process.Stop)
+        Assert.True((match result.Process.Exit with Known(Exited 0,_) -> true | _ -> false),sprintf "exit=%A stderr=%s" result.Process.Exit (decoded result.Text.Stderr))
+        Assert.True(match result.Process.Stdout.Reader,result.Process.Stderr.Reader with Known(Eof,_),Known(Eof,_) -> true | _ -> false)
+        Assert.True(match result.Process.Cleanup.WorkloadEmpty with Unknown _ -> true | _ -> false)
+
+    [<Theory>]
+    [<InlineData("text-large-stdout",300010,0)>]
+    [<InlineData("text-large-stderr",10,300000)>]
+    [<InlineData("text-large-mixed",150010,150000)>]
+    [<InlineData("text-exact",200000,200000)>]
+    let ``text mode retains real large reports with one shared cap`` (mode: string) stdoutCount stderrCount =
+        let result = runText 400000L [mode]
+        successful result
+        Assert.Equal(stdoutCount,(decoded result.Text.Stdout).Length)
+        Assert.Equal(stderrCount,(decoded result.Text.Stderr).Length)
+        Assert.Equal(int64(stdoutCount+stderrCount),result.Text.ChargedDecodedUtf8Bytes)
+        Assert.Equal(0L,result.Text.Stdout.OmittedDecodedUtf8Bytes)
+        Assert.Equal(0L,result.Text.Stderr.OmittedDecodedUtf8Bytes)
+        Assert.Equal(0L,result.Process.Stdout.Totals.Retained)
+        Assert.Equal(result.Text.RawTransportBytes,result.Process.ChargedTotalBytes)
+        Assert.Equal(result.Text.Stdout.RawTransportBytes,result.Process.Stdout.Totals.Omitted)
+        Assert.True(result.Text.Stdout.Chunks.Length + result.Text.Stderr.Chunks.Length <= (stdoutCount+stderrCount+1023)/1024+2)
+
+    [<Fact>]
+    let ``shared text overflow is authoritative and remains first cause`` () =
+        let result = runText 400000L ["text-over"]
+        Assert.Equal("text-decoded-limit",result.Text.FirstFailure.Value.Code)
+        Assert.Equal("text-decoded-limit",result.Process.FirstFailure.Value.Diagnostic.Code)
+        Assert.True(match result.Process.Stop with Requested(OutputLimit,_) -> true | _ -> false)
+        Assert.True(result.Text.ChargedDecodedUtf8Bytes > 400000L)
+        Assert.True(result.Text.Stdout.AdmittedDecodedUtf8Bytes + result.Text.Stderr.AdmittedDecodedUtf8Bytes <= 400000L)
+        Assert.True(result.Text.Stdout.OmittedDecodedUtf8Bytes + result.Text.Stderr.OmittedDecodedUtf8Bytes > 0L)
+
+    [<Theory>]
+    [<InlineData("utf8")>]
+    [<InlineData("utf8-bom")>]
+    [<InlineData("utf16le")>]
+    [<InlineData("utf16be")>]
+    [<InlineData("utf32le")>]
+    [<InlineData("utf32be")>]
+    let ``text reader preserves BOM detected encodings and multibyte text`` mode =
+        let result = runText 400000L ["text-encoding";mode]
+        successful result
+        Assert.Equal("café😀\n",decoded result.Text.Stdout)
+        Assert.Equal(10L,result.Text.ChargedDecodedUtf8Bytes)
+
+    [<Fact>]
+    let ``malformed and truncated UTF8 uses existing replacement fallback`` () =
+        let result = runText 400000L ["text-encoding";"malformed"]
+        successful result
+        Assert.Equal("A�B�",decoded result.Text.Stdout)
+        Assert.Equal(8L,result.Text.ChargedDecodedUtf8Bytes)
+
+    [<Fact>]
+    let ``UTF32 transport worst case is separately bounded from decoded capture`` () =
+        let result = runText 400000L ["text-encoding";"utf32-large"]
+        successful result
+        Assert.Equal(String('X',300000),decoded result.Text.Stdout)
+        Assert.Equal(300000L,result.Text.ChargedDecodedUtf8Bytes)
+        Assert.Equal(1200004L,result.Text.RawTransportBytes)
+        Assert.True(result.Text.RawTransportBytes < result.Bounds.MaximumRawTransportBytes)
+
+    [<Fact>]
+    let ``large declared cap does not allocate its maximum before tiny output`` () =
+        let session,budget,liveClock = prepareText (request (int64 Int32.MaxValue) ["text-encoding";"utf8"]) (TimeSpan.FromSeconds 8.) (TimeSpan.FromSeconds 5.)
+        let prepared = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+        Assert.Empty(prepared.Text.Stdout.Chunks)
+        Assert.Empty(prepared.Text.Stderr.Chunks)
+        Assert.Equal(32768L,prepared.Bounds.PreparedCaptureBytes)
+        session.RunAsync(CancellationToken.None).GetAwaiter().GetResult() |> ignore
+        let result = settleText liveClock budget session
+        successful result
+        Assert.Single(result.Text.Stdout.Chunks) |> ignore
+        Assert.Equal("café😀\n",decoded result.Text.Stdout)
+
+    [<Fact>]
+    let ``concurrent text runs share launch and separate invocations reset charge`` () =
+        for _ in 1 .. 2 do
+            let session,budget,liveClock = prepareText (request 400000L ["text-large-stdout"]) (TimeSpan.FromSeconds 8.) (TimeSpan.FromSeconds 5.)
+            let tasks = [| for _ in 1 .. 4 -> session.RunAsync(CancellationToken.None) |]
+            Task.WhenAll(tasks).GetAwaiter().GetResult() |> ignore
+            let result = settleText liveClock budget session
+            successful result
+            Assert.Equal(300010L,result.Text.ChargedDecodedUtf8Bytes)
+            Assert.True(tasks |> Array.forall(fun task -> task.Result.Process.Identity = result.Process.Identity))
+
+    [<Fact>]
+    let ``short read charges preserve split surrogate fallback while retention coalesces`` () =
+        let request,bounds = Validation.textCommand (request 400000L []) |> ok
+        let sink = BoundedOutput.create request.Capture |> ok
+        let capture = BoundedText.CaptureState(bounds,sink)
+        let result = Lifecycle.prepare request (identity()) (Budget.create ((clock()).Now()) (TimeSpan.FromSeconds 8.) (TimeSpan.FromSeconds 5.) |> ok) |> ok |> Lifecycle.snapshot
+        let pair = "😀".ToCharArray()
+        Assert.Equal(Accepted,capture.Admit(Stdout,[|pair[0]|],1))
+        let early = capture.Snapshot result
+        Assert.Equal(Accepted,capture.Admit(Stdout,[|pair[1]|],1))
+        for _ in 1 .. 2048 do Assert.Equal(Accepted,capture.Admit(Stderr,[|'a'|],1))
+        let final = capture.Snapshot result
+        Assert.Equal(6L,final.Stdout.AdmittedDecodedUtf8Bytes)
+        Assert.Equal("😀",decoded final.Stdout)
+        Assert.Equal(1,early.Stdout.Chunks.Head.Length)
+        Assert.Equal(2,final.Stderr.Chunks.Length)
+        Assert.Equal(2054L,final.ChargedDecodedUtf8Bytes)
+
+    [<Fact>]
+    let ``terminal reserve survives text overflow without changing first cause`` () =
+        let request,bounds = Validation.textCommand (request 1L []) |> ok
+        let sink = BoundedOutput.create request.Capture |> ok
+        let capture = BoundedText.CaptureState(bounds,sink)
+        Assert.True(match capture.Admit(Stdout,[|'a';'b'|],2) with RetireRequired cause -> cause.Code = "text-decoded-limit" | _ -> false)
+        for _ in 1 .. 2 do Assert.Equal(Accepted,capture.RecordTransport(TerminalEvidence,ReadOnlyMemory<byte>(Array.zeroCreate 1024)))
+        Assert.Equal(2048L,capture.RawSnapshot().TerminalEvidenceBytes)
+        Assert.Equal("text-decoded-limit",capture.RawSnapshot().FirstFailure.Value.Code)
+
+    [<Theory>]
+    [<InlineData("ordinary-deadline",false)>]
+    [<InlineData("ordinary-cancel",true)>]
+    [<InlineData("ordinary-heldpipe",false)>]
+    let ``text readers preserve work versus pipe EOF and caller stop custody`` mode cancel =
+        let session,budget,liveClock = prepareText (request 400000L [mode]) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.5)
+        use cancellation = new CancellationTokenSource()
+        let running = session.RunAsync(cancellation.Token)
+        if cancel then
+            let mutable ready = false
+            while not ready do
+                let observed = session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()
+                ready <- not observed.Text.Stdout.Chunks.IsEmpty
+                if not ready then
+                    let delay = Budget.clip (liveClock.Now()) Work (TimeSpan.FromMilliseconds 5.) budget |> ok
+                    Task.Delay(delay).GetAwaiter().GetResult()
+            cancellation.Cancel()
+            session.ObserveAsync(cancellation.Token).GetAwaiter().GetResult() |> ignore
+        let initial = running.GetAwaiter().GetResult()
+        Assert.True(match initial.Process.Stop with Requested(CallerCancellation,_) when cancel -> true | Requested(WorkDeadline,_) when not cancel -> true | _ -> false)
+        Assert.True(match initial.Process.Cleanup.Custody with RetainedByOwner _ -> true | _ -> false)
+        if mode = "ordinary-heldpipe" then
+            Assert.True(match initial.Process.Exit with Known(Exited 0,_) -> true | _ -> false)
+            Assert.False(match initial.Process.Stdout.Reader with Known(Eof,_) -> true | _ -> false)
+            Assert.True(match session.TryRelease() with ReleaseRefused _ -> true | _ -> false)
+        let final = settleText liveClock budget session
+        Assert.Equal(initial.Process.Stop,final.Process.Stop)
+        Assert.Equal(initial.Process.FirstFailure,final.Process.FirstFailure)
+        Assert.Equal(decoded initial.Text.Stdout,decoded final.Text.Stdout)
+        Assert.Equal(Budget.describe budget,Budget.describe final.Process.OriginalBudget)
+
+    [<Theory>]
+    [<InlineData(1029L,true)>]
+    [<InlineData(1028L,false)>]
+    let ``actual StreamReader boundary charges split surrogate and cap plus one`` maximum accepted =
+        let result = runText maximum ["text-surrogate"]
+        Assert.Equal(1029L,result.Text.ChargedDecodedUtf8Bytes)
+        Assert.Equal(1027L,result.Text.RawTransportBytes)
+        if accepted then
+            successful result
+            Assert.Equal(String('A',1023)+"😀",decoded result.Text.Stdout)
+        else
+            Assert.Equal("text-decoded-limit",result.Text.FirstFailure.Value.Code)
+            Assert.Equal("text-decoded-limit",result.Process.FirstFailure.Value.Diagnostic.Code)
+            Assert.True(match result.Process.Stop with Requested(OutputLimit,_) -> true | _ -> false)
+            Assert.Equal(1026L,result.Text.Stdout.AdmittedDecodedUtf8Bytes)
+            Assert.Equal(1024,(decoded result.Text.Stdout).Length)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``GHz clock positive floor zero keeps raw and text run pending until real expiry`` useText =
+        let domain = { Id = Guid.NewGuid(); Frequency = 1000000000L }
+        let clockGate = obj()
+        let mutable ticks = 1000L
+        let liveClock = { new IMonotonicClock with member _.Now() = lock clockGate (fun () -> { Domain = domain; Ticks = ticks }) }
+        let setTicks value = lock clockGate (fun () -> ticks <- value)
+        let budget = Budget.create (liveClock.Now()) (TimeSpan.FromSeconds 3.) (TimeSpan.FromSeconds 2.) |> ok
+        let description = Budget.describe budget
+        let selected = request 400000L ["ordinary-deadline"]
+        let running,observe,release,readRun,retainedSession =
+            if useText then
+                let session = ProcessSessions.createTextFactoryWithRetirement(RetirementPolicy.BestEffortProcessTree).Prepare(selected,identity(),budget,liveClock,owner) |> ok
+                setTicks (description.WorkExpiresAt - 1L)
+                let actual = session.RunAsync(CancellationToken.None)
+                (actual :> Task),(fun () -> session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult().Process),
+                    session.TryRelease,(fun () -> actual.GetAwaiter().GetResult().Process),box session
+            else
+                let raw: CommandSpec =
+                    { command with Executable = selected.Executable; Arguments = selected.Arguments; WorkingDirectory = selected.WorkingDirectory
+                                   Environment = selected.Environment; Input = selected.Input }
+                let session = ProcessSessions.createFactoryWithRetirement(RetirementPolicy.BestEffortProcessTree).Prepare(raw,identity(),budget,liveClock,owner) |> ok
+                setTicks (description.WorkExpiresAt - 1L)
+                let actual = session.RunAsync(CancellationToken.None)
+                (actual :> Task),(fun () -> session.ObserveAsync(CancellationToken.None).GetAwaiter().GetResult()),
+                    session.TryRelease,(fun () -> actual.GetAwaiter().GetResult()),box session
+        let cleanup () =
+            // The admitted test owner advances only its original fixture clock to
+            // the original expiry and retains actual native/session tasks throughout.
+            setTicks description.WorkExpiresAt
+            Assert.True(running.Wait(TimeSpan.FromSeconds 2.),"finite GHz fixture Run did not return at original expiry")
+            running.GetAwaiter().GetResult()
+            let watchdog = System.Diagnostics.Stopwatch.StartNew()
+            let mutable result = observe()
+            while not (match result.Cleanup.LocalTasks with Known(Settled,_) -> true | _ -> false) do
+                Assert.True(watchdog.Elapsed < TimeSpan.FromSeconds 2.,"finite GHz fixture cleanup did not settle")
+                Task.Delay(TimeSpan.FromMilliseconds 5.).GetAwaiter().GetResult()
+                result <- observe()
+            Assert.Equal(ResourcesReleased,release())
+        try
+            let remainder = Budget.remaining (liveClock.Now()) budget |> ok
+            Assert.False(remainder.WorkExpired)
+            Assert.Equal(TimeSpan.Zero,remainder.WorkRemaining)
+            Assert.Equal(NotRequested,observe().Stop)
+            Assert.False(running.IsCompleted,"active positive sub-TimeSpan remainder must not complete bounded Run")
+            setTicks description.WorkExpiresAt
+            Assert.True(running.Wait(TimeSpan.FromSeconds 2.),"finite GHz Run did not return at original expiry")
+            let final = readRun()
+            Assert.True(match final.Stop with Requested(WorkDeadline,_) -> true | _ -> false)
+            Assert.Equal(description,Budget.describe final.OriginalBudget)
+            cleanup()
+        with original ->
+            try cleanup()
+            with secondary -> original.Data["GHzFixtureCleanupFailure"] <- secondary
+            original.Data["RetainedGHzSession"] <- retainedSession
+            original.Data["RetainedGHzRunTask"] <- running
             reraise()

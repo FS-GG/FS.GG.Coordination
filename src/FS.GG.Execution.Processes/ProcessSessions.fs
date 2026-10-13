@@ -4,6 +4,7 @@ open System
 open System.ComponentModel
 open System.Diagnostics
 open System.IO
+open System.Text
 open System.Threading
 open System.Threading.Tasks
 open FS.GG.Execution.Contracts
@@ -22,7 +23,7 @@ module ProcessSessions =
     // Friend tests can replace only this retained instance's native retirement leaf.
     // Every asynchronous BCL operation and its Process remain fields of that object.
     type private Session(command: CommandSpec, identity: OperationIdentity, budget: ExecutionBudget,
-                         clock: IMonotonicClock, owner: OwnerReference, preparedAt: ClockStamp, initial: LifecycleState, sink: IBoundedByteSink, retirement: RetirementPolicy, retire: Process -> bool -> unit) =
+                         clock: IMonotonicClock, owner: OwnerReference, preparedAt: ClockStamp, initial: LifecycleState, sink: IBoundedByteSink, text: (TextCaptureBounds * BoundedText.CaptureState) option, retirement: RetirementPolicy, retire: Process -> bool -> unit) =
         let gate = obj()
         let mutable state = initial
         let mutable runConsumed = false
@@ -197,6 +198,19 @@ module ProcessSessions =
                 | _ -> ()
             | Error _ -> ()
 
+        let textSnapshot () =
+            match text with
+            | None -> invalidOp "This session uses raw capture."
+            | Some(bounds,capture) ->
+                let processResult = snapshot()
+                try { Process = processResult; Text = capture.Snapshot processResult; Bounds = bounds }
+                with :? OutOfMemoryException ->
+                    capture.RecordCopyFailure()
+                    recordFailure "text-observation-copy-failed"
+                    stop SinkFailure
+                    let failed = snapshot()
+                    { Process = failed; Text = capture.FailedSnapshot failed; Bounds = bounds }
+
         let pump channel (stream: Stream) : Task =
             task {
                 try
@@ -227,6 +241,60 @@ module ProcessSessions =
                         if channel = Stdout then stdoutDone <- true else stderrDone <- true
                         refreshCleanup())
             } :> Task
+        let pumpText channel bounds (capture: BoundedText.CaptureState) (stream: Stream) : Task =
+            task {
+                try
+                    try
+                        let observe bytes =
+                            lock gate (fun () ->
+                                let admitted = capture.RecordTransport(channel,bytes)
+                                apply (OutputObserved(capture.RawSnapshot())) |> ignore
+                                match admitted with
+                                | Accepted -> ()
+                                | RetireRequired _ ->
+                                    stop OutputLimit
+                                    raise (IOException "Bounded text transport was refused."))
+                        use transport = new BoundedText.TransportStream(stream,observe)
+                        use reader = new StreamReader(transport,Encoding.UTF8,true,bounds.ReaderByteBufferBytes,true)
+                        let buffer = Array.zeroCreate<char> bounds.ReaderCharacterChunkSize
+                        let mutable reading = true
+                        while reading do
+                            // Preserve the caller's StreamReader1024-character admission
+                            // chunks, including replacement and split-surrogate charging.
+                            let! count = reader.ReadAsync(buffer,0,buffer.Length)
+                            lock gate (fun () ->
+                                if count = 0 then
+                                    reading <- false
+                                    match now() with
+                                    | Ok at -> applyAt at (ReaderObserved(channel,Known(Eof,stamp at))) |> ignore
+                                    | Error _ -> ()
+                                else
+                                    let admitted = capture.Admit(channel,buffer,count)
+                                    apply (OutputObserved(capture.RawSnapshot())) |> ignore
+                                    match admitted with
+                                    | Accepted -> ()
+                                    | RetireRequired cause ->
+                                        reading <- false
+                                        stop (if cause.Code = "text-retention-failed" then SinkFailure else OutputLimit)
+                                        match now() with
+                                        | Ok at -> applyAt at (ReaderObserved(channel,Known(StoppedWithoutEof cause,stamp at))) |> ignore
+                                        | Error _ -> ())
+                    with _ ->
+                        lock gate (fun () ->
+                            match now() with
+                            | Ok at -> applyAt at (ReaderObserved(channel,Known(ReadFailed(note "bcl-text-reader-failed"),stamp at))) |> ignore
+                            | Error _ -> ()
+                            stop SinkFailure)
+                finally
+                    lock gate (fun () ->
+                        if channel = Stdout then stdoutDone <- true else stderrDone <- true
+                        refreshCleanup())
+            } :> Task
+        let pumpSelected channel stream =
+            match text with
+            | None -> pump channel stream
+            | Some(bounds,capture) -> pumpText channel bounds capture stream
+
         let writeInput (stream: Stream) : Task =
             task {
                 try
@@ -324,8 +392,8 @@ module ProcessSessions =
                                     generation <- Some actual
                                     apply (LaunchObserved(Started actual)) |> ignore
                                     stdoutDone <- false; stderrDone <- false; inputDone <- false; exitDone <- false
-                                    stdoutTask <- Some(runTask (fun () -> pump Stdout targetProcess.StandardOutput.BaseStream))
-                                    stderrTask <- Some(runTask (fun () -> pump Stderr targetProcess.StandardError.BaseStream))
+                                    stdoutTask <- Some(runTask (fun () -> pumpSelected Stdout targetProcess.StandardOutput.BaseStream))
+                                    stderrTask <- Some(runTask (fun () -> pumpSelected Stderr targetProcess.StandardError.BaseStream))
                                     inputTask <- Some(runTask (fun () -> writeInput targetProcess.StandardInput.BaseStream))
                                     exitTask <- Some(runTask (fun () -> waitExit targetProcess)))
                             else
@@ -365,12 +433,23 @@ module ProcessSessions =
                                     let stopping = (Lifecycle.snapshot state).Stop <> NotRequested
                                     if released || allSettled() || view.TotalExpired || (not useCleanup && (view.WorkExpired || stopping)) || privateFailure.IsSome then None
                                     else
-                                        Budget.clip at (if useCleanup && stopping then Cleanup else Work) (TimeSpan.FromMilliseconds 5.) budget |> Result.toOption
+                                        let phase = if useCleanup && stopping then Cleanup else Work
+                                        match Budget.clip at phase (TimeSpan.FromMilliseconds 5.) budget with
+                                        | Ok duration -> Some duration
+                                        | Error BudgetExpired when
+                                            (phase = Work && not view.WorkExpired && view.WorkRemaining = TimeSpan.Zero)
+                                            || (phase = Cleanup && not view.TotalExpired && view.TotalRemaining = TimeSpan.Zero) ->
+                                            // A positive clock remainder can floor below one TimeSpan tick.
+                                            // Cooperatively reobserve this original clock/budget; it is
+                                            // neither terminal settlement nor a renewed time allowance.
+                                            Some TimeSpan.Zero
+                                        | Error _ -> remember "observation-budget-refused"; None
                                 | Error _ -> remember "observation-clock-refused"; None
                             | Error _ -> None)
                     match delay with
                     | Some duration when duration > TimeSpan.Zero -> do! Task.Delay duration
-                    | _ -> observing <- false
+                    | Some _ -> do! Task.Yield()
+                    | None -> observing <- false
                 return lock gate (fun () ->
                     refreshCleanup()
                     apply ReturnRequested |> ignore
@@ -473,52 +552,85 @@ module ProcessSessions =
                             | _ -> ReleaseRefused(note "original-time-expired")
                         | Error _ -> ReleaseRefused(note "clock-observation-failed"))
 
-    let private createFactoryWithAction retirement (retire: Process -> bool -> unit) =
+        interface ITextProcessSession with
+            member _.Identity = identity
+            member _.Owner = owner
+            member this.RunAsync cancellation =
+                task {
+                    let! _ = (this :> IProcessSession).RunAsync cancellation
+                    return lock gate textSnapshot }
+            member this.ObserveAsync cancellation =
+                // Observe and text-copy remain atomic relative to the same pumps.
+                lock gate (fun () ->
+                    (this :> IProcessSession).ObserveAsync(cancellation).GetAwaiter().GetResult() |> ignore
+                    Task.FromResult(textSnapshot()))
+            member this.RequestStopAsync(reason,cancellation) = (this :> IProcessSession).RequestStopAsync(reason,cancellation)
+            member this.TryRelease() = (this :> IProcessSession).TryRelease()
+
+    let private prepareSession retirement (retire: Process -> bool -> unit) (textBounds: TextCaptureBounds option) (command: CommandSpec,identity: OperationIdentity,budget: ExecutionBudget,clock: IMonotonicClock,owner: OwnerReference) =
+        try
+            let policyErrors =
+                [ if obj.ReferenceEquals(retirement,null) then error "invalid-retirement-policy" "retirement"
+                  if obj.ReferenceEquals(retire,null) then error "invalid-retirement-action" "retirement" ]
+            let requestErrors = policyErrors @ Validation.command command @ Validation.identity identity
+            if not requestErrors.IsEmpty then Error requestErrors
+            else
+                let unsupported =
+                    command.Capabilities |> List.choose (fun requirement ->
+                        if requirement.Required && requirement.Capability <> BoundedReturnWithRetainedCustody then Some(error "unsupported-capability" "capabilities") else None)
+                let resources = command.Resources
+                let resourceErrors =
+                    [ if resources.MemoryBytes.IsSome then error "unsupported-resource" "resources.memory"
+                      if resources.CpuQuota.IsSome then error "unsupported-resource" "resources.cpuQuota"
+                      if resources.CpuAffinity.IsSome then error "unsupported-resource" "resources.cpuAffinity"
+                      if resources.MaxKernelTasks.IsSome then error "unsupported-resource" "resources.kernelTasks"
+                      if resources.MaxOwnedProcesses.IsSome then error "unsupported-resource" "resources.ownedProcesses"
+                      if resources.MaxClrProcesses.IsSome then error "unsupported-resource" "resources.clrProcesses" ]
+                let ownerErrors =
+                    Validation.cleanup
+                        { Disposition = Incomplete; RequestedActions = []; LeaderTermination = Unknown(note "unstarted")
+                          WorkloadEmpty = Unknown(note "unsupported"); OwnedChildrenReaped = Unknown(note "unsupported")
+                          LocalTasks = Unknown(note "unstarted"); Unresolved = []; OmittedUnresolved = 0L; Custody = RetainedByOwner owner }
+                let preparedAt,clockErrors =
+                    try
+                        let at = clock.Now()
+                        match Budget.remaining at budget with
+                        | Ok view when not view.WorkExpired -> Some at,[]
+                        | _ -> None,[error "invalid-live-budget" "budget"]
+                    with _ -> None,[error "invalid-live-clock" "clock"]
+                let errors = ownerErrors @ unsupported @ resourceErrors @ clockErrors
+                             @ (if OperatingSystem.IsLinux() then [] else [error "unsupported-platform" "platform"])
+                if not errors.IsEmpty then Error errors
+                else
+                    // Copy caller-owned input before retaining it; all other request collections
+                    // are immutable validated F# values, and capture allocates only after refusal.
+                    let copied = { command with Input = match command.Input with Closed -> Closed | Bytes bytes -> Bytes(ReadOnlyMemory<byte>(bytes.ToArray())) }
+                    match Lifecycle.prepare copied identity budget,BoundedOutput.create copied.Capture,preparedAt with
+                    | Ok initial,Ok sink,Some at ->
+                        let text = textBounds |> Option.map (fun bounds -> bounds,BoundedText.CaptureState(bounds,sink))
+                        Ok(Session(copied,identity,budget,clock,owner,at,initial,sink,text,retirement,retire))
+                    | Error errors,_,_ | _,Error errors,_ -> Error errors
+                    | _,_,None -> Error [error "invalid-live-clock" "clock"]
+        with
+        | :? ArgumentException | :? NullReferenceException | :? OverflowException -> Error [error "invalid-request" "request.structure"]
+
+    let private createFactoryWithAction retirement retire =
         { new IProcessSessionFactory with
             member _.Prepare(command,identity,budget,clock,owner) =
+                prepareSession retirement retire None (command,identity,budget,clock,owner)
+                |> Result.map (fun session -> session :> IProcessSession) }
+
+    let private createTextFactoryWithAction retirement retire =
+        { new ITextProcessSessionFactory with
+            member _.Prepare(command,identity,budget,clock,owner) =
                 try
-                    let policyErrors =
-                        [ if obj.ReferenceEquals(retirement,null) then error "invalid-retirement-policy" "retirement"
-                          if obj.ReferenceEquals(retire,null) then error "invalid-retirement-action" "retirement" ]
-                    let requestErrors = policyErrors @ Validation.command command @ Validation.identity identity
-                    if not requestErrors.IsEmpty then Error requestErrors
-                    else
-                        let unsupported =
-                            command.Capabilities |> List.choose (fun requirement ->
-                                if requirement.Required && requirement.Capability <> BoundedReturnWithRetainedCustody then Some(error "unsupported-capability" "capabilities") else None)
-                        let resources = command.Resources
-                        let resourceErrors =
-                            [ if resources.MemoryBytes.IsSome then error "unsupported-resource" "resources.memory"
-                              if resources.CpuQuota.IsSome then error "unsupported-resource" "resources.cpuQuota"
-                              if resources.CpuAffinity.IsSome then error "unsupported-resource" "resources.cpuAffinity"
-                              if resources.MaxKernelTasks.IsSome then error "unsupported-resource" "resources.kernelTasks"
-                              if resources.MaxOwnedProcesses.IsSome then error "unsupported-resource" "resources.ownedProcesses"
-                              if resources.MaxClrProcesses.IsSome then error "unsupported-resource" "resources.clrProcesses" ]
-                        let ownerErrors =
-                            Validation.cleanup
-                                { Disposition = Incomplete; RequestedActions = []; LeaderTermination = Unknown(note "unstarted")
-                                  WorkloadEmpty = Unknown(note "unsupported"); OwnedChildrenReaped = Unknown(note "unsupported")
-                                  LocalTasks = Unknown(note "unstarted"); Unresolved = []; OmittedUnresolved = 0L; Custody = RetainedByOwner owner }
-                        let preparedAt,clockErrors =
-                            try
-                                let at = clock.Now()
-                                match Budget.remaining at budget with
-                                | Ok view when not view.WorkExpired -> Some at,[]
-                                | _ -> None,[error "invalid-live-budget" "budget"]
-                            with _ -> None,[error "invalid-live-clock" "clock"]
-                        let errors = ownerErrors @ unsupported @ resourceErrors @ clockErrors
-                                     @ (if OperatingSystem.IsLinux() then [] else [error "unsupported-platform" "platform"])
-                        if not errors.IsEmpty then Error errors
-                        else
-                            // Copy caller-owned input before retaining it; all other request collections
-                            // are immutable validated F# values, and capture allocates only after refusal.
-                            let copied = { command with Input = match command.Input with Closed -> Closed | Bytes bytes -> Bytes(ReadOnlyMemory<byte>(bytes.ToArray())) }
-                            match Lifecycle.prepare copied identity budget,BoundedOutput.create copied.Capture,preparedAt with
-                            | Ok initial,Ok sink,Some at -> Ok(Session(copied,identity,budget,clock,owner,at,initial,sink,retirement,retire) :> IProcessSession)
-                            | Error errors,_,_ | _,Error errors,_ -> Error errors
-                            | _,_,None -> Error [error "invalid-live-clock" "clock"]
-                with
-                | :? ArgumentException | :? NullReferenceException | :? OverflowException -> Error [error "invalid-request" "request.structure"] }
+                    match Validation.textCommand command with
+                    | Error errors -> Error errors
+                    | Ok(request,bounds) ->
+                        prepareSession retirement retire (Some bounds) (request,identity,budget,clock,owner)
+                        |> Result.map (fun session -> session :> ITextProcessSession)
+                with :? ArgumentException | :? NullReferenceException | :? OverflowException ->
+                    Error [error "invalid-request" "request.structure"] }
 
     let private bclRetire (target: Process) tree =
         if tree then target.Kill(true) else target.Kill()
@@ -528,3 +640,7 @@ module ProcessSessions =
     let createFactoryWithRetirement retirement = createFactoryWithAction retirement bclRetire
 
     let createFactory () = createFactoryWithRetirement RetirementPolicy.DirectChild
+
+    let createTextFactoryWithRetirement retirement = createTextFactoryWithAction retirement bclRetire
+
+    let createTextFactory () = createTextFactoryWithRetirement RetirementPolicy.DirectChild

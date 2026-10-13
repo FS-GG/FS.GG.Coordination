@@ -681,3 +681,36 @@ module ContractTests =
             Assert.Equal(projected.OmittedFailures,result.OmittedFailures)
             Assert.Equal((sink.Snapshot()).ChargedTotal,result.ChargedTotalBytes)
             Assert.True(Lifecycle.metadataBytes state <= int64 Validation.limits.ResultMetadataBytes)
+
+    [<Fact>]
+    let ``text capture derives finite bounds without widening raw default allocation`` () =
+        let policy = { MaximumDecodedUtf8Bytes = 400000L; TerminalReserveBytes = 2048 }
+        let bounds = Validation.textCapture policy |> ok
+        Assert.Equal(1610254L,bounds.MaximumRawTransportBytes)
+        Assert.Equal(32768L,bounds.PreparedCaptureBytes)
+        Assert.True(bounds.RetainedCaptureBytes > 800000L)
+        Assert.True(bounds.ObservationCopyBytes < 40000L)
+        Assert.True(Validation.capture { capture with StdoutPrefixBytes = 256 * 1024 + 1 } |> List.isEmpty |> not)
+        for invalid in [ 0L; -1L; Int64.MaxValue ] do
+            Assert.True(Validation.textCapture { policy with MaximumDecodedUtf8Bytes = invalid } |> Result.isError)
+        for reserve in [ -1; 0; 2047; Int32.MaxValue ] do
+            Assert.True(Validation.textCapture { policy with TerminalReserveBytes = reserve } |> Result.isError)
+        let largestCallerInt = Validation.textCapture { policy with MaximumDecodedUtf8Bytes = int64 Int32.MaxValue } |> ok
+        Assert.Equal(32768L,largestCallerInt.PreparedCaptureBytes)
+
+    [<Fact>]
+    let ``transport-only zero byte retention is explicit omission without a sink failure`` () =
+        let textRequest: TextCommandSpec =
+            { Executable = command.Executable; Arguments = command.Arguments; WorkingDirectory = command.WorkingDirectory
+              Environment = command.Environment; Input = command.Input; Capabilities = command.Capabilities; Resources = command.Resources
+              TextCapture = { MaximumDecodedUtf8Bytes = 400000L; TerminalReserveBytes = 2048 } }
+        let request,_ = Validation.textCommand textRequest |> ok
+        let sink = BoundedOutput.create request.Capture |> ok
+        Assert.Equal(Accepted,sink.Append(Stdout,memory (Array.create 1024 65uy)))
+        let observation = sink.Snapshot()
+        Assert.Empty(Validation.output request.Capture observation)
+        Assert.Equal(1024L,observation.Stdout.Totals.Omitted)
+        Assert.Equal(0L,observation.Stdout.Totals.Retained)
+        let lifecycle = Lifecycle.prepare request identity budget |> ok |> apply (OutputObserved observation)
+        Assert.True((Lifecycle.snapshot lifecycle).FirstFailure.IsNone)
+        Assert.Equal(NotRequested,(Lifecycle.snapshot lifecycle).Stop)
