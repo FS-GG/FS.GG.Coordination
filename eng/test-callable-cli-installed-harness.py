@@ -454,6 +454,9 @@ class PairMetadataReader:
             raise RuntimeError("unselected metadata origin")
         if authenticated and not url.startswith("https://api.github.com/"):
             raise RuntimeError("credential origin refused")
+        # This transport owns only its own watchdog. Never replace a caller's active budget.
+        if any(value > 0 for value in signal.getitimer(signal.ITIMER_REAL)):
+            raise PairObservationBound("active caller watchdog prevents metadata acquisition")
         self.count += 1
         headers = {"Accept": "application/vnd.github+json", "User-Agent": "coordination-pair-preflight"}
         if authenticated:

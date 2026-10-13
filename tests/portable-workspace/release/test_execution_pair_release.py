@@ -10,6 +10,8 @@ import os
 from pathlib import Path
 import re
 import runpy
+import signal
+import time
 import subprocess
 import tempfile
 import zipfile
@@ -224,6 +226,36 @@ def pair_observation_controls():
         except (RuntimeError,ValueError,OSError):refused=True
         assert refused==(mode not in ('good','denied','redirect')),mode
         if not refused:assert status==({'denied':403,'redirect':302}.get(mode,200)) and (data=={} if mode=='good' else data is None)
+    # A real pre-existing caller watchdog must survive refusal without even one GET.
+    assert signal.getitimer(signal.ITIMER_REAL)==(0.0,0.0)
+    caller_handler=lambda signum,frame: None
+    previous_handler=signal.signal(signal.SIGALRM,caller_handler)
+    signal.setitimer(signal.ITIMER_REAL,10,3)
+    try:
+        before=signal.getitimer(signal.ITIMER_REAL);started=time.monotonic()
+        reader=reader_class();calls=[]
+        def forbidden_get(*args,**kwargs):
+            calls.append(args)
+            raise AssertionError('GET must not start with an active caller watchdog')
+        reader.opener.open=forbidden_get
+        with tempfile.TemporaryDirectory(prefix='pair-caller-watchdog-') as temporary:
+            out=Path(temporary)/'observation.json'
+            with patch.object(signal,'setitimer',wraps=signal.setitimer) as mutate_timer, patch.object(signal,'signal',wraps=signal.signal) as mutate_handler:
+                assert observe(out,read=reader,environment=env)==1
+                mutate_timer.assert_not_called();mutate_handler.assert_not_called()
+            report=json.loads(out.read_bytes())
+        after=signal.getitimer(signal.ITIMER_REAL)
+        assert not calls and reader.count==0
+        assert signal.getsignal(signal.SIGALRM) is caller_handler
+        assert after[1]==before[1]==3 and 0<after[0]<=before[0]
+        assert abs((before[0]-after[0])-(time.monotonic()-started))<0.1
+        assert report['firstFailure']=={'name':'main-before','state':'budget-limited',
+                                      'reason':'active caller watchdog prevents metadata acquisition'}
+        assert all(row['state']=='budget-limited' for row in report['observations'][1:-1])
+        assert report['collectionComplete'] is False and report['publicationEligible'] is False
+    finally:
+        signal.setitimer(signal.ITIMER_REAL,0)
+        signal.signal(signal.SIGALRM,previous_handler)
     workflow=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
     text=workflow.split('  execution_pair_preflight:\n',1)[1].split('  execution_pair:\n',1)[0]
     permissions=text.split('    permissions:\n',1)[1].split('    steps:\n',1)[0]
@@ -246,7 +278,7 @@ def pair_observation_controls():
             assert active==(['execution_pair'] if not cli and not readback else []),flags
     a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes())
     assert a['enabled'] is False and a['operation'] is None and a['namespaceEntitlement'] is None
-    print('PAIR_OBSERVATION_INERT_CONTROLS passed cases='+str(len(modes))+' transport=10 selectors=16 read-only/no-eligibility')
+    print('PAIR_OBSERVATION_INERT_CONTROLS passed cases='+str(len(modes))+' transport=11 selectors=16 read-only/no-eligibility')
 
 def main():
     pair_observation_controls()
