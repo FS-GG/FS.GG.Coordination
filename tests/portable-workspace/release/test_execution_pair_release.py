@@ -639,7 +639,7 @@ def consumer_source_only_controls():
     check(sdd,'sdd-s1');check(sdd,'sdd-rollback');check(sdd,'other',refuse=True)
     assert 'repos/FS-GG/FsQuint/actions/' not in prepare
     assert 'fsquint-original/candidate.zip' not in prepare
-    public_shell=prepare.split('          export PUBLIC_ROLLBACK_START=',1)[1].split("          python3 - <<'PY_FSQUINT_PUBLIC'",1)[0]
+    public_shell=prepare.split('          PUBLIC_ROLLBACK_START=',1)[1].split("          python3 - <<'PY_FSQUINT_PUBLIC'",1)[0]
     assert 'env -u GH_TOKEN -u GITHUB_TOKEN curl --disable' in public_shell
     assert '--location' not in public_shell and '--header' not in public_shell and '--retry' not in public_shell
     assert 'https://api.nuget.org/v3-flatcontainer/$id/0.1.0/$id.0.1.0.nupkg' in public_shell
@@ -777,16 +777,43 @@ def consumer_source_only_controls():
     check(scope['consumer_fsquint'],log.replace(b'PASS batch stdin is closed',b'absent batch stdin is closed'),True,refuse=True)
     check(scope['consumer_fsquint'],log+b'FAIL later\n',True,refuse=True)
     check(scope['consumer_fsquint'],b'0 checks passed\n',True,refuse=True)
+    clock_lines=[line[10:] for line in prepare.splitlines() if line.startswith('          PUBLIC_ROLLBACK_START=') or line=='          export PUBLIC_ROLLBACK_START']
+    assert len(clock_lines)==2 and clock_lines[1]=='export PUBLIC_ROLLBACK_START'
+    assert 'export PUBLIC_ROLLBACK_START=' not in prepare
+    for fails in (False,True):
+        with tempfile.TemporaryDirectory(prefix='proc6-clock-binding-test-') as temporary:
+            root=Path(temporary);stub=root/'python3'
+            stub.write_text('#!/usr/bin/python3\nimport os,sys\nif os.environ["FIXTURE_CLOCK_FAIL"]=="1":sys.exit(7)\nprint("123.5")\n')
+            stub.chmod(0o700)
+            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_CLOCK_FAIL':'1' if fails else '0'}
+            script='set -euo pipefail\n'+'\n'.join(clock_lines)+'\nprintf "clock=%s\n" "$PUBLIC_ROLLBACK_START"\n'
+            result=subprocess.run(['bash','-c',script],env=env,capture_output=True,timeout=5)
+            assert result.returncode==(7 if fails else 0) and result.stdout==(b'' if fails else b'clock=123.5\n')
+            count+=1
     jobs=('sdd_s1','fsquint_s1','sdd_rollback','fsquint_rollback');bodies=[]
     for key in jobs:
         body=prepare.split('  execution_pair_'+key+':\n',1)[1].split('\n  execution_pair_',1)[0]
         assert 'needs: execution_pair_installed' in body and "needs.execution_pair_installed.result == 'success'" in body
         assert 'runs-on: ubuntu-24.04' in body and 'timeout-minutes: 15' in body
         assert '      contents: read\n      actions: read\n' in body
+        assert 'DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet' not in body
+        sdk_bind=body.split('      - name: Bind private SDK installation below runner temp\n',1)[1].split('      - name:',1)[0]
+        assert body.index('Bind private SDK installation below runner temp')<body.index('Bind receiver identity and cold input roots')<body.index('uses: actions/setup-dotnet@')
+        assert 'printf \'DOTNET_INSTALL_DIR=%s/proc6-dotnet\\n\' "$RUNNER_TEMP" >> "$GITHUB_ENV"' in sdk_bind
+        sdk_script=sdk_bind.split('        run: |\n',1)[1]
+        sdk_script='\n'.join(line[10:] for line in sdk_script.splitlines())
+        for missing in (False,True):
+            with tempfile.TemporaryDirectory(prefix='proc6-sdk-binding-test-') as temporary:
+                root=Path(temporary);envfile=root/'env';runner=root/'runner temp';runner.mkdir()
+                env={**os.environ,'RUNNER_TEMP':'' if missing else str(runner),'GITHUB_ENV':str(envfile)}
+                result=subprocess.run(['bash','-c',sdk_script],env=env,capture_output=True,timeout=5)
+                assert (result.returncode==0)==(not missing)
+                assert envfile.exists()==(not missing)
+                if not missing:assert envfile.read_text()=='DOTNET_INSTALL_DIR='+str(runner)+'/proc6-dotnet\n'
+                count+=1
         assert 'persist-credentials: false' in body and 'fetch-depth: 1' in body
         assert 'artifact-ids: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}' in body
         assert '-p:DisableImplicitLibraryPacksFolder=true' in body
-        assert 'DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet' in body
         assert '"${remaining}s" "$DOTNET_HOST_PATH"' in body
         assert "'hostBytesObservedOnly':True" in body and "'hostMatchesHistoricalProfileClaim':False" in body
         signature_step=body.split('      - name: Verify both fresh public rollback signatures before any restore',1)[1].split('      - name:',1)[0]

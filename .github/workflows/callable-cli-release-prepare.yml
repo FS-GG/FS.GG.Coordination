@@ -617,7 +617,8 @@ jobs:
           mkdir "$CANDIDATE_OUTPUT/original-a"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair-artifact "$old/candidate-bindings.json" "$old" "$CANDIDATE_OUTPUT/original-a"
           # Public signed bytes are fresh inputs; the original ZIP remains historical custody.
-          export PUBLIC_ROLLBACK_START=$(python3 -c 'import time;print(time.monotonic())')
+          PUBLIC_ROLLBACK_START=$(python3 -c 'import time;print(time.monotonic())')
+          export PUBLIC_ROLLBACK_START
           old="$READBACK_OUTPUT/fsquint-original"
           for id in fsquint fsquint.tooling; do
             case "$id" in fsquint) size=80175;; fsquint.tooling) size=40444;; *) exit 1;; esac
@@ -721,7 +722,6 @@ jobs:
       DOTNET_NOLOGO: 1
       DOTNET_PROCESSOR_COUNT: 4
       DOTNET_ROLL_FORWARD: Disable
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet
       CONSUMER_CASE: sdd-s1
       RECEIVER_REPOSITORY: FS-GG/FS.GG.SDD
       RECEIVER_SOURCE: ${{ needs.execution_pair_installed.outputs.sdd_source }}
@@ -730,6 +730,12 @@ jobs:
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
+      - name: Bind private SDK installation below runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_TEMP"
+          printf 'DOTNET_INSTALL_DIR=%s/proc6-dotnet\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Authenticate current-run successful acquisition artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -1374,7 +1380,6 @@ jobs:
       DOTNET_NOLOGO: 1
       DOTNET_PROCESSOR_COUNT: 4
       DOTNET_ROLL_FORWARD: Disable
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet
       CONSUMER_CASE: fsquint-s1
       RECEIVER_REPOSITORY: FS-GG/FsQuint
       RECEIVER_SOURCE: ${{ needs.execution_pair_installed.outputs.fsquint_source }}
@@ -1383,6 +1388,12 @@ jobs:
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
+      - name: Bind private SDK installation below runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_TEMP"
+          printf 'DOTNET_INSTALL_DIR=%s/proc6-dotnet\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Authenticate current-run successful acquisition artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -2027,7 +2038,6 @@ jobs:
       DOTNET_NOLOGO: 1
       DOTNET_PROCESSOR_COUNT: 4
       DOTNET_ROLL_FORWARD: Disable
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet
       CONSUMER_CASE: sdd-rollback
       RECEIVER_REPOSITORY: FS-GG/FS.GG.SDD
       RECEIVER_SOURCE: c246d2cf12eeb04d6894bab7528c7929bb87a762
@@ -2036,6 +2046,12 @@ jobs:
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
+      - name: Bind private SDK installation below runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_TEMP"
+          printf 'DOTNET_INSTALL_DIR=%s/proc6-dotnet\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Authenticate current-run successful acquisition artifact
         env:
           GH_TOKEN: ${{ github.token }}
@@ -2680,7 +2696,6 @@ jobs:
       DOTNET_NOLOGO: 1
       DOTNET_PROCESSOR_COUNT: 4
       DOTNET_ROLL_FORWARD: Disable
-      DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet
       CONSUMER_CASE: fsquint-rollback
       RECEIVER_REPOSITORY: FS-GG/FsQuint
       RECEIVER_SOURCE: 34eeca981c136144ced73a3f98b5ce04218e89c7
@@ -2689,6 +2704,12 @@ jobs:
       ARCHIVE_SHA: ${{ inputs.candidate_archive_sha256 }}
       PROOF_ARTIFACT_ID: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}
     steps:
+      - name: Bind private SDK installation below runner temp
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -n "$RUNNER_TEMP"
+          printf 'DOTNET_INSTALL_DIR=%s/proc6-dotnet\n' "$RUNNER_TEMP" >> "$GITHUB_ENV"
       - name: Authenticate current-run successful acquisition artifact
         env:
           GH_TOKEN: ${{ github.token }}
