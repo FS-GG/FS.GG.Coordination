@@ -372,6 +372,7 @@ def installed_version_preflight_controls():
             assert refused and not (root/'PairInstalled.fsproj').exists()
 
 def main():
+    consumer_source_only_controls()
     pair_observation_controls()
     installed_version_preflight_controls()
     for version in ("0.2.0","0.3.0"):
@@ -462,6 +463,7 @@ if args[0]=='diff':print('src/FS.GG.Execution.Processes/ProcessSessions.fs' if o
 """)
             stub.chmod(0o700)
             env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_MODE':mode,
+                 'MODE':'execution-pair-installed',
                  'GITHUB_REF':'refs/heads/main','GITHUB_RUN_ATTEMPT':'1','GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination','GITHUB_SHA':'9'*40,
                  'EXECUTOR_SOURCE':'8'*40 if mode=='moved-executor' else '9'*40,
                  'SOURCE_A':'z'*40 if mode=='bad-source' else 'a'*40,'CANDIDATE_RUN':'true' if mode=='bad-run' else '1',
@@ -579,5 +581,259 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
     print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=20 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=8 installed-source=9 publisher-source=5 isolation-and-byte-joins=48 version-preflight=11 selectors=exclusive')
+
+def consumer_source_only_controls():
+    """Exercise workflow predicates with inert records; never run a job or SDK."""
+    import ast
+    import stat
+    import xml.etree.ElementTree as E
+    prepare=(ROOT/'.github/workflows/callable-cli-release-prepare.yml').read_text()
+    scope={'json':json,'re':re,'stat':stat,'pathlib':__import__('pathlib'),'E':E,'hashlib':__import__('hashlib')}
+    markers=('PY_CONSUMER_SIGNATURE','PY_CONSUMER_DOTNET','PY_CONSUMER_EXECUTOR_PATHS','PY_CONSUMER_SELECTION','PY_CONSUMER_TRANSFER','PY_CONSUMER_PAYLOAD','PY_CONSUMER_INPUT_CLOSURE','PY_CONSUMER_RESULTS')
+    for marker in markers:
+        body=prepare.split("          python3 - <<'"+marker+"'\n",1)[1].split('          '+marker+'\n',1)[0]
+        module=ast.parse('\n'.join(line[10:] for line in body.splitlines()))
+        # Only the actual pure predicates are evaluated, never their job bodies.
+        definitions=[node for node in module.body if isinstance(node,ast.FunctionDef) and node.name!='original_pair']
+        exec(compile(ast.Module(body=definitions,type_ignores=[]),marker,'exec'),scope)
+    count=0
+    def check(fn,*args,refuse=False):
+        nonlocal count
+        rejected=False
+        try:fn(*args)
+        except (ValueError,TypeError,KeyError,AttributeError):rejected=True
+        assert rejected==refuse,(getattr(fn,'__name__',str(fn)),refuse,args)
+        count+=1
+    # Original receipt bytes are historical data, not a synthesized authority record.
+    import base64
+    public_body=prepare.split("          python3 - <<'PY_FSQUINT_PUBLIC'\n",1)[1].split('          PY_FSQUINT_PUBLIC\n',1)[0]
+    public_ast=ast.parse('\n'.join(line[10:] for line in public_body.splitlines()))
+    literal=next(n.value.args[0].value for n in public_ast.body if isinstance(n,ast.Assign) and any(isinstance(v,ast.Name) and v.id=='raw' for v in n.targets))
+    historical=base64.b64decode(literal,validate=True)
+    receipt_fn=scope['consumer_historical_receipt'];check(receipt_fn,historical)
+    check(receipt_fn,historical+b' ',refuse=True);check(receipt_fn,historical[:-1],refuse=True)
+    receipt=json.loads(historical)
+    raw_fn=scope['consumer_public_raw'];members_fn=scope['consumer_public_members'];maps_fn=scope['consumer_public_payloads']
+    for id,size,digest,dll,n in scope['consumer_public_specs']():
+        check(raw_fn,size,digest,id)
+        check(raw_fn,size,receipt[id+':github']['archiveSha256'],id,refuse=True)
+        check(raw_fn,size+1,digest,id,refuse=True)
+        expected=receipt[id+':nuget']['payloads'];assert len(expected)==n
+        rows=[(name,100,stat.S_IFREG) for name in expected]+[('.signature.p7s',100,stat.S_IFREG)]
+        check(members_fn,rows,expected);check(maps_fn,dict(expected),expected)
+        for name in expected:
+            changed=dict(expected);changed[name]='0'*64;check(maps_fn,changed,expected,refuse=True)
+        check(maps_fn,{**expected,'extra':'a'*64},expected,refuse=True)
+        check(maps_fn,dict(list(expected.items())[1:]),expected,refuse=True)
+        for changed in (rows[:-1],rows+rows[-1:],rows+[('extra',1,stat.S_IFREG)],rows[:-1]+[('nested/.signature.p7s',100,stat.S_IFREG)],[(rows[0][0],2097153,stat.S_IFREG)]+rows[1:],[(rows[0][0],1,stat.S_IFLNK)]+rows[1:]):check(members_fn,changed,expected,refuse=True)
+        for unsafe in ('/abs','../up','a/./b','a//b','C:/file','a\\b'):
+            check(members_fn,[(unsafe,1,stat.S_IFREG),('.signature.p7s',1,stat.S_IFREG)],{unsafe:'a'*64},refuse=True)
+        deps='<dependency id="FSharp.Core" version="10.1.302" exclude="Build,Analyzers" />'
+        if id=='FsQuint.Tooling':deps='<dependency id="FsQuint" version="0.1.0" exclude="Build,Analyzers" />'+deps
+        nuspec=('<package><metadata><id>'+id+'</id><version>0.1.0</version><repository type="git" url="https://github.com/FS-GG/FsQuint" commit="34eeca981c136144ced73a3f98b5ce04218e89c7" /><dependencies><group>'+deps+'</group></dependencies></metadata></package>').encode()
+        check(scope['consumer_public_nuspec'],nuspec,id)
+        for old,new in ((b'0.1.0',b'0.2.0'),(b'34eeca981',b'000000000'),(b'10.1.302',b'10.1.401'),(b'FS-GG/FsQuint',b'other/FsQuint')):check(scope['consumer_public_nuspec'],nuspec.replace(old,new),id,refuse=True)
+    signature=scope['consumer_signature_result'];check(signature,0,42)
+    for code,size in ((1,42),(124,42),(0,0),(0,65537),(None,42),(True,42)):check(signature,code,size,refuse=True)
+    sdd=scope['consumer_sdd_expected'];assert sdd('sdd-s1')==(18,8,17,27,1) and sdd('sdd-rollback')==(13,8,17,27,1)
+    check(sdd,'sdd-s1');check(sdd,'sdd-rollback');check(sdd,'other',refuse=True)
+    assert 'repos/FS-GG/FsQuint/actions/' not in prepare
+    assert 'fsquint-original/candidate.zip' not in prepare
+    public_shell=prepare.split('          PUBLIC_ROLLBACK_START=',1)[1].split("          python3 - <<'PY_FSQUINT_PUBLIC'",1)[0]
+    assert 'env -u GH_TOKEN -u GITHUB_TOKEN curl --disable' in public_shell
+    assert '--location' not in public_shell and '--header' not in public_shell and '--retry' not in public_shell
+    assert 'https://api.nuget.org/v3-flatcontainer/$id/0.1.0/$id.0.1.0.nupkg' in public_shell
+    assert '--max-filesize "$size"' in public_shell and '--max-time "$remaining"' in public_shell
+    # Signed raw identity and normalized NuGet identity are distinct domains.
+    normalized='S1dCVHdcLRdXmZnjCOk+nJLhjO3acz705bEeQm2cBrwxiEsDpVj7PD8tECcKo/Bzpbw5ZOI4bLMWdlqSkISsbg=='
+    observed='A'*86+'=='
+    expected_cache={'version':'0.1.0','packageBytes':80175,'packageSha256':'e170d70a683321818944d86bb9c9e087323e01391738b3b4a621892ef91a2a8a','contentHash':normalized}
+    cache=scope['consumer_cache_identity'];lock_entry=scope['consumer_lock_entry'];asset_hash=scope['consumer_asset_hash']
+    check(cache,80175,expected_cache['packageSha256'],normalized,observed,expected_cache)
+    for size,digest,meta,observed_value in ((80174,expected_cache['packageSha256'],normalized,observed),(80175,'0'*64,normalized,observed),(80175,expected_cache['packageSha256'],observed,observed),(80175,expected_cache['packageSha256'],None,observed),(80175,expected_cache['packageSha256'],normalized,'')):
+        check(cache,size,digest,meta,observed_value,expected_cache,refuse=True)
+    direct={'type':'Direct','requested':'[0.1.0, 0.1.0]','resolved':'0.1.0','contentHash':normalized}
+    check(lock_entry,direct,expected_cache)
+    check(lock_entry,{'type':'Transitive','resolved':'0.1.0','contentHash':normalized},expected_cache)
+    for changed in ({**direct,'type':'Project'},{**direct,'resolved':'0.2.0'},{**direct,'contentHash':observed},{**direct,'requested':'[0.1.0, )'},{k:v for k,v in direct.items() if k!='contentHash'}):check(lock_entry,changed,expected_cache,refuse=True)
+    check(asset_hash,{'type':'package','sha512':normalized},expected_cache)
+    for changed in ({'type':'project','sha512':normalized},{'type':'package','sha512':observed},{'type':'package'}):check(asset_hash,changed,expected_cache,refuse=True)
+    selectors={k:str(i+1)*40 for i,k in enumerate(('sdd_source','sdd_tree','fsquint_source','fsquint_tree'))}
+    select=scope['consumer_selection']
+    check(select,'execution-pair-consumers',json.dumps(selectors))
+    check(select,'execution-pair-installed','')
+    for raw in ('', '{}','[]',json.dumps({**selectors,'extra':'a'*40}),json.dumps({**selectors,'sdd_source':'main'}),json.dumps({**selectors,'sdd_source':'0'*40}),json.dumps({**selectors,'sdd_tree':True}),json.dumps(selectors)[:-1]+',"sdd_source":"'+'a'*40+'"}'):
+        check(select,'execution-pair-consumers',raw,refuse=True)
+    check(select,'execution-pair-installed',json.dumps(selectors),refuse=True)
+    check(select,'portable',json.dumps(selectors),refuse=True)
+    paths=scope['consumer_executor_paths']
+    three=('.github/workflows/callable-cli-release-prepare.yml','tests/portable-workspace/release/test_execution_pair_release.py','evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json')
+    five=three+('.github/workflows/callable-cli-release-publish.yml','eng/test-callable-cli-installed-harness.py')
+    check(paths,'execution-pair-consumers','\n'.join(three))
+    check(paths,'execution-pair-consumers','')
+    for path in three:check(paths,'execution-pair-consumers',path)
+    for path in five[3:]+('src/FS.GG.Execution.Processes/Process.fs','../eng/test-callable-cli-installed-harness.py'):
+        check(paths,'execution-pair-consumers','\n'.join(three+(path,)),refuse=True)
+    for path in five:check(paths,'execution-pair-installed',path)
+    check(paths,'portable','\n'.join(three),refuse=True)
+    check(paths,'execution-pair-consumers','x'*16385,refuse=True)
+    installed=prepare.split('  execution_pair_installed:\n',1)[1].split('  execution_pair_sdd_s1:\n',1)[0]
+    legacy=installed.split('            case "$path" in\n',1)[1].split(') ;;',1)[0].strip()
+    assert set(legacy.split('|'))==set(five),'installed-only original five-path population drift'
+    assert installed.index('PY_CONSUMER_EXECUTOR_PATHS')<installed.index('            case "$path" in')
+    assert '          MODE: ${{ inputs.preparation_mode }}' in installed
+    count+=3
+    transfer={'id':7,'expired':False,'name':'execution-pair-installed-'+'a'*40+'-8','size_in_bytes':100,'workflow_run':{'id':8,'head_sha':'b'*40,'repository_id':1346720714,'head_repository_id':1346720714}}
+    check(scope['consumer_transfer'],transfer,'7','8','b'*40,'a'*40)
+    for field,value in [('id',True),('id',9),('expired',True),('name','other'),('size_in_bytes',0),('size_in_bytes',True),('size_in_bytes',67108865)]:
+        row=copy.deepcopy(transfer);row[field]=value
+        check(scope['consumer_transfer'],row,'7','8','b'*40,'a'*40,refuse=True)
+    for field,value in [('id',9),('head_sha','c'*40),('repository_id',1),('head_repository_id',1)]:
+        row=copy.deepcopy(transfer);row['workflow_run'][field]=value
+        check(scope['consumer_transfer'],row,'7','8','b'*40,'a'*40,refuse=True)
+    member=scope['consumer_members'];expected={'a':4,'b':4}
+    check(member,[('a',4,stat.S_IFREG),('b',1,0)],expected)
+    for rows in ([('a',4,0)],[('a',1,0),('a',1,0)],[('a',5,0),('b',1,0)],[('a',0,0),('b',1,0)],[('a',1,stat.S_IFLNK),('b',1,0)],[('../a',1,0),('b',1,0)]):check(member,rows,expected,refuse=True)
+    manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair','version':'0.3.0','tag':'execution/v0.3.0','sourceCommit':'a'*40,'sourceTree':'b'*40,'publicationAuthorized':False,'tagAuthorized':False,'ownership':{'reservation':'unreserved'},'packages':[{'packageId':id,'file':id+'.0.3.0.nupkg','bytes':1,'sha256':'c'*64,'assemblySha256':'d'*64} for id in IDS]}
+    check(scope['consumer_manifest'],manifest,'0.3.0','a'*40)
+    for field,value in [('version','0.2.0'),('sourceCommit','e'*40),('tag','v0.3.0'),('publicationAuthorized',True),('tagAuthorized',True),('sourceTree','main'),('packages',manifest['packages'][:1]),('ownership',{'reservation':'reserved'})]:
+        row=copy.deepcopy(manifest);row[field]=value
+        check(scope['consumer_manifest'],row,'0.3.0','a'*40,refuse=True)
+    for field,value in [('bytes',True),('bytes',16777217),('file','other.nupkg'),('sha256','x'*64),('assemblySha256','')]:
+        row=copy.deepcopy(manifest);row['packages'][0][field]=value
+        check(scope['consumer_manifest'],row,'0.3.0','a'*40,refuse=True)
+    layout=scope['consumer_dotnet_layout']
+    check(layout,'/private/sdk/dotnet','/private/sdk',['10.0.401'])
+    check(layout,'/global/dotnet','/private/sdk',['10.0.401'],refuse=True)
+    check(layout,'/private/sdk/dotnet','/private/sdk',['10.0.401','10.0.402'],refuse=True)
+    check(layout,'/private/sdk/dotnet','/private/sdk',[],refuse=True)
+    toolpins={'sdk/10.0.401/.version':{'bytes':98,'sha256':'496179aced13abd185f027a1ce8519cc57aa194a5538c51226c0c12e63a4a5ba'},'sdk/10.0.401/FSharp/fsc.dll':{'bytes':97104,'sha256':'2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b'},'shared/Microsoft.NETCore.App/10.0.12/libcoreclr.so':{'bytes':7110952,'sha256':'df5cfe7ba5abf7931f4836726f2fbb0d47dc32caa45d3c209ddf7ccd25c32f4c'}}
+    check(scope['consumer_dotnet_pins'],toolpins)
+    for name in toolpins:
+        row=copy.deepcopy(toolpins);row[name]['sha256']='0'*64
+        check(scope['consumer_dotnet_pins'],row,refuse=True)
+    check(scope['consumer_dotnet_pins'],{},refuse=True)
+    compiler={'D':'10.0.401','H':'/private/sdk/dotnet','F':'/private/sdk/dotnet','S':'/private/sdk/sdk/10.0.401/Sdks','X':'/private/sdk/sdk/10.0.401/FSharp/fsc.dll'}
+    check(scope['consumer_compiler_evaluation'],compiler,'/private/sdk/dotnet','/private/sdk')
+    for key in compiler:
+        row=copy.deepcopy(compiler);row[key]='other'
+        check(scope['consumer_compiler_evaluation'],row,'/private/sdk/dotnet','/private/sdk',refuse=True)
+    check(scope['consumer_compiler_evaluation'],{**compiler,'extra':'other'},'/private/sdk/dotnet','/private/sdk',refuse=True)
+    check(scope['consumer_compiler_evaluation'],{},'/private/sdk/dotnet','/private/sdk',refuse=True)
+    runtime={'runtimeOptions':{'tfm':'net10.0','rollForward':'Disable','framework':{'name':'Microsoft.NETCore.App','version':'10.0.12'}}}
+    check(scope['consumer_runtime_config'],runtime)
+    for key,value in [('rollForward','Major'),('rollForward',None),('tfm','net8.0'),('framework',{'name':'Microsoft.NETCore.App','version':'10.0.0'}),('frameworks',[{'name':'Microsoft.NETCore.App','version':'10.0.12'}])]:
+        row=copy.deepcopy(runtime);row['runtimeOptions'][key]=value
+        check(scope['consumer_runtime_config'],row,refuse=True)
+    restore_sources=scope['consumer_restore_sources']
+    assert restore_sources({'original':{},'https://api.nuget.org/v3/index.json':{}},'original')
+    assert not restore_sources({'original':{},'https://api.nuget.org/v3/index.json':{},'/sdk/FSharp/library-packs':{}},'original')
+    assert not restore_sources({'other':{},'https://api.nuget.org/v3/index.json':{}},'original')
+    count+=3
+    exact=scope['consumer_exact_range']
+    assert exact('[0.3.0]','0.3.0') and exact('[0.3.0, 0.3.0]','0.3.0')
+    assert not any(exact(v,'0.3.0') for v in ('0.3.0','[0.3.0,)','[0.2.0]','*',None))
+    count+=7
+    check(scope['consumer_path_allowed'],str(ROOT/'.github/workflows/callable-cli-release-prepare.yml'),[ROOT])
+    check(scope['consumer_path_allowed'],str(ROOT/'.github/workflows/callable-cli-release-prepare.yml'),[ROOT/'tests'],refuse=True)
+    check(scope['consumer_path_allowed'],'relative.fs',[ROOT],refuse=True)
+    relative=scope['consumer_producer_relative']
+    assert not relative(('receiver-source','src','Program.fs'))
+    assert relative(('src','FS.GG.Execution.Processes','Process.fs'))
+    assert relative(('FS.GG.Execution.Contracts.fsproj',))
+    assert not relative(('fs.gg.execution.contracts','0.3.0','lib','net10.0','FS.GG.Execution.Contracts.dll'))
+    count+=4
+    ns='http://microsoft.com/schemas/VisualStudio/TeamTest/2010'
+    trx=('<TestRun xmlns="'+ns+'"><ResultSummary outcome="Completed"><Counters total="1" executed="1" passed="1" failed="0" error="0" timeout="0" aborted="0" notExecuted="0"/></ResultSummary><Results><UnitTestResult testId="a" testName="selected" outcome="Passed"/></Results></TestRun>').encode()
+    check(scope['consumer_trx'],trx,1)
+    check(scope['consumer_trx'],trx,2,refuse=True)
+    check(scope['consumer_trx'],trx.replace(b'outcome="Passed"',b'outcome="Failed"'),1,refuse=True)
+    check(scope['consumer_trx'],trx.replace(b'notExecuted="0"',b'notExecuted="1"'),1,refuse=True)
+    # Derive the finite required labels from the actual function, not invented receipts.
+    result_body=prepare.split("          python3 - <<'PY_CONSUMER_RESULTS'\n",1)[1].split('          PY_CONSUMER_RESULTS\n',1)[0]
+    result_ast=ast.parse('\n'.join(line[10:] for line in result_body.splitlines()))
+    fn=next(node for node in result_ast.body if isinstance(node,ast.FunctionDef) and node.name=='consumer_fsquint')
+    labels=[]
+    for node in ast.walk(fn):
+        if isinstance(node,ast.Assign) and any(isinstance(t,ast.Name) and t.id=='required' for t in node.targets):labels+=ast.literal_eval(node.value)
+        if isinstance(node,ast.AugAssign) and isinstance(node.target,ast.Name) and node.target.id=='required':labels+=ast.literal_eval(node.value)
+    # Independent selected-source lifecycle inventory: actual immutable Program708587.
+    lifecycle_labels=['Quint cancellation reaches actual workload', 'Quint cancellation fixture child is executing', 'Quint caller cancellation returns within observation allowance', 'Quint caller token retains cancellation first cause', 'Quint cancellation known child retired', 'held pipe fixture reaches workload', 'held pipe leader exits before work deadline', 'held pipe recorded child remains executing', 'passing marker and leader exit cannot complete held pipe', 'held pipe observation returns within fixture allowance', 'held pipe work deadline retains timeout first cause', 'held pipe known child retired by fixture']
+    labels+=lifecycle_labels
+    assert len(labels)==len(set(labels)) and len(labels)<124
+    labels+=['inert unrelated case '+str(i) for i in range(124-len(labels))]
+    log=('\n'.join('PASS '+v for v in labels)+'\n'+str(len(labels))+' checks passed\n').encode()
+    check(scope['consumer_fsquint'],log,True)
+    for index,label in enumerate(lifecycle_labels):
+        missing=log.replace(('PASS '+label+'\n').encode(),('PASS omitted lifecycle '+str(index)+'\n').encode())
+        check(scope['consumer_fsquint'],missing,True,refuse=True)
+    duplicate=log.replace(('PASS '+labels[-1]+'\n').encode(),('PASS '+labels[-2]+'\n').encode())
+    check(scope['consumer_fsquint'],duplicate,True,refuse=True)
+    for old_count in (85,112):
+        stale=('\n'.join('PASS '+name for name in labels[:old_count])+'\n'+str(old_count)+' checks passed\n').encode()
+        check(scope['consumer_fsquint'],stale,True,refuse=True)
+    legacy=('\n'.join('PASS '+name for name in labels[:27])+'\n27 checks passed\n').encode()
+    check(scope['consumer_fsquint'],legacy,False)
+    check(scope['consumer_fsquint'],log.replace(b'PASS batch stdin is closed',b'absent batch stdin is closed'),True,refuse=True)
+    check(scope['consumer_fsquint'],log+b'FAIL later\n',True,refuse=True)
+    check(scope['consumer_fsquint'],b'0 checks passed\n',True,refuse=True)
+    clock_lines=[line[10:] for line in prepare.splitlines() if line.startswith('          PUBLIC_ROLLBACK_START=') or line=='          export PUBLIC_ROLLBACK_START']
+    assert len(clock_lines)==2 and clock_lines[1]=='export PUBLIC_ROLLBACK_START'
+    assert 'export PUBLIC_ROLLBACK_START=' not in prepare
+    for fails in (False,True):
+        with tempfile.TemporaryDirectory(prefix='proc6-clock-binding-test-') as temporary:
+            root=Path(temporary);stub=root/'python3'
+            stub.write_text('#!/usr/bin/python3\nimport os,sys\nif os.environ["FIXTURE_CLOCK_FAIL"]=="1":sys.exit(7)\nprint("123.5")\n')
+            stub.chmod(0o700)
+            env={**os.environ,'PATH':str(root)+os.pathsep+os.environ['PATH'],'FIXTURE_CLOCK_FAIL':'1' if fails else '0'}
+            script='set -euo pipefail\n'+'\n'.join(clock_lines)+'\nprintf "clock=%s\n" "$PUBLIC_ROLLBACK_START"\n'
+            result=subprocess.run(['bash','-c',script],env=env,capture_output=True,timeout=5)
+            assert result.returncode==(7 if fails else 0) and result.stdout==(b'' if fails else b'clock=123.5\n')
+            count+=1
+    jobs=('sdd_s1','fsquint_s1','sdd_rollback','fsquint_rollback');bodies=[]
+    for key in jobs:
+        body=prepare.split('  execution_pair_'+key+':\n',1)[1].split('\n  execution_pair_',1)[0]
+        assert 'needs: execution_pair_installed' in body and "needs.execution_pair_installed.result == 'success'" in body
+        assert 'runs-on: ubuntu-24.04' in body and 'timeout-minutes: 15' in body
+        assert '      contents: read\n      actions: read\n' in body
+        assert 'DOTNET_INSTALL_DIR: ${{ runner.temp }}/proc6-dotnet' not in body
+        sdk_bind=body.split('      - name: Bind private SDK installation below runner temp\n',1)[1].split('      - name:',1)[0]
+        assert body.index('Bind private SDK installation below runner temp')<body.index('Bind receiver identity and cold input roots')<body.index('uses: actions/setup-dotnet@')
+        assert 'printf \'DOTNET_INSTALL_DIR=%s/proc6-dotnet\\n\' "$RUNNER_TEMP" >> "$GITHUB_ENV"' in sdk_bind
+        sdk_script=sdk_bind.split('        run: |\n',1)[1]
+        sdk_script='\n'.join(line[10:] for line in sdk_script.splitlines())
+        for missing in (False,True):
+            with tempfile.TemporaryDirectory(prefix='proc6-sdk-binding-test-') as temporary:
+                root=Path(temporary);envfile=root/'env';runner=root/'runner temp';runner.mkdir()
+                env={**os.environ,'RUNNER_TEMP':'' if missing else str(runner),'GITHUB_ENV':str(envfile)}
+                result=subprocess.run(['bash','-c',sdk_script],env=env,capture_output=True,timeout=5)
+                assert (result.returncode==0)==(not missing)
+                assert envfile.exists()==(not missing)
+                if not missing:assert envfile.read_text()=='DOTNET_INSTALL_DIR='+str(runner)+'/proc6-dotnet\n'
+                count+=1
+        assert 'persist-credentials: false' in body and 'fetch-depth: 1' in body
+        assert 'artifact-ids: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}' in body
+        assert '-p:DisableImplicitLibraryPacksFolder=true' in body
+        assert '"${remaining}s" "$DOTNET_HOST_PATH"' in body
+        assert "'hostBytesObservedOnly':True" in body and "'hostMatchesHistoricalProfileClaim':False" in body
+        signature_step=body.split('      - name: Verify both fresh public rollback signatures before any restore',1)[1].split('      - name:',1)[0]
+        assert "if: env.CONSUMER_CASE == 'fsquint-rollback'" in signature_step and 'set -euo pipefail' in signature_step
+        assert 'nuget verify' in signature_step and '--all 2>&1 | head -c 65537' in signature_step and 'test -s' in signature_step
+        assert body.index('Verify both fresh public rollback signatures')<body.index('"$DOTNET_HOST_PATH" restore ')
+        assert "else None,'historicalOriginalArchiveSha256'" in body and "'originalArtifactReacquired':False" in body
+        assert body.index('source-lock-pins.json')<body.index('uses: actions/setup-dotnet@')
+        assert "'cacheSha512ConventionAsserted':False" in body and "'normalizedHashExpectedOrigin':normalized_origin" in body
+        assert "'actualLocks':lock_records" in body and "'actualAssetHashes':asset_records" in body
+        assert "raise ValueError('immutable receiver source lock changed')" in body
+        assert "raise ValueError('actual restore lock missing or unsafe')" in body
+        assert 'matrix:' not in body and 'id-token:' not in body and 'packages:' not in body
+        assert 'hardContainment\':False' in body and "'outerCustodyQualified':False" in body
+        assert 'eng/test-callable-cli-installed-harness.py' not in body and 'dotnet pack' not in body and 'nuget push' not in body
+        bodies.append(body.split('    steps:\n',1)[1].strip())
+    assert len(set(bodies))==1,'fixed receiver job logic drift'
+    assert 'RECEIVER_SOURCE: c246d2cf12eeb04d6894bab7528c7929bb87a762' in prepare
+    assert 'RECEIVER_SOURCE: 34eeca981c136144ced73a3f98b5ce04218e89c7' in prepare
+    assert 'REFRESH' not in prepare
+    print('EXECUTION_PAIR_CONSUMER_SOURCE_ONLY_CONTROLS passed cases='+str(count)+' fixed-fresh-jobs=4 native-effects=0')
 
 if __name__=='__main__':main()
