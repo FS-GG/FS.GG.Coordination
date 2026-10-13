@@ -17,6 +17,10 @@ import sys
 import tempfile
 import threading
 import urllib.request
+import urllib.error
+import time
+import re
+import signal
 import zipfile
 
 
@@ -414,7 +418,214 @@ printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
                                    "packages": joins, "nativeFixtureInvoked": False, "consumerAdoptionAccepted": False}) + b"\n")
     return 0
 
+# Original immutable A; these are observation pins, never publication admission.
+PAIR_OBSERVATION_CANDIDATE = {
+    "source": "c6764ac0cd62cb14372c89c14234292315000380",
+    "runId": 38274623070, "runAttempt": 1, "jobId": 114896943746,
+    "artifactId": 11759090717,
+    "archiveSha256": "6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819",
+    "manifestSha256": "4a09ead11044d34cccb2c305c563d95bf0781c918433d19c0bc631ee8b479e18",
+    "packages": {
+        "FS.GG.Execution.Contracts": "62b1f85b8622d6719f086d73f4dbf29bd251dbb083a9b9588535d6b86531665d",
+        "FS.GG.Execution.Processes": "20d09f3bc71c78c46809931a8d1f7b4009d381fb0c4f203db2d7c846266e4f41",
+    },
+}
+
+
+class PairObservationBound(RuntimeError):
+    pass
+
+
+class PairMetadataReader:
+    """GET-only transport; no redirects, retries, credentials issued or payload downloads."""
+    def __init__(self):
+        self.deadline = time.monotonic() + 150
+        self.count = 0
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                return None
+        self.opener = urllib.request.build_opener(NoRedirect())
+
+    def __call__(self, url, authenticated=False):
+        remaining = self.deadline - time.monotonic()
+        if remaining <= 0 or self.count >= 20:
+            raise PairObservationBound("metadata request/deadline budget exhausted")
+        if not url.startswith(("https://api.github.com/", "https://api.nuget.org/v3-flatcontainer/")):
+            raise RuntimeError("unselected metadata origin")
+        if authenticated and not url.startswith("https://api.github.com/"):
+            raise RuntimeError("credential origin refused")
+        # This transport owns only its own watchdog. Never replace a caller's active budget.
+        if any(value > 0 for value in signal.getitimer(signal.ITIMER_REAL)):
+            raise PairObservationBound("active caller watchdog prevents metadata acquisition")
+        self.count += 1
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "coordination-pair-preflight"}
+        if authenticated:
+            headers["Authorization"] = "Bearer " + os.environ["GH_TOKEN"]
+            headers["X-GitHub-Api-Version"] = "2022-11-28"
+        # Bound the whole response, including a slowly streaming body, not only socket waits.
+        def request_timeout(signum, frame):
+            raise TimeoutError("metadata request time limit")
+        previous_handler = signal.signal(signal.SIGALRM, request_timeout)
+        signal.setitimer(signal.ITIMER_REAL, min(15, remaining))
+        try:
+            try:
+                response = self.opener.open(urllib.request.Request(url, headers=headers, method="GET"), timeout=min(15, remaining))
+            except urllib.error.HTTPError as error:
+                response = error
+            with response:
+                raw = response.read(1048577)
+                if len(raw) > 1048576:
+                    raise PairObservationBound("metadata body exceeds 1 MiB")
+                if time.monotonic() >= self.deadline:
+                    raise PairObservationBound("metadata deadline exhausted")
+                status = response.code
+                if status != 200:
+                    return status, None, hashlib.sha256(raw).hexdigest()
+                return status, json.loads(raw), hashlib.sha256(raw).hexdigest()
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+
+
+
+def observe_execution_pair(output, *, read=None, environment=None):
+    """Extend release-preflight observations; independent failures never mint eligibility."""
+    env = os.environ if environment is None else environment
+    candidate = json.loads(json.dumps(PAIR_OBSERVATION_CANDIDATE))
+    report = {"schema": "fsgg.coordination.migration-release-preflight/1", "profile": "execution-pair",
+              "source": env.get("REQUESTED_PUBLISHER"), "candidate": candidate,
+              "proposedVersion": "0.2.0", "publicationAuthorized": False, "versionReserved": False,
+              "publicationEligible": False, "namespaceEntitlement": "unknown",
+              "trustedPublishingLoginSucceeded": None, "credentialProbe": "not-selected",
+              "identity": {"nugetUser": env.get("SELECTED_NUGET_USER"),
+                           "repository": "FS-GG/FS.GG.Coordination",
+                           "workflow": ".github/workflows/callable-cli-release-publish.yml", "environment": None},
+              "observations": [], "firstFailure": None, "collectionComplete": False,
+              "exitOutcome": "incomplete", "cleanupOutcome": "no-workload-or-credential-created",
+              "reportingOutcome": "pending"}
+    def record(name, state, reason=None, reference=None, sha256=None):
+        row = {"name": name, "state": state}
+        if reason: row["reason"] = reason
+        if reference: row["reference"] = reference
+        if sha256: row["sha256"] = sha256
+        report["observations"].append(row)
+        if state not in ("passed", "absent", "observed") and report["firstFailure"] is None:
+            report["firstFailure"] = {"name": name, "state": state, "reason": reason}
+    publisher = env.get("REQUESTED_PUBLISHER", "")
+    valid = (env.get("GITHUB_REPOSITORY") == "FS-GG/FS.GG.Coordination"
+             and env.get("GITHUB_REF") == "refs/heads/main" and env.get("GITHUB_RUN_ATTEMPT") == "1"
+             and re.fullmatch(r"[0-9a-f]{40}", publisher) is not None and publisher == env.get("GITHUB_SHA")
+             and env.get("REQUESTED_SOURCE") == candidate["source"]
+             and env.get("REQUESTED_MERGE", "") in ("", candidate["source"])
+             and env.get("REQUESTED_SHA256") == candidate["manifestSha256"]
+             and env.get("OPERATION", "") == "" and env.get("EXECUTION_PAIR") == "true"
+             and env.get("PREFLIGHT_ONLY") == "true" and env.get("CLI_ONLY") == "false"
+             and env.get("READBACK_ONLY") == "false"
+             and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", env.get("SELECTED_NUGET_USER", "")) is not None)
+    record("inputs", "passed" if valid else "failed", None if valid else "exclusive protected-source/original-A binding refused")
+    reader = read if read is not None else PairMetadataReader()
+    api = "https://api.github.com/repos/FS-GG/FS.GG.Coordination"
+    stopped = False
+    def observation(name, url, validate, absent=False, authenticated=True):
+        nonlocal stopped
+        if not valid or stopped:
+            record(name, "blocked" if not valid else "budget-limited", "input binding refused" if not valid else "original collection budget exhausted")
+            return
+        try:
+            status, data, sha = reader(url, authenticated)
+            if status == 404:
+                state = "absent" if absent else "missing"
+            elif status in (401, 403): state = "denied"
+            elif status != 200: state = "unknown"
+            else: state = validate(data)
+            record(name, state, reference=url, sha256=sha)
+        except PairObservationBound as error:
+            stopped = True
+            record(name, "budget-limited", str(error), url)
+        except (ValueError, TypeError, KeyError, AttributeError, AssertionError, RecursionError):
+            record(name, "malformed", "metadata shape or binding refused", url)
+        except (OSError, RuntimeError):
+            record(name, "unknown", "metadata acquisition unavailable", url)
+    def main_ref(data):
+        return "passed" if data["object"]["sha"] == publisher else "foreign"
+    def run_metadata(data):
+        expected = {"id": candidate["runId"], "head_sha": candidate["source"], "head_branch": "main",
+                    "event": "workflow_dispatch", "run_attempt": 1, "status": "completed", "conclusion": "success",
+                    "path": ".github/workflows/callable-cli-release-prepare.yml"}
+        return "passed" if all(type(data[k]) is type(v) and data[k] == v for k, v in expected.items()) and data["repository"]["id"] == 1346720714 and data["head_repository"]["id"] == 1346720714 else "foreign"
+    def jobs_metadata(data):
+        rows = data["jobs"]
+        if type(data["total_count"]) is not int or data["total_count"] != len(rows) or len(rows) > 100: return "unknown"
+        selected = [r for r in rows if r.get("id") == candidate["jobId"]]
+        expected = {"id": candidate["jobId"], "run_id": candidate["runId"], "run_attempt": 1,
+                    "head_sha": candidate["source"], "name": "Prepare the routine Execution pair without publication",
+                    "status": "completed", "conclusion": "success"}
+        return "passed" if len(selected) == 1 and all(type(selected[0][k]) is type(v) and selected[0][k] == v for k, v in expected.items()) else "foreign"
+    def artifact_metadata(data):
+        if data["expired"] is not False: return "expired"
+        expected = {"id": candidate["artifactId"], "name": "execution-pair-" + candidate["source"],
+                    "size_in_bytes": 150889, "digest": "sha256:" + candidate["archiveSha256"]}
+        return "passed" if all(type(data[k]) is type(v) and data[k] == v for k, v in expected.items()) and data["workflow_run"]["id"] == candidate["runId"] and data["workflow_run"]["head_sha"] == candidate["source"] else "foreign"
+    observation("main-before", api + "/git/ref/heads/main", main_ref)
+    observation("candidate-run", api + f"/actions/runs/{candidate['runId']}", run_metadata)
+    observation("candidate-job", api + f"/actions/runs/{candidate['runId']}/attempts/1/jobs?per_page=100", jobs_metadata)
+    observation("candidate-artifact", api + f"/actions/artifacts/{candidate['artifactId']}", artifact_metadata)
+    for package in sorted(candidate["packages"]):
+        namespace = "https://api.github.com/orgs/FS-GG/packages/nuget/" + package.lower()
+        def namespace_metadata(data, package=package):
+            return "observed" if data["name"].lower() == package.lower() and data["package_type"] == "nuget" and data["owner"]["login"] == "FS-GG" else "foreign"
+        observation("namespace-" + package, namespace, namespace_metadata)
+        # One finite page: a full page cannot prove absence; no silent pagination truncation.
+        def github_versions(data):
+            if not isinstance(data, list) or len(data) > 100: return "malformed"
+            versions = [row["name"] for row in data]
+            if not all(isinstance(v, str) for v in versions): return "malformed"
+            return "occupied" if "0.2.0" in versions else "unknown" if len(data) == 100 else "absent"
+        observation("github-cell-" + package, namespace + "/versions?per_page=100", github_versions, absent=True)
+        def public_versions(data):
+            versions = data["versions"]
+            if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions): return "malformed"
+            return "occupied" if "0.2.0" in versions else "absent"
+        observation("nuget-cell-" + package, "https://api.nuget.org/v3-flatcontainer/" + package.lower() + "/index.json", public_versions, absent=True, authenticated=False)
+    observation("component-tag", api + "/git/ref/tags/execution/v0.2.0", lambda _: "occupied", absent=True)
+    observation("component-release", api + "/releases/tags/execution%2Fv0.2.0", lambda _: "occupied", absent=True)
+    def protection(data):
+        desired = json.loads((ROOT / "eng/repository-settings/release-tag-ruleset.json").read_bytes())
+        keys = ("target", "enforcement", "conditions", "bypass_actors", "rules")
+        policy = {key: data[key] for key in keys}
+        updates = [row for row in policy["rules"] if row.get("type") == "update"]
+        if len(updates) == 1 and set(updates[0]) == {"type"}:
+            updates[0]["parameters"] = {"update_allows_fetch_and_merge": False}
+        if len(updates) != 1 or set(updates[0]) != {"type", "parameters"} or updates[0]["parameters"] != {"update_allows_fetch_and_merge": False} or updates[0]["parameters"]["update_allows_fetch_and_merge"] is not False: return "foreign"
+        return "passed" if type(data["id"]) is int and data["id"] == 21633398 and policy == {key: desired[key] for key in keys} else "foreign"
+    observation("component-protection", api + "/rulesets/21633398", protection)
+    def github_identity(data):
+        login = data["login"]
+        if not isinstance(login, str) or re.fullmatch(r"[A-Za-z0-9_.\[\]-]{1,100}", login) is None:
+            return "malformed"
+        report["identity"]["githubLogin"] = login
+        return "observed"
+    observation("github-identity", "https://api.github.com/user", github_identity)
+    observation("main-after", api + "/git/ref/heads/main", main_ref)
+    record("namespace-entitlement", "unknown", "authenticated account new-package policy, ownership and prefix rights unavailable; supplying owner unknown")
+    required = [row for row in report["observations"] if row["name"] != "namespace-entitlement"]
+    report["collectionComplete"] = all(row["state"] in ("passed", "absent", "observed") for row in required)
+    report["exitOutcome"] = "collected-entitlement-incomplete" if report["collectionComplete"] else "incomplete"
+    # Report failure propagates independently; it never erases the first collected cause.
+    report["reportingOutcome"] = "written"
+    try:
+        output.write_bytes(compact(report) + b"\n")
+    except OSError:
+        # Keep first cause and cleanup distinct even when the artifact cannot be written.
+        print(compact({"firstFailure": report["firstFailure"], "exitOutcome": report["exitOutcome"],
+                       "cleanupOutcome": report["cleanupOutcome"], "reportingOutcome": "failed"}).decode(), file=sys.stderr)
+        return 2
+    return 0 if report["collectionComplete"] else 1
+
+
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--execution-pair-preflight":
+        return observe_execution_pair(pathlib.Path(sys.argv[2]))
     if len(sys.argv) == 5 and sys.argv[1] == "--execution-pair-artifact":
         return extract_execution_pair_artifact(pathlib.Path(sys.argv[2]), pathlib.Path(sys.argv[3]), pathlib.Path(sys.argv[4]))
     if len(sys.argv) == 5 and sys.argv[1] == "--execution-pair":

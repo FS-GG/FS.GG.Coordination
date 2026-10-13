@@ -896,8 +896,48 @@ jobs:
           if-no-files-found: warn
           retention-days: 90
 
+  execution_pair_preflight:
+    if: inputs.execution_pair && inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
+    name: Observe original Execution pair without publication authority
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+      packages: read
+    steps:
+      - name: Check out exact observation source without credentials
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+      - name: Collect bounded independent pair observations
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REQUESTED_SOURCE: ${{ inputs.source }}
+          REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
+          REQUESTED_MERGE: ${{ inputs.protected_merge }}
+          REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+          OPERATION: ${{ inputs.operation }}
+          CLI_ONLY: ${{ inputs.cli_only }}
+          READBACK_ONLY: ${{ inputs.readback_only }}
+          PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
+          EXECUTION_PAIR: ${{ inputs.execution_pair }}
+          SELECTED_NUGET_USER: ${{ secrets.NUGET_USER || 'Paradigma11' }}
+          PYTHONDONTWRITEBYTECODE: 1
+        run: |
+          python3 eng/test-callable-cli-installed-harness.py --execution-pair-preflight "${RUNNER_TEMP}/execution-pair-preflight.json"
+      - name: Retain terminal read-only observations
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: execution-pair-preflight-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/execution-pair-preflight.json
+          if-no-files-found: error
+          retention-days: 14
+
   execution_pair:
-    if: inputs.execution_pair
+    if: inputs.execution_pair && !inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
     name: Publish the admitted original routine Execution pair
     runs-on: ubuntu-24.04
     timeout-minutes: 35
