@@ -31,11 +31,11 @@ def heredoc(marker,workflow='publish'):
 
 def admission():
     return {'schema':'fsgg.coordination.execution-pair-admission/1','profile':'execution-pair','enabled':True,
-            'operation':'publish-execution-pair-020-fixture','version':'0.2.0','tag':'execution/v0.2.0',
+            'operation':'publish-execution-pair-030-fixture','version':'0.3.0','tag':'execution/v0.3.0',
             'source':'a'*40,'tree':'b'*40,'protectedMerge':'a'*40,'runId':1,'jobId':2,'artifactId':3,
             'archiveSha256':'c'*64,'manifestSha256':'d'*64,'packages':{id:'e'*64 for id in IDS},
-            'namespaceEntitlement':{'accepted':True,'packageIds':sorted(IDS),'nugetUser':'fixture-user',
-               'githubRepository':'FS-GG/FS.GG.Coordination','publisherWorkflow':'.github/workflows/callable-cli-release-publish.yml','evidenceSha256':'f'*64},
+            'namespaceEntitlement':{'accepted':True,'packageIds':sorted(IDS),'nugetUser':'Paradigma11',
+               'githubRepository':'FS-GG/FS.GG.Coordination','publisherWorkflow':'.github/workflows/callable-cli-release-publish.yml','evidenceSha256':'47a06f26b2bbd9924df2a9778cfdeb8bf29ee618c88908f652dbe2cbb5019fcb'},
             'tagProtection':{'rulesetId':4,'policySha256':'1'*64}}
 
 def installed_isolation_diagnostic_controls(version, installed_mode="candidate"):
@@ -113,7 +113,7 @@ def installed_isolation_diagnostic_controls(version, installed_mode="candidate")
 def pair_observation_controls():
     helper = runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
     observe = helper['observe_execution_pair']; original = helper['PAIR_OBSERVATION_CANDIDATE']
-    assert original == {
+    assert helper['PAIR_HISTORICAL_CANDIDATE'] == {
         'source':'c6764ac0cd62cb14372c89c14234292315000380','runId':38274623070,
         'runAttempt':1,'jobId':114896943746,'artifactId':11759090717,
         'archiveSha256':'6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819',
@@ -125,14 +125,14 @@ def pair_observation_controls():
            'GITHUB_RUN_ATTEMPT':'1','GITHUB_SHA':publisher,'REQUESTED_PUBLISHER':publisher,
            'REQUESTED_SOURCE':original['source'],'REQUESTED_SHA256':original['manifestSha256'],
            'REQUESTED_MERGE':'','OPERATION':'','EXECUTION_PAIR':'true','PREFLIGHT_ONLY':'true',
-           'CLI_ONLY':'false','READBACK_ONLY':'false','SELECTED_NUGET_USER':'fixture-user'}
+           'CLI_ONLY':'false','READBACK_ONLY':'false','SELECTED_NUGET_USER':'Paradigma11'}
     run = {'id':original['runId'],'head_sha':original['source'],'head_branch':'main',
            'event':'workflow_dispatch','run_attempt':1,'status':'completed','conclusion':'success',
            'path':'.github/workflows/callable-cli-release-prepare.yml','repository':{'id':1346720714},'head_repository':{'id':1346720714}}
     jobs = {'total_count':1,'jobs':[{'id':original['jobId'],'run_id':original['runId'],'run_attempt':1,
             'head_sha':original['source'],'name':'Prepare the routine Execution pair without publication',
             'status':'completed','conclusion':'success'}]}
-    artifact = {'id':original['artifactId'],'expired':False,'size_in_bytes':150889,
+    artifact = {'id':original['artifactId'],'expired':False,'size_in_bytes':169508,
                 'name':'execution-pair-'+original['source'],'digest':'sha256:'+original['archiveSha256'],
                 'workflow_run':{'id':original['runId'],'head_sha':original['source']}}
     desired = json.loads((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_bytes());desired['id']=21633398
@@ -171,7 +171,7 @@ def pair_observation_controls():
                 if mode=='expired':data['expired']=True
                 if mode=='changed-hash':data['digest']='sha256:'+'0'*64
             elif '/versions?' in url:
-                data=[{'name':'0.2.0'}] if mode=='occupied' else [{'name':'0.1.0'}]*100 if mode=='pagination' else []
+                data=[{'name':'0.3.0'}] if mode=='occupied' else [{'name':'0.1.0'}]*100 if mode=='pagination' else []
                 if mode=='denied': status=403;data=None
                 if mode=='malformed':data={'versions':[]}
             elif '/packages/nuget/' in url:
@@ -194,7 +194,7 @@ def pair_observation_controls():
             report=json.loads(out.read_bytes());rows={r['name']:r for r in report['observations']}
             assert report['candidate']==original
             assert report['publicationAuthorized'] is False and report['versionReserved'] is False and report['publicationEligible'] is False
-            assert report['namespaceEntitlement']=='unknown' and report['trustedPublishingLoginSucceeded'] is None
+            assert report['namespaceEntitlement']==helper['PAIR_ACCOUNT_OWNER_EVIDENCE'] and report['trustedPublishingLoginSucceeded'] is None
             assert report['credentialProbe']=='not-selected' and report['reportingOutcome']=='written'
             success=mode in ('good','disabled-admission')
             assert (result==0)==success,(mode,report)
@@ -290,7 +290,7 @@ def pair_observation_controls():
         if execution and not preflight:
             assert active==(['execution_pair'] if not cli and not readback else []),flags
     a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes())
-    assert a['enabled'] is False and a['operation'] is None and a['namespaceEntitlement'] is None
+    assert a['enabled'] is True and a['operation']=='publish-execution-pair-030-b11fb121-four38484632631' and a['namespaceEntitlement']['evidenceSha256']==helper['PAIR_ACCOUNT_OWNER_EVIDENCE']['evidenceSha256']
     print('PAIR_OBSERVATION_INERT_CONTROLS passed cases='+str(len(modes))+' transport=11 selectors=16 read-only/no-eligibility')
 
 def archive_controls(version):
@@ -371,8 +371,204 @@ def installed_version_preflight_controls():
             except RuntimeError:refused=True
             assert refused and not (root/'PairInstalled.fsproj').exists()
 
+def consumer_fixture(root, a):
+    """Synthetic byte/native records only; never an accepted hosted proof."""
+    helper=runpy.run_path(str(ROOT/'eng/write-callable-cli-release-readback.py'))
+    q={'executor':'7'*40,'runId':17,'workflowSha256':'8'*64,'cases':{}}
+    a['consumerQualification']=q
+    native_jobs=[]
+    for index,(case,(repository,receiver,count)) in enumerate(helper['PAIR_RECEIVERS'].items()):
+        job_id=30+index;artifact_id=40+index
+        profile=json.dumps({'installation':'/inert/proc6-dotnet','hostPath':'/inert/proc6-dotnet/dotnet','fixtureOnly':True}).encode()
+        closure={'physicalSourceExclusionEstablished':True,'networkReachable':True,'hardContainment':False,
+                 'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','nativeFixtureInvoked':False,'consumerAdoptionAccepted':False,
+                 'sdkVersion':'10.0.401','runtimeFrameworkVersion':'10.0.12','dotnetProfileSha256':hashlib.sha256(profile).hexdigest(),
+                 'compilerInputs':['inert'],'compilerEvaluations':['inert'],'runtimeCopies':{},'cachePackageIdentities':[],
+                 'sdkBundledInput':None,'actualLocks':[],'actualAssetHashes':[],'runtimeConfigurations':[{'runtimeVersion':'10.0.12','rollForward':'Disable'}]}
+        version='0.3.0' if case.endswith('s1') else '0.2.0' if case=='sdd-rollback' else '0.1.0'
+        hashes=a['packages'] if case.endswith('s1') else {'FS.GG.Execution.Contracts':'62b1f85b8622d6719f086d73f4dbf29bd251dbb083a9b9588535d6b86531665d','FS.GG.Execution.Processes':'20d09f3bc71c78c46809931a8d1f7b4009d381fb0c4f203db2d7c846266e4f41'} if case=='sdd-rollback' else {'FsQuint':'e170d70a683321818944d86bb9c9e087323e01391738b3b4a621892ef91a2a8a','FsQuint.Tooling':'d2a58ae6431281e02fe19a26670225a5bd77c50450f473e4a8031c6fa47ebc79'}
+        closure['packageVersions']={}
+        for id,digest in hashes.items():
+            closure['packageVersions'][id]={'version':version,'packageSha256':digest,'packageBytes':1,'dllSha256':'8'*64}
+            closure['runtimeCopies'][id]=['fixture.dll']
+            closure['cachePackageIdentities'].append({'packageId':id,'version':version,'archiveSha256':digest,'archiveBytes':1,'cacheSha512ConventionAsserted':False,'metadataContentHash':'fixture-normalized'})
+            closure['actualLocks'].append({'schemaVersion':2 if case.startswith('sdd-') else 1,'entries':[{'packageId':id,'entry':{'resolved':version,'contentHash':'fixture-normalized'}}]})
+            closure['actualAssetHashes'].append({'packageId':id,'contentHash':'fixture-normalized'})
+        source_pins={'receiverSource':receiver,'locks':[]}
+        if case=='fsquint-s1':
+            core=copy.deepcopy(helper['PAIR_SDK_CORE']);lockmap=helper['PAIR_SDK_SOURCE_LOCKS']
+            entry={'framework':'net10.0','packageId':'FSharp.Core','entry':{'type':'Direct','requested':'[10.1.401, )','resolved':core['version'],'contentHash':core['contentHash']}}
+            source_pins['locks']=[{'path':path,'sha256':digest,'entries':[copy.deepcopy(entry)]} for path,digest in lockmap.items()]
+            binding={'sdkVersion':'10.0.401','sdkSourcePath':'/inert/proc6-dotnet/sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg','coldFeedPath':'/inert/proc6-feed/FSharp.Core.10.1.401.nupkg','expected':core,'assemblyPayloads':{'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',core['dllRelativePath']:core['dllSha256']},'sourceLockPinsSha256':hashlib.sha256(json.dumps(source_pins).encode()).hexdigest(),'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False}
+            closure['sdkBundledInput']=binding
+            closure['cachePackageIdentities'].append({'packageId':'FSharp.Core','version':core['version'],'archiveBytes':core['packageBytes'],'archiveSha256':core['packageSha256'],'metadataContentHash':core['contentHash'],'cacheSha512ConventionAsserted':False})
+            closure['compilerInputs'].append(['R','/inert/proc6-state/packages/fsharp.core/10.1.401/'+core['dllRelativePath']])
+            closure['runtimeCopies']['FSharp.Core']=['tests/FsQuint.Tests/bin/Release/net10.0/FSharp.Core.dll']
+            for path in ('src/FsQuint/packages.lock.json','src/FsQuint.Tooling/packages.lock.json','tests/FsQuint.Tests/packages.lock.json'):
+                closure['actualLocks'].append({'path':path,'sha256':lockmap[path],'schemaVersion':1,'generatedForThisReceiver':False,'entries':[copy.deepcopy(entry)]})
+                closure['actualAssetHashes'].append({'path':str(Path(path).parent/'obj/project.assets.json'),'packageId':'FSharp.Core','contentHash':core['contentHash']})
+        closure_raw=json.dumps(closure).encode();members={'proc6-state/proof/source-closure.json':closure_raw,'proc6-state/proof/dotnet-profile.json':profile}
+        members['proc6-state/source-inputs.json']=json.dumps({'receiverRepository':repository,'receiverCommit':receiver,'producerSourceTransferred':False,'networkReachable':True,'hardContainment':False,'expectedPackages':closure['packageVersions']}).encode()
+        members['proc6-state/budget.json']=json.dumps({'workSeconds':600,'cleanupSeconds':30,'reportSeconds':30}).encode()
+        members['proc6-state/proof/source-lock-pins.json']=json.dumps(source_pins).encode()
+        if case=='fsquint-s1':members['proc6-state/proof/sdk-core-input.json']=json.dumps(binding).encode()
+        members['proc6-transfer-native.json']=json.dumps({'id':80,'expired':False,'digest':'sha256:'+'3'*64,'name':'execution-pair-installed-'+a['source']+'-17','workflow_run':{'id':17,'head_sha':q['executor'],'repository_id':1346720714,'head_repository_id':1346720714}}).encode()
+        fixtures=[]
+        if case.startswith('sdd-'):
+            for group,n in enumerate((18 if case=='sdd-s1' else 13,8,17,27,1)):
+                names=[f'fixture-{group}-{i}' for i in range(n)];fixtures+=names
+                xml='<TestRun xmlns="http://microsoft.com/schemas/VisualStudio/TeamTest/2010"><Results>'+''.join(f'<UnitTestResult testId="{name}" testName="{name}" outcome="Passed" />' for name in names)+'</Results><ResultSummary outcome="Completed"><Counters '+f'total="{n}" executed="{n}" passed="{n}" failed="0" error="0" timeout="0" aborted="0" notExecuted="0" /></ResultSummary></TestRun>'
+                members[f'proc6-state/proof/results/{group}.trx']=xml.encode()
+        else:
+            fixtures=[f'fixture-{i}' for i in range(count)]
+            members['proc6-state/logs/fixture-0.log']=(''.join('PASS '+n+'\n' for n in fixtures)+str(count)+' checks passed\n').encode()
+        signature={'currentVerificationObserved':True,'historicalVerificationSubstituted':False,'packages':[{'packageId':id,'packageSha256':digest,'exitCode':0,'verifyAll':True,'logSha256':hashlib.sha256(b'inert-signature-log').hexdigest()} for id,digest in hashes.items()]}
+        for id in hashes:members['proc6-state/logs/'+id+'-signature.log']=b'inert-signature-log'
+        if case=='fsquint-rollback':members['proc6-state/proof/public-signature-verification.json']=json.dumps(signature).encode()
+        observation={'schema':'fsgg.coordination.execution-pair-consumer-observation/1','case':case,'source':a['source'],'executor':q['executor'],
+                     'runId':str(q['runId']),'attempt':1,'receiver':receiver,'receiverRepository':repository,'candidateArchiveSha256':a['archiveSha256'],
+                     'sourceClosureSha256':hashlib.sha256(closure_raw).hexdigest(),'fixtureNames':fixtures,'fixtureCount':count,
+                     'nativeFixtureInvoked':True,'selectedFixturesPassed':True,'fixtureCleanupObserved':True,'networkReachable':True,
+                     'consumerAdoptionAccepted':False,'publicationAuthorized':False,'hardContainment':False,'outerCustodyQualified':False,
+                     'pipelineDeadlineQualified':False,'currentCrossRepoArtifactAccessEstablished':False,'elapsedSeconds':1,'originalWorkSeconds':600,
+                     'ordinaryCommandTimeoutSeconds':90,'sdkVersion':'10.0.401','runtimeFrameworkVersion':'10.0.12','dotnetProfileSha256':hashlib.sha256(profile).hexdigest(),
+                     'selectedPackageArchiveSha256':a['archiveSha256'] if case.endswith('s1') else '6aedfb7e4eda796fdea3fc0326003a6f90f859352d7394d311f4c5d867687819' if case=='sdd-rollback' else None,
+                     'originalArtifactReacquired':False,'historicalOriginalArchiveSha256':'7078f08faed9d8f1e6a7a662fd33c04861a106990db61b184d3e573c413f8c1f',
+                     'historicalReceiptSha256':'fc0c5c4f774b7210dbfda88fcbae97759994f36424b9c889c693dcf8d7ac4f3c','freshPublicSignatureVerification':signature}
+        observation_raw=json.dumps(observation).encode();members['proc6-state/proof/consumer-observation.json']=observation_raw
+        root.mkdir(parents=True,exist_ok=True)
+        with zipfile.ZipFile(root/(case+'.zip'),'w') as z:
+            for name,raw in members.items():z.writestr(name,raw)
+        archive=(root/(case+'.zip')).read_bytes();digest=hashlib.sha256(archive).hexdigest()
+        q['cases'][case]={'jobId':job_id,'artifactId':artifact_id,'archiveSha256':digest,'observationSha256':hashlib.sha256(observation_raw).hexdigest(),'sourceClosureSha256':hashlib.sha256(closure_raw).hexdigest()}
+        write(root/(case+'.artifact.json'),{'id':artifact_id,'name':f'execution-pair-consumer-{case}-17-1','expired':False,'size_in_bytes':len(archive),'digest':'sha256:'+digest,
+              'workflow_run':{'id':17,'head_sha':q['executor'],'repository_id':1346720714,'head_repository_id':1346720714}})
+        native_jobs.append({'id':job_id,'name':'Installed receiver '+case,'run_id':17,'head_sha':q['executor'],'run_attempt':1,'status':'completed','conclusion':'success',
+                            'runner_id':50+index,'runner_name':'fixture-'+str(index),'runner_group_name':'GitHub Actions','labels':['ubuntu-24.04'],'steps':[{'name':'Set up job','conclusion':'success'}]})
+        (root/(case+'.job.log')).write_text('##[group]Runner Image\nImage: ubuntu-24.04\nVersion: 20261013.1.0\n##[endgroup]\n')
+    write(root/'jobs.json',{'total_count':4,'jobs':native_jobs})
+    write(root/'run.json',{'id':17,'workflow_id':361024581,'repository':{'id':1346720714},'head_repository':{'id':1346720714},'head_sha':q['executor'],
+          'head_branch':'main','path':'.github/workflows/callable-cli-release-prepare.yml','event':'workflow_dispatch','run_attempt':1,'status':'completed','conclusion':'success'})
+    return helper
+
+
+def consumer_readback_controls():
+    modes=('good','unresolved','missing-case','duplicate-job','wrong-executor','second-attempt','foreign-repo','failed-job','same-runner',
+           'missing-image','expired','wrong-native-digest','wrong-archive','wrong-receipt-pin','missing-closure','wrong-receiver','false-source-exclusion',
+           'wrong-runtime','missing-cache','wrong-fixture','failed-trx','signed-rollback-not-verified','rollback-archive-fiction','unsupported-containment','wrong-cached-package','wrong-normalized-hash','bad-signature-log','wrong-source-input','renewed-budget','foreign-transfer','schema-bool','schema-zero','schema-three','schema-text','missing-sdk-binding')
+    for mode in modes:
+        with tempfile.TemporaryDirectory(prefix='pair-four-receivers-inert-') as tmp:
+            root=Path(tmp);a=admission();helper=consumer_fixture(root,a);q=a['consumerQualification']
+            def edit_json(name,fn):
+                value=json.loads((root/name).read_bytes());fn(value);write(root/name,value)
+            if mode=='unresolved':q['executor']=None
+            if mode=='missing-case':q['cases'].pop('fsquint-rollback')
+            if mode=='duplicate-job':q['cases']['fsquint-s1']['jobId']=q['cases']['sdd-s1']['jobId']
+            if mode=='wrong-executor':edit_json('run.json',lambda r:r.update(head_sha='9'*40))
+            if mode=='second-attempt':edit_json('run.json',lambda r:r.update(run_attempt=2))
+            if mode=='foreign-repo':edit_json('run.json',lambda r:r['repository'].update(id=1))
+            if mode=='failed-job':edit_json('jobs.json',lambda r:r['jobs'][0].update(conclusion='failure'))
+            if mode=='same-runner':edit_json('jobs.json',lambda r:r['jobs'][1].update(runner_id=50))
+            if mode=='missing-image':(root/'sdd-s1.job.log').write_text('fixture unknown')
+            if mode=='expired':edit_json('sdd-s1.artifact.json',lambda r:r.update(expired=True))
+            if mode=='wrong-native-digest':edit_json('sdd-s1.artifact.json',lambda r:r.update(digest='sha256:'+'9'*64))
+            if mode=='wrong-archive':(root/'sdd-s1.zip').write_bytes(b'wrong')
+            if mode=='wrong-receipt-pin':q['cases']['sdd-s1']['observationSha256']='9'*64
+            mutated=mode in ('missing-closure','wrong-receiver','false-source-exclusion','wrong-runtime','missing-cache','wrong-fixture','failed-trx','signed-rollback-not-verified','rollback-archive-fiction','unsupported-containment','wrong-cached-package','wrong-normalized-hash','bad-signature-log','wrong-source-input','renewed-budget','foreign-transfer','schema-bool','schema-zero','schema-three','schema-text','missing-sdk-binding')
+            if mutated:
+                case='fsquint-s1' if mode=='missing-sdk-binding' else 'fsquint-rollback' if mode in ('signed-rollback-not-verified','rollback-archive-fiction','bad-signature-log') else 'sdd-s1'
+                path=root/(case+'.zip')
+                with zipfile.ZipFile(path) as z:members={n:z.read(n) for n in z.namelist()}
+                op='proc6-state/proof/consumer-observation.json';cp='proc6-state/proof/source-closure.json'
+                o=json.loads(members[op]);c=json.loads(members[cp])
+                if mode=='wrong-receiver':o['receiver']='9'*40
+                if mode.startswith('schema-'):c['actualLocks'][0]['schemaVersion']={'schema-bool':True,'schema-zero':0,'schema-three':3,'schema-text':'2'}[mode]
+                if mode=='missing-sdk-binding':members.pop('proc6-state/proof/sdk-core-input.json')
+                if mode=='false-source-exclusion':c['physicalSourceExclusionEstablished']=False
+                if mode=='wrong-runtime':c['runtimeFrameworkVersion']='10.0.11'
+                if mode=='missing-cache':c['cachePackageIdentities']=[]
+                if mode=='wrong-fixture':o['fixtureNames'][0]='wrong'
+                if mode=='wrong-source-input':
+                    key='proc6-state/source-inputs.json';v=json.loads(members[key]);v['receiverCommit']='9'*40;members[key]=json.dumps(v).encode()
+                if mode=='renewed-budget':
+                    key='proc6-state/budget.json';v=json.loads(members[key]);v['workSeconds']=900;members[key]=json.dumps(v).encode()
+                if mode=='foreign-transfer':
+                    key='proc6-transfer-native.json';v=json.loads(members[key]);v['workflow_run']['id']=99;members[key]=json.dumps(v).encode()
+                if mode=='unsupported-containment':o['hardContainment']=True
+                if mode=='wrong-cached-package':c['cachePackageIdentities'][0]['archiveSha256']='9'*64
+                if mode=='wrong-normalized-hash':c['actualAssetHashes'][0]['contentHash']='different'
+                if mode=='bad-signature-log':members['proc6-state/logs/FsQuint-signature.log']=b'changed'
+                if mode=='rollback-archive-fiction':o['selectedPackageArchiveSha256']='9'*64
+                if mode=='signed-rollback-not-verified':
+                    o['freshPublicSignatureVerification']['currentVerificationObserved']=False
+                    members['proc6-state/proof/public-signature-verification.json']=json.dumps(o['freshPublicSignatureVerification']).encode()
+                if mode=='failed-trx':members['proc6-state/proof/results/0.trx']=members['proc6-state/proof/results/0.trx'].replace(b'outcome="Passed"',b'outcome="Failed"',1)
+                members[cp]=json.dumps(c).encode();q['cases'][case]['sourceClosureSha256']=hashlib.sha256(members[cp]).hexdigest();o['sourceClosureSha256']=q['cases'][case]['sourceClosureSha256']
+                members[op]=json.dumps(o).encode();q['cases'][case]['observationSha256']=hashlib.sha256(members[op]).hexdigest()
+                if mode=='missing-closure':members.pop(cp)
+                with zipfile.ZipFile(path,'w') as z:
+                    for name,raw in members.items():z.writestr(name,raw)
+                raw=path.read_bytes();q['cases'][case]['archiveSha256']=hashlib.sha256(raw).hexdigest()
+                edit_json(case+'.artifact.json',lambda r:r.update(size_in_bytes=len(raw),digest='sha256:'+q['cases'][case]['archiveSha256']))
+            with contextlib.redirect_stderr(io.StringIO()):
+                try:helper['pair_consumers'](a,root);refused=False
+                except (SystemExit,ValueError,KeyError,TypeError):refused=True
+            assert refused==(mode!='good'),mode
+    print('PAIR_FOUR_RECEIVER_INERT_CONTROLS passed cases='+str(len(modes))+' no-native-evidence')
+
+
+def consumer_sdk_readback_controls():
+    modes=('good','nonselected-profile','missing-binding','public-core-substitution','wrong-core-size','wrong-dll-payload','wrong-sdk-source',
+           'wrong-feed','implicit-fallback','public-substitution-flag','wrong-lock-pin-digest','missing-source-lock','foreign-source-lock-hash',
+           'implicit-request-changed','wrong-cache-raw','wrong-cache-normalized','cache-convention-claim','missing-compiled-lock',
+           'compiled-lock-changed','compiled-request-changed','generated-lock','wrong-asset-normalized','missing-asset','wrong-compiler-reference',
+           'missing-runtime-copy','escaping-runtime-copy')
+    with tempfile.TemporaryDirectory(prefix='pair-sdk-readback-inert-') as tmp:
+        root=Path(tmp);a=admission();helper=consumer_fixture(root,a)
+        with zipfile.ZipFile(root/'fsquint-s1.zip') as z:source={name:z.read(name) for name in z.namelist()}
+        for mode in modes:
+            c=json.loads(source['proc6-state/proof/source-closure.json']);b=json.loads(source['proc6-state/proof/sdk-core-input.json']);pins=json.loads(source['proc6-state/proof/source-lock-pins.json']);profile=json.loads(source['proc6-state/proof/dotnet-profile.json']);case='fsquint-s1'
+            if mode=='nonselected-profile':case='sdd-s1'
+            if mode=='public-core-substitution':b['expected']['packageSha256']='f'*64
+            if mode=='wrong-core-size':b['expected']['packageBytes']+=1
+            if mode=='wrong-dll-payload':b['assemblyPayloads']['lib/netstandard2.0/FSharp.Core.dll']='f'*64
+            if mode=='wrong-sdk-source':b['sdkSourcePath']='/public/FSharp.Core.10.1.401.nupkg'
+            if mode=='wrong-feed':b['coldFeedPath']='/outside/FSharp.Core.10.1.401.nupkg'
+            if mode=='implicit-fallback':b['implicitFallbackEnabled']=True
+            if mode=='public-substitution-flag':b['sameVersionPublicSubstitutionAccepted']=True
+            if mode=='missing-source-lock':pins['locks'].pop()
+            if mode=='foreign-source-lock-hash':pins['locks'][0]['sha256']='f'*64
+            if mode=='implicit-request-changed':pins['locks'][0]['entries'][0]['entry']['requested']='[10.1.401]'
+            cache=next(v for v in c['cachePackageIdentities'] if v['packageId']=='FSharp.Core')
+            locks=[v for v in c['actualLocks'] if any(e['packageId']=='FSharp.Core' for e in v['entries'])]
+            assets=[v for v in c['actualAssetHashes'] if v['packageId']=='FSharp.Core']
+            if mode=='wrong-cache-raw':cache['archiveSha256']='f'*64
+            if mode=='wrong-cache-normalized':cache['metadataContentHash']='public-package-hash'
+            if mode=='cache-convention-claim':cache['cacheSha512ConventionAsserted']=True
+            if mode=='missing-compiled-lock':c['actualLocks'].remove(locks[0])
+            if mode=='compiled-lock-changed':locks[0]['sha256']='f'*64
+            if mode=='compiled-request-changed':locks[0]['entries'][0]['entry']['requested']='[10.1.401]'
+            if mode=='generated-lock':locks[0]['generatedForThisReceiver']=True
+            if mode=='wrong-asset-normalized':assets[0]['contentHash']='public-package-hash'
+            if mode=='missing-asset':c['actualAssetHashes'].remove(assets[0])
+            if mode=='wrong-compiler-reference':c['compilerInputs'][-1][1]='/outside/FSharp.Core.dll'
+            if mode=='missing-runtime-copy':c['runtimeCopies']['FSharp.Core']=[]
+            if mode=='escaping-runtime-copy':c['runtimeCopies']['FSharp.Core']=['../bin/FSharp.Core.dll']
+            # Keep receipt and nested binding hashes coherent so semantic guards decide.
+            pins_raw=json.dumps(pins).encode();b['sourceLockPinsSha256']=hashlib.sha256(pins_raw).hexdigest()
+            if mode=='wrong-lock-pin-digest':b['sourceLockPinsSha256']='f'*64
+            c['sdkBundledInput']=copy.deepcopy(b);binding_raw=None if mode=='missing-binding' else json.dumps(b).encode()
+            with contextlib.redirect_stderr(io.StringIO()):
+                try:helper['pair_sdk_bundled_input'](case,c,profile,pins_raw,binding_raw);refused=False
+                except (SystemExit,ValueError,KeyError,TypeError):refused=True
+            assert refused==(mode!='good'),mode
+    print('PAIR_R8_SDK_READBACK_INERT_CONTROLS passed cases='+str(len(modes))+' sdk-input-separate-from-pair')
+
+
 def main():
+    consumer_sdk_readback_controls()
     consumer_source_only_controls()
+    consumer_readback_controls()
     pair_observation_controls()
     installed_version_preflight_controls()
     for version in ("0.2.0","0.3.0"):
@@ -388,15 +584,27 @@ def main():
         gate=next(line for line in gate if line.startswith('    if:'))
         assert '!inputs.execution_pair' in gate
     job=workflow.split('\n  execution_pair:\n',1)[1]
+    # A failed test inside command substitution does not itself stop a shell function.
+    # Never emit zero to curl --max-time/timeout: zero disables their time bound.
+    remaining=next(line.strip() for line in job.splitlines() if line.strip().startswith('remaining() {'))
+    for seconds,deadline,expected in ((10,70,'30'),(10,17,'7'),(10,10,None),(10,9,None)):
+        script=remaining+f'\nSECONDS={seconds}\ndeadline={deadline}\nvalue=$(remaining); code=$?\nprintf "%s:%s" "$code" "$value"\n'
+        result=subprocess.run(['bash','-c',script],capture_output=True,text=True,timeout=5)
+        assert result.returncode==0 and result.stdout==('0:'+expected if expected is not None else '1:'),(seconds,deadline,result.stdout)
     for gate in ('test "$CLI_ONLY" = false','test "$PREFLIGHT_ONLY" = false','test "$READBACK_ONLY" = false'):
         assert job.index(gate)<job.index('Attest only')<job.index('Push both retained')
     assert 'nuget push' not in prepare
     assert 'skip-duplicate' not in job and 'dotnet pack' not in job
     actual=heredoc('PY_PAIR_ADMISSION'); base=admission()
+    with tempfile.TemporaryDirectory(prefix='pair-selection-inert-') as tmp:consumer_fixture(Path(tmp),base)
     cases={'good':lambda a:None,'disabled':lambda a:a.update(enabled=False),
            'wrong-profile':lambda a:a.update(profile='cli'),'wrong-member':lambda a:a['packages'].pop(IDS[1]),
            'foreign-source':lambda a:a.update(source='z'*40),'missing-capability':lambda a:a.update(namespaceEntitlement=None),
            'not-entitled':lambda a:a['namespaceEntitlement'].update(accepted=False),
+           'foreign-policy-owner':lambda a:a['namespaceEntitlement'].update(nugetUser='another-owner'),
+           'foreign-policy-evidence':lambda a:a['namespaceEntitlement'].update(evidenceSha256='9'*64),
+           'unknown-consumer-run':lambda a:a['consumerQualification'].update(runId=None),
+           'unknown-executor':lambda a:a['consumerQualification'].update(executor=None),
            'wrong-entitlement-pair':lambda a:a['namespaceEntitlement'].update(packageIds=[IDS[0]]),
            'wrong-workflow':lambda a:a['namespaceEntitlement'].update(publisherWorkflow='other.yml'),
            'unknown-protection':lambda a:a.update(tagProtection=None),
@@ -405,13 +613,14 @@ def main():
         with tempfile.TemporaryDirectory(prefix='pair-admission-test-') as temporary:
             root=Path(temporary); a=copy.deepcopy(base);mutate(a)
             write(root/'eng/execution-pair-release-admission.json',a)
+            (root/'eng/write-callable-cli-release-readback.py').write_bytes((ROOT/'eng/write-callable-cli-release-readback.py').read_bytes())
             environment={'OPERATION':base['operation'],'REQUESTED_SOURCE':base['source'],'REQUESTED_MERGE':base['protectedMerge'],
                          'REQUESTED_SHA256':base['manifestSha256'],'REQUESTED_PUBLISHER':'9'*40,'GITHUB_ENV':str(root/'env')}
             old=Path.cwd();os.chdir(root);refused=False
             try:
                 with patch.dict(os.environ,environment,clear=True):
                     try:exec(actual,{})
-                    except (AssertionError,KeyError,TypeError):refused=True
+                    except (AssertionError,KeyError,TypeError,SystemExit):refused=True
             finally:os.chdir(old)
             assert refused == (name!='good'), name
             assert (root/'env').exists()==(name=='good'),name
@@ -431,7 +640,7 @@ def main():
             m={'version':'0.2.0' if mode=='old-manifest' else '0.3.0','tag':'execution/v0.2.0' if mode=='old-manifest' else 'execution/v0.3.0','sourceCommit':'a'*40,'sourceTree':'b'*40,'packages':[{'packageId':id,'sha256':str(i+1)*64} for i,id in enumerate(IDS)]}
             if mode=='wrong-tag':m['tag']='execution/v0.2.0'
             with zipfile.ZipFile(readback/'candidate.zip','w') as z:z.writestr('execution-pair-release-manifest.json',json.dumps(m))
-            a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes());a['enabled']=mode=='enabled'
+            a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes());a['enabled']=mode=='enabled';a['operation']=None
             write(root/'eng/execution-pair-release-admission.json',a)
             write(readback/'jobs.json',{'jobs':[{'id':2,'name':'foreign' if mode=='wrong-job' else 'Prepare the routine Execution pair without publication'}]})
             env={'READBACK_OUTPUT':str(readback),'ARCHIVE_SHA':'0'*64 if mode=='changed-archive' else hashlib.sha256((readback/'candidate.zip').read_bytes()).hexdigest(),
@@ -440,7 +649,7 @@ def main():
             try:
                 with patch.dict(os.environ,env,clear=True):
                     try:exec(bind,{})
-                    except (AssertionError,KeyError,TypeError):refused=True
+                    except (AssertionError,KeyError,TypeError,SystemExit):refused=True
             finally:os.chdir(old)
             assert refused==(mode!='good'),mode
             assert (readback/'candidate-bindings.json').exists()==(mode=='good'),mode
@@ -448,7 +657,8 @@ def main():
             if mode=='good':
                 bound=json.loads((readback/'candidate-bindings.json').read_bytes())
                 assert bound['version']=='0.3.0' and bound['tag']=='execution/v0.3.0' and bound['enabled'] is False
-                for key in ('operation','namespaceEntitlement','tagProtection'):assert bound[key]==a[key] is None
+                assert bound['operation'] is None
+                for key in ('namespaceEntitlement','tagProtection','consumerQualification'):assert bound[key]==a[key]
     gate=installed_job.split('          set -euo pipefail\n',1)[1].split('      - name: Run actual shared pair guards',1)[0]
     gate='set -euo pipefail\n'+'\n'.join(line[10:] if line.startswith('          ') else line for line in gate.splitlines())
     for mode in ('good','package-change','bad-source','bad-run','bad-hash','moved-executor','diff-failure','metadata-change','bad-version'):
@@ -494,16 +704,16 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
     with tempfile.TemporaryDirectory(prefix='pair-readback-test-') as temporary:
         root=Path(temporary)
         manifest={'schema':'fsgg.coordination.execution-pair-release-preparation/1','profile':'execution-pair',
-                  'version':'0.2.0','tag':'execution/v0.2.0','sourceCommit':'a'*40,'sourceTree':'b'*40,
+                  'version':'0.3.0','tag':'execution/v0.3.0','sourceCommit':'a'*40,'sourceTree':'b'*40,
                   'publicationAuthorized':False,'tagAuthorized':False,
                   'packages':[{'packageId':id,'sha256':str(index+1)*64,'assemblySha256':str(index+3)*64} for index,id in enumerate(IDS)]}
         installed={'schema':'fsgg.coordination.execution-pair-installed-load/1','mode':'public','publicOnly':True,
                    'producerProjectReferenced':False,'packageInputsOnly':True,'physicalSourceExclusionEstablished':False,
                    'privateCachesUnavailable':True,'effectiveProjectIsolationGuard':True,'effectiveNuGetFoldersVerified':True,'actualCompilerReferencesVerified':True,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False,
-                   'packages':[{'packageId':row['packageId'],'version':'0.2.0','runtimeSha256':row['assemblySha256']} for row in manifest['packages']]}
-        for mode in ('good','missing-second-feed','wrong-candidate','github-raw-mismatch','payload-unknown','wrong-runtime','wrong-version','claimed-adoption'):
+                   'packages':[{'packageId':row['packageId'],'version':'0.3.0','runtimeSha256':row['assemblySha256']} for row in manifest['packages']]}
+        for mode in ('good','missing-second-feed','wrong-candidate','github-raw-mismatch','payload-unknown','wrong-runtime','wrong-version','claimed-adoption','contradictory-admission-packages','contradictory-admission-merge','contradictory-admission-version','contradictory-admission-tag'):
             current=copy.deepcopy(manifest);smoke=copy.deepcopy(installed)
-            if mode=='wrong-version':current['version']='0.3.0'
+            if mode=='wrong-version':current['version']='0.2.0'
             if mode=='wrong-runtime':smoke['packages'][0]['runtimeSha256']='8'*64
             if mode=='claimed-adoption':smoke['consumerAdoptionAccepted']=True
             write(root/'manifest.json',current);write(root/'installed.json',smoke)
@@ -516,11 +726,20 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
                     if index==0 and mode=='payload-unknown':value['payloadMatch']=None
                     write(path,value)
                     if mode=='missing-second-feed' and index==1 and name=='nuget':path.unlink()
+            selection=admission();selection['manifestSha256']=hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest()
+            selection['packages']={row['packageId']:row['sha256'] for row in current['packages']}
+            # Keep the manifest, feed receipts and coherent consumer proof mutually valid;
+            # each negative contradicts only the final admission cross-field join.
+            if mode=='contradictory-admission-packages':selection['packages'][IDS[0]]='8'*64
+            if mode=='contradictory-admission-merge':selection['protectedMerge']='8'*40
+            if mode=='contradictory-admission-version':selection['version']='0.2.0'
+            if mode=='contradictory-admission-tag':selection['tag']='execution/v0.2.0'
+            consumer_fixture(root/'consumers',selection);write(root/'selection.json',selection)
             output=root/(mode+'.json')
             command=['python3',str(ROOT/'eng/write-callable-cli-release-readback.py'),'--execution-pair',
                      '--publisher','c'*40,'--source','a'*40,'--tree','b'*40,'--merge','a'*40,
                      '--manifest',str(root/'manifest.json'),'--manifest-sha256',hashlib.sha256((root/'manifest.json').read_bytes()).hexdigest(),
-                     '--feed-root',str(root),'--installed',str(root/'installed.json'),'--output',str(output)]
+                     '--admission',str(root/'selection.json'),'--consumer-root',str(root/'consumers'),'--feed-root',str(root),'--installed',str(root/'installed.json'),'--output',str(output)]
             result=subprocess.run(command,capture_output=True,timeout=5)
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             assert output.exists()==(mode=='good'),mode
@@ -553,7 +772,7 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
             try:
                 with patch.dict(os.environ,{'READBACK_OUTPUT':str(readback)},clear=True):
                     try:exec(actual,{})
-                    except (AssertionError,KeyError,TypeError):refused=True
+                    except (AssertionError,KeyError,TypeError,SystemExit):refused=True
             finally:os.chdir(old)
             assert refused==(mode not in {'good','good-omitted-tag-parameters'}),mode
     # Exercise the actual four-cell shell loop with a finite inert curl replacement.
@@ -580,7 +799,7 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed admission=12 archive=20 readback=8 tag-protection=13 four-feed-cells=3 installed-bindings=8 installed-source=9 publisher-source=5 isolation-and-byte-joins=48 version-preflight=11 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed consumer-deadline=4 admission=16 archive=20 readback=12 tag-protection=13 four-feed-cells=3 installed-bindings=8 installed-source=9 publisher-source=5 isolation-and-byte-joins=48 version-preflight=11 selectors=exclusive')
 
 def consumer_source_only_controls():
     """Exercise workflow predicates with inert records; never run a job or SDK."""

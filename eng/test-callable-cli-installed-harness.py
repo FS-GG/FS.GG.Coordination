@@ -432,8 +432,8 @@ printfn "EXECUTION_PAIR_INSTALLED_LOAD_OK"
                                    "packages": joins, "nativeFixtureInvoked": False, "consumerAdoptionAccepted": False}) + b"\n")
     return 0
 
-# Original immutable A; these are observation pins, never publication admission.
-PAIR_OBSERVATION_CANDIDATE = {
+# Original immutable 0.2 A retained as historical evidence; never current admission.
+PAIR_HISTORICAL_CANDIDATE = {
     "source": "c6764ac0cd62cb14372c89c14234292315000380",
     "runId": 38274623070, "runAttempt": 1, "jobId": 114896943746,
     "artifactId": 11759090717,
@@ -445,6 +445,10 @@ PAIR_OBSERVATION_CANDIDATE = {
     },
 }
 
+
+# Genuine original S1 A; observation pins alone never authorize publication.
+PAIR_OBSERVATION_CANDIDATE = {'source': 'b11fb121f046898e655b779dfc6809f35fc7aac6', 'runId': 38455588652, 'jobId': 115497350577, 'artifactId': 11842360725, 'archiveSha256': '75b1b0a8ac11522a63043932abf01c6ad7048988300ee42edddc6dedc3f58791', 'manifestSha256': 'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8', 'packages': {'FS.GG.Execution.Contracts': 'bfd248eb935b4868bb1a7fb431bdb1ec26d3c1fedd2a294c34cf7b546bed151a', 'FS.GG.Execution.Processes': '978ac179d1983b6a3346655cd904391fd8dc2ff7f3b0558ed9fd40fa9aa56cbd'}, 'runAttempt': 1}
+PAIR_ACCOUNT_OWNER_EVIDENCE = {'evidenceKind': 'account-owner-provided', 'evidenceSha256': '47a06f26b2bbd9924df2a9778cfdeb8bf29ee618c88908f652dbe2cbb5019fcb', 'nugetUser': 'Paradigma11', 'repositoryId': 1346720714, 'repositoryOwnerId': 293607011, 'publisherWorkflow': '.github/workflows/callable-cli-release-publish.yml', 'firstPublicationCovered': ['FS.GG.Execution.Contracts', 'FS.GG.Execution.Processes']}
 
 class PairObservationBound(RuntimeError):
     pass
@@ -508,8 +512,8 @@ def observe_execution_pair(output, *, read=None, environment=None):
     candidate = json.loads(json.dumps(PAIR_OBSERVATION_CANDIDATE))
     report = {"schema": "fsgg.coordination.migration-release-preflight/1", "profile": "execution-pair",
               "source": env.get("REQUESTED_PUBLISHER"), "candidate": candidate,
-              "proposedVersion": "0.2.0", "publicationAuthorized": False, "versionReserved": False,
-              "publicationEligible": False, "namespaceEntitlement": "unknown",
+              "proposedVersion": "0.3.0", "publicationAuthorized": False, "versionReserved": False,
+              "publicationEligible": False, "namespaceEntitlement": dict(PAIR_ACCOUNT_OWNER_EVIDENCE),
               "trustedPublishingLoginSucceeded": None, "credentialProbe": "not-selected",
               "identity": {"nugetUser": env.get("SELECTED_NUGET_USER"),
                            "repository": "FS-GG/FS.GG.Coordination",
@@ -535,7 +539,7 @@ def observe_execution_pair(output, *, read=None, environment=None):
              and env.get("OPERATION", "") == "" and env.get("EXECUTION_PAIR") == "true"
              and env.get("PREFLIGHT_ONLY") == "true" and env.get("CLI_ONLY") == "false"
              and env.get("READBACK_ONLY") == "false"
-             and re.fullmatch(r"[A-Za-z0-9_.-]{1,100}", env.get("SELECTED_NUGET_USER", "")) is not None)
+             and env.get("SELECTED_NUGET_USER") == PAIR_ACCOUNT_OWNER_EVIDENCE["nugetUser"])
     record("inputs", "passed" if valid else "failed", None if valid else "exclusive protected-source/original-A binding refused")
     reader = read if read is not None else PairMetadataReader()
     api = "https://api.github.com/repos/FS-GG/FS.GG.Coordination"
@@ -578,7 +582,7 @@ def observe_execution_pair(output, *, read=None, environment=None):
     def artifact_metadata(data):
         if data["expired"] is not False: return "expired"
         expected = {"id": candidate["artifactId"], "name": "execution-pair-" + candidate["source"],
-                    "size_in_bytes": 150889, "digest": "sha256:" + candidate["archiveSha256"]}
+                    "size_in_bytes": 169508, "digest": "sha256:" + candidate["archiveSha256"]}
         return "passed" if all(type(data[k]) is type(v) and data[k] == v for k, v in expected.items()) and data["workflow_run"]["id"] == candidate["runId"] and data["workflow_run"]["head_sha"] == candidate["source"] else "foreign"
     observation("main-before", api + "/git/ref/heads/main", main_ref)
     observation("candidate-run", api + f"/actions/runs/{candidate['runId']}", run_metadata)
@@ -594,15 +598,15 @@ def observe_execution_pair(output, *, read=None, environment=None):
             if not isinstance(data, list) or len(data) > 100: return "malformed"
             versions = [row["name"] for row in data]
             if not all(isinstance(v, str) for v in versions): return "malformed"
-            return "occupied" if "0.2.0" in versions else "unknown" if len(data) == 100 else "absent"
+            return "occupied" if "0.3.0" in versions else "unknown" if len(data) == 100 else "absent"
         observation("github-cell-" + package, namespace + "/versions?per_page=100", github_versions, absent=True)
         def public_versions(data):
             versions = data["versions"]
             if not isinstance(versions, list) or not all(isinstance(v, str) for v in versions): return "malformed"
-            return "occupied" if "0.2.0" in versions else "absent"
+            return "occupied" if "0.3.0" in versions else "absent"
         observation("nuget-cell-" + package, "https://api.nuget.org/v3-flatcontainer/" + package.lower() + "/index.json", public_versions, absent=True, authenticated=False)
-    observation("component-tag", api + "/git/ref/tags/execution/v0.2.0", lambda _: "occupied", absent=True)
-    observation("component-release", api + "/releases/tags/execution%2Fv0.2.0", lambda _: "occupied", absent=True)
+    observation("component-tag", api + "/git/ref/tags/execution/v0.3.0", lambda _: "occupied", absent=True)
+    observation("component-release", api + "/releases/tags/execution%2Fv0.3.0", lambda _: "occupied", absent=True)
     def protection(data):
         desired = json.loads((ROOT / "eng/repository-settings/release-tag-ruleset.json").read_bytes())
         keys = ("target", "enforcement", "conditions", "bypass_actors", "rules")
@@ -621,10 +625,10 @@ def observe_execution_pair(output, *, read=None, environment=None):
         return "observed"
     observation("github-identity", "https://api.github.com/user", github_identity)
     observation("main-after", api + "/git/ref/heads/main", main_ref)
-    record("namespace-entitlement", "unknown", "authenticated account new-package policy, ownership and prefix rights unavailable; supplying owner unknown")
+    record("namespace-entitlement", "observed", "account-owner-provided active policy covers first publication of both IDs; current login and every publication gate remain separate", sha256=PAIR_ACCOUNT_OWNER_EVIDENCE["evidenceSha256"])
     required = [row for row in report["observations"] if row["name"] != "namespace-entitlement"]
     report["collectionComplete"] = all(row["state"] in ("passed", "absent", "observed") for row in required)
-    report["exitOutcome"] = "collected-entitlement-incomplete" if report["collectionComplete"] else "incomplete"
+    report["exitOutcome"] = "collected-no-publication-authority" if report["collectionComplete"] else "incomplete"
     # Report failure propagates independently; it never erases the first collected cause.
     report["reportingOutcome"] = "written"
     try:
