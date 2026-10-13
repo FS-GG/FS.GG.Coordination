@@ -199,10 +199,19 @@ module ProcessSessionTests =
 
     [<Fact>]
     let ``actual stdin failure stays bounded without exposing request secrets`` () =
-        let payload = Array.create 32768 (byte 's')
-        let session,budget,liveClock = prepare { command with Arguments = [ "-c"; "exec 0<&-; /bin/sleep 0.1" ]; Input = Bytes(ReadOnlyMemory<byte>(payload)) }
+        let payload = Array.create (192 * 1024) (byte 's')
+        // No reader can drain this pipe: report its actual capacity before closing
+        // stdin. When the admitted input exceeds that capacity, even a parent write
+        // that starts before this child runs cannot complete successfully.
+        let script = "import fcntl,os,time; capacity=fcntl.fcntl(0,fcntl.F_GETPIPE_SZ); os.write(1,(str(capacity)+'\\n').encode('ascii')); os.close(0); time.sleep(0.1)"
+        let session,budget,liveClock =
+            prepare { command with Executable = "/usr/bin/python3"; Arguments = [ "-c"; script ]; Input = Bytes(ReadOnlyMemory<byte>(payload)) }
         session.RunAsync(CancellationToken.None).GetAwaiter().GetResult() |> ignore
         let final = settle liveClock budget session
+        let parsed,capacity = Int32.TryParse((text final.Stdout).Trim())
+        Assert.True(parsed, "closed-reader fixture must report its actual stdin pipe capacity")
+        Assert.True(capacity > 0 && capacity < payload.Length, "admitted input must exceed the observed stdin pipe capacity")
+        Assert.True(final.FirstFailure.IsSome, "the observed closed reader must cause the bounded stdin write to fail")
         Assert.Equal("bcl-stdin-write-failed",final.FirstFailure.Value.Diagnostic.Code)
         Assert.Equal("BCL session observation.",final.FirstFailure.Value.Diagnostic.Message)
         Assert.True(match final.Stop with Requested(SinkFailure,_) -> true | _ -> false)
