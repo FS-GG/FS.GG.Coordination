@@ -920,6 +920,8 @@ jobs:
           # Capture immutable receiver-source lock expectations before SDK, restore or build.
           source=pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'receiver-source'
           expected=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+          # Observe the unchanged SDK-generated Core lock before SDK setup or restore.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':expected['FSharp.Core']={'version':'10.1.401'}
           lock_paths=list(source.rglob('packages.lock.json'))
           if len(lock_paths)>128 or sum(v.stat().st_size for v in lock_paths)>8388608:raise ValueError('source lock observation cap')
           pins=[]
@@ -953,6 +955,18 @@ jobs:
               expected={'sdk/10.0.401/.version':(98,'496179aced13abd185f027a1ce8519cc57aa194a5538c51226c0c12e63a4a5ba'),'sdk/10.0.401/FSharp/fsc.dll':(97104,'2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b'),'shared/Microsoft.NETCore.App/10.0.12/libcoreclr.so':(7110952,'df5cfe7ba5abf7931f4836726f2fbb0d47dc32caa45d3c209ddf7ccd25c32f4c')}
               if any((rows.get(name,{}).get('bytes'),rows.get(name,{}).get('sha256'))!=value for name,value in expected.items()):
                   raise ValueError('selected SDK/compiler/runtime bytes differ')
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_payload(size,digest,identity,assemblies):
+              row=consumer_sdk_core_spec()
+              required={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',row['dllRelativePath']:row['dllSha256']}
+              if type(size) is not int or size!=row['packageBytes'] or digest!=row['packageSha256'] or identity!=('FSharp.Core',row['version']) or assemblies!=required:
+                  raise ValueError('selected SDK Core raw package or DLL payload differs')
+          def consumer_sdk_core_feed(case,files,package_files):
+              if case not in ('sdd-s1','sdd-rollback','fsquint-s1','fsquint-rollback'):raise ValueError('unsupported SDK input receiver')
+              expected=set(package_files)
+              if case=='fsquint-s1':expected.add('FSharp.Core.10.1.401.nupkg')
+              if set(files)!=expected or len(files)!=len(expected):raise ValueError('explicit cold feed population differs')
           root=pathlib.Path(os.environ['DOTNET_INSTALL_DIR']);state=pathlib.Path(os.environ['PROC6_STATE'])
           if root!=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-dotnet' or root.is_symlink():raise ValueError('private SDK root differs')
           root=root.resolve(strict=True);host=pathlib.Path(shutil.which('dotnet')).resolve(strict=True)
@@ -974,6 +988,41 @@ jobs:
               a=json.loads(p.read_bytes())['runtimeOptions']
               if a.get('tfm')!='net10.0' or a.get('framework')!={'name':'Microsoft.NETCore.App','version':'10.0.12'} or a.get('frameworks'):raise ValueError('compiler runtime profile differs')
               rows[name]={'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          # The SDK-bundled Core payload differs from the same-version public package.
+          # Bind its genuine original bytes explicitly; implicit library-pack fallback stays disabled.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              import io,zipfile,xml.etree.ElementTree as E
+              core=consumer_sdk_core_spec();source=root/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg'
+              if source.is_symlink() or source.resolve(strict=True)!=source or not source.is_file() or source.stat().st_size!=core['packageBytes']:raise ValueError('SDK Core source location or allocation differs')
+              raw=source.read_bytes();digest=hashlib.sha256(raw).hexdigest()
+              if digest!=core['packageSha256']:raise ValueError('SDK Core source bytes differ')
+              with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                  members=archive.infolist();names=[v.filename for v in members]
+                  if not 0<len(members)<=64 or len(names)!=len(set(names)) or sum(v.file_size for v in members)>16777216:raise ValueError('SDK Core package allocation differs')
+                  for name in ('FSharp.Core.nuspec','lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath']):
+                      if names.count(name)!=1:raise ValueError('SDK Core member absent or duplicated')
+                  if archive.getinfo('FSharp.Core.nuspec').file_size>65536:raise ValueError('SDK Core nuspec cap')
+                  ns=E.fromstring(archive.read('FSharp.Core.nuspec'));local=lambda n:n.tag.rsplit('}',1)[-1]
+                  metadata=[v for v in ns if local(v)=='metadata']
+                  if local(ns)!='package' or len(metadata)!=1:raise ValueError('SDK Core nuspec shape differs')
+                  identity=[]
+                  for key in ('id','version'):
+                      values=[v.text for v in metadata[0] if local(v)==key]
+                      if len(values)!=1:raise ValueError('SDK Core nuspec field differs')
+                      identity.append(values[0])
+                  assemblies={name:hashlib.sha256(archive.read(name)).hexdigest() for name in ('lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath'])}
+              consumer_sdk_core_payload(len(raw),digest,tuple(identity),assemblies)
+              pins=json.loads((state/'proof/source-lock-pins.json').read_bytes())
+              hashes={entry['entry'].get('contentHash') for lock in pins['locks'] for entry in lock['entries'] if entry['packageId']=='FSharp.Core' and entry['entry'].get('resolved')==core['version']}
+              if hashes!={core['contentHash']}:raise ValueError('SDK Core differs from original receiver lock expectation')
+              feed=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'
+              if feed.is_symlink() or feed.resolve(strict=True)!=feed or not feed.is_dir():raise ValueError('explicit input feed location differs')
+              target=feed/'FSharp.Core.10.1.401.nupkg'
+              with target.open('xb') as output:output.write(raw)
+              pair=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+              consumer_sdk_core_feed(os.environ['CONSUMER_CASE'],[p.name for p in feed.iterdir()],[id+'.'+row['version']+'.nupkg' for id,row in pair.items()])
+              if target.is_symlink() or target.resolve(strict=True)!=target or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:raise ValueError('copied SDK Core input differs')
+              (state/'proof/sdk-core-input.json').write_text(json.dumps({'sdkVersion':'10.0.401','sdkSourcePath':str(source),'coldFeedPath':str(target),'expected':core,'assemblyPayloads':assemblies,'sourceLockPinsSha256':hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest(),'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False},sort_keys=True))
           (state/'proof/dotnet-profile.json').write_text(json.dumps({'hostPath':str(host),'installation':str(root),'sdkVersion':'10.0.401','compilerPath':str(root/'sdk/10.0.401/FSharp/fsc.dll'),'files':rows,'hostBytesObservedOnly':True,'hostMatchesHistoricalProfileClaim':False,'nativeAcceptance':False,'runtimeVersion':'10.0.12','runtimeRollForwardEnvironment':'Disable'},sort_keys=True))
           with open(os.environ['GITHUB_ENV'],'a') as output:
               for key,value in {'DOTNET_HOST_PATH':host,'DOTNET_ROOT':root,'DOTNET_ROOT_X64':root,'MSBUILDDISABLENODEREUSE':'1'}.items():output.write(key+'='+str(value)+'\n')
@@ -1053,6 +1102,7 @@ jobs:
           E.SubElement(sources,'add',key='public',value='https://api.nuget.org/v3/index.json')
           mapping=E.SubElement(config,'packageSourceMapping');one=E.SubElement(mapping,'packageSource',key='original')
           for id in expected:E.SubElement(one,'package',pattern=id)
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':E.SubElement(one,'package',pattern='FSharp.Core')
           public=E.SubElement(mapping,'packageSource',key='public');E.SubElement(public,'package',pattern='*')
           E.ElementTree(config).write(state/'NuGet.Config',encoding='unicode')
           # Instrument the actual evaluated compilation, imports and references; no producer source/helper.
@@ -1137,6 +1187,20 @@ jobs:
               # Observed separately: do not assume this file uses normalized or raw archive convention.
               consumer_hash_text(observed_cache_sha512)
 
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_binding(binding,sdk,feed,lock_sha):
+              spec=consumer_sdk_core_spec()
+              assemblies={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',spec['dllRelativePath']:spec['dllSha256']}
+              if (type(binding) is not dict or binding.get('expected')!=spec or binding.get('sdkVersion')!='10.0.401'
+                  or binding.get('sdkSourcePath')!=str(pathlib.Path(sdk)/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg')
+                  or binding.get('coldFeedPath')!=str(pathlib.Path(feed)/'FSharp.Core.10.1.401.nupkg')
+                  or binding.get('assemblyPayloads')!=assemblies or binding.get('sourceLockPinsSha256')!=lock_sha
+                  or binding.get('implicitFallbackEnabled') is not False or binding.get('sameVersionPublicSubstitutionAccepted') is not False):raise ValueError('SDK Core input binding changed')
+          def consumer_lock_schema(doc):
+              if type(doc) is not dict or type(doc.get('version')) is not int or doc['version'] not in (1,2) or type(doc.get('dependencies')) is not dict or any(type(v) is not dict for v in doc['dependencies'].values()):raise ValueError('unrecognized lock schema')
+          def consumer_sdk_core_lock_entry(row,expected,original):
+              if type(row) is not dict or row!=original or row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('SDK Core actual lock differs from immutable original source')
           def consumer_lock_entry(row,expected):
               if row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('actual selected lock entry differs')
               if row['type']=='Direct' and not consumer_exact_range(row.get('requested'),expected['version']):raise ValueError('actual direct lock request is not exact')
@@ -1166,6 +1230,14 @@ jobs:
                   if len(values)!=1:raise ValueError('missing or mixed immutable receiver lock expected hash')
                   row['contentHash']=consumer_hash_text(next(iter(values)))
               normalized_origin={'kind':'immutable selected receiver source locks before restore','source':source_pins['receiverSource'],'pins':source_pins['locks']}
+          # Core is a separate compiler/runtime input, not an exact-direct Execution pair member.
+          sdk_core=None
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              raw=(state/'proof/sdk-core-input.json').read_bytes()
+              if len(raw)>16384:raise ValueError('SDK Core proof allocation differs')
+              binding=json.loads(raw);sdk_core=binding['expected']
+              consumer_sdk_core_binding(binding,str(sdk),str(pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'),hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest())
+              cache_expected['FSharp.Core']=sdk_core
           cache_records=[]
           for id,row in cache_expected.items():
               folder=packages/id.lower()/row['version'];archive=folder/(id.lower()+'.'+row['version']+'.nupkg')
@@ -1195,7 +1267,7 @@ jobs:
                   lock=project.parent/'packages.lock.json'
                   if lock.is_symlink() or not lock.is_file() or not 0<lock.stat().st_size<=4194304:raise ValueError('actual restore lock missing or unsafe')
                   raw=lock.read_bytes();doc=json.loads(raw);rows=[]
-                  if doc.get('version')!=1:raise ValueError('unrecognized lock schema')
+                  consumer_lock_schema(doc)
                   if os.environ['CONSUMER_CASE']!='fsquint-rollback':
                       pins=[v for v in source_pins['locks'] if v['path']==str(lock.relative_to(receiver))]
                       if len(pins)!=1 or pins[0]['sha256']!=hashlib.sha256(raw).hexdigest():raise ValueError('immutable receiver source lock changed')
@@ -1203,8 +1275,13 @@ jobs:
                       matching=[(framework,deps[id]) for framework,deps in doc.get('dependencies',{}).items() if id in deps]
                       if not matching:raise ValueError('selected package missing from actual lock')
                       for framework,value in matching:
-                          consumer_lock_entry(value,cache_expected[id]);rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
-                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
+                          if id=='FSharp.Core' and sdk_core is not None:
+                              original=[e['entry'] for pin in source_pins['locks'] if pin['path']==str(lock.relative_to(receiver)) for e in pin['entries'] if e['framework']==framework and e['packageId']==id]
+                              if len(original)!=1:raise ValueError('missing original SDK Core lock row')
+                              consumer_sdk_core_lock_entry(value,cache_expected[id],original[0])
+                          else:consumer_lock_entry(value,cache_expected[id])
+                          rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
+                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'schemaVersion':doc['version'],'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
               for id,row in expected.items():
                   selected=[(name,value) for name,value in a['libraries'].items() if name.split('/')[0]==id]
                   if selected:
@@ -1224,7 +1301,9 @@ jobs:
                   if hashlib.sha256((fsharp/relative).read_bytes()).hexdigest()!=digest:raise ValueError('historical FSharp input bytes differ')
           traces=list(receiver.rglob('proc6-inputs.txt'))
           if not 0<len(traces)<=128:raise ValueError('missing actual compilation evidence')
-          actual={id:set() for id in expected};inputs=[];compiler_evaluations=[]
+          reference_expected={id:dict(row) for id,row in expected.items()}
+          if sdk_core is not None:reference_expected['FSharp.Core']=sdk_core
+          actual={id:set() for id in reference_expected};inputs=[];compiler_evaluations=[]
           for trace in traces:
               if trace.stat().st_size>1048576:raise ValueError('compiler metadata cap')
               evaluated={}
@@ -1240,16 +1319,16 @@ jobs:
                       required=host if kind in ('H','F') else sdk/'sdk/10.0.401/Sdks' if kind=='S' else sdk/'sdk/10.0.401/FSharp/fsc.dll'
                       if p!=required or kind in evaluated:raise ValueError('evaluated compiler/tool path differs')
                       evaluated[kind]=str(p)
-                  for id,row in expected.items():
+                  for id,row in reference_expected.items():
                       if kind=='R' and p.name==id+'.dll':
-                          target=packages/id.lower()/row['version']/'lib/net10.0'/(id+'.dll')
+                          target=packages/id.lower()/row['version']/row.get('dllRelativePath','lib/net10.0/'+id+'.dll')
                           if p!=target or hashlib.sha256(p.read_bytes()).hexdigest()!=row['dllSha256']:raise ValueError('actual compiler package bytes differ')
                           actual[id].add(str(p))
               consumer_compiler_evaluation(evaluated,str(host),str(sdk))
               compiler_evaluations.append(evaluated)
           if any(len(paths)!=1 for paths in actual.values()):raise ValueError('missing or mixed actual compiler package references')
           runtime={}
-          for id,row in expected.items():
+          for id,row in reference_expected.items():
               copies=[p for p in receiver.rglob(id+'.dll') if 'bin' in p.relative_to(receiver).parts]
               if not copies or len(copies)>128:raise ValueError('missing runtime package copies')
               for p in copies:
@@ -1270,7 +1349,7 @@ jobs:
                   count+=1
                   if count>200000:raise ValueError('filesystem observation cap')
                   if p.name in ('FS.GG.Execution.Contracts.fsproj','FS.GG.Execution.Processes.fsproj','test-callable-cli-installed-harness.py','callable-cli-release.fsx'):raise ValueError('producer source physically present')
-          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
+          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'sdkBundledInput':json.loads((state/'proof/sdk-core-input.json').read_bytes()) if sdk_core is not None else None,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
           raw=json.dumps(proof,sort_keys=True).encode()
           if len(raw)>1048576:raise ValueError('source closure evidence cap')
           (state/'proof/source-closure.json').write_bytes(raw)
@@ -1578,6 +1657,8 @@ jobs:
           # Capture immutable receiver-source lock expectations before SDK, restore or build.
           source=pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'receiver-source'
           expected=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+          # Observe the unchanged SDK-generated Core lock before SDK setup or restore.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':expected['FSharp.Core']={'version':'10.1.401'}
           lock_paths=list(source.rglob('packages.lock.json'))
           if len(lock_paths)>128 or sum(v.stat().st_size for v in lock_paths)>8388608:raise ValueError('source lock observation cap')
           pins=[]
@@ -1611,6 +1692,18 @@ jobs:
               expected={'sdk/10.0.401/.version':(98,'496179aced13abd185f027a1ce8519cc57aa194a5538c51226c0c12e63a4a5ba'),'sdk/10.0.401/FSharp/fsc.dll':(97104,'2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b'),'shared/Microsoft.NETCore.App/10.0.12/libcoreclr.so':(7110952,'df5cfe7ba5abf7931f4836726f2fbb0d47dc32caa45d3c209ddf7ccd25c32f4c')}
               if any((rows.get(name,{}).get('bytes'),rows.get(name,{}).get('sha256'))!=value for name,value in expected.items()):
                   raise ValueError('selected SDK/compiler/runtime bytes differ')
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_payload(size,digest,identity,assemblies):
+              row=consumer_sdk_core_spec()
+              required={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',row['dllRelativePath']:row['dllSha256']}
+              if type(size) is not int or size!=row['packageBytes'] or digest!=row['packageSha256'] or identity!=('FSharp.Core',row['version']) or assemblies!=required:
+                  raise ValueError('selected SDK Core raw package or DLL payload differs')
+          def consumer_sdk_core_feed(case,files,package_files):
+              if case not in ('sdd-s1','sdd-rollback','fsquint-s1','fsquint-rollback'):raise ValueError('unsupported SDK input receiver')
+              expected=set(package_files)
+              if case=='fsquint-s1':expected.add('FSharp.Core.10.1.401.nupkg')
+              if set(files)!=expected or len(files)!=len(expected):raise ValueError('explicit cold feed population differs')
           root=pathlib.Path(os.environ['DOTNET_INSTALL_DIR']);state=pathlib.Path(os.environ['PROC6_STATE'])
           if root!=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-dotnet' or root.is_symlink():raise ValueError('private SDK root differs')
           root=root.resolve(strict=True);host=pathlib.Path(shutil.which('dotnet')).resolve(strict=True)
@@ -1632,6 +1725,41 @@ jobs:
               a=json.loads(p.read_bytes())['runtimeOptions']
               if a.get('tfm')!='net10.0' or a.get('framework')!={'name':'Microsoft.NETCore.App','version':'10.0.12'} or a.get('frameworks'):raise ValueError('compiler runtime profile differs')
               rows[name]={'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          # The SDK-bundled Core payload differs from the same-version public package.
+          # Bind its genuine original bytes explicitly; implicit library-pack fallback stays disabled.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              import io,zipfile,xml.etree.ElementTree as E
+              core=consumer_sdk_core_spec();source=root/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg'
+              if source.is_symlink() or source.resolve(strict=True)!=source or not source.is_file() or source.stat().st_size!=core['packageBytes']:raise ValueError('SDK Core source location or allocation differs')
+              raw=source.read_bytes();digest=hashlib.sha256(raw).hexdigest()
+              if digest!=core['packageSha256']:raise ValueError('SDK Core source bytes differ')
+              with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                  members=archive.infolist();names=[v.filename for v in members]
+                  if not 0<len(members)<=64 or len(names)!=len(set(names)) or sum(v.file_size for v in members)>16777216:raise ValueError('SDK Core package allocation differs')
+                  for name in ('FSharp.Core.nuspec','lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath']):
+                      if names.count(name)!=1:raise ValueError('SDK Core member absent or duplicated')
+                  if archive.getinfo('FSharp.Core.nuspec').file_size>65536:raise ValueError('SDK Core nuspec cap')
+                  ns=E.fromstring(archive.read('FSharp.Core.nuspec'));local=lambda n:n.tag.rsplit('}',1)[-1]
+                  metadata=[v for v in ns if local(v)=='metadata']
+                  if local(ns)!='package' or len(metadata)!=1:raise ValueError('SDK Core nuspec shape differs')
+                  identity=[]
+                  for key in ('id','version'):
+                      values=[v.text for v in metadata[0] if local(v)==key]
+                      if len(values)!=1:raise ValueError('SDK Core nuspec field differs')
+                      identity.append(values[0])
+                  assemblies={name:hashlib.sha256(archive.read(name)).hexdigest() for name in ('lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath'])}
+              consumer_sdk_core_payload(len(raw),digest,tuple(identity),assemblies)
+              pins=json.loads((state/'proof/source-lock-pins.json').read_bytes())
+              hashes={entry['entry'].get('contentHash') for lock in pins['locks'] for entry in lock['entries'] if entry['packageId']=='FSharp.Core' and entry['entry'].get('resolved')==core['version']}
+              if hashes!={core['contentHash']}:raise ValueError('SDK Core differs from original receiver lock expectation')
+              feed=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'
+              if feed.is_symlink() or feed.resolve(strict=True)!=feed or not feed.is_dir():raise ValueError('explicit input feed location differs')
+              target=feed/'FSharp.Core.10.1.401.nupkg'
+              with target.open('xb') as output:output.write(raw)
+              pair=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+              consumer_sdk_core_feed(os.environ['CONSUMER_CASE'],[p.name for p in feed.iterdir()],[id+'.'+row['version']+'.nupkg' for id,row in pair.items()])
+              if target.is_symlink() or target.resolve(strict=True)!=target or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:raise ValueError('copied SDK Core input differs')
+              (state/'proof/sdk-core-input.json').write_text(json.dumps({'sdkVersion':'10.0.401','sdkSourcePath':str(source),'coldFeedPath':str(target),'expected':core,'assemblyPayloads':assemblies,'sourceLockPinsSha256':hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest(),'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False},sort_keys=True))
           (state/'proof/dotnet-profile.json').write_text(json.dumps({'hostPath':str(host),'installation':str(root),'sdkVersion':'10.0.401','compilerPath':str(root/'sdk/10.0.401/FSharp/fsc.dll'),'files':rows,'hostBytesObservedOnly':True,'hostMatchesHistoricalProfileClaim':False,'nativeAcceptance':False,'runtimeVersion':'10.0.12','runtimeRollForwardEnvironment':'Disable'},sort_keys=True))
           with open(os.environ['GITHUB_ENV'],'a') as output:
               for key,value in {'DOTNET_HOST_PATH':host,'DOTNET_ROOT':root,'DOTNET_ROOT_X64':root,'MSBUILDDISABLENODEREUSE':'1'}.items():output.write(key+'='+str(value)+'\n')
@@ -1711,6 +1839,7 @@ jobs:
           E.SubElement(sources,'add',key='public',value='https://api.nuget.org/v3/index.json')
           mapping=E.SubElement(config,'packageSourceMapping');one=E.SubElement(mapping,'packageSource',key='original')
           for id in expected:E.SubElement(one,'package',pattern=id)
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':E.SubElement(one,'package',pattern='FSharp.Core')
           public=E.SubElement(mapping,'packageSource',key='public');E.SubElement(public,'package',pattern='*')
           E.ElementTree(config).write(state/'NuGet.Config',encoding='unicode')
           # Instrument the actual evaluated compilation, imports and references; no producer source/helper.
@@ -1795,6 +1924,20 @@ jobs:
               # Observed separately: do not assume this file uses normalized or raw archive convention.
               consumer_hash_text(observed_cache_sha512)
 
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_binding(binding,sdk,feed,lock_sha):
+              spec=consumer_sdk_core_spec()
+              assemblies={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',spec['dllRelativePath']:spec['dllSha256']}
+              if (type(binding) is not dict or binding.get('expected')!=spec or binding.get('sdkVersion')!='10.0.401'
+                  or binding.get('sdkSourcePath')!=str(pathlib.Path(sdk)/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg')
+                  or binding.get('coldFeedPath')!=str(pathlib.Path(feed)/'FSharp.Core.10.1.401.nupkg')
+                  or binding.get('assemblyPayloads')!=assemblies or binding.get('sourceLockPinsSha256')!=lock_sha
+                  or binding.get('implicitFallbackEnabled') is not False or binding.get('sameVersionPublicSubstitutionAccepted') is not False):raise ValueError('SDK Core input binding changed')
+          def consumer_lock_schema(doc):
+              if type(doc) is not dict or type(doc.get('version')) is not int or doc['version'] not in (1,2) or type(doc.get('dependencies')) is not dict or any(type(v) is not dict for v in doc['dependencies'].values()):raise ValueError('unrecognized lock schema')
+          def consumer_sdk_core_lock_entry(row,expected,original):
+              if type(row) is not dict or row!=original or row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('SDK Core actual lock differs from immutable original source')
           def consumer_lock_entry(row,expected):
               if row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('actual selected lock entry differs')
               if row['type']=='Direct' and not consumer_exact_range(row.get('requested'),expected['version']):raise ValueError('actual direct lock request is not exact')
@@ -1824,6 +1967,14 @@ jobs:
                   if len(values)!=1:raise ValueError('missing or mixed immutable receiver lock expected hash')
                   row['contentHash']=consumer_hash_text(next(iter(values)))
               normalized_origin={'kind':'immutable selected receiver source locks before restore','source':source_pins['receiverSource'],'pins':source_pins['locks']}
+          # Core is a separate compiler/runtime input, not an exact-direct Execution pair member.
+          sdk_core=None
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              raw=(state/'proof/sdk-core-input.json').read_bytes()
+              if len(raw)>16384:raise ValueError('SDK Core proof allocation differs')
+              binding=json.loads(raw);sdk_core=binding['expected']
+              consumer_sdk_core_binding(binding,str(sdk),str(pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'),hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest())
+              cache_expected['FSharp.Core']=sdk_core
           cache_records=[]
           for id,row in cache_expected.items():
               folder=packages/id.lower()/row['version'];archive=folder/(id.lower()+'.'+row['version']+'.nupkg')
@@ -1853,7 +2004,7 @@ jobs:
                   lock=project.parent/'packages.lock.json'
                   if lock.is_symlink() or not lock.is_file() or not 0<lock.stat().st_size<=4194304:raise ValueError('actual restore lock missing or unsafe')
                   raw=lock.read_bytes();doc=json.loads(raw);rows=[]
-                  if doc.get('version')!=1:raise ValueError('unrecognized lock schema')
+                  consumer_lock_schema(doc)
                   if os.environ['CONSUMER_CASE']!='fsquint-rollback':
                       pins=[v for v in source_pins['locks'] if v['path']==str(lock.relative_to(receiver))]
                       if len(pins)!=1 or pins[0]['sha256']!=hashlib.sha256(raw).hexdigest():raise ValueError('immutable receiver source lock changed')
@@ -1861,8 +2012,13 @@ jobs:
                       matching=[(framework,deps[id]) for framework,deps in doc.get('dependencies',{}).items() if id in deps]
                       if not matching:raise ValueError('selected package missing from actual lock')
                       for framework,value in matching:
-                          consumer_lock_entry(value,cache_expected[id]);rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
-                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
+                          if id=='FSharp.Core' and sdk_core is not None:
+                              original=[e['entry'] for pin in source_pins['locks'] if pin['path']==str(lock.relative_to(receiver)) for e in pin['entries'] if e['framework']==framework and e['packageId']==id]
+                              if len(original)!=1:raise ValueError('missing original SDK Core lock row')
+                              consumer_sdk_core_lock_entry(value,cache_expected[id],original[0])
+                          else:consumer_lock_entry(value,cache_expected[id])
+                          rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
+                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'schemaVersion':doc['version'],'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
               for id,row in expected.items():
                   selected=[(name,value) for name,value in a['libraries'].items() if name.split('/')[0]==id]
                   if selected:
@@ -1882,7 +2038,9 @@ jobs:
                   if hashlib.sha256((fsharp/relative).read_bytes()).hexdigest()!=digest:raise ValueError('historical FSharp input bytes differ')
           traces=list(receiver.rglob('proc6-inputs.txt'))
           if not 0<len(traces)<=128:raise ValueError('missing actual compilation evidence')
-          actual={id:set() for id in expected};inputs=[];compiler_evaluations=[]
+          reference_expected={id:dict(row) for id,row in expected.items()}
+          if sdk_core is not None:reference_expected['FSharp.Core']=sdk_core
+          actual={id:set() for id in reference_expected};inputs=[];compiler_evaluations=[]
           for trace in traces:
               if trace.stat().st_size>1048576:raise ValueError('compiler metadata cap')
               evaluated={}
@@ -1898,16 +2056,16 @@ jobs:
                       required=host if kind in ('H','F') else sdk/'sdk/10.0.401/Sdks' if kind=='S' else sdk/'sdk/10.0.401/FSharp/fsc.dll'
                       if p!=required or kind in evaluated:raise ValueError('evaluated compiler/tool path differs')
                       evaluated[kind]=str(p)
-                  for id,row in expected.items():
+                  for id,row in reference_expected.items():
                       if kind=='R' and p.name==id+'.dll':
-                          target=packages/id.lower()/row['version']/'lib/net10.0'/(id+'.dll')
+                          target=packages/id.lower()/row['version']/row.get('dllRelativePath','lib/net10.0/'+id+'.dll')
                           if p!=target or hashlib.sha256(p.read_bytes()).hexdigest()!=row['dllSha256']:raise ValueError('actual compiler package bytes differ')
                           actual[id].add(str(p))
               consumer_compiler_evaluation(evaluated,str(host),str(sdk))
               compiler_evaluations.append(evaluated)
           if any(len(paths)!=1 for paths in actual.values()):raise ValueError('missing or mixed actual compiler package references')
           runtime={}
-          for id,row in expected.items():
+          for id,row in reference_expected.items():
               copies=[p for p in receiver.rglob(id+'.dll') if 'bin' in p.relative_to(receiver).parts]
               if not copies or len(copies)>128:raise ValueError('missing runtime package copies')
               for p in copies:
@@ -1928,7 +2086,7 @@ jobs:
                   count+=1
                   if count>200000:raise ValueError('filesystem observation cap')
                   if p.name in ('FS.GG.Execution.Contracts.fsproj','FS.GG.Execution.Processes.fsproj','test-callable-cli-installed-harness.py','callable-cli-release.fsx'):raise ValueError('producer source physically present')
-          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
+          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'sdkBundledInput':json.loads((state/'proof/sdk-core-input.json').read_bytes()) if sdk_core is not None else None,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
           raw=json.dumps(proof,sort_keys=True).encode()
           if len(raw)>1048576:raise ValueError('source closure evidence cap')
           (state/'proof/source-closure.json').write_bytes(raw)
@@ -2236,6 +2394,8 @@ jobs:
           # Capture immutable receiver-source lock expectations before SDK, restore or build.
           source=pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'receiver-source'
           expected=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+          # Observe the unchanged SDK-generated Core lock before SDK setup or restore.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':expected['FSharp.Core']={'version':'10.1.401'}
           lock_paths=list(source.rglob('packages.lock.json'))
           if len(lock_paths)>128 or sum(v.stat().st_size for v in lock_paths)>8388608:raise ValueError('source lock observation cap')
           pins=[]
@@ -2269,6 +2429,18 @@ jobs:
               expected={'sdk/10.0.401/.version':(98,'496179aced13abd185f027a1ce8519cc57aa194a5538c51226c0c12e63a4a5ba'),'sdk/10.0.401/FSharp/fsc.dll':(97104,'2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b'),'shared/Microsoft.NETCore.App/10.0.12/libcoreclr.so':(7110952,'df5cfe7ba5abf7931f4836726f2fbb0d47dc32caa45d3c209ddf7ccd25c32f4c')}
               if any((rows.get(name,{}).get('bytes'),rows.get(name,{}).get('sha256'))!=value for name,value in expected.items()):
                   raise ValueError('selected SDK/compiler/runtime bytes differ')
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_payload(size,digest,identity,assemblies):
+              row=consumer_sdk_core_spec()
+              required={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',row['dllRelativePath']:row['dllSha256']}
+              if type(size) is not int or size!=row['packageBytes'] or digest!=row['packageSha256'] or identity!=('FSharp.Core',row['version']) or assemblies!=required:
+                  raise ValueError('selected SDK Core raw package or DLL payload differs')
+          def consumer_sdk_core_feed(case,files,package_files):
+              if case not in ('sdd-s1','sdd-rollback','fsquint-s1','fsquint-rollback'):raise ValueError('unsupported SDK input receiver')
+              expected=set(package_files)
+              if case=='fsquint-s1':expected.add('FSharp.Core.10.1.401.nupkg')
+              if set(files)!=expected or len(files)!=len(expected):raise ValueError('explicit cold feed population differs')
           root=pathlib.Path(os.environ['DOTNET_INSTALL_DIR']);state=pathlib.Path(os.environ['PROC6_STATE'])
           if root!=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-dotnet' or root.is_symlink():raise ValueError('private SDK root differs')
           root=root.resolve(strict=True);host=pathlib.Path(shutil.which('dotnet')).resolve(strict=True)
@@ -2290,6 +2462,41 @@ jobs:
               a=json.loads(p.read_bytes())['runtimeOptions']
               if a.get('tfm')!='net10.0' or a.get('framework')!={'name':'Microsoft.NETCore.App','version':'10.0.12'} or a.get('frameworks'):raise ValueError('compiler runtime profile differs')
               rows[name]={'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          # The SDK-bundled Core payload differs from the same-version public package.
+          # Bind its genuine original bytes explicitly; implicit library-pack fallback stays disabled.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              import io,zipfile,xml.etree.ElementTree as E
+              core=consumer_sdk_core_spec();source=root/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg'
+              if source.is_symlink() or source.resolve(strict=True)!=source or not source.is_file() or source.stat().st_size!=core['packageBytes']:raise ValueError('SDK Core source location or allocation differs')
+              raw=source.read_bytes();digest=hashlib.sha256(raw).hexdigest()
+              if digest!=core['packageSha256']:raise ValueError('SDK Core source bytes differ')
+              with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                  members=archive.infolist();names=[v.filename for v in members]
+                  if not 0<len(members)<=64 or len(names)!=len(set(names)) or sum(v.file_size for v in members)>16777216:raise ValueError('SDK Core package allocation differs')
+                  for name in ('FSharp.Core.nuspec','lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath']):
+                      if names.count(name)!=1:raise ValueError('SDK Core member absent or duplicated')
+                  if archive.getinfo('FSharp.Core.nuspec').file_size>65536:raise ValueError('SDK Core nuspec cap')
+                  ns=E.fromstring(archive.read('FSharp.Core.nuspec'));local=lambda n:n.tag.rsplit('}',1)[-1]
+                  metadata=[v for v in ns if local(v)=='metadata']
+                  if local(ns)!='package' or len(metadata)!=1:raise ValueError('SDK Core nuspec shape differs')
+                  identity=[]
+                  for key in ('id','version'):
+                      values=[v.text for v in metadata[0] if local(v)==key]
+                      if len(values)!=1:raise ValueError('SDK Core nuspec field differs')
+                      identity.append(values[0])
+                  assemblies={name:hashlib.sha256(archive.read(name)).hexdigest() for name in ('lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath'])}
+              consumer_sdk_core_payload(len(raw),digest,tuple(identity),assemblies)
+              pins=json.loads((state/'proof/source-lock-pins.json').read_bytes())
+              hashes={entry['entry'].get('contentHash') for lock in pins['locks'] for entry in lock['entries'] if entry['packageId']=='FSharp.Core' and entry['entry'].get('resolved')==core['version']}
+              if hashes!={core['contentHash']}:raise ValueError('SDK Core differs from original receiver lock expectation')
+              feed=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'
+              if feed.is_symlink() or feed.resolve(strict=True)!=feed or not feed.is_dir():raise ValueError('explicit input feed location differs')
+              target=feed/'FSharp.Core.10.1.401.nupkg'
+              with target.open('xb') as output:output.write(raw)
+              pair=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+              consumer_sdk_core_feed(os.environ['CONSUMER_CASE'],[p.name for p in feed.iterdir()],[id+'.'+row['version']+'.nupkg' for id,row in pair.items()])
+              if target.is_symlink() or target.resolve(strict=True)!=target or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:raise ValueError('copied SDK Core input differs')
+              (state/'proof/sdk-core-input.json').write_text(json.dumps({'sdkVersion':'10.0.401','sdkSourcePath':str(source),'coldFeedPath':str(target),'expected':core,'assemblyPayloads':assemblies,'sourceLockPinsSha256':hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest(),'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False},sort_keys=True))
           (state/'proof/dotnet-profile.json').write_text(json.dumps({'hostPath':str(host),'installation':str(root),'sdkVersion':'10.0.401','compilerPath':str(root/'sdk/10.0.401/FSharp/fsc.dll'),'files':rows,'hostBytesObservedOnly':True,'hostMatchesHistoricalProfileClaim':False,'nativeAcceptance':False,'runtimeVersion':'10.0.12','runtimeRollForwardEnvironment':'Disable'},sort_keys=True))
           with open(os.environ['GITHUB_ENV'],'a') as output:
               for key,value in {'DOTNET_HOST_PATH':host,'DOTNET_ROOT':root,'DOTNET_ROOT_X64':root,'MSBUILDDISABLENODEREUSE':'1'}.items():output.write(key+'='+str(value)+'\n')
@@ -2369,6 +2576,7 @@ jobs:
           E.SubElement(sources,'add',key='public',value='https://api.nuget.org/v3/index.json')
           mapping=E.SubElement(config,'packageSourceMapping');one=E.SubElement(mapping,'packageSource',key='original')
           for id in expected:E.SubElement(one,'package',pattern=id)
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':E.SubElement(one,'package',pattern='FSharp.Core')
           public=E.SubElement(mapping,'packageSource',key='public');E.SubElement(public,'package',pattern='*')
           E.ElementTree(config).write(state/'NuGet.Config',encoding='unicode')
           # Instrument the actual evaluated compilation, imports and references; no producer source/helper.
@@ -2453,6 +2661,20 @@ jobs:
               # Observed separately: do not assume this file uses normalized or raw archive convention.
               consumer_hash_text(observed_cache_sha512)
 
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_binding(binding,sdk,feed,lock_sha):
+              spec=consumer_sdk_core_spec()
+              assemblies={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',spec['dllRelativePath']:spec['dllSha256']}
+              if (type(binding) is not dict or binding.get('expected')!=spec or binding.get('sdkVersion')!='10.0.401'
+                  or binding.get('sdkSourcePath')!=str(pathlib.Path(sdk)/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg')
+                  or binding.get('coldFeedPath')!=str(pathlib.Path(feed)/'FSharp.Core.10.1.401.nupkg')
+                  or binding.get('assemblyPayloads')!=assemblies or binding.get('sourceLockPinsSha256')!=lock_sha
+                  or binding.get('implicitFallbackEnabled') is not False or binding.get('sameVersionPublicSubstitutionAccepted') is not False):raise ValueError('SDK Core input binding changed')
+          def consumer_lock_schema(doc):
+              if type(doc) is not dict or type(doc.get('version')) is not int or doc['version'] not in (1,2) or type(doc.get('dependencies')) is not dict or any(type(v) is not dict for v in doc['dependencies'].values()):raise ValueError('unrecognized lock schema')
+          def consumer_sdk_core_lock_entry(row,expected,original):
+              if type(row) is not dict or row!=original or row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('SDK Core actual lock differs from immutable original source')
           def consumer_lock_entry(row,expected):
               if row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('actual selected lock entry differs')
               if row['type']=='Direct' and not consumer_exact_range(row.get('requested'),expected['version']):raise ValueError('actual direct lock request is not exact')
@@ -2482,6 +2704,14 @@ jobs:
                   if len(values)!=1:raise ValueError('missing or mixed immutable receiver lock expected hash')
                   row['contentHash']=consumer_hash_text(next(iter(values)))
               normalized_origin={'kind':'immutable selected receiver source locks before restore','source':source_pins['receiverSource'],'pins':source_pins['locks']}
+          # Core is a separate compiler/runtime input, not an exact-direct Execution pair member.
+          sdk_core=None
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              raw=(state/'proof/sdk-core-input.json').read_bytes()
+              if len(raw)>16384:raise ValueError('SDK Core proof allocation differs')
+              binding=json.loads(raw);sdk_core=binding['expected']
+              consumer_sdk_core_binding(binding,str(sdk),str(pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'),hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest())
+              cache_expected['FSharp.Core']=sdk_core
           cache_records=[]
           for id,row in cache_expected.items():
               folder=packages/id.lower()/row['version'];archive=folder/(id.lower()+'.'+row['version']+'.nupkg')
@@ -2511,7 +2741,7 @@ jobs:
                   lock=project.parent/'packages.lock.json'
                   if lock.is_symlink() or not lock.is_file() or not 0<lock.stat().st_size<=4194304:raise ValueError('actual restore lock missing or unsafe')
                   raw=lock.read_bytes();doc=json.loads(raw);rows=[]
-                  if doc.get('version')!=1:raise ValueError('unrecognized lock schema')
+                  consumer_lock_schema(doc)
                   if os.environ['CONSUMER_CASE']!='fsquint-rollback':
                       pins=[v for v in source_pins['locks'] if v['path']==str(lock.relative_to(receiver))]
                       if len(pins)!=1 or pins[0]['sha256']!=hashlib.sha256(raw).hexdigest():raise ValueError('immutable receiver source lock changed')
@@ -2519,8 +2749,13 @@ jobs:
                       matching=[(framework,deps[id]) for framework,deps in doc.get('dependencies',{}).items() if id in deps]
                       if not matching:raise ValueError('selected package missing from actual lock')
                       for framework,value in matching:
-                          consumer_lock_entry(value,cache_expected[id]);rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
-                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
+                          if id=='FSharp.Core' and sdk_core is not None:
+                              original=[e['entry'] for pin in source_pins['locks'] if pin['path']==str(lock.relative_to(receiver)) for e in pin['entries'] if e['framework']==framework and e['packageId']==id]
+                              if len(original)!=1:raise ValueError('missing original SDK Core lock row')
+                              consumer_sdk_core_lock_entry(value,cache_expected[id],original[0])
+                          else:consumer_lock_entry(value,cache_expected[id])
+                          rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
+                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'schemaVersion':doc['version'],'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
               for id,row in expected.items():
                   selected=[(name,value) for name,value in a['libraries'].items() if name.split('/')[0]==id]
                   if selected:
@@ -2540,7 +2775,9 @@ jobs:
                   if hashlib.sha256((fsharp/relative).read_bytes()).hexdigest()!=digest:raise ValueError('historical FSharp input bytes differ')
           traces=list(receiver.rglob('proc6-inputs.txt'))
           if not 0<len(traces)<=128:raise ValueError('missing actual compilation evidence')
-          actual={id:set() for id in expected};inputs=[];compiler_evaluations=[]
+          reference_expected={id:dict(row) for id,row in expected.items()}
+          if sdk_core is not None:reference_expected['FSharp.Core']=sdk_core
+          actual={id:set() for id in reference_expected};inputs=[];compiler_evaluations=[]
           for trace in traces:
               if trace.stat().st_size>1048576:raise ValueError('compiler metadata cap')
               evaluated={}
@@ -2556,16 +2793,16 @@ jobs:
                       required=host if kind in ('H','F') else sdk/'sdk/10.0.401/Sdks' if kind=='S' else sdk/'sdk/10.0.401/FSharp/fsc.dll'
                       if p!=required or kind in evaluated:raise ValueError('evaluated compiler/tool path differs')
                       evaluated[kind]=str(p)
-                  for id,row in expected.items():
+                  for id,row in reference_expected.items():
                       if kind=='R' and p.name==id+'.dll':
-                          target=packages/id.lower()/row['version']/'lib/net10.0'/(id+'.dll')
+                          target=packages/id.lower()/row['version']/row.get('dllRelativePath','lib/net10.0/'+id+'.dll')
                           if p!=target or hashlib.sha256(p.read_bytes()).hexdigest()!=row['dllSha256']:raise ValueError('actual compiler package bytes differ')
                           actual[id].add(str(p))
               consumer_compiler_evaluation(evaluated,str(host),str(sdk))
               compiler_evaluations.append(evaluated)
           if any(len(paths)!=1 for paths in actual.values()):raise ValueError('missing or mixed actual compiler package references')
           runtime={}
-          for id,row in expected.items():
+          for id,row in reference_expected.items():
               copies=[p for p in receiver.rglob(id+'.dll') if 'bin' in p.relative_to(receiver).parts]
               if not copies or len(copies)>128:raise ValueError('missing runtime package copies')
               for p in copies:
@@ -2586,7 +2823,7 @@ jobs:
                   count+=1
                   if count>200000:raise ValueError('filesystem observation cap')
                   if p.name in ('FS.GG.Execution.Contracts.fsproj','FS.GG.Execution.Processes.fsproj','test-callable-cli-installed-harness.py','callable-cli-release.fsx'):raise ValueError('producer source physically present')
-          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
+          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'sdkBundledInput':json.loads((state/'proof/sdk-core-input.json').read_bytes()) if sdk_core is not None else None,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
           raw=json.dumps(proof,sort_keys=True).encode()
           if len(raw)>1048576:raise ValueError('source closure evidence cap')
           (state/'proof/source-closure.json').write_bytes(raw)
@@ -2894,6 +3131,8 @@ jobs:
           # Capture immutable receiver-source lock expectations before SDK, restore or build.
           source=pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'receiver-source'
           expected=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+          # Observe the unchanged SDK-generated Core lock before SDK setup or restore.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':expected['FSharp.Core']={'version':'10.1.401'}
           lock_paths=list(source.rglob('packages.lock.json'))
           if len(lock_paths)>128 or sum(v.stat().st_size for v in lock_paths)>8388608:raise ValueError('source lock observation cap')
           pins=[]
@@ -2927,6 +3166,18 @@ jobs:
               expected={'sdk/10.0.401/.version':(98,'496179aced13abd185f027a1ce8519cc57aa194a5538c51226c0c12e63a4a5ba'),'sdk/10.0.401/FSharp/fsc.dll':(97104,'2bd6190eafa94f47739538467f5a7cd52de233a627789c69f07959d7578e4d6b'),'shared/Microsoft.NETCore.App/10.0.12/libcoreclr.so':(7110952,'df5cfe7ba5abf7931f4836726f2fbb0d47dc32caa45d3c209ddf7ccd25c32f4c')}
               if any((rows.get(name,{}).get('bytes'),rows.get(name,{}).get('sha256'))!=value for name,value in expected.items()):
                   raise ValueError('selected SDK/compiler/runtime bytes differ')
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_payload(size,digest,identity,assemblies):
+              row=consumer_sdk_core_spec()
+              required={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',row['dllRelativePath']:row['dllSha256']}
+              if type(size) is not int or size!=row['packageBytes'] or digest!=row['packageSha256'] or identity!=('FSharp.Core',row['version']) or assemblies!=required:
+                  raise ValueError('selected SDK Core raw package or DLL payload differs')
+          def consumer_sdk_core_feed(case,files,package_files):
+              if case not in ('sdd-s1','sdd-rollback','fsquint-s1','fsquint-rollback'):raise ValueError('unsupported SDK input receiver')
+              expected=set(package_files)
+              if case=='fsquint-s1':expected.add('FSharp.Core.10.1.401.nupkg')
+              if set(files)!=expected or len(files)!=len(expected):raise ValueError('explicit cold feed population differs')
           root=pathlib.Path(os.environ['DOTNET_INSTALL_DIR']);state=pathlib.Path(os.environ['PROC6_STATE'])
           if root!=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-dotnet' or root.is_symlink():raise ValueError('private SDK root differs')
           root=root.resolve(strict=True);host=pathlib.Path(shutil.which('dotnet')).resolve(strict=True)
@@ -2948,6 +3199,41 @@ jobs:
               a=json.loads(p.read_bytes())['runtimeOptions']
               if a.get('tfm')!='net10.0' or a.get('framework')!={'name':'Microsoft.NETCore.App','version':'10.0.12'} or a.get('frameworks'):raise ValueError('compiler runtime profile differs')
               rows[name]={'bytes':p.stat().st_size,'sha256':hashlib.sha256(p.read_bytes()).hexdigest()}
+          # The SDK-bundled Core payload differs from the same-version public package.
+          # Bind its genuine original bytes explicitly; implicit library-pack fallback stays disabled.
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              import io,zipfile,xml.etree.ElementTree as E
+              core=consumer_sdk_core_spec();source=root/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg'
+              if source.is_symlink() or source.resolve(strict=True)!=source or not source.is_file() or source.stat().st_size!=core['packageBytes']:raise ValueError('SDK Core source location or allocation differs')
+              raw=source.read_bytes();digest=hashlib.sha256(raw).hexdigest()
+              if digest!=core['packageSha256']:raise ValueError('SDK Core source bytes differ')
+              with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+                  members=archive.infolist();names=[v.filename for v in members]
+                  if not 0<len(members)<=64 or len(names)!=len(set(names)) or sum(v.file_size for v in members)>16777216:raise ValueError('SDK Core package allocation differs')
+                  for name in ('FSharp.Core.nuspec','lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath']):
+                      if names.count(name)!=1:raise ValueError('SDK Core member absent or duplicated')
+                  if archive.getinfo('FSharp.Core.nuspec').file_size>65536:raise ValueError('SDK Core nuspec cap')
+                  ns=E.fromstring(archive.read('FSharp.Core.nuspec'));local=lambda n:n.tag.rsplit('}',1)[-1]
+                  metadata=[v for v in ns if local(v)=='metadata']
+                  if local(ns)!='package' or len(metadata)!=1:raise ValueError('SDK Core nuspec shape differs')
+                  identity=[]
+                  for key in ('id','version'):
+                      values=[v.text for v in metadata[0] if local(v)==key]
+                      if len(values)!=1:raise ValueError('SDK Core nuspec field differs')
+                      identity.append(values[0])
+                  assemblies={name:hashlib.sha256(archive.read(name)).hexdigest() for name in ('lib/netstandard2.0/FSharp.Core.dll',core['dllRelativePath'])}
+              consumer_sdk_core_payload(len(raw),digest,tuple(identity),assemblies)
+              pins=json.loads((state/'proof/source-lock-pins.json').read_bytes())
+              hashes={entry['entry'].get('contentHash') for lock in pins['locks'] for entry in lock['entries'] if entry['packageId']=='FSharp.Core' and entry['entry'].get('resolved')==core['version']}
+              if hashes!={core['contentHash']}:raise ValueError('SDK Core differs from original receiver lock expectation')
+              feed=pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'
+              if feed.is_symlink() or feed.resolve(strict=True)!=feed or not feed.is_dir():raise ValueError('explicit input feed location differs')
+              target=feed/'FSharp.Core.10.1.401.nupkg'
+              with target.open('xb') as output:output.write(raw)
+              pair=json.loads((pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-expected-packages.json').read_bytes())
+              consumer_sdk_core_feed(os.environ['CONSUMER_CASE'],[p.name for p in feed.iterdir()],[id+'.'+row['version']+'.nupkg' for id,row in pair.items()])
+              if target.is_symlink() or target.resolve(strict=True)!=target or hashlib.sha256(target.read_bytes()).hexdigest()!=digest:raise ValueError('copied SDK Core input differs')
+              (state/'proof/sdk-core-input.json').write_text(json.dumps({'sdkVersion':'10.0.401','sdkSourcePath':str(source),'coldFeedPath':str(target),'expected':core,'assemblyPayloads':assemblies,'sourceLockPinsSha256':hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest(),'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False},sort_keys=True))
           (state/'proof/dotnet-profile.json').write_text(json.dumps({'hostPath':str(host),'installation':str(root),'sdkVersion':'10.0.401','compilerPath':str(root/'sdk/10.0.401/FSharp/fsc.dll'),'files':rows,'hostBytesObservedOnly':True,'hostMatchesHistoricalProfileClaim':False,'nativeAcceptance':False,'runtimeVersion':'10.0.12','runtimeRollForwardEnvironment':'Disable'},sort_keys=True))
           with open(os.environ['GITHUB_ENV'],'a') as output:
               for key,value in {'DOTNET_HOST_PATH':host,'DOTNET_ROOT':root,'DOTNET_ROOT_X64':root,'MSBUILDDISABLENODEREUSE':'1'}.items():output.write(key+'='+str(value)+'\n')
@@ -3027,6 +3313,7 @@ jobs:
           E.SubElement(sources,'add',key='public',value='https://api.nuget.org/v3/index.json')
           mapping=E.SubElement(config,'packageSourceMapping');one=E.SubElement(mapping,'packageSource',key='original')
           for id in expected:E.SubElement(one,'package',pattern=id)
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':E.SubElement(one,'package',pattern='FSharp.Core')
           public=E.SubElement(mapping,'packageSource',key='public');E.SubElement(public,'package',pattern='*')
           E.ElementTree(config).write(state/'NuGet.Config',encoding='unicode')
           # Instrument the actual evaluated compilation, imports and references; no producer source/helper.
@@ -3111,6 +3398,20 @@ jobs:
               # Observed separately: do not assume this file uses normalized or raw archive convention.
               consumer_hash_text(observed_cache_sha512)
 
+          def consumer_sdk_core_spec():
+              return {'version':'10.1.401','packageBytes':3049582,'packageSha256':'17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff','contentHash':'IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ==','dllSha256':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be','dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+          def consumer_sdk_core_binding(binding,sdk,feed,lock_sha):
+              spec=consumer_sdk_core_spec()
+              assemblies={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991',spec['dllRelativePath']:spec['dllSha256']}
+              if (type(binding) is not dict or binding.get('expected')!=spec or binding.get('sdkVersion')!='10.0.401'
+                  or binding.get('sdkSourcePath')!=str(pathlib.Path(sdk)/'sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg')
+                  or binding.get('coldFeedPath')!=str(pathlib.Path(feed)/'FSharp.Core.10.1.401.nupkg')
+                  or binding.get('assemblyPayloads')!=assemblies or binding.get('sourceLockPinsSha256')!=lock_sha
+                  or binding.get('implicitFallbackEnabled') is not False or binding.get('sameVersionPublicSubstitutionAccepted') is not False):raise ValueError('SDK Core input binding changed')
+          def consumer_lock_schema(doc):
+              if type(doc) is not dict or type(doc.get('version')) is not int or doc['version'] not in (1,2) or type(doc.get('dependencies')) is not dict or any(type(v) is not dict for v in doc['dependencies'].values()):raise ValueError('unrecognized lock schema')
+          def consumer_sdk_core_lock_entry(row,expected,original):
+              if type(row) is not dict or row!=original or row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('SDK Core actual lock differs from immutable original source')
           def consumer_lock_entry(row,expected):
               if row.get('type') not in ('Direct','Transitive') or row.get('resolved')!=expected['version'] or row.get('contentHash')!=consumer_hash_text(expected['contentHash']):raise ValueError('actual selected lock entry differs')
               if row['type']=='Direct' and not consumer_exact_range(row.get('requested'),expected['version']):raise ValueError('actual direct lock request is not exact')
@@ -3140,6 +3441,14 @@ jobs:
                   if len(values)!=1:raise ValueError('missing or mixed immutable receiver lock expected hash')
                   row['contentHash']=consumer_hash_text(next(iter(values)))
               normalized_origin={'kind':'immutable selected receiver source locks before restore','source':source_pins['receiverSource'],'pins':source_pins['locks']}
+          # Core is a separate compiler/runtime input, not an exact-direct Execution pair member.
+          sdk_core=None
+          if os.environ['CONSUMER_CASE']=='fsquint-s1':
+              raw=(state/'proof/sdk-core-input.json').read_bytes()
+              if len(raw)>16384:raise ValueError('SDK Core proof allocation differs')
+              binding=json.loads(raw);sdk_core=binding['expected']
+              consumer_sdk_core_binding(binding,str(sdk),str(pathlib.Path(os.environ['RUNNER_TEMP'])/'proc6-feed'),hashlib.sha256((state/'proof/source-lock-pins.json').read_bytes()).hexdigest())
+              cache_expected['FSharp.Core']=sdk_core
           cache_records=[]
           for id,row in cache_expected.items():
               folder=packages/id.lower()/row['version'];archive=folder/(id.lower()+'.'+row['version']+'.nupkg')
@@ -3169,7 +3478,7 @@ jobs:
                   lock=project.parent/'packages.lock.json'
                   if lock.is_symlink() or not lock.is_file() or not 0<lock.stat().st_size<=4194304:raise ValueError('actual restore lock missing or unsafe')
                   raw=lock.read_bytes();doc=json.loads(raw);rows=[]
-                  if doc.get('version')!=1:raise ValueError('unrecognized lock schema')
+                  consumer_lock_schema(doc)
                   if os.environ['CONSUMER_CASE']!='fsquint-rollback':
                       pins=[v for v in source_pins['locks'] if v['path']==str(lock.relative_to(receiver))]
                       if len(pins)!=1 or pins[0]['sha256']!=hashlib.sha256(raw).hexdigest():raise ValueError('immutable receiver source lock changed')
@@ -3177,8 +3486,13 @@ jobs:
                       matching=[(framework,deps[id]) for framework,deps in doc.get('dependencies',{}).items() if id in deps]
                       if not matching:raise ValueError('selected package missing from actual lock')
                       for framework,value in matching:
-                          consumer_lock_entry(value,cache_expected[id]);rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
-                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
+                          if id=='FSharp.Core' and sdk_core is not None:
+                              original=[e['entry'] for pin in source_pins['locks'] if pin['path']==str(lock.relative_to(receiver)) for e in pin['entries'] if e['framework']==framework and e['packageId']==id]
+                              if len(original)!=1:raise ValueError('missing original SDK Core lock row')
+                              consumer_sdk_core_lock_entry(value,cache_expected[id],original[0])
+                          else:consumer_lock_entry(value,cache_expected[id])
+                          rows.append({'framework':framework,'packageId':id,'entry':value});joined[id]+=1
+                  lock_records.append({'path':str(lock.relative_to(receiver)),'sha256':hashlib.sha256(raw).hexdigest(),'entries':rows,'schemaVersion':doc['version'],'generatedForThisReceiver':os.environ['CONSUMER_CASE']=='fsquint-rollback'})
               for id,row in expected.items():
                   selected=[(name,value) for name,value in a['libraries'].items() if name.split('/')[0]==id]
                   if selected:
@@ -3198,7 +3512,9 @@ jobs:
                   if hashlib.sha256((fsharp/relative).read_bytes()).hexdigest()!=digest:raise ValueError('historical FSharp input bytes differ')
           traces=list(receiver.rglob('proc6-inputs.txt'))
           if not 0<len(traces)<=128:raise ValueError('missing actual compilation evidence')
-          actual={id:set() for id in expected};inputs=[];compiler_evaluations=[]
+          reference_expected={id:dict(row) for id,row in expected.items()}
+          if sdk_core is not None:reference_expected['FSharp.Core']=sdk_core
+          actual={id:set() for id in reference_expected};inputs=[];compiler_evaluations=[]
           for trace in traces:
               if trace.stat().st_size>1048576:raise ValueError('compiler metadata cap')
               evaluated={}
@@ -3214,16 +3530,16 @@ jobs:
                       required=host if kind in ('H','F') else sdk/'sdk/10.0.401/Sdks' if kind=='S' else sdk/'sdk/10.0.401/FSharp/fsc.dll'
                       if p!=required or kind in evaluated:raise ValueError('evaluated compiler/tool path differs')
                       evaluated[kind]=str(p)
-                  for id,row in expected.items():
+                  for id,row in reference_expected.items():
                       if kind=='R' and p.name==id+'.dll':
-                          target=packages/id.lower()/row['version']/'lib/net10.0'/(id+'.dll')
+                          target=packages/id.lower()/row['version']/row.get('dllRelativePath','lib/net10.0/'+id+'.dll')
                           if p!=target or hashlib.sha256(p.read_bytes()).hexdigest()!=row['dllSha256']:raise ValueError('actual compiler package bytes differ')
                           actual[id].add(str(p))
               consumer_compiler_evaluation(evaluated,str(host),str(sdk))
               compiler_evaluations.append(evaluated)
           if any(len(paths)!=1 for paths in actual.values()):raise ValueError('missing or mixed actual compiler package references')
           runtime={}
-          for id,row in expected.items():
+          for id,row in reference_expected.items():
               copies=[p for p in receiver.rglob(id+'.dll') if 'bin' in p.relative_to(receiver).parts]
               if not copies or len(copies)>128:raise ValueError('missing runtime package copies')
               for p in copies:
@@ -3244,7 +3560,7 @@ jobs:
                   count+=1
                   if count>200000:raise ValueError('filesystem observation cap')
                   if p.name in ('FS.GG.Execution.Contracts.fsproj','FS.GG.Execution.Processes.fsproj','test-callable-cli-installed-harness.py','callable-cli-release.fsx'):raise ValueError('producer source physically present')
-          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
+          proof={'physicalSourceExclusionEstablished':True,'scope':'known fresh hosted workspace/temp and evaluated compiler inputs','networkReachable':True,'hardContainment':False,'compilerInputs':inputs,'compilerEvaluations':compiler_evaluations,'sdkVersion':compiler_evaluations[0]['D'],'runtimeFrameworkVersion':runtime_configs[0]['runtimeVersion'],'runtimeConfigurations':runtime_configs,'dotnetProfileSha256':hashlib.sha256((state/'proof/dotnet-profile.json').read_bytes()).hexdigest(),'runtimeCopies':runtime,'packageVersions':expected,'sdkBundledInput':json.loads((state/'proof/sdk-core-input.json').read_bytes()) if sdk_core is not None else None,'normalizedHashExpectedOrigin':normalized_origin,'cachePackageIdentities':cache_records,'actualLocks':lock_records,'actualAssetHashes':asset_records,'nativeFixtureInvoked':False,'consumerAdoptionAccepted':False}
           raw=json.dumps(proof,sort_keys=True).encode()
           if len(raw)>1048576:raise ValueError('source closure evidence cap')
           (state/'proof/source-closure.json').write_bytes(raw)

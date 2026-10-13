@@ -658,6 +658,32 @@ def consumer_source_only_controls():
     for changed in ({**direct,'type':'Project'},{**direct,'resolved':'0.2.0'},{**direct,'contentHash':observed},{**direct,'requested':'[0.1.0, )'},{k:v for k,v in direct.items() if k!='contentHash'}):check(lock_entry,changed,expected_cache,refuse=True)
     check(asset_hash,{'type':'package','sha512':normalized},expected_cache)
     for changed in ({'type':'project','sha512':normalized},{'type':'package','sha512':observed},{'type':'package'}):check(asset_hash,changed,expected_cache,refuse=True)
+    # Genuine NuGet schema 2 retains the same package/hash/request obligations.
+    schema=scope['consumer_lock_schema']
+    for version in (1,2):check(schema,{'version':version,'dependencies':{'net10.0':{'FS.GG.Execution.Contracts':direct}}})
+    for version in (True,False,1.0,2.0,'1','2',0,3,None):check(schema,{'version':version,'dependencies':{'net10.0':{}}},refuse=True)
+    for document in ({'version':2},{'version':2,'dependencies':[]},{'version':2,'dependencies':{'net10.0':[]}},[],None):check(schema,document,refuse=True)
+    # These are actual original SDK401 package/member identities, not the same-version public payload.
+    core_assemblies={'lib/netstandard2.0/FSharp.Core.dll':'26d0e3e00c769b9b6e9d8c1925885f7c16a51c605f795093386a25b909012991','lib/netstandard2.1/FSharp.Core.dll':'9abd1f889fc8e2d2a74d6ac83a31e6c3012c075a17946a7d687c0cbe33ed15be'}
+    core_raw='17a9cfd456ce207ebf721eef50d8e1f70aca5e70e2d265a62ca704211526c0ff';core_normalized='IGqjL9U8pQl7CaCpFP3f5slZMduE8c7ZBx7HycAQ9dc1tawyniNyw7Fh6L2cShIoQDcaDL+S8/kokhWs8WwnBQ=='
+    payload=scope['consumer_sdk_core_payload'];check(payload,3049582,core_raw,('FSharp.Core','10.1.401'),core_assemblies)
+    for size,digest,identity,assemblies in ((True,core_raw,('FSharp.Core','10.1.401'),core_assemblies),(3049581,core_raw,('FSharp.Core','10.1.401'),core_assemblies),(3065170,'cf1f4e69fc2d1351af9fa9923ac90ed466088730a00867cbe0eb1b3b2c68963e',('FSharp.Core','10.1.401'),core_assemblies),(3049582,core_raw,('FSharp.Core','10.1.302'),core_assemblies),(3049582,core_raw,('FsQuint','10.1.401'),core_assemblies),(3049582,core_raw,('FSharp.Core','10.1.401'),{**core_assemblies,'lib/netstandard2.1/FSharp.Core.dll':'39b0b7f06c11bedd93f94b6f101fffd645f1c4437a5a6d3ee79259f855aeb11a'}),(3049582,core_raw,('FSharp.Core','10.1.401'),{})):
+        check(payload,size,digest,identity,assemblies,refuse=True)
+    feed=scope['consumer_sdk_core_feed'];pair_files=['FS.GG.Execution.Contracts.0.3.0.nupkg','FS.GG.Execution.Processes.0.3.0.nupkg'];core_file='FSharp.Core.10.1.401.nupkg'
+    check(feed,'fsquint-s1',pair_files+[core_file],pair_files)
+    for case in ('sdd-s1','sdd-rollback','fsquint-rollback'):
+        check(feed,case,pair_files,pair_files);check(feed,case,pair_files+[core_file],pair_files,refuse=True)
+    for files in (pair_files,pair_files+[core_file,core_file],pair_files+[core_file,'extra.nupkg'],[core_file]):check(feed,'fsquint-s1',files,pair_files,refuse=True)
+    check(feed,'unsupported',pair_files,pair_files,refuse=True)
+    core_expected={'version':'10.1.401','packageBytes':3049582,'packageSha256':core_raw,'contentHash':core_normalized,'dllSha256':core_assemblies['lib/netstandard2.1/FSharp.Core.dll'],'dllRelativePath':'lib/netstandard2.1/FSharp.Core.dll'}
+    original_core={'type':'Direct','requested':'[10.1.401, )','resolved':'10.1.401','contentHash':core_normalized}
+    core_lock=scope['consumer_sdk_core_lock_entry'];check(core_lock,dict(original_core),core_expected,original_core)
+    for row in ({**original_core,'requested':'[10.1.401]'},{**original_core,'type':'Project'},{**original_core,'resolved':'10.1.302'},{**original_core,'contentHash':'/lvOK51KD8IangBYkfDVna3/HrE/r4VUnX3dI01KDspctoYXmind3POeoYkqWKeXHwiKlf6Hc9TxwSnoSCWcjw=='}):check(core_lock,row,core_expected,original_core,refuse=True)
+    # Preserve the existing exact-direct pair rule; Core uses byte-pinned original implicit request.
+    check(lock_entry,original_core,core_expected,refuse=True)
+    bind=scope['consumer_sdk_core_binding'];binding={'sdkVersion':'10.0.401','sdkSourcePath':'/sdk/sdk/10.0.401/FSharp/library-packs/FSharp.Core.10.1.401.nupkg','coldFeedPath':'/feed/'+core_file,'expected':core_expected,'assemblyPayloads':core_assemblies,'sourceLockPinsSha256':'a'*64,'implicitFallbackEnabled':False,'sameVersionPublicSubstitutionAccepted':False}
+    check(bind,binding,'/sdk','/feed','a'*64)
+    for changed in ({**binding,'sdkVersion':'10.0.400'},{**binding,'sdkSourcePath':'/public/'+core_file},{**binding,'coldFeedPath':'/public/'+core_file},{**binding,'expected':{**core_expected,'packageSha256':'cf1f4e69fc2d1351af9fa9923ac90ed466088730a00867cbe0eb1b3b2c68963e'}},{**binding,'assemblyPayloads':{}},{**binding,'sourceLockPinsSha256':'b'*64},{**binding,'implicitFallbackEnabled':True},{**binding,'sameVersionPublicSubstitutionAccepted':True}):check(bind,changed,'/sdk','/feed','a'*64,refuse=True)
     selectors={k:str(i+1)*40 for i,k in enumerate(('sdd_source','sdd_tree','fsquint_source','fsquint_tree'))}
     select=scope['consumer_selection']
     check(select,'execution-pair-consumers',json.dumps(selectors))
@@ -814,6 +840,10 @@ def consumer_source_only_controls():
         assert 'persist-credentials: false' in body and 'fetch-depth: 1' in body
         assert 'artifact-ids: ${{ needs.execution_pair_installed.outputs.proof_artifact_id }}' in body
         assert '-p:DisableImplicitLibraryPacksFolder=true' in body
+        assert body.index('consumer_sdk_core_payload(len(raw)')<body.index('NuGet.Config')<body.index('\"$DOTNET_HOST_PATH\" restore ')
+        assert "if os.environ['CONSUMER_CASE']=='fsquint-s1':E.SubElement(one,'package',pattern='FSharp.Core')" in body
+        assert 'consumer_lock_schema(doc)' in body and "'schemaVersion':doc['version']" in body
+        assert "reference_expected['FSharp.Core']=sdk_core" in body and "'sdkBundledInput':" in body
         assert '"${remaining}s" "$DOTNET_HOST_PATH"' in body
         assert "'hostBytesObservedOnly':True" in body and "'hostMatchesHistoricalProfileClaim':False" in body
         signature_step=body.split('      - name: Verify both fresh public rollback signatures before any restore',1)[1].split('      - name:',1)[0]
