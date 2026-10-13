@@ -42,7 +42,7 @@ let ``callable CLI is the sole stable tool alongside the explicit Execution libr
         let library = read $"src/{id}/{id}.fsproj"
         Assert.DoesNotContain("<PackAsTool>true</PackAsTool>", library, StringComparison.Ordinal)
         Assert.Contains($"<PackageId>{id}</PackageId>", library, StringComparison.Ordinal)
-        Assert.Contains("<PackageVersion>0.2.0</PackageVersion>", library, StringComparison.Ordinal)
+        Assert.Contains("<PackageVersion>0.3.0</PackageVersion>", library, StringComparison.Ordinal)
 
 [<Fact>]
 let ``release preparation route has no publication tag or credential authority`` () =
