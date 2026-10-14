@@ -10,6 +10,8 @@ import unittest
 import copy
 import time
 import hashlib
+import contextlib
+import io
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -29,21 +31,29 @@ class DiagnosticControls(unittest.TestCase):
         module.PROC_OPERATION_BASE.mkdir(mode=0o700)
         base=module.PROC_OPERATION_BASE/str(os.geteuid());base.mkdir(mode=0o700)
         slot=module.proc_operation_root(operation);slot.mkdir(mode=0o700)
-        client=root/'inert-gh'
+        client=root/'inert-curl'
         body={'workflow_run_id':42,'run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/42',
               'html_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/42'}
-        text='HTTP/2.0 200 OK\ncontent-type: application/json\n\n'+json.dumps(body)
-        if mode=='foreign':text=text.replace('Coordination/','Foreign/')
-        if mode=='no-id':text='HTTP/2.0 200 OK\n\n{}'
-        if mode=='202':text=text.replace('200 OK','202 Accepted')
+        if mode=='foreign':body['run_url']=body['run_url'].replace('Coordination/','Foreign/')
+        if mode=='no-id':body={}
         extra=''
         if mode=='unexpected-read':
             foreign=root/'foreign-config';foreign.write_text('inert-only')
             extra='held=open('+repr(str(foreign))+')\n'
         if mode=='timeout':extra='time.sleep(20)\n'
-        client.write_text('#!/usr/bin/python3\nimport sys,time\nif sys.argv[1:]==["--version"]:print("gh version inert-source-control");sys.exit(0)\n'+extra+'time.sleep(.2)\n'+
-                          ('sys.exit(7)\n' if mode=='lost' else 'sys.stdout.write('+repr(text)+')\n'))
+        meta={'httpCode':'202' if mode=='202' else '200',
+              'effectiveUrl':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
+              'redirects':0,'sslVerifyResult':0}
+        client.write_text('#!/usr/bin/python3\nimport sys,time,os\nif sys.argv[1:]==["--version"]:print("curl inert-source-control");sys.exit(0)\n'
+                          +'assert "GH_TOKEN" not in os.environ\n'+extra+'time.sleep(.2)\n'+
+                          ('sys.exit(7)\n' if mode=='lost' else
+                           'open(sys.argv[sys.argv.index("--output")+1],"wb").write('+repr(json.dumps(body).encode())+')\n'
+                           +'sys.stdout.write('+repr(json.dumps(meta)+'\n')+')\n'))
         client.chmod(0o700)
+        for name in ('home','tmp'):(slot/name).mkdir(mode=0o700)
+        support=module.proc_support_root();support.mkdir(mode=0o700);(support/'ca-empty').mkdir(mode=0o700)
+        (support/'openssl.cnf').write_bytes(module.PROC_OPENSSL_CONFIG)
+        ca=support/'trusted-ca.pem';ca.write_text('inert-fixture-ca')
         native={key:str(root/(key+'.json')) for key in ('admission','originalRun','originalJobs','originalArtifact',
                                                         'originalArchive','verifiedAttestation','sourceCorrespondence','runtimeQualification')}
         for name in native.values():Path(name).write_text('{}')
@@ -64,7 +74,7 @@ class DiagnosticControls(unittest.TestCase):
         imports.append(Path(runpy.__file__).resolve())
         for path in dict.fromkeys((client,ROOT/'eng/shared_process_owner.py',ROOT/'eng/retain-choreo-c2-diagnostics.py',
                      ROOT/'eng/test-callable-cli-installed-harness.py',ROOT/'eng/write-callable-cli-release-readback.py',
-                     Path(os.path.realpath(os.sys.executable)),*(Path(p) for p in native.values()),*consumer.iterdir(),*imports)):
+                     Path(os.path.realpath(os.sys.executable)),module.proc_support_root()/'openssl.cnf',ca,*(Path(p) for p in native.values()),*consumer.iterdir(),*imports)):
             row=module.pin_file(path);row['mode']=path.stat().st_mode&0o777;pins.append(row)
         native['consumerRoot']=str(root/'consumer-fixture')
         started=time.monotonic()
@@ -78,26 +88,27 @@ class DiagnosticControls(unittest.TestCase):
                              'execution_pair':True,'pair_recovery':True,'preflight_only':False,'cli_only':False,'readback_only':False,
                              'publisher_source':'d'*40,'operation':operation,'source':correspondence['source'],
                              'protected_merge':correspondence['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}}},
-              'argv':[str(client),'api','--method','POST','--include','repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
-                      '-H','X-GitHub-Api-Version: 2026-03-10','--input',str(slot/'dispatch-input.json')],
+              'argv':[str(client)],'transport':{'client':str(client),'caBundle':str(ca),'tracer':str(client)},
+              'readEvidence':{'contract':'ordinary-exact-profile-observation-and-drift','directories':[], 'aliases':[], 'absences':[],'runtimeData':copy.deepcopy(module.PROC_RUNTIME_DATA)},
               'pins':pins,'proofInputs':native,'sourceReadAllowlist':[p['path'] for p in pins],
-              'environment':{'HOME':str(slot/'home'),'TMPDIR':str(slot/'tmp'),'GH_CONFIG_DIR':str(slot/'home/.config/gh'),
-                             'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','LC_ALL':'C.UTF-8','GH_PROMPT_DISABLED':'1','GH_HOST':'github.com'},
+              'environment':{'HOME':str(slot/'home'),'TMPDIR':str(slot/'tmp'),'PATH':'/usr/bin',
+                             'LANG':'C','LC_ALL':'C','TZ':'UTC','OPENSSL_CONF':str(module.proc_support_root()/'openssl.cnf')},
               'operationRoot':str(slot),'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
               'rssBytes':512*1024**2,'addressSpaceBytes':512*1024**2,'logBytes':1024**2,'diskBytes':16*1024**2,'cpuAffinity':sorted(os.sched_getaffinity(0))}
         # Canonical-shaped inert evidence exercises joins, never supplies genuine gh qualification.
-        qualification={'schema':module.RESULT_SCHEMA,'commandAccepted':True,
+        qualification={'schema':module.RESULT_SCHEMA,'commandAccepted':True,'qualificationAccepted':True,'firstCause':None,'additionalFailures':[],'reportingOutcome':'written',
                        'ownerReceipt':{'cleanup':'observed-empty-group','custody':'observed-owned-group','exit':0,'firstCause':None,
                                        'leader':{'start':1},'residual':[],'escapedResidual':[],'escapedDescendants':[]},
                        'runtimeEvidence':{'currentBootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                                           'effectiveUid':os.geteuid(),'actualInterpreter':os.path.realpath(os.sys.executable),
                                           'interpreterFlags':{'isolated':1,'noSite':1,'noBytecode':True,'optimize':0},
                                           'canonicalBaseIdentity':module.proc_directory_identity(base),
-                                          'canonicalOperationIdentity':module.proc_directory_identity(slot),
+                                          'nativeGetObserved':True,'qualifiedSourcePins':[pin for pin in pins if pin['path'].endswith('/retain-choreo-c2-diagnostics.py')],
                                           'supportPins':[pin for pin in pins if pin['path'] not in native.values()],
                                           'bounds':{k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')},
-                                          'clientPath':str(client),'clientVersion':'gh version inert-source-control','postRetryExcluded':True,
-                                          'transitiveSourceReadFence':'qualified-no-unobserved-source-reads',
+                                          'clientPath':str(client),'clientVersion':'curl inert-source-control','postRetryExcluded':True,
+                                          'readContract':'ordinary-exact-profile-observation-and-drift','readEvidence':spec['readEvidence'],
+                                          'traceComplete':True,'controllerStartupTraceComplete':True,'sourceAlternativesReviewSha256':'a'*64,
                                           'sourceReadAllowlist':spec['sourceReadAllowlist']}}
         Path(native['runtimeQualification']).write_text(json.dumps(qualification))
         row=module.pin_file(native['runtimeQualification']);row['mode']=Path(row['path']).stat().st_mode&0o777
@@ -109,12 +120,14 @@ class DiagnosticControls(unittest.TestCase):
         authority={'schema':module.COMMAND_SCHEMA,'descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest(),
                    'profile':spec['profile'],'operation':operation,'operationRoot':str(slot),'approved':True,
                    'runtimeQualified':True,'readFenceQualified':True,'clientAutomaticPostRetry':False,
-                   'independentCapacityQualified':True,'runtimeQualification':qualification}
+                   'canonicalSupportIdentity':module.proc_directory_identity(support),
+                   'canonicalBaseIdentity':module.proc_directory_identity(base),'canonicalOperationIdentity':module.proc_directory_identity(slot),
+                   'independentCapacityQualified':True,'sourceAlternativesReviewSha256':'a'*64,'runtimeQualification':qualification}
         approved=root/'selected-authority.json';approved.write_text(json.dumps(authority))
         return spec,descriptor,approved
 
     def test_proc_transport_one_use_and_uncertainty_keep_canonical_state(self):
-        # Actual shared owner and subprocess; fake gh never reaches a network or credential.
+        # Actual shared owner and subprocess; fake curl never reaches a network or credential.
         adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
                   'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
         for mode in ('good','lost','202','foreign','no-id','unexpected-read','timeout'):
@@ -130,6 +143,9 @@ class DiagnosticControls(unittest.TestCase):
                     self.assertEqual('consumed-accepted' if mode=='good' else 'consumed-unknown',state['sendState'])
                     self.assertEqual('observed-empty-group',state['ownerReceipt']['cleanup'])
                     self.assertFalse(state['publicationAccepted'])
+                    self.assertNotIn(b'fixture-only',before)
+                    self.assertEqual('removed-after-qualified-retirement',state['sensitiveInputRetirement']['disposition'])
+                    self.assertFalse((Path(spec['operationRoot'])/'authorization.header').exists())
                     self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
                     self.assertEqual(before,result.read_bytes())
 
@@ -196,17 +212,19 @@ class DiagnosticControls(unittest.TestCase):
             from types import SimpleNamespace
             archive=b'inert terminal archive';calls=[]
             def inert_run(argv,cwd,env,deadline,cleanup,rss,out,cap,**kwargs):
-                calls.append(argv[4]);output=Path(out)
-                if '/jobs?' in argv[4]:
+                target=argv[-1];calls.append(target);output=Path(out)
+                if '/jobs?' in target:
                     output.write_bytes(b'inert causal failure')
                     output.with_suffix('.log.result.json').write_text(json.dumps({'cleanup':'observed-empty-group'}))
                     raise RuntimeError('inert original terminal job metadata failure')
-                if '/artifacts?' in argv[4]:
+                if '/artifacts?' in target:
                     value={'total_count':1,'artifacts':[{'id':71,'name':'execution-pair-publication-42-1','expired':False,
                            'workflow_run':{'id':42,'head_sha':spec['publisher']},'size_in_bytes':len(archive),
                            'digest':'sha256:'+hashlib.sha256(archive).hexdigest()}]}
-                    output.write_text(json.dumps(value))
-                else:output.write_bytes(archive)
+                    raw=json.dumps(value).encode()
+                else:raw=archive
+                Path(argv[argv.index('--output')+1]).write_bytes(raw)
+                output.write_text(json.dumps({'httpCode':'200','effectiveUrl':target,'redirects':0,'sslVerifyResult':0}))
                 return {'cleanup':'observed-empty-group'}
             result=module.proc_terminal_evidence(SimpleNamespace(run=inert_run),spec,root,{},lambda *a:None,{'id':42})
             self.assertEqual('failed',result['records']['terminal-jobs']['state'])
@@ -252,7 +270,7 @@ class DiagnosticControls(unittest.TestCase):
                 if mode=='missing-input':(slot/'input.json').unlink()
                 if mode=='missing-result':(slot/'command.json').unlink()
                 if mode=='missing-slot':
-                    (slot/'input.json').unlink();(slot/'command.json').unlink();slot.rmdir()
+                    shutil.rmtree(slot)
                 with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
                     self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
                 self.assertFalse((slot/'dispatch-input.json').exists())
@@ -269,6 +287,92 @@ class DiagnosticControls(unittest.TestCase):
             self.assertIn(b'optimize=0',result.stderr)
             self.assertEqual(before,state.read_bytes())
             self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
+
+    def test_proc_fixed_curl_argv_and_sensitive_input_retirement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            slot=Path(spec['operationRoot'])
+            argv=module.proc_curl_argv(spec,slot,spec['request']['endpoint'],'POST',body=slot/'dispatch-input.json')
+            self.assertEqual('-q',argv[1]);self.assertEqual('https://api.github.com/'+spec['request']['endpoint'],argv[-1])
+            self.assertIn('Expect:',argv);self.assertIn('@'+str(slot/'authorization.header'),argv)
+            for forbidden in ('--location','-L','--retry','--anyauth','--netrc','--config','--parallel','--next','--user'):
+                self.assertNotIn(forbidden,argv)
+            header=module.proc_sensitive_header(slot,'inert-sensitive-source-control')
+            self.assertEqual(0o600,(slot/'authorization.header').stat().st_mode&0o777)
+            self.assertNotIn('inert-sensitive',json.dumps({k:v for k,v in header.items() if not k.startswith('_')}));self.assertNotIn('sha256',header)
+            with self.assertRaises(FileExistsError):module.proc_sensitive_header(slot,'second-inert-value')
+            self.assertEqual('held-uncertain-retirement',module.proc_sensitive_retire(header,{'cleanup':'unknown'})['disposition'])
+            self.assertTrue((slot/'authorization.header').exists())
+            receipt={'cleanup':'observed-empty-group','custody':'observed-owned-group'}
+            self.assertEqual('removed-after-qualified-retirement',module.proc_sensitive_retire(header,receipt)['disposition'])
+            for invalid in ('line\nbreak','line\rbreak','nul\0break',''):
+                with self.assertRaises(ValueError):module.proc_sensitive_header(slot,invalid)
+
+    def test_proc_typed_read_drift_observes_alias_population_and_absence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            selected=root/'bounded-support';selected.mkdir();file=selected/'file';file.write_text('owned support')
+            alias=root/'support-alias';alias.symlink_to(file)
+            identity=module.proc_read_identity
+            spec['readEvidence']={'contract':'ordinary-exact-profile-observation-and-drift','runtimeData':copy.deepcopy(module.PROC_RUNTIME_DATA),
+                'directories':[{'path':str(selected),'identity':identity(selected),'relevantEntries':{'file':identity(file)},'completePopulation':True}],
+                'aliases':[{'path':str(alias),'target':str(file),'resolved':str(file),'identity':identity(alias)}],
+                'absences':[{'path':str(root/'absent-config'),'parentIdentity':identity(root)}]}
+            module.proc_read_drift(spec)
+            (selected/'unexpected').write_text('new support')
+            with self.assertRaisesRegex(ValueError,'population'):module.proc_read_drift(spec)
+            (selected/'unexpected').unlink();(root/'absent-config').write_text('new config')
+            with self.assertRaisesRegex(ValueError,'negative'):module.proc_read_drift(spec)
+            (root/'absent-config').unlink();alias.unlink();alias.symlink_to(selected/'foreign')
+            with self.assertRaises(ValueError):module.proc_read_drift(spec)
+
+    def test_proc_qualification_trace_has_complete_births_and_refuses_unknown_paths(self):
+        # Parser controls are inert metadata, never authentic qualification evidence.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,approved=self.proc_fixture(root)
+            bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}))
+            spec['proofInputs']['bootstrapEvidence']=str(bootstrap)
+            slot=Path(spec['operationRoot']);python=os.path.realpath(os.sys.executable);client=spec['transport']['client']
+            parent=slot/'qualification.trace.10';child=slot/'qualification.trace.11'
+            parent.write_text('execve('+json.dumps(python)+', ["python", "-I"], 0x0 /* 7 vars */) = 0\nclone(child_stack=NULL, flags=SIGCHLD) = 11\n+++ exited with 0 +++\n')
+            child.write_text('execve('+json.dumps(client)+', ["curl", "-q"], 0x0 /* 7 vars */) = 0\n+++ exited with 52 +++\n')
+            self.assertTrue(module.proc_trace_evidence(spec,slot,approved)['complete'])
+            original=child.read_text()
+            child.write_text(original.replace('+++ exited', 'openat(AT_FDCWD, "/foreign/config", O_RDONLY) = 3</foreign/config>\n+++ exited'))
+            with self.assertRaisesRegex(ValueError,'outside bootstrap'):module.proc_trace_evidence(spec,slot,approved)
+            child.write_text(original);child.unlink()
+            with self.assertRaisesRegex(ValueError,'birth join'):module.proc_trace_evidence(spec,slot,approved)
+
+    def test_proc_qualification_bootstrap_cannot_borrow_dispatch_or_native_get_authority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            spec['profile']='proc-pair-client-qualification';spec['role']='qualification'
+            spec['operation']=module.PROC_PROFILES[spec['profile']];slot=module.proc_operation_root(spec['operation']);slot.mkdir(mode=0o700)
+            for name in ('home','tmp','ca-empty'):(slot/name).mkdir(mode=0o700)
+            config=module.proc_support_root()/'openssl.cnf'
+            spec['operationRoot']=str(slot)
+            spec['environment'].update(HOME=str(slot/'home'),TMPDIR=str(slot/'tmp'),OPENSSL_CONF=str(config))
+            spec['proofInputs']['bootstrapEvidence']=spec['proofInputs'].pop('runtimeQualification')
+            spec['request']={'method':'GET','endpoint':'repos/'+module.PROC_REPOSITORY,'apiVersion':'2026-03-10',
+                             'body':None,'requestLimit':1,'nativeGet':False,'cases':list(module.PROC_QUALIFICATION_CASES)}
+            self.assertEqual('qualification',module.proc_command_preflight(spec,now=time.monotonic())['role'])
+            self.assertNotIn('runtimeQualification',spec['proofInputs'])
+            descriptor.write_text(json.dumps(spec))
+            authority=json.loads(approved.read_bytes());authority.update(profile=spec['profile'],operation=spec['operation'],
+                operationRoot=str(slot),descriptorSha256=hashlib.sha256(descriptor.read_bytes()).hexdigest(),
+                canonicalOperationIdentity=module.proc_directory_identity(slot))
+            approved.write_text(json.dumps(authority))
+            # The old dispatch admission does not authorize qualification; native
+            # client execution cannot be reached by this source-only control.
+            original=module.os.readlink
+            def dev_null(path,*args,**kwargs):return '/dev/null' if str(path)=='/proc/self/fd/0' else original(path,*args,**kwargs)
+            errors=io.StringIO()
+            with contextlib.redirect_stderr(errors),patch('runpy.run_path',return_value={'pair_recovery_selection':lambda a:a['recovery']}),patch.object(module,'proc_bootstrap_evidence',side_effect=ValueError('explicit non-effect bootstrap unavailable')),patch.object(module.os,'readlink',side_effect=dev_null):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertIn('explicit non-effect bootstrap unavailable',errors.getvalue())
+            self.assertFalse((slot/'dispatch-input.json').exists())
+            bad=copy.deepcopy(spec);bad['request']['method']='POST'
+            with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
 
     def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
         for inherited in (False, True):

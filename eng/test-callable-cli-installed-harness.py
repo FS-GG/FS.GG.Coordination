@@ -511,9 +511,9 @@ PAIR_ORIGINAL_STEPS = (
 
 def pair_recovery_selection(admission):
     selected = admission['recovery']
-    expected = {'enabled', 'policyObservationEnabled', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
+    expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
                 'jobId', 'artifactId', 'archiveSha256'}
-    if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled')):
+    if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled','clientQualificationEnabled')):
         raise ValueError('pair recovery selection changed')
     if (admission['enabled'] is not False
             or admission['operation'] != 'publish-execution-pair-030-b11fb121-four38484632631'

@@ -77,6 +77,7 @@
     "jobId": 115630940784,
     "artifactId": 11863691435,
     "archiveSha256": "e885b5a0a80807e461559b89547dda91c9c822a89216145a0092b53e3a3c879e",
-    "policyObservationEnabled": false
+    "policyObservationEnabled": false,
+    "clientQualificationEnabled": false
   }
 }
