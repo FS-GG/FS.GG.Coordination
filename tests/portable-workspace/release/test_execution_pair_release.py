@@ -705,8 +705,8 @@ def pair_recovery_source_controls():
     text=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
     job=text.split('\n  execution_pair:\n',1)[1]
     assert 'inputs.pair_recovery' in job.splitlines()[0] and '!inputs.readback_only' in job.splitlines()[0]
-    attest=job.split('      - name: Attest only',1)[1].split('      - name:',1)[0]
-    assert 'if: ${{ false }}' in attest
+    assert 'actions/attest@' not in job and 'Attest only the retained pair inputs' not in job
+    assert 'gh attestation verify' in job and "<<'PY_PAIR_ATTESTATION'" in job
     assert job.index('Authenticate consumed original failure')<job.index('Require existing App bindings')<job.index('Obtain selected Trusted Publishing')
     preflight=text.split('  execution_pair_preflight:\n',1)[1].split('  execution_pair:\n',1)[0]
     for forbidden in ('NuGet/login','dotnet ','actions/attest@','nuget push','gh release','packages: write','contents: write'):
@@ -744,7 +744,7 @@ def main():
         result=subprocess.run(['bash','-c',script],capture_output=True,text=True,timeout=5)
         assert result.returncode==0 and result.stdout==('0:'+expected if expected is not None else '1:'),(seconds,deadline,result.stdout)
     for gate in ('test "$CLI_ONLY" = false','test "$PREFLIGHT_ONLY" = false','test "$READBACK_ONLY" = false'):
-        assert job.index(gate)<job.index('Attest only')<job.index('Push both retained')
+        assert job.index(gate)<job.index('Authenticate consumed original failure')<job.index('Verify pair provenance')<job.index('Push both retained')
     assert 'nuget push' not in prepare
     assert 'skip-duplicate' not in job and 'dotnet pack' not in job
     actual=heredoc('PY_PAIR_ADMISSION'); base=admission()

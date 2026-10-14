@@ -1177,11 +1177,6 @@ jobs:
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
-      - name: Attest only the retained pair inputs under reviewed B
-        if: ${{ false }} # Original attestation is retained; pair recovery never creates another.
-        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
-        with:
-          subject-path: ${{ env.CANDIDATE_OUTPUT }}/*.nupkg
       - name: Verify pair provenance and candidate installed load before effects
         shell: bash
         env:
