@@ -52,8 +52,8 @@ class DiagnosticControls(unittest.TestCase):
                                             for suffix in ('.artifact.json','.job.log','.zip'))):
             (consumer/name).write_text('{}')
         pins=[]
-        imports=[Path(m.__file__).resolve() for m in list(os.sys.modules.values())
-                 if getattr(m,'__file__',None) is not None and Path(m.__file__).is_file()]
+        imports=[Path(getattr(m,field)).resolve() for m in list(os.sys.modules.values()) for field in ('__file__','__cached__')
+                 if getattr(m,field,None) is not None and Path(getattr(m,field)).is_file()]
         import runpy
         imports.append(Path(runpy.__file__).resolve())
         for path in dict.fromkeys((client,ROOT/'eng/shared_process_owner.py',ROOT/'eng/retain-choreo-c2-diagnostics.py',

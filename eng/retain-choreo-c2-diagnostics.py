@@ -780,9 +780,10 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             raise ValueError('PROC authenticated consumer input closure absent')
         def imports_unchanged():
             for imported in list(sys.modules.values()):
-                source=getattr(imported,'__file__',None)
-                if source is not None and Path(source).is_file() and str(Path(source).resolve()) not in spec['sourceReadAllowlist']:
-                    raise ValueError('PROC unexpected actual import/support source')
+                for field in ('__file__','__cached__'):
+                    source=getattr(imported,field,None)
+                    if source is not None and Path(source).is_file() and str(Path(source).resolve()) not in spec['sourceReadAllowlist']:
+                        raise ValueError('PROC unexpected actual import/bytecode/support source')
         imports_unchanged()
         if (spec['profile']=='proc-pair-recovery-dispatch' and selected['enabled'] is not True
                 or spec['profile']=='proc-pair-policy-observation' and selected['policyObservationEnabled'] is not True):
@@ -800,6 +801,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             root.mkdir(mode=0o700);claimed=True;slot=root
         for name in ('tmp','home'): (slot/name).mkdir(mode=0o700)
         persist(slot/'input.json',spec,exclusive=True)
+        generated_inputs=[]
         result={'schema':RESULT_SCHEMA,'operation':spec['operation'],'originalOperation':PROC_ORIGINAL,
                 'commandAccepted':False,'sendState':'not-applicable' if spec['role']=='watch' else 'prepared-no-send',
                 'firstCause':None,'additionalFailures':[],'ownerReceipt':None,'nativeResponse':None,
@@ -807,6 +809,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                 'remoteTerminal':'unknown','reportingOutcome':'pending','publicationAccepted':False}
         if spec['role']=='dispatch':
             persist(root/'dispatch-input.json',spec['request']['body'],exclusive=True)
+            row=pin_file(root/'dispatch-input.json');row['mode']=0o600;generated_inputs.append(row)
             persist(root/'command.json',result,exclusive=True)
         env=dict(spec['environment'])
         if 'GH_TOKEN' not in os.environ or not os.environ['GH_TOKEN']:raise ValueError('PROC approved credential binding unavailable')
@@ -814,6 +817,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         def check(event,child,leader,known):
             if event!='after-cleanup' and time.monotonic()>=spec['workDeadline']:raise TimeoutError('PROC original deadline')
             for pin in spec['pins']:proc_regular_pin(pin)
+            for pin in generated_inputs:proc_regular_pin(pin)
             imports_unchanged()
             observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
             if observed['fixtureSymlinks'] or observed['objects']>25000:raise ValueError('PROC operation scope changed')
