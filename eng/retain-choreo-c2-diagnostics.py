@@ -445,6 +445,8 @@ def validate_launch_grant(grant):
 
 def command_preflight(spec, *, now):
     """Pure shape/role/budget joins; filesystem checks happen against actual pins."""
+    if spec.get('profile', '').startswith('proc-pair-'):
+        return proc_command_preflight(spec, now=now)
     required = {'schema', 'role', 'argv', 'pins', 'aliases', 'semanticToolchainId', 'archiveSha256',
                 'started', 'workDeadline', 'totalDeadline', 'workSeconds', 'cleanupSeconds',
                 'rssBytes', 'logBytes', 'maximumGenerations', 'endpoint', 'jvmArgs', 'tlcConfig', 'mutableScope'}
@@ -498,6 +500,380 @@ def command_preflight(spec, *, now):
         raise ValueError('command metadata cap')
     # Semantic identity intentionally has no equality requirement with byte digests.
     return {'schema': COMMAND_SCHEMA, 'passed': True, 'role': spec['role']}
+
+
+PROC_PROFILES = {'proc-pair-policy-observation': 'observe-execution-pair-policy-21633398',
+                 'proc-pair-recovery-dispatch': 'recover-execution-pair-030-b11fb121-original38495729817',
+                 'proc-pair-native-watch': None}
+PROC_ORIGINAL = 'publish-execution-pair-030-b11fb121-four38484632631'
+PROC_REPOSITORY = 'FS-GG/FS.GG.Coordination'
+PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
+
+
+def proc_command_preflight(spec, *, now):
+    """Closed operation contracts. A valid shape never supplies launch authority."""
+    fields = {'schema','profile','role','campaign','item','attempt','originalOperation','operation',
+              'publisher','repositoryId','workflowId','workflowPath','source','originalPublisher',
+              'request','argv','pins','proofInputs','sourceReadAllowlist','environment','operationRoot',
+              'started','workDeadline','totalDeadline','cleanupSeconds','rssBytes','addressSpaceBytes','logBytes','diskBytes','cpuAffinity'}
+    if set(spec) != fields or spec['schema'] != COMMAND_SCHEMA or spec['profile'] not in PROC_PROFILES:
+        raise ValueError('PROC command schema/profile')
+    expected_role = 'watch' if spec['profile'] == 'proc-pair-native-watch' else 'dispatch'
+    if spec['role'] != expected_role: raise ValueError('PROC profile role exchange')
+    if (spec['campaign'] != 'unified-roadmap-20261003' or not all(type(spec[k]) is str and spec[k] for k in ('item','attempt'))
+            or spec['originalOperation'] != PROC_ORIGINAL
+            or spec['repositoryId'] != 1346720714 or spec['workflowId'] != 361038177 or spec['workflowPath'] != PROC_WORKFLOW
+            or spec['source'] != 'b11fb121f046898e655b779dfc6809f35fc7aac6'
+            or spec['originalPublisher'] != '0ccfb6d067d912bbd8a1e26c4b56449358443b2e'
+            or not re.fullmatch('[0-9a-f]{40}',spec['publisher'])):
+        raise ValueError('PROC original/source/native identity')
+    if spec['profile'] != 'proc-pair-native-watch' and spec['operation'] != PROC_PROFILES[spec['profile']]:
+        raise ValueError('PROC operation exchange')
+    if spec['operation'] not in (PROC_PROFILES['proc-pair-policy-observation'],PROC_PROFILES['proc-pair-recovery-dispatch']):
+        raise ValueError('PROC consumed-original operation cannot dispatch or watch as recovery')
+    if (any(type(spec[k]) not in (float,int) or not math.isfinite(spec[k]) for k in ('started','workDeadline','totalDeadline'))
+            or not 0 < spec['workDeadline']-spec['started'] <= 90 or spec['cleanupSeconds'] != 10
+            or spec['totalDeadline'] != spec['workDeadline']+10 or not spec['started'] <= now < spec['workDeadline']
+            or now-spec['started'] > 60):
+        raise ValueError('PROC original launch/deadline budget')
+    if (spec['rssBytes'] != 512*1024**2 or spec['logBytes'] != 1024**2 or spec['diskBytes'] != 16*1024**2
+            or not isinstance(spec['cpuAffinity'],list) or len(spec['cpuAffinity']) != 1
+            or type(spec['cpuAffinity'][0]) is not int
+            or spec['addressSpaceBytes'] is not None and (type(spec['addressSpaceBytes']) is not int or spec['addressSpaceBytes']<spec['rssBytes'])):
+        raise ValueError('PROC resource profile')
+    root = Path(spec['operationRoot'])
+    if not root.is_absolute() or str(root) != os.path.normpath(str(root)) or root.name != spec['operation']:
+        raise ValueError('PROC fixed operation root')
+    environment = spec['environment']
+    if (set(environment) != {'HOME','TMPDIR','GH_CONFIG_DIR','PATH','LANG','LC_ALL','GH_PROMPT_DISABLED','GH_HOST'}
+            or environment['HOME'] != str(root/'home') or environment['TMPDIR'] != str(root/'tmp')
+            or environment['GH_CONFIG_DIR'] != str(root/'home/.config/gh')
+            or environment['GH_PROMPT_DISABLED'] != '1' or environment['GH_HOST'] != 'github.com'
+            or any(type(v) is not str or '\x00' in v for v in environment.values())):
+        raise ValueError('PROC environment/config exclusions')
+    if (not isinstance(spec['pins'],list) or not 3 <= len(spec['pins']) <= 512
+            or not isinstance(spec['sourceReadAllowlist'],list) or len(spec['sourceReadAllowlist']) > 512):
+        raise ValueError('PROC closure population')
+    for row in spec['pins']:
+        if (set(row) != {'path','bytes','sha256','mode'} or not Path(row['path']).is_absolute()
+                or type(row['bytes']) is not int or row['bytes'] < 0
+                or not re.fullmatch('[0-9a-f]{64}',row['sha256']) or type(row['mode']) is not int):
+            raise ValueError('PROC closure pin')
+    if (len({p['path'] for p in spec['pins']}) != len(spec['pins'])
+            or set(spec['sourceReadAllowlist']) != {p['path'] for p in spec['pins']}):
+        raise ValueError('PROC exact declared read closure')
+    if set(spec['proofInputs']) != {'admission','originalRun','originalJobs','originalArtifact','originalArchive','verifiedAttestation','consumerRoot','sourceCorrespondence','runtimeQualification'}:
+        raise ValueError('PROC proof input population')
+    pinned = {p['path'] for p in spec['pins']}
+    if any(path not in pinned for key,path in spec['proofInputs'].items() if key != 'consumerRoot'):
+        raise ValueError('PROC proof input not pinned')
+    request = spec['request']
+    if spec['role'] == 'dispatch':
+        inputs = {'execution_pair':True,'pair_recovery':spec['profile']=='proc-pair-recovery-dispatch',
+                  'preflight_only':spec['profile']=='proc-pair-policy-observation','cli_only':False,'readback_only':False,
+                  'publisher_source':spec['publisher'],'operation':spec['operation'],'source':spec['source'],
+                  'protected_merge':spec['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}
+        expected = {'method':'POST','endpoint':'repos/'+PROC_REPOSITORY+'/actions/workflows/361038177/dispatches',
+                    'apiVersion':'2026-03-10','body':{'ref':'main','inputs':inputs},'requestLimit':1}
+        argv_tail = ['api','--method','POST','--include',expected['endpoint'],'-H','X-GitHub-Api-Version: 2026-03-10',
+                     '--input',str(root/'dispatch-input.json')]
+    else:
+        if (set(request) != {'method','endpoint','apiVersion','body','requestLimit','runId'}
+                or request['runId'] is not None and (type(request['runId']) is not int or request['runId'] <= 0)):
+            raise ValueError('PROC watch native identity')
+        endpoint = ('repos/'+PROC_REPOSITORY+'/actions/runs/'+str(request['runId']) if request['runId'] is not None
+                    else 'repos/'+PROC_REPOSITORY+'/actions/runs?event=workflow_dispatch&head_sha='+spec['publisher']+'&per_page=100')
+        expected = {'method':'GET','endpoint':endpoint,
+                    'apiVersion':'2026-03-10','body':None,'requestLimit':5,'runId':request['runId']}
+        argv_tail = ['api','--method','GET',expected['endpoint'],'-H','X-GitHub-Api-Version: 2026-03-10']
+    if request != expected or not isinstance(spec['argv'],list) or spec['argv'][1:] != argv_tail:
+        raise ValueError('PROC exact endpoint/method/argv')
+    if spec['argv'][0] not in pinned: raise ValueError('PROC client outside runtime closure')
+    if len(json.dumps(spec).encode()) > 256*1024: raise ValueError('PROC descriptor bound')
+    return {'schema':COMMAND_SCHEMA,'passed':True,'role':spec['role'],'publicationAuthorized':False}
+
+
+def proc_regular_pin(row):
+    path = Path(row['path'])
+    if any(p.is_symlink() for p in (path,*path.parents)) or not path.is_file():
+        raise ValueError('PROC source/runtime alias or nonregular input')
+    actual = pin_file(path)
+    actual['mode'] = stat.S_IMODE(path.stat().st_mode)
+    if actual != row: raise ValueError('PROC source/runtime input drift')
+
+
+def proc_dispatch_response(raw):
+    """Only documented 200+exact native identity settles the one consumed send."""
+    if len(raw) > 1024**2: raise ValueError('PROC dispatch response bound')
+    header,body = raw.replace(b'\r\n',b'\n').split(b'\n\n',1)
+    if header.splitlines()[0].split()[1] != b'200': raise ValueError('PROC dispatch response is not HTTP200')
+    value = json.loads(body)
+    if set(value) != {'workflow_run_id','run_url','html_url'} or type(value['workflow_run_id']) is not int or value['workflow_run_id'] <= 0:
+        raise ValueError('PROC dispatch native response identity')
+    run = value['workflow_run_id']
+    if (value['run_url'] != 'https://api.github.com/repos/'+PROC_REPOSITORY+'/actions/runs/'+str(run)
+            or value['html_url'] != 'https://github.com/'+PROC_REPOSITORY+'/actions/runs/'+str(run)):
+        raise ValueError('PROC dispatch native response origin')
+    return value
+
+
+def proc_native_correlation(spec, prior, payload):
+    """A unique original-window match is observation, never a fresh send grant."""
+    def identity(run):
+        return (type(run.get('id')) is int and run['id']>0 and run.get('workflow_id')==spec['workflowId']
+                and run.get('head_sha')==spec['publisher'] and run.get('event')=='workflow_dispatch'
+                and type(run.get('run_attempt')) is int and run['run_attempt']==1
+                and run.get('repository',{}).get('id')==spec['repositoryId'] and run.get('path')==PROC_WORKFLOW
+                and run.get('head_branch')=='main' and run.get('display_title')=='PROC '+spec['operation']+' @ '+spec['publisher'])
+    if spec['request']['runId'] is not None:
+        if not identity(payload) or payload['id']!=spec['request']['runId']:
+            raise ValueError('PROC watch native correlation changed')
+        return payload
+    rows=payload['workflow_runs']
+    if (type(payload['total_count']) is not int or payload['total_count']!=len(rows) or len(rows)>=100
+            or len({r['id'] for r in rows})!=len(rows)):
+        raise ValueError('PROC uncertain-send run population incomplete')
+    import datetime
+    matches=[]
+    for run in rows:
+        if identity(run):
+            created=datetime.datetime.strptime(run['created_at'],'%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=datetime.timezone.utc).timestamp()
+            if prior['nativeCreatedAfterEpoch']-1<=created<=prior['nativeCreatedBeforeEpoch']:matches.append(run)
+    if len(matches)!=1:raise ValueError('PROC uncertain-send run correlation absent or ambiguous; send remains consumed')
+    return matches[0]
+
+
+def proc_runtime_evidence(spec, authority, evidence):
+    """Join root-selected canonical qualification to actual current support inputs."""
+    owner=evidence.get('ownerReceipt') or {}
+    runtime=evidence.get('runtimeEvidence') or {}
+    expected_bounds={k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')}
+    support=[pin for pin in spec['pins'] if pin['path'] not in spec['proofInputs'].values()]
+    if (evidence.get('schema')!=RESULT_SCHEMA or evidence.get('commandAccepted') is not True
+            or evidence!=authority.get('runtimeQualification') or owner.get('cleanup')!='observed-empty-group'
+            or owner.get('custody')!='observed-owned-group' or owner.get('exit')!=0 or owner.get('firstCause') is not None
+            or not isinstance(owner.get('leader'),dict) or not owner['leader'].get('start')
+            or owner.get('residual')!=[] or owner.get('escapedResidual')!=[] or owner.get('escapedDescendants')!=[]
+            or runtime.get('currentBootId')!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+            or runtime.get('effectiveUid')!=os.geteuid() or runtime.get('actualInterpreter')!=os.path.realpath(sys.executable)
+            or runtime.get('supportPins')!=support or runtime.get('bounds')!=expected_bounds
+            or runtime.get('clientPath')!=spec['argv'][0] or runtime.get('postRetryExcluded') is not True
+            or runtime.get('transitiveSourceReadFence')!='qualified-no-unobserved-source-reads'
+            or runtime.get('sourceReadAllowlist')!=spec['sourceReadAllowlist']):
+        raise ValueError('PROC actual canonical runtime/support/read/retry/custody evidence unavailable')
+
+
+def proc_terminal_evidence(owner, spec, slot, env, check, native):
+    """Bound independent terminal logs/artifacts; failures never reopen original send."""
+    run=native['id']; collected={}; failures=[]
+    def read(target,name,document=False):
+        output=slot/(name+'.log')
+        argv=[spec['argv'][0],'api','--method','GET',target,'-H','X-GitHub-Api-Version: 2026-03-10']
+        if name=='terminal-job':argv.insert(2,'--allow-escape-sequences')
+        try:
+            owner.run(argv,str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],str(output),
+                      spec['logBytes'],control=check,observe_child_exit=True)
+            raw=output.read_bytes()
+            if len(raw)>spec['logBytes']:raise ValueError('PROC terminal evidence bound')
+            value=json.loads(raw) if document else None
+            collected[name]={'state':'collected','sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+            return value
+        except BaseException as error:
+            failures.append({'stage':name,'cause':failure_record(error)})
+            receipt_path=output.with_suffix('.log.result.json')
+            if not receipt_path.is_file() or json.loads(receipt_path.read_bytes()).get('cleanup')!='observed-empty-group':
+                raise ValueError('PROC terminal evidence child custody/cleanup unknown') from error
+            collected[name]={'state':'failed'}
+            return None
+    jobs=read('repos/'+PROC_REPOSITORY+'/actions/runs/'+str(run)+'/attempts/1/jobs?per_page=100','terminal-jobs',True)
+    artifacts=read('repos/'+PROC_REPOSITORY+'/actions/runs/'+str(run)+'/artifacts?per_page=100','terminal-artifacts',True)
+    if jobs is not None:
+        rows=jobs.get('jobs',[])
+        expected='Publish the admitted original routine Execution pair' if spec['operation']==PROC_PROFILES['proc-pair-recovery-dispatch'] else 'Observe original Execution pair without publication authority'
+        selected=[j for j in rows if j.get('name')==expected]
+        if (jobs.get('total_count')==len(rows)<100 and len(selected)==1 and type(selected[0].get('id')) is int
+                and selected[0].get('run_id')==run and selected[0].get('head_sha')==spec['publisher'] and selected[0].get('run_attempt')==1):
+            read('repos/'+PROC_REPOSITORY+'/actions/jobs/'+str(selected[0]['id'])+'/logs','terminal-job')
+        else:failures.append({'stage':'terminal-job','cause':{'message':'complete selected native job binding unavailable'}})
+    if artifacts is not None:
+        rows=artifacts.get('artifacts',[])
+        prefix='execution-pair-publication-' if spec['operation']==PROC_PROFILES['proc-pair-recovery-dispatch'] else 'execution-pair-preflight-'
+        selected=[a for a in rows if a.get('name')==prefix+str(run)+'-1']
+        if (artifacts.get('total_count')==len(rows)<100 and len(selected)==1 and type(selected[0].get('id')) is int
+                and selected[0].get('expired') is False and selected[0].get('workflow_run',{}).get('id')==run
+                and selected[0].get('workflow_run',{}).get('head_sha')==spec['publisher']
+                and type(selected[0].get('size_in_bytes')) is int and 0<selected[0]['size_in_bytes']<=spec['logBytes']):
+            read('repos/'+PROC_REPOSITORY+'/actions/artifacts/'+str(selected[0]['id'])+'/zip','terminal-archive')
+            archive=collected.get('terminal-archive',{})
+            if archive.get('state')=='collected' and selected[0].get('digest')!='sha256:'+archive['sha256']:
+                archive['state']='failed';failures.append({'stage':'terminal-archive','cause':{'message':'native artifact archive digest differs'}})
+        else:failures.append({'stage':'terminal-archive','cause':{'message':'artifact unavailable, unsafe, incomplete or exceeds remaining selected output bound'}})
+    return {'records':collected,'additionalFailures':failures,'publicationAccepted':False}
+
+
+def execute_proc_command(descriptor, authority_path, authority_sha):
+    """Existing canonical input/result slots, one shared owner, no send replay."""
+    first=None; additional=[]; receipt=None; spec=None; result=None; claimed=False
+    def read_regular(path,cap):
+        p=Path(path)
+        if any(x.is_symlink() for x in (p,*p.parents)) or not p.is_file() or not 0<p.stat().st_size<=cap:
+            raise ValueError('PROC selected descriptor/authority unsafe')
+        return p.read_bytes()
+    def persist(path,value,exclusive=False):
+        raw=json.dumps(value,sort_keys=True).encode()+b'\n'
+        if exclusive:
+            with path.open('xb') as out: os.chmod(path,0o600);out.write(raw);out.flush();os.fsync(out.fileno())
+        else:
+            temporary=path.with_suffix('.pending')
+            with temporary.open('xb') as out:os.chmod(temporary,0o600);out.write(raw);out.flush();os.fsync(out.fileno())
+            os.replace(temporary,path)
+    try:
+        raw=read_regular(descriptor,256*1024);spec=json.loads(raw)
+        authority_raw=read_regular(authority_path,256*1024)
+        if hashlib.sha256(authority_raw).hexdigest()!=authority_sha:raise ValueError('PROC root-selected authority drift')
+        authority=json.loads(authority_raw)
+        if (authority.get('schema')!=COMMAND_SCHEMA or authority.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()
+                or authority.get('operation')!=spec['operation'] or authority.get('operationRoot')!=spec['operationRoot']
+                or authority.get('profile')!=spec['profile'] or authority.get('approved') is not True
+                or authority.get('runtimeQualified') is not True or authority.get('readFenceQualified') is not True
+                or authority.get('clientAutomaticPostRetry') is not False or authority.get('independentCapacityQualified') is not True):
+            raise ValueError('PROC current root authority/runtime/read/retry/capacity admission unavailable')
+        proc_command_preflight(spec,now=time.monotonic())
+        if set(os.sched_getaffinity(0))!=set(spec['cpuAffinity']):raise ValueError('PROC actual CPU affinity differs')
+        import resource
+        expected_address_space=resource.RLIM_INFINITY if spec['addressSpaceBytes'] is None else spec['addressSpaceBytes']
+        if resource.getrlimit(resource.RLIMIT_AS)[0]!=expected_address_space:raise ValueError('PROC actual virtual address-space bound differs')
+        for pin in spec['pins']:proc_regular_pin(pin)
+        if os.path.realpath(sys.executable) not in spec['sourceReadAllowlist']:
+            raise ValueError('PROC actual interpreter outside qualified runtime closure')
+        if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode:
+            raise ValueError('PROC actual interpreter must use isolated/no-site/no-bytecode flags')
+        required_sources=(Path(__file__),Path(__file__).with_name('shared_process_owner.py'),
+                          Path(__file__).with_name('test-callable-cli-installed-harness.py'),
+                          Path(__file__).with_name('write-callable-cli-release-readback.py'))
+        if any(str(path.resolve()) not in spec['sourceReadAllowlist'] for path in required_sources):
+            raise ValueError('PROC actual validator/runner/support closure absent')
+        root=Path(spec['operationRoot']);parent=root.parent
+        if any(p.is_symlink() for p in (parent,*parent.parents)) or stat.S_IMODE(parent.stat().st_mode)!=0o700:
+            raise ValueError('PROC exclusive operation parent')
+        owner_path=Path(__file__).with_name('shared_process_owner.py')
+        if not any(pin['path']==str(owner_path) and pin['sha256']==OWNER_SHA for pin in spec['pins']):
+            raise ValueError('PROC shared owner closure absent')
+        validators=__import__('runpy').run_path(str(Path(__file__).with_name('test-callable-cli-installed-harness.py')))
+        def document(key):return json.loads(read_regular(spec['proofInputs'][key],2*1024**2))
+        admission=document('admission');selected=validators['pair_recovery_selection'](admission)
+        qualification=document('runtimeQualification')
+        proc_runtime_evidence(spec,authority,qualification)
+        correspondence=document('sourceCorrespondence')
+        if (correspondence.get('publisher')!=spec['publisher'] or correspondence.get('source')!=spec['source']
+                or correspondence.get('originalPublisher')!=spec['originalPublisher'] or correspondence.get('protectedSourceVerified') is not True
+                or correspondence.get('aToEExactThreePaths') is not True or correspondence.get('aToPublisherExactElevenPaths') is not True):
+            raise ValueError('PROC current protected source correspondence absent')
+        original_proof=validators['pair_original_failure'](admission,document('originalRun'),document('originalJobs'),document('originalArtifact'),
+                                                          read_regular(spec['proofInputs']['originalArchive'],192*1024**2))
+        attestation_proof=validators['pair_verified_attestation'](admission,document('verifiedAttestation'))
+        __import__('runpy').run_path(str(Path(__file__).with_name('write-callable-cli-release-readback.py')))['pair_consumers'](admission,Path(spec['proofInputs']['consumerRoot']))
+        consumer=Path(spec['proofInputs']['consumerRoot'])
+        expected_consumer={'run.json','jobs.json',*(case+suffix for case in ('sdd-s1','fsquint-s1','sdd-rollback','fsquint-rollback')
+                                                  for suffix in ('.artifact.json','.job.log','.zip'))}
+        if consumer.is_symlink() or any(str(consumer/name) not in spec['sourceReadAllowlist'] for name in expected_consumer):
+            raise ValueError('PROC authenticated consumer input closure absent')
+        def imports_unchanged():
+            for imported in list(sys.modules.values()):
+                source=getattr(imported,'__file__',None)
+                if source is not None and Path(source).is_file() and str(Path(source).resolve()) not in spec['sourceReadAllowlist']:
+                    raise ValueError('PROC unexpected actual import/support source')
+        imports_unchanged()
+        if (spec['profile']=='proc-pair-recovery-dispatch' and selected['enabled'] is not True
+                or spec['profile']=='proc-pair-policy-observation' and selected['policyObservationEnabled'] is not True):
+            raise ValueError('PROC protected profile remains disabled')
+        if spec['role']=='watch':
+            prior=json.loads(read_regular(root/'command.json',MAX_OUTPUT))
+            if (prior.get('schema')!=RESULT_SCHEMA or prior.get('operation')!=spec['operation']
+                    or prior.get('sendState') not in ('send-started','consumed-accepted','consumed-unknown')
+                    or spec['request']['runId'] is not None and (prior.get('nativeResponse') or {}).get('workflow_run_id')!=spec['request']['runId']):
+                raise ValueError('PROC watch original native response binding unavailable')
+            observation=root/('watch-'+hashlib.sha256(raw).hexdigest())
+            observation.mkdir(mode=0o700);slot=observation
+        else:
+            # Fixed root key comes from root-selected authority. No alternate output path exists.
+            root.mkdir(mode=0o700);claimed=True;slot=root
+        for name in ('tmp','home'): (slot/name).mkdir(mode=0o700)
+        persist(slot/'input.json',spec,exclusive=True)
+        result={'schema':RESULT_SCHEMA,'operation':spec['operation'],'originalOperation':PROC_ORIGINAL,
+                'commandAccepted':False,'sendState':'not-applicable' if spec['role']=='watch' else 'prepared-no-send',
+                'firstCause':None,'additionalFailures':[],'ownerReceipt':None,'nativeResponse':None,
+                'originalPublication':original_proof,'retainedAttestation':attestation_proof,
+                'remoteTerminal':'unknown','reportingOutcome':'pending','publicationAccepted':False}
+        if spec['role']=='dispatch':
+            persist(root/'dispatch-input.json',spec['request']['body'],exclusive=True)
+            persist(root/'command.json',result,exclusive=True)
+        env=dict(spec['environment'])
+        if 'GH_TOKEN' not in os.environ or not os.environ['GH_TOKEN']:raise ValueError('PROC approved credential binding unavailable')
+        env['GH_TOKEN']=os.environ['GH_TOKEN']
+        def check(event,child,leader,known):
+            if event!='after-cleanup' and time.monotonic()>=spec['workDeadline']:raise TimeoutError('PROC original deadline')
+            for pin in spec['pins']:proc_regular_pin(pin)
+            imports_unchanged()
+            observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
+            if observed['fixtureSymlinks'] or observed['objects']>25000:raise ValueError('PROC operation scope changed')
+            # This is observed-group read exclusion, not a claim about transient opens.
+            # The separately root-qualified transitive read fence remains mandatory.
+            if leader is not None and event!='after-cleanup':
+                members=owner.census(leader['pgid'])
+                if len(members)>32:raise ValueError('PROC observed group population bound')
+                for member in members:
+                    if known.get(member['pid'])!=member['start']:raise ValueError('PROC unknown observed group birth')
+                    for target in owned_fd_targets(member,owner.proc,additional):
+                        if target.startswith('/') and target not in spec['sourceReadAllowlist'] and target not in (
+                                '/dev/null',str(slot/'runner.log'),str(slot/'client-preflight.log'),str(root/'dispatch-input.json'),
+                                *(str(slot/(name+'.log')) for name in ('terminal-jobs','terminal-artifacts','terminal-job','terminal-archive'))):
+                            raise ValueError('PROC unexpected observed source/config read')
+        module_spec=importlib.util.spec_from_file_location('proc_shared_owner',owner_path)
+        owner=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(owner)
+        # Benign actual-client startup is checked before send intent, under the same
+        # original limits; Go virtual reservations are distinct from sampled RSS.
+        startup=owner.run([spec['argv'][0],'--version'],str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],
+                          spec['rssBytes'],str(slot/'client-preflight.log'),spec['logBytes'],control=check,observe_child_exit=True)
+        version=read_regular(slot/'client-preflight.log',4096).decode().strip()
+        if version!=qualification['runtimeEvidence'].get('clientVersion'):
+            raise ValueError('PROC actual current client startup/version differs')
+        result['clientPreflightReceipt']=startup
+        if spec['role']=='dispatch':
+            result['sendState']='send-started'
+            result['nativeCreatedAfterEpoch']=time.time()
+            result['nativeCreatedBeforeEpoch']=result['nativeCreatedAfterEpoch']+max(0,spec['workDeadline']-time.monotonic())+10
+            # Durable intent precedes exactly one native POST. Never transition back.
+            persist(root/'command.json',result)
+        receipt=owner.run(spec['argv'],str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],
+                          str(slot/'runner.log'),spec['logBytes'],control=check,observe_child_exit=True)
+        response=read_regular(slot/'runner.log',spec['logBytes'])
+        if spec['role']=='dispatch':
+            result['nativeResponse']=proc_dispatch_response(response);result['sendState']='consumed-accepted'
+        else:
+            native=proc_native_correlation(spec,prior,json.loads(response))
+            result['remoteTerminal']=native.get('status','unknown');result['nativeResponse']=native
+            if native.get('status')=='completed':
+                result['terminalEvidence']=proc_terminal_evidence(owner,spec,slot,env,check,native)
+        result['commandAccepted']=True
+    except BaseException as error:
+        first=error
+        if result is not None and spec['role']=='dispatch' and result['sendState']=='send-started':result['sendState']='consumed-unknown'
+    finally:
+        if result is not None:
+            result['firstCause']=failure_record(first);result['additionalFailures']=additional
+            result['ownerReceipt']=receipt
+            if receipt is None and 'slot' in locals() and (slot/'runner.log.result.json').is_file():
+                try:result['ownerReceipt']=json.loads((slot/'runner.log.result.json').read_bytes())
+                except BaseException as error:additional.append(failure_record(error))
+            result['reportingOutcome']='written'
+            try:persist(slot/'command.json',result,exclusive=spec['role']=='watch')
+            except BaseException as error:
+                additional.append(failure_record(error));result['reportingOutcome']='failed'
+                if first is None:first=error
+        elif first is not None:
+            print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':failure_record(first),'commandAccepted':False}),file=sys.stderr)
+    return 0 if first is None else 1
 
 
 def extraction_receipt_join(receipt, manifest_sha):
@@ -921,6 +1297,8 @@ def execute_command(seconds, log_path, endpoint, argv):
 
 
 if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'command':
+    if len(sys.argv)==6 and sys.argv[2]=='--proc':
+        sys.exit(execute_proc_command(sys.argv[3],sys.argv[4],sys.argv[5]))
     if len(sys.argv) < 9 or sys.argv[5] != '--': sys.exit(64)
     sys.exit(execute_command(sys.argv[2], sys.argv[3], sys.argv[4], sys.argv[6:]))
 elif __name__ == '__main__':

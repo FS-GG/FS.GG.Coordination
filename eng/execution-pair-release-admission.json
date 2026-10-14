@@ -1,7 +1,7 @@
 {
   "schema": "fsgg.coordination.execution-pair-admission/1",
   "profile": "execution-pair",
-  "enabled": true,
+  "enabled": false,
   "operation": "publish-execution-pair-030-b11fb121-four38484632631",
   "version": "0.3.0",
   "tag": "execution/v0.3.0",
@@ -66,5 +66,17 @@
         "sourceClosureSha256": "ac096150c1d81c755a8f4dd6b5f0f7cedc8bb05dd62aaa14cb3c27487b30f708"
       }
     }
+  },
+  "recovery": {
+    "enabled": false,
+    "operation": "recover-execution-pair-030-b11fb121-original38495729817",
+    "originalOperation": "publish-execution-pair-030-b11fb121-four38484632631",
+    "publisher": "0ccfb6d067d912bbd8a1e26c4b56449358443b2e",
+    "runId": 38495729817,
+    "runAttempt": 1,
+    "jobId": 115630940784,
+    "artifactId": 11863691435,
+    "archiveSha256": "e885b5a0a80807e461559b89547dda91c9c822a89216145a0092b53e3a3c879e",
+    "policyObservationEnabled": false
   }
 }

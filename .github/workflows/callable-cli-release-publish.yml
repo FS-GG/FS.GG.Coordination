@@ -1,4 +1,5 @@
 name: callable-cli-release-publish
+run-name: "PROC ${{ inputs.operation || 'observation' }} @ ${{ inputs.publisher_source || github.sha }}"
 
 on:
   workflow_dispatch:
@@ -10,6 +11,11 @@ on:
         type: boolean
       execution_pair:
         description: Select the separately admitted routine Execution pair
+        required: false
+        default: false
+        type: boolean
+      pair_recovery:
+        description: Select expressly reconciled pre-push pair recovery; consumed original send stays disabled
         required: false
         default: false
         type: boolean
@@ -58,7 +64,7 @@ concurrency:
 jobs:
   preflight:
     name: Read-only migration release feasibility
-    if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair
+    if: inputs.preflight_only == true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -157,7 +163,7 @@ jobs:
           retention-days: 14
 
   publish:
-    if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair
+    if: inputs.preflight_only != true && !inputs.cli_only && !inputs.readback_only && !inputs.execution_pair && !inputs.pair_recovery
     name: Qualify, publish, and read back exact portable CLI
     runs-on: ubuntu-24.04
     timeout-minutes: 60
@@ -579,7 +585,7 @@ jobs:
           compression-level: 0
 
   cli_successor:
-    if: inputs.cli_only && !inputs.preflight_only && !inputs.execution_pair
+    if: inputs.cli_only && !inputs.preflight_only && !inputs.execution_pair && !inputs.pair_recovery
     name: Publish the admitted original CLI-only candidate
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -897,7 +903,7 @@ jobs:
           retention-days: 90
 
   execution_pair_preflight:
-    if: inputs.execution_pair && inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
+    if: inputs.execution_pair && inputs.preflight_only && !inputs.pair_recovery && !inputs.cli_only && !inputs.readback_only
     name: Observe original Execution pair without publication authority
     runs-on: ubuntu-24.04
     timeout-minutes: 5
@@ -910,34 +916,79 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           persist-credentials: false
-      - name: Collect bounded independent pair observations
+      - name: Bind exact disabled-by-default policy observation source
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
-          REQUESTED_SOURCE: ${{ inputs.source }}
           REQUESTED_PUBLISHER: ${{ inputs.publisher_source }}
-          REQUESTED_MERGE: ${{ inputs.protected_merge }}
-          REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
+          REQUESTED_SOURCE: ${{ inputs.source }}
           OPERATION: ${{ inputs.operation }}
-          CLI_ONLY: ${{ inputs.cli_only }}
-          READBACK_ONLY: ${{ inputs.readback_only }}
-          PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
-          EXECUTION_PAIR: ${{ inputs.execution_pair }}
-          SELECTED_NUGET_USER: ${{ secrets.NUGET_USER || 'Paradigma11' }}
-          PYTHONDONTWRITEBYTECODE: 1
         run: |
-          python3 eng/test-callable-cli-installed-harness.py --execution-pair-preflight "${RUNNER_TEMP}/execution-pair-preflight.json"
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq .object.sha)" = "$GITHUB_SHA"
+          test "$GITHUB_REF" = refs/heads/main
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test "$GITHUB_REPOSITORY" = FS-GG/FS.GG.Coordination
+          test "$REQUESTED_PUBLISHER" = "$GITHUB_SHA"
+          python3 - <<'PY_PAIR_POLICY_SELECTION'
+          import json,os,runpy
+          a=json.load(open('eng/execution-pair-release-admission.json'))
+          selected=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_recovery_selection'](a)
+          assert selected['policyObservationEnabled'] is True, 'scoped policy observation remains disabled'
+          assert os.environ['OPERATION']=='observe-execution-pair-policy-21633398'
+          assert os.environ['REQUESTED_SOURCE']==a['source']
+          PY_PAIR_POLICY_SELECTION
+      - name: Require existing App bindings for the complete protection read
+        shell: bash
+        env:
+          RULESET_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          RULESET_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if test -z "${RULESET_APP_ID:-}" || test -z "${RULESET_APP_PRIVATE_KEY:-}"; then
+            echo "::error::existing ruleset App bindings are missing; complete protection evidence is unavailable"
+            exit 1
+          fi
+      - name: Mint repository-scoped token solely for the complete protection GET
+        id: pair-ruleset-reader
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination
+          permission-administration: write
+      - name: Observe only the exact scoped complete tag protection
+        shell: bash
+        env:
+          PAIR_RULESET_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
+          READBACK_OUTPUT: ${{ runner.temp }}/execution-pair-policy
+        run: |
+          set -euo pipefail
+          test -n "${PAIR_RULESET_TOKEN:-}"
+          mkdir "$READBACK_OUTPUT"
+          timeout --kill-after=5s 30s env GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
+          python3 - <<'PY_PAIR_POLICY_OBSERVATION'
+          import json,os,pathlib,runpy
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          path=root/'tag-protection.json'
+          assert 0<path.stat().st_size<=1048576
+          a=json.load(open('eng/execution-pair-release-admission.json'))
+          proof=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_protection'](json.loads(path.read_bytes()),a,json.load(open('eng/repository-settings/release-tag-ruleset.json')))
+          proof.update({'source':os.environ['GITHUB_SHA'],'operation':'observe-execution-pair-policy-21633398','scopedAppTokenUsed':True,'cleanupOutcome':'pending-native-token-revocation-observation','publicationAuthorized':False,'publicationEligible':False})
+          (root/'policy-observation.json').write_text(json.dumps(proof,sort_keys=True)+'\n')
+          PY_PAIR_POLICY_OBSERVATION
       - name: Retain terminal read-only observations
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
         with:
           name: execution-pair-preflight-${{ github.run_id }}-${{ github.run_attempt }}
-          path: ${{ runner.temp }}/execution-pair-preflight.json
+          path: ${{ runner.temp }}/execution-pair-policy/
           if-no-files-found: error
           retention-days: 14
 
   execution_pair:
-    if: inputs.execution_pair && !inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
+    if: inputs.execution_pair && inputs.pair_recovery && !inputs.preflight_only && !inputs.cli_only && !inputs.readback_only
     name: Publish the admitted original routine Execution pair
     runs-on: ubuntu-24.04
     timeout-minutes: 35
@@ -967,6 +1018,7 @@ jobs:
           PREFLIGHT_ONLY: ${{ inputs.preflight_only }}
           READBACK_ONLY: ${{ inputs.readback_only }}
           OPERATION: ${{ inputs.operation }}
+          PAIR_RECOVERY: ${{ inputs.pair_recovery }}
           REQUESTED_SOURCE: ${{ inputs.source }}
           REQUESTED_MERGE: ${{ inputs.protected_merge }}
           REQUESTED_SHA256: ${{ inputs.expected_sha256 }}
@@ -985,9 +1037,13 @@ jobs:
           python3 - <<'PY_PAIR_ADMISSION'
           import json,os,re
           a=json.load(open('eng/execution-pair-release-admission.json'))
-          keys={'schema','profile','enabled','operation','version','tag','source','tree','protectedMerge','runId','jobId','artifactId','archiveSha256','manifestSha256','packages','namespaceEntitlement','tagProtection','consumerQualification'}
+          keys={'schema','profile','enabled','operation','version','tag','source','tree','protectedMerge','runId','jobId','artifactId','archiveSha256','manifestSha256','packages','namespaceEntitlement','tagProtection','consumerQualification','recovery'}
           assert set(a)==keys and a['schema']=='fsgg.coordination.execution-pair-admission/1' and a['profile']=='execution-pair'
-          assert a['enabled'] is True, 'pair publication admission disabled'
+          assert a['enabled'] is False, 'consumed original pair operation must remain disabled'
+          assert os.environ['PAIR_RECOVERY']=='true', 'pair recovery must be explicitly selected'
+          import runpy
+          recovery=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_recovery_selection'](a)
+          assert recovery['enabled'] is True, 'pair recovery publication remains disabled'
           assert a['version']=='0.3.0' and a['tag']=='execution/v0.3.0'
           assert isinstance(a['operation'],str) and re.fullmatch(r'publish-execution-pair-030-[a-z0-9-]+',a['operation'])
           def identity(value,size): assert isinstance(value,str) and re.fullmatch('[0-9a-f]{'+str(size)+'}',value) and set(value)!={'0'}
@@ -1008,7 +1064,7 @@ jobs:
           protection=a['tagProtection']
           assert isinstance(protection,dict) and set(protection)=={'rulesetId','policySha256'} and type(protection['rulesetId']) is int and protection['rulesetId']>0
           identity(protection['policySha256'],64)
-          assert os.environ['OPERATION']==a['operation'] and os.environ['REQUESTED_SOURCE']==a['source'] and os.environ['REQUESTED_MERGE']==a['protectedMerge']
+          assert os.environ['OPERATION']==recovery['operation'] and os.environ['REQUESTED_SOURCE']==a['source'] and os.environ['REQUESTED_MERGE']==a['protectedMerge']
           assert os.environ['REQUESTED_SHA256']==a['manifestSha256']
           identity(os.environ['REQUESTED_PUBLISHER'],40)
           with open(os.environ['GITHUB_ENV'],'a') as out:
@@ -1092,11 +1148,34 @@ jobs:
           proof=runpy.run_path('eng/write-callable-cli-release-readback.py')['pair_consumers'](a,root)
           (root/'validated.json').write_text(json.dumps(proof,sort_keys=True))
           PY_PAIR_CONSUMERS
+      - name: Authenticate consumed original failure before recovery credentials or effects
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          deadline=$((SECONDS+120))
+          remaining() { local n=$((deadline-SECONDS)); test "$n" -gt 0 || return 1; if test "$n" -gt 30; then n=30; fi; printf '%s' "$n"; }
+          timeout --kill-after=5s "$(remaining)s" gh api "repos/$GITHUB_REPOSITORY/actions/runs/38495729817" > "$READBACK_OUTPUT/original-run.json"
+          timeout --kill-after=5s "$(remaining)s" gh api "repos/$GITHUB_REPOSITORY/actions/runs/38495729817/attempts/1/jobs?per_page=100" > "$READBACK_OUTPUT/original-jobs.json"
+          timeout --kill-after=5s "$(remaining)s" gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/11863691435" > "$READBACK_OUTPUT/original-artifact.json"
+          curl --fail --silent --show-error --location --max-time "$(remaining)" --max-filesize 201326592 --header "Authorization: Bearer $GH_TOKEN" --output "$READBACK_OUTPUT/original-observation.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/11863691435/zip"
+          python3 - <<'PY_PAIR_ORIGINAL'
+          import json,os,pathlib,runpy
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          for name in ('original-run.json','original-jobs.json','original-artifact.json'):
+              assert 0<(root/name).stat().st_size<=1048576
+          a=json.load(open('eng/execution-pair-release-admission.json'))
+          validate=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_original_failure']
+          proof=validate(a,*[json.loads((root/name).read_bytes()) for name in ('original-run.json','original-jobs.json','original-artifact.json')],(root/'original-observation.zip').read_bytes())
+          (root/'original-publication.json').write_text(json.dumps(proof,sort_keys=True)+'\n')
+          PY_PAIR_ORIGINAL
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
           global-json-file: global.json
       - name: Attest only the retained pair inputs under reviewed B
+        if: ${{ false }} # Original attestation is retained; pair recovery never creates another.
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6
         with:
           subject-path: ${{ env.CANDIDATE_OUTPUT }}/*.nupkg
@@ -1106,9 +1185,17 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
-            gh attestation verify "$CANDIDATE_OUTPUT/$id.0.3.0.nupkg" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml"
-          done
+          gh attestation verify "$CANDIDATE_OUTPUT/FS.GG.Execution.Contracts.0.3.0.nupkg" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml" --signer-digest 0ccfb6d067d912bbd8a1e26c4b56449358443b2e --source-digest 0ccfb6d067d912bbd8a1e26c4b56449358443b2e --source-ref refs/heads/main --deny-self-hosted-runners --format json > "$READBACK_OUTPUT/original-attestation-verified.json"
+          python3 - <<'PY_PAIR_ATTESTATION'
+          import json,os,pathlib,runpy
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])
+          path=root/'original-attestation-verified.json'
+          assert 0<path.stat().st_size<=1048576
+          a=json.load(open('eng/execution-pair-release-admission.json'))
+          validate=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_verified_attestation']
+          proof=validate(a,json.loads(path.read_bytes()))
+          (root/'retained-attestation.json').write_text(json.dumps(proof,sort_keys=True)+'\n')
+          PY_PAIR_ATTESTATION
           dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
             --source "$SOURCE_A" --version 0.3.0 --output "$CANDIDATE_OUTPUT"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair "$CANDIDATE_OUTPUT" candidate "$READBACK_OUTPUT/candidate-load.json"
@@ -1149,39 +1236,16 @@ jobs:
           ruleset="$(python3 -c 'import json; print(json.load(open("eng/execution-pair-release-admission.json"))["tagProtection"]["rulesetId"])')"
           GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/$ruleset" > "$READBACK_OUTPUT/tag-protection.json"
           python3 - <<'PY_PAIR_PROTECTION'
-          import hashlib,json,os,pathlib
+          import json,os,pathlib,runpy
           a=json.load(open('eng/execution-pair-release-admission.json'))
           path=pathlib.Path(os.environ['READBACK_OUTPUT'])/'tag-protection.json'
           assert 0<path.stat().st_size<=1048576
-          actual=json.loads(path.read_bytes())
-          keys=('target','enforcement','conditions','bypass_actors','rules')
-          if not isinstance(actual,dict) or any(key not in actual for key in (*keys,'id')):
-              raise SystemExit('incomplete ruleset evidence: required policy fields are missing')
-          if not isinstance(actual['bypass_actors'],list):
-              raise SystemExit('incomplete ruleset evidence: bypass_actors must be an explicit complete list')
-          if actual['bypass_actors']:
-              raise SystemExit('ruleset policy refused: bypass actors are present')
-          policy={key:actual[key] for key in keys}
-          desired=json.load(open('eng/repository-settings/release-tag-ruleset.json'))
-          expected={key:desired[key] for key in policy}
-          # Tag update rules may omit the optional branch-only parameters object.
-          # Normalize only that exact shape; explicit false is the sole allowed value.
-          assert policy['target']=='tag' and isinstance(policy['rules'],list) and len(policy['rules'])==4
-          updates=[rule for rule in policy['rules'] if rule.get('type')=='update']
-          assert len(updates)==1
-          update=updates[0]
-          if set(update)=={'type'}:
-              update['parameters']={'update_allows_fetch_and_merge':False}
-          assert set(update)=={'type','parameters'} and isinstance(update['parameters'],dict)
-          assert set(update['parameters'])=={'update_allows_fetch_and_merge'}
-          assert update['parameters']['update_allows_fetch_and_merge'] is False
-          assert policy==expected and type(actual['id']) is int and actual['id']==a['tagProtection']['rulesetId']
-          assert policy['target']=='tag' and policy['enforcement']=='active' and policy['bypass_actors']==[]
-          assert policy['conditions']=={'ref_name':{'include':['refs/tags/v*','refs/tags/execution/v*'],'exclude':[]}}
-          assert len(policy['rules'])==4 and {rule['type'] for rule in policy['rules']}=={'deletion','non_fast_forward','required_signatures','update'}
-          update=next(rule for rule in policy['rules'] if rule['type']=='update')
-          assert update['parameters']=={'update_allows_fetch_and_merge':False}
-          assert hashlib.sha256(json.dumps(policy,sort_keys=True,separators=(',',':')).encode()).hexdigest()==a['tagProtection']['policySha256']
+          validate=runpy.run_path('eng/test-callable-cli-installed-harness.py')['pair_protection']
+          try:
+              proof=validate(json.loads(path.read_bytes()),a,json.load(open('eng/repository-settings/release-tag-ruleset.json')))
+          except ValueError as error:
+              raise SystemExit(str(error))
+          (path.parent/'tag-protection-validated.json').write_text(json.dumps(proof,sort_keys=True)+'\n')
           PY_PAIR_PROTECTION
           for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
             lower="${id,,}"
@@ -1281,7 +1345,7 @@ jobs:
             --publisher "$GITHUB_SHA" --source "$SOURCE_A" --tree "$TREE_A" --merge "$MERGE_A" \
             --manifest "$CANDIDATE_OUTPUT/execution-pair-release-manifest.json" --manifest-sha256 "$MANIFEST_SHA" \
             --admission eng/execution-pair-release-admission.json --consumer-root "$READBACK_OUTPUT/consumers" \
-            --feed-root "$READBACK_OUTPUT" --installed "$READBACK_OUTPUT/public-load.json" --output "$READBACK_OUTPUT/pair-release-readback.json"
+            --feed-root "$READBACK_OUTPUT" --installed "$READBACK_OUTPUT/public-load.json" --original-root "$READBACK_OUTPUT" --recovery-operation "${{ inputs.operation }}" --output "$READBACK_OUTPUT/pair-release-readback.json"
       - name: Finalize component tag only after complete pair readback
         shell: bash
         env:

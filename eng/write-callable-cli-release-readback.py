@@ -303,6 +303,8 @@ def pair_readback(arguments: list[str]) -> int:
         parser.add_argument("--" + name, required=True)
     for name in ("manifest", "feed-root", "installed", "output", "admission", "consumer-root"):
         parser.add_argument("--" + name, required=True, type=Path)
+    parser.add_argument("--original-root", type=Path)
+    parser.add_argument("--recovery-operation")
     args = parser.parse_args(arguments)
     for identity in (args.publisher, args.source, args.tree, args.merge): sha(identity, 40)
     sha(args.manifest_sha256, 64)
@@ -330,6 +332,24 @@ def pair_readback(arguments: list[str]) -> int:
         or admission["protectedMerge"] != args.merge or admission["version"] != manifest["version"] or admission["tag"] != manifest["tag"]
         or admission["packages"] != {row["packageId"]: row["sha256"] for row in manifest["packages"]}):
         refuse("pair consumer admission differs from final manifest")
+    original = None
+    if 'recovery' in admission or args.original_root is not None or args.recovery_operation is not None:
+        if args.original_root is None or args.recovery_operation != admission['recovery']['operation']:
+            refuse('pair recovery original binding missing or changed')
+        import runpy
+        validators = runpy.run_path(str(Path(__file__).with_name('test-callable-cli-installed-harness.py')))
+        root = args.original_root
+        def bounded(name, cap=1048576):
+            path = root / name
+            if path.is_symlink() or not path.is_file() or not 0 < path.stat().st_size <= cap:
+                refuse('pair original evidence unsafe, missing or oversized')
+            return path.read_bytes()
+        original = validators['pair_original_failure'](admission,
+            *[json.loads(bounded(name)) for name in ('original-run.json','original-jobs.json','original-artifact.json')],
+            bounded('original-observation.zip',192*1024**2))
+        verified = validators['pair_verified_attestation'](admission,json.loads(bounded('original-attestation-verified.json')))
+        original.update({'retainedAttestation':verified,'recoveryOperation':args.recovery_operation,
+                         'attestationCreationRepeated':False})
     consumers = pair_consumers(admission, args.consumer_root)
     members = []
     for row in sorted(manifest["packages"], key=lambda row: row["packageId"]):
@@ -345,6 +365,9 @@ def pair_readback(arguments: list[str]) -> int:
              "source": args.source, "sourceTree": args.tree, "protectedMerge": args.merge, "version": "0.3.0", "tag": "execution/v0.3.0",
              "manifestSha256": args.manifest_sha256, "packages": members, "installedLoad": installed, "consumerQualification": consumers,
              "consumerAdoptionAccepted": False}
+    if original is not None: value['originalPublication'] = original
+    value['actualEffects'] = {'githubPackages':'verified','nugetOrg':'verified','publicInstalledLoad':'verified','componentFinalization':'pending'}
+    value['unresolvedState'] = ['component-finalization-native-readback']
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes((json.dumps(value, sort_keys=True, separators=(",", ":")) + "\n").encode())
     return 0

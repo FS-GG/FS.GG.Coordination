@@ -8,6 +8,7 @@ import base64
 import hashlib
 import http.server
 import json
+import io
 import os
 import pathlib
 import shutil
@@ -449,6 +450,168 @@ PAIR_HISTORICAL_CANDIDATE = {
 # Genuine original S1 A; observation pins alone never authorize publication.
 PAIR_OBSERVATION_CANDIDATE = {'source': 'b11fb121f046898e655b779dfc6809f35fc7aac6', 'runId': 38455588652, 'jobId': 115497350577, 'artifactId': 11842360725, 'archiveSha256': '75b1b0a8ac11522a63043932abf01c6ad7048988300ee42edddc6dedc3f58791', 'manifestSha256': 'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8', 'packages': {'FS.GG.Execution.Contracts': 'bfd248eb935b4868bb1a7fb431bdb1ec26d3c1fedd2a294c34cf7b546bed151a', 'FS.GG.Execution.Processes': '978ac179d1983b6a3346655cd904391fd8dc2ff7f3b0558ed9fd40fa9aa56cbd'}, 'runAttempt': 1}
 PAIR_ACCOUNT_OWNER_EVIDENCE = {'evidenceKind': 'account-owner-provided', 'evidenceSha256': '47a06f26b2bbd9924df2a9778cfdeb8bf29ee618c88908f652dbe2cbb5019fcb', 'nugetUser': 'Paradigma11', 'repositoryId': 1346720714, 'repositoryOwnerId': 293607011, 'publisherWorkflow': '.github/workflows/callable-cli-release-publish.yml', 'firstPublicationCovered': ['FS.GG.Execution.Contracts', 'FS.GG.Execution.Processes']}
+
+def pair_protection(actual, admission, desired):
+    """One complete policy predicate for observation and effect admission."""
+    keys = ('target', 'enforcement', 'conditions', 'bypass_actors', 'rules')
+    if not isinstance(actual, dict) or any(key not in actual for key in (*keys, 'id')):
+        raise ValueError('incomplete ruleset evidence: required policy fields are missing')
+    if not isinstance(actual['bypass_actors'], list):
+        raise ValueError('incomplete ruleset evidence: bypass_actors must be an explicit complete list')
+    if actual['bypass_actors']:
+        raise ValueError('ruleset policy refused: bypass actors are present')
+    policy = json.loads(json.dumps({key: actual[key] for key in keys}))
+    if not isinstance(policy['rules'], list) or any(not isinstance(r, dict) for r in policy['rules']):
+        raise ValueError('ruleset rule population malformed')
+    updates = [r for r in policy['rules'] if r.get('type') == 'update']
+    if len(updates) != 1: raise ValueError('ruleset update population changed')
+    update = updates[0]
+    if set(update) == {'type'}: update['parameters'] = {'update_allows_fetch_and_merge': False}
+    if (set(update) != {'type', 'parameters'} or update['parameters'] != {'update_allows_fetch_and_merge': False}
+            or update['parameters']['update_allows_fetch_and_merge'] is not False):
+        raise ValueError('ruleset update rule changed')
+    selection = admission['tagProtection']
+    expected_hash = '5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'
+    if (selection != {'rulesetId': 21633398, 'policySha256': expected_hash}
+            or type(actual['id']) is not int or actual['id'] != 21633398
+            or policy != {key: desired[key] for key in keys}
+            or hashlib.sha256(compact(policy)).hexdigest() != expected_hash):
+        raise ValueError('exact tag protection policy changed')
+    return {'rulesetId': 21633398, 'policySha256': expected_hash, 'explicitBypassActors': [],
+            'publicationAuthorized': False, 'publicationEligible': False}
+
+
+PAIR_ORIGINAL_STEPS = (
+    ('Set up job', 'success'),
+    ('Check out reviewed publisher B without persisted credentials', 'success'),
+    ('Bind exclusive disabled-by-default pair admission', 'success'),
+    ('Bind pair A ancestry and publication-only B changes', 'success'),
+    ('Authenticate and extract exactly the original pair A archive', 'success'),
+    ('Authenticate original four receiver proofs before any publication effect', 'success'),
+    ('Set up the pinned .NET SDK', 'success'),
+    ('Attest only the retained pair inputs under reviewed B', 'success'),
+    ('Verify pair provenance and candidate installed load before effects', 'success'),
+    ('Observe four feed cells and component protection before first push', 'failure'),
+    ('Obtain selected Trusted Publishing credentials before pair effects', 'skipped'),
+    ('Recheck exact B and pair bytes immediately before first push', 'skipped'),
+    ('Push both retained members to GitHub Packages first', 'skipped'),
+    ('Verify both GitHub raw archives before any public push', 'skipped'),
+    ('Push the identical retained pair inputs to nuget.org', 'skipped'),
+    ('Verify each public payload and repository signature', 'skipped'),
+    ('Validate public installed load and write exact pair readback', 'skipped'),
+    ('Finalize component tag only after complete pair readback', 'skipped'),
+    ('Preserve the original pair observation on success or failure', 'success'),
+    ('Post Set up the pinned .NET SDK', 'skipped'),
+    ('Post Check out reviewed publisher B without persisted credentials', 'success'),
+    ('Complete job', 'success'))
+
+
+def pair_recovery_selection(admission):
+    selected = admission['recovery']
+    expected = {'enabled', 'policyObservationEnabled', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
+                'jobId', 'artifactId', 'archiveSha256'}
+    if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled')):
+        raise ValueError('pair recovery selection changed')
+    if (admission['enabled'] is not False
+            or admission['operation'] != 'publish-execution-pair-030-b11fb121-four38484632631'
+            or selected['originalOperation'] != admission['operation']
+            or selected['operation'] != 'recover-execution-pair-030-b11fb121-original38495729817'
+            or selected['publisher'] != '0ccfb6d067d912bbd8a1e26c4b56449358443b2e'
+            or any(type(selected[k]) is not int or selected[k] != v for k, v in
+                   {'runId': 38495729817, 'runAttempt': 1, 'jobId': 115630940784, 'artifactId': 11863691435}.items())
+            or selected['archiveSha256'] != 'e885b5a0a80807e461559b89547dda91c9c822a89216145a0092b53e3a3c879e'):
+        raise ValueError('original pair identity or consumed operation changed')
+    return selected
+
+
+def pair_original_native(admission, run, jobs):
+    """Consume native terminal evidence; an archive is not send authority."""
+    selected = pair_recovery_selection(admission)
+    if (run['id'] != selected['runId'] or run['workflow_id'] != 361038177
+            or run['repository']['id'] != 1346720714 or run['head_repository']['id'] != 1346720714
+            or run['path'] != '.github/workflows/callable-cli-release-publish.yml'
+            or run['event'] != 'workflow_dispatch' or run['head_branch'] != 'main'
+            or run['head_sha'] != selected['publisher'] or type(run['run_attempt']) is not int
+            or run['run_attempt'] != 1 or run['status'] != 'completed' or run['conclusion'] != 'failure'):
+        raise ValueError('original publisher native run changed')
+    rows = jobs['jobs']
+    if (type(jobs['total_count']) is not int or jobs['total_count'] != len(rows) or not 1 <= len(rows) < 100
+            or len({row['id'] for row in rows}) != len(rows)):
+        raise ValueError('original publisher job population incomplete')
+    matches = [row for row in rows if row['id'] == selected['jobId']]
+    if len(matches) != 1: raise ValueError('original publisher job missing')
+    job = matches[0]
+    if (job['run_id'] != run['id'] or job['head_sha'] != run['head_sha'] or type(job['run_attempt']) is not int
+            or job['run_attempt'] != 1 or job['status'] != 'completed' or job['conclusion'] != 'failure'
+            or job['name'] != 'Publish the admitted original routine Execution pair'):
+        raise ValueError('original publisher job identity changed')
+    steps = job['steps']
+    if ([(s['name'], s['conclusion']) for s in steps] != list(PAIR_ORIGINAL_STEPS)
+            or any(s['status'] != 'completed' for s in steps)
+            or [s['number'] for s in steps] != sorted({s['number'] for s in steps})):
+        raise ValueError('original publisher complete ordered step outcomes changed')
+    return {'runId': selected['runId'], 'jobId': selected['jobId'], 'completeOrderedSteps': True}
+
+
+def pair_original_failure(admission, run, jobs, artifact, archive):
+    """Authenticate retained bytes after complete native first-failure reconciliation."""
+    pair_original_native(admission, run, jobs)
+    selected = pair_recovery_selection(admission)
+    if (artifact['id'] != selected['artifactId'] or artifact['expired'] is not False
+            or artifact['name'] != 'execution-pair-publication-38495729817-1'
+            or artifact['digest'] != 'sha256:' + selected['archiveSha256']
+            or artifact['workflow_run']['id'] != run['id'] or artifact['workflow_run']['head_sha'] != run['head_sha']
+            or not 0 < len(archive) <= 192 * 1024**2 or hashlib.sha256(archive).hexdigest() != selected['archiveSha256']):
+        raise ValueError('original publisher observation archive changed')
+    with zipfile.ZipFile(io.BytesIO(archive)) as bundle:
+        entries = bundle.infolist()
+        if len(entries) > 128 or len({e.filename for e in entries}) != len(entries):
+            raise ValueError('original publisher observation ZIP population changed')
+        original = bundle.getinfo('candidate.zip')
+        if original.file_size > 50331648 or hashlib.sha256(bundle.read(original)).hexdigest() != admission['archiveSha256']:
+            raise ValueError('original publisher candidate archive changed')
+    return {'originalOperation': selected['originalOperation'], 'publisherSource': selected['publisher'],
+            'runId': selected['runId'], 'runAttempt': 1, 'jobId': selected['jobId'],
+            'observationArtifactId': selected['artifactId'], 'observationArchiveSha256': selected['archiveSha256'],
+            'firstCause': 'incomplete-complete-protection-observation', 'attestationRetained': True,
+            'packagePushes': 'skipped', 'historicalFeedUnchanged': 'unknown'}
+
+
+def pair_verified_attestation(admission, verified):
+    """Only canonical verifier output, not a decoded unverified DSSE statement."""
+    selected = pair_recovery_selection(admission)
+    repo = 'https://github.com/FS-GG/FS.GG.Coordination'
+    workflow = '.github/workflows/callable-cli-release-publish.yml'
+    signer = repo + '/' + workflow + '@refs/heads/main'
+    invocation = repo + '/actions/runs/38495729817/attempts/1'
+    expected_subjects = {k + '.0.3.0.nupkg': {'sha256': v} for k, v in admission['packages'].items()}
+    if not isinstance(verified, list) or len(verified) != 1: raise ValueError('verified original attestation population changed')
+    result = verified[0]['verificationResult']
+    if result['mediaType'] != 'application/vnd.dev.sigstore.verificationresult+json;version=0.1':
+        raise ValueError('canonical verified attestation missing')
+    cert = result['signature']['certificate']
+    expected_cert = {'issuer': 'https://token.actions.githubusercontent.com', 'subjectAlternativeName': signer,
+                     'buildSignerURI': signer, 'buildSignerDigest': selected['publisher'], 'runnerEnvironment': 'github-hosted',
+                     'sourceRepositoryURI': repo, 'sourceRepositoryDigest': selected['publisher'],
+                     'sourceRepositoryRef': 'refs/heads/main', 'sourceRepositoryIdentifier': '1346720714',
+                     'sourceRepositoryOwnerIdentifier': '293607011', 'buildConfigURI': signer,
+                     'buildConfigDigest': selected['publisher'], 'buildTrigger': 'workflow_dispatch', 'runInvocationURI': invocation}
+    if any(cert.get(k) != v for k, v in expected_cert.items()): raise ValueError('verified original signer claims changed')
+    statement = result['statement']; subjects = statement['subject']; predicate = statement['predicate']
+    if (statement['_type'] != 'https://in-toto.io/Statement/v1' or statement['predicateType'] != 'https://slsa.dev/provenance/v1'
+            or len(subjects) != 2 or {s['name']: s['digest'] for s in subjects} != expected_subjects
+            or predicate['buildDefinition'] != {
+                'buildType': 'https://actions.github.io/buildtypes/workflow/v1',
+                'externalParameters': {'workflow': {'path': workflow, 'ref': 'refs/heads/main', 'repository': repo}},
+                'internalParameters': {'github': {'event_name': 'workflow_dispatch', 'repository_id': '1346720714',
+                                                  'repository_owner_id': '293607011', 'runner_environment': 'github-hosted'}},
+                'resolvedDependencies': [{'uri': 'git+' + repo + '@refs/heads/main', 'digest': {'gitCommit': selected['publisher']}}]}
+            or predicate['runDetails']['builder'] != {'id': signer}
+            or predicate['runDetails']['metadata']['invocationId'] != invocation):
+        raise ValueError('verified original subject or provenance claims changed')
+    return {'subjects': expected_subjects, 'publisherSource': selected['publisher'], 'invocation': invocation,
+            'signatureVerifiedByCanonicalCaller': True, 'attestationCreationRepeated': False}
+
 
 class PairObservationBound(RuntimeError):
     pass
