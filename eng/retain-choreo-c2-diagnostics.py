@@ -421,7 +421,12 @@ def failure_record(error):
         return None
     try: message = str(error)
     except BaseException: message = '<message unavailable>'
-    return {'type': type(error).__name__[:96], 'message': filtered(message.encode(), Path('/nonexistent'))[:512]}
+    record={'type': type(error).__name__[:96], 'message': filtered(message.encode(), Path('/nonexistent'))[:512]}
+    # The private writer preserves the original write/fsync error and one close
+    # error. Project that existing bounded carrier through every result caller.
+    secondary=getattr(error,'proc_report_secondary',None)
+    if secondary is not None:record['secondaryFailures']=[secondary]
+    return record
 
 
 def command_role(entry, action):
@@ -1990,7 +1995,6 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                 additional.append(failure_record(first))
                 if hasattr(first,'proc_measurement_report_disposition'):error.proc_measurement_report_disposition=first.proc_measurement_report_disposition
             first=error
-        first.proc_measurement_additional=additional
     record={'phase':phase,'additionalFailures':additional,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),'tracer':tracer,'tracerExit':code,'pidfdSignalSent':signal_sent,
         'subjectStartAuthenticated':ready is not None,'subjectReadiness':ready,'controlReadiness':control,
         'sampledBirths':list(known.values()),'samples':samples,'sampledPeakRssBytes':peak,
@@ -2003,7 +2007,9 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         else:additional.append(failure_record(error))
         if hasattr(error,'proc_private_report'):
             first.proc_measurement_report_disposition=error.proc_private_report
-    if first is not None:raise first
+    if first is not None:
+        first.proc_measurement_additional=additional
+        raise first
     if cleanup!='observed-known-terminal':raise ValueError('PROC measurement cleanup unknown; retain private hold')
     if phase!='normal' and (not signal_sent or code!=-signal.SIGKILL):raise ValueError('PROC kernel control terminal grammar differs')
     if phase!='normal':

@@ -190,6 +190,27 @@ class DiagnosticControls(unittest.TestCase):
             with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
                 self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
 
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            write=module.os.write;close=module.os.close;advisory=io.StringIO()
+            def report_fd(fd):
+                try:return Path(os.readlink('/proc/self/fd/'+str(fd))).name=='command.json.pending'
+                except OSError:return False
+            def failed_write(fd,raw):
+                if report_fd(fd):raise OSError('original canonical write failure')
+                return write(fd,raw)
+            def failed_close(fd):
+                selected=report_fd(fd);close(fd)
+                if selected:raise OSError('canonical close failure')
+            with patch('runpy.run_path',return_value=adapters),patch.object(module.os,'write',side_effect=failed_write),patch.object(module.os,'close',side_effect=failed_close),contextlib.redirect_stderr(advisory):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            projected=json.loads(advisory.getvalue().splitlines()[-1])
+            self.assertEqual('original canonical write failure',projected['firstCause']['message'])
+            self.assertEqual([{'type':'OSError','message':'canonical close failure'}],projected['firstCause']['secondaryFailures'])
+            slot=Path(spec['operationRoot'])
+            self.assertEqual('prepared-no-send',json.loads((slot/'command.json').read_bytes())['sendState'])
+            self.assertTrue((slot/'command.json.pending').exists());self.assertTrue((slot/'dispatch-input.json').exists())
+
     def test_proc_uncertain_native_correlation_never_reopens_send(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
@@ -596,6 +617,15 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual(str(path),raised.exception.proc_private_report['path'])
             self.assertTrue(path.exists());self.assertFalse(path.with_name(path.name+'.pending').exists())
             self.assertEqual(module.proc_read_identity(path),raised.exception.proc_private_report['identity'])
+            path.unlink();close=module.os.close
+            def close_then_fail(fd):close(fd);raise OSError('inert writer close failure')
+            with patch.object(module.os,'write',side_effect=OSError('original inert write failure')),patch.object(module.os,'close',side_effect=close_then_fail):
+                with self.assertRaisesRegex(OSError,'original inert write failure') as raised:
+                    module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
+            projected=module.failure_record(raised.exception)
+            self.assertEqual('original inert write failure',projected['message'])
+            self.assertEqual([{'type':'OSError','message':'inert writer close failure'}],projected['secondaryFailures'])
+            self.assertEqual(str(path),raised.exception.proc_private_report['path']);self.assertTrue(path.exists())
 
     def test_proc_subject_failure_survives_apparatus_reporting_and_collector_collision(self):
         # Same maintained caller paths; injected transport/report failures are
@@ -613,6 +643,24 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual(subject,raised.exception.proc_subject_result)
             self.assertEqual(subject['firstCause'],raised.exception.proc_subject_failure)
             self.assertIn({'type':'OSError','message':'inert apparatus report failure'},raised.exception.proc_measurement_additional)
+            # Exit0 or a negative-control phase does not imply that cleanup or
+            # apparatus reporting succeeded. Every common raise exports both.
+            original_open=Path.open
+            class FailingClose:
+                def __init__(self,stream):self.stream=stream
+                def close(self):self.stream.close();raise OSError('inert stream close failure')
+                def __getattr__(self,name):return getattr(self.stream,name)
+            def selected_open(path,*args,**kwargs):
+                stream=original_open(path,*args,**kwargs)
+                return FailingClose(stream) if path.name=='measurement.tracer.log' else stream
+            for phase in ('normal','controller','session'):
+                isolated=slot/('inert-secondary-'+phase);isolated.mkdir(mode=0o700)
+                phase_spec=dict(spec,operationRoot=str(isolated));child.poll.return_value=0
+                with patch('subprocess.Popen',return_value=child),patch.object(module,'proc_actor',return_value=None),patch.object(Path,'open',selected_open),patch.object(module,'proc_private_record',side_effect=OSError('inert apparatus report failure')):
+                    with self.assertRaisesRegex(ValueError,'actual direct tracer birth') as raised:
+                        module.proc_measure_once(phase_spec,{}, {},descriptor,approved,'a'*64,phase)
+                self.assertEqual([{'type':'OSError','message':'inert stream close failure'},
+                                  {'type':'OSError','message':'inert apparatus report failure'}],raised.exception.proc_measurement_additional)
             # Exercise the actual cleanup branch with an inert child/pidfd adapter:
             # a failed send never produces affirmative signal evidence.
             actor={'pid':123456,'ppid':os.getpid(),'uid':os.geteuid(),'pgid':123456,'sid':123456,'start':7}
