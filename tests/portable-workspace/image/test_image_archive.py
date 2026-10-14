@@ -92,10 +92,15 @@ def main() -> None:
     storage_spec.loader.exec_module(storage)
     controls = unittest.defaultTestLoader.loadTestsFromTestCase(storage.StoragePreflight)
     assert unittest.TextTestRunner().run(controls).wasSuccessful()
+    common_spec = importlib.util.spec_from_file_location("common_arch_controls", Path(__file__).with_name("test_common_arch_inputs.py"))
+    assert common_spec and common_spec.loader
+    common = importlib.util.module_from_spec(common_spec)
+    common_spec.loader.exec_module(common)
+    assert unittest.TextTestRunner().run(unittest.defaultTestLoader.loadTestsFromTestCase(common.CommonArchInputs)).wasSuccessful()
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
     containerfile = (ROOT / "tests/portable-workspace/image/Containerfile").read_text()
     inputs = json.loads((ROOT / "tests/portable-workspace/image/inputs.json").read_text())
-    assert hashlib.sha256(source.encode()).hexdigest() == "7be970f4153bd3ce65b93b4ba4e7549a2cca08c2b4e3add99daf60be852a7c9a"
+    assert hashlib.sha256(source.encode()).hexdigest() == "21345d5c57e82e7e5f2bad54fa0ce6952b2efa0af8cf9ff33a48192405084cdf"
     assert_fixed_build_inputs(containerfile, source, inputs)
     IMAGE.require_containerfile_contract(containerfile)
     for changed, expected in (
