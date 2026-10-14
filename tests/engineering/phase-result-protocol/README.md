@@ -23,6 +23,11 @@ and yields ACK bytes at most once. `RetentionTasks` and `LocalTasks` must join t
 existing execution result's reader/task and cleanup accounting. A blocked task
 remains outstanding after refusal or expiry. Taking an ACK conservatively means
 possibly delivered; a later failed write cannot clear the retained possible effect.
+Returning ACK bytes does not open child ingress. The trusted channel owner must
+complete the full bounded ACK write and call `ConfirmAckSent` before reading the
+next phase. The decoder records barriers at wire ingress, including partial
+prefixes, so later processing cannot authorize bytes received before that ACK.
+Ungated token-owned/revocation and revoked/terminal pairs may share a read.
 The owning execution session must retire on `Refused` within its original budget.
 A validated terminal arriving before a pending ACK is retained as failure evidence;
 it invalidates that ACK and leaves any writer task accounted for. A late callback

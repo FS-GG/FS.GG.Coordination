@@ -43,6 +43,7 @@ for element in vectors.GetProperty("children").EnumerateArray() do
         gate.Completion.GetAwaiter().GetResult() |> accepted |> ignore
         let actual = session.TakeAck(start,window,gate) |> accepted
         require ("paired-ack-exact-" + snapshot.Kind) (actual.ToArray() = expectedAcks[ackIndex])
+        session.ConfirmAckSent(start,window,snapshot) |> accepted |> ignore
         ackIndex <- ackIndex + 1
 require "paired-six-complete-frames-three-acks" (session.Accepted.Length=6 && ackIndex=3 && session.FinishInput()=Ok ())
 require "paired-original-task-accounting-settled" (session.LocalTasks=Settled && session.RetentionTasks.Length=3)

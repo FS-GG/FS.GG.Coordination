@@ -11,13 +11,14 @@ open System.Threading.Tasks
 open FS.GG.Execution.Contracts
 
 /// A closed immutable snapshot. Array access returns a copy, never the retained bytes.
-type PhaseResultSnapshot internal (binding: string, ordinal: int, kind: string, frame: byte array, payload: byte array) =
+type PhaseResultSnapshot internal (binding: string, ordinal: int, kind: string, frame: byte array, payload: byte array, beforeAck: bool) =
     member _.Binding = binding
     member _.Ordinal = ordinal
     member _.Kind = kind
     member _.Digest = Convert.ToHexStringLower(SHA256.HashData frame)
     member _.Frame = ReadOnlyMemory<byte>(Array.copy frame)
     member _.Payload = ReadOnlyMemory<byte>(Array.copy payload)
+    member internal _.EnteredBeforeAck = beforeAck
 
 /// Completion of the caller's durable replacement AND independent readback.
 /// This declaration does not establish persistence: the supplied writer owns that proof.
@@ -113,7 +114,7 @@ module PhaseResultProtocol =
             Ok(hash bytes)
         with _ -> Error "phase-binding-refused"
 
-    let private decode expectedBinding (bytes: byte array) =
+    let private decode expectedBinding beforeAck (bytes: byte array) =
         if bytes.Length < 5 || bytes.Length > maximumFrameBytes then refuse ()
         if BinaryPrimitives.ReadUInt32BigEndian(bytes.AsSpan(0, 4)) <> uint32 (bytes.Length - 4) then refuse ()
         use document = parseCanonical bytes[4..]
@@ -127,7 +128,7 @@ module PhaseResultProtocol =
         if not (List.contains kind ["ready"; "issuance-possible"; "token-owned"; "revocation-possible"; "revoked"; "terminal"]) then refuse ()
         let payload = value.GetProperty "p"
         if payload.ValueKind <> JsonValueKind.Object then refuse ()
-        PhaseResultSnapshot(expectedBinding, ordinal, kind, Array.copy bytes, canonical payload)
+        PhaseResultSnapshot(expectedBinding, ordinal, kind, Array.copy bytes, canonical payload, beforeAck)
 
     let private ack (snapshot: PhaseResultSnapshot) =
         // Values are fixed identifiers, hashes and a bounded ordinal; no escaping seam.
@@ -161,6 +162,10 @@ module PhaseResultProtocol =
         let mutable started = false
         let mutable refused = false
         let mutable pending: PhaseResultSnapshot option = None
+        let mutable ackTaken: PhaseResultSnapshot option = None
+        let mutable ingressBarrier: PhaseResultSnapshot option = None
+        let mutable enteredBeforeAck = false
+        let mutable terminalDecoded = false
         let mutable retained: PhaseResultSnapshot list = []
         let input = Array.zeroCreate<byte> maximumFrameBytes
         let mutable inputCount = 0
@@ -227,6 +232,8 @@ module PhaseResultProtocol =
                 if refused || not started || phase = "terminal" then refuse ()
                 let snapshots = ResizeArray<PhaseResultSnapshot>()
                 for index = 0 to bytes.Length - 1 do
+                    if terminalDecoded then refuse ()
+                    if inputCount = 0 then enteredBeforeAck <- ingressBarrier.IsSome
                     input[inputCount] <- bytes.Span[index]
                     inputCount <- inputCount + 1
                     if inputCount = 4 then
@@ -236,7 +243,11 @@ module PhaseResultProtocol =
                     if inputCount = inputExpected && inputCount > 4 then
                         frames <- frames + 1
                         if frames > 6 then refuse ()
-                        let snapshot = decode binding input[0..inputCount-1]
+                        let snapshot = decode binding enteredBeforeAck input[0..inputCount-1]
+                        if enteredBeforeAck && snapshot.Kind <> "terminal" then refuse ()
+                        if List.contains snapshot.Kind ["ready"; "issuance-possible"; "revocation-possible"] then
+                            ingressBarrier <- Some snapshot
+                        if snapshot.Kind = "terminal" then terminalDecoded <- true
                         decoded.Add snapshot |> ignore
                         snapshots.Add snapshot
                         inputCount <- 0
@@ -245,7 +256,7 @@ module PhaseResultProtocol =
             with _ -> refused <- true; Error "phase-frame-refused")
 
         member _.FinishInput() = lock gate (fun () ->
-            if inputCount <> 0 || phase <> "terminal" then refused <- true
+            if inputCount <> 0 || phase <> "terminal" || decoded.Count <> 0 || pending.IsSome || ackTaken.IsSome then refused <- true
             if refused then Error "phase-input-incomplete" else Ok ())
 
         /// Adapter code calls this on its parser/reporting task, never on the
@@ -258,8 +269,8 @@ module PhaseResultProtocol =
 
         member private _.AcceptValidated(snapshot: PhaseResultSnapshot) = lock gate (fun () ->
             try
-                if not started || refused || (pending.IsSome && snapshot.Kind <> "terminal") || snapshot.Binding <> binding || snapshot.Ordinal <> ordinal + 1 || not (decoded.Remove snapshot) then refuse ()
-                let terminalBeforeAck = pending.IsSome && snapshot.Kind = "terminal"
+                if not started || (refused && snapshot.Kind <> "terminal") || (pending.IsSome && snapshot.Kind <> "terminal") || snapshot.Binding <> binding || snapshot.Ordinal <> ordinal + 1 || not (decoded.Remove snapshot) then refuse ()
+                let terminalBeforeAck = snapshot.Kind = "terminal" && (pending.IsSome || snapshot.EnteredBeforeAck)
                 let next =
                     match phase, snapshot.Kind with
                     | "start", "ready" -> true
@@ -282,6 +293,7 @@ module PhaseResultProtocol =
                     // Preserve the validated failure snapshot, but a prior writer
                     // finishing later can never revive its ACK or qualify success.
                     pending <- None
+                    ackTaken <- None
                     refused <- true
                 Ok requiresAck
             with _ -> refused <- true; Error "phase-order-refused")
@@ -295,7 +307,8 @@ module PhaseResultProtocol =
                 match pending with
                 | Some expected when obj.ReferenceEquals(expected, snapshot) -> ()
                 | _ -> refuse ()
-                if refused || not completed.Completion.IsCompletedSuccessfully then refuse ()
+                if refused || terminalDecoded || inputCount <> 0 || not completed.Completion.IsCompletedSuccessfully then refuse ()
+                if ackTaken.IsSome then refuse ()
                 let inTime =
                     if snapshot.Kind = "revocation-possible" then
                         match FiniteCustodyWindow.remaining now window with Ok view -> not view.WorkExpired | Error _ -> false
@@ -306,6 +319,25 @@ module PhaseResultProtocol =
                 | _ -> refuse ()
                 let bytes = ack snapshot
                 charge bytes.Length
-                pending <- None
+                ackTaken <- Some snapshot
                 Ok(ReadOnlyMemory<byte>(bytes))
             with _ -> refused <- true; Error "phase-ack-refused")
+
+        /// The trusted channel owner calls this only after the complete ACK frame
+        /// was written. Returning eligibility bytes alone never opens child ingress.
+        member _.ConfirmAckSent(now: ClockStamp, window: FiniteCustodyWindow, snapshot: PhaseResultSnapshot) = lock gate (fun () ->
+            try
+                match pending, ackTaken, ingressBarrier with
+                | Some waiting, Some taken, Some ingress when
+                    obj.ReferenceEquals(waiting,snapshot) && obj.ReferenceEquals(taken,snapshot) && obj.ReferenceEquals(ingress,snapshot) -> ()
+                | _ -> refuse ()
+                let timely =
+                    if snapshot.Kind = "revocation-possible" then
+                        match FiniteCustodyWindow.remaining now window with Ok view -> not view.WorkExpired | Error _ -> false
+                    else FiniteCustodyWindow.normalWorkAllowed now window
+                if refused || terminalDecoded || inputCount <> 0 || not timely then refuse ()
+                pending <- None
+                ackTaken <- None
+                ingressBarrier <- None
+                Ok ()
+            with _ -> refused <- true; Error "phase-ack-write-refused")

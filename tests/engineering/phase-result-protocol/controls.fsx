@@ -56,6 +56,7 @@ for n, kind, payload in
     if needsAck then
         let ack = session.TakeAck(at 2000L, window, retain session snapshot) |> accepted
         require ("bounded-digest-ack-" + kind) (ack.Length <= 512 && Encoding.ASCII.GetString(ack.Span).Contains snapshot.Digest)
+        session.ConfirmAckSent(at 2000L,window,snapshot) |> accepted |> ignore
 require "complete-six-frame-session" (session.Accepted.Length = 6 && session.FinishInput() = Ok ())
 require "both-directions-charged" (session.ChargedBytes > int64 (6 * ready.Length) && session.ObservedBytes = int64 session.ChargedBytes)
 require "extra-after-terminal-refuses" (session.Feed(child 6 "terminal" "{}") |> rejected)
@@ -137,6 +138,7 @@ require "retention-order-refusal-prevents-original-ack" (duplicateRetention.Take
 let maximum = fresh ()
 let maxReady = acceptReady maximum
 maximum.TakeAck(at 2000L,window,retain maximum maxReady) |> accepted |> ignore
+maximum.ConfirmAckSent(at 2000L,window,maxReady) |> accepted |> ignore
 let emptyPad = child 2 "issuance-possible" "{\"pad\":[\"\",\"\"]}"
 let padding = 2048 - emptyPad.Length
 let payload = "{\"pad\":[\"" + String.replicate (padding/2) "x" + "\",\"" + String.replicate (padding-padding/2) "x" + "\"]}"
@@ -155,3 +157,50 @@ earlyGate.Completion.GetAwaiter().GetResult() |> accepted |> ignore
 require "late-writer-cannot-revive-terminal-ack" (earlyTerminal.TakeAck(at 2000L,window,earlyGate) |> rejected)
 require "terminal-before-ack-cannot-qualify-session" (earlyTerminal.FinishInput() |> rejected)
 require "no-effect-phase-after-early-terminal" (earlyTerminal.Feed(child 3 "issuance-possible" "{}") |> rejected)
+
+let concatenate (frames:ReadOnlyMemory<byte> list) =
+    frames |> List.collect (fun frame -> List.ofArray(frame.ToArray())) |> List.toArray |> ReadOnlyMemory<byte>
+let coalesced = fresh ()
+require "coalesced-before-ready-ack-refuses" (coalesced.Feed(concatenate [ready;child 2 "issuance-possible" "{}";child 3 "token-owned" "{}";child 4 "revocation-possible" "{}";child 5 "revoked" "{}";child 6 "terminal" "{}"]) |> rejected)
+
+let earlySuccessor = fresh ()
+let earlyReady = acceptReady earlySuccessor
+let earlyReadyGate = retain earlySuccessor earlyReady
+earlySuccessor.TakeAck(at 2000L,window,earlyReadyGate) |> accepted |> ignore
+require "ack-bytes-alone-do-not-open-ingress" (earlySuccessor.Feed(child 2 "issuance-possible" "{}") |> rejected)
+
+let fragmented = fresh ()
+let fragmentReady = acceptReady fragmented
+fragmented.Feed((child 2 "issuance-possible" "{}").Slice(0,1)) |> accepted |> ignore
+require "partial-pre-ack-prefix-prevents-ack" (fragmented.TakeAck(at 2000L,window,retain fragmented fragmentReady) |> rejected)
+require "partial-pre-ack-prefix-cannot-be-laundered" (fragmented.Feed((child 2 "issuance-possible" "{}").Slice(1)) |> rejected)
+
+let terminalBeforeReduction = fresh ()
+let reduceReady = acceptReady terminalBeforeReduction
+let reduceGate = retain terminalBeforeReduction reduceReady
+let reduceTerminal = receive terminalBeforeReduction (child 2 "terminal" "{}")
+require "decoded-terminal-immediately-fences-ack" (terminalBeforeReduction.TakeAck(at 2000L,window,reduceGate) |> rejected)
+require "terminal-remains-retainable-after-ack-refusal" (terminalBeforeReduction.AcceptChild(reduceTerminal,validate)=Ok false && terminalBeforeReduction.Accepted.Length=2)
+
+let leftover = fresh ()
+let leftoverReady = acceptReady leftover
+leftover.TakeAck(at 2000L,window,retain leftover leftoverReady) |> accepted |> ignore
+leftover.ConfirmAckSent(at 2000L,window,leftoverReady) |> accepted |> ignore
+let leftoverTerminal = receive leftover (child 2 "terminal" "{}")
+require "unconsumed-decoded-terminal-blocks-finish" (leftover.FinishInput() |> rejected)
+require "refused-close-keeps-terminal-available" (leftover.AcceptChild(leftoverTerminal,validate)=Ok false)
+
+let legalCoalescing = fresh ()
+for n,kind,payload in [1,"ready","{\"binding\":{\"fixture\":true}}";2,"issuance-possible","{}"] do
+    let snapshot = receive legalCoalescing (child n kind payload)
+    legalCoalescing.AcceptChild(snapshot,validate) |> accepted |> ignore
+    legalCoalescing.TakeAck(at 2000L,window,retain legalCoalescing snapshot) |> accepted |> ignore
+    legalCoalescing.ConfirmAckSent(at 2000L,window,snapshot) |> accepted |> ignore
+let middleFrames = legalCoalescing.Feed(concatenate [child 3 "token-owned" "{}";child 4 "revocation-possible" "{}"]) |> accepted
+for snapshot in middleFrames do
+    if legalCoalescing.AcceptChild(snapshot,validate) |> accepted then
+        legalCoalescing.TakeAck(at 2000L,window,retain legalCoalescing snapshot) |> accepted |> ignore
+        legalCoalescing.ConfirmAckSent(at 2000L,window,snapshot) |> accepted |> ignore
+let finalFrames = legalCoalescing.Feed(concatenate [child 5 "revoked" "{}";child 6 "terminal" "{}"]) |> accepted
+for snapshot in finalFrames do legalCoalescing.AcceptChild(snapshot,validate) |> accepted |> ignore
+require "legal-ungated-coalescing-completes" (legalCoalescing.FinishInput()=Ok () && legalCoalescing.Accepted.Length=6)
