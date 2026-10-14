@@ -676,8 +676,19 @@ def observe_endpoint_ownership(owner, child, leader, servers, handles, known, ch
                     if not missing or not missing <= prior_inodes: return False
                     prior_before = complete_births(prior['beforeMembers'])
                     prior_after = complete_births(prior['afterMembers'])
-                    if prior_before is None or prior_before != prior_after or not servers <= prior_before:
+                    if prior_before is None or prior_after is None or not servers <= prior_after:
                         return False
+                    if prior_before != prior_after:
+                        # The authenticated direct leader may exit after the prior FD
+                        # proof. Permit only its exact original birth to disappear,
+                        # leaving exactly the already proved server. This classifies
+                        # history only; current birth/FD checks and the second complete
+                        # stable observation below remain mandatory.
+                        leader_birth = (leader['pid'], leader['start'])
+                        if (child.pid != leader['pid'] or leader['pgid'] != leader['pid']
+                                or leader_birth in servers or prior_after != servers
+                                or prior_before != servers | {leader_birth}):
+                            return False
                     # Handles are retained append-only until the outer owner retires.
                     # Exact original birth plus its still-retained pidfd and prior FD
                     # ownership classify only these inodes, never later listener sets.
