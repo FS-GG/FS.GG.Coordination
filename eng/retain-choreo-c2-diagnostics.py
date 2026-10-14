@@ -508,6 +508,11 @@ PROC_PROFILES = {'proc-pair-policy-observation': 'observe-execution-pair-policy-
                  'proc-pair-native-watch': None}
 PROC_CURL_SHA = '450474f8939a71e297282400fc83176a9532da9f8ab84524c2f2ed42e96748cc'
 PROC_STRACE_SHA = '28ed5493ecf611b83ac0d0398cc1c4f09a228afaa7fce4737d14c8599cc796e2'
+PROC_INSTRUMENTATION = {'boundarySha256':'995c2509d964896b20af74b1449fc1fa2fdd25f42867c09d8eb6703601865f4a',
+    'packageSha256':'4e51a26cf0f69d959d96bb629b848892ab248f5c522981e391dfa302ac44312e',
+    'sourceSha256':'4bde6246926890dcee824f6e6ac42a06752f47d77e5097d86e3c0d6d4b709fe5',
+    'clientSha256':PROC_STRACE_SHA,'sourceProbeBound':2}
+PROC_QUALIFICATION_CREDENTIAL='root-existing-GH_TOKEN/read-only-original-collector'
 PROC_OPENSSL_CONFIG = b'openssl_conf = proc_init\n[proc_init]\n'
 PROC_QUALIFICATION_CASES = ('valid','301','302','303','307','308','401','417','429','500','early-close','partial-response')
 PROC_QUALIFICATION_ORIGIN = 'https://127.0.0.1:18443'
@@ -647,7 +652,7 @@ def proc_sensitive_input(slot,name,raw,*,deadline=None):
         observed=os.fstat(fd)
         identity={'device':observed.st_dev,'inode':observed.st_ino,'uid':observed.st_uid,
                   'mode':stat.S_IMODE(observed.st_mode),'kind':stat.S_IFMT(observed.st_mode)}
-        if identity['mode']!=0o600 or identity['uid']!=os.geteuid() or identity['kind']!=stat.S_IFREG:
+        if identity['mode']!=0o600 or identity['uid']!=os.geteuid() or identity['kind']!=stat.S_IFREG or observed.st_nlink!=1:
             raise ValueError('PROC ephemeral creation owner/mode/type refusal')
         offset=0
         while offset<len(raw):
@@ -692,7 +697,7 @@ def proc_sensitive_unchanged(header):
         actual=os.fstat(fd)
         identity={'device':actual.st_dev,'inode':actual.st_ino,'uid':actual.st_uid,
                   'mode':stat.S_IMODE(actual.st_mode),'kind':stat.S_IFMT(actual.st_mode)}
-        if identity!=header['identity'] or actual.st_size!=len(header['_expectedBytes']) or os.read(fd,16448+1)!=header['_expectedBytes']:
+        if identity!=header['identity'] or actual.st_nlink!=1 or actual.st_size!=len(header['_expectedBytes']) or os.read(fd,16448+1)!=header['_expectedBytes']:
             raise ValueError('PROC ephemeral single-header input drift; preserve private hold')
     finally:os.close(fd)
 
@@ -916,7 +921,8 @@ def proc_command_preflight(spec, *, now):
     request = spec['request']
     if spec['role']=='qualification':
         expected={'method':'GET','endpoint':'repos/'+PROC_REPOSITORY,'apiVersion':'2026-03-10','body':None,
-                  'requestLimit':1,'nativeGet':request.get('nativeGet'),'cases':list(PROC_QUALIFICATION_CASES)}
+                  'requestLimit':5,'nativeGet':request.get('nativeGet'),'credentialReference':PROC_QUALIFICATION_CREDENTIAL if request.get('nativeGet') else None,
+                  'cases':list(PROC_QUALIFICATION_CASES)}
         if type(request.get('nativeGet')) is not bool:raise ValueError('PROC qualification native GET admission selection')
     elif spec['role'] == 'dispatch':
         inputs = {'execution_pair':True,'pair_recovery':spec['profile']=='proc-pair-recovery-dispatch',
@@ -1051,84 +1057,270 @@ def proc_observed_runtime(spec, observed, version):
             'clientPath':spec['transport']['client'],'clientVersion':version,
             'postRetryExcluded':observed['noRepeatedFixtureRequests'],
             'readContract':'ordinary-exact-profile-observation-and-drift','readEvidence':spec['readEvidence'],
-            'sourceReadAllowlist':spec['sourceReadAllowlist'],'traceComplete':observed['trace']['complete'],
+            'sourceReadAllowlist':spec['sourceReadAllowlist'],'traceComplete':False,
             'sourceAlternativesReviewSha256':observed['sourceAlternativesReviewSha256'],
             'canonicalBaseIdentity':proc_directory_identity(proc_operation_root(spec['operation']).parent),
             'qualifiedSourcePins':[pin for pin in spec['pins'] if pin['path'].endswith('/retain-choreo-c2-diagnostics.py')],
-            'nativeGetObserved':observed['nativeGetObserved'],
+            'nativeGetObserved':observed['nativeGetObserved'],'nativeCollectorObserved':observed.get('nativeCollectorObserved',False),
             'controllerStartupTraceComplete':False,
             'controllerTraceGap':'Outer canonical supervisor/shared owner startup and metadata hooks are source-pinned and sampled, but outside this worker trace.',
             'limitation':'Executed fixed scenarios and reviewed source alternatives; sampled drift checks have intervals. No preventive filesystem containment or universal future-read guarantee.'}
 
 
-def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None):
-    """Conservative metadata-only complete-lifetime inventory. Unknowns refuse."""
+def proc_trace_arguments(line):
+    match=re.match(r'([a-z0-9_]+)\(',line)
+    if match is None:return None,[],None
+    name=match.group(1);end=line.rfind(') = ')
+    if end<0:raise ValueError('PROC trace syscall result framing unknown')
+    body=line[match.end():end];args=[];begin=0;depth=0;quoted=False;escaped=False
+    for index,char in enumerate(body):
+        if quoted:
+            if escaped:escaped=False
+            elif char=='\\':escaped=True
+            elif char=='"':quoted=False
+        elif char=='"':quoted=True
+        elif char in '([{':depth+=1
+        elif char in ')]}':depth-=1
+        elif char==',' and depth==0:args.append(body[begin:index].strip());begin=index+1
+    if quoted or depth:raise ValueError('PROC truncated trace argument framing')
+    args.append(body[begin:].strip())
+    return name,args,line[end+4:]
+
+
+def proc_trace_string(value):
+    if not value.startswith('"') or not value.endswith('"'):raise ValueError('PROC truncated/unknown trace pathname')
+    decoded=json.loads(value)
+    if not isinstance(decoded,str) or '\x00' in decoded:raise ValueError('PROC trace pathname shape')
+    return decoded
+
+
+def proc_generated_path(spec,path,authority_path):
+    root=Path(spec['operationRoot']);candidate=Path(path)
+    if candidate==Path(authority_path):return True
+    directories={root,root/'home',root/'tmp',root/'control-controller',root/'control-session'}
+    if candidate in directories:return True
+    files={'input.json','dispatch-input.json','command.json','command.json.pending','measurement.subject.json',
+           'measurement.subject.json.pending','measurement.ready.json','measurement.control.json','measurement.child.log',
+           'measurement.child.log.result.json','measurement.tracer.log','measurement.apparatus.json','measurement.collector.json',
+           'qualification.observed.json','qualification.native.log','qualification.native.body','fixture-request.json',
+           'runner.log','runner.log.result.json','client-preflight.log','client-preflight.log.result.json',
+           'authorization.header','storage-url.conf',
+           *(name+suffix for name in ('terminal-job','terminal-archive','terminal-job-api','terminal-archive-api') for suffix in ('.log','.body','.log.result.json','.headers')),
+           *(f'fixture-{case}{suffix}' for case in PROC_QUALIFICATION_CASES for suffix in ('.log','.body'))}
+    return candidate.parent in directories and (candidate.name in files or re.fullmatch(r'qualification\.trace\.[1-9][0-9]*',candidate.name) is not None)
+
+
+def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=False, apparatus_pid=None):
+    """Whole fork graph and chronological cwd/dirfd evidence; unknowns refuse."""
     traces=sorted(Path(slot).glob('qualification.trace.*'))
     if not traces or len(traces)>32:raise ValueError('PROC trace process/thread population incomplete')
     read=spec['readEvidence'];files=set(spec['sourceReadAllowlist'])
     directories={row['path'] for row in read['directories']};aliases={row['path'] for row in read['aliases']}
-    absent={row['path'] for row in read['absences']};rows=[];total=0;births=set();pids=set();python_execs=set()
-    trace_pids={int(path.name.rsplit('.',1)[1]) for path in traces}
-    bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes())
-    cgroup=Path(bootstrap['capacity']['directory'])
-    kernel_inputs={str(cgroup/name) for name in ('cpu.max','memory.max','memory.current')}|{'/proc/self/cgroup','/proc/self/mountinfo','/proc/sys/kernel/random/boot_id'}
+    absent={row['path'] for row in read['absences']};events=[];records={};total=0;clocked=True;births={};birth_times={};serial=0
     for trace in traces:
         raw=trace.read_bytes();total+=len(raw)
-        if trace.is_symlink() or total>8*1024**2 or not raw.endswith(b'\n'):
-            raise ValueError('PROC private trace bound/completeness')
-        text=raw.decode('utf-8','strict');pending=None
-        lines=[]
-        for line in text.splitlines():
+        if trace.is_symlink() or total>8*1024**2 or not raw.endswith(b'\n'):raise ValueError('PROC private trace bound/completeness')
+        pid=int(trace.name.rsplit('.',1)[1]);lines=[];pending=None
+        for original in raw.decode('utf-8','strict').splitlines():
+            stamp=re.match(r'([0-9]+\.[0-9]+) (.*)$',original)
+            if stamp:when=float(stamp.group(1));line=stamp.group(2)
+            else:clocked=False;when=float(serial);line=original
+            serial+=1
             if '<unfinished ...>' in line:
                 if pending is not None:raise ValueError('PROC ambiguous trace continuation')
-                pending=line.split('<unfinished ...>')[0];continue
+                pending=(when,line.split('<unfinished ...>')[0],line.split('(',1)[0]);continue
             if line.startswith('<... ') and ' resumed>' in line:
                 if pending is None:raise ValueError('PROC orphan trace continuation')
-                line=pending+line.split(' resumed>',1)[1];pending=None
-            lines.append(line)
-        if pending is not None or not lines or not re.fullmatch(r'\+\+\+ exited with (0|18|52) \+\+\+',lines[-1]):
-            raise ValueError('PROC detached/lost/nonzero traced lifetime')
-        pid=int(trace.name.rsplit('.',1)[1]);pids.add(pid);observed=set();client=False;controller=False
-        for line in lines:
+                resumed=re.match(r'<\.\.\. ([a-z0-9_]+) resumed>',line)
+                when,prior,call=pending
+                if resumed is None or resumed.group(1)!=call:raise ValueError('PROC mismatched resumed syscall name')
+                line=prior+line.split(' resumed>',1)[1];pending=None
+            lines.append(line);events.append((when,serial,pid,line))
             born=re.match(r'(?:clone3?|fork|vfork)\(.*\)\s+= ([0-9]+)$',line)
             if born:
                 child=int(born.group(1))
                 if child in births:raise ValueError('PROC repeated traced PID birth; reconciliation required')
-                births.add(child)
-            if line.startswith('execve('+json.dumps(os.path.realpath(sys.executable))+','):python_execs.add(pid);controller=True
-            if line.startswith('execve('+json.dumps(spec['transport']['client'])+','):client=True;controller=False
-            if any(marker in line for marker in ('strace:', 'detached', 'CLONE_UNTRACED', 'setns(', 'unshare(', 'ptrace(', 'io_uring_', 'io_setup(', 'io_submit(', 'io_getevents(', 'io_pgetevents(', 'aio_', 'process_vm_')):
-                raise ValueError('PROC unsupported tracing/asynchronous source access')
-            if line.startswith(('mmap(', 'mmap2(')) and 'MAP_ANONYMOUS' not in line:
-                if not re.search(r', [0-9]+</[^<>]+>, [0-9]+\)\s+=',line):
-                    raise ValueError('PROC executable/file mapping descriptor provenance unknown')
-            # Path-bearing syscall strings and -yy descriptor/map provenance.
-            # Unresolved relative paths are not silently treated as observed reads.
-            paths=re.findall(r'"((?:[^"\\]|\\.)*)"',line)
-            if line.startswith(('execve','readlink','open','newfstatat','stat','access','chdir')):paths=paths[:1]
-            paths+=re.findall(r'<(/[^<>]+)>',line)
-            for value in paths:
-                if not value:continue
-                if '\\' in value:raise ValueError('PROC truncated/escaped path provenance unknown')
-                if value.startswith('/'):
-                    path=value
-                elif line.startswith(('open','newfstatat','stat','access','readlink','execve','chdir')):
-                    directory=re.search(r'^[a-z0-9_]+\([0-9]+<(/[^<>]+)>',line)
-                    path=str(Path(directory.group(1) if directory else slot)/value)
-                else:continue
-                # Generated outputs are separately bounded by the owner census;
-                # no sensitive file is used by this qualification route.
-                generated=path==str(authority_path) or Path(path).parent==Path(slot) and Path(path).name in ('input.json','dispatch-input.json','qualification.observed.json','qualification.native.log','qualification.native.body','fixture-request.json',*(f'fixture-{case}{suffix}' for case in PROC_QUALIFICATION_CASES for suffix in ('.log','.body')))
-                kernel=proc_kernel_data_read(path,line,pid,trace_pids,tracer_pid,controller,kernel_inputs)
-                if path not in files|directories|aliases|{'/dev/null'} and not generated and not kernel:
-                    if 'ENOENT' not in line or path not in absent:raise ValueError('PROC observed source/mapping/negative lookup outside bootstrap inventory')
-                observed.add(path)
-        if lines[-1]!='+++ exited with 0 +++' and not client:raise ValueError('PROC unexpected traced child failure')
-        rows.append({'pid':pid,'sha256':hashlib.sha256(raw).hexdigest(),
-                     'bytes':len(raw),'paths':sorted(observed),'terminal':lines[-1]})
-    roots=pids-births
-    if len(roots)!=1 or not roots<=python_execs or pids!=roots|births:raise ValueError('PROC complete traced process/thread birth join unavailable')
-    return {'complete':True,'processes':rows,'traceBytes':total,'scope':'full fixed worker startup and traced descendants/threads; metadata only'}
+                births[child]=pid
+                birth_times[child]=when
+        terminal=r'\+\+\+ killed by SIGKILL \+\+\+' if killed else r'\+\+\+ exited with (0|18|52) \+\+\+'
+        if pending is not None or not lines or not re.fullmatch(terminal,lines[-1]):raise ValueError('PROC detached/lost/nonzero traced lifetime')
+        records[pid]={'pid':pid,'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw),'terminal':lines[-1],'observed':set()}
+    roots=set(records)-set(births)
+    if len(roots)!=1 or set(records)!=roots|set(births):raise ValueError('PROC complete traced process/thread birth join unavailable')
+    root_pid=next(iter(roots));states={root_pid:{'cwd':[str(Path(spec['operationRoot']))],'fds':{0:'/dev/null',1:str(Path(slot)/'measurement.tracer.log'),2:str(Path(slot)/'measurement.tracer.log')},'cloexec':set(),'controller':False,'client':False}}
+    bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes());cgroup=Path(bootstrap['capacity']['directory'])
+    kernel_inputs={str(cgroup/name) for name in ('cpu.max','memory.max','memory.current')}|{'/proc/self/cgroup','/proc/self/mountinfo','/proc/sys/kernel/random/boot_id'}
+    actors=set(records)|({apparatus_pid} if apparatus_pid is not None else set());root_exec=False
+    path_indices={'open':(0,),'openat':(1,),'openat2':(1,),'stat':(0,),'lstat':(0,),'stat64':(0,),'lstat64':(0,),
+                  'newfstatat':(1,),'statx':(1,),'access':(0,),'faccessat':(1,),'faccessat2':(1,),
+                  'readlink':(0,),'readlinkat':(1,),'execve':(0,),'execveat':(1,),'chdir':(0,),'getcwd':(0,),
+                  'mkdir':(0,),'mkdirat':(1,),'rmdir':(0,),'unlink':(0,),'unlinkat':(1,),
+                  'rename':(0,1),'renameat':(1,3),'renameat2':(1,3),'chmod':(0,),'fchmodat':(1,),
+                  'chown':(0,),'lchown':(0,),'utime':(0,),'utimes':(0,),'statfs':(0,),
+                  'truncate':(0,),'truncate64':(0,),'getxattr':(0,),'lgetxattr':(0,),'listxattr':(0,),'llistxattr':(0,)}
+    fd_metadata={'fstat','fstat64','fstatfs','fstatfs64','fgetxattr','flistxattr'}
+    nonpath={'clone','clone3','fork','vfork','close','close_range','dup','dup2','dup3','fcntl','fcntl64',
+             'mmap','mmap2','mprotect','munmap','mremap','brk','madvise','msync','mlock','munlock','mlockall','munlockall',
+             'pkey_alloc','pkey_free','pkey_mprotect','mseal','fchdir','getdents64','read','pread64','readv',
+             'exit','exit_group','wait4','waitid','kill','tkill','tgkill','pidfd_send_signal','setsid','setpgid',
+             'getpid','getppid','gettid','getpgrp','getpgid','getsid','prctl','arch_prctl','set_tid_address','set_robust_list',
+             'futex','rseq','rt_sigaction','rt_sigprocmask','rt_sigreturn','sigaltstack',
+             'socket','accept','accept4','socketpair','pipe','pipe2','eventfd','eventfd2',
+             'epoll_create','epoll_create1','timerfd_create','signalfd','signalfd4','inotify_init','inotify_init1','memfd_create','pidfd_open'}
+    semantic_reads=[]
+    for _,_,pid,line in sorted(events):
+        if pid not in states:raise ValueError('PROC child event precedes authenticated fork/cwd lineage')
+        state=states[pid]
+        if line.startswith(('+++','---')):continue
+        if any(marker in line for marker in ('strace:','detached','CLONE_UNTRACED','setns(','unshare(','ptrace(','io_uring_','io_setup(','io_submit(','io_getevents(','io_pgetevents(','aio_','process_vm_','symlink(','symlinkat(')):
+            raise ValueError('PROC unsupported tracing/asynchronous source access')
+        name,args,result=proc_trace_arguments(line)
+        if name is None:raise ValueError('PROC unknown trace record framing')
+        if name not in set(path_indices)|fd_metadata|nonpath:raise ValueError('PROC unmodelled selected syscall grammar')
+        success=not result.startswith('-1 ')
+        paths=[]
+        for index in path_indices.get(name,()):
+            if index>=len(args):raise ValueError('PROC trace pathname argument missing')
+            value=proc_trace_string(args[index])
+            if not value:continue
+            if value.startswith('/'):path=value
+            else:
+                base=state['cwd'][0]
+                if index in (1,3):
+                    dirarg=args[index-1]
+                    if dirarg.startswith('AT_FDCWD<'):
+                        annotated=re.fullmatch(r'AT_FDCWD<(/[^<>]+)>',dirarg)
+                        if annotated is None or annotated.group(1)!=state['cwd'][0]:raise ValueError('PROC actual AT_FDCWD provenance/cwd drift')
+                        base=annotated.group(1)
+                    elif dirarg!='AT_FDCWD':
+                        annotated=re.fullmatch(r'([0-9]+)<(/[^<>]+)>',dirarg)
+                        if annotated:base=annotated.group(2)
+                        elif dirarg.isdigit() and int(dirarg) in state['fds']:base=state['fds'][int(dirarg)]
+                        else:raise ValueError('PROC unresolved relative dirfd pathname')
+                path=os.path.normpath(str(Path(base)/value))
+            paths.append(path)
+        paths+=re.findall(r'<(/[^<>]+)>',line)
+        if name in ('mmap','mmap2') and 'MAP_ANONYMOUS' not in line and success:
+            if len(args)<5 or not re.fullmatch(r'[0-9]+</[^<>]+>',args[4]):raise ValueError('PROC executable/file mapping descriptor provenance unknown')
+        for path in paths:
+            if killed and Path(path).name in ('authorization.header','storage-url.conf'):
+                raise ValueError('PROC token-free kernel control accessed semantic credential input')
+            mutation=name in ('truncate','truncate64','chmod','fchmodat','chown','lchown','utime','utimes','unlink','unlinkat','rename','renameat','renameat2','mkdir','mkdirat','rmdir') or name in ('open','openat','openat2') and any(flag in line for flag in ('O_WRONLY','O_RDWR','O_TRUNC','O_CREAT'))
+            if mutation and not proc_generated_path(spec,path,authority_path):raise ValueError('PROC write/metadata mutation outside fixed generated artifact lifecycle')
+            if '(deleted)' in path:raise ValueError('PROC deleted source/descriptor provenance unknown')
+            kernel=proc_kernel_data_read(path,line,pid,actors,tracer_pid,state['controller'],kernel_inputs)
+            if path not in files|directories|aliases|{'/dev/null'} and not proc_generated_path(spec,path,authority_path) and not kernel:
+                if 'ENOENT' not in result or path not in absent:raise ValueError('PROC observed source/mapping/negative lookup outside bootstrap inventory')
+            records[pid]['observed'].add(path)
+        if name in ('readlink','readlinkat') and success and paths:
+            returned=re.findall(r'"((?:[^"\\]|\\.)*)"',line)
+            if len(returned)>=2 and re.search(r'/proc/(?:self|thread-self|[0-9]+)/(?:(?:task/[0-9]+/)?fd/[0-9]+|exe)$',paths[0]):
+                target=json.loads('"'+returned[1]+'"')
+                if target.startswith('/') and target not in files|aliases|{'/dev/null'} and not proc_generated_path(spec,target,authority_path):
+                    raise ValueError('PROC ordinary executable/FD target outside source/lifecycle closure')
+                if not target.startswith('/') and not re.fullmatch(r'(?:socket|pipe|anon_inode):\[[^\]]+\]',target):raise ValueError('PROC unknown kernel FD label')
+        if name in ('execve','execveat') and success:
+            state['fds']={fd:target for fd,target in state['fds'].items() if fd not in state['cloexec']};state['cloexec']=set()
+            exe=paths[0]
+            state['controller']=exe==os.path.realpath(sys.executable);state['client']=exe==spec['transport']['client']
+            if pid==root_pid:
+                if not state['controller']:raise ValueError('PROC trace root is not the canonical interpreter')
+                root_exec=True
+                argv=json.loads(args[1] if name=='execve' else args[2])
+                if clocked:
+                    if (len(argv)!=12 or argv[:6]!=[os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),'command']
+                            or argv[6]!='--proc-measured-controller' or argv[7]!=str(Path(spec['operationRoot'])/'input.json')
+                            or argv[8]!=str(authority_path) or argv[9]!=hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()
+                            or not argv[10].isdigit() or argv[11] not in ('normal','controller','session')):
+                        raise ValueError('PROC actual root exec argv outside closed measured role')
+                    state['fds'][int(argv[10])]='pipe:measurement-handshake'
+        if name in ('read','pread64','readv'):
+            if (len(args)!=(4 if name=='pread64' else 3) or not all(re.fullmatch(r'(?:0x[0-9a-f]+|0)',arg) for arg in args)
+                    or not re.fullmatch(r'(?:0x[0-9a-f]+|0|-[0-9]+(?: .*)?)',result)):
+                raise ValueError('PROC read must use raw pointer/count metadata, never payload decoding')
+            fd=int(args[0],16);target=state['fds'].get(fd)
+            if target is None:raise ValueError('PROC raw read descriptor lifetime/provenance unknown')
+            count=int(result,16) if result.startswith('0x') else int(result.split()[0])
+            if name!='readv' and count>int(args[2],16):raise ValueError('PROC impossible raw read byte/count result')
+            if count>0 and Path(target).name in ('authorization.header','storage-url.conf'):
+                semantic_reads.append({'pid':pid,'fd':fd,'path':target,'bytes':count})
+        if name=='chdir' and success:state['cwd'][0]=paths[0]
+        if name=='fchdir' and success:
+            if not args or not args[0].split('<',1)[0].isdigit():raise ValueError('PROC unresolved fchdir')
+            fd=int(args[0].split('<',1)[0]);annotated=re.search(r'<(/[^<>]+)>',args[0])
+            if annotated:state['cwd'][0]=annotated.group(1)
+            elif fd in state['fds']:state['cwd'][0]=state['fds'][fd]
+            else:raise ValueError('PROC unresolved fchdir descriptor')
+        born=re.match(r'(?:clone3?|fork|vfork)\(.*\)\s+= ([0-9]+)$',line)
+        if born:
+            child=int(born.group(1));states[child]={'cwd':state['cwd'] if 'CLONE_FS' in line else list(state['cwd']),
+                'fds':state['fds'] if 'CLONE_FILES' in line else dict(state['fds']),
+                'cloexec':state['cloexec'] if 'CLONE_FILES' in line else set(state['cloexec']),'controller':state['controller'],'client':state['client']}
+        if name in ('open','openat','openat2') and success:
+            opened=re.match(r'([0-9]+)(?:<[^>]+>)?$',result)
+            if opened and paths:
+                fd=int(opened.group(1));state['fds'][fd]=paths[0]
+                if 'O_CLOEXEC' in line:state['cloexec'].add(fd)
+                else:state['cloexec'].discard(fd)
+        if name in ('socket','accept','accept4','eventfd','eventfd2','epoll_create','epoll_create1','timerfd_create','signalfd','signalfd4','inotify_init','inotify_init1','pidfd_open') and success:
+            opened=re.match(r'([0-9]+)(?:<[^>]+>)?$',result)
+            if opened:
+                fd=int(opened.group(1));state['fds'][fd]='kernel:'+name
+                if 'CLOEXEC' in line or name=='pidfd_open':state['cloexec'].add(fd)
+                else:state['cloexec'].discard(fd)
+            else:raise ValueError('PROC kernel descriptor creation result unknown')
+        if name in ('pipe','pipe2','socketpair') and success:
+            vector=args[3] if name=='socketpair' else args[0]
+            descriptors=re.findall(r'(?:\[|,\s*)([0-9]+)(?:<[^>]+>)?',vector)
+            if len(descriptors)!=2:raise ValueError('PROC kernel descriptor pair creation unknown')
+            for fd in descriptors:
+                state['fds'][int(fd)]='kernel:'+name
+                if 'CLOEXEC' in line:state['cloexec'].add(int(fd))
+                else:state['cloexec'].discard(int(fd))
+        if name=='memfd_create':raise ValueError('PROC anonymous executable/source descriptor constructor unsupported')
+        if name=='close' and success and args and args[0].split('<',1)[0].isdigit():
+            fd=int(args[0].split('<',1)[0]);state['fds'].pop(fd,None);state['cloexec'].discard(fd)
+        if name=='close_range' and success:
+            if len(args)<2 or not args[0].isdigit() or args[1] not in ('~0U','4294967295') and not args[1].isdigit():raise ValueError('PROC close_range descriptor bounds unknown')
+            start=int(args[0]);end=4294967295 if args[1] in ('~0U','4294967295') else int(args[1])
+            for fd in list(state['fds']):
+                if start<=fd<=end:
+                    if 'CLOSE_RANGE_CLOEXEC' in line:state['cloexec'].add(fd)
+                    else:state['fds'].pop(fd,None);state['cloexec'].discard(fd)
+        if name in ('dup','dup2','dup3') and success:
+            source=args[0].split('<',1)[0];dest=result.split('<',1)[0]
+            if source.isdigit() and dest.isdigit() and int(source) in state['fds']:
+                state['fds'][int(dest)]=state['fds'][int(source)]
+                if name=='dup3' and 'O_CLOEXEC' in line:state['cloexec'].add(int(dest))
+                elif int(source)!=int(dest):state['cloexec'].discard(int(dest))
+            else:raise ValueError('PROC descriptor duplication provenance unknown')
+        if name in ('fcntl','fcntl64') and success:
+            source=args[0].split('<',1)[0]
+            if not source.isdigit():raise ValueError('PROC fcntl descriptor grammar unknown')
+            fd=int(source);command=args[1]
+            if command in ('F_DUPFD','F_DUPFD_CLOEXEC'):
+                dest=result.split('<',1)[0]
+                if fd not in state['fds'] or not dest.isdigit():raise ValueError('PROC fcntl duplicate provenance unknown')
+                state['fds'][int(dest)]=state['fds'][fd]
+                if command=='F_DUPFD_CLOEXEC':state['cloexec'].add(int(dest))
+                else:state['cloexec'].discard(int(dest))
+            elif command=='F_SETFD':
+                if len(args)!=3 or args[2] not in ('0','FD_CLOEXEC'):raise ValueError('PROC fcntl close-on-exec value unknown')
+                if args[2]=='FD_CLOEXEC':state['cloexec'].add(fd)
+                else:state['cloexec'].discard(fd)
+            elif command not in ('F_GETFD','F_GETFL','F_SETFL','F_GETPIPE_SZ','F_SETPIPE_SZ'):raise ValueError('PROC unsupported fcntl transition')
+    if not root_exec:raise ValueError('PROC canonical root exec missing')
+    union=set();rows=[]
+    for pid,row in sorted(records.items()):
+        if not killed and row['terminal']!='+++ exited with 0 +++' and not states[pid]['client']:raise ValueError('PROC unexpected traced child failure')
+        observed=sorted(row.pop('observed'));union.update(observed)
+        row.update(pathCount=len(observed),pathSetSha256=hashlib.sha256(json.dumps(observed).encode()).hexdigest());rows.append(row)
+    evidence={'complete':True,'clocked':clocked,'rootPid':root_pid,'processes':rows,'observedPaths':sorted(union),
+              'traceBytes':total,'semanticReads':semantic_reads,
+              'forkProvenance':[{'pid':pid,'parentPid':parent,'timestamp':birth_times[pid]} for pid,parent in sorted(births.items())],
+              'scope':'fresh canonical controller exec through terminal traced descendants/threads; metadata only'}
+    if len(json.dumps(evidence).encode())>MAX_OUTPUT:raise ValueError('PROC trace result vocabulary byte bound')
+    return evidence
 
 
 def proc_kernel_data_read(path,line,pid,actors,tracer_pid,controller,kernel_inputs):
@@ -1150,15 +1342,12 @@ def proc_kernel_data_read(path,line,pid,actors,tracer_pid,controller,kernel_inpu
     return not any(flag in line for flag in ('O_WRONLY','O_RDWR','O_CREAT'))
 
 
-def proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,authority_sha):
-    # Trace from exec of a fresh isolated Python, not late attachment. Neither
-    # arbitrary argv nor publication credentials reach this closed worker.
-    tracer=spec['transport']['tracer']
-    trace_calls='%file,%process,%memory,close,dup,dup2,dup3,fcntl,getdents64,io_uring_setup,io_uring_enter,io_uring_register,io_setup,io_destroy,io_submit,io_cancel,io_getevents,io_pgetevents,process_vm_readv,process_vm_writev'
-    argv=[tracer,'-ff','-yy','-s','4096','-e','trace='+trace_calls,'-o',str(slot/'qualification.trace'),
-          os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),'command','--proc-qualification-worker',
+def proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,authority_sha,work_deadline):
+    # Only the authenticated measured controller reaches this worker; the outer
+    # tracer already follows the unchanged owner's legitimate session boundary.
+    argv=[os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),'command','--proc-qualification-worker',
           str(slot/'input.json'),str(slot/'qualification.observed.json'),str(authority_path),authority_sha]
-    receipt=owner.run(argv,str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],
+    receipt=owner.run(argv,str(slot),env,work_deadline,spec['cleanupSeconds'],spec['rssBytes'],
                       str(slot/'runner.log'),spec['logBytes'],control=check,observe_child_exit=True)
     output=slot/'qualification.observed.json'
     if output.is_symlink() or not 0<output.stat().st_size<=spec['logBytes']:raise ValueError('PROC observed qualification output bound')
@@ -1166,9 +1355,8 @@ def proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,auth
     if (set(observed)!={'cases','noRepeatedFixtureRequests','nativeGetObserved'}
             or list(observed['cases'])!=list(PROC_QUALIFICATION_CASES)
             or observed['noRepeatedFixtureRequests'] is not True
-            or observed['nativeGetObserved'] is not spec['request']['nativeGet']):
+            or observed['nativeGetObserved'] is not False):
         raise ValueError('PROC actual closed qualification sequence incomplete')
-    observed['trace']=proc_trace_evidence(spec,slot,authority_path,receipt['leader']['pid'])
     observed['sourceAlternativesReviewSha256']=authority['sourceAlternativesReviewSha256']
     proc_read_drift(spec)
     return receipt,observed
@@ -1188,16 +1376,23 @@ def proc_qualification_worker(descriptor, output, authority_path, authority_sha)
             or authority.get('approved') is not True or authority.get('operation')!=spec['operation']
             or authority.get('operationRoot')!=str(root) or authority.get('profile')!=spec['profile']):
         raise ValueError('PROC root-selected worker bootstrap authority unavailable')
-    if (proc_directory_identity(root.parent)!=authority.get('canonicalBaseIdentity')
+    if (proc_directory_identity(PROC_OPERATION_BASE/str(os.geteuid()))!=authority.get('canonicalBaseIdentity')
+            or proc_directory_identity(root.parent)!=authority.get('canonicalQualificationLineageIdentity')
             or proc_directory_identity(root)!=authority.get('canonicalOperationIdentity')):
         raise ValueError('PROC root-qualified worker canonical state differs')
-    state=json.loads((root/'command.json').read_bytes())
+    state=json.loads((root/'measurement.subject.json').read_bytes())
     if (state.get('schema')!=RESULT_SCHEMA or state.get('operation')!=spec['operation']
             or state.get('sendState')!='qualification-started' or not (root/'dispatch-input.json').is_file()):
         raise ValueError('PROC worker requires consumed outer qualification intent')
     parent=os.getppid()
-    if os.path.realpath(f'/proc/{parent}/exe')!=str(Path(spec['transport']['tracer']).resolve(strict=True)) or os.getpgrp()!=parent:
-        raise ValueError('PROC worker lacks actual selected tracer/group parent')
+    ready=json.loads((root/'measurement.ready.json').read_bytes());current_parent=proc_actor(parent)
+    if (current_parent is None or current_parent['pid']!=ready['subject']['pid'] or current_parent['start']!=ready['subject']['start']
+            or current_parent['tracerPid']!=ready['tracer']['pid'] or proc_actor(os.getpid())['tracerPid']!=ready['tracer']['pid']
+            or os.path.realpath(f'/proc/{parent}/exe')!=os.path.realpath(sys.executable) or os.getpgrp()!=os.getpid()):
+        raise ValueError('PROC worker lacks actual authenticated measured-controller/owned-session parent')
+    # Keep the original input bytes unchanged; this local subject execution limit
+    # reserves the original ten seconds for owner cleanup and ten for collection.
+    spec=dict(spec);spec['workDeadline']=ready['subjectWorkDeadline']
     if set(os.sched_getaffinity(0))!=set(spec['cpuAffinity']):raise ValueError('PROC actual worker affinity differs')
     import resource
     expected=resource.RLIM_INFINITY if spec['addressSpaceBytes'] is None else spec['addressSpaceBytes']
@@ -1256,18 +1451,9 @@ def proc_qualification_worker(descriptor, output, authority_path, authority_sha)
                     or completed.returncode!=(52 if case=='early-close' else 18 if case=='partial-response' else 0)):
                 raise ValueError('PROC observed TLS fault request/response behavior differs')
             cases[case]={'requests':counts[case],'exit':completed.returncode,'metadata':meta}
-        if spec['request']['nativeGet']:
-            argv=proc_curl_argv(spec,root,spec['request']['endpoint'],'GET',authorization=False,
-                                remaining=spec['workDeadline']-time.monotonic(),name='qualification.native')
-            with (root/'qualification.native.log').open('xb') as stream:
-                subprocess.run(argv,cwd=root,env=spec['environment'],stdout=stream,stderr=subprocess.DEVNULL,
-                               timeout=max(.01,spec['workDeadline']-time.monotonic()),check=True)
-            native=json.loads(proc_curl_response(root,'qualification.native','https://api.github.com/'+spec['request']['endpoint'],spec['logBytes']))
-            if native.get('id')!=spec['repositoryId'] or native.get('full_name')!=PROC_REPOSITORY:
-                raise ValueError('PROC separately admitted fixed native GET identity')
         proc_read_drift(spec)
         value={'cases':cases,'noRepeatedFixtureRequests':not redirected and all(n==1 for n in counts.values()),
-               'nativeGetObserved':spec['request']['nativeGet']}
+               'nativeGetObserved':False}
         with Path(output).open('xb') as stream:os.chmod(output,0o600);stream.write(json.dumps(value).encode()+b'\n')
     finally:
         server.shutdown();thread.join(timeout=max(0,spec['totalDeadline']-time.monotonic()));server.server_close()
@@ -1282,6 +1468,7 @@ def proc_runtime_evidence(spec, authority, evidence):
     expected_bounds={k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')}
     support=[pin for pin in spec['pins'] if pin['path'] not in spec['proofInputs'].values()]
     if (evidence.get('schema')!=RESULT_SCHEMA or evidence.get('commandAccepted') is not True
+            or evidence.get('rootAccepted') is not True or evidence.get('publicationAuthorized') is not False
             or evidence.get('firstCause') is not None or evidence.get('additionalFailures')!=[]
             or evidence.get('reportingOutcome')!='written'
             or evidence!=authority.get('runtimeQualification') or owner.get('cleanup')!='observed-empty-group'
@@ -1303,14 +1490,20 @@ def proc_runtime_evidence(spec, authority, evidence):
             or runtime.get('sourceAlternativesReviewSha256')!=authority.get('sourceAlternativesReviewSha256')
             or runtime.get('sourceReadAllowlist')!=spec['sourceReadAllowlist']
             or runtime.get('canonicalBaseIdentity')!=proc_directory_identity(proc_operation_root(spec['operation']).parent)
-            or runtime.get('nativeGetObserved') is not True):
+            or runtime.get('nativeGetObserved') is not True or runtime.get('nativeCollectorObserved') is not True):
         raise ValueError('PROC actual canonical runtime/support/read/retry/custody evidence unavailable')
 
 
-def proc_charge_read(retirement,kind):
+def proc_charge_read(retirement,kind,leg=None):
     counts=retirement.setdefault('readCounts',{'api':0,'storage':0,'total':0})
-    if kind not in ('api','storage') or counts[kind]>=(5 if kind=='api' else 2) or counts['total']>=7:
+    qualification=retirement.get('profile')=='qualification'
+    if qualification:
+        expected={'api:repo-public','api:terminal-job','api:terminal-archive','storage:terminal-job','storage:terminal-archive'}
+        key=kind+':'+str(leg);used=retirement.setdefault('consumedLegs',[])
+        if key not in expected or key in used:raise ValueError('PROC qualification fixed native leg consumed/foreign')
+    if kind not in ('api','storage') or counts[kind]>=(3 if qualification and kind=='api' else 5 if kind=='api' else 2) or counts['total']>=(5 if qualification else 7):
         raise ValueError('PROC finite API/storage request budget exhausted')
+    if qualification:used.append(key)
     counts[kind]+=1;counts['total']+=1
 
 
@@ -1338,7 +1531,7 @@ def proc_storage_read(owner,spec,slot,env,check,target,name,retirement):
         if api_result.exists() or api_result.is_symlink():raise ValueError('PROC API child result occupied')
         argv=proc_curl_argv(spec,slot,target,'GET',name=name+'-api',remaining=spec['workDeadline']-time.monotonic())
         argv[-1:-1]=['--dump-header',str(headers)]
-        proc_charge_read(retirement,'api');retirement['receipt']=None
+        proc_charge_read(retirement,'api',name);retirement['receipt']=None
         def api_check(event,child,leader,known):
             check(event,child,leader,known)
             if (proc_read_identity(headers)!=header_identity or proc_read_identity(api_body)!=body_identity
@@ -1356,6 +1549,7 @@ def proc_storage_read(owner,spec,slot,env,check,target,name,retirement):
                 retirement.setdefault('storageRetirementFailures',[]).append(failure_record(error))
             raise
         api_receipt=receipt
+        retirement.setdefault('apiReaders',[]).append({'stage':name,'receipt':receipt})
         retirement['receipt']=receipt
         meta=json.loads((slot/(name+'-api.log')).read_bytes())
         if (set(meta)!={'httpCode','effectiveUrl','redirects','sslVerifyResult'} or meta['httpCode']!='302'
@@ -1378,7 +1572,7 @@ def proc_storage_read(owner,spec,slot,env,check,target,name,retirement):
             if proc_read_identity(storage_body)!=storage_identity or storage_body.stat().st_size>spec['logBytes']:
                 raise ValueError('PROC private storage body identity/bound drift')
             if event!='after-cleanup' and time.monotonic()>=deadline:raise TimeoutError('PROC consumed storage URL lifetime exhausted')
-        proc_charge_read(retirement,'storage');retirement['receipt']=None;receipt=None
+        proc_charge_read(retirement,'storage',name);retirement['receipt']=None;receipt=None
         argv=proc_storage_argv(spec,slot,name,deadline-time.monotonic())
         storage_result=slot/(name+'.log.result.json')
         if storage_result.exists() or storage_result.is_symlink():raise ValueError('PROC storage child result occupied')
@@ -1501,15 +1695,542 @@ def proc_terminal_evidence(owner, spec, slot, env, check, native, retirement=Non
             'storageInputRetirements':retirement.get('storageInputRetirements',[]),'publicationAccepted':False}
 
 
-def execute_proc_command(descriptor, authority_path, authority_sha):
+def proc_stat(pid):
+    try:
+        text=Path('/proc',str(pid),'stat').read_text();fields=text[text.rindex(')')+2:].split()
+        return {'pid':pid,'start':int(fields[19]),'ppid':int(fields[1]),'pgid':int(fields[2]),'sid':int(fields[3]),
+                'state':fields[0],'rss':max(0,int(fields[21]))*os.sysconf('SC_PAGE_SIZE')}
+    except FileNotFoundError:return None
+
+
+def proc_actor(pid):
+    """Fresh kernel DATA identity; a vanished task is not a fabricated lifetime."""
+    try:
+        row=proc_stat(pid)
+        if row is None:return None
+        status={}
+        for line in Path('/proc',str(pid),'status').read_text().splitlines():
+            if ':' in line:
+                key,value=line.split(':',1);status[key]=value.strip()
+        row.update(uid=int(status['Uid'].split()[0]),tgid=int(status['Tgid']),tracerPid=int(status['TracerPid']),
+                   namespaces={name:os.readlink(Path('/proc',str(pid),'ns',name)) for name in ('pid','mnt','user')})
+        fresh=proc_stat(pid)
+        if fresh is None:return None
+        if fresh['start']!=row['start']:raise ValueError('PROC apparatus PID changed during metadata observation')
+        return row
+    except FileNotFoundError:return None
+
+
+def proc_private_record(path,value,deadline,*,exclusive=False,expected=None):
+    path=Path(path);parts=[];size=0
+    for part in json.JSONEncoder(sort_keys=True).iterencode(value):
+        if time.monotonic()>=deadline:raise TimeoutError('PROC original private serialization deadline')
+        raw=part.encode();size+=len(raw)
+        if size+1>MAX_OUTPUT:raise ValueError('PROC finite measurement result byte budget')
+        parts.append(raw)
+    raw=b''.join(parts)+b'\n'
+    if time.monotonic()>=deadline:raise TimeoutError('PROC original private serialization deadline')
+    if expected is not None and (path.is_symlink() or path.read_bytes()!=expected):raise ValueError('PROC measurement collector state drift')
+    destination=path if exclusive else path.with_name(path.name+'.pending')
+    fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);first=None;identity=None;offset=0
+    try:
+        identity=proc_read_identity(destination)
+        while offset<len(raw):
+            if time.monotonic()>=deadline:raise TimeoutError('PROC original measurement report write deadline')
+            count=os.write(fd,raw[offset:])
+            if count<=0:raise OSError('PROC measurement report zero write')
+            offset+=count
+        os.fsync(fd)
+        if time.monotonic()>=deadline:raise TimeoutError('PROC original report fsync deadline')
+    except BaseException as error:first=error
+    finally:
+        try:os.close(fd)
+        except BaseException as error:
+            if first is None:first=error
+            else:first.proc_report_secondary=failure_record(error)
+    if first is None:
+        try:
+            if time.monotonic()>=deadline:raise TimeoutError('PROC original report close deadline')
+            if proc_read_identity(destination)!=identity:raise ValueError('PROC private report destination identity drift')
+            if not exclusive:
+                if expected is not None and path.read_bytes()!=expected:raise ValueError('PROC measurement collector changed before replace')
+                if time.monotonic()>=deadline:raise TimeoutError('PROC original report replace deadline')
+                os.replace(destination,path)
+                if time.monotonic()>=deadline:raise TimeoutError('PROC original report post-replace deadline')
+        except BaseException as error:first=error
+    if first is not None:
+        first.proc_private_report={'path':str(destination),'disposition':'held-partial-or-completed-report','identity':identity,'bytesWritten':offset}
+        raise first
+    return raw
+
+
+def proc_trace_argv(spec,slot,descriptor,authority_path,authority_sha,handshake_fd,phase):
+    if spec['role']!='qualification' or phase not in ('normal','controller','session') or type(handshake_fd) is not int or not 3<=handshake_fd<=1024:
+        raise ValueError('PROC closed measurement role/handshake')
+    calls='%file,%process,%memory,read,pread64,readv,socket,accept,accept4,socketpair,pipe,pipe2,eventfd,eventfd2,epoll_create,epoll_create1,timerfd_create,signalfd,signalfd4,inotify_init,inotify_init1,memfd_create,pidfd_open,close,dup,dup2,dup3,fcntl,getdents64,io_uring_setup,io_uring_enter,io_uring_register,io_setup,io_destroy,io_submit,io_cancel,io_getevents,io_pgetevents,process_vm_readv,process_vm_writev'
+    return [spec['transport']['tracer'],'-ff','--kill-on-exit','--interruptible=2','-ttt','-yy','-s','4096','-e','trace='+calls,'-e','raw=read,pread64,readv',
+            '-o',str(Path(slot)/'qualification.trace'),os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),
+            'command','--proc-measured-controller',str(descriptor),str(authority_path),authority_sha,str(handshake_fd),phase]
+
+
+def proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phase):
+    import select
+    if spec['role']!='qualification' or phase not in ('normal','controller','session') or not stat.S_ISFIFO(os.fstat(fd).st_mode):
+        raise ValueError('PROC forged measured role/handshake kind')
+    import fcntl
+    if fcntl.fcntl(fd,fcntl.F_GETFL)&os.O_ACCMODE!=os.O_RDONLY:raise ValueError('PROC handshake must be read-only')
+    remaining=spec['workDeadline']-time.monotonic()
+    if remaining<=0 or not select.select([fd],[],[],min(2,remaining))[0]:raise TimeoutError('PROC measured handshake original deadline')
+    raw=os.read(fd,8193);os.close(fd)
+    if not 0<len(raw)<=8192:raise ValueError('PROC handshake framing bound')
+    proof=json.loads(raw);boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+    if (set(proof)!={'bootId','apparatus','tracer','descriptorSha256','authoritySha256','phase','slot','subjectWorkDeadline'}
+            or proof['bootId']!=boot or proof['phase']!=phase or proof['authoritySha256']!=authority_sha
+            or proof['descriptorSha256']!=hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()
+            or proof['subjectWorkDeadline']!=spec['workDeadline']-10):raise ValueError('PROC measured bootstrap binding unavailable')
+    tracer=proc_actor(os.getppid());self_row=proc_actor(os.getpid());apparatus=proc_actor(proof['apparatus']['pid'])
+    for row,expected in ((tracer,proof['tracer']),(apparatus,proof['apparatus'])):
+        if row is None or any(row[k]!=expected[k] for k in ('pid','start','uid','pgid','sid')):raise ValueError('PROC stale apparatus/tracer birth')
+    if (self_row is None or self_row['tracerPid']!=tracer['pid'] or tracer['ppid']!=apparatus['pid']
+            or tracer['uid']!=os.geteuid() or apparatus['uid']!=os.geteuid()
+            or pin_file(Path('/proc',str(tracer['pid']),'exe').resolve())['sha256']!=PROC_STRACE_SHA
+            or str(Path('/proc',str(apparatus['pid']),'exe').resolve())!=os.path.realpath(sys.executable)):
+        raise ValueError('PROC actual traced subject/parent executable relation unavailable')
+    root=Path(spec['operationRoot']);slot=root if phase=='normal' else root/('control-'+phase)
+    if proof['slot']!=str(slot) or proc_directory_identity(root) is None:raise ValueError('PROC measured fixed artifact slot')
+    state=json.loads((root/'command.json').read_bytes())
+    if state.get('sendState')!='measurement-started' or state.get('descriptorSha256')!=proof['descriptorSha256']:
+        raise ValueError('PROC measured role lacks original exclusive measurement claim')
+    # The actual closed entry consumes the ready artifact once. It is not another
+    # operation or send identity and cannot initialize/retry the canonical slot.
+    proc_private_record(slot/'measurement.ready.json',{'bootId':boot,'subject':self_row,'tracer':tracer,'subjectWorkDeadline':proof['subjectWorkDeadline'],
+        'phase':phase,'descriptorSha256':proof['descriptorSha256']},spec['workDeadline']-10,exclusive=True)
+    return proof
+
+
+def proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,subject_started):
+    proc_capacity_evidence(spec,authority,bootstrap['capacity']);proc_read_drift(spec)
+    if set(os.sched_getaffinity(0))!=set(spec['cpuAffinity']):raise ValueError('PROC apparatus actual affinity drift')
+    trace_files=list(Path(spec['operationRoot']).rglob('qualification.trace.*'))
+    if len(trace_files)>128 or any(path.is_symlink() or not path.is_file() for path in trace_files) or sum(path.stat().st_size for path in trace_files)>8*1024**2:
+        raise ValueError('PROC apparatus live 8MiB trace bound')
+    census(Path(spec['operationRoot']),min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
+    rows={}
+    for path in Path('/proc').iterdir():
+        if path.name.isascii() and path.name.isdigit():
+            row=proc_stat(int(path.name))
+            if row is not None:rows[row['pid']]=row
+    apparatus=rows.get(os.getpid())
+    if apparatus is None:raise ValueError('PROC apparatus live census unavailable')
+    candidates={apparatus['pid']:apparatus}
+    if tracer is not None:
+        current=rows.get(tracer['pid'])
+        if current is not None and current['start']!=tracer['start']:raise ValueError('PROC tracer PID reused')
+        if current is not None:candidates[current['pid']]=current
+    changed=True
+    while changed:
+        changed=False
+        for row in rows.values():
+            if row['ppid'] in candidates and row['pid'] not in candidates:
+                parent=candidates[row['ppid']]
+                if parent['pid'] in known and known[parent['pid']]['start']!=parent['start']:raise ValueError('PROC apparatus parent birth reused')
+                candidates[row['pid']]=row;changed=True
+    for pid,birth in list(known.items()):
+        current=rows.get(pid)
+        if current is not None:
+            if current['start']!=birth['start']:raise ValueError('PROC sampled measurement PID reuse')
+            candidates[pid]=current
+    pinned={os.path.realpath(sys.executable),str(Path(spec['transport']['tracer']).resolve()),str(Path(spec['transport']['client']).resolve())}
+    samples=[];tgids={}
+    for pid,row in candidates.items():
+        row=proc_actor(pid)
+        if row is None:continue
+        if row['uid']!=os.geteuid() or row['namespaces']!=proc_actor(os.getpid())['namespaces']:
+            raise ValueError('PROC foreign measurement UID/namespace')
+        if row['state'] not in ('Z','X','x'):
+            try:exe=str(Path('/proc',str(pid),'exe').resolve(strict=True))
+            except FileNotFoundError:
+                fresh=proc_actor(pid)
+                if fresh is not None and fresh['start']==row['start'] and fresh['state'] not in ('Z','X','x'):raise
+                continue
+            if exe not in pinned:raise ValueError('PROC unclassified live measurement executable')
+            if subject_started and pid not in (os.getpid(),tracer['pid']) and row['ppid']==tracer['pid'] and exe==str(Path(spec['transport']['tracer']).resolve()):
+                raise ValueError('PROC unexpected live instrumentation after authenticated subject start')
+        if pid not in known:
+            if len(known)>=128:raise ValueError('PROC finite sampled measurement birth bound')
+            known[pid]={'pid':pid,'start':row['start'],'tgid':row['tgid'],'instrumentationCandidate':tracer is not None and row['ppid']==tracer['pid']}
+        tgids[row['tgid']]=max(tgids.get(row['tgid'],0),row['rss']);samples.append({k:row[k] for k in ('pid','start','tgid','state')})
+    aggregate=sum(tgids.values())
+    if aggregate>spec['rssBytes']:raise MemoryError('PROC aggregate sampled apparatus/tracer/subject RSS bound')
+    return {'rssBytes':aggregate,'actors':samples}
+
+
+def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase):
+    import subprocess
+    root=Path(spec['operationRoot']);slot=root if phase=='normal' else root/('control-'+phase)
+    if phase!='normal':slot.mkdir(mode=0o700)
+    subject_deadline=spec['workDeadline']-10
+    if time.monotonic()>=subject_deadline:raise TimeoutError('PROC original subject-work reserve exhausted')
+    read_fd,write_fd=os.pipe();child=None;tracer=None;pidfd=None;first=None;known={};samples=[];peak=0;ready=None;control=None;signal_sent=False;code=None;additional=[]
+    stream=None
+    launch_started=time.monotonic()
+    try:
+        stream=(slot/'measurement.tracer.log').open('xb');os.chmod(slot/'measurement.tracer.log',0o600)
+        argv=proc_trace_argv(spec,slot,root/'input.json',authority_path,authority_sha,read_fd,phase)
+        child=subprocess.Popen(argv,cwd=str(root),env=dict(spec['environment']),stdin=subprocess.DEVNULL,stdout=stream,stderr=stream,
+                               close_fds=True,pass_fds=(read_fd,),start_new_session=True)
+        os.close(read_fd);read_fd=None
+        tracer=proc_actor(child.pid)
+        if tracer is None or tracer['ppid']!=os.getpid() or tracer['uid']!=os.geteuid() or tracer['pgid']!=tracer['pid'] or tracer['sid']!=tracer['pid']:
+            raise ValueError('PROC actual direct tracer birth unavailable')
+        # Popen can be sampled before exec; wait briefly within the same deadline.
+        while str(Path('/proc',str(child.pid),'exe').resolve(strict=True))!=str(Path(spec['transport']['tracer']).resolve()):
+            if child.poll() is not None or time.monotonic()>=min(subject_deadline,launch_started+2):raise ValueError('PROC tracer actual pinned executable startup unavailable')
+            time.sleep(.01)
+        pidfd=os.pidfd_open(tracer['pid']);fresh=proc_actor(tracer['pid'])
+        if fresh is None or fresh['start']!=tracer['start']:raise ValueError('PROC tracer pidfd original birth drift')
+        apparatus=proc_actor(os.getpid())
+        proof={'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),'apparatus':apparatus,'tracer':tracer,
+               'descriptorSha256':hashlib.sha256(Path(descriptor).read_bytes()).hexdigest(),'authoritySha256':authority_sha,
+               'phase':phase,'slot':str(slot),'subjectWorkDeadline':subject_deadline}
+        wire=json.dumps(proof,sort_keys=True).encode()
+        if len(wire)>8192 or os.write(write_fd,wire)!=len(wire):raise ValueError('PROC handshake one-use write failure')
+        os.close(write_fd);write_fd=None
+        while True:
+            if (hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()!=authority['descriptorSha256']
+                    or hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha
+                    or proc_directory_identity(root)!=authority['canonicalOperationIdentity']
+                    or proc_directory_identity(root.parent)!=authority['canonicalQualificationLineageIdentity']
+                    or proc_directory_identity(PROC_OPERATION_BASE/str(os.geteuid()))!=authority['canonicalBaseIdentity']):
+                raise ValueError('PROC apparatus pinned input/canonical lineage drift')
+            ready_path=slot/'measurement.ready.json'
+            if ready is None and ready_path.is_file():
+                ready=json.loads(ready_path.read_bytes());subject=proc_actor(ready['subject']['pid'])
+                if (ready['bootId']!=proof['bootId'] or ready['phase']!=phase or ready['descriptorSha256']!=proof['descriptorSha256']
+                        or subject is None or subject['start']!=ready['subject']['start'] or subject['tracerPid']!=tracer['pid']):
+                    raise ValueError('PROC actual measured subject readiness unavailable')
+            sample=proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,ready is not None)
+            sample={'elapsedMilliseconds':int((time.monotonic()-spec['started'])*1000),'rssBytes':sample['rssBytes'],
+                    'actorCount':len(sample['actors'])}
+            if len(samples)>=1000:raise ValueError('PROC apparatus finite sample/report bound')
+            # Bound reporting incrementally; retain first cause rather than silently
+            # omitting birth records or emitting an unbounded successful receipt.
+            if len(json.dumps(samples+[sample]).encode())>64*1024:raise ValueError('PROC apparatus sample receipt byte bound')
+            samples.append(sample);peak=max(peak,sample['rssBytes'])
+            if (slot/'measurement.tracer.log').stat().st_size>spec['logBytes']:raise ValueError('PROC apparatus tracer log bound')
+            if phase!='normal' and ready is not None:
+                control_ready=slot/'measurement.control.json'
+                if phase=='controller' or control_ready.is_file():
+                    if phase=='session':
+                        control=json.loads(control_ready.read_bytes());current=proc_actor(control['child']['pid'])
+                        parent=proc_actor(control['controller']['pid'])
+                        if (control.get('phase')!='session' or control.get('bootId')!=proof['bootId'] or current is None or parent is None
+                                or current['start']!=control['child']['start'] or current['ppid']!=ready['subject']['pid']
+                                or current['tracerPid']!=tracer['pid'] or parent['start']!=ready['subject']['start']
+                                or current['sid']!=current['pid'] or current['pgid']!=current['pid']):
+                            raise ValueError('PROC actual kernel descendant/session readiness unavailable')
+                        known[current['pid']]={'pid':current['pid'],'start':current['start'],'tgid':current['tgid'],'instrumentationCandidate':False}
+                    signal.pidfd_send_signal(pidfd,signal.SIGKILL);signal_sent=True;break
+            code=child.poll()
+            if code is not None:break
+            if time.monotonic()>=(spec['workDeadline'] if phase=='normal' else subject_deadline):raise TimeoutError('PROC original measured subject/cleanup deadline')
+            time.sleep(.1)
+    except BaseException as error:first=error
+    finally:
+        def cleanup(action):
+            nonlocal first
+            try:return action()
+            except BaseException as error:
+                if first is None:first=error
+                else:additional.append(failure_record(error))
+                return None
+        for fd in (read_fd,write_fd):
+            if fd is not None:cleanup(lambda fd=fd:os.close(fd))
+        if child is not None:
+            status=cleanup(child.poll)
+            if status is None:
+                if pidfd is not None and tracer is not None:
+                    current=cleanup(lambda:proc_actor(tracer['pid']))
+                    if current is not None and current['start']==tracer['start']:
+                        cleanup(lambda:signal.pidfd_send_signal(pidfd,signal.SIGKILL));signal_sent=True
+                code=cleanup(lambda:child.wait(timeout=max(.001,min(10,spec['workDeadline']-time.monotonic()))))
+            else:code=status
+        if stream is not None:cleanup(stream.close)
+        if pidfd is not None:cleanup(lambda:os.close(pidfd))
+    residual=[]
+    while True:
+        residual=[]
+        for pid,birth in known.items():
+            if pid==os.getpid():continue
+            try:current=proc_actor(pid)
+            except (OSError,ValueError) as error:
+                if first is None:first=error
+                residual.append({'pid':pid,'start':birth['start'],'observation':'unreadable'});continue
+            if current is not None and (current['start']!=birth['start'] or current['state'] not in ('Z','X','x')):residual.append(current)
+        if not residual or time.monotonic()>=spec['workDeadline']:break
+        time.sleep(.05)
+    cleanup='observed-known-terminal' if ready is not None and not residual and code is not None else 'unknown-private-hold'
+    record={'phase':phase,'additionalFailures':additional,'firstCause':failure_record(first),'tracer':tracer,'tracerExit':code,'pidfdSignalSent':signal_sent,
+        'subjectStartAuthenticated':ready is not None,'subjectReadiness':ready,'controlReadiness':control,
+        'sampledBirths':list(known.values()),'samples':samples,'sampledPeakRssBytes':peak,
+        'unsampledInstrumentation':{'sourceProbeBound':2,'count':None,'identities':None,'lifetimes':None,'peakRssBytes':None},
+        'instrumentationRetirementBasis':'source-normal-startup-plus-sampled-terminal' if ready is not None else 'not-established',
+        'residuals':residual,'cleanup':cleanup,'measurementLimitation':'Sampled ordinary accounting; no complete instrumentation census or transient peak guarantee.'}
+    try:proc_private_record(slot/'measurement.apparatus.json',record,spec['totalDeadline'],exclusive=True)
+    except BaseException as error:
+        if first is None:first=error
+        else:first.proc_measurement_reporting_failure=failure_record(error)
+    if first is not None:raise first
+    if cleanup!='observed-known-terminal':raise ValueError('PROC measurement cleanup unknown; retain private hold')
+    if phase=='normal' and code!=0:
+        failed=slot/'measurement.subject.json'
+        error=ValueError('PROC measured terminal grammar differs')
+        if failed.is_file() and not failed.is_symlink() and failed.stat().st_size<=MAX_OUTPUT:
+            detail=json.loads(failed.read_bytes())
+            error.proc_subject_failure=detail.get('firstCause')
+            error.proc_subject_result=detail
+        raise error
+    if phase!='normal' and (not signal_sent or code!=-signal.SIGKILL):raise ValueError('PROC kernel control terminal grammar differs')
+    if phase!='normal':
+        trace=proc_trace_evidence(spec,slot,authority_path,tracer['pid'],killed=True,apparatus_pid=os.getpid())
+        if not trace['clocked'] or trace['rootPid']!=ready['subject']['pid'] or phase=='session' and control['child']['pid'] not in {row['pid'] for row in trace['processes']}:
+            raise ValueError('PROC actual complete kernel-control trace/birth join unavailable')
+        record['controlTrace']=trace
+        # The original observation remains immutable; this separate bounded join is
+        # a fixed control artifact, never a replacement successful normal trace.
+        proc_private_record(slot/'measurement.control-proof.json',{'apparatusSha256':hashlib.sha256((slot/'measurement.apparatus.json').read_bytes()).hexdigest(),
+            'trace':trace,'expectedTracerAbort':True},spec['totalDeadline'],exclusive=True)
+    return record
+
+
+def proc_kernel_child(descriptor,authority_path,authority_sha):
+    spec=json.loads(Path(descriptor).read_bytes());proc_command_preflight(spec,now=time.monotonic())
+    root=Path(spec['operationRoot']);slot=root/'control-session'
+    if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode or sys.flags.optimize or spec['role']!='qualification':
+        raise ValueError('PROC closed unoptimized kernel child role')
+    if hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha:raise ValueError('PROC kernel child root input drift')
+    ready=json.loads((slot/'measurement.ready.json').read_bytes());parent=proc_actor(os.getppid());actual=proc_actor(os.getpid())
+    if (parent is None or actual is None or parent['pid']!=ready['subject']['pid'] or parent['start']!=ready['subject']['start']
+            or actual['tracerPid']!=ready['tracer']['pid'] or parent['tracerPid']!=actual['tracerPid']
+            or actual['pgid']!=actual['pid'] or actual['sid']!=actual['pid']):
+        raise ValueError('PROC kernel child lacks actual measured parent/session/tracer relation')
+    proc_private_record(slot/'measurement.control.json',{'phase':'session','child':actual,'controller':parent,
+        'bootId':ready['bootId']},ready['subjectWorkDeadline'],exclusive=True)
+    while time.monotonic()<ready['subjectWorkDeadline']:time.sleep(.1)
+    raise TimeoutError('PROC kernel control tracer did not abort before original deadline')
+
+
+def proc_load_qualification_header(spec,authority,measurement):
+    if (authority.get('qualificationCredentialReference')!=PROC_QUALIFICATION_CREDENTIAL or authority.get('nativeCollectorApproved') is not True
+            or spec['request']['credentialReference']!=PROC_QUALIFICATION_CREDENTIAL):
+        raise ValueError('PROC separate root read-only qualification credential admission unavailable')
+    root=Path(spec['operationRoot']);state=json.loads((root/'command.json').read_bytes());semantic=state.get('semanticHeader') or {}
+    if (set(semantic)!={'path','identity','bytes','creator','ordinal','purpose'} or semantic['path']!=str(root/'authorization.header')
+            or semantic['ordinal']!=spec['qualificationAttempt'] or semantic['purpose']!=PROC_QUALIFICATION_CREDENTIAL
+            or semantic['creator']['pid']!=measurement['apparatus']['pid'] or semantic['creator']['start']!=measurement['apparatus']['start']):
+        raise ValueError('PROC exact apparatus-created semantic header provenance unavailable')
+    creator=proc_actor(semantic['creator']['pid'])
+    if creator is None or creator['start']!=semantic['creator']['start']:raise ValueError('PROC semantic input creator birth unavailable')
+    fd=os.open(root/'authorization.header',os.O_RDONLY|os.O_NOFOLLOW)
+    try:
+        current=os.fstat(fd);raw=os.read(fd,8192+64)
+        identity={'device':current.st_dev,'inode':current.st_ino,'uid':current.st_uid,'mode':stat.S_IMODE(current.st_mode),'kind':stat.S_IFMT(current.st_mode)}
+        if (identity!=semantic['identity'] or current.st_nlink!=1 or current.st_uid!=os.geteuid() or current.st_mode&0o777!=0o600
+                or current.st_size!=semantic['bytes'] or not 0<len(raw)<=8192+64
+                or not re.fullmatch(rb'Authorization: Bearer [\x21-\x7e]+\n',raw)):
+            raise ValueError('PROC qualification semantic single-header input drift/shape')
+    finally:os.close(fd)
+    return {'path':semantic['path'],'identity':identity,'_expectedBytes':raw}
+
+
+def proc_native_qualification(owner,spec,slot,env,check,header,deadline,destination):
+    selected=dict(spec);selected['workDeadline']=deadline
+    retirement={'profile':'qualification','receipt':None};records={}
+    destination.update(nativeCollectorObserved=False,records=records,requests=retirement.setdefault('readCounts',{'api':0,'storage':0,'total':0}),
+                       consumedLegs=retirement.setdefault('consumedLegs',[]),readLifetime=retirement,firstCause=None)
+    try:
+        def guarded(*args):check(*args);proc_sensitive_unchanged(header)
+        proc_charge_read(retirement,'api','repo-public')
+        argv=proc_curl_argv(selected,slot,'repos/'+PROC_REPOSITORY,'GET',authorization=False,
+                            remaining=deadline-time.monotonic(),name='qualification.native')
+        receipt=owner.run(argv,str(slot),env,deadline,spec['cleanupSeconds'],spec['rssBytes'],str(slot/'qualification.native.log'),
+                          spec['logBytes'],control=guarded,observe_child_exit=True)
+        repository=json.loads(proc_curl_response(slot,'qualification.native','https://api.github.com/repos/'+PROC_REPOSITORY,spec['logBytes']))
+        if (repository.get('id')!=1346720714 or repository.get('full_name')!=PROC_REPOSITORY
+                or repository.get('private') is not False or repository.get('visibility')!='public'):
+            raise ValueError('PROC fresh fixed public native repository identity differs')
+        records['publicRepository']={'id':1346720714,'receipt':receipt}
+        log=proc_storage_read(owner,selected,slot,env,guarded,'repos/'+PROC_REPOSITORY+'/actions/jobs/115630940784/logs','terminal-job',retirement)
+        text=log.decode('utf-8','strict')
+        if '\x00' in text or not 0<len(text.splitlines())<=10000:raise ValueError('PROC bounded original native log framing refusal')
+        records['originalJob']={'jobId':115630940784,'runId':38495729817,'runAttempt':1,'head':spec['originalPublisher'],
+                                'bytes':len(log),'sha256':hashlib.sha256(log).hexdigest(),'lines':len(text.splitlines())}
+        archive=proc_storage_read(owner,selected,slot,env,guarded,'repos/'+PROC_REPOSITORY+'/actions/artifacts/11863691435/zip','terminal-archive',retirement)
+        digest=hashlib.sha256(archive).hexdigest()
+        if len(archive)!=497795 or digest!='e885b5a0a80807e461559b89547dda91c9c822a89216145a0092b53e3a3c879e':
+            raise ValueError('PROC fresh original native archive identity differs; no historical substitution')
+        records['originalArtifact']={'artifactId':11863691435,'runId':38495729817,'bytes':len(archive),'sha256':digest}
+        readers=retirement.get('apiReaders',[])
+        if (len(readers)!=2 or any(row['receipt'].get('cleanup')!='observed-empty-group' or row['receipt'].get('custody')!='observed-owned-group' for row in readers)
+                or retirement.get('storagePrivateHold') or retirement['readCounts']!={'api':3,'storage':2,'total':5}):
+            raise ValueError('PROC all native readers/legs retirement unavailable')
+        proc_sensitive_unchanged(header)
+        destination.update({'nativeCollectorObserved':True,'records':records,'requests':retirement['readCounts'],
+                'consumedLegs':retirement['consumedLegs'],'apiReaders':readers,'storageRetirements':retirement.get('storageInputRetirements',[])})
+        return destination
+
+    except BaseException as error:
+        destination['firstCause']=failure_record(error)
+        if hasattr(error,'proc_read_status'):destination['failureStatus']=error.proc_read_status
+        raise
+
+
+def proc_measured_entry(descriptor,authority_path,authority_sha,fd,phase):
+    if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode or sys.flags.optimize:
+        raise ValueError('PROC measured actual interpreter flags')
+    spec=json.loads(Path(descriptor).read_bytes());proc_command_preflight(spec,now=time.monotonic())
+    if dict(os.environ)!=spec['environment'] or os.getcwd()!=spec['operationRoot']:
+        raise ValueError('PROC measured inherited environment/cwd differs from fixed profile')
+    if os.readlink('/proc/self/fd/0')!='/dev/null':raise ValueError('PROC measured input must be dev-null')
+    proof=proc_measured_handshake(spec,descriptor,authority_path,authority_sha,fd,phase)
+    if phase=='normal':return execute_proc_command(descriptor,authority_path,authority_sha,measurement=proof)
+    if phase=='controller':
+        while time.monotonic()<proof['subjectWorkDeadline']:time.sleep(.1)
+        raise TimeoutError('PROC controller negative control was not aborted')
+    # One ordinary source-owned Python leader/session under the unchanged owner.
+    path=Path(__file__).with_name('shared_process_owner.py')
+    if pin_file(path)['sha256']!=OWNER_SHA:raise ValueError('PROC kernel control shared owner source drift')
+    source=importlib.util.spec_from_file_location('proc_kernel_control_owner',path)
+    owner=importlib.util.module_from_spec(source);source.loader.exec_module(owner)
+    argv=[os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),'command','--proc-kernel-child',
+          str(descriptor),str(authority_path),authority_sha]
+    slot=Path(proof['slot'])
+    def guard(*args):
+        proc_read_drift(spec)
+        if time.monotonic()>=proof['subjectWorkDeadline']:raise TimeoutError('PROC original kernel-control deadline')
+    owner.run(argv,str(slot),dict(spec['environment']),proof['subjectWorkDeadline'],spec['cleanupSeconds'],spec['rssBytes'],
+              str(slot/'measurement.child.log'),spec['logBytes'],control=guard,observe_child_exit=True)
+    raise ValueError('PROC kernel session control unexpectedly returned normally')
+
+
+def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority):
+    root=Path(spec['operationRoot']);first=None;additional=[];records=[];subject=None;header=None;normal_attempted=False
+    bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes())
+    proc_bootstrap_evidence(spec,authority,bootstrap)
+    if bootstrap.get('instrumentation')!=PROC_INSTRUMENTATION or authority.get('instrumentation')!=PROC_INSTRUMENTATION:
+        raise ValueError('PROC authenticated explicit instrumentation source boundary unavailable')
+    if spec['request']['nativeGet'] and (authority.get('qualificationCredentialReference')!=PROC_QUALIFICATION_CREDENTIAL or authority.get('nativeCollectorApproved') is not True):
+        raise ValueError('PROC qualification fixed borrowed read binding not separately admitted')
+    admission=json.loads(Path(spec['proofInputs']['admission']).read_bytes())
+    if admission.get('recovery',{}).get('clientQualificationEnabled') is not True:raise ValueError('PROC protected qualification remains disabled')
+    for path in (root/'input.json',root/'command.json'):
+        if path.is_symlink() or not path.is_file():raise ValueError('PROC root-prepared measurement state missing')
+    raw=Path(descriptor).read_bytes();prepared=json.loads((root/'command.json').read_bytes())
+    if ((root/'input.json').read_bytes()!=raw or prepared.get('sendState')!='prepared-no-send'
+            or prepared.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()
+            or authority.get('canonicalBaseIdentity')!=proc_directory_identity(PROC_OPERATION_BASE/str(os.geteuid()))
+            or authority.get('canonicalQualificationLineageIdentity')!=proc_directory_identity(root.parent)
+            or authority.get('canonicalOperationIdentity')!=proc_directory_identity(root)):
+        raise ValueError('PROC measurement original prepared/lineage state drift')
+    proc_private_record(root/'dispatch-input.json',None,spec['totalDeadline'],exclusive=True)
+    state={'schema':RESULT_SCHEMA,'operation':spec['operation'],'originalOperation':PROC_ORIGINAL,
+           'descriptorSha256':hashlib.sha256(raw).hexdigest(),'sendState':'measurement-started','commandAccepted':False,
+           'publicationAuthorized':False,'rootAccepted':False,'qualificationAccepted':False}
+    state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=(root/'command.json').read_bytes())
+    try:
+        for phase in ('controller','session'):
+            records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase))
+        if spec['request']['nativeGet']:
+            token=os.environ.pop('GH_TOKEN',None)
+            header=proc_sensitive_header(root,token,deadline=spec['workDeadline']-10);del token
+            state['semanticHeader']={'path':header['path'],'identity':header['identity'],'bytes':len(header['_expectedBytes']),
+                                    'creator':proc_actor(os.getpid()),'ordinal':spec['qualificationAttempt'],'purpose':PROC_QUALIFICATION_CREDENTIAL}
+            state_raw=proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=state_raw)
+        normal_attempted=True
+        records.append(proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,'normal'))
+        output=root/'measurement.subject.json'
+        if output.is_symlink() or not 0<output.stat().st_size<=MAX_OUTPUT:raise ValueError('PROC complete measured subject result unavailable')
+        subject=json.loads(output.read_bytes())
+        if subject.get('commandAccepted') is not True or subject.get('firstCause') is not None or subject.get('additionalFailures')!=[]:
+            raise ValueError('PROC measured canonical controller failed')
+        trace=proc_trace_evidence(spec,root,authority_path,records[-1]['tracer']['pid'],apparatus_pid=os.getpid())
+        if not trace['clocked'] or trace['rootPid']!=records[-1]['subjectReadiness']['subject']['pid']:
+            raise ValueError('PROC complete measured subject timestamp/root join unavailable')
+        if header is not None:
+            collector=subject.get('nativeCollector') or {};readers=collector.get('apiReaders') or []
+            observed_reads={row['pid'] for row in trace['semanticReads'] if row['path']==header['path'] and row['bytes']>0}
+            if (collector.get('nativeCollectorObserved') is not True or len(readers)!=2
+                    or any(row['receipt'].get('cleanup')!='observed-empty-group' or row['receipt'].get('custody')!='observed-owned-group'
+                           or row['receipt']['leader']['pid'] not in observed_reads for row in readers)):
+                raise ValueError('PROC both API header readers lack complete raw read/retirement evidence')
+            subject_birth=records[-1]['subjectReadiness']['subject'];boot=records[-1]['subjectReadiness']['bootId']
+            if boot!=Path('/proc/sys/kernel/random/boot_id').read_text().strip():raise ValueError('PROC API reader boot join changed')
+            forks={row['pid']:row for row in trace['forkProvenance']}
+            sampled={row['pid']:row['start'] for row in records[-1]['sampledBirths']}
+            processes={row['pid']:row for row in trace['processes']};joins=[]
+            for reader in readers:
+                leader=reader['receipt']['leader'];pid=leader['pid'];fork=forks.get(pid)
+                if (type(leader.get('start')) is not int or leader['start']<subject_birth['start']
+                        or leader.get('ppid')!=subject_birth['pid'] or fork is None or fork['parentPid']!=subject_birth['pid']
+                        or pid not in processes or processes[pid]['terminal']!='+++ exited with 0 +++'
+                        or pid in sampled and sampled[pid]!=leader['start']):
+                    raise ValueError('PROC literal API read requires same-boot owner birth and unique traced fork/lifetime')
+                joins.append({'stage':reader['stage'],'bootId':boot,'pid':pid,'start':leader['start'],'fork':fork,
+                              'traceSha256':processes[pid]['sha256'],'headerIdentity':header['identity'],
+                              'startWitness':'unchanged shared-owner live kernel birth; sampled apparatus corroboration when present'})
+            state['semanticReadBirthJoins']=joins
+            proc_sensitive_unchanged(header);Path(header['path']).unlink()
+            if Path(header['path']).exists():raise ValueError('PROC semantic header absence not established')
+            state['semanticHeaderRetirement']={'disposition':'removed-after-both-api-readers-subject-and-tracer','identity':header['identity']}
+            header=None
+        proc_read_drift(spec);proc_capacity_evidence(spec,authority,bootstrap['capacity'])
+        state.update(subject);state['runtimeEvidence']['controllerStartupTraceComplete']=True
+        state['runtimeEvidence'].pop('controllerTraceGap',None)
+        state['runtimeEvidence']['traceComplete']=trace['complete'];state['completeSubjectTrace']=trace
+        state['subjectResult']={'sha256':hashlib.sha256(output.read_bytes()).hexdigest(),'bytes':output.stat().st_size}
+        state['sendState']='qualification-completed';state['qualificationAccepted']=False
+        state['qualificationBoundary']='Complete subject measurement, root acceptance remains separate.'
+    except BaseException as error:
+        first=error;state['sendState']='qualification-failed-or-unknown'
+        if hasattr(error,'proc_subject_result'):state['failedSubjectResult']=error.proc_subject_result
+        if hasattr(error,'proc_sensitive_creation'):
+            state['semanticHeaderCreationFailure']=error.proc_sensitive_creation
+            if hasattr(error,'proc_sensitive_close_failure'):additional.append(error.proc_sensitive_close_failure)
+    finally:
+        if header is not None:
+            state['semanticHeaderRetirement']={'disposition':'held-unknown-reader-retirement','identity':header['identity']}
+            if not normal_attempted:
+                try:
+                    proc_sensitive_unchanged(header);Path(header['path']).unlink()
+                    state['semanticHeaderRetirement']['disposition']='removed-before-normal-subject'
+                except BaseException as error:additional.append(failure_record(error))
+            elif first is None:first=ValueError('PROC semantic header remains held; no positive qualification')
+        state.update(firstCause=getattr(first,'proc_subject_failure',None) or failure_record(first),additionalFailures=additional,apparatusObservations=records,
+                     instrumentationBoundary=PROC_INSTRUMENTATION,publicationAuthorized=False,rootAccepted=False,qualificationAccepted=False)
+        if first is not None:state['commandAccepted']=False
+        try:
+            proc_private_record(root/'measurement.collector.json',{'descriptorSha256':state['descriptorSha256'],'collectorPid':os.getpid()},spec['totalDeadline'],exclusive=True)
+            proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=state_raw)
+        except BaseException as error:
+            if first is None:first=error
+            else:additional.append(failure_record(error))
+            # Advisory stderr contains only bounded first/secondary causes and the
+            # authenticated report disposition; it cannot replace canonical state.
+            print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),
+                              'reportingFailure':failure_record(error),'reportDisposition':getattr(error,'proc_private_report',None)}),file=sys.stderr)
+    return 0 if first is None else 1
+
+
+def execute_proc_command(descriptor, authority_path, authority_sha, *, measurement=None):
     """Existing canonical input/result slots, one shared owner, no send replay."""
-    first=None; additional=[]; receipt=None; spec=None; result=None; claimed=False; sensitive=None; retirement={'receipt':None}
+    first=None; additional=[]; receipt=None; spec=None; result=None; claimed=False; sensitive=None; qualification_header=None; retirement={'receipt':None}
     def read_regular(path,cap):
         p=Path(path)
         if any(x.is_symlink() for x in (p,*p.parents)) or not p.is_file() or not 0<p.stat().st_size<=cap:
             raise ValueError('PROC selected descriptor/authority unsafe')
         return p.read_bytes()
     def persist(path,value,exclusive=False):
+        if measurement is not None and path.name=='command.json':path=path.with_name('measurement.subject.json')
         if spec is not None and time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC original state/reporting deadline')
         raw=json.dumps(value,sort_keys=True).encode()+b'\n'
         cap=256*1024 if path.name=='input.json' else MAX_OUTPUT
@@ -1560,6 +2281,18 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         owner_path=Path(__file__).with_name('shared_process_owner.py')
         if not any(pin['path']==str(owner_path) and pin['sha256']==OWNER_SHA for pin in spec['pins']):
             raise ValueError('PROC shared owner closure absent')
+        if spec['role']=='qualification' and measurement is None:
+            if os.readlink('/proc/self/fd/0')!='/dev/null':raise ValueError('PROC qualification stdin must be root-selected dev-null')
+            return proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,authority)
+        owner_deadline=spec['workDeadline']
+        if measurement is not None:
+            actual=proc_actor(os.getpid());ready=json.loads((root/'measurement.ready.json').read_bytes())
+            if (spec['role']!='qualification' or measurement.get('phase')!='normal' or actual is None
+                    or actual['pid']!=ready['subject']['pid'] or actual['start']!=ready['subject']['start']
+                    or actual['tracerPid']!=measurement['tracer']['pid'] or actual['tracerPid']==0
+                    or ready['subjectWorkDeadline']!=spec['workDeadline']-10):
+                raise ValueError('PROC measured role cannot assert root authority or launch an effect')
+            owner_deadline=measurement['subjectWorkDeadline']
         validators=__import__('runpy').run_path(str(Path(__file__).with_name('test-callable-cli-installed-harness.py')))
         def document(key):return json.loads(read_regular(spec['proofInputs'][key],2*1024**2))
         admission=document('admission');selected=validators['pair_recovery_selection'](admission)
@@ -1611,13 +2344,16 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                 prepared=json.loads(read_regular(root/'command.json',MAX_OUTPUT))
             except (OSError,ValueError) as error:
                 raise ValueError('PROC canonical input/result missing or unsafe; reconciliation required') from error
+            expected_state='measurement-started' if measurement is not None else 'prepared-no-send'
             if (prepared_raw!=raw or prepared.get('schema')!=RESULT_SCHEMA
-                    or prepared.get('operation')!=spec['operation'] or prepared.get('sendState')!='prepared-no-send'
+                    or prepared.get('operation')!=spec['operation'] or prepared.get('sendState')!=expected_state
                     or prepared.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()):
                 raise ValueError('PROC canonical prepared state differs/consumed; reconciliation required')
             # Existing canonical dispatch input is the exclusive claim. Failure here
             # cannot overwrite the first invocation's original result.
-            persist(root/'dispatch-input.json',spec['request']['body'],exclusive=True)
+            if measurement is not None:
+                if not (root/'dispatch-input.json').is_file() or (root/'measurement.subject.json').exists():raise ValueError('PROC measured original claim/result missing or occupied')
+            else:persist(root/'dispatch-input.json',spec['request']['body'],exclusive=True)
             claimed=True;slot=root
         for name in ('tmp','home'):
             if spec['role']=='watch':(slot/name).mkdir(mode=0o700)
@@ -1642,7 +2378,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         if spec['role']!='qualification' and ('GH_TOKEN' not in os.environ or not os.environ['GH_TOKEN']):
             raise ValueError('PROC approved credential binding unavailable')
         def check(event,child,leader,known):
-            if event!='after-cleanup' and time.monotonic()>=spec['workDeadline']:raise TimeoutError('PROC original deadline')
+            if event!='after-cleanup' and time.monotonic()>=owner_deadline:raise TimeoutError('PROC original subject work deadline')
             if proc_directory_identity(canonical_base)!=base_identity or proc_directory_identity(parent)!=parent_identity or proc_directory_identity(root)!=operation_identity:
                 raise ValueError('PROC canonical state directory identity drift; reconciliation required')
             proc_read_drift(spec)
@@ -1655,6 +2391,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             for pin in generated_inputs:proc_regular_pin(pin)
             imports_unchanged()
             if sensitive is not None:proc_sensitive_unchanged(sensitive)
+            if qualification_header is not None:proc_sensitive_unchanged(qualification_header)
             observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
             if observed['fixtureSymlinks'] or observed['objects']>25000:raise ValueError('PROC operation scope changed')
             if spec['role']=='qualification':
@@ -1681,7 +2418,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         owner=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(owner)
         # Benign actual-client startup is checked before send intent, under the same
         # original limits; virtual address space is distinct from sampled RSS.
-        startup=owner.run([spec['argv'][0],'--version'],str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],
+        startup=owner.run([spec['argv'][0],'--version'],str(slot),env,owner_deadline,spec['cleanupSeconds'],
                           spec['rssBytes'],str(slot/'client-preflight.log'),spec['logBytes'],control=check,observe_child_exit=True)
         version=read_regular(slot/'client-preflight.log',4096).decode().strip()
         if spec['role']!='qualification' and version!=qualification['runtimeEvidence'].get('clientVersion'):
@@ -1689,7 +2426,12 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         result['clientPreflightReceipt']=startup
         if spec['role']=='qualification':
             result['sendState']='qualification-started';persist(root/'command.json',result)
-            receipt,observed=proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,authority_sha)
+            receipt,observed=proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,authority_sha,owner_deadline)
+            if spec['request']['nativeGet']:
+                qualification_header=proc_load_qualification_header(spec,authority,measurement)
+                result['nativeCollector']={}
+                proc_native_qualification(owner,spec,slot,env,check,qualification_header,owner_deadline,result['nativeCollector'])
+                observed['nativeGetObserved']=True;observed['nativeCollectorObserved']=True
             result['qualificationObservations']=observed
             result['capacity']=qualification['capacity']
             result['runtimeEvidence']=proc_observed_runtime(spec,observed,version)
@@ -2184,6 +2926,10 @@ def execute_command(seconds, log_path, endpoint, argv):
 
 
 if __name__ == '__main__' and len(sys.argv) > 1 and sys.argv[1] == 'command':
+    if len(sys.argv)==8 and sys.argv[2]=='--proc-measured-controller':
+        sys.exit(proc_measured_entry(sys.argv[3],sys.argv[4],sys.argv[5],int(sys.argv[6]),sys.argv[7]))
+    if len(sys.argv)==6 and sys.argv[2]=='--proc-kernel-child':
+        sys.exit(proc_kernel_child(sys.argv[3],sys.argv[4],sys.argv[5]))
     if len(sys.argv)==7 and sys.argv[2]=='--proc-qualification-worker':
         sys.exit(proc_qualification_worker(sys.argv[3],sys.argv[4],sys.argv[5],sys.argv[6]))
     if len(sys.argv)==6 and sys.argv[2]=='--proc':

@@ -98,14 +98,14 @@ class DiagnosticControls(unittest.TestCase):
         # Canonical-shaped inert evidence exercises joins, never supplies genuine gh qualification.
         capacity={'directory':'/sys/fs/cgroup','independentPrivateScope':True,'heldStoresUsed':False,'activeWorkers':None,
                   'identity':module.proc_read_identity('/sys/fs/cgroup'),'membership':Path('/proc/self/cgroup').read_text()}
-        qualification={'capacity':capacity,'schema':module.RESULT_SCHEMA,'commandAccepted':True,'qualificationAccepted':True,'firstCause':None,'additionalFailures':[],'reportingOutcome':'written',
+        qualification={'rootAccepted':True,'publicationAuthorized':False,'capacity':capacity,'schema':module.RESULT_SCHEMA,'commandAccepted':True,'qualificationAccepted':True,'firstCause':None,'additionalFailures':[],'reportingOutcome':'written',
                        'ownerReceipt':{'cleanup':'observed-empty-group','custody':'observed-owned-group','exit':0,'firstCause':None,
                                        'leader':{'start':1},'residual':[],'escapedResidual':[],'escapedDescendants':[]},
                        'runtimeEvidence':{'currentBootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                                           'effectiveUid':os.geteuid(),'actualInterpreter':os.path.realpath(os.sys.executable),
                                           'interpreterFlags':{'isolated':1,'noSite':1,'noBytecode':True,'optimize':0},
                                           'canonicalBaseIdentity':module.proc_directory_identity(base),
-                                          'nativeGetObserved':True,'qualifiedSourcePins':[pin for pin in pins if pin['path'].endswith('/retain-choreo-c2-diagnostics.py')],
+                                          'nativeGetObserved':True,'nativeCollectorObserved':True,'qualifiedSourcePins':[pin for pin in pins if pin['path'].endswith('/retain-choreo-c2-diagnostics.py')],
                                           'supportPins':[pin for pin in pins if pin['path'] not in native.values()],
                                           'bounds':{k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')},
                                           'clientPath':str(client),'clientVersion':'curl inert-source-control','postRetryExcluded':True,
@@ -530,6 +530,64 @@ class DiagnosticControls(unittest.TestCase):
             child.write_text(original);child.unlink()
             with self.assertRaisesRegex(ValueError,'birth join'):module.proc_trace_evidence(spec,slot,approved)
 
+    def test_proc_trace_closed_grammar_cwd_raw_reads_and_exec_fd_lifetime(self):
+        # Exact parser controls only, never native trace/qualification evidence.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,approved=self.proc_fixture(root)
+            bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}))
+            spec['proofInputs']['bootstrapEvidence']=str(bootstrap);slot=Path(spec['operationRoot'])
+            python=os.path.realpath(os.sys.executable);client=spec['transport']['client'];header=str(slot/'authorization.header')
+            parent=slot/'qualification.trace.10';child=slot/'qualification.trace.11'
+            begin='execve('+json.dumps(python)+', ["python", "-I"], 0x0 /* 7 vars */) = 0\n'
+            finish='+++ exited with 0 +++\n'
+            for syscall in ('getxattr("/foreign/secret", "user.value", NULL, 0) = 4','truncate("/foreign/state", 0) = 0',
+                            'unmodelled_file_call("/foreign", 0) = 0',
+                            'openat(AT_FDCWD, "/foreign", O_RDONLY <unfinished ...>\n<... execve resumed>) = 3'):
+                parent.write_text(begin+syscall+'\n'+finish)
+                with self.assertRaises(ValueError):module.proc_trace_evidence(spec,slot,approved)
+            parent.write_text(begin+'openat(AT_FDCWD<'+str(slot)+'>, "input.json", O_RDONLY) = 3<'+str(slot/'input.json')+'>\n'+finish)
+            self.assertTrue(module.proc_trace_evidence(spec,slot,approved)['complete'])
+            for flag in ('O_CLOEXEC','0'):
+                parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY|'+flag+') = 3<'+header+'>\nclone(child_stack=NULL, flags=SIGCHLD) = 11\n'+finish)
+                child.write_text('execve('+json.dumps(client)+', ["curl", "-q"], 0x0 /* 7 vars */) = 0\nread(0x3, 0x1000, 0x40) = 0x20\n'+finish)
+                if flag=='O_CLOEXEC':
+                    with self.assertRaisesRegex(ValueError,'descriptor lifetime'):module.proc_trace_evidence(spec,slot,approved)
+                else:self.assertEqual(11,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['pid'])
+            child.unlink()
+            parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\nfcntl(3<'+header+'>, F_DUPFD, 10) = 10\nread(0xa, 0x1000, 0x40) = 0x20\n'+finish)
+            self.assertEqual(10,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['fd'])
+            for read in ('read(0x3, 0x1000, 0) = 0x20','read(0x3, "SENSITIVE-SENTINEL", 0x40) = 0x20'):
+                parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\n'+read+'\n'+finish)
+                with self.assertRaises(ValueError) as raised:module.proc_trace_evidence(spec,slot,approved)
+                self.assertNotIn('SENSITIVE-SENTINEL',str(raised.exception))
+
+    def test_proc_private_reporting_refuses_cap_deadline_collision_and_retains_partial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);path=root/'record.json'
+            with self.assertRaises(ValueError):module.proc_private_record(path,{'large':'x'*module.MAX_OUTPUT},time.monotonic()+1,exclusive=True)
+            self.assertFalse(path.exists())
+            with self.assertRaises(TimeoutError):module.proc_private_record(path,{},time.monotonic()-1,exclusive=True)
+            path.write_text('original')
+            with self.assertRaises(FileExistsError):module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
+            self.assertEqual('original',path.read_text());path.unlink()
+            with patch.object(module.os,'write',return_value=0):
+                with self.assertRaises(OSError) as raised:module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
+            self.assertEqual('held-partial-or-completed-report',raised.exception.proc_private_report['disposition'])
+            self.assertTrue(path.exists())
+
+    def test_proc_qualification_native_legs_are_consumed_without_repeat_or_watch_widening(self):
+        state={'profile':'qualification'}
+        module.proc_charge_read(state,'api','repo-public')
+        with self.assertRaises(ValueError):module.proc_charge_read(state,'api','repo-public')
+        with self.assertRaises(ValueError):module.proc_charge_read(state,'api','arbitrary')
+        for kind,leg in (('api','terminal-job'),('storage','terminal-job'),('api','terminal-archive'),('storage','terminal-archive')):
+            module.proc_charge_read(state,kind,leg)
+        self.assertEqual({'api':3,'storage':2,'total':5},state['readCounts'])
+        self.assertEqual(5,len(state['consumedLegs']))
+        watch={}
+        for kind in ('api',)*5+('storage',)*2:module.proc_charge_read(watch,kind)
+        self.assertEqual(7,watch['readCounts']['total'])
+
     def test_proc_qualification_bootstrap_cannot_borrow_dispatch_or_native_get_authority(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
@@ -543,7 +601,7 @@ class DiagnosticControls(unittest.TestCase):
             spec['environment'].update(HOME=str(slot/'home'),TMPDIR=str(slot/'tmp'),OPENSSL_CONF=str(config))
             spec['proofInputs']['bootstrapEvidence']=spec['proofInputs'].pop('runtimeQualification')
             spec['request']={'method':'GET','endpoint':'repos/'+module.PROC_REPOSITORY,'apiVersion':'2026-03-10',
-                             'body':None,'requestLimit':1,'nativeGet':False,'cases':list(module.PROC_QUALIFICATION_CASES)}
+                             'body':None,'requestLimit':5,'nativeGet':False,'credentialReference':None,'cases':list(module.PROC_QUALIFICATION_CASES)}
             self.assertEqual('qualification',module.proc_command_preflight(spec,now=time.monotonic())['role'])
             self.assertNotIn('runtimeQualification',spec['proofInputs'])
             descriptor.write_text(json.dumps(spec))
