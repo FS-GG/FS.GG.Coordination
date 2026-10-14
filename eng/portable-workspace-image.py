@@ -162,6 +162,51 @@ def podman_prefix(args: argparse.Namespace) -> list[str]:
     ]
 
 
+def require_storage_paths(args: argparse.Namespace, source: Path, state: Path) -> None:
+    """Check declared paths without allocating storage or invoking the engine."""
+    paths = {}
+    for name, value in (("graphroot", args.root), ("runroot", args.runroot), ("state", args.state_dir)):
+        if ".." in Path(value).parts:
+            raise RuntimeError(f"portable storage {name} contains parent traversal")
+        path = Path(os.path.abspath(value))
+        if any(part.is_symlink() for part in (path, *path.parents)):
+            raise RuntimeError(f"portable storage {name} has a symlink component")
+        paths[name] = path
+
+    def overlaps(left: Path, right: Path) -> bool:
+        return left == right or left in right.parents or right in left.parents
+
+    source = source.resolve()
+    for name, path in paths.items():
+        if overlaps(path, source):
+            raise RuntimeError(f"portable storage {name} overlaps the source checkout")
+    for left, right in (("graphroot", "runroot"), ("graphroot", "state"), ("runroot", "state")):
+        if overlaps(paths[left], paths[right]):
+            raise RuntimeError(f"portable storage {left} overlaps {right}")
+    home = Path.home()
+    global_stores = [home / ".local/share/containers", Path("/var/lib/containers/storage"),
+                     Path(f"/run/user/{os.getuid()}/containers"), Path("/run/containers/storage")]
+    if os.environ.get("XDG_DATA_HOME"):
+        global_stores.append(Path(os.environ["XDG_DATA_HOME"]) / "containers")
+    for name, path in paths.items():
+        if any(overlaps(path, store.resolve()) for store in global_stores):
+            raise RuntimeError(f"portable storage {name} overlaps a global container store")
+    if paths["state"] != state:
+        raise RuntimeError("portable storage state path does not match the declared path")
+
+
+def require_effective_storage(info: dict, args: argparse.Namespace) -> None:
+    """A CLI storage request is not evidence that the engine obtained it."""
+    store = info.get("store")
+    if not isinstance(store, dict):
+        raise RuntimeError("Podman effective storage observation is missing")
+    expected = {"graphRoot": str(Path(args.root).resolve()),
+                "runRoot": str(Path(args.runroot).resolve()), "graphDriverName": "vfs"}
+    for field, value in expected.items():
+        if store.get(field) != value:
+            raise RuntimeError(f"Podman effective storage {field} does not match the declared profile")
+
+
 def inspect_image(prefix: list[str], image: str) -> dict:
     values = json.loads(run(prefix + ["image", "inspect", image]).stdout)
     if not isinstance(values, list) or len(values) != 1:
@@ -203,6 +248,7 @@ def require_containerfile_contract(recipe: str) -> None:
 
 
 def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
+    require_storage_paths(args, source, state)
     revision, tree, fixture_sha256 = require_exact_source(source, args.expected_source_revision)
     image_dir = source / "tests" / "portable-workspace" / "image"
     require_python_fixture_oracle(image_dir / "fixture" / "python")
@@ -224,6 +270,7 @@ def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
 
     prefix = podman_prefix(args)
     info = json.loads(run(prefix + ["info", "--format=json"]).stdout)
+    require_effective_storage(info, args)
     require_podman_options(prefix, "build", REQUIRED_BUILD_OPTIONS)
     require_podman_options(prefix, "create", REQUIRED_CREATE_OPTIONS)
     podman_version = run(prefix + ["version", "--format", "{{.Client.Version}}"]).stdout.strip()
@@ -250,6 +297,7 @@ def preflight(args: argparse.Namespace, source: Path, state: Path) -> Path:
         "containerUser": "32768:32768",
         "forbiddenIsolationOverrides": "absent",
         "podmanVersion": podman_version,
+        "storage": {field: info["store"][field] for field in ("graphRoot", "runRoot", "graphDriverName")},
         "deterministicBuildTimestamp": "--timestamp=0",
     }
     path = state / "preflight.json"
@@ -581,6 +629,7 @@ def main() -> int:
     args = parser.parse_args()
     source = Path(args.source).resolve()
     state = Path(args.state_dir).resolve()
+    require_storage_paths(args, source, state)
     state.mkdir(parents=True, exist_ok=True, mode=0o700)
     os.chmod(state, 0o700)
     preflight_path = preflight(args, source, state)

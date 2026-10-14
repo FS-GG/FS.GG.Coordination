@@ -11,6 +11,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import shutil
+import unittest
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -85,10 +86,16 @@ def archive(path: Path, *, cache_layer: bool = False, corrupt_layer: bool = Fals
 
 
 def main() -> None:
+    storage_spec = importlib.util.spec_from_file_location("storage_preflight_controls", Path(__file__).with_name("test_storage_preflight.py"))
+    assert storage_spec and storage_spec.loader
+    storage = importlib.util.module_from_spec(storage_spec)
+    storage_spec.loader.exec_module(storage)
+    controls = unittest.defaultTestLoader.loadTestsFromTestCase(storage.StoragePreflight)
+    assert unittest.TextTestRunner().run(controls).wasSuccessful()
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
     containerfile = (ROOT / "tests/portable-workspace/image/Containerfile").read_text()
     inputs = json.loads((ROOT / "tests/portable-workspace/image/inputs.json").read_text())
-    assert hashlib.sha256(source.encode()).hexdigest() == "aa1d2ae85c35e89216bae3159a57e6aa13cf9464243142eae5abbea083977c58"
+    assert hashlib.sha256(source.encode()).hexdigest() == "7be970f4153bd3ce65b93b4ba4e7549a2cca08c2b4e3add99daf60be852a7c9a"
     assert_fixed_build_inputs(containerfile, source, inputs)
     IMAGE.require_containerfile_contract(containerfile)
     for changed, expected in (

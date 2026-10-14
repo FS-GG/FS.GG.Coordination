@@ -11,6 +11,14 @@ the non-root user mapping and absence of privileged or host PID/UTS/user namespa
 preflight permits the pinned base pull, image build and operation run. A known-bad pin, dirty or wrong revision,
 unsupported rootless mapping or isolation override fails before that costly work.
 
+Declared graphroot, runroot and evidence state must be disjoint from each other, the source checkout
+and global container stores. Parent traversal and symlink components are refused before state creation
+or an engine command. Preflight also requires Podman's effective graphroot/runroot and VFS driver to
+match the explicit request. These checks do not allocate a fresh store, prove ownership of another run,
+prevent concurrent path substitution, establish disk backing or grant deletion authority. Provisioned
+host allocation and independent cleanup remain separate prerequisites. Pure controls run with
+`python3 tests/portable-workspace/image/test_storage_preflight.py` without invoking Podman.
+
 No custom pipeline model is used. The job has no fan-out, retry, shared mutable cache, publication or conditional
 admission state that would benefit from a state-machine model. Static validation directly covers the relevant
 failure boundary and is expected to be reused on every image change. The implementation and validation effort is
