@@ -619,7 +619,7 @@ def qualify(args: argparse.Namespace, source: Path, state: Path, image_reference
 
 # Common-Arch is an inert input seam. It cannot admit native execution.
 COMMON_PINS = {
-    'Containerfile': '1254a5a127a47653e82c5b4aa2aff38a56d83d0acb87af2a1c23817a3b2f1c74',
+    'Containerfile': 'cde44e5b391adf6bf6c9ae3d98d64869f7e1d352143c25b00f5fd5bb23a15576',
     'pacman.conf': '4fce63852fc318bff9146dea8487fd5c58837c4e35277a4903c4788be2fced8c',
     'inputs.json': 'f1b9d132f10c8bd0bd8643781a13321c1498b0f62f48b26f0075951eb09d7caf',
 }
@@ -687,10 +687,16 @@ def common_read(path: Path, limit: int, expected=None, destination=None):
     """Stream a no-follow one-link file, detecting substitution and byte drift."""
     import stat
     common_raw_path(path)
-    before = path.lstat()
+    try:
+        before = path.lstat()
+    except OSError as error:
+        raise RuntimeError('common-arch: missing or unreadable input') from error
     common_require(stat.S_ISREG(before.st_mode) and before.st_nlink == 1 and before.st_size <= limit,
                    'nonregular, hardlinked or overlarge input')
-    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    try:
+        descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW)
+    except OSError as error:
+        raise RuntimeError('common-arch: input open failed') from error
     digest = hashlib.sha256()
     payload = bytearray() if destination is None and limit <= MAX_LOCK_BYTES else None
     total = 0
@@ -851,7 +857,7 @@ def validate_common_inputs(bundle: Path, lock: dict, source_spec: dict, image_id
         if role == 'inventory':
             common_require(path == 'acquired/package-inventory.expected', 'inventory path mismatch')
         else:
-            common_require(re.fullmatch(r'acquired/repositories/(core|extra)/os/x86_64/[A-Za-z0-9_+.-]+', path)
+            common_require(re.fullmatch(r'acquired/repositories/(core|extra)/os/x86_64/[A-Za-z0-9_+.:-]+', path)
                            is not None, 'repository path mismatch')
         suffix = {'database': '.db', 'database-signature': '.db.sig', 'package': '.pkg.tar.zst',
                   'package-signature': '.pkg.tar.zst.sig'}.get(role)

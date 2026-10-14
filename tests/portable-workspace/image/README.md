@@ -214,3 +214,15 @@ Python acceptance, with synthetic receipt identity clearly distinguished from re
 image qualification. Pure source assertions do not replace F# compilation or actual
 F# caller controls. Common native preflight/qualification remain disabled in the
 image helper; these reader guards do not activate them.
+
+
+Authentic Arch epoch versions can contain a literal colon in package archive and
+signature basenames (for example `conmon-1:2.2.1-1-x86_64.pkg.tar.zst`). The restricted
+repository basename alphabet is `[A-Za-z0-9_+.:-]+`, matching the reviewed recipe
+checksum guard; traversal, separators, controls and unsupported filename characters
+remain refused. Version strings stay opaque. Package/database bytes and filenames
+are preserved exactly; no package rename or custom version resolver is introduced.
+The reviewed common Containerfile pin is
+`cde44e5b391adf6bf6c9ae3d98d64869f7e1d352143c25b00f5fd5bb23a15576`.
+This source correction does not enable common native execution or establish acquired
+lock/transaction authenticity. Original failed checks remain in owner evidence.

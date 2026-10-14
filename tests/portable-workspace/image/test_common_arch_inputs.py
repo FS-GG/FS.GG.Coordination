@@ -189,6 +189,38 @@ class CommonArchInputs(unittest.TestCase):
         (self.bundle/'proof/synthetic.txt').write_bytes(b'changed proof with stale descriptor')
         with self.assertRaisesRegex(RuntimeError,'input bytes differ'):self.validate()
 
+    def test_real_checker_preserves_opaque_epoch_filename(self):
+        # Synthetic payload only; mirrors authentic pacman epoch spelling without
+        # replacing authentic package names or inventing resolver/trust acceptance.
+        a=self.lock['acquiredInputs'];package=a['packages'][0]
+        old=package['path'];new=old.replace('python-3-1-any','python-1:3-1-any')
+        (self.bundle/old).rename(self.bundle/new)
+        (self.bundle/(old+'.sig')).rename(self.bundle/(new+'.sig'))
+        package.update(path=new,version='1:3-1');package['signature']['carrierPath']=new+'.sig'
+        for descriptor in a['files']:
+            if descriptor['path'] in (old,old+'.sig'):
+                descriptor['path']=descriptor['path'].replace(old,new)
+        inventory=b'donor 1-1\npython 1:3-1\n'
+        final=a['transaction']['finalInventory'];(self.bundle/final['path']).write_bytes(inventory)
+        final.update(bytes=len(inventory),sha256=digest(inventory))
+        for descriptor in a['files']:
+            if descriptor['role']=='inventory':descriptor.update(bytes=len(inventory),sha256=digest(inventory))
+        a['files'].sort(key=lambda f:f['path']);self.refresh_checksums()
+        self.assertIn(new,self.validate());self.assertIn(new+'.sig',self.validate())
+        self.assertIn(new.removeprefix('acquired/').encode(),(self.bundle/'acquired/SHA256SUMS').read_bytes())
+
+    def test_epoch_basename_does_not_relax_path_guards(self):
+        original=copy.deepcopy(self.lock)
+        for basename in ('python-1:3/../../escape.pkg.tar.zst','python-1:3\t-1.pkg.tar.zst',
+                         'python-1:3\n-1.pkg.tar.zst','python-1:3\\-1.pkg.tar.zst',
+                         'python-1:3@-1.pkg.tar.zst','python-1:3-1.pkg.tar.zst/extra'):
+            self.lock=copy.deepcopy(original)
+            package=next(f for f in self.lock['acquiredInputs']['files'] if f['role']=='package')
+            package['path']='acquired/repositories/core/os/x86_64/'+basename
+            with self.subTest(basename=basename):
+                with self.assertRaises(RuntimeError):self.validate()
+        self.lock=original
+
     def test_duplicate_json_key(self):
         with self.assertRaisesRegex(RuntimeError,'duplicate JSON'):
             IMAGE.common_json(b'{"a":1,"a":2}')
