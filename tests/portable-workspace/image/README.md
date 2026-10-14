@@ -32,14 +32,15 @@ container after every attempt; the workflow repeats scoped cleanup even on failu
 remains separate and requires its joined source and durable journal enforcement.
 
 
-## Common-Arch source input checking (native execution disabled)
+## Common-Arch source input checking
 
 `eng/portable-workspace-image.py --profile common-arch check-inputs` extends this
 existing helper with an inert input checker and fresh private staging. The default
 profile is `portable-python`; its existing native invocations and output shape remain
-unchanged. Common `preflight` and `qualify` refuse immediately after parsing, before
-filesystem access or effects. Python rejects common-only flags and `check-inputs`.
-Activation requires separate consumer guards and native qualification.
+unchanged. Reviewed common `preflight` and `qualify` source dispatch requires all
+exact input identities plus a closed `--engine-allocation`; missing prerequisites
+refuse before filesystem access or effects. Python rejects common-only flags and
+`check-inputs`. Operational launch requires separate admission and native qualification.
 
 Supply `--source`, `--expected-source-revision` for the exact clean executing
 Coordination checkout; `--image-source`, `--expected-image-source-revision` for the
@@ -212,8 +213,8 @@ executable sentinels under a separately admitted CLR/Execution build closure. Ex
 installed/release fixtures test actual entrypoints and preserve legacy and explicit
 Python acceptance, with synthetic receipt identity clearly distinguished from real
 image qualification. Pure source assertions do not replace F# compilation or actual
-F# caller controls. Common native preflight/qualification remain disabled in the
-image helper; these reader guards do not activate them.
+F# caller controls. These reader guards remain unchanged when reviewed common
+image-helper dispatch is enabled; they do not accept common consumer images.
 
 
 Authentic Arch epoch versions can contain a literal colon in package archive and
@@ -224,5 +225,71 @@ remain refused. Version strings stay opaque. Package/database bytes and filename
 are preserved exactly; no package rename or custom version resolver is introduced.
 The reviewed common Containerfile pin is
 `cde44e5b391adf6bf6c9ae3d98d64869f7e1d352143c25b00f5fd5bb23a15576`.
-This source correction does not enable common native execution or establish acquired
+The filename correction alone does not establish native execution or acquired
 lock/transaction authenticity. Original failed checks remain in owner evidence.
+
+
+## Common native profile
+
+The maintained `preflight` and `qualify` modes contain reviewed common-Arch source
+flow with `COMMON_NATIVE_DISPATCH_ENABLED = True`. Source dispatch acceptance does
+not admit a native operation. Launch still requires an independently admitted
+operation with actual capacity, input authenticity, custody and teardown.
+The three Python consumers retain their qualified guards and refuse common images.
+
+Common native preparation requires `--engine-allocation` and an explicit closed
+Podman prefix. Build and save commands append literal command tokens to the whole
+prefix. No fixed token slicing, caller command override, host-network fallback,
+network acquisition or guessed Buildah cleanup is used. The finite owned configuration
+uses ten configured default capabilities, excluding NET_BIND_SERVICE, empty crun
+runtime flags and environment arrays, no proxy or host environment injection, VFS
+storage, empty registry search/authentication/connections, and empty hooks/mounts.
+Unknown configuration keys and environment variables refuse. The build requests
+rootless isolation, network none, no-new-privileges and only NET_BIND_SERVICE removal;
+Buildah's drop-all handling would defeat capability additions and is not used here.
+Actual runtime-effective properties require native evidence.
+
+Preflight binds the literal original donor reference363129… to config5a30…, its actual
+RepoDigests/platform, reviewed Podman6.1.3/Buildah1.45.1 and effective storage. An OCI
+annotation or recompressed donor export does not supply that local reference binding.
+Clean source revisions, context bytes and configuration hashes are rechecked before
+build, cases and export. These checks complement single-owner custody; they do not
+prevent concurrent filesystem substitution. Build failure retains bounded diagnostics
+and external-container observation for the allocation owner's teardown. Case cleanup
+requires the actual CID, run label and image identity; reporting failures cannot replace
+the original failure. Unknown create effects remain unconfirmed and are not removed by
+proposed name.
+
+The finite cases compare the complete pacman inventory to acquired and retained bytes,
+check the nonroot user/home/workdir and absence of engine/private-key state, perform
+offline Python file/hash work and run passive packaged Git/Podman version commands.
+They do not establish nested-engine, CLR, product or consumer readiness. Existing
+receipt families distinguish built manifest digest, exported manifest digest and config
+identity. Fresh reload and publication remain separate qualifications.
+
+The common OCI scanner validates compressed descriptors and uncompressed diffIDs,
+then applies layer whiteouts and opaque directories before checking the effective
+filesystem. It never extracts to the host. Header, metadata, expanded bytes and effective
+population are bounded; hardlink content provenance is bound in tar order before later
+same-layer or cross-layer replacements. Forward hardlinks refuse.
+The donor's zero-byte legacy secring and empty private-key directories may occur in
+ancestors but must be absent from the final filesystem. Nonzero ancestor private-key
+payloads and aliases are refused even if later whiteouted. This scoped check makes no
+broader secret-discovery claim. Synthetic transport intercepts every native call;
+`test_common_arch_inputs.py` supplies source controls, not native evidence.
+
+The common inputs pin is `53c30494e1098af88d7efb78b3b0b80f7bee7894df6b6a902a82e40f3b8da8ce`,
+aligning the descriptive framework preparation with Coordination's pinned SDK400.
+Prior source/lock proof remains retained; current source identity needs a genuine rebind.
+
+Common calls explicitly select the bounded branch of the existing subprocess `run`
+function: at most 8MiB combined stdout/stderr is captured while reading, with a finite
+per-command deadline. Overflow and timeout retain their original cause and bounded
+diagnostic tails. Only the owned direct child is terminated/reaped (one second for
+TERM, then one second for KILL/wait); descendant and Buildah/container effects remain
+unconfirmed until the allocation owner observes and tears down the exact population.
+No process-group cleanup or allocation retirement is inferred. Portable-Python keeps
+its existing `subprocess.run(capture_output=True)` behavior. Actual native operation
+still needs separately admitted whole-operation time, memory, disk and output limits.
+Owned ordinary-process controls test exact-bound success, combined-output overflow,
+TERM-ignoring timeout, reaping and reporting failure; they launch no native engine.
