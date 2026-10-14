@@ -565,7 +565,88 @@ def consumer_sdk_readback_controls():
     print('PAIR_R8_SDK_READBACK_INERT_CONTROLS passed cases='+str(len(modes))+' sdk-input-separate-from-pair')
 
 
+def complete_policy_source_controls():
+    """Actual publisher path, original immutable admission and policy, inert transports only."""
+    workflow=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
+    job=workflow.split('\n  execution_pair:\n',1)[1]
+    binding=job.split('      - name: Require existing App bindings',1)[1].split('      - name:',1)[0]
+    mint=job.split('      - name: Mint repository-scoped token',1)[1].split('      - name:',1)[0]
+    observe=job.split('      - name: Observe four feed cells and component protection before first push\n',1)[1].split('      - name:',1)[0]
+    assert 'RULESET_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}' in binding
+    assert 'RULESET_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}' in binding
+    for required in ('id: pair-ruleset-reader','actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1',
+                     'app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}','private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}',
+                     'owner: FS-GG','repositories: FS.GG.Coordination','permission-administration: write'):
+        assert required in mint,required
+    assert mint.count('permission-')==1 and 'skip-token-revoke:' not in mint
+    assert workflow.count('${{ steps.pair-ruleset-reader.outputs.token }}')==1
+    assert workflow.count('GH_TOKEN="$PAIR_RULESET_TOKEN"')==1
+    assert 'GH_TOKEN: ${{ github.token }}' in observe
+    assert job.index('Verify pair provenance')<job.index('Require existing App bindings')<job.index('Mint repository-scoped token')<job.index('Observe four feed cells')<job.index('Obtain selected Trusted Publishing')<job.index('Push both retained')
+    def shell(body):
+        return '\n'.join(line[10:] for line in body.split('        run: |\n',1)[1].splitlines())
+    for app_id,key,accepted in (('fixture-id','fixture-key',True),('','fixture-key',False),('fixture-id','',False),('','',False)):
+        result=subprocess.run(['bash','-c',shell(binding)],env={'RULESET_APP_ID':app_id,'RULESET_APP_PRIVATE_KEY':key},capture_output=True,timeout=5)
+        assert (result.returncode==0)==accepted
+        if not accepted:assert b'App bindings are missing' in result.stdout
+    original=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_text())
+    expected_hash='5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da'
+    assert original['operation']=='publish-execution-pair-030-b11fb121-four38484632631'
+    assert original['tagProtection']=={'rulesetId':21633398,'policySha256':expected_hash}
+    desired=json.loads((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_text())
+    keys=('target','enforcement','conditions','bypass_actors','rules')
+    policy={key:desired[key] for key in keys}
+    assert hashlib.sha256(json.dumps(policy,sort_keys=True,separators=(',',':')).encode()).hexdigest()==expected_hash
+    # Record controls use authentic retained source policy, never claim a fresh native GET.
+    actual=heredoc('PY_PAIR_PROTECTION')
+    for mode in ('full','missing','nonempty','null'):
+        with tempfile.TemporaryDirectory(prefix='pair-original-policy-test-') as tmp:
+            root=Path(tmp);readback=root/'readback';readback.mkdir()
+            live=copy.deepcopy(policy);live['id']=21633398;live['current_user_can_bypass']='never'
+            if mode=='missing':live.pop('bypass_actors')
+            if mode=='nonempty':live['bypass_actors']=[{'actor_id':1,'actor_type':'Integration','bypass_mode':'always'}]
+            if mode=='null':live['bypass_actors']=None
+            write(root/'eng/execution-pair-release-admission.json',original)
+            write(root/'eng/repository-settings/release-tag-ruleset.json',desired)
+            write(readback/'tag-protection.json',live)
+            with contextlib.chdir(root),patch.dict(os.environ,{'READBACK_OUTPUT':str(readback)},clear=True):
+                try:exec(actual,{});refusal=None
+                except SystemExit as error:refusal=str(error)
+            assert (refusal is None)==(mode=='full'),(mode,refusal)
+            if mode=='missing':assert refusal=='incomplete ruleset evidence: required policy fields are missing'
+            if mode=='null':assert refusal=='incomplete ruleset evidence: bypass_actors must be an explicit complete list'
+            if mode=='nonempty':assert refusal=='ruleset policy refused: bypass actors are present'
+    # Run just the actual read shell, up to its parser, using finite credential-aware stubs.
+    prefix=shell(observe).split("python3 - <<'PY_PAIR_PROTECTION'",1)[0]
+    for mode in ('good','missing-token','denied'):
+        with tempfile.TemporaryDirectory(prefix='pair-ruleset-get-test-') as tmp:
+            root=Path(tmp)
+            write(root/'eng/execution-pair-release-admission.json',original)
+            stub=root/'gh';stub.write_text("""#!/usr/bin/python3
+import json,os,sys,pathlib
+assert sys.argv[1:]==['api','repos/FS-GG/FS.GG.Coordination/rulesets/21633398']
+assert os.environ['GH_TOKEN']=='fixture-ruleset-token'
+pathlib.Path('ruleset-called').write_text('called')
+if os.environ['FIXTURE_MODE']=='denied':sys.exit(1)
+print(json.dumps({'fixture':'only'}))
+""");stub.chmod(0o700)
+            stub=root/'git';stub.write_text('#!/bin/bash\nexit 0\n');stub.chmod(0o700)
+            stub=root/'curl';stub.write_text("""#!/usr/bin/python3
+import os
+assert os.environ['GH_TOKEN']=='fixture-default-token'
+print('404',end='')
+""");stub.chmod(0o700)
+            env={'PATH':str(root)+':/usr/bin:/bin','READBACK_OUTPUT':str(root),'GITHUB_REPOSITORY':'FS-GG/FS.GG.Coordination',
+                 'GH_TOKEN':'fixture-default-token','PAIR_RULESET_TOKEN':'' if mode=='missing-token' else 'fixture-ruleset-token','FIXTURE_MODE':mode}
+            result=subprocess.run(['bash','-c',prefix],cwd=root,env=env,capture_output=True,timeout=5)
+            assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
+            assert (root/'ruleset-called').exists()==(mode!='missing-token')
+            if mode=='missing-token':assert b'App token is missing' in result.stdout
+    print('EXECUTION_PAIR_COMPLETE_POLICY_CONTROLS passed original-policy=4 app-binding=4 inert-token-routing=3 native-effects=0')
+
+
 def main():
+    complete_policy_source_controls()
     consumer_sdk_readback_controls()
     consumer_source_only_controls()
     consumer_readback_controls()
@@ -760,7 +841,7 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
     desired=json.loads((ROOT/'eng/repository-settings/release-tag-ruleset.json').read_text())
     keys=('target','enforcement','conditions','bypass_actors','rules')
     policy={key:desired[key] for key in keys}
-    for mode in ('good','good-omitted-tag-parameters','update-enabled','update-numeric-zero','update-null','update-unknown-parameter','update-unknown-field','unprotected-component','inactive','bypass','deleted-signature-rule','foreign-ruleset','wrong-pin'):
+    for mode in ('good','good-omitted-tag-parameters','update-enabled','update-numeric-zero','update-null','update-unknown-parameter','update-unknown-field','unprotected-component','inactive','bypass','missing-actors','null-actors','object-actors','missing-actors-requester-never','missing-target','null-policy','foreign-id-type','deleted-signature-rule','foreign-ruleset','wrong-pin'):
         with tempfile.TemporaryDirectory(prefix='pair-protection-test-') as temporary:
             root=Path(temporary);readback=root/'readback';readback.mkdir()
             live=copy.deepcopy(policy); live['id']=4
@@ -774,6 +855,13 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
             if mode=='unprotected-component':live['conditions']['ref_name']['include'].remove('refs/tags/execution/v*')
             if mode=='inactive':live['enforcement']='disabled'
             if mode=='bypass':live['bypass_actors']=[{'actor_id':1,'actor_type':'Integration','bypass_mode':'always'}]
+            if mode in {'missing-actors','missing-actors-requester-never'}:live.pop('bypass_actors')
+            if mode=='missing-actors-requester-never':live['current_user_can_bypass']='never'
+            if mode=='null-actors':live['bypass_actors']=None
+            if mode=='object-actors':live['bypass_actors']={}
+            if mode=='missing-target':live.pop('target')
+            if mode=='null-policy':live=None
+            if mode=='foreign-id-type':live['id']=4.0
             if mode=='deleted-signature-rule':live['rules']=[rule for rule in live['rules'] if rule['type']!='required_signatures']
             if mode=='foreign-ruleset':live['id']=5
             a=admission();a['tagProtection']['policySha256']=hashlib.sha256(json.dumps(policy,sort_keys=True,separators=(',',':')).encode()).hexdigest()
@@ -812,7 +900,7 @@ print('200' if mode=='occupied' and value==3 else '403' if mode=='unknown' and v
             assert (result.returncode==0)==(mode=='good'),(mode,result.stderr)
             count=int((root/'calls').read_text());assert count==(4 if mode=='good' else 3)
             status=list(root.glob('*.status'));assert len(status)==(4 if mode=='good' else 2)
-    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed consumer-deadline=4 admission=16 archive=20 readback=12 tag-protection=13 four-feed-cells=3 installed-bindings=8 installed-source=9 publisher-source=13 isolation-and-byte-joins=48 version-preflight=11 selectors=exclusive')
+    print('EXECUTION_PAIR_RELEASE_INERT_CONTROLS passed consumer-deadline=4 admission=16 archive=20 readback=12 tag-protection=21 four-feed-cells=3 installed-bindings=8 installed-source=9 publisher-source=13 isolation-and-byte-joins=48 version-preflight=11 selectors=exclusive')
 
 def consumer_source_only_controls():
     """Exercise workflow predicates with inert records; never run a job or SDK."""

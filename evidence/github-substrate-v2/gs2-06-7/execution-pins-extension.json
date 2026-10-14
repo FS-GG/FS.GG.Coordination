@@ -97,11 +97,12 @@
     {
       "kind": "workflow",
       "path": ".github/workflows/callable-cli-release-publish.yml",
-      "sha256": "4e314f92c68cbee8ce7cdce1bd660c00a2eac5a4f5eb582f28365bdfddd609e9",
+      "sha256": "3a9e3b4e6f1ce78df40650ad58826b2a0301746acbd0efd098df30eef25097b9",
       "externalReferences": [
         "NuGet/login@8d196754b4036150537f80ac539e15c2f1028841",
         "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
         "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
+        "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
         "actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c",
         "actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68",
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a"
