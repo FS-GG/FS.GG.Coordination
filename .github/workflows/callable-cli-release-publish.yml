@@ -1119,10 +1119,10 @@ jobs:
           RULESET_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
         run: |
           set -euo pipefail
-          test -n "${RULESET_APP_ID:-}" && test -n "${RULESET_APP_PRIVATE_KEY:-}" || {
+          if test -z "${RULESET_APP_ID:-}" || test -z "${RULESET_APP_PRIVATE_KEY:-}"; then
             echo "::error::existing ruleset App bindings are missing; complete protection evidence is unavailable"
             exit 1
-          }
+          fi
       - name: Mint repository-scoped token solely for the complete protection GET
         id: pair-ruleset-reader
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
