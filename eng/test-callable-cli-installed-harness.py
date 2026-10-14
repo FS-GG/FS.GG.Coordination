@@ -24,6 +24,9 @@ import re
 import signal
 import zipfile
 
+if sys.flags.optimize != 0:
+    raise RuntimeError('protected release validators require Python optimize=0')
+
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 CONTRACT = ROOT / "eng/callable-cli-installed-harness.json"

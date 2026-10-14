@@ -508,6 +508,23 @@ PROC_PROFILES = {'proc-pair-policy-observation': 'observe-execution-pair-policy-
 PROC_ORIGINAL = 'publish-execution-pair-030-b11fb121-four38484632631'
 PROC_REPOSITORY = 'FS-GG/FS.GG.Coordination'
 PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
+# Producer source pins this persistent namespace. No descriptor, authority path,
+# output, cwd, HOME or environment value can select another operation namespace.
+PROC_OPERATION_BASE = Path('/var/tmp/fsgg-canonical-owned-commands')
+
+
+def proc_operation_root(operation):
+    return PROC_OPERATION_BASE / str(os.geteuid()) / operation
+
+
+def proc_directory_identity(path):
+    path=Path(path)
+    if any(p.is_symlink() for p in (path,*path.parents)) or not path.is_dir():
+        raise ValueError('PROC canonical state missing/aliased; reconciliation required')
+    observed=path.stat()
+    if observed.st_uid!=os.geteuid() or stat.S_IMODE(observed.st_mode)!=0o700:
+        raise ValueError('PROC canonical state owner/mode differs; reconciliation required')
+    return {'path':str(path),'device':observed.st_dev,'inode':observed.st_ino,'uid':observed.st_uid,'mode':0o700}
 
 
 def proc_command_preflight(spec, *, now):
@@ -542,7 +559,7 @@ def proc_command_preflight(spec, *, now):
             or spec['addressSpaceBytes'] is not None and (type(spec['addressSpaceBytes']) is not int or spec['addressSpaceBytes']<spec['rssBytes'])):
         raise ValueError('PROC resource profile')
     root = Path(spec['operationRoot'])
-    if not root.is_absolute() or str(root) != os.path.normpath(str(root)) or root.name != spec['operation']:
+    if root!=proc_operation_root(spec['operation']):
         raise ValueError('PROC fixed operation root')
     environment = spec['environment']
     if (set(environment) != {'HOME','TMPDIR','GH_CONFIG_DIR','PATH','LANG','LC_ALL','GH_PROMPT_DISABLED','GH_HOST'}
@@ -656,10 +673,13 @@ def proc_runtime_evidence(spec, authority, evidence):
             or owner.get('residual')!=[] or owner.get('escapedResidual')!=[] or owner.get('escapedDescendants')!=[]
             or runtime.get('currentBootId')!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
             or runtime.get('effectiveUid')!=os.geteuid() or runtime.get('actualInterpreter')!=os.path.realpath(sys.executable)
+            or runtime.get('interpreterFlags')!={'isolated':1,'noSite':1,'noBytecode':True,'optimize':0}
             or runtime.get('supportPins')!=support or runtime.get('bounds')!=expected_bounds
             or runtime.get('clientPath')!=spec['argv'][0] or runtime.get('postRetryExcluded') is not True
             or runtime.get('transitiveSourceReadFence')!='qualified-no-unobserved-source-reads'
-            or runtime.get('sourceReadAllowlist')!=spec['sourceReadAllowlist']):
+            or runtime.get('sourceReadAllowlist')!=spec['sourceReadAllowlist']
+            or runtime.get('canonicalBaseIdentity')!=proc_directory_identity(proc_operation_root(spec['operation']).parent)
+            or runtime.get('canonicalOperationIdentity')!=proc_directory_identity(proc_operation_root(spec['operation']))):
         raise ValueError('PROC actual canonical runtime/support/read/retry/custody evidence unavailable')
 
 
@@ -738,6 +758,8 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                 or authority.get('runtimeQualified') is not True or authority.get('readFenceQualified') is not True
                 or authority.get('clientAutomaticPostRetry') is not False or authority.get('independentCapacityQualified') is not True):
             raise ValueError('PROC current root authority/runtime/read/retry/capacity admission unavailable')
+        if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode or sys.flags.optimize!=0:
+            raise ValueError('PROC actual interpreter must use isolated/no-site/no-bytecode and optimize=0 flags')
         proc_command_preflight(spec,now=time.monotonic())
         if set(os.sched_getaffinity(0))!=set(spec['cpuAffinity']):raise ValueError('PROC actual CPU affinity differs')
         import resource
@@ -746,16 +768,14 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         for pin in spec['pins']:proc_regular_pin(pin)
         if os.path.realpath(sys.executable) not in spec['sourceReadAllowlist']:
             raise ValueError('PROC actual interpreter outside qualified runtime closure')
-        if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode:
-            raise ValueError('PROC actual interpreter must use isolated/no-site/no-bytecode flags')
         required_sources=(Path(__file__),Path(__file__).with_name('shared_process_owner.py'),
                           Path(__file__).with_name('test-callable-cli-installed-harness.py'),
                           Path(__file__).with_name('write-callable-cli-release-readback.py'))
         if any(str(path.resolve()) not in spec['sourceReadAllowlist'] for path in required_sources):
             raise ValueError('PROC actual validator/runner/support closure absent')
         root=Path(spec['operationRoot']);parent=root.parent
-        if any(p.is_symlink() for p in (parent,*parent.parents)) or stat.S_IMODE(parent.stat().st_mode)!=0o700:
-            raise ValueError('PROC exclusive operation parent')
+        base_identity=proc_directory_identity(parent)
+        operation_identity=proc_directory_identity(root)
         owner_path=Path(__file__).with_name('shared_process_owner.py')
         if not any(pin['path']==str(owner_path) and pin['sha256']==OWNER_SHA for pin in spec['pins']):
             raise ValueError('PROC shared owner closure absent')
@@ -797,10 +817,23 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             observation=root/('watch-'+hashlib.sha256(raw).hexdigest())
             observation.mkdir(mode=0o700);slot=observation
         else:
-            # Fixed root key comes from root-selected authority. No alternate output path exists.
-            root.mkdir(mode=0o700);claimed=True;slot=root
+            # Only explicit root preparation creates the persistent slot/input/result.
+            # Missing state never means never-used; the runner cannot recreate it.
+            try:
+                prepared_raw=read_regular(root/'input.json',256*1024)
+                prepared=json.loads(read_regular(root/'command.json',MAX_OUTPUT))
+            except (OSError,ValueError) as error:
+                raise ValueError('PROC canonical input/result missing or unsafe; reconciliation required') from error
+            if (prepared_raw!=raw or prepared.get('schema')!=RESULT_SCHEMA
+                    or prepared.get('operation')!=spec['operation'] or prepared.get('sendState')!='prepared-no-send'
+                    or prepared.get('descriptorSha256')!=hashlib.sha256(raw).hexdigest()):
+                raise ValueError('PROC canonical prepared state differs/consumed; reconciliation required')
+            # Existing canonical dispatch input is the exclusive claim. Failure here
+            # cannot overwrite the first invocation's original result.
+            persist(root/'dispatch-input.json',spec['request']['body'],exclusive=True)
+            claimed=True;slot=root
         for name in ('tmp','home'): (slot/name).mkdir(mode=0o700)
-        persist(slot/'input.json',spec,exclusive=True)
+        if spec['role']=='watch':persist(slot/'input.json',spec,exclusive=True)
         generated_inputs=[]
         result={'schema':RESULT_SCHEMA,'operation':spec['operation'],'originalOperation':PROC_ORIGINAL,
                 'commandAccepted':False,'sendState':'not-applicable' if spec['role']=='watch' else 'prepared-no-send',
@@ -808,14 +841,15 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                 'originalPublication':original_proof,'retainedAttestation':attestation_proof,
                 'remoteTerminal':'unknown','reportingOutcome':'pending','publicationAccepted':False}
         if spec['role']=='dispatch':
-            persist(root/'dispatch-input.json',spec['request']['body'],exclusive=True)
             row=pin_file(root/'dispatch-input.json');row['mode']=0o600;generated_inputs.append(row)
-            persist(root/'command.json',result,exclusive=True)
+            persist(root/'command.json',result)
         env=dict(spec['environment'])
         if 'GH_TOKEN' not in os.environ or not os.environ['GH_TOKEN']:raise ValueError('PROC approved credential binding unavailable')
         env['GH_TOKEN']=os.environ['GH_TOKEN']
         def check(event,child,leader,known):
             if event!='after-cleanup' and time.monotonic()>=spec['workDeadline']:raise TimeoutError('PROC original deadline')
+            if proc_directory_identity(parent)!=base_identity or proc_directory_identity(root)!=operation_identity:
+                raise ValueError('PROC canonical state directory identity drift; reconciliation required')
             for pin in spec['pins']:proc_regular_pin(pin)
             for pin in generated_inputs:proc_regular_pin(pin)
             imports_unchanged()

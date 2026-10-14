@@ -905,6 +905,8 @@ jobs:
   execution_pair_preflight:
     if: inputs.execution_pair && inputs.preflight_only && !inputs.pair_recovery && !inputs.cli_only && !inputs.readback_only
     name: Observe original Execution pair without publication authority
+    env:
+      PYTHONOPTIMIZE: '0'
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     permissions:
@@ -1000,6 +1002,7 @@ jobs:
       attestations: write
       artifact-metadata: write
     env:
+      PYTHONOPTIMIZE: '0'
       DOTNET_CLI_TELEMETRY_OPTOUT: 1
       DOTNET_NOLOGO: 1
       DOTNET_PROCESSOR_COUNT: 4

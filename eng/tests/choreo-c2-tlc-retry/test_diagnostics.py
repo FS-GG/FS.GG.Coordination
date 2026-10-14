@@ -22,7 +22,13 @@ class DiagnosticControls(unittest.TestCase):
     def proc_fixture(self, root, mode='good'):
         """Declared proof adapters are inert fixtures, never runtime/effect acceptance."""
         operation='recover-execution-pair-030-b11fb121-original38495729817'
-        slot=root/operation
+        # Only tests replace the producer constant. Neither production descriptor
+        # nor a matching newly authored authority can alter this namespace.
+        namespace=patch.object(module,'PROC_OPERATION_BASE',root/'producer-state')
+        namespace.start();self.addCleanup(namespace.stop)
+        module.PROC_OPERATION_BASE.mkdir(mode=0o700)
+        base=module.PROC_OPERATION_BASE/str(os.geteuid());base.mkdir(mode=0o700)
+        slot=module.proc_operation_root(operation);slot.mkdir(mode=0o700)
         client=root/'inert-gh'
         body={'workflow_run_id':42,'run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/42',
               'html_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/42'}
@@ -85,6 +91,9 @@ class DiagnosticControls(unittest.TestCase):
                                        'leader':{'start':1},'residual':[],'escapedResidual':[],'escapedDescendants':[]},
                        'runtimeEvidence':{'currentBootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                                           'effectiveUid':os.geteuid(),'actualInterpreter':os.path.realpath(os.sys.executable),
+                                          'interpreterFlags':{'isolated':1,'noSite':1,'noBytecode':True,'optimize':0},
+                                          'canonicalBaseIdentity':module.proc_directory_identity(base),
+                                          'canonicalOperationIdentity':module.proc_directory_identity(slot),
                                           'supportPins':[pin for pin in pins if pin['path'] not in native.values()],
                                           'bounds':{k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')},
                                           'clientPath':str(client),'clientVersion':'gh version inert-source-control','postRetryExcluded':True,
@@ -94,6 +103,9 @@ class DiagnosticControls(unittest.TestCase):
         row=module.pin_file(native['runtimeQualification']);row['mode']=Path(row['path']).stat().st_mode&0o777
         pins[:]=[row if pin['path']==row['path'] else pin for pin in pins]
         descriptor=root/'selected-input.json';descriptor.write_text(json.dumps(spec))
+        (slot/'input.json').write_bytes(descriptor.read_bytes())
+        (slot/'command.json').write_text(json.dumps({'schema':module.RESULT_SCHEMA,'operation':operation,
+            'sendState':'prepared-no-send','descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest()}))
         authority={'schema':module.COMMAND_SCHEMA,'descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest(),
                    'profile':spec['profile'],'operation':operation,'operationRoot':str(slot),'approved':True,
                    'runtimeQualified':True,'readFenceQualified':True,'clientAutomaticPostRetry':False,
@@ -135,7 +147,7 @@ class DiagnosticControls(unittest.TestCase):
                     with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
             authority=json.loads(approved.read_bytes());authority['runtimeQualified']=False;approved.write_text(json.dumps(authority))
             self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
-            self.assertFalse(Path(spec['operationRoot']).exists())
+            self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
 
     def test_proc_actual_pin_drift_and_reporting_failure_preserve_send_slot(self):
         adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
@@ -144,14 +156,14 @@ class DiagnosticControls(unittest.TestCase):
             root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
             Path(spec['argv'][0]).write_text('changed-runtime')
             self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
-            self.assertFalse(Path(spec['operationRoot']).exists())
+            self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
             original=module.os.replace;writes=[]
             def refuse_final(source,target):
                 if Path(target).name=='command.json':
                     writes.append(target)
-                    if len(writes)==2:raise OSError('inert receipt failure')
+                    if len(writes)==3:raise OSError('inert receipt failure')
                 return original(source,target)
             with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}),patch.object(module.os,'replace',side_effect=refuse_final):
                 self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
@@ -202,6 +214,61 @@ class DiagnosticControls(unittest.TestCase):
             self.assertIn('original terminal job metadata failure',result['additionalFailures'][0]['cause']['message'])
             self.assertEqual(3,len(calls))
             self.assertFalse(result['publicationAccepted'])
+
+    def test_proc_fixed_producer_location_refuses_new_authority_under_another_parent(self):
+        adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                self.assertEqual(0,module.execute_proc_command(descriptor,approved,sha))
+            state=Path(spec['operationRoot'])/'command.json';original=state.read_bytes()
+            alternate=root/'different-parent';alternate.mkdir(mode=0o700)
+            moved=copy.deepcopy(spec);new_slot=alternate/spec['operation'];moved['operationRoot']=str(new_slot)
+            moved['argv'][-1]=str(new_slot/'dispatch-input.json')
+            for key,value in moved['environment'].items():moved['environment'][key]=value.replace(spec['operationRoot'],str(new_slot))
+            relocated=alternate/'input.json';relocated.write_text(json.dumps(moved))
+            authority=json.loads(approved.read_bytes());authority['operationRoot']=str(new_slot)
+            authority['descriptorSha256']=hashlib.sha256(relocated.read_bytes()).hexdigest()
+            other_authority=alternate/'authority.json';other_authority.write_text(json.dumps(authority))
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                self.assertEqual(1,module.execute_proc_command(relocated,other_authority,hashlib.sha256(other_authority.read_bytes()).hexdigest()))
+            self.assertFalse(new_slot.exists());self.assertEqual(original,state.read_bytes())
+
+    def test_proc_canonical_base_and_known_state_loss_refuse_without_recreation(self):
+        adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+        for mode in ('base-mode','base-inode','base-alias','missing-input','missing-result','missing-slot'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+                slot=Path(spec['operationRoot']);base=slot.parent;sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+                if mode=='base-mode':base.chmod(0o755)
+                if mode=='base-inode':
+                    previous=base.with_name('previous-base');base.rename(previous);base.mkdir(mode=0o700)
+                    (previous/slot.name).rename(slot)
+                if mode=='base-alias':
+                    previous=base.with_name('previous-base');base.rename(previous);base.symlink_to(previous,target_is_directory=True)
+                if mode=='missing-input':(slot/'input.json').unlink()
+                if mode=='missing-result':(slot/'command.json').unlink()
+                if mode=='missing-slot':
+                    (slot/'input.json').unlink();(slot/'command.json').unlink();slot.rmdir()
+                with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
+                self.assertFalse((slot/'dispatch-input.json').exists())
+                if mode=='missing-slot':self.assertFalse(slot.exists())
+
+    def test_proc_actual_optimized_interpreter_refuses_before_slot_or_child(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            state=Path(spec['operationRoot'])/'command.json';before=state.read_bytes()
+            result=subprocess.run([os.sys.executable,'-I','-S','-B','-O',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),
+                'command','--proc',str(descriptor),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest()],
+                capture_output=True,timeout=5)
+            self.assertEqual(1,result.returncode,result.stderr)
+            self.assertIn(b'optimize=0',result.stderr)
+            self.assertEqual(before,state.read_bytes())
+            self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
 
     def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
         for inherited in (False, True):
