@@ -38,13 +38,6 @@ let tar = full "tar"
 let storeRoot = full "root"
 let runRoot = full "runroot"
 
-for path in [ sourceTemplate; manifestPath; podman; git; tar ] do
-    if not (Directory.Exists path || File.Exists path) then
-        fail $"required input is absent: {path}"
-
-for path in [ stateRoot; storeRoot; runRoot; Path.GetDirectoryName evidencePath ] do
-    Directory.CreateDirectory path |> ignore
-
 let sha256 (bytes: byte array) =
     bytes |> SHA256.HashData |> Convert.ToHexString |> _.ToLowerInvariant()
 
@@ -59,6 +52,29 @@ if
 then
     fail "unsupported image manifest schema"
 
+// A missing profile is supported only for the exact established Python recipe.
+let requirePythonImageProfile (manifestRoot: JsonElement) =
+    let mutable profile = Unchecked.defaultof<JsonElement>
+    if manifestRoot.TryGetProperty("profile", &profile) then
+        if profile.ValueKind <> JsonValueKind.String || profile.GetString() <> "portable-python" then
+            fail "image manifest is outside the portable-python profile"
+    let source = manifestRoot.GetProperty "source"
+    let image = manifestRoot.GetProperty "image"
+    let imageName = "localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2"
+    if source.GetProperty("containerfileSha256").GetString() <> "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4"
+       || source.GetProperty("inputsSha256").GetString() <> "c5ef4bb365b37c9213015166758e0fd62bd9230d2bde51c2f2d265ae21f66065"
+       || image.GetProperty("name").GetString() <> imageName then
+        fail "image manifest lacks the pinned portable-python recipe identity"
+    let reference = image.GetProperty("reference").GetString()
+    let prefix = imageName + "@sha256:"
+    if isNull reference || not (reference.StartsWith(prefix, StringComparison.Ordinal)) then
+        fail "image manifest lacks the pinned portable-python image reference"
+    let digest = reference.Substring(prefix.Length)
+    if digest.Length <> 64 || digest |> Seq.exists (fun character -> not ("0123456789abcdef".Contains character)) then
+        fail "image manifest lacks a lowercase SHA-256 image reference"
+
+requirePythonImageProfile root
+
 let image = root.GetProperty "image"
 let imageReference = image.GetProperty("reference").GetString()
 let imageId = image.GetProperty("id").GetString()
@@ -71,6 +87,13 @@ if
     || not (imageId.StartsWith("sha256:", StringComparison.Ordinal))
 then
     fail "image manifest is outside the reviewed runtime profile"
+
+for path in [ sourceTemplate; manifestPath; podman; git; tar ] do
+    if not (Directory.Exists path || File.Exists path) then
+        fail $"required input is absent: {path}"
+
+for path in [ stateRoot; storeRoot; runRoot; Path.GetDirectoryName evidencePath ] do
+    Directory.CreateDirectory path |> ignore
 
 let run executable arguments workingDirectory environment =
     use child = new Process()

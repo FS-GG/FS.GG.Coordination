@@ -187,3 +187,30 @@ Package architecture is `x86_64` or `any`, repository core or extra. Package pat
 Files roles are the five enumerated in helper-window.md; no `SHA256SUMS` self-row. Distinct DB/package/signature/inventory descriptors must join exactly all staged payload files; no dangling metadata and no unclassified extra bytes. Signature files are optional only according to the explicit detached/embedded representation and policy. Source `SHA256SUMS` coverage remains exact. Evidence descriptors are all referenced, hash/size verified and bounded; a caller cannot substitute remote URLs or absolute filesystem paths.
 
 The metadata-first donor descriptor prepared by v3_env is only a proposed operation and does not fill this slot. Its eventual manifest observation can contribute one donor evidence ref, but cannot satisfy acquired config/layers, package trust or transaction refs. Full package acquisition remains separate after authentic expanded-size/capacity bounds exist. No field above manufactures an old operation identity or grants a new effect.
+
+
+## Python consumer profile fences
+
+The maintained executor qualification, installed Python hello preparation and portable
+release helpers accept explicit `portable-python` or authentic legacy profile absence
+only with the established Python recipe/input/image identity. Exact Containerfile
+SHA256 is `41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4`;
+input manifest SHA256 is `c5ef4bb365b37c9213015166758e0fd62bd9230d2bde51c2f2d265ae21f66065`;
+image name is `localhost/fsgg-portable-workspace:python-3.14.0-node-24.8.0-ts-5.9.2`,
+with a lowercase64hex digest reference under that exact name. Explicit common,
+unknown, null/nonstring profiles and absent/unpinned future manifests refuse.
+A source revision/tree label or a relabeled common recipe cannot replace these pins.
+Existing manifest/OCI/qualification/authentication correspondence remains required;
+the finite profile predicate adds no independent trust or execution authority.
+
+Executor checks the manifest before creating any state, store or evidence directories.
+Installed preparation checks it before package identity/extraction or OCI scanning.
+Release checks it before Git processes/package/archive operations and output creation.
+The existing image test entrypoint verifies executor ordering and pins; its
+`run_executor_profile_controls(dotnet)` exercises the actual F# consumer with inert
+executable sentinels under a separately admitted CLR/Execution build closure. Existing
+installed/release fixtures test actual entrypoints and preserve legacy and explicit
+Python acceptance, with synthetic receipt identity clearly distinguished from real
+image qualification. Pure source assertions do not replace F# compilation or actual
+F# caller controls. Common native preflight/qualification remain disabled in the
+image helper; these reader guards do not activate them.

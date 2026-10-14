@@ -12,6 +12,7 @@ import tarfile
 import tempfile
 import shutil
 import unittest
+import subprocess
 
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -85,6 +86,61 @@ def archive(path: Path, *, cache_layer: bool = False, corrupt_layer: bool = Fals
     return manifest_digest, config_digest
 
 
+def assert_executor_profile_guard_source(executor: str) -> None:
+    guard = executor.index("requirePythonImageProfile root")
+    assert guard < executor.index("Directory.CreateDirectory path") < executor.index("let run executable")
+    assert guard < executor.index("copyDirectory sourceTemplate fixtureRepository")
+    for value in ("portable-python", "containerfileSha256", "inputsSha256", IMAGE.IMAGE_NAME,
+                  "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4", IMAGE.INPUTS_SHA256):
+        assert value in executor
+
+
+def run_executor_profile_controls(dotnet: str) -> None:
+    """Actual F# reader controls; caller supplies separately admitted CLR closure."""
+    import copy
+    with tempfile.TemporaryDirectory(prefix="executor-profile-SYNTHETIC-") as temporary:
+        work = Path(temporary)
+        marker = work / "unexpected-process"
+        sentinel = work / "sentinel-tool"
+        sentinel.write_text("#!/bin/sh\nprintf unexpected > '" + str(marker) + "'\nexit 88\n")
+        sentinel.chmod(0o700)
+        manifest = {
+            "schema": "fsgg.portable-workspace-local-image/1",
+            "source": {"revision": "a"*40, "tree": "b"*40,
+                       "containerfileSha256": "41f2ae90901851254556d87a85e17011b816e4f4847103376f213f651ef537b4",
+                       "inputsSha256": IMAGE.INPUTS_SHA256},
+            "image": {"name": IMAGE.IMAGE_NAME, "reference": IMAGE.IMAGE_NAME+"@sha256:"+"c"*64,
+                      "id": "sha256:"+"d"*64, "os": "linux", "architecture": "amd64", "user": "32768:32768"},
+        }
+        candidates=[]
+        for value in ("common-arch", "unknown", None, True):
+            candidates.append(({**copy.deepcopy(manifest), "profile":value}, False))
+        unpinned=copy.deepcopy(manifest);unpinned['source']['containerfileSha256']='0'*64
+        candidates.append((unpinned,False))
+        relabeled=copy.deepcopy(unpinned);relabeled['profile']='portable-python'
+        candidates.append((relabeled,False))
+        wrong_name=copy.deepcopy(manifest);wrong_name['image']['name']='localhost/fsgg-provisioned-common:arch-20261012'
+        candidates.append((wrong_name,False))
+        candidates.extend([(manifest,True),({**copy.deepcopy(manifest),'profile':'portable-python'},True)])
+        for index,(value,accepted) in enumerate(candidates):
+            case=work/str(index);case.mkdir()
+            manifest_path=case/'manifest.json';manifest_path.write_bytes(canonical(value))
+            argv=[dotnet,'fsi','--exec',str(ROOT/'eng/portable-workspace-executor-qualification.fsx'),
+                  '--fixture',str(case/'missing-fixture'),'--image-manifest',str(manifest_path),
+                  '--state-dir',str(case/'state'),'--evidence',str(case/'evidence/result.json'),
+                  '--podman',str(sentinel),'--git',str(sentinel),'--tar',str(sentinel),
+                  '--root',str(case/'graphroot'),'--runroot',str(case/'runroot')]
+            completed=subprocess.run(argv,cwd=ROOT,text=True,capture_output=True,timeout=90)
+            assert completed.returncode != 0, completed.stdout
+            if accepted:
+                assert 'required input is absent' in completed.stderr, completed.stderr
+            else:
+                assert 'required input is absent' not in completed.stderr, completed.stderr
+                assert ('portable-python' in completed.stderr or 'outside the portable-python profile' in completed.stderr), completed.stderr
+            assert not marker.exists()
+            assert not any((case/name).exists() for name in ('state','evidence','graphroot','runroot'))
+
+
 def main() -> None:
     storage_spec = importlib.util.spec_from_file_location("storage_preflight_controls", Path(__file__).with_name("test_storage_preflight.py"))
     assert storage_spec and storage_spec.loader
@@ -137,6 +193,7 @@ def main() -> None:
     assert IMAGE.PYTHON_EXPECTED_OUTPUTS == expected_python
     assert all(IMAGE.EXPECTED_OUTPUTS[path] == digest for path, digest in expected_python.items())
     executor = (ROOT / "eng" / "portable-workspace-executor-qualification.fsx").read_text()
+    assert_executor_profile_guard_source(executor)
     assert executor.count(expected_python["python/app.pyc"]) == 1
     fixture_roots = (
         ROOT / "tests" / "portable-workspace" / "image" / "fixture" / "python",
