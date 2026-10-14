@@ -699,6 +699,140 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual('original occupied registration',(slot/'measurement.collector.json').read_text())
             self.assertTrue((slot/'dispatch-input.json').exists())
 
+    def test_proc_private_control_artifact_refuses_alias_type_owner_mode_bound_and_read_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for name in ('measurement.ready.json','measurement.control.json'):
+                path=root/name;raw=b'{"INERT":"bounded fixture"}';path.write_bytes(raw);path.chmod(0o600)
+                self.assertEqual(raw,module.proc_private_artifact(path,8192))
+                path.chmod(0o644)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.chmod(0o600)
+                with patch.object(module.os,'geteuid',return_value=os.geteuid()+1):
+                    with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                os.link(path,root/'hardlink')
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                (root/'hardlink').unlink();path.unlink();path.symlink_to(root/'target')
+                with self.assertRaisesRegex(ValueError,'path/bound'):module.proc_private_artifact(path,8192)
+                path.unlink();os.mkfifo(path,0o600)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.unlink();path.mkdir(mode=0o600)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.rmdir();path.write_bytes(b'x'*8193);path.chmod(0o600)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.write_bytes(b'')
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.write_bytes(raw);read=module.os.read
+                def changed_after_read(fd,cap):
+                    observed=read(fd,cap);path.write_bytes(raw[:-1]+b'x');return observed
+                with patch.object(module.os,'read',side_effect=changed_after_read):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                path.write_bytes(raw)
+                def replaced_after_read(fd,cap):
+                    observed=read(fd,cap);replacement=root/'replacement';replacement.write_bytes(raw);replacement.chmod(0o600);os.replace(replacement,path);return observed
+                with patch.object(module.os,'read',side_effect=replaced_after_read):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                with patch.object(module.os,'read',return_value=b'x'):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                with patch.object(module.os,'read',return_value=b'x'*8193):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                # Opening a replacement inode also refuses before any JSON is trusted.
+                opened=module.os.open
+                def replaced_before_open(selected,flags,*args,**kwargs):
+                    replacement=root/'replacement';replacement.write_bytes(raw);replacement.chmod(0o600);os.replace(replacement,path);return opened(selected,flags,*args,**kwargs)
+                with patch.object(module.os,'open',side_effect=replaced_before_open):
+                    with self.assertRaisesRegex(ValueError,'opened identity drift'):module.proc_private_artifact(path,8192)
+
+    def test_proc_negative_control_retirement_requires_actual_origin_and_keeps_partial_trace_unqualified(self):
+        # Inert kernel/Popen adapters only: no tracer, PID adoption or native qualification.
+        from types import SimpleNamespace
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);namespace=root/'producer';namespace.mkdir()
+            with patch.object(module,'PROC_OPERATION_BASE',namespace):
+                lineage=namespace/str(os.geteuid())/module.PROC_PROFILES['proc-pair-client-qualification']
+                lineage.mkdir(parents=True);operation=lineage.name;slot_root=module.proc_operation_root(operation,2);slot_root.mkdir()
+                spec={'profile':'proc-pair-client-qualification','role':'qualification','operation':operation,
+                      'qualificationAttempt':2,'operationRoot':str(slot_root),'workDeadline':100.0}
+                descriptor=slot_root/'input.json';descriptor.write_text(json.dumps(spec))
+                authority=root/'authority.json';authority.write_text('INERT authority adapter')
+                authority_sha=hashlib.sha256(authority.read_bytes()).hexdigest()
+                namespaces={'pid':'pid:[1]','mnt':'mnt:[2]','user':'user:[3]'}
+                apparatus={'pid':os.getpid(),'start':1,'uid':os.geteuid(),'pgid':os.getpid(),'sid':os.getpid(),'namespaces':namespaces}
+                tracer=dict(apparatus,pid=10,start=2,ppid=apparatus['pid'],pgid=10,sid=10,tracerPid=0)
+                subject=dict(tracer,pid=11,start=3,ppid=10,tracerPid=10)
+                nested=dict(subject,pid=12,start=4,ppid=11,pgid=12,sid=12)
+                child=SimpleNamespace(pid=10,returncode=-module.signal.SIGKILL)
+                def original(phase):
+                    slot=slot_root/('control-'+phase);slot.mkdir()
+                    proof={'apparatus':apparatus,'tracer':tracer,'phase':phase,'slot':str(slot),
+                           'bootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                           'descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest(),
+                           'authoritySha256':authority_sha,'subjectWorkDeadline':90.0}
+                    ready={k:proof[k] for k in ('bootId','descriptorSha256','phase','subjectWorkDeadline')}
+                    ready.update(tracer=tracer,subject=subject)
+                    ready_path=slot/'measurement.ready.json';ready_path.write_text(json.dumps(ready));ready_path.chmod(0o600)
+                    control=None
+                    if phase=='session':
+                        control={'phase':phase,'bootId':proof['bootId'],'controller':subject,'child':nested}
+                        (slot/'measurement.control.json').write_text(json.dumps(control));(slot/'measurement.control.json').chmod(0o600)
+                    for actor in ([subject] if phase=='controller' else [subject,nested]):
+                        # Expected abort may stop mid syscall; custody never converts it into complete trace.
+                        (slot/('qualification.trace.'+str(actor['pid']))).write_text('1.0 read(3, <unfinished ...>')
+                    actors=[apparatus,tracer,subject]+([] if phase=='controller' else [nested])
+                    record={'phase':phase,'measurementBinding':proof,'tracer':tracer,'subjectReadiness':ready,
+                            'controlReadiness':control,'firstCause':None,'additionalFailures':[],
+                            'subjectStartAuthenticated':True,'pidfdSignalSent':True,'tracerExit':-module.signal.SIGKILL,
+                            'cleanup':'observed-known-terminal','residuals':[],
+                            'sampledBirths':[{'pid':a['pid'],'start':a['start'],'tgid':a['pid']} for a in actors]}
+                    return slot,record,proof
+                with patch.object(module,'proc_actor',side_effect=lambda pid: apparatus if pid==apparatus['pid'] else None):
+                    for phase in ('controller','session'):
+                        slot,record,proof=original(phase)
+                        evidence=module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        self.assertFalse(evidence['traceComplete']);self.assertFalse(evidence['readClosureQualified'])
+                        self.assertFalse(evidence['publicationAuthorized']);self.assertEqual(phase,evidence['phase'])
+                        self.assertNotIn(apparatus['pid'],[a['pid'] for a in evidence['knownTerminalBirths']])
+                        self.assertEqual(1 if phase=='controller' else 2,len(evidence['traceArtifacts']))
+                        bad=[]
+                        for key,value in (('pidfdSignalSent',False),('tracerExit',0),('cleanup','unknown-private-hold'),
+                                          ('subjectStartAuthenticated',False),('residuals',[{'pid':11}]),
+                                          ('firstCause',{'message':'original failure'}),('additionalFailures',[{'message':'secondary'}])):
+                            changed=copy.deepcopy(record);changed[key]=value;bad.append(changed)
+                        for key,value in (('bootId','foreign'),('descriptorSha256','0'*64),('authoritySha256','0'*64),
+                                          ('phase','normal'),('slot',str(slot_root)),('subjectWorkDeadline',80.0)):
+                            changed=copy.deepcopy(record);changed['measurementBinding'][key]=value;bad.append(changed)
+                        changed=copy.deepcopy(record);changed['sampledBirths'][1]['start']=99;bad.append(changed)
+                        changed=copy.deepcopy(record);changed['subjectReadiness']['subject']['tracerPid']=99;bad.append(changed)
+                        changed=copy.deepcopy(record);changed['sampledBirths'].append(changed['sampledBirths'][0]);bad.append(changed)
+                        changed=copy.deepcopy(record);changed['controlReadiness']=None if phase=='session' else {'phase':'controller'};bad.append(changed)
+                        for changed in bad:
+                            with self.subTest(phase=phase,changed=changed):
+                                with self.assertRaises(ValueError):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,changed,changed['measurementBinding'],child)
+                        with self.assertRaises(ValueError):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,None)
+                        with self.assertRaises(ValueError):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,SimpleNamespace(pid=10,returncode=0))
+                        foreign=slot/'qualification.trace.99';foreign.write_text('INERT foreign actor artifact')
+                        with self.assertRaisesRegex(ValueError,'actor population'):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        foreign.unlink()
+                        original_trace=slot/'qualification.trace.11';held=original_trace.read_bytes();original_trace.unlink()
+                        original_trace.symlink_to(descriptor)
+                        with self.assertRaisesRegex(ValueError,'custody/bound'):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        original_trace.unlink();original_trace.write_bytes(held)
+                        os.link(original_trace,slot/'inert-hardlink')
+                        with self.assertRaisesRegex(ValueError,'custody/bound'):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        (slot/'inert-hardlink').unlink()
+                        with original_trace.open('wb') as stream:stream.truncate(8*1024**2+1)
+                        with self.assertRaisesRegex(ValueError,'custody/bound'):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        original_trace.write_bytes(held)
+                        for pid,current in ((11,dict(subject,state='R')),(11,dict(subject,start=99,state='Z'))):
+                            with patch.object(module,'proc_actor',side_effect=lambda selected: apparatus if selected==apparatus['pid'] else current if selected==pid else None):
+                                with self.assertRaisesRegex(ValueError,'terminal birth'):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        with patch.object(module,'proc_actor',side_effect=lambda pid: dict(apparatus,start=99) if pid==apparatus['pid'] else None):
+                            with self.assertRaisesRegex(ValueError,'apparatus birth'):module.proc_control_retirement_evidence(spec,slot,descriptor,authority,authority_sha,record,proof,child)
+                        # The unchanged complete normal parser refuses this same incomplete artifact.
+                        normal=dict(spec,readEvidence={'directories':[],'aliases':[],'absences':[]},sourceReadAllowlist=[])
+                        with self.assertRaisesRegex(ValueError,'bound/completeness'):
+                            module.proc_trace_evidence(normal,slot,authority)
+
     def test_proc_qualification_native_legs_are_consumed_without_repeat_or_watch_widening(self):
         state={'profile':'qualification'}
         module.proc_charge_read(state,'api','repo-public')
