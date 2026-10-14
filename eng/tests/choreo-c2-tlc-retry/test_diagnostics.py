@@ -699,6 +699,50 @@ class DiagnosticControls(unittest.TestCase):
             self.assertEqual('original occupied registration',(slot/'measurement.collector.json').read_text())
             self.assertTrue((slot/'dispatch-input.json').exists())
 
+    def test_proc_private_control_artifact_refuses_alias_type_owner_mode_bound_and_read_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for name in ('measurement.ready.json','measurement.control.json'):
+                path=root/name;raw=b'{"INERT":"bounded fixture"}';path.write_bytes(raw);path.chmod(0o600)
+                self.assertEqual(raw,module.proc_private_artifact(path,8192))
+                path.chmod(0o644)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.chmod(0o600)
+                with patch.object(module.os,'geteuid',return_value=os.geteuid()+1):
+                    with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                os.link(path,root/'hardlink')
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                (root/'hardlink').unlink();path.unlink();path.symlink_to(root/'target')
+                with self.assertRaisesRegex(ValueError,'path/bound'):module.proc_private_artifact(path,8192)
+                path.unlink();os.mkfifo(path,0o600)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.unlink();path.mkdir(mode=0o600)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.rmdir();path.write_bytes(b'x'*8193);path.chmod(0o600)
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.write_bytes(b'')
+                with self.assertRaisesRegex(ValueError,'regular/owner/link/mode/size'):module.proc_private_artifact(path,8192)
+                path.write_bytes(raw);read=module.os.read
+                def changed_after_read(fd,cap):
+                    observed=read(fd,cap);path.write_bytes(raw[:-1]+b'x');return observed
+                with patch.object(module.os,'read',side_effect=changed_after_read):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                path.write_bytes(raw)
+                def replaced_after_read(fd,cap):
+                    observed=read(fd,cap);replacement=root/'replacement';replacement.write_bytes(raw);replacement.chmod(0o600);os.replace(replacement,path);return observed
+                with patch.object(module.os,'read',side_effect=replaced_after_read):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                with patch.object(module.os,'read',return_value=b'x'):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                with patch.object(module.os,'read',return_value=b'x'*8193):
+                    with self.assertRaisesRegex(ValueError,'identity/size drift'):module.proc_private_artifact(path,8192)
+                # Opening a replacement inode also refuses before any JSON is trusted.
+                opened=module.os.open
+                def replaced_before_open(selected,flags,*args,**kwargs):
+                    replacement=root/'replacement';replacement.write_bytes(raw);replacement.chmod(0o600);os.replace(replacement,path);return opened(selected,flags,*args,**kwargs)
+                with patch.object(module.os,'open',side_effect=replaced_before_open):
+                    with self.assertRaisesRegex(ValueError,'opened identity drift'):module.proc_private_artifact(path,8192)
+
     def test_proc_negative_control_retirement_requires_actual_origin_and_keeps_partial_trace_unqualified(self):
         # Inert kernel/Popen adapters only: no tracer, PID adoption or native qualification.
         from types import SimpleNamespace
@@ -730,7 +774,7 @@ class DiagnosticControls(unittest.TestCase):
                     control=None
                     if phase=='session':
                         control={'phase':phase,'bootId':proof['bootId'],'controller':subject,'child':nested}
-                        (slot/'measurement.control.json').write_text(json.dumps(control))
+                        (slot/'measurement.control.json').write_text(json.dumps(control));(slot/'measurement.control.json').chmod(0o600)
                     for actor in ([subject] if phase=='controller' else [subject,nested]):
                         # Expected abort may stop mid syscall; custody never converts it into complete trace.
                         (slot/('qualification.trace.'+str(actor['pid']))).write_text('1.0 read(3, <unfinished ...>')

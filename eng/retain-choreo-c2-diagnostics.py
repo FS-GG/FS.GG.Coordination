@@ -1873,6 +1873,30 @@ def proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,subject_s
     return {'rssBytes':aggregate,'actors':samples}
 
 
+def proc_private_artifact(path,cap):
+    """Bounded private regular-file read with the existing no-follow FD identity pattern."""
+    path=Path(path)
+    if not path.is_absolute() or not 0<cap<=MAX_OUTPUT or any(p.is_symlink() for p in (path,*path.parents)):
+        raise ValueError('PROC private artifact path/bound unavailable')
+    before=path.lstat();identity=proc_read_identity(path)
+    def snapshot(row):
+        return (row.st_dev,row.st_ino,row.st_mode,row.st_uid,row.st_nlink,row.st_size,row.st_mtime_ns,row.st_ctime_ns)
+    if (identity['kind']!=stat.S_IFREG or identity['uid']!=os.geteuid() or identity['mode']!=0o600
+            or before.st_nlink!=1 or not 0<before.st_size<=cap):
+        raise ValueError('PROC private artifact regular/owner/link/mode/size unavailable')
+    fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW|os.O_NONBLOCK)
+    try:
+        opened=os.fstat(fd)
+        if snapshot(opened)!=snapshot(before):raise ValueError('PROC private artifact opened identity drift')
+        raw=os.read(fd,cap+1);after=os.fstat(fd)
+        if (snapshot(after)!=snapshot(before) or len(raw)!=before.st_size or len(raw)>cap
+                or snapshot(path.lstat())!=snapshot(before) or proc_read_identity(path)!=identity
+                or any(p.is_symlink() for p in (path,*path.parents))):
+            raise ValueError('PROC private artifact identity/size drift')
+        return raw
+    finally:os.close(fd)
+
+
 def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child):
     """Actual negative-control death and partial trace custody; never read closure."""
     phase=record['phase'];root=Path(spec['operationRoot']);slot=Path(slot)
@@ -1903,8 +1927,7 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
             or any(ready['tracer'][k]!=tracer[k] for k in ('pid','start','uid','ppid','pgid','sid','namespaces'))):
         raise ValueError('PROC negative-control authenticated signal/terminal/cleanup unavailable')
     ready_path=slot/'measurement.ready.json'
-    if (ready_path.is_symlink() or ready_path.stat().st_uid!=os.geteuid() or ready_path.stat().st_nlink!=1
-            or stat.S_IMODE(ready_path.stat().st_mode)!=0o600 or ready!=json.loads(ready_path.read_bytes())):
+    if ready!=json.loads(proc_private_artifact(ready_path,8192)):
         raise ValueError('PROC negative-control original ready artifact differs')
     subject=ready['subject'];known={row['pid']:row for row in record['sampledBirths']}
     actors=[proof['apparatus'],tracer,subject]
@@ -1918,7 +1941,7 @@ def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authori
         if control is not None or (slot/'measurement.control.json').exists():
             raise ValueError('PROC controller control readiness must be authenticated subject only')
     else:
-        if (control is None or control!=json.loads((slot/'measurement.control.json').read_bytes())
+        if (control is None or control!=json.loads(proc_private_artifact(slot/'measurement.control.json',8192))
                 or control['phase']!='session' or control['bootId']!=proof['bootId']
                 or any(control['controller'][k]!=subject[k] for k in ('pid','start','uid','ppid','pgid','sid','namespaces'))):
             raise ValueError('PROC session child/controller readiness binding unavailable')
@@ -1999,7 +2022,7 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                 raise ValueError('PROC apparatus pinned input/canonical lineage drift')
             ready_path=slot/'measurement.ready.json'
             if ready is None and ready_path.is_file():
-                ready=json.loads(ready_path.read_bytes());subject=proc_actor(ready['subject']['pid'])
+                ready=json.loads(proc_private_artifact(ready_path,8192));subject=proc_actor(ready['subject']['pid'])
                 if (ready['bootId']!=proof['bootId'] or ready['phase']!=phase or ready['descriptorSha256']!=proof['descriptorSha256']
                         or subject is None or subject['start']!=ready['subject']['start'] or subject['tracerPid']!=tracer['pid']):
                     raise ValueError('PROC actual measured subject readiness unavailable')
@@ -2016,7 +2039,7 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                 control_ready=slot/'measurement.control.json'
                 if phase=='controller' or control_ready.is_file():
                     if phase=='session':
-                        control=json.loads(control_ready.read_bytes());current=proc_actor(control['child']['pid'])
+                        control=json.loads(proc_private_artifact(control_ready,8192));current=proc_actor(control['child']['pid'])
                         parent=proc_actor(control['controller']['pid'])
                         if (control.get('phase')!='session' or control.get('bootId')!=proof['bootId'] or current is None or parent is None
                                 or current['start']!=control['child']['start'] or current['ppid']!=ready['subject']['pid']
@@ -2114,7 +2137,7 @@ def proc_kernel_child(descriptor,authority_path,authority_sha):
     if not sys.flags.isolated or not sys.flags.no_site or not sys.dont_write_bytecode or sys.flags.optimize or spec['role']!='qualification':
         raise ValueError('PROC closed unoptimized kernel child role')
     if hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha:raise ValueError('PROC kernel child root input drift')
-    ready=json.loads((slot/'measurement.ready.json').read_bytes());parent=proc_actor(os.getppid());actual=proc_actor(os.getpid())
+    ready=json.loads(proc_private_artifact(slot/'measurement.ready.json',8192));parent=proc_actor(os.getppid());actual=proc_actor(os.getpid())
     if (parent is None or actual is None or parent['pid']!=ready['subject']['pid'] or parent['start']!=ready['subject']['start']
             or actual['tracerPid']!=ready['tracer']['pid'] or parent['tracerPid']!=actual['tracerPid']
             or actual['pgid']!=actual['pid'] or actual['sid']!=actual['pid']):
