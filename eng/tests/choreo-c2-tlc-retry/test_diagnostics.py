@@ -554,9 +554,22 @@ class DiagnosticControls(unittest.TestCase):
                     with self.assertRaisesRegex(ValueError,'descriptor lifetime'):module.proc_trace_evidence(spec,slot,approved)
                 else:self.assertEqual(11,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['pid'])
             child.unlink()
+            # CLONE_FILES shares a table until this actor explicitly unshares it.
+            measured=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',str(slot/'input.json'),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest(),'9','normal']
+            timed_begin='1.000 execve('+json.dumps(python)+', '+json.dumps(measured)+', 0x0 /* 7 vars */) = 0\n'
+            parent.write_text(timed_begin+'1.100 openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\n1.200 clone(child_stack=NULL, flags=CLONE_FILES|SIGCHLD) = 11\n3.000 read(0x3, 0x1000, 0x40) = 0x20\n4.000 '+finish)
+            child.write_text('2.000 close_range(3, ~0U, CLOSE_RANGE_UNSHARE) = 0\n2.100 '+finish)
+            self.assertEqual(10,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['pid'])
+            child.write_text('2.000 close_range(3, ~0U, 0) = 0\n2.100 '+finish)
+            with self.assertRaisesRegex(ValueError,'descriptor lifetime'):module.proc_trace_evidence(spec,slot,approved)
+            child.unlink()
+            spec['role']='qualification'
+            argv=module.proc_trace_argv(spec,slot,slot/'input.json',approved,'a'*64,3,'normal')
+            selected=next(arg for arg in argv if arg.startswith('trace=')).split('=',1)[1].split(',')
+            self.assertIn('close_range',selected);self.assertIn('fcntl64',selected)
             parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\nfcntl(3<'+header+'>, F_DUPFD, 10) = 10\nread(0xa, 0x1000, 0x40) = 0x20\n'+finish)
             self.assertEqual(10,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['fd'])
-            for read in ('read(0x3, 0x1000, 0) = 0x20','read(0x3, "SENSITIVE-SENTINEL", 0x40) = 0x20'):
+            for read in ('readv(0x3, 0x1000, 0) = 0x20','read(0x3, 0x1000, 0) = 0x20','read(0x3, "SENSITIVE-SENTINEL", 0x40) = 0x20'):
                 parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\n'+read+'\n'+finish)
                 with self.assertRaises(ValueError) as raised:module.proc_trace_evidence(spec,slot,approved)
                 self.assertNotIn('SENSITIVE-SENTINEL',str(raised.exception))
@@ -573,7 +586,70 @@ class DiagnosticControls(unittest.TestCase):
             with patch.object(module.os,'write',return_value=0):
                 with self.assertRaises(OSError) as raised:module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
             self.assertEqual('held-partial-or-completed-report',raised.exception.proc_private_report['disposition'])
-            self.assertTrue(path.exists())
+            self.assertTrue(path.exists());path.unlink()
+            # A completed rename followed by an expired deadline holds the actual
+            # promoted inode, never the obsolete temporary pathname.
+            clock=[time.monotonic()];deadline=clock[0]+1;replace=module.os.replace
+            def late_replace(source,target):replace(source,target);clock[0]=deadline+1
+            with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]),patch.object(module.os,'replace',side_effect=late_replace):
+                with self.assertRaises(TimeoutError) as raised:module.proc_private_record(path,{'complete':True},deadline)
+            self.assertEqual(str(path),raised.exception.proc_private_report['path'])
+            self.assertTrue(path.exists());self.assertFalse(path.with_name(path.name+'.pending').exists())
+            self.assertEqual(module.proc_read_identity(path),raised.exception.proc_private_report['identity'])
+
+    def test_proc_subject_failure_survives_apparatus_reporting_and_collector_collision(self):
+        # Same maintained caller paths; injected transport/report failures are
+        # inert and provide no measurement or native qualification evidence.
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            slot=Path(spec['operationRoot']);spec['role']='qualification';spec['workDeadline']=time.monotonic()+30
+            subject={'firstCause':{'type':'RuntimeError','message':'original inert subject cause'},'commandAccepted':False}
+            (slot/'measurement.subject.json').write_text(json.dumps(subject))
+            child=Mock(pid=123456);child.poll.return_value=7
+            with patch('subprocess.Popen',return_value=child),patch.object(module,'proc_actor',return_value=None),patch.object(module,'proc_private_record',side_effect=OSError('inert apparatus report failure')):
+                with self.assertRaises(ValueError) as raised:
+                    module.proc_measure_once(spec,{}, {},descriptor,approved,'a'*64,'normal')
+            self.assertEqual(subject,raised.exception.proc_subject_result)
+            self.assertEqual(subject['firstCause'],raised.exception.proc_subject_failure)
+            self.assertIn({'type':'OSError','message':'inert apparatus report failure'},raised.exception.proc_measurement_additional)
+            # Exercise the actual cleanup branch with an inert child/pidfd adapter:
+            # a failed send never produces affirmative signal evidence.
+            actor={'pid':123456,'ppid':os.getpid(),'uid':os.geteuid(),'pgid':123456,'sid':123456,'start':7}
+            child.poll.return_value=None;child.wait.return_value=7
+            resolve=Path.resolve
+            def resolve_actor(path,*args,**kwargs):
+                if str(path)=='/proc/123456/exe':return Path(spec['transport']['tracer'])
+                return resolve(path,*args,**kwargs)
+            # Retained log is occupied from the first independent attempt. This
+            # test uses a separate ordinary slot, never resets a consumed attempt.
+            second=slot/'inert-cleanup-slot';second.mkdir(mode=0o700)
+            cleanup_spec=dict(spec,operationRoot=str(second));(second/'measurement.subject.json').write_text(json.dumps(subject))
+            with patch('subprocess.Popen',return_value=child),patch.object(module,'proc_actor',return_value=actor),patch.object(Path,'resolve',resolve_actor),patch.object(module.os,'pidfd_open',side_effect=lambda pid:os.dup(0)),patch.object(module.signal,'pidfd_send_signal',side_effect=OSError('inert failed signal')):
+                with self.assertRaises(ValueError):
+                    module.proc_measure_once(cleanup_spec,{'descriptorSha256':'wrong'}, {},descriptor,approved,'a'*64,'normal')
+            cleanup_record=json.loads((second/'measurement.apparatus.json').read_bytes())
+            self.assertEqual(subject['firstCause'],cleanup_record['firstCause'])
+            self.assertFalse(cleanup_record['pidfdSignalSent'])
+            self.assertIn({'type':'OSError','message':'inert failed signal'},cleanup_record['additionalFailures'])
+            # Registration is occupied, yet the canonical command gets its failed
+            # result independently and preserves both the original cause/file.
+            bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'instrumentation':module.PROC_INSTRUMENTATION}))
+            spec['proofInputs']['bootstrapEvidence']=str(bootstrap);spec['request']['nativeGet']=False
+            admission=root/'admission-control.json';admission.write_text(json.dumps({'recovery':{'clientQualificationEnabled':True}}));spec['proofInputs']['admission']=str(admission)
+            descriptor.write_text(json.dumps(spec));(slot/'input.json').write_bytes(descriptor.read_bytes())
+            (slot/'command.json').write_text(json.dumps({'sendState':'prepared-no-send','descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest()}))
+            authority=json.loads(approved.read_bytes());authority['instrumentation']=module.PROC_INSTRUMENTATION
+            authority['canonicalQualificationLineageIdentity']=module.proc_directory_identity(slot.parent)
+            (slot/'measurement.collector.json').write_text('original occupied registration')
+            cause=ValueError('inert failed subject');cause.proc_subject_failure=subject['firstCause'];cause.proc_subject_result=subject
+            with patch.object(module,'proc_bootstrap_evidence'),patch.object(module,'proc_measure_once',side_effect=cause),contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(1,module.proc_qualification_apparatus(spec,descriptor,approved,'a'*64,authority))
+            state=json.loads((slot/'command.json').read_bytes())
+            self.assertEqual(subject['firstCause'],state['firstCause']);self.assertFalse(state['commandAccepted'])
+            self.assertEqual('FileExistsError',state['additionalFailures'][-1]['type'])
+            self.assertEqual('original occupied registration',(slot/'measurement.collector.json').read_text())
+            self.assertTrue((slot/'dispatch-input.json').exists())
 
     def test_proc_qualification_native_legs_are_consumed_without_repeat_or_watch_widening(self):
         state={'profile':'qualification'}

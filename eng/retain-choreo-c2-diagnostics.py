@@ -1241,7 +1241,7 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=F
             fd=int(args[0],16);target=state['fds'].get(fd)
             if target is None:raise ValueError('PROC raw read descriptor lifetime/provenance unknown')
             count=int(result,16) if result.startswith('0x') else int(result.split()[0])
-            if name!='readv' and count>int(args[2],16):raise ValueError('PROC impossible raw read byte/count result')
+            if (name!='readv' and count>int(args[2],16)) or (name=='readv' and int(args[2],16)==0 and count>0):raise ValueError('PROC impossible raw read byte/count result')
             if count>0 and Path(target).name in ('authorization.header','storage-url.conf'):
                 semantic_reads.append({'pid':pid,'fd':fd,'path':target,'bytes':count})
         if name=='chdir' and success:state['cwd'][0]=paths[0]
@@ -1281,7 +1281,9 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None, *, killed=F
         if name=='close' and success and args and args[0].split('<',1)[0].isdigit():
             fd=int(args[0].split('<',1)[0]);state['fds'].pop(fd,None);state['cloexec'].discard(fd)
         if name=='close_range' and success:
-            if len(args)<2 or not args[0].isdigit() or args[1] not in ('~0U','4294967295') and not args[1].isdigit():raise ValueError('PROC close_range descriptor bounds unknown')
+            if len(args)!=3 or args[2] not in ('0','CLOSE_RANGE_CLOEXEC','CLOSE_RANGE_UNSHARE','CLOSE_RANGE_UNSHARE|CLOSE_RANGE_CLOEXEC','CLOSE_RANGE_CLOEXEC|CLOSE_RANGE_UNSHARE') or not args[0].isdigit() or args[1] not in ('~0U','4294967295') and not args[1].isdigit():raise ValueError('PROC close_range descriptor bounds unknown')
+            if 'CLOSE_RANGE_UNSHARE' in args[2]:
+                state['fds']=dict(state['fds']);state['cloexec']=set(state['cloexec'])
             start=int(args[0]);end=4294967295 if args[1] in ('~0U','4294967295') else int(args[1])
             for fd in list(state['fds']):
                 if start<=fd<=end:
@@ -1721,16 +1723,16 @@ def proc_actor(pid):
     except FileNotFoundError:return None
 
 
-def proc_private_record(path,value,deadline,*,exclusive=False,expected=None):
+def proc_private_record(path,value,deadline,*,exclusive=False,expected=None,cap=MAX_OUTPUT):
     path=Path(path);parts=[];size=0
     for part in json.JSONEncoder(sort_keys=True).iterencode(value):
         if time.monotonic()>=deadline:raise TimeoutError('PROC original private serialization deadline')
         raw=part.encode();size+=len(raw)
-        if size+1>MAX_OUTPUT:raise ValueError('PROC finite measurement result byte budget')
+        if size+1>cap:raise ValueError('PROC finite measurement result byte budget')
         parts.append(raw)
     raw=b''.join(parts)+b'\n'
     if time.monotonic()>=deadline:raise TimeoutError('PROC original private serialization deadline')
-    if expected is not None and (path.is_symlink() or path.read_bytes()!=expected):raise ValueError('PROC measurement collector state drift')
+    if expected is not None and (path.is_symlink() or path.stat().st_size!=len(expected) or path.read_bytes()!=expected):raise ValueError('PROC measurement collector state drift')
     destination=path if exclusive else path.with_name(path.name+'.pending')
     fd=os.open(destination,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600);first=None;identity=None;offset=0
     try:
@@ -1753,9 +1755,10 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None):
             if time.monotonic()>=deadline:raise TimeoutError('PROC original report close deadline')
             if proc_read_identity(destination)!=identity:raise ValueError('PROC private report destination identity drift')
             if not exclusive:
-                if expected is not None and path.read_bytes()!=expected:raise ValueError('PROC measurement collector changed before replace')
+                if expected is not None and (path.is_symlink() or path.stat().st_size!=len(expected) or path.read_bytes()!=expected):raise ValueError('PROC measurement collector changed before replace')
                 if time.monotonic()>=deadline:raise TimeoutError('PROC original report replace deadline')
                 os.replace(destination,path)
+                destination=path
                 if time.monotonic()>=deadline:raise TimeoutError('PROC original report post-replace deadline')
         except BaseException as error:first=error
     if first is not None:
@@ -1767,7 +1770,7 @@ def proc_private_record(path,value,deadline,*,exclusive=False,expected=None):
 def proc_trace_argv(spec,slot,descriptor,authority_path,authority_sha,handshake_fd,phase):
     if spec['role']!='qualification' or phase not in ('normal','controller','session') or type(handshake_fd) is not int or not 3<=handshake_fd<=1024:
         raise ValueError('PROC closed measurement role/handshake')
-    calls='%file,%process,%memory,read,pread64,readv,socket,accept,accept4,socketpair,pipe,pipe2,eventfd,eventfd2,epoll_create,epoll_create1,timerfd_create,signalfd,signalfd4,inotify_init,inotify_init1,memfd_create,pidfd_open,close,dup,dup2,dup3,fcntl,getdents64,io_uring_setup,io_uring_enter,io_uring_register,io_setup,io_destroy,io_submit,io_cancel,io_getevents,io_pgetevents,process_vm_readv,process_vm_writev'
+    calls='%file,%process,%memory,read,pread64,readv,socket,accept,accept4,socketpair,pipe,pipe2,eventfd,eventfd2,epoll_create,epoll_create1,timerfd_create,signalfd,signalfd4,inotify_init,inotify_init1,memfd_create,pidfd_open,close,close_range,dup,dup2,dup3,fcntl,fcntl64,getdents64,io_uring_setup,io_uring_enter,io_uring_register,io_setup,io_destroy,io_submit,io_cancel,io_getevents,io_pgetevents,process_vm_readv,process_vm_writev'
     return [spec['transport']['tracer'],'-ff','--kill-on-exit','--interruptible=2','-ttt','-yy','-s','4096','-e','trace='+calls,'-e','raw=read,pread64,readv',
             '-o',str(Path(slot)/'qualification.trace'),os.path.realpath(sys.executable),'-I','-S','-B',str(Path(__file__).resolve()),
             'command','--proc-measured-controller',str(descriptor),str(authority_path),authority_sha,str(handshake_fd),phase]
@@ -1952,7 +1955,8 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                 if pidfd is not None and tracer is not None:
                     current=cleanup(lambda:proc_actor(tracer['pid']))
                     if current is not None and current['start']==tracer['start']:
-                        cleanup(lambda:signal.pidfd_send_signal(pidfd,signal.SIGKILL));signal_sent=True
+                        sent=cleanup(lambda:(signal.pidfd_send_signal(pidfd,signal.SIGKILL),True)[1])
+                        if sent is True:signal_sent=True
                 code=cleanup(lambda:child.wait(timeout=max(.001,min(10,spec['workDeadline']-time.monotonic()))))
             else:code=status
         if stream is not None:cleanup(stream.close)
@@ -1970,7 +1974,24 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
         if not residual or time.monotonic()>=spec['workDeadline']:break
         time.sleep(.05)
     cleanup='observed-known-terminal' if ready is not None and not residual and code is not None else 'unknown-private-hold'
-    record={'phase':phase,'additionalFailures':additional,'firstCause':failure_record(first),'tracer':tracer,'tracerExit':code,'pidfdSignalSent':signal_sent,
+    # A measured subject's retained cause precedes apparatus cleanup/reporting
+    # errors. They remain secondary; neither may erase the consumed child result.
+    if phase=='normal' and code is not None and code!=0:
+        error=ValueError('PROC measured terminal grammar differs')
+        failed=slot/'measurement.subject.json'
+        try:
+            if failed.is_file() and not failed.is_symlink() and 0<failed.stat().st_size<=MAX_OUTPUT:
+                detail=json.loads(failed.read_bytes())
+                error.proc_subject_failure=detail.get('firstCause')
+                error.proc_subject_result=detail
+        except BaseException as read_error:additional.append(failure_record(read_error))
+        if getattr(error,'proc_subject_failure',None) is not None or first is None:
+            if first is not None:
+                additional.append(failure_record(first))
+                if hasattr(first,'proc_measurement_report_disposition'):error.proc_measurement_report_disposition=first.proc_measurement_report_disposition
+            first=error
+        first.proc_measurement_additional=additional
+    record={'phase':phase,'additionalFailures':additional,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),'tracer':tracer,'tracerExit':code,'pidfdSignalSent':signal_sent,
         'subjectStartAuthenticated':ready is not None,'subjectReadiness':ready,'controlReadiness':control,
         'sampledBirths':list(known.values()),'samples':samples,'sampledPeakRssBytes':peak,
         'unsampledInstrumentation':{'sourceProbeBound':2,'count':None,'identities':None,'lifetimes':None,'peakRssBytes':None},
@@ -1979,17 +2000,11 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
     try:proc_private_record(slot/'measurement.apparatus.json',record,spec['totalDeadline'],exclusive=True)
     except BaseException as error:
         if first is None:first=error
-        else:first.proc_measurement_reporting_failure=failure_record(error)
+        else:additional.append(failure_record(error))
+        if hasattr(error,'proc_private_report'):
+            first.proc_measurement_report_disposition=error.proc_private_report
     if first is not None:raise first
     if cleanup!='observed-known-terminal':raise ValueError('PROC measurement cleanup unknown; retain private hold')
-    if phase=='normal' and code!=0:
-        failed=slot/'measurement.subject.json'
-        error=ValueError('PROC measured terminal grammar differs')
-        if failed.is_file() and not failed.is_symlink() and failed.stat().st_size<=MAX_OUTPUT:
-            detail=json.loads(failed.read_bytes())
-            error.proc_subject_failure=detail.get('firstCause')
-            error.proc_subject_result=detail
-        raise error
     if phase!='normal' and (not signal_sent or code!=-signal.SIGKILL):raise ValueError('PROC kernel control terminal grammar differs')
     if phase!='normal':
         trace=proc_trace_evidence(spec,slot,authority_path,tracer['pid'],killed=True,apparatus_pid=os.getpid())
@@ -2193,6 +2208,8 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
     except BaseException as error:
         first=error;state['sendState']='qualification-failed-or-unknown'
         if hasattr(error,'proc_subject_result'):state['failedSubjectResult']=error.proc_subject_result
+        additional.extend(getattr(error,'proc_measurement_additional',[]))
+        if hasattr(error,'proc_measurement_report_disposition'):state['measurementReportDisposition']=error.proc_measurement_report_disposition
         if hasattr(error,'proc_sensitive_creation'):
             state['semanticHeaderCreationFailure']=error.proc_sensitive_creation
             if hasattr(error,'proc_sensitive_close_failure'):additional.append(error.proc_sensitive_close_failure)
@@ -2208,16 +2225,20 @@ def proc_qualification_apparatus(spec,descriptor,authority_path,authority_sha,au
         state.update(firstCause=getattr(first,'proc_subject_failure',None) or failure_record(first),additionalFailures=additional,apparatusObservations=records,
                      instrumentationBoundary=PROC_INSTRUMENTATION,publicationAuthorized=False,rootAccepted=False,qualificationAccepted=False)
         if first is not None:state['commandAccepted']=False
-        try:
-            proc_private_record(root/'measurement.collector.json',{'descriptorSha256':state['descriptorSha256'],'collectorPid':os.getpid()},spec['totalDeadline'],exclusive=True)
-            proc_private_record(root/'command.json',state,spec['totalDeadline'],expected=state_raw)
-        except BaseException as error:
-            if first is None:first=error
-            else:additional.append(failure_record(error))
-            # Advisory stderr contains only bounded first/secondary causes and the
-            # authenticated report disposition; it cannot replace canonical state.
-            print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),
-                              'reportingFailure':failure_record(error),'reportDisposition':getattr(error,'proc_private_report',None)}),file=sys.stderr)
+        # Registration and canonical failure reporting are independent attempts.
+        # An occupied registration never makes this command successful.
+        for report_path in (root/'measurement.collector.json',root/'command.json'):
+            state.update(firstCause=getattr(first,'proc_subject_failure',None) or failure_record(first),additionalFailures=additional)
+            if first is not None:state['commandAccepted']=False
+            try:
+                if report_path.name=='measurement.collector.json':
+                    proc_private_record(report_path,{'descriptorSha256':state['descriptorSha256'],'collectorPid':os.getpid()},spec['totalDeadline'],exclusive=True)
+                else:proc_private_record(report_path,state,spec['totalDeadline'],expected=state_raw)
+            except BaseException as error:
+                if first is None:first=error
+                else:additional.append(failure_record(error))
+                print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),
+                                  'reportingFailure':failure_record(error),'reportDisposition':getattr(error,'proc_private_report',None)}),file=sys.stderr)
     return 0 if first is None else 1
 
 
@@ -2231,17 +2252,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         return p.read_bytes()
     def persist(path,value,exclusive=False):
         if measurement is not None and path.name=='command.json':path=path.with_name('measurement.subject.json')
-        if spec is not None and time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC original state/reporting deadline')
-        raw=json.dumps(value,sort_keys=True).encode()+b'\n'
+        deadline=spec['totalDeadline'] if spec is not None else time.monotonic()
         cap=256*1024 if path.name=='input.json' else MAX_OUTPUT
-        if len(raw)>cap:raise ValueError('PROC canonical state/report byte budget exceeded')
-        if spec is not None and time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC original state/report serialization deadline')
-        if exclusive:
-            with path.open('xb') as out: os.chmod(path,0o600);out.write(raw);out.flush();os.fsync(out.fileno())
-        else:
-            temporary=path.with_suffix('.pending')
-            with temporary.open('xb') as out:os.chmod(temporary,0o600);out.write(raw);out.flush();os.fsync(out.fileno())
-            os.replace(temporary,path)
+        return proc_private_record(path,value,deadline,exclusive=exclusive,cap=cap)
     try:
         raw=read_regular(descriptor,256*1024);spec=json.loads(raw)
         authority_raw=read_regular(authority_path,256*1024)
@@ -2499,6 +2512,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
             try:persist(slot/'command.json',result,exclusive=spec['role']=='watch')
             except BaseException as error:
                 additional.append(failure_record(error));result['reportingOutcome']='failed'
+                result['reportDisposition']=getattr(error,'proc_private_report',None)
+                print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':failure_record(first or error),
+                                  'reportingFailure':failure_record(error),'reportDisposition':result['reportDisposition']}),file=sys.stderr)
                 if first is None:first=error
         elif first is not None:
             print(json.dumps({'schema':RESULT_SCHEMA,'firstCause':failure_record(first),'commandAccepted':False}),file=sys.stderr)
