@@ -378,6 +378,47 @@ class CommonArchInputs(unittest.TestCase):
             (Path(args.engine_allocation)/'hooks/unapproved.json').write_text('{}')
             with self.assertRaisesRegex(RuntimeError,'hooks directory'):IMAGE.common_engine_environment(args)
 
+    def test_actual_tmpfs_scratch_contract_preserves_runtime_prefix(self):
+        import os
+        args,pins,environment,git=self.native_fixture()
+        old_prefix=IMAGE.podman_prefix(args)
+        with tempfile.TemporaryDirectory(prefix='OWNED-common-scratch-',dir='/dev/shm') as owned:
+            parent=Path(owned);scratch=parent/'scratch';scratch.mkdir(mode=0o700)
+            args.engine_scratch_dir=str(scratch)
+            chosen={**environment,'TMPDIR':str(scratch)}
+            self.assertEqual(IMAGE.podman_prefix(args),old_prefix)
+            self.assertEqual(IMAGE.common_engine_paths(args)['libpod-tmp'],Path(args.engine_allocation)/'libpod-tmp')
+            with patch.dict(IMAGE.os.environ,chosen,clear=True):
+                identity=IMAGE.common_scratch_identity(args,require_empty=True)
+                self.assertEqual(identity['filesystem'],'tmpfs');self.assertEqual(identity['uid'],os.geteuid())
+                IMAGE.common_engine_environment(args)
+                with patch.dict(IMAGE.os.environ,environment,clear=True):
+                    with self.assertRaisesRegex(RuntimeError,'environment mismatch'):IMAGE.common_engine_environment(args)
+                scratch.chmod(0o755)
+                with self.assertRaisesRegex(RuntimeError,'mode0700'):IMAGE.common_engine_environment(args)
+                scratch.chmod(0o700)
+                with patch.object(IMAGE.os,'geteuid',return_value=os.geteuid()+1):
+                    with self.assertRaisesRegex(RuntimeError,'owned directory'):IMAGE.common_scratch_identity(args)
+                (scratch/'unclassified').write_bytes(b'OWNED ordinary control')
+                with self.assertRaisesRegex(RuntimeError,'fresh and empty'):IMAGE.common_scratch_identity(args,require_empty=True)
+                (scratch/'unclassified').unlink()
+                alias=parent/'alias';alias.symlink_to(scratch);args.engine_scratch_dir=str(alias)
+                with self.assertRaisesRegex(RuntimeError,'symlink'):IMAGE.common_scratch_identity(args)
+                args.engine_scratch_dir=str(Path(args.engine_allocation)/'home')
+                with self.assertRaisesRegex(RuntimeError,'overlaps namespace'):IMAGE.common_engine_paths(args)
+                args.engine_scratch_dir=str(scratch)
+                inventory=(self.bundle/'acquired/package-inventory.expected').read_bytes()
+                transport=SyntheticNativeTransport(args,inventory,self.root/'SYNTHETIC-scratch.oci.tar')
+                with patch.dict(IMAGE.COMMON_PINS,pins),patch.object(IMAGE,'git_value',side_effect=git),patch.object(IMAGE,'run',side_effect=transport):
+                    checked=IMAGE.check_common_inputs(args)
+                    receipt=IMAGE.common_preflight(args,ROOT,Path(args.state_dir),checked)
+                    self.assertEqual(json.loads(receipt.read_bytes())['engineScratchIdentity'],identity)
+                    IMAGE.common_revalidate(args,checked)
+                    scratch.rename(parent/'retained-original');scratch.mkdir(mode=0o700)
+                    with self.assertRaisesRegex(RuntimeError,'identity changed'):IMAGE.common_revalidate(args,checked)
+            # No engine call escaped transport; both directories are this test's
+            # exact owned allocation, and TemporaryDirectory closes that scope.
+
     def test_actual_common_native_flow_inert_transport(self):
         args,pins,environment,git=self.native_fixture()
         inventory=(self.bundle/'acquired/package-inventory.expected').read_bytes()
@@ -649,6 +690,9 @@ class CommonArchInputs(unittest.TestCase):
         self.cli('unknown','preflight')
         self.cli('portable-python','check-inputs')
         self.cli('portable-python','preflight',['--image-source','/missing'])
+        self.cli('portable-python','preflight',['--engine-scratch-dir','/missing'])
+        self.cli('common-arch','check-inputs',['--image-source','/missing-image','--expected-image-source-revision','b'*40,
+                 '--acquisition-dir','/missing-acquired','--expected-acquired-inputs-sha256','c'*64,'--engine-scratch-dir','/missing'])
 
     def test_actual_staging_and_commands(self):
         image=self.root/'image'

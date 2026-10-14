@@ -293,3 +293,37 @@ its existing `subprocess.run(capture_output=True)` behavior. Actual native opera
 still needs separately admitted whole-operation time, memory, disk and output limits.
 Owned ordinary-process controls test exact-bound success, combined-output overflow,
 TERM-ignoring timeout, reaping and reporting failure; they launch no native engine.
+
+
+## Common engine scratch backing
+
+Common native modes accept optional `--engine-scratch-dir`. It changes only the
+closed environment's `TMPDIR`, preserving the engine allocation, full Podman prefix,
+libpod `--tmpdir`, graphroot/runroot and configuration. The override must be an existing
+empty directory owned by the invoking uid with mode0700 on tmpfs, disjoint from sources,
+acquisition, state, storage and other engine namespace directories. Preflight records
+its device/inode identity and rechecks it before later effects. The helper creates,
+mounts and deletes no scratch allocation; allocation custody remains external.
+Without this flag, the existing `allocation/download-tmp` behavior is preserved.
+Portable-Python rejects the flag before I/O.
+
+The supported backing constraint comes from pinned upstream source: Buildah1.45.1
+[creates its context overlay before recipe execution](https://github.com/containers/podman/blob/v6.1.3/vendor/go.podman.io/buildah/imagebuildah/build.go),
+including with VFS image storage. Its [upper/work scaffolding](https://github.com/containers/podman/blob/v6.1.3/vendor/go.podman.io/buildah/imagebuildah/build_linux.go)
+uses [TMPDIR first](https://github.com/containers/podman/blob/v6.1.3/vendor/go.podman.io/buildah/internal/tmpdir/tmpdir.go).
+The immutable build context remains the lower directory; it need not be copied to
+tmpfs. [Linux OverlayFS documentation](https://www.kernel.org/doc/html/v6.5/filesystems/overlayfs.html)
+allows another overlay filesystem as lower and requires upper/work filesystem support.
+Actual kernel acceptance remains native qualification; the source guard does not prove it.
+
+Keep the libpod temporary path stable for a retained store: Podman6.1.3
+[persists and validates that path](https://github.com/containers/podman/blob/v6.1.3/libpod/sqlite_state.go).
+Changing the whole engine namespace would also change it. No database reset or rewrite
+is a scratch repair. TMPDIR additionally governs
+[temporary image-copy storage](https://github.com/containers/podman/blob/v6.1.3/vendor/go.podman.io/common/pkg/config/config.go)
+and [full OCI layout staging before archive creation](https://github.com/containers/podman/blob/v6.1.3/vendor/go.podman.io/image/v5/oci/archive/oci_dest.go).
+Account scratch pages in memory as well as disk/inode capacity; actor RSS alone excludes
+those tmpfs charges. Neither a fixed tmpfs size nor an empty scaffold proves enough
+capacity for export. Native admission retains whole-operation limits, exact teardown
+and original failures. Controls exercise the actual production path against a small
+owned tmpfs directory; intercepted engine transport supplies no native acceptance.

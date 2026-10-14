@@ -1167,6 +1167,14 @@ def common_engine_paths(args):
     allocation = common_raw_path(args.engine_allocation)
     paths = {name: allocation / name for name in ('home', 'xdg-runtime', 'config', 'data',
                                                    'download-tmp', 'libpod-tmp', 'hooks', 'network')}
+    scratch = getattr(args, 'engine_scratch_dir', None)
+    if scratch is not None:
+        paths['download-tmp'] = common_raw_path(scratch)
+        for name, other in paths.items():
+            if name != 'download-tmp':
+                chosen = paths['download-tmp']
+                common_require(chosen != other and chosen not in other.parents and other not in chosen.parents,
+                               'engine scratch overlaps namespace: ' + name)
     for name, path in paths.items():
         common_raw_path(path)
         for value in (args.source, args.image_source, args.acquisition_dir, args.root, args.runroot, args.state_dir):
@@ -1174,6 +1182,36 @@ def common_engine_paths(args):
             common_require(path != other and path not in other.parents and other not in path.parents,
                            'engine namespace overlaps input/state/storage: ' + name)
     return paths
+
+
+def common_scratch_identity(args, *, require_empty=False):
+    """An optional common-only TMPDIR; never change libpod's persisted --tmpdir."""
+    import stat
+    if getattr(args, 'engine_scratch_dir', None) is None:
+        return None
+    path = common_engine_paths(args)['download-tmp']
+    try:
+        identity = path.lstat()
+    except OSError as error:
+        raise RuntimeError('common-arch: engine scratch directory missing/unreadable') from error
+    common_require(stat.S_ISDIR(identity.st_mode) and identity.st_uid == os.geteuid()
+                   and stat.S_IMODE(identity.st_mode) == 0o700, 'engine scratch must be owned directory mode0700')
+    mountinfo = common_read(Path('/proc') / str(os.getpid()) / 'mountinfo', MAX_LOCK_BYTES)
+    candidates = []
+    for row in mountinfo.decode('utf-8').splitlines():
+        fields = row.split()
+        common_require(len(fields) >= 10 and '-' in fields, 'invalid engine scratch mount observation')
+        mountpoint = Path(re.sub(r'\\([0-7]{3})', lambda match: chr(int(match[1], 8)), fields[4]))
+        if (mountpoint == path or mountpoint in path.parents) and fields[2] == f'{os.major(identity.st_dev)}:{os.minor(identity.st_dev)}':
+            candidates.append((len(mountpoint.parts), fields[fields.index('-') + 1]))
+    common_require(candidates and max(candidates)[1] == 'tmpfs', 'engine scratch filesystem must be tmpfs')
+    if require_empty:
+        common_require(not any(path.iterdir()), 'engine scratch must be fresh and empty before preflight')
+    current = path.lstat()
+    common_require((current.st_dev, current.st_ino, current.st_uid, current.st_mode)
+                   == (identity.st_dev, identity.st_ino, identity.st_uid, identity.st_mode), 'engine scratch changed during observation')
+    return {'path': str(path), 'device': identity.st_dev, 'inode': identity.st_ino,
+            'uid': identity.st_uid, 'mode': '0700', 'filesystem': 'tmpfs'}
 
 
 def common_engine_prefix(args):
@@ -1188,6 +1226,7 @@ def common_engine_prefix(args):
 def common_engine_environment(args):
     import tomllib
     paths = common_engine_paths(args)
+    common_scratch_identity(args)
     expected = {'PATH': '/usr/bin:/bin', 'HOME': str(paths['home']), 'LANG': 'C.UTF-8', 'LC_ALL': 'C.UTF-8',
                 'XDG_RUNTIME_DIR': str(paths['xdg-runtime']), 'XDG_CONFIG_HOME': str(paths['config']),
                 'XDG_DATA_HOME': str(paths['data']), 'TMPDIR': str(paths['download-tmp'])}
@@ -1556,6 +1595,7 @@ def common_context_inventory(checked):
 
 
 def common_preflight(args, source, state, checked):
+    scratch_identity = common_scratch_identity(args, require_empty=True)
     config_identities = common_engine_environment(args)
     expected_inventory = common_context_inventory(checked)
     prefix = podman_prefix(args)
@@ -1593,6 +1633,9 @@ def common_preflight(args, source, state, checked):
                'storage': {key: info['store'][key] for key in ('graphRoot', 'runRoot', 'graphDriverName')},
                'scope': 'native-prerequisites-observed; build/runtime-effective capabilities require native evidence'}
     checked['engineConfigSha256'] = config_identities
+    if scratch_identity is not None:
+        checked['engineScratchIdentity'] = scratch_identity
+        receipt['engineScratchIdentity'] = scratch_identity
     path = state / 'preflight.json'
     with path.open('xb') as stream:
         os.fchmod(stream.fileno(), 0o600)
@@ -1606,6 +1649,9 @@ def common_revalidate(args, checked):
         common_require(not git_value(checkout, 'status', '--porcelain', capture_limit_bytes=COMMON_CAPTURE_LIMIT_BYTES)
                        and git_value(checkout, 'rev-parse', 'HEAD', capture_limit_bytes=COMMON_CAPTURE_LIMIT_BYTES) == expected, 'native source changed')
     identities = common_engine_environment(args)
+    if 'engineScratchIdentity' in checked:
+        common_require(common_scratch_identity(args) == checked['engineScratchIdentity'],
+                       'engine scratch directory identity changed')
     if 'engineConfigSha256' in checked:
         common_require(identities == checked['engineConfigSha256'], 'native engine configuration changed')
     return common_context_inventory(checked)
@@ -1813,19 +1859,20 @@ def main() -> int:
     parser.add_argument("--runroot", required=True)
     parser.add_argument("--profile", choices=("portable-python", "common-arch"), default="portable-python")
     parser.add_argument("--engine-allocation")
+    parser.add_argument("--engine-scratch-dir")
     parser.add_argument("--image-source")
     parser.add_argument("--expected-image-source-revision")
     parser.add_argument("--acquisition-dir")
     parser.add_argument("--expected-acquired-inputs-sha256")
     args = parser.parse_args()
     common_flags = (args.image_source, args.expected_image_source_revision,
-                    args.acquisition_dir, args.expected_acquired_inputs_sha256, args.engine_allocation)
+                    args.acquisition_dir, args.expected_acquired_inputs_sha256, args.engine_allocation, args.engine_scratch_dir)
     if args.profile == "common-arch":
         if args.mode != "check-inputs" and not COMMON_NATIVE_DISPATCH_ENABLED:
             parser.error("common-arch native preflight/qualification source dispatch disabled pending semantic review")
         if not all(common_flags[:4]):
             parser.error("common-arch requires image source and externally bound acquisition inputs")
-        if args.mode != "check-inputs" and args.engine_allocation is None:
+        if (args.mode != "check-inputs" or args.engine_scratch_dir is not None) and args.engine_allocation is None:
             parser.error("common-arch native modes require --engine-allocation")
         result = check_common_inputs(args) if args.mode == "check-inputs" else common_native_main(args)
         print(json.dumps(result, sort_keys=True, separators=(",", ":")))

@@ -156,7 +156,7 @@ def main() -> None:
     source = (ROOT / "eng/portable-workspace-image.py").read_text()
     containerfile = (ROOT / "tests/portable-workspace/image/Containerfile").read_text()
     inputs = json.loads((ROOT / "tests/portable-workspace/image/inputs.json").read_text())
-    assert hashlib.sha256(source.encode()).hexdigest() == "4b7c0d244ebc8cacbdef84e4b1b0bf50aaccfe6f697e25a56bef28f948e66da1"
+    assert hashlib.sha256(source.encode()).hexdigest() == "8baed6e995ab930285d7713987a926284833589190fc69b5c05cca11b9677b4a"
     assert_fixed_build_inputs(containerfile, source, inputs)
     IMAGE.require_containerfile_contract(containerfile)
     for changed, expected in (
