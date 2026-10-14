@@ -612,7 +612,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     let digest (value: string) =
         Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes value)).ToLowerInvariant()
 
-    Assert.Equal("80fdd970af21353c803bd380e645b72e922c8b3a39b455b86574872d03c2b74e", digest source)
+    Assert.Equal("621a1bdfdaa15318bf3818138a1438307977ca352092447a62bb50d43692cd41", digest source)
     let marker = "// Controlled subprocess fixtures exercise the production wrappers, not native proof."
     let ending = "let requireGreen code workingDirectory executable arguments environment ="
     let start = source.IndexOf(marker, StringComparison.Ordinal)
@@ -621,7 +621,7 @@ let ``physical accounting preserves failed attempts and rejects incomplete or ov
     Assert.Equal(start, source.LastIndexOf(marker, StringComparison.Ordinal))
     Assert.Equal(finish, source.LastIndexOf(ending, StringComparison.Ordinal))
     let prefix = source.Substring(0, start)
-    Assert.Equal("6e7c4dab87d0db93c5ab205249f0936290b3e0a7a931b36b5f631c8313d8ea7f", digest prefix)
+    Assert.Equal("5cd480b615baeaf388ebb752318b3b07614b39c7c55c700c829d2e1d57384de6", digest prefix)
     let fragment = File.ReadAllText(Path.Combine(root, "tests/FS.GG.Coordination.ArchitectureTests/Fixtures/quint-accounting-controls.fsx.fragment"))
     Assert.True(Encoding.UTF8.GetByteCount(fragment) <= 32768)
     Assert.Equal("0cb026147d6cee22119d640b75a8939723dd8894fbd10a23ea693bb49958f376", digest fragment)

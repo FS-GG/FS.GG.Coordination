@@ -4018,6 +4018,73 @@ let ``canonical Quint failure receipts retain the failed phase`` phase q1 q2 cod
         if File.Exists receipt then
             File.Delete receipt
 
+[<Theory>]
+[<InlineData("physical-observations", "RECEIPT-SELF-TEST-PHYSICAL", "observed", 2)>]
+[<InlineData("diagnostic-bound", "RECEIPT-SELF-TEST-BOUND", "partial", 1)>]
+let ``canonical Quint failure diagnostics retain physical attempts without qualifying`` phase code status count =
+    let receipt =
+        Path.Combine(Path.GetTempPath(), "fsgg-quint-diagnostics-" + Guid.NewGuid().ToString("N") + ".json")
+
+    try
+        let exitCode, _, error =
+            run
+                "dotnet"
+                [
+                    "fsi"
+                    "eng/validate-canonical-quint-protocol.fsx"
+                    "--"
+                    "--root"
+                    "."
+                    "--output"
+                    receipt
+                    "--exercise-failure-receipt"
+                    phase
+                ]
+
+        Assert.NotEqual(0, exitCode)
+        Assert.Contains($"code=%s{code}", error)
+        Assert.True(FileInfo(receipt).Length < 1100000L)
+        use document = JsonDocument.Parse(File.ReadAllBytes receipt)
+        let value = document.RootElement
+        Assert.Equal(code, value.GetProperty("failure").GetProperty("code").GetString())
+        Assert.Equal("failed", value.GetProperty("q1Outcome").GetString())
+        Assert.Equal("not-run", value.GetProperty("q2Outcome").GetString())
+        let diagnostics = value.GetProperty("failureDiagnostics")
+        Assert.Equal(status, diagnostics.GetProperty("status").GetString())
+        Assert.Equal(count, diagnostics.GetProperty("observedPhysicalCount").GetInt32())
+        let rows = diagnostics.GetProperty("physicalAttempts").EnumerateArray() |> Seq.toArray
+        Assert.Equal(count, rows.Length)
+        Assert.Equal(0, rows[0].GetProperty("exitCode").GetInt32())
+        Assert.True(rows[0].GetProperty("completed").GetBoolean())
+        Assert.Equal("fsgg.quint-physical-attempt/2", rows[0].GetProperty("schema").GetString())
+
+        if phase = "physical-observations" then
+            let command = rows[0].GetProperty("command")
+            Assert.Equal("/bin/sh", command.GetProperty("executable").GetString())
+            Assert.Equal(64, command.GetProperty("executableSha256").GetString().Length)
+            Assert.Equal(64, command.GetProperty("argvSha256").GetString().Length)
+            Assert.Equal("printf diagnostic-child", command.GetProperty("arguments").[1].GetString())
+            Assert.Equal(124, rows[1].GetProperty("exitCode").GetInt32())
+            Assert.True(rows[1].GetProperty("timedOut").GetBoolean())
+            Assert.True(rows[1].GetProperty("terminal").GetBoolean())
+            Assert.Equal(75, rows[1].GetProperty("timeoutMs").GetInt32())
+        else
+            Assert.Equal("argv-bound", diagnostics.GetProperty("gap").GetString())
+            Assert.Equal(0, diagnostics.GetProperty("commandObservationCount").GetInt32())
+            Assert.Equal(JsonValueKind.Null, rows[0].GetProperty("command").ValueKind)
+
+        // Evaluate the production aggregate predicate against the actual failed
+        // receipt. Available diagnostics cannot replace either passing gate.
+        let aggregate = File.ReadAllText(Path.Combine(root, "eng/bootstrap-gates/canonical-quint-aggregate.sh"))
+        let start = aggregate.IndexOf("jq -e '", StringComparison.Ordinal) + "jq -e '".Length
+        let finish = aggregate.IndexOf("' \"$base\"", start, StringComparison.Ordinal)
+        Assert.True(start >= "jq -e '".Length && finish > start)
+        let aggregateExit, _, _ = run "jq" [ "-e"; aggregate.Substring(start, finish - start); receipt ]
+        Assert.Equal(1, aggregateExit)
+    finally
+        if File.Exists receipt then
+            File.Delete receipt
+
 [<Fact>]
 let ``canonical Quint retained process inventory near miss fails closed`` () =
     let receipt =

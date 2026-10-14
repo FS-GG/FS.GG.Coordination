@@ -536,6 +536,77 @@ let mutable private physicalScope: string option = None
 let mutable private logicalSequence = 0
 let private physicalAttempts = ResizeArray<PhysicalAttemptObservation>()
 
+// These observations aid a failed ordinary qualification. They never participate
+// in admission, retry selection, the result digest or trace acceptance.
+type private InvocationDiagnostic =
+    {
+        Executable: string
+        ExecutableSha256: string option
+        Arguments: string list
+        ArgvSha256: string
+        Input: string option
+        InputSha256: string option
+        Gap: string option
+    }
+
+let private invocationDiagnostics =
+    System.Collections.Generic.Dictionary<string, InvocationDiagnostic>()
+
+let mutable private invocationDiagnosticBytes = 0
+let mutable private ordinaryDiagnosticCaptureEnabled = false
+let mutable private invocationDiagnosticGap: string option = None
+
+let private observeInvocation logicalId ordinal workingDirectory executable arguments isQuint =
+    try
+        let executable, arguments = resolveFsiInvocation executable arguments
+        let argvBytes = JsonSerializer.SerializeToUtf8Bytes((executable, arguments))
+
+        // Bound diagnostics independently of the original command. A diagnostic
+        // refusal leaves that command and its eventual first failure unchanged.
+        if arguments.Length > 64 || argvBytes.Length > 16384
+           || invocationDiagnosticBytes + argvBytes.Length > 262144 then
+            invocationDiagnosticGap <- Some "argv-bound"
+        else
+            invocationDiagnosticBytes <- invocationDiagnosticBytes + argvBytes.Length
+
+            let boundedDigest path =
+                try
+                    if File.Exists path && FileInfo(path).Length <= 16777216L then
+                        Some(sha256 path)
+                    else
+                        None
+                with _ -> None
+
+            let input =
+                if isQuint then
+                    match arguments with
+                    | ("run" | "verify" | "parse" | "typecheck" | "compile" | "test") :: path :: _ ->
+                        Some(Path.GetFullPath(path, workingDirectory))
+                    | _ -> None
+                else None
+
+            // The genuine Quint object was already hash-verified by the owning
+            // toolchain closure. Reuse that identity without repeatedly hashing
+            // its large executable during every measured invocation.
+            let executableDigest =
+                if isQuint then Some expectedQuint else boundedDigest executable
+            let inputDigest = input |> Option.bind boundedDigest
+
+            invocationDiagnostics[$"{logicalId}/{ordinal}"] <-
+                {
+                    Executable = executable
+                    ExecutableSha256 = executableDigest
+                    Arguments = arguments
+                    ArgvSha256 = Convert.ToHexString(SHA256.HashData argvBytes).ToLowerInvariant()
+                    Input = input
+                    InputSha256 = inputDigest
+                    Gap =
+                        if executableDigest.IsNone || (input.IsSome && inputDigest.IsNone) then
+                            Some "identity-unavailable"
+                        else None
+                }
+    with _ -> invocationDiagnosticGap <- Some "command-observation-unavailable"
+
 let mutable private physicalObserver: (PhysicalAttemptObservation -> unit) option =
     None
 
@@ -668,10 +739,12 @@ let private runWithBudget timeoutMs workingDirectory (executable: string) argume
         if List.tryHead arguments = Some "verify" then
             Interlocked.Increment(&apalacheVerifyInvocationCount) |> ignore
 
-    let invoke _ =
+    let invoke ordinal =
         let executable, arguments = resolveFsiInvocation executable arguments
         let clock = Stopwatch.StartNew()
         let isolatedArguments, _ = isolateApalacheEndpoint isQuint arguments
+        if ordinaryDiagnosticCaptureEnabled then
+            observeInvocation logicalId ordinal workingDirectory executable isolatedArguments isQuint
         let info = ProcessStartInfo(executable)
         info.WorkingDirectory <- workingDirectory
         info.UseShellExecute <- false
@@ -1082,6 +1155,7 @@ let root, staticOnly, compilerOnly, outputOption, receiptFailurePhase, measureme
 
 let measurementOnly = Option.isSome measurementOutput
 let preflightOnly = Option.isSome preflightOutput
+ordinaryDiagnosticCaptureEnabled <- not measurementOnly && not preflightOnly
 // Measurement admission requires the qualified Core bytes actually loaded, not a
 // symlinked SDK path that the loader may resolve into another runtime closure.
 if measurementOnly || preflightOnly then
@@ -1135,6 +1209,85 @@ let qualificationOutput =
          outputOption)
     |> Option.map Path.GetFullPath
     |> Option.defaultValue (Path.Combine(root, "artifacts/canonical-quint/qualification.json"))
+
+let private writeFailureDiagnostics (writer: Utf8JsonWriter) =
+    let options = JsonSerializerOptions(PropertyNamingPolicy = JsonNamingPolicy.CamelCase)
+    let boxOption value = value |> Option.map box |> Option.defaultValue null
+
+    let writeGap (reason: string) =
+        writer.WriteStartObject("failureDiagnostics")
+        writer.WriteString("status", "unavailable")
+        writer.WriteString("gap", reason)
+        writer.WriteNumber("observedPhysicalCount", physicalAttempts.Count)
+        writer.WriteEndObject()
+
+    // Diagnostic construction must not replace the already selected failure.
+    let bytes =
+        try
+            let rows =
+                physicalAttempts
+                |> Seq.map (fun row ->
+                    let command =
+                        match invocationDiagnostics.TryGetValue $"{row.LogicalId}/{row.Ordinal}" with
+                        | true, value ->
+                            box
+                                {|
+                                    executable = value.Executable
+                                    executableSha256 = boxOption value.ExecutableSha256
+                                    arguments = value.Arguments
+                                    argvSha256 = value.ArgvSha256
+                                    input = boxOption value.Input
+                                    inputSha256 = boxOption value.InputSha256
+                                    gap = boxOption value.Gap
+                                |}
+                        | _ -> null
+
+                    {|
+                        schema = "fsgg.quint-physical-attempt/2"
+                        logicalId = row.LogicalId
+                        ordinal = row.Ordinal
+                        scope = boxOption row.Scope
+                        label = row.Label
+                        classification = boxOption row.Classification
+                        elapsedMs = boxOption row.ElapsedMs
+                        peakMiB = boxOption row.PeakMiB
+                        exitCode = boxOption row.ExitCode
+                        timedOut = boxOption row.TimedOut
+                        terminal = boxOption row.Terminal
+                        completed = row.Completed
+                        pid = boxOption row.Pid
+                        timeoutMs = boxOption row.TimeoutMs
+                        outputBytes = boxOption row.OutputBytes
+                        outputSha256 = boxOption row.OutputSha256
+                        semanticOutcome = boxOption row.SemanticOutcome
+                        command = command
+                    |})
+                |> Seq.toArray
+
+            Some(
+                JsonSerializer.SerializeToUtf8Bytes(
+                    {|
+                        status = if invocationDiagnosticGap.IsSome then "partial" else "observed"
+                        gap = boxOption invocationDiagnosticGap
+                        sourceSha256 = expectedSource
+                        contractSha256 = expectedContract
+                        toolchainSha256 = expectedToolchain
+                        observedPhysicalCount = physicalAttempts.Count
+                        commandObservationCount = invocationDiagnostics.Count
+                        physicalAttempts = rows
+                    |},
+                    options
+                )
+            )
+        with _ -> None
+
+    match bytes with
+    | Some value when value.Length <= 1048576 ->
+        writer.WritePropertyName "failureDiagnostics"
+        // Keep the measured byte bound when the enclosing receipt is indented.
+        writer.WriteRawValue(Encoding.UTF8.GetString value, true)
+    | Some _ -> writeGap "byte-bound"
+    | None -> writeGap "construction-unavailable"
 
 let writeQualificationReceipt failure =
     verifyMeasurementDirectory ()
@@ -1263,6 +1416,9 @@ let writeQualificationReceipt failure =
             writer.WriteEndObject()
         | None -> writer.WriteNull("failure")
 
+        if failure.IsSome && ordinaryDiagnosticCaptureEnabled then
+            writeFailureDiagnostics writer
+
         writer.WriteString("resultSha256", resultSha256)
         writer.WriteEndObject()
         writer.Flush()
@@ -1335,6 +1491,27 @@ match receiptFailurePhase with
     preparationDurationMs <- qualificationClock.ElapsedMilliseconds
     preparationDigest <- Some(String.replicate 64 "0")
     fail "RECEIPT-SELF-TEST-Q2" "exercise q2 failure receipt"
+| Some "physical-observations" ->
+    let passCode, passOutput, _, _, _ =
+        runMeasured 5000 root "/bin/sh" [ "-c"; "printf diagnostic-child" ] []
+
+    let timeoutCode, _, _, _, _ =
+        runMeasured 75 root "/bin/sh" [ "-c"; "sleep 2" ] []
+
+    if passCode <> 0 || passOutput <> "diagnostic-child" || timeoutCode <> 124 then
+        fail "RECEIPT-SELF-TEST-CONTROL" "controlled child outcome"
+
+    fail "RECEIPT-SELF-TEST-PHYSICAL" "controlled original failure retained"
+| Some "diagnostic-bound" ->
+    invocationDiagnosticBytes <- 262145
+
+    let code, _, _, _, _ =
+        runMeasured 5000 root "/bin/sh" [ "-c"; "printf bounded-child" ] []
+
+    if code <> 0 then
+        fail "RECEIPT-SELF-TEST-CONTROL" "bounded controlled child"
+
+    fail "RECEIPT-SELF-TEST-BOUND" "controlled original failure retained"
 | Some "process-inventory" ->
     q1Outcome <- "passed"
     currentPhase <- "q2"
