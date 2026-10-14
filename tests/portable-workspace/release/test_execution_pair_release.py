@@ -669,7 +669,11 @@ VERIFIED_PAIR_CONTROL = r'''{"mediaType":"application/vnd.dev.sigstore.verificat
 def pair_recovery_source_controls():
     helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
     a,run,jobs,verified=recovery_inert_fixture()
-    assert a['enabled'] is False and a['recovery']['enabled'] is False and a['recovery']['policyObservationEnabled'] is False and a['recovery']['clientQualificationEnabled'] is False
+    assert a['enabled'] is False and a['recovery']['enabled'] is False and a['recovery']['policyObservationEnabled'] is False
+    assert a['recovery']['clientQualificationEnabled'] is True
+    assert a['recovery']['policyTokenCleanup']['enabled'] is False
+    assert a['recovery']['policyTokenCleanup']['nativeAdmissionEstablished'] is False
+    assert a['recovery']['policyTokenCleanup']['publicationAuthorized'] is False
     helpers['pair_original_native'](a,run,jobs)
     helpers['pair_verified_attestation'](a,verified)
     for mode in ('repository','publisher','attempt','workflow','partial-jobs','duplicate-job','duplicate-step','extra-step','effect-success','attest-skipped','failure-order'):
