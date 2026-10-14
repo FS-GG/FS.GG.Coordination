@@ -93,10 +93,12 @@ class DiagnosticControls(unittest.TestCase):
               'pins':pins,'proofInputs':native,'sourceReadAllowlist':[p['path'] for p in pins],
               'environment':{'HOME':str(slot/'home'),'TMPDIR':str(slot/'tmp'),'PATH':'/usr/bin',
                              'LANG':'C','LC_ALL':'C','TZ':'UTC','OPENSSL_CONF':str(module.proc_support_root()/'openssl.cnf')},
-              'operationRoot':str(slot),'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
+              'operationRoot':str(slot),'qualificationAttempt':None,'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
               'rssBytes':512*1024**2,'addressSpaceBytes':512*1024**2,'logBytes':1024**2,'diskBytes':16*1024**2,'cpuAffinity':sorted(os.sched_getaffinity(0))}
         # Canonical-shaped inert evidence exercises joins, never supplies genuine gh qualification.
-        qualification={'schema':module.RESULT_SCHEMA,'commandAccepted':True,'qualificationAccepted':True,'firstCause':None,'additionalFailures':[],'reportingOutcome':'written',
+        capacity={'directory':'/sys/fs/cgroup','independentPrivateScope':True,'heldStoresUsed':False,'activeWorkers':None,
+                  'identity':module.proc_read_identity('/sys/fs/cgroup'),'membership':Path('/proc/self/cgroup').read_text()}
+        qualification={'capacity':capacity,'schema':module.RESULT_SCHEMA,'commandAccepted':True,'qualificationAccepted':True,'firstCause':None,'additionalFailures':[],'reportingOutcome':'written',
                        'ownerReceipt':{'cleanup':'observed-empty-group','custody':'observed-owned-group','exit':0,'firstCause':None,
                                        'leader':{'start':1},'residual':[],'escapedResidual':[],'escapedDescendants':[]},
                        'runtimeEvidence':{'currentBootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
@@ -215,7 +217,7 @@ class DiagnosticControls(unittest.TestCase):
                 target=argv[-1];calls.append(target);output=Path(out)
                 if '/jobs?' in target:
                     output.write_bytes(b'inert causal failure')
-                    output.with_suffix('.log.result.json').write_text(json.dumps({'cleanup':'observed-empty-group'}))
+                    output.with_suffix('.log.result.json').write_text(json.dumps({'cleanup':'observed-empty-group','custody':'observed-owned-group'}))
                     raise RuntimeError('inert original terminal job metadata failure')
                 if '/artifacts?' in target:
                     value={'total_count':1,'artifacts':[{'id':71,'name':'execution-pair-publication-42-1','expired':False,
@@ -225,8 +227,13 @@ class DiagnosticControls(unittest.TestCase):
                 else:raw=archive
                 Path(argv[argv.index('--output')+1]).write_bytes(raw)
                 output.write_text(json.dumps({'httpCode':'200','effectiveUrl':target,'redirects':0,'sslVerifyResult':0}))
-                return {'cleanup':'observed-empty-group'}
-            result=module.proc_terminal_evidence(SimpleNamespace(run=inert_run),spec,root,{},lambda *a:None,{'id':42})
+                return {'cleanup':'observed-empty-group','custody':'observed-owned-group'}
+            def inert_storage(owner,spec,slot,env,check,target,name,retirement):
+                calls.append('explicit-storage-join')
+                module.proc_charge_read(retirement,'api');module.proc_charge_read(retirement,'storage')
+                return archive
+            with patch.object(module,'proc_storage_read',side_effect=inert_storage):
+                result=module.proc_terminal_evidence(SimpleNamespace(run=inert_run),spec,root,{},lambda *a:None,{'id':42},{})
             self.assertEqual('failed',result['records']['terminal-jobs']['state'])
             self.assertEqual('collected',result['records']['terminal-archive']['state'])
             self.assertIn('original terminal job metadata failure',result['additionalFailures'][0]['cause']['message'])
@@ -317,7 +324,7 @@ class DiagnosticControls(unittest.TestCase):
             spec['readEvidence']={'contract':'ordinary-exact-profile-observation-and-drift','runtimeData':copy.deepcopy(module.PROC_RUNTIME_DATA),
                 'directories':[{'path':str(selected),'identity':identity(selected),'relevantEntries':{'file':identity(file)},'completePopulation':True}],
                 'aliases':[{'path':str(alias),'target':str(file),'resolved':str(file),'identity':identity(alias)}],
-                'absences':[{'path':str(root/'absent-config'),'parentIdentity':identity(root)}]}
+                'absences':[module.proc_absence(root/'absent-config')]}
             module.proc_read_drift(spec)
             (selected/'unexpected').write_text('new support')
             with self.assertRaisesRegex(ValueError,'population'):module.proc_read_drift(spec)
@@ -325,6 +332,186 @@ class DiagnosticControls(unittest.TestCase):
             with self.assertRaisesRegex(ValueError,'negative'):module.proc_read_drift(spec)
             (root/'absent-config').unlink();alias.unlink();alias.symlink_to(selected/'foreign')
             with self.assertRaises(ValueError):module.proc_read_drift(spec)
+
+    def test_proc_negative_intermediate_directory_and_alias_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            path=root/'missing'/'nested'/'socket'
+            row=module.proc_absence(path)
+            self.assertEqual(['missing','nested','socket'],row['missingComponents'])
+            spec['readEvidence']['absences']=[row];module.proc_read_drift(spec)
+            (root/'missing').mkdir()
+            with self.assertRaisesRegex(ValueError,'missing chain'):module.proc_read_drift(spec)
+            (root/'missing').rmdir();(root/'missing').symlink_to(root)
+            with self.assertRaises(ValueError):module.proc_read_drift(spec)
+
+    def test_proc_sensitive_creation_failure_is_owned_or_held_and_never_loops(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for operation in ('write','fsync'):
+                failure=OSError('original inert '+operation+' failure')
+                with patch.object(module.os,operation,side_effect=failure):
+                    with self.assertRaises(OSError) as raised:module.proc_sensitive_header(root,'inert-value')
+                self.assertIs(failure,raised.exception)
+                self.assertEqual('removed-before-child',failure.proc_sensitive_creation['disposition'])
+                self.assertFalse((root/'authorization.header').exists())
+            with patch.object(module.os,'write',return_value=0):
+                with self.assertRaisesRegex(OSError,'zero write'):module.proc_sensitive_header(root,'inert-value')
+            failure=OSError('preserve original write failure')
+            with patch.object(module.os,'write',side_effect=failure),patch.object(module.Path,'unlink',side_effect=OSError('inert retirement denied')):
+                with self.assertRaises(OSError) as raised:module.proc_sensitive_header(root,'inert-value')
+            self.assertIs(failure,raised.exception)
+            self.assertEqual('held-creation-failure',failure.proc_sensitive_creation['disposition'])
+            self.assertTrue((root/'authorization.header').exists())
+            (root/'authorization.header').unlink()
+            close=module.os.close
+            def close_failure(fd):close(fd);raise OSError('original inert close failure')
+            with patch.object(module.os,'close',side_effect=close_failure):
+                with self.assertRaisesRegex(OSError,'original inert close') as raised:module.proc_sensitive_header(root,'inert-value')
+            self.assertEqual('removed-before-child',raised.exception.proc_sensitive_creation['disposition'])
+            failure=OSError('original inert write before close failure')
+            with patch.object(module.os,'write',side_effect=failure),patch.object(module.os,'close',side_effect=close_failure):
+                with self.assertRaises(OSError) as raised:module.proc_sensitive_header(root,'inert-value')
+            self.assertIs(failure,raised.exception)
+            self.assertIn('original inert close',failure.proc_sensitive_close_failure['message'])
+            self.assertFalse((root/'authorization.header').exists())
+
+    def test_proc_qualification_birth_reuse_and_parent_reuse_refuse(self):
+        known={10:100};member={'pid':11,'ppid':10,'start':200}
+        records={10:{'pid':10,'start':100},11:member}
+        module.proc_join_qualification_birth(member,known,records.get)
+        self.assertEqual(200,known[11])
+        records[11]=dict(member,start=201)
+        with self.assertRaisesRegex(ValueError,'PID birth reuse'):
+            module.proc_join_qualification_birth(dict(member,start=201),known,records.get)
+        known={10:100};records[10]['start']=101;records[11]=member
+        with self.assertRaisesRegex(ValueError,'parent/birth'):
+            module.proc_join_qualification_birth(member,known,records.get)
+        self.assertNotIn(11,known)
+
+    def test_proc_effect_capacity_claim_cannot_replace_live_enclosing_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            runtime=Path(spec['proofInputs']['runtimeQualification'])
+            qualification=json.loads(runtime.read_bytes());qualification['capacity']['membership']='foreign'
+            runtime.write_text(json.dumps(qualification))
+            pin=module.pin_file(runtime);pin['mode']=runtime.stat().st_mode&0o777
+            spec['pins']=[pin if row['path']==str(runtime) else row for row in spec['pins']]
+            descriptor.write_text(json.dumps(spec));authority=json.loads(approved.read_bytes())
+            authority.update(descriptorSha256=hashlib.sha256(descriptor.read_bytes()).hexdigest(),runtimeQualification=qualification)
+            approved.write_text(json.dumps(authority))
+            slot=Path(spec['operationRoot']);before=(slot/'command.json').read_bytes()
+            with contextlib.redirect_stderr(io.StringIO()),patch('runpy.run_path',return_value={'pair_recovery_selection':lambda a:a['recovery']}):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertEqual(before,(slot/'command.json').read_bytes());self.assertFalse((slot/'dispatch-input.json').exists())
+
+    def test_proc_state_byte_cap_keeps_exclusive_claim_and_launches_no_child(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            slot=Path(spec['operationRoot']);before=(slot/'command.json').read_bytes()
+            adapters={'pair_recovery_selection':lambda a:a['recovery'],
+                      'pair_original_failure':lambda *a:{'oversized':'x'*module.MAX_OUTPUT},
+                      'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+            with patch('runpy.run_path',return_value=adapters):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertEqual(before,(slot/'command.json').read_bytes());self.assertTrue((slot/'dispatch-input.json').exists())
+            self.assertFalse((slot/'client-preflight.log').exists());self.assertFalse((slot/'authorization.header').exists())
+
+    def test_proc_kernel_data_is_census_data_and_closed_actor_metadata(self):
+        classify=module.proc_kernel_data_read;actors={10,11};args=(10,actors,9,True,set())
+        self.assertTrue(classify('/proc/999/stat','openat(AT_FDCWD, "stat", O_RDONLY) = 3',*args))
+        self.assertFalse(classify('/proc/999/status','openat(AT_FDCWD, "status", O_RDONLY) = 3',*args))
+        self.assertTrue(classify('/proc/11/exe','readlink("exe", "/pinned/python", 4096) = 10',*args))
+        for path in ('/proc/11/environ','/proc/11/mem','/proc/11/root/file','/proc/999/ns/pid'):
+            self.assertFalse(classify(path,'openat(AT_FDCWD, "file", O_RDONLY) = 3',*args))
+        self.assertFalse(classify('/proc/11/fd/3','openat(AT_FDCWD, "fd/3", O_RDONLY) = 3',*args))
+
+    def storage_fixture_url(self,archive=False):
+        from datetime import datetime,timezone
+        now=int(time.time());stamp=lambda seconds:datetime.fromtimestamp(seconds,timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        fields={key:'inert' for key in module.PROC_STORAGE_KEYS}
+        fields.update(sp='r',spr='https',sr='b',sv='2025-11-05',st=stamp(now-60),se=stamp(now+600),sig='SENSITIVE-SENTINEL')
+        if archive:fields['rscd']='inert'
+        url='https://'+module.PROC_STORAGE_HOST+'/closed/object?'+ '&'.join(key+'='+value for key,value in sorted(fields.items()))
+        date=datetime.fromtimestamp(now,timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        return url,date,now
+
+    def test_proc_storage_grammar_counter_and_private_argv(self):
+        url,date,now=self.storage_fixture_url()
+        self.assertGreater(module.proc_storage_location(url,archive=False,api_date=date,now_epoch=now),0)
+        for bad in (url.replace(module.PROC_STORAGE_HOST,'foreign.invalid'),url+'&sig=second',url.replace('sp=r&','sp=rw&'),
+                    url.replace('sv=2025-11-05','sv=unknown'),url+'#fragment',url.replace('https://','https://user@'),url.replace('/closed/','/../')):
+            with self.assertRaises(ValueError) as raised:module.proc_storage_location(bad,archive=False,api_date=date,now_epoch=now)
+            self.assertNotIn('SENSITIVE-SENTINEL',str(raised.exception))
+        with tempfile.TemporaryDirectory() as tmp:
+            spec,_,_=self.proc_fixture(Path(tmp));slot=Path(spec['operationRoot'])
+            argv=module.proc_storage_argv(spec,slot,'terminal-job',5)
+            self.assertNotIn(url,json.dumps(argv));self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(argv))
+            self.assertNotIn('--show-error',argv);self.assertNotIn('%{url_effective}',json.dumps(argv))
+            self.assertNotIn('@'+str(slot/'authorization.header'),argv);self.assertEqual('-q',argv[1])
+        retirement={}
+        for kind in ('api',)*5+('storage',)*2:module.proc_charge_read(retirement,kind)
+        self.assertEqual({'api':5,'storage':2,'total':7},retirement['readCounts'])
+        with self.assertRaises(ValueError):module.proc_charge_read(retirement,'storage')
+
+    def test_proc_archive_controls_are_bounded_crc_and_safe_paths(self):
+        import zipfile
+        def archive(name):
+            target=io.BytesIO()
+            with zipfile.ZipFile(target,'w') as writer:writer.writestr(name,b'inert native archive control')
+            return target.getvalue()
+        module.proc_archive_shape(archive('proof.json'),deadline=time.monotonic()+1)
+        for name in ('../outside','/absolute','nested\\outside'):
+            with self.assertRaises(ValueError):module.proc_archive_shape(archive(name))
+        with self.assertRaises(TimeoutError):module.proc_archive_shape(archive('proof.json'),deadline=time.monotonic()-1)
+        for status,classification in (('401','access-authentication-refused'),('403','storage-access-indeterminate'),
+                                      ('404','native-evidence-unavailable'),('410','native-evidence-expired'),('302','second-redirect-refused')):
+            error=module.proc_read_failure('storage',status,'inert refusal')
+            self.assertEqual(classification,error.proc_read_status['disposition'])
+        error=module.proc_read_failure('storage','SENSITIVE-SENTINEL','inert refusal')
+        self.assertIsNone(error.proc_read_status['httpStatus'])
+        self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(error.proc_read_status))
+
+    def test_proc_storage_read_uses_actual_owner_and_separated_inert_children(self):
+        # Owned Python transport adapter only: no curl, TLS, tracer or network.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            slot=Path(spec['operationRoot']);url,date,_=self.storage_fixture_url()
+            client=Path(spec['transport']['client'])
+            client.write_text('#!/usr/bin/python3\nimport sys,json,os\na=sys.argv\nassert "GH_TOKEN" not in os.environ\n'
+                +'out=a[a.index("--output")+1]\n'
+                +'if "--dump-header" in a:\n'
+                +' assert "--config" not in a\n'
+                +' open(a[a.index("--dump-header")+1],"wb").write('+repr(('HTTP/1.1 302 Found\r\nDate: '+date+'\r\nLocation: '+url+'\r\n\r\n').encode())+')\n'
+                +' open(out,"wb").write(b"SENSITIVE-SENTINEL")\n'
+                +' print(json.dumps({"httpCode":"302","effectiveUrl":a[-1],"redirects":0,"sslVerifyResult":0}))\n'
+                +'else:\n'
+                +' assert "--config" in a and not any("authorization.header" in v for v in a)\n'
+                +' assert "SENSITIVE-SENTINEL" in open(a[a.index("--config")+1]).read()\n'
+                +' open(out,"wb").write(b"inert log")\n'
+                +' print(json.dumps({"httpCode":"200","redirects":0,"sslVerifyResult":0,"bytes":9}))\n')
+            owner_spec=importlib.util.spec_from_file_location('inert_storage_owner',ROOT/'eng/shared_process_owner.py')
+            owner=importlib.util.module_from_spec(owner_spec);owner_spec.loader.exec_module(owner)
+            retirement={};argv_seen=[]
+            class Capture:
+                def run(self,argv,*args,**kwargs):argv_seen.append(argv);return owner.run(argv,*args,**kwargs)
+            raw=module.proc_storage_read(Capture(),spec,slot,spec['environment'],lambda *args:None,
+                'repos/FS-GG/FS.GG.Coordination/actions/jobs/1/logs','terminal-job',retirement)
+            self.assertEqual(b'inert log',raw);self.assertEqual(2,len(argv_seen))
+            self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(argv_seen)+json.dumps(retirement))
+            self.assertFalse((slot/'storage-url.conf').exists());self.assertFalse((slot/'terminal-job.headers').exists())
+            self.assertEqual({'api':1,'storage':1,'total':2},retirement['readCounts'])
+            # Same real API-child lifecycle, then a deterministic parse refusal.
+            # Raw redirect body must retire even though the storage child never runs.
+            retirement={};argv_seen.clear();negative=slot/'negative-source-control';negative.mkdir(mode=0o700)
+            with patch.object(module,'proc_storage_location',side_effect=ValueError('original inert location refusal')):
+                with self.assertRaisesRegex(ValueError,'original inert location'):
+                    module.proc_storage_read(Capture(),spec,negative,spec['environment'],lambda *args:None,
+                        'repos/FS-GG/FS.GG.Coordination/actions/jobs/1/logs','terminal-job',retirement)
+            self.assertEqual(1,len(argv_seen));self.assertFalse((negative/'terminal-job-api.body').exists())
+            self.assertFalse((negative/'terminal-job.headers').exists());self.assertFalse((negative/'storage-url.conf').exists())
+            self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(retirement)+json.dumps(argv_seen))
+            self.assertEqual('removed-after-qualified-child-retirement',retirement['redirectBodyDisposition'])
 
     def test_proc_qualification_trace_has_complete_births_and_refuses_unknown_paths(self):
         # Parser controls are inert metadata, never authentic qualification evidence.
@@ -347,7 +534,9 @@ class DiagnosticControls(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
             spec['profile']='proc-pair-client-qualification';spec['role']='qualification'
-            spec['operation']=module.PROC_PROFILES[spec['profile']];slot=module.proc_operation_root(spec['operation']);slot.mkdir(mode=0o700)
+            spec['operation']=module.PROC_PROFILES[spec['profile']];spec['qualificationAttempt']=1
+            lineage=module.proc_operation_root(spec['operation']);lineage.mkdir(mode=0o700)
+            slot=module.proc_operation_root(spec['operation'],1);slot.mkdir(mode=0o700)
             for name in ('home','tmp','ca-empty'):(slot/name).mkdir(mode=0o700)
             config=module.proc_support_root()/'openssl.cnf'
             spec['operationRoot']=str(slot)
@@ -360,7 +549,7 @@ class DiagnosticControls(unittest.TestCase):
             descriptor.write_text(json.dumps(spec))
             authority=json.loads(approved.read_bytes());authority.update(profile=spec['profile'],operation=spec['operation'],
                 operationRoot=str(slot),descriptorSha256=hashlib.sha256(descriptor.read_bytes()).hexdigest(),
-                canonicalOperationIdentity=module.proc_directory_identity(slot))
+                canonicalOperationIdentity=module.proc_directory_identity(slot),canonicalQualificationLineageIdentity=module.proc_directory_identity(lineage))
             approved.write_text(json.dumps(authority))
             # The old dispatch admission does not authorize qualification; native
             # client execution cannot be reached by this source-only control.
@@ -373,6 +562,15 @@ class DiagnosticControls(unittest.TestCase):
             self.assertFalse((slot/'dispatch-input.json').exists())
             bad=copy.deepcopy(spec);bad['request']['method']='POST'
             with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+            for ordinal in (None,0,4,True):
+                bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
+                with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+            for ordinal in (1,2,3):
+                bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
+                path=module.proc_operation_root(spec['operation'],ordinal)
+                bad['operationRoot']=str(path);bad['environment'].update(HOME=str(path/'home'),TMPDIR=str(path/'tmp'))
+                self.assertEqual('qualification',module.proc_command_preflight(bad,now=time.monotonic())['role'])
+            self.assertEqual(spec['operation'],module.proc_operation_root(spec['operation'],2).parent.name)
 
     def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
         for inherited in (False, True):

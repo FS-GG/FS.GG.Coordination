@@ -516,7 +516,9 @@ PROC_RUNTIME_DATA = {'contract':'closed-existing-owner-kernel-data/1',
     'processStat':'existing-owner-current-pid-census-for-known-group-classification',
     'ownedFd':'actual-known-pid-birth-only','cgroup':'/sys/fs/cgroup',
     'accounting':['cpu.max','memory.max','memory.current'],'selfMembership':'/proc/self/cgroup',
-    'mountInfo':'/proc/self/mountinfo','scope':'volatile metadata, never immutable source pins or reservation release'}
+    'mountInfo':'/proc/self/mountinfo',
+    'actorMetadata':'birth-joined traced controller/descendant status, task, namespace and executable metadata only',
+    'scope':'volatile metadata, never immutable source pins, membership adoption, signal authority or reservation release'}
 PROC_ORIGINAL = 'publish-execution-pair-030-b11fb121-four38484632631'
 PROC_REPOSITORY = 'FS-GG/FS.GG.Coordination'
 PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
@@ -525,8 +527,12 @@ PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
 PROC_OPERATION_BASE = Path('/var/tmp/fsgg-canonical-owned-commands')
 
 
-def proc_operation_root(operation):
-    return PROC_OPERATION_BASE / str(os.geteuid()) / operation
+def proc_operation_root(operation,qualification_attempt=None):
+    lineage=PROC_OPERATION_BASE / str(os.geteuid()) / operation
+    if qualification_attempt is None:return lineage
+    if operation!=PROC_PROFILES['proc-pair-client-qualification'] or type(qualification_attempt) is not int or not 1<=qualification_attempt<=3:
+        raise ValueError('PROC fixed qualification lineage/ordinal')
+    return lineage/('attempt-'+str(qualification_attempt))
 
 
 def proc_support_root():
@@ -539,6 +545,24 @@ def proc_read_identity(path):
     observed=Path(path).lstat()
     return {'device':observed.st_dev,'inode':observed.st_ino,'uid':observed.st_uid,
             'mode':stat.S_IMODE(observed.st_mode),'kind':stat.S_IFMT(observed.st_mode)}
+
+
+def proc_absence(path):
+    """Nearest no-follow existing ancestor and the complete missing chain."""
+    path=Path(path)
+    if not path.is_absolute() or any(part in ('.','..') for part in path.parts):
+        raise ValueError('PROC negative lookup path')
+    missing=[];current=path
+    while True:
+        try:identity=proc_read_identity(current)
+        except FileNotFoundError:
+            missing.insert(0,current.name);current=current.parent;continue
+        if current.is_symlink() or not current.is_dir() or not missing:
+            raise ValueError('PROC negative lookup ancestor/absence changed')
+        for ancestor in current.parents:
+            if ancestor.is_symlink():raise ValueError('PROC negative lookup ancestor alias')
+        return {'path':str(path),'errno':'ENOENT','ancestor':str(current),
+                'ancestorIdentity':identity,'missingComponents':missing}
 
 
 def proc_read_drift(spec):
@@ -566,11 +590,8 @@ def proc_read_drift(spec):
             except FileNotFoundError:actual=None
             if actual!=identity:raise ValueError('PROC relevant directory entry drift')
     for row in evidence['absences']:
-        if set(row)!={'path','parentIdentity'} or proc_read_identity(Path(row['path']).parent)!=row['parentIdentity']:
-            raise ValueError('PROC absence parent drift')
-        try:Path(row['path']).lstat()
-        except FileNotFoundError:continue
-        raise ValueError('PROC negative lookup changed')
+        if set(row)!={'path','errno','ancestor','ancestorIdentity','missingComponents'} or proc_absence(row['path'])!=row:
+            raise ValueError('PROC negative lookup ancestor/missing chain drift')
     declared={row['path']:row for row in evidence['aliases']}
     for pin in spec['pins']:
         if pin['path'].startswith(('/proc/','/sys/fs/cgroup/')):raise ValueError('PROC volatile kernel DATA cannot be immutable source pin')
@@ -609,18 +630,59 @@ def proc_curl_argv(spec, slot, endpoint, method, *, body=None, authorization=Tru
     return argv
 
 
-def proc_sensitive_header(slot, value):
+def proc_sensitive_header(slot, value, *, deadline=None):
     """Ephemeral semantic input. Never hash or report credential bytes."""
     if not isinstance(value,str) or not 1<=len(value.encode())<=8192 or any(c in value for c in '\r\n\x00') or not value.isascii():
         raise ValueError('PROC approved binding has invalid header shape')
-    path=Path(slot)/'authorization.header'
+    return proc_sensitive_input(slot,'authorization.header',('Authorization: Bearer '+value+'\n').encode(),deadline=deadline)
+
+
+def proc_sensitive_input(slot,name,raw,*,deadline=None):
+    if name not in ('authorization.header','storage-url.conf') or not isinstance(raw,bytes) or not 0<len(raw)<=16448:
+        raise ValueError('PROC closed ephemeral input shape')
+    path=Path(slot)/name
     fd=os.open(path,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+    identity=None;creation_error=None
     try:
-        raw=('Authorization: Bearer '+value+'\n').encode();offset=0
-        while offset<len(raw):offset+=os.write(fd,raw[offset:])
+        observed=os.fstat(fd)
+        identity={'device':observed.st_dev,'inode':observed.st_ino,'uid':observed.st_uid,
+                  'mode':stat.S_IMODE(observed.st_mode),'kind':stat.S_IFMT(observed.st_mode)}
+        if identity['mode']!=0o600 or identity['uid']!=os.geteuid() or identity['kind']!=stat.S_IFREG:
+            raise ValueError('PROC ephemeral creation owner/mode/type refusal')
+        offset=0
+        while offset<len(raw):
+            if deadline is not None and time.monotonic()>=deadline:raise TimeoutError('PROC ephemeral header creation deadline')
+            count=os.write(fd,raw[offset:])
+            if count<=0:raise OSError('PROC ephemeral header zero write')
+            offset+=count
         os.fsync(fd)
+        if deadline is not None and time.monotonic()>=deadline:raise TimeoutError('PROC ephemeral creation original deadline')
+        if proc_read_identity(path)!=identity:raise ValueError('PROC ephemeral header creation identity drift')
         return {'path':str(path),'identity':proc_read_identity(path),'disposition':'live-ephemeral','_expectedBytes':raw}
-    finally:os.close(fd)
+    except BaseException as error:
+        creation_error=error
+        # No child has received this path. Remove only the authenticated exclusive
+        # object; otherwise retain a private hold. Preserve the write first cause.
+        disposition='held-creation-failure'
+        try:
+            if identity is not None and proc_read_identity(path)==identity:
+                path.unlink();disposition='removed-before-child'
+        except OSError:pass
+        error.proc_sensitive_creation={'disposition':disposition,'identity':identity}
+        raise
+    finally:
+        try:os.close(fd)
+        except BaseException as error:
+            if creation_error is not None:
+                creation_error.proc_sensitive_close_failure=failure_record(error)
+            else:
+                disposition='held-creation-failure'
+                try:
+                    if identity is not None and proc_read_identity(path)==identity:
+                        path.unlink();disposition='removed-before-child'
+                except OSError:pass
+                error.proc_sensitive_creation={'disposition':disposition,'identity':identity}
+                raise
 
 
 def proc_sensitive_unchanged(header):
@@ -630,7 +692,7 @@ def proc_sensitive_unchanged(header):
         actual=os.fstat(fd)
         identity={'device':actual.st_dev,'inode':actual.st_ino,'uid':actual.st_uid,
                   'mode':stat.S_IMODE(actual.st_mode),'kind':stat.S_IFMT(actual.st_mode)}
-        if identity!=header['identity'] or actual.st_size!=len(header['_expectedBytes']) or os.read(fd,8192+64)!=header['_expectedBytes']:
+        if identity!=header['identity'] or actual.st_size!=len(header['_expectedBytes']) or os.read(fd,16448+1)!=header['_expectedBytes']:
             raise ValueError('PROC ephemeral single-header input drift; preserve private hold')
     finally:os.close(fd)
 
@@ -656,6 +718,119 @@ def proc_curl_response(slot,name,expected_url,cap):
     return body.read_bytes()
 
 
+def proc_read_status(status,storage=False):
+    if not isinstance(status,str) or not re.fullmatch('[0-9]{3}',status):return 'malformed-status'
+    if status=='401':return 'access-authentication-refused'
+    if status=='403':return 'storage-access-indeterminate' if storage else 'access-permission-refused'
+    if status=='404':return 'native-evidence-unavailable'
+    if status=='410':return 'native-evidence-expired'
+    if status in ('301','302','303','307','308'):return 'second-redirect-refused' if storage else 'redirect-status-refused'
+    return 'unexpected-status-'+status
+
+
+def proc_read_failure(stage,status,message):
+    error=ValueError(message)
+    error.proc_read_status={'stage':stage,'httpStatus':status if isinstance(status,str) and re.fullmatch('[0-9]{3}',status) else None,
+                           'disposition':proc_read_status(status,storage=stage=='storage')}
+    return error
+
+
+PROC_STORAGE_HOST='productionresultssa18.blob.core.windows.net'
+PROC_STORAGE_KEYS={'rsct','se','sig','ske','skoid','sks','skt','sktid','skv','sp','spr','sr','st','sv'}
+
+
+def proc_storage_location(raw,*,archive,api_date,now_epoch):
+    """Closed observed SAS grammar. Never include this input in error/receipt/hash."""
+    if (not isinstance(raw,str) or not 0<len(raw.encode())<=16384
+            or any(ord(c)<=32 or ord(c)>=127 or c in '\\"#' for c in raw)
+            or not raw.startswith('https://'+PROC_STORAGE_HOST+'/')):
+        raise ValueError('PROC storage location origin/shape refusal')
+    rest=raw[len('https://'+PROC_STORAGE_HOST):]
+    if '?' not in rest or rest.count('?')!=1 or not re.fullmatch(r'/[A-Za-z0-9._~/%!$&()*+,;=:@-]+\?[^#]+',rest):
+        raise ValueError('PROC storage location path/query refusal')
+    path,query=rest.split('?',1)
+    checked_path=re.sub('%2[eE]','.',path)
+    if any(part in ('.','..') for part in checked_path.split('/')) or re.search(r'%(?![0-9A-Fa-f]{2})',rest):
+        raise ValueError('PROC storage location encoding refusal')
+    fields={}
+    for part in query.split('&'):
+        if '=' not in part:raise ValueError('PROC storage query shape refusal')
+        key,value=part.split('=',1)
+        if key in fields or not key or not value:raise ValueError('PROC storage query duplicate/empty refusal')
+        fields[key]=value
+    if set(fields)!=PROC_STORAGE_KEYS|({'rscd'} if archive else set()):raise ValueError('PROC storage query version/inventory refusal')
+    if any(fields[k]!=v for k,v in {'sp':'r','spr':'https','sr':'b','sv':'2025-11-05'}.items()):
+        raise ValueError('PROC storage signed permissions/protocol/version refusal')
+    # Only safe timestamp fields are decoded. The signature is never inspected.
+    from datetime import datetime,timezone
+    def epoch(value):
+        value=value.replace('%3A',':').replace('%3a',':')
+        if not re.fullmatch(r'\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ',value):raise ValueError('PROC storage timestamp shape refusal')
+        return datetime.strptime(value,'%Y-%m-%dT%H:%M:%SZ').replace(tzinfo=timezone.utc).timestamp()
+    try:date=datetime.strptime(api_date,'%a, %d %b %Y %H:%M:%S GMT').replace(tzinfo=timezone.utc).timestamp()
+    except (TypeError,ValueError):raise ValueError('PROC storage API Date unavailable') from None
+    expiry=epoch(fields['se']);start=epoch(fields['st'])
+    if abs(date-now_epoch)>60 or start>date+300 or expiry<=max(date,now_epoch)+10 or expiry-date>900:
+        raise ValueError('PROC storage signed lifetime/clock consistency refusal')
+    return min(60,expiry-now_epoch-5)
+
+
+def proc_redirect_headers(path):
+    path=Path(path)
+    if path.is_symlink() or not 0<path.stat().st_size<=65536 or stat.S_IMODE(path.stat().st_mode)!=0o600:
+        raise ValueError('PROC private API redirect headers unavailable')
+    raw=path.read_bytes()
+    if b'\x00' in raw:raise ValueError('PROC API redirect header framing refusal')
+    lines=raw.decode('ascii','strict').split('\r\n')
+    if not lines[0].startswith('HTTP/1.1 302 ') or any(line.startswith((' ','\t')) for line in lines):
+        raise ValueError('PROC API redirect status/folding refusal')
+    fields={}
+    for line in lines[1:]:
+        if not line:continue
+        if ':' not in line:raise ValueError('PROC API redirect header framing refusal')
+        key,value=line.split(':',1);key=key.lower()
+        fields.setdefault(key,[]).append(value.strip())
+    if len(fields.get('location',[]))!=1 or len(fields.get('date',[]))!=1:
+        raise ValueError('PROC API redirect Location/Date cardinality refusal')
+    return fields['location'][0],fields['date'][0]
+
+
+def proc_storage_argv(spec,slot,name,remaining):
+    if name not in ('terminal-job','terminal-archive') or remaining<=0:raise ValueError('PROC storage role/deadline refusal')
+    seconds=max(1,min(30,int(remaining)))
+    return [spec['transport']['client'],'-q','--config',str(Path(slot)/'storage-url.conf'),
+            '--silent','--stderr','/dev/null','--http1.1','--proto','=https','--proto-redir','=https',
+            '--max-redirs','0','--globoff','--path-as-is','--proxy','','--noproxy','*','--request','GET','--header','Expect:',
+            '--cacert',spec['transport']['caBundle'],'--capath',str(proc_support_root()/'ca-empty'),
+            '--connect-timeout',str(min(3,seconds)),'--max-time',str(seconds),'--max-filesize',str(spec['logBytes']),
+            '--output',str(Path(slot)/(name+'.body')),'--write-out',
+            '{"httpCode":"%{http_code}","redirects":%{num_redirects},"sslVerifyResult":%{ssl_verify_result},"bytes":%{size_download}}\n']
+
+
+def proc_archive_shape(raw,*,deadline=None):
+    import io,zipfile
+    with zipfile.ZipFile(io.BytesIO(raw)) as archive:
+        rows=archive.infolist()
+        if not 0<len(rows)<=128 or sum(row.file_size for row in rows)>8*1024**2:
+            raise ValueError('PROC archive population/expanded bound')
+        names=set()
+        for row in rows:
+            path=Path(row.filename)
+            if (row.filename in names or path.is_absolute() or '..' in path.parts or '\\' in row.filename
+                    or '\x00' in row.filename or row.flag_bits&1 or stat.S_ISLNK(row.external_attr>>16)):
+                raise ValueError('PROC archive member framing/path/type refusal')
+            names.add(row.filename)
+        expanded=0
+        for row in rows:
+            with archive.open(row) as source:
+                while True:
+                    if deadline is not None and time.monotonic()>=deadline:raise TimeoutError('PROC original archive inspection deadline')
+                    chunk=source.read(65536)
+                    if not chunk:break
+                    expanded+=len(chunk)
+                    if expanded>8*1024**2:raise ValueError('PROC actual archive expanded bound')
+
+
 def proc_directory_identity(path):
     path=Path(path)
     if any(p.is_symlink() for p in (path,*path.parents)) or not path.is_dir():
@@ -670,7 +845,7 @@ def proc_command_preflight(spec, *, now):
     """Closed operation contracts. A valid shape never supplies launch authority."""
     fields = {'schema','profile','role','campaign','item','attempt','originalOperation','operation',
               'publisher','repositoryId','workflowId','workflowPath','source','originalPublisher',
-              'request','argv','transport','readEvidence','pins','proofInputs','sourceReadAllowlist','environment','operationRoot',
+              'request','argv','transport','readEvidence','pins','proofInputs','sourceReadAllowlist','environment','operationRoot','qualificationAttempt',
               'started','workDeadline','totalDeadline','cleanupSeconds','rssBytes','addressSpaceBytes','logBytes','diskBytes','cpuAffinity'}
     if set(spec) != fields or spec['schema'] != COMMAND_SCHEMA or spec['profile'] not in PROC_PROFILES:
         raise ValueError('PROC command schema/profile')
@@ -699,8 +874,12 @@ def proc_command_preflight(spec, *, now):
             or type(spec['cpuAffinity'][0]) is not int
             or spec['addressSpaceBytes'] is not None and (type(spec['addressSpaceBytes']) is not int or spec['addressSpaceBytes']<spec['rssBytes'])):
         raise ValueError('PROC resource profile')
+    ordinal=spec['qualificationAttempt']
+    if (spec['role']=='qualification' and (type(ordinal) is not int or not 1<=ordinal<=3)
+            or spec['role']!='qualification' and ordinal is not None):
+        raise ValueError('PROC root-selected qualification ordinal cannot become effect retry')
     root = Path(spec['operationRoot'])
-    if root!=proc_operation_root(spec['operation']):
+    if root!=proc_operation_root(spec['operation'],ordinal):
         raise ValueError('PROC fixed operation root')
     environment = spec['environment']
     if (set(environment)!={'HOME','TMPDIR','PATH','LANG','LC_ALL','TZ','OPENSSL_CONF'}
@@ -753,7 +932,7 @@ def proc_command_preflight(spec, *, now):
         endpoint = ('repos/'+PROC_REPOSITORY+'/actions/runs/'+str(request['runId']) if request['runId'] is not None
                     else 'repos/'+PROC_REPOSITORY+'/actions/runs?event=workflow_dispatch&head_sha='+spec['publisher']+'&per_page=100')
         expected = {'method':'GET','endpoint':endpoint,
-                    'apiVersion':'2026-03-10','body':None,'requestLimit':5,'runId':request['runId']}
+                    'apiVersion':'2026-03-10','body':None,'requestLimit':7,'runId':request['runId']}
     if request != expected:
         raise ValueError('PROC exact endpoint/method/argv')
     if spec['argv'][0] not in pinned: raise ValueError('PROC client outside runtime closure')
@@ -807,6 +986,22 @@ def proc_native_correlation(spec, prior, payload):
             if prior['nativeCreatedAfterEpoch']-1<=created<=prior['nativeCreatedBeforeEpoch']:matches.append(run)
     if len(matches)!=1:raise ValueError('PROC uncertain-send run correlation absent or ambiguous; send remains consumed')
     return matches[0]
+
+
+def proc_join_qualification_birth(member,known,observe):
+    current=observe(member['pid'])
+    if current is None or current['start']!=member['start']:
+        raise ValueError('PROC qualification PID birth changed during observation')
+    existing=known.get(member['pid'])
+    if existing is not None:
+        if existing!=member['start']:raise ValueError('PROC qualification PID birth reuse')
+        return
+    parent=observe(member['ppid'])
+    if (parent is None or known.get(parent['pid'])!=parent['start']
+            or current is None or current['start']!=member['start']
+            or current['ppid']!=parent['pid']):
+        raise ValueError('PROC unknown qualification descendant parent/birth')
+    known[member['pid']]=member['start']
 
 
 def proc_capacity_evidence(spec,authority,capacity):
@@ -872,13 +1067,14 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None):
     if not traces or len(traces)>32:raise ValueError('PROC trace process/thread population incomplete')
     read=spec['readEvidence'];files=set(spec['sourceReadAllowlist'])
     directories={row['path'] for row in read['directories']};aliases={row['path'] for row in read['aliases']}
-    absent={row['path'] for row in read['absences']};rows=[];total=0;births=set();pids=set();roots=set()
+    absent={row['path'] for row in read['absences']};rows=[];total=0;births=set();pids=set();python_execs=set()
+    trace_pids={int(path.name.rsplit('.',1)[1]) for path in traces}
     bootstrap=json.loads(Path(spec['proofInputs']['bootstrapEvidence']).read_bytes())
     cgroup=Path(bootstrap['capacity']['directory'])
     kernel_inputs={str(cgroup/name) for name in ('cpu.max','memory.max','memory.current')}|{'/proc/self/cgroup','/proc/self/mountinfo','/proc/sys/kernel/random/boot_id'}
     for trace in traces:
         raw=trace.read_bytes();total+=len(raw)
-        if trace.is_symlink() or total>spec['logBytes'] or not raw.endswith(b'\n'):
+        if trace.is_symlink() or total>8*1024**2 or not raw.endswith(b'\n'):
             raise ValueError('PROC private trace bound/completeness')
         text=raw.decode('utf-8','strict');pending=None
         lines=[]
@@ -892,13 +1088,16 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None):
             lines.append(line)
         if pending is not None or not lines or not re.fullmatch(r'\+\+\+ exited with (0|18|52) \+\+\+',lines[-1]):
             raise ValueError('PROC detached/lost/nonzero traced lifetime')
-        pid=int(trace.name.rsplit('.',1)[1]);pids.add(pid);observed=set();client=False
+        pid=int(trace.name.rsplit('.',1)[1]);pids.add(pid);observed=set();client=False;controller=False
         for line in lines:
             born=re.match(r'(?:clone3?|fork|vfork)\(.*\)\s+= ([0-9]+)$',line)
-            if born:births.add(int(born.group(1)))
-            if line.startswith('execve('+json.dumps(os.path.realpath(sys.executable))+','):roots.add(pid)
-            if line.startswith('execve('+json.dumps(spec['transport']['client'])+','):client=True
-            if any(marker in line for marker in ('strace:', 'detached', 'io_uring_', 'io_setup(', 'io_submit(', 'io_getevents(', 'io_pgetevents(', 'aio_', 'process_vm_')):
+            if born:
+                child=int(born.group(1))
+                if child in births:raise ValueError('PROC repeated traced PID birth; reconciliation required')
+                births.add(child)
+            if line.startswith('execve('+json.dumps(os.path.realpath(sys.executable))+','):python_execs.add(pid);controller=True
+            if line.startswith('execve('+json.dumps(spec['transport']['client'])+','):client=True;controller=False
+            if any(marker in line for marker in ('strace:', 'detached', 'CLONE_UNTRACED', 'setns(', 'unshare(', 'ptrace(', 'io_uring_', 'io_setup(', 'io_submit(', 'io_getevents(', 'io_pgetevents(', 'aio_', 'process_vm_')):
                 raise ValueError('PROC unsupported tracing/asynchronous source access')
             if line.startswith(('mmap(', 'mmap2(')) and 'MAP_ANONYMOUS' not in line:
                 if not re.search(r', [0-9]+</[^<>]+>, [0-9]+\)\s+=',line):
@@ -906,7 +1105,7 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None):
             # Path-bearing syscall strings and -yy descriptor/map provenance.
             # Unresolved relative paths are not silently treated as observed reads.
             paths=re.findall(r'"((?:[^"\\]|\\.)*)"',line)
-            if line.startswith(('execve','readlink')):paths=paths[:1]
+            if line.startswith(('execve','readlink','open','newfstatat','stat','access','chdir')):paths=paths[:1]
             paths+=re.findall(r'<(/[^<>]+)>',line)
             for value in paths:
                 if not value:continue
@@ -920,15 +1119,35 @@ def proc_trace_evidence(spec, slot, authority_path, tracer_pid=None):
                 # Generated outputs are separately bounded by the owner census;
                 # no sensitive file is used by this qualification route.
                 generated=path==str(authority_path) or Path(path).parent==Path(slot) and Path(path).name in ('input.json','dispatch-input.json','qualification.observed.json','qualification.native.log','qualification.native.body','fixture-request.json',*(f'fixture-{case}{suffix}' for case in PROC_QUALIFICATION_CASES for suffix in ('.log','.body')))
-                kernel=path in kernel_inputs or path in (f'/proc/{pid}/cgroup',f'/proc/{pid}/fd/0','/proc/self/fd/0') or tracer_pid is not None and path==f'/proc/{tracer_pid}/exe'
+                kernel=proc_kernel_data_read(path,line,pid,trace_pids,tracer_pid,controller,kernel_inputs)
                 if path not in files|directories|aliases|{'/dev/null'} and not generated and not kernel:
                     if 'ENOENT' not in line or path not in absent:raise ValueError('PROC observed source/mapping/negative lookup outside bootstrap inventory')
                 observed.add(path)
         if lines[-1]!='+++ exited with 0 +++' and not client:raise ValueError('PROC unexpected traced child failure')
         rows.append({'pid':pid,'sha256':hashlib.sha256(raw).hexdigest(),
                      'bytes':len(raw),'paths':sorted(observed),'terminal':lines[-1]})
-    if len(roots)!=1 or pids!=roots|births:raise ValueError('PROC complete traced process/thread birth join unavailable')
+    roots=pids-births
+    if len(roots)!=1 or not roots<=python_execs or pids!=roots|births:raise ValueError('PROC complete traced process/thread birth join unavailable')
     return {'complete':True,'processes':rows,'traceBytes':total,'scope':'full fixed worker startup and traced descendants/threads; metadata only'}
+
+
+def proc_kernel_data_read(path,line,pid,actors,tracer_pid,controller,kernel_inputs):
+    """Observed purpose-limited kernel DATA, never arbitrary process authority."""
+    if path in kernel_inputs:return controller
+    if path=='/proc':return controller and line.startswith(('open','newfstatat','stat','getdents'))
+    if re.fullmatch(r'/proc/[1-9][0-9]*/stat',path):
+        return controller and line.startswith(('open','newfstatat','stat','access')) and not any(flag in line for flag in ('O_WRONLY','O_RDWR','O_CREAT'))
+    path=path.replace('/proc/self/',f'/proc/{pid}/').replace('/proc/thread-self/',f'/proc/{pid}/task/{pid}/')
+    match=re.fullmatch(r'/proc/([1-9][0-9]*)/(cgroup|mountinfo|status|exe|fd|fd/[0-9]+|ns/(?:pid|mnt|user)|task(?:/[0-9]+(?:/stat|/status)?)?)',path)
+    if not match:return False
+    target=int(match.group(1))
+    if target not in actors and target!=tracer_pid:return False
+    if not controller:return target==pid and match.group(2)=='fd/0'
+    # Metadata readlink/lstat is allowed for the closed actor set. Dereferencing
+    # arbitrary fd/exe/namespace contents is not a kernel-data read exception.
+    if match.group(2).startswith(('fd/','ns/')) or match.group(2)=='exe':
+        return line.startswith(('readlink','newfstatat','stat','access'))
+    return not any(flag in line for flag in ('O_WRONLY','O_RDWR','O_CREAT'))
 
 
 def proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,authority_sha):
@@ -1088,13 +1307,154 @@ def proc_runtime_evidence(spec, authority, evidence):
         raise ValueError('PROC actual canonical runtime/support/read/retry/custody evidence unavailable')
 
 
+def proc_charge_read(retirement,kind):
+    counts=retirement.setdefault('readCounts',{'api':0,'storage':0,'total':0})
+    if kind not in ('api','storage') or counts[kind]>=(5 if kind=='api' else 2) or counts['total']>=7:
+        raise ValueError('PROC finite API/storage request budget exhausted')
+    counts[kind]+=1;counts['total']+=1
+
+
+def proc_storage_read(owner,spec,slot,env,check,target,name,retirement):
+    """One explicitly consumed API redirect, then one credential-separated GET."""
+    selected_path={'terminal-job':r'actions/jobs/[1-9][0-9]{0,19}/logs',
+                   'terminal-archive':r'actions/artifacts/[1-9][0-9]{0,19}/zip'}
+    if name not in selected_path or not re.fullmatch(re.escape('repos/'+PROC_REPOSITORY+'/')+selected_path[name],target):
+        raise ValueError('PROC redirect transfer requires selected native job/artifact endpoint')
+    headers=slot/(name+'.headers');api_body=slot/(name+'-api.body')
+    storage_body=slot/(name+'.body')
+    secret=None;header_identity=None;body_identity=None;storage_identity=None;receipt=None;api_receipt=None;api_started=False;storage_started=False;native_success=False
+    started=time.monotonic();first=None
+    try:
+        fd=os.open(headers,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        try:header_identity=proc_read_identity(headers)
+        finally:os.close(fd)
+        fd=os.open(api_body,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        try:body_identity=proc_read_identity(api_body)
+        finally:os.close(fd)
+        fd=os.open(storage_body,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        try:storage_identity=proc_read_identity(storage_body)
+        finally:os.close(fd)
+        api_result=slot/(name+'-api.log.result.json')
+        if api_result.exists() or api_result.is_symlink():raise ValueError('PROC API child result occupied')
+        argv=proc_curl_argv(spec,slot,target,'GET',name=name+'-api',remaining=spec['workDeadline']-time.monotonic())
+        argv[-1:-1]=['--dump-header',str(headers)]
+        proc_charge_read(retirement,'api');retirement['receipt']=None
+        def api_check(event,child,leader,known):
+            check(event,child,leader,known)
+            if (proc_read_identity(headers)!=header_identity or proc_read_identity(api_body)!=body_identity
+                    or headers.stat().st_size>65536 or api_body.stat().st_size>spec['logBytes']):
+                raise ValueError('PROC private API redirect header/body identity/bound drift')
+        try:
+            api_started=True
+            receipt=owner.run(argv,str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],
+                              str(slot/(name+'-api.log')),spec['logBytes'],control=api_check,observe_child_exit=True)
+        except BaseException:
+            try:
+                if api_result.is_file() and not api_result.is_symlink() and 0<api_result.stat().st_size<=spec['logBytes']:
+                    api_receipt=json.loads(api_result.read_bytes());retirement['receipt']=api_receipt
+            except BaseException as error:
+                retirement.setdefault('storageRetirementFailures',[]).append(failure_record(error))
+            raise
+        api_receipt=receipt
+        retirement['receipt']=receipt
+        meta=json.loads((slot/(name+'-api.log')).read_bytes())
+        if (set(meta)!={'httpCode','effectiveUrl','redirects','sslVerifyResult'} or meta['httpCode']!='302'
+                or meta['effectiveUrl']!='https://api.github.com/'+target or meta['redirects']!=0 or meta['sslVerifyResult']!=0
+                or proc_read_identity(headers)!=header_identity or headers.stat().st_size>65536):
+            raise proc_read_failure('api',meta.get('httpCode'),'PROC selected API redirect status/origin/trust refusal')
+        location,date=proc_redirect_headers(headers)
+        lifetime=proc_storage_location(location,archive=name=='terminal-archive',api_date=date,now_epoch=time.time())
+        deadline=min(spec['workDeadline'],started+60,time.monotonic()+lifetime)
+        secret=proc_sensitive_input(slot,'storage-url.conf',('url = "'+location+'"\n').encode(),deadline=deadline)
+        # Never persist or hash the URL, API redirect headers or body.
+        del location
+        if receipt.get('cleanup')!='observed-empty-group' or receipt.get('custody')!='observed-owned-group':
+            raise ValueError('PROC API redirect child retirement unknown')
+        headers.unlink();header_identity=None
+        if proc_read_identity(api_body)!=body_identity:raise ValueError('PROC private API body retirement identity drift')
+        api_body.unlink();body_identity=None
+        def transfer_check(event,child,leader,known):
+            check(event,child,leader,known);proc_sensitive_unchanged(secret)
+            if proc_read_identity(storage_body)!=storage_identity or storage_body.stat().st_size>spec['logBytes']:
+                raise ValueError('PROC private storage body identity/bound drift')
+            if event!='after-cleanup' and time.monotonic()>=deadline:raise TimeoutError('PROC consumed storage URL lifetime exhausted')
+        proc_charge_read(retirement,'storage');retirement['receipt']=None;receipt=None
+        argv=proc_storage_argv(spec,slot,name,deadline-time.monotonic())
+        storage_result=slot/(name+'.log.result.json')
+        if storage_result.exists() or storage_result.is_symlink():raise ValueError('PROC storage child result occupied')
+        try:
+            storage_started=True
+            receipt=owner.run(argv,str(slot),env,deadline,spec['cleanupSeconds'],spec['rssBytes'],
+                              str(slot/(name+'.log')),spec['logBytes'],control=transfer_check,observe_child_exit=True)
+        except BaseException:
+            try:
+                if storage_result.is_file() and not storage_result.is_symlink() and 0<storage_result.stat().st_size<=spec['logBytes']:
+                    receipt=json.loads(storage_result.read_bytes());retirement['receipt']=receipt
+            except BaseException as error:
+                retirement.setdefault('storageRetirementFailures',[]).append(failure_record(error))
+            raise
+        retirement['receipt']=receipt
+        meta_path=slot/(name+'.log');body=slot/(name+'.body')
+        if meta_path.is_symlink() or proc_read_identity(body)!=storage_identity or not 0<meta_path.stat().st_size<=8192 or not 0<body.stat().st_size<=spec['logBytes']:
+            raise ValueError('PROC storage response private bound refusal')
+        meta=json.loads(meta_path.read_bytes())
+        if (set(meta)!={'httpCode','redirects','sslVerifyResult','bytes'} or meta['httpCode']!='200'
+                or meta['redirects']!=0 or meta['sslVerifyResult']!=0 or type(meta['bytes']) not in (float,int)
+                or meta['bytes']!=body.stat().st_size):
+            raise proc_read_failure('storage',meta.get('httpCode'),'PROC storage '+proc_read_status(meta.get('httpCode'),storage=True)+' or metadata/trust refusal')
+        raw=body.read_bytes()
+        if name=='terminal-archive':proc_archive_shape(raw,deadline=spec['workDeadline'])
+        native_success=True
+        return raw
+    except BaseException as error:
+        first=error
+        if hasattr(error,'proc_sensitive_creation'):
+            retirement['storageCreationFailure']=error.proc_sensitive_creation
+            if error.proc_sensitive_creation['disposition']!='removed-before-child':retirement['storagePrivateHold']=True
+        raise
+    finally:
+        retirement_errors=[]
+        private_outputs=[(headers,header_identity,'redirectHeadersDisposition',api_started,api_receipt),
+                         (api_body,body_identity,'redirectBodyDisposition',api_started,api_receipt)]
+        if not native_success:private_outputs.append((storage_body,storage_identity,'storageBodyDisposition',storage_started,receipt))
+        for path,identity,label,started_child,child_receipt in private_outputs:
+            if identity is None:continue
+            try:
+                if (not started_child or child_receipt is not None and child_receipt.get('cleanup')=='observed-empty-group' and child_receipt.get('custody')=='observed-owned-group') and proc_read_identity(path)==identity:
+                    path.unlink();retirement[label]='removed-before-child' if not started_child else 'removed-after-qualified-child-retirement'
+                else:
+                    retirement[label]='held-uncertain-retirement';retirement['storagePrivateHold']=True
+            except BaseException as error:
+                retirement_errors.append(error);retirement[label]='held-uncertain-retirement';retirement['storagePrivateHold']=True
+        if secret is not None:
+            try:
+                if storage_started:disposition=proc_sensitive_retire(secret,receipt)
+                else:
+                    proc_sensitive_unchanged(secret);Path(secret['path']).unlink()
+                    disposition={'disposition':'removed-before-storage-child','identity':secret['identity']}
+                retirement.setdefault('storageInputRetirements',[]).append(disposition)
+                if disposition['disposition'] not in ('removed-after-qualified-retirement','removed-before-storage-child'):
+                    retirement['storagePrivateHold']=True
+            except BaseException as error:
+                retirement_errors.append(error);retirement['storagePrivateHold']=True
+        for error in retirement_errors:
+            retirement.setdefault('storageRetirementFailures',[]).append(failure_record(error))
+        if first is None and retirement_errors:raise retirement_errors[0]
+
+
 def proc_terminal_evidence(owner, spec, slot, env, check, native, retirement=None):
     """Bound independent terminal logs/artifacts; failures never reopen original send."""
     run=native['id']; collected={}; failures=[]
+    if retirement is None:raise ValueError('PROC watch read counter unavailable')
     def read(target,name,document=False):
         output=slot/(name+'.log')
         argv=proc_curl_argv(spec,slot,target,'GET',remaining=spec['workDeadline']-time.monotonic(),name=name)
         try:
+            if name in ('terminal-job','terminal-archive'):
+                raw=proc_storage_read(owner,spec,slot,env,check,target,name,retirement)
+                collected[name]={'state':'collected','sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)}
+                return None
+            proc_charge_read(retirement,'api')
             if retirement is not None:retirement['receipt']=None
             observed=owner.run(argv,str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],str(output),
                       spec['logBytes'],control=check,observe_child_exit=True)
@@ -1107,9 +1467,12 @@ def proc_terminal_evidence(owner, spec, slot, env, check, native, retirement=Non
             failures.append({'stage':name,'cause':failure_record(error)})
             receipt_path=output.with_suffix('.log.result.json')
             if retirement is not None and receipt_path.is_file():retirement['receipt']=json.loads(receipt_path.read_bytes())
-            if not receipt_path.is_file() or json.loads(receipt_path.read_bytes()).get('cleanup')!='observed-empty-group':
+            latest=retirement.get('receipt')
+            if (retirement.get('storagePrivateHold') or retirement.get('redirectHeadersDisposition')=='held-uncertain-retirement'
+                    or not latest or latest.get('cleanup')!='observed-empty-group' or latest.get('custody')!='observed-owned-group'):
                 raise ValueError('PROC terminal evidence child custody/cleanup unknown') from error
             collected[name]={'state':'failed'}
+            if hasattr(error,'proc_read_status'):collected[name]['status']=error.proc_read_status
             return None
     jobs=read('repos/'+PROC_REPOSITORY+'/actions/runs/'+str(run)+'/attempts/1/jobs?per_page=100','terminal-jobs',True)
     artifacts=read('repos/'+PROC_REPOSITORY+'/actions/runs/'+str(run)+'/artifacts?per_page=100','terminal-artifacts',True)
@@ -1131,10 +1494,11 @@ def proc_terminal_evidence(owner, spec, slot, env, check, native, retirement=Non
                 and type(selected[0].get('size_in_bytes')) is int and 0<selected[0]['size_in_bytes']<=spec['logBytes']):
             read('repos/'+PROC_REPOSITORY+'/actions/artifacts/'+str(selected[0]['id'])+'/zip','terminal-archive')
             archive=collected.get('terminal-archive',{})
-            if archive.get('state')=='collected' and selected[0].get('digest')!='sha256:'+archive['sha256']:
+            if archive.get('state')=='collected' and (selected[0].get('digest')!='sha256:'+archive['sha256'] or selected[0]['size_in_bytes']!=archive['bytes']):
                 archive['state']='failed';failures.append({'stage':'terminal-archive','cause':{'message':'native artifact archive digest differs'}})
         else:failures.append({'stage':'terminal-archive','cause':{'message':'artifact unavailable, unsafe, incomplete or exceeds remaining selected output bound'}})
-    return {'records':collected,'additionalFailures':failures,'publicationAccepted':False}
+    return {'records':collected,'additionalFailures':failures,'requests':retirement['readCounts'],
+            'storageInputRetirements':retirement.get('storageInputRetirements',[]),'publicationAccepted':False}
 
 
 def execute_proc_command(descriptor, authority_path, authority_sha):
@@ -1146,7 +1510,11 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             raise ValueError('PROC selected descriptor/authority unsafe')
         return p.read_bytes()
     def persist(path,value,exclusive=False):
+        if spec is not None and time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC original state/reporting deadline')
         raw=json.dumps(value,sort_keys=True).encode()+b'\n'
+        cap=256*1024 if path.name=='input.json' else MAX_OUTPUT
+        if len(raw)>cap:raise ValueError('PROC canonical state/report byte budget exceeded')
+        if spec is not None and time.monotonic()>=spec['totalDeadline']:raise TimeoutError('PROC original state/report serialization deadline')
         if exclusive:
             with path.open('xb') as out: os.chmod(path,0o600);out.write(raw);out.flush();os.fsync(out.fileno())
         else:
@@ -1181,7 +1549,11 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         if any(str(path.resolve()) not in spec['sourceReadAllowlist'] for path in required_sources):
             raise ValueError('PROC actual validator/runner/support closure absent')
         root=Path(spec['operationRoot']);parent=root.parent
-        base_identity=proc_directory_identity(parent)
+        canonical_base=PROC_OPERATION_BASE/str(os.geteuid())
+        if spec['role']=='qualification' and authority.get('canonicalQualificationLineageIdentity')!=proc_directory_identity(parent):
+            raise ValueError('PROC root-prepared qualification lineage identity unavailable')
+        base_identity=proc_directory_identity(canonical_base)
+        parent_identity=proc_directory_identity(parent)
         operation_identity=proc_directory_identity(root)
         if authority.get('canonicalBaseIdentity')!=base_identity or authority.get('canonicalOperationIdentity')!=operation_identity:
             raise ValueError('PROC root-qualified canonical directory identity differs; reconciliation required')
@@ -1195,7 +1567,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
         if spec['role']=='qualification':
             if os.readlink('/proc/self/fd/0')!='/dev/null':raise ValueError('PROC qualification stdin must be root-selected dev-null')
             proc_bootstrap_evidence(spec,authority,qualification)
-        else:proc_runtime_evidence(spec,authority,qualification)
+        else:
+            proc_runtime_evidence(spec,authority,qualification)
+            proc_capacity_evidence(spec,authority,qualification.get('capacity') or {})
         correspondence=document('sourceCorrespondence')
         if (correspondence.get('publisher')!=spec['publisher'] or correspondence.get('source')!=spec['source']
                 or correspondence.get('originalPublisher')!=spec['originalPublisher'] or correspondence.get('protectedSourceVerified') is not True
@@ -1269,12 +1643,12 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             raise ValueError('PROC approved credential binding unavailable')
         def check(event,child,leader,known):
             if event!='after-cleanup' and time.monotonic()>=spec['workDeadline']:raise TimeoutError('PROC original deadline')
-            if proc_directory_identity(parent)!=base_identity or proc_directory_identity(root)!=operation_identity:
+            if proc_directory_identity(canonical_base)!=base_identity or proc_directory_identity(parent)!=parent_identity or proc_directory_identity(root)!=operation_identity:
                 raise ValueError('PROC canonical state directory identity drift; reconciliation required')
             proc_read_drift(spec)
             if authority.get('canonicalSupportIdentity')!=proc_directory_identity(proc_support_root()):
                 raise ValueError('PROC root-qualified support directory identity differs')
-            if spec['role']=='qualification':proc_capacity_evidence(spec,authority,qualification['capacity'])
+            proc_capacity_evidence(spec,authority,qualification.get('capacity') or {})
             if read_regular(descriptor,256*1024)!=raw or read_regular(authority_path,256*1024)!=authority_raw:
                 raise ValueError('PROC root-selected descriptor/authority input drift')
             if list((proc_support_root()/'ca-empty').iterdir()):raise ValueError('PROC private empty CA population drift')
@@ -1283,6 +1657,10 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             if sensitive is not None:proc_sensitive_unchanged(sensitive)
             observed=census(slot,min(spec['totalDeadline'],time.monotonic()+1),limit=spec['diskBytes'])
             if observed['fixtureSymlinks'] or observed['objects']>25000:raise ValueError('PROC operation scope changed')
+            if spec['role']=='qualification':
+                traces=list(slot.glob('qualification.trace.*'))
+                if len(traces)>32 or any(path.is_symlink() or not path.is_file() for path in traces) or sum(path.stat().st_size for path in traces)>8*1024**2:
+                    raise ValueError('PROC live qualification trace population/8MiB bound')
             # This is observed-group read exclusion, not a claim about transient opens.
             # Root-accepted complete qualification observations and reviewed source alternatives remain mandatory.
             if leader is not None and event!='after-cleanup':
@@ -1290,15 +1668,14 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                 if len(members)>32:raise ValueError('PROC observed group population bound')
                 for member in members:
                     if spec['role']=='qualification':
-                        if member['pid'] not in known and member['ppid'] not in known:raise ValueError('PROC unknown qualification descendant ancestry')
-                        known[member['pid']]=member['start']
+                        proc_join_qualification_birth(member,known,owner.proc)
                     elif known.get(member['pid'])!=member['start']:raise ValueError('PROC unknown observed group birth')
                     for target in owned_fd_targets(member,owner.proc,additional):
                         qualification_output=spec['role']=='qualification' and Path(target).parent==slot and (Path(target).name.startswith('qualification.trace.') and Path(target).name.rsplit('.',1)[-1].isdigit() or Path(target).name in ('qualification.observed.json','qualification.native.log','qualification.native.body','fixture-request.json',*(f'fixture-{case}{suffix}' for case in PROC_QUALIFICATION_CASES for suffix in ('.log','.body'))))
                         typed_metadata=target in {row['path'] for row in spec['readEvidence']['directories']}
-                        if target.startswith('/') and target not in spec['sourceReadAllowlist'] and not qualification_output and not typed_metadata and not (Path(target).parent==slot and Path(target).name in ('authorization.header','runner.body','client-preflight.body','terminal-jobs.body','terminal-artifacts.body','terminal-job.body','terminal-archive.body')) and target not in (
+                        if target.startswith('/') and target not in spec['sourceReadAllowlist'] and not qualification_output and not typed_metadata and not (Path(target).parent==slot and Path(target).name in ('authorization.header','runner.body','client-preflight.body','terminal-jobs.body','terminal-artifacts.body','terminal-job.body','terminal-archive.body','storage-url.conf','terminal-job.headers','terminal-archive.headers','terminal-job-api.body','terminal-archive-api.body')) and target not in (
                                 '/dev/null',str(slot/'runner.log'),str(slot/'client-preflight.log'),str(root/'dispatch-input.json'),
-                                *(str(slot/(name+'.log')) for name in ('terminal-jobs','terminal-artifacts','terminal-job','terminal-archive'))):
+                                *(str(slot/(name+'.log')) for name in ('terminal-jobs','terminal-artifacts','terminal-job','terminal-archive','terminal-job-api','terminal-archive-api'))):
                             raise ValueError('PROC unexpected observed source/config read')
         module_spec=importlib.util.spec_from_file_location('proc_shared_owner',owner_path)
         owner=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(owner)
@@ -1314,13 +1691,14 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
             result['sendState']='qualification-started';persist(root/'command.json',result)
             receipt,observed=proc_qualify(owner,spec,slot,env,check,authority,version,authority_path,authority_sha)
             result['qualificationObservations']=observed
+            result['capacity']=qualification['capacity']
             result['runtimeEvidence']=proc_observed_runtime(spec,observed,version)
             result['publicationAuthorized']=False;result['rootAccepted']=False;result['sendState']='qualification-completed'
             result['qualificationAccepted']=False
             result['qualificationBoundary']='worker observations complete; outer supervisor trace not established; root reconciliation required'
             result['commandAccepted']=True
         else:
-            sensitive=proc_sensitive_header(slot,os.environ['GH_TOKEN']);retirement['receipt']=startup
+            sensitive=proc_sensitive_header(slot,os.environ['GH_TOKEN'],deadline=spec['workDeadline']);retirement['receipt']=startup
             if spec['role']=='dispatch':
                 result['sendState']='send-started'
                 result['nativeCreatedAfterEpoch']=time.time()
@@ -1331,6 +1709,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                                     body=root/'dispatch-input.json' if spec['role']=='dispatch' else None,
                                     remaining=spec['workDeadline']-time.monotonic(),name='runner')
             retirement['receipt']=None
+            if spec['role']=='watch':proc_charge_read(retirement,'api')
             receipt=owner.run(transfer,str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],
                               str(slot/'runner.log'),spec['logBytes'],control=check,observe_child_exit=True)
             retirement['receipt']=receipt
@@ -1355,13 +1734,19 @@ def execute_proc_command(descriptor, authority_path, authority_sha):
                 if first is None:first=error
                 else:additional.append(failure_record(error))
             result['firstCause']=failure_record(first);result['additionalFailures']=additional
+            if first is not None and hasattr(first,'proc_sensitive_creation'):
+                result['sensitiveCreationFailure']=first.proc_sensitive_creation
+                if hasattr(first,'proc_sensitive_close_failure'):additional.append(first.proc_sensitive_close_failure)
             result['ownerReceipt']=receipt
             if receipt is None and 'slot' in locals() and (slot/'runner.log.result.json').is_file():
                 try:
                     result['ownerReceipt']=json.loads((slot/'runner.log.result.json').read_bytes())
                     if retirement['receipt'] is None:retirement['receipt']=result['ownerReceipt']
                 except BaseException as error:additional.append(failure_record(error))
-            try:result['sensitiveInputRetirement']=proc_sensitive_retire(sensitive,retirement['receipt'])
+            if spec['role']=='watch':result['readCounts']=retirement.get('readCounts',{'api':0,'storage':0,'total':0})
+            try:
+                result['sensitiveInputRetirement']=(first.proc_sensitive_creation if first is not None and hasattr(first,'proc_sensitive_creation')
+                    else proc_sensitive_retire(sensitive,retirement['receipt']))
             except BaseException as error:
                 additional.append(failure_record(error))
                 result['sensitiveInputRetirement']={'disposition':'held-uncertain-retirement'}
