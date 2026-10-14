@@ -540,7 +540,7 @@ PROC_OPERATION_BASE = Path('/var/tmp/fsgg-canonical-owned-commands')
 def proc_operation_root(operation,qualification_attempt=None):
     lineage=PROC_OPERATION_BASE / str(os.geteuid()) / operation
     if qualification_attempt is None:return lineage
-    if operation!=PROC_PROFILES['proc-pair-client-qualification'] or type(qualification_attempt) is not int or not 1<=qualification_attempt<=3:
+    if operation!=PROC_PROFILES['proc-pair-client-qualification'] or type(qualification_attempt) is not int or not 1<=qualification_attempt<=4:
         raise ValueError('PROC fixed qualification lineage/ordinal')
     return lineage/('attempt-'+str(qualification_attempt))
 
@@ -885,7 +885,7 @@ def proc_command_preflight(spec, *, now):
             or spec['addressSpaceBytes'] is not None and (type(spec['addressSpaceBytes']) is not int or spec['addressSpaceBytes']<spec['rssBytes'])):
         raise ValueError('PROC resource profile')
     ordinal=spec['qualificationAttempt']
-    if (spec['role']=='qualification' and (type(ordinal) is not int or not 1<=ordinal<=3)
+    if (spec['role']=='qualification' and (type(ordinal) is not int or not 1<=ordinal<=4)
             or spec['role']!='qualification' and ordinal is not None):
         raise ValueError('PROC root-selected qualification ordinal cannot become effect retry')
     root = Path(spec['operationRoot'])

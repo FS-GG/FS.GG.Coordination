@@ -878,14 +878,24 @@ class DiagnosticControls(unittest.TestCase):
             self.assertFalse((slot/'dispatch-input.json').exists())
             bad=copy.deepcopy(spec);bad['request']['method']='POST'
             with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
-            for ordinal in (None,0,4,True):
+            for ordinal in (None,0,5,True):
                 bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
                 with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
-            for ordinal in (1,2,3):
+            for ordinal in (1,2,3,4):
                 bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
                 path=module.proc_operation_root(spec['operation'],ordinal)
                 bad['operationRoot']=str(path);bad['environment'].update(HOME=str(path/'home'),TMPDIR=str(path/'tmp'))
                 self.assertEqual('qualification',module.proc_command_preflight(bad,now=time.monotonic())['role'])
+            # The sole successor is a global ordinal in the existing lineage;
+            # it does not select an alternate root or authorize a fifth slot.
+            for ordinal in (0,5,True):
+                with self.assertRaises(ValueError):module.proc_operation_root(spec['operation'],ordinal)
+            with self.assertRaises(ValueError):module.proc_operation_root(module.PROC_ORIGINAL,4)
+            successor=copy.deepcopy(bad)
+            successor['operationRoot']=str(module.proc_operation_root(spec['operation'],3))
+            with self.assertRaises(ValueError):module.proc_command_preflight(successor,now=time.monotonic())
+            successor=copy.deepcopy(bad);successor['role']='dispatch'
+            with self.assertRaises(ValueError):module.proc_command_preflight(successor,now=time.monotonic())
             self.assertEqual(spec['operation'],module.proc_operation_root(spec['operation'],2).parent.name)
 
     def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
