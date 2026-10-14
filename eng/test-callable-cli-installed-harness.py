@@ -509,12 +509,38 @@ PAIR_ORIGINAL_STEPS = (
     ('Complete job', 'success'))
 
 
+PAIR_POLICY_TOKEN_CLEANUP_CONTRACT = {'enabled': False,
+ 'sourceContract': 'bounded-existing-token-cleanup',
+ 'apiVersion': '2026-03-10',
+ 'owner': 'FS-GG',
+ 'repository': 'FS.GG.Coordination',
+ 'repositoryId': 1346720714,
+ 'permissions': {'administration': 'write'},
+ 'knownTokenSequence': ['GET installation/repositories?per_page=1 = 200; selected scope exactly '
+                        'one repository',
+                        'DELETE installation/token = 204',
+                        'GET same installation/repositories?per_page=1 = 401'],
+ 'requestSeconds': 10,
+ 'cleanupSeconds': 30,
+ 'terminationReserveSeconds': 5,
+ 'responseBytes': 1048576,
+ 'cleanupRequestMaximum': 3,
+ 'automaticPostDeleteMaximum': 1,
+ 'mintLogicalAttemptMaximum': 4,
+ 'mintWireSendMaximum': None,
+ 'unknownGrantsPolicy': 'held-until-authentic-reconciliation',
+ 'nativeAdmissionEstablished': False,
+ 'publicationAuthorized': False}
+
+
 def pair_recovery_selection(admission):
     selected = admission['recovery']
-    expected = {'enabled', 'policyObservationEnabled', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
+    expected = {'enabled', 'policyObservationEnabled', 'clientQualificationEnabled', 'policyTokenCleanup', 'operation', 'originalOperation', 'publisher', 'runId', 'runAttempt',
                 'jobId', 'artifactId', 'archiveSha256'}
-    if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled')):
+    if set(selected) != expected or any(type(selected[k]) is not bool for k in ('enabled','policyObservationEnabled','clientQualificationEnabled')):
         raise ValueError('pair recovery selection changed')
+    if compact(selected['policyTokenCleanup']) != compact(PAIR_POLICY_TOKEN_CLEANUP_CONTRACT):
+        raise ValueError('pair policy token cleanup closed source contract changed')
     if (admission['enabled'] is not False
             or admission['operation'] != 'publish-execution-pair-030-b11fb121-four38484632631'
             or selected['originalOperation'] != admission['operation']
@@ -672,6 +698,124 @@ class PairMetadataReader:
 
 
 
+class PairPolicyTokenCleanup:
+    """Closed same-bearer sequence; no retries, redirects or credential fallback."""
+    scope_url = "https://api.github.com/installation/repositories?per_page=1"
+    revoke_url = "https://api.github.com/installation/token"
+
+    def __init__(self, token, *, opener=None, clock=time.monotonic):
+        self.token = token
+        self.clock = clock
+        self.deadline = clock() + 30
+        class NoRedirect(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *args, **kwargs):
+                return None
+        self.opener = opener or urllib.request.build_opener(urllib.request.ProxyHandler({}), NoRedirect())
+
+    def sequence(self):
+        # The public surface has no arbitrary method/URL or authentication selector.
+        for label, method, url in (("scope", "GET", self.scope_url),
+                                   ("delete", "DELETE", self.revoke_url),
+                                   ("rejection", "GET", self.scope_url)):
+            try:
+                yield label, self._request(method, url), None
+            except Exception:
+                # Exception text and response bodies may contain credentials; retain no raw text.
+                yield label, (None, None), "request-incomplete"
+
+    def _request(self, method, url):
+        remaining = self.deadline - self.clock()
+        if remaining <= 0:
+            raise PairObservationBound("cleanup deadline exhausted")
+        if any(value > 0 for value in signal.getitimer(signal.ITIMER_REAL)):
+            raise PairObservationBound("active caller watchdog prevents token cleanup")
+        headers = {"Accept": "application/vnd.github+json", "User-Agent": "coordination-pair-token-cleanup",
+                   "Authorization": "Bearer " + self.token, "X-GitHub-Api-Version": "2026-03-10"}
+        def request_timeout(signum, frame):
+            raise TimeoutError("cleanup request time limit")
+        previous_handler = signal.signal(signal.SIGALRM, request_timeout)
+        signal.setitimer(signal.ITIMER_REAL, min(10, remaining))
+        try:
+            try:
+                response = self.opener.open(urllib.request.Request(url, headers=headers, method=method), timeout=min(10, remaining))
+            except urllib.error.HTTPError as error:
+                response = error
+            with response:
+                raw = response.read(1048577)
+                if len(raw) > 1048576 or self.clock() >= self.deadline:
+                    raise PairObservationBound("cleanup response budget exhausted")
+                status = response.code
+                # DELETE/401 error bodies are never parsed, hashed, persisted or logged.
+                return status, json.loads(raw) if method == "GET" and status == 200 else None
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+            signal.signal(signal.SIGALRM, previous_handler)
+
+
+def pair_policy_mint_observation(logs=None, *, complete=False):
+    """Native complete mint logs are a separate join; no elapsed-time reconciliation."""
+    if not complete or not isinstance(logs, str):
+        return "unknown-action-logs"
+    if "Failed to create token" in logs or "attempt" in logs.lower():
+        return "unknown-grants-retry-observed"
+    return "complete-logs-require-native-source-review"
+
+
+def cleanup_pair_policy_token(output, *, environment=None, opener=None, clock=time.monotonic):
+    env = os.environ if environment is None else environment
+    report = {"source": env.get("GITHUB_SHA"), "operation": "observe-execution-pair-policy-21633398",
+              "scopedAppTokenUsed": False, "policyObservationOutcome": "unavailable",
+              "knownTokenCleanupOutcome": "no-returned-token", "cleanupOutcome": "unknown-grants-held",
+              "deleteAcknowledged": False, "sameTokenRejected": False,
+              "mintObservation": pair_policy_mint_observation(), "unknownGrantsReconciled": False,
+              "publicationAuthorized": False, "publicationEligible": False,
+              "defaultPostFallback": "separate-unobserved", "firstCleanupFailure": None,
+              "cleanupRequests": []}
+    # Read only selected proof flags, never raw policy/error fields into the cleanup report.
+    policy = pathlib.Path(output).parent / "policy-observation.json"
+    try:
+        if policy.stat().st_size <= 1048576:
+            proof = json.loads(policy.read_bytes())
+            if (isinstance(proof, dict) and proof.get("operation") == report["operation"]
+                    and proof.get("source") == report["source"] and proof.get("rulesetId") == 21633398
+                    and proof.get("policySha256") == "5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da"):
+                report["policyObservationOutcome"] = "complete"
+    except (OSError, ValueError, TypeError):
+        pass
+    token = env.get("PAIR_RULESET_TOKEN", "")
+    if token:
+        report["scopedAppTokenUsed"] = True
+        report["knownTokenCleanupOutcome"] = "incomplete"
+        scope_ok = False
+        for label, (status, body), error in PairPolicyTokenCleanup(token, opener=opener, clock=clock).sequence():
+            report["cleanupRequests"].append({"stage": label, "status": status, "failure": error})
+            if label == "scope":
+                repos = body.get("repositories") if isinstance(body, dict) else None
+                scope_ok = (status == 200 and isinstance(body, dict) and type(body.get("total_count")) is int and body["total_count"] == 1
+                            and isinstance(repos, list) and len(repos) == 1 and isinstance(repos[0], dict)
+                            and type(repos[0].get("id")) is int and repos[0]["id"] == PAIR_ACCOUNT_OWNER_EVIDENCE["repositoryId"]
+                            and repos[0].get("full_name") == "FS-GG/FS.GG.Coordination")
+                error = error or (None if scope_ok else "scope-not-established")
+            elif label == "delete":
+                report["deleteAcknowledged"] = status == 204
+                error = error or (None if status == 204 else "delete-not-acknowledged")
+            else:
+                report["sameTokenRejected"] = status == 401
+                error = error or (None if status == 401 else "same-token-rejection-not-established")
+            report["cleanupRequests"][-1]["failure"] = error
+            if error and report["firstCleanupFailure"] is None:
+                report["firstCleanupFailure"] = {"stage": label, "failure": error}
+        if scope_ok and report["deleteAcknowledged"] and report["sameTokenRejected"]:
+            report["knownTokenCleanupOutcome"] = "acknowledged-and-independently-rejected"
+    try:
+        pathlib.Path(output).parent.mkdir(parents=True, exist_ok=True)
+        pathlib.Path(output).write_bytes(compact(report) + b"\n")
+    except OSError:
+        print('pair policy token cleanup reporting failed', file=sys.stderr)
+        return 1
+    return 0 if report["knownTokenCleanupOutcome"] == "acknowledged-and-independently-rejected" else 1
+
+
 def observe_execution_pair(output, *, read=None, environment=None):
     """Extend release-preflight observations; independent failures never mint eligibility."""
     env = os.environ if environment is None else environment
@@ -808,6 +952,8 @@ def observe_execution_pair(output, *, read=None, environment=None):
 
 
 def main() -> int:
+    if len(sys.argv) == 3 and sys.argv[1] == "--execution-pair-policy-token-cleanup":
+        return cleanup_pair_policy_token(pathlib.Path(sys.argv[2]))
     if len(sys.argv) == 3 and sys.argv[1] == "--execution-pair-preflight":
         return observe_execution_pair(pathlib.Path(sys.argv[2]))
     if len(sys.argv) == 5 and sys.argv[1] == "--execution-pair-artifact":

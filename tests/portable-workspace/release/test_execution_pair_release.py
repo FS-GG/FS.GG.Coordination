@@ -669,7 +669,7 @@ VERIFIED_PAIR_CONTROL = r'''{"mediaType":"application/vnd.dev.sigstore.verificat
 def pair_recovery_source_controls():
     helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
     a,run,jobs,verified=recovery_inert_fixture()
-    assert a['enabled'] is False and a['recovery']['enabled'] is False and a['recovery']['policyObservationEnabled'] is False
+    assert a['enabled'] is False and a['recovery']['enabled'] is False and a['recovery']['policyObservationEnabled'] is False and a['recovery']['clientQualificationEnabled'] is False
     helpers['pair_original_native'](a,run,jobs)
     helpers['pair_verified_attestation'](a,verified)
     for mode in ('repository','publisher','attempt','workflow','partial-jobs','duplicate-job','duplicate-step','extra-step','effect-success','attest-skipped','failure-order'):
@@ -712,10 +712,136 @@ def pair_recovery_source_controls():
     for forbidden in ('NuGet/login','dotnet ','actions/attest@','nuget push','gh release','packages: write','contents: write'):
         assert forbidden not in preflight,forbidden
     assert 'publicationAuthorized' in preflight and 'pending-native-token-revocation-observation' in preflight
+    assert '--execution-pair-policy-token-cleanup' in preflight and 'Independently clean' in preflight
     print('PAIR_RECOVERY_SOURCE_CONTROLS passed native-negatives=11 verified-provenance-negatives=9 effects-disabled=true')
 
 
+def policy_token_cleanup_controls():
+    helper = runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
+    cleanup = helper['cleanup_pair_policy_token']
+    transport = helper['PairPolicyTokenCleanup']
+    good = {'total_count': 1, 'repositories': [{'id': 1346720714, 'full_name': 'FS-GG/FS.GG.Coordination'}]}
+    token = 'inert-cleanup-bearer-do-not-retain'
+    class Response:
+        def __init__(self, status, body): self.code = status; self.body = body
+        def __enter__(self): return self
+        def __exit__(self, *args): pass
+        def read(self, limit): return self.body[:limit]
+    class Opener:
+        def __init__(self, mode): self.mode=mode; self.calls=[]
+        def open(self, request, timeout):
+            index=len(self.calls); self.calls.append(request)
+            assert request.get_header('Authorization')=='Bearer '+token
+            assert request.get_header('X-github-api-version')=='2026-03-10'
+            assert 0 < timeout <= 10
+            status=(200,204,401)[index]; body=json.dumps(good).encode() if index==0 else b''
+            if self.mode=='scope-401' and index==0:status=401
+            if self.mode=='scope-403' and index==0:status=403
+            if self.mode=='scope-404' and index==0:status=404
+            if self.mode=='scope-none' and index==0:body=b'null'
+            if self.mode=='scope-invalid' and index==0:body=b'not-json'
+            if self.mode=='scope-count' and index==0:body=json.dumps(dict(good,total_count=2)).encode()
+            if self.mode=='scope-id' and index==0:body=json.dumps({'total_count':1,'repositories':[{'id':1,'full_name':'FS-GG/FS.GG.Coordination'}]}).encode()
+            if self.mode=='scope-name' and index==0:body=json.dumps({'total_count':1,'repositories':[{'id':1346720714,'full_name':'foreign/repo'}]}).encode()
+            if self.mode=='scope-large' and index==0:body=b'x'*1048577
+            if self.mode=='scope-lost' and index==0:raise TimeoutError(token)
+            if self.mode=='delete-lost' and index==1:raise TimeoutError(token)
+            if self.mode.startswith('delete-') and self.mode!='delete-lost' and index==1:status=int(self.mode[7:])
+            if self.mode.startswith('final-') and self.mode!='final-lost' and index==2:status=int(self.mode[6:]); body=b'{}'
+            if self.mode=='final-lost' and index==2:raise TimeoutError(token)
+            return Response(status,body)
+    modes=('good','scope-401','scope-403','scope-404','scope-none','scope-invalid','scope-count','scope-id','scope-name','scope-large','scope-lost',
+           'delete-lost','delete-401','delete-403','delete-404','delete-500','final-200','final-403','final-404','final-500','final-lost')
+    for mode in modes:
+        with tempfile.TemporaryDirectory(prefix='inert-policy-cleanup-') as temporary:
+            out=Path(temporary)/'token-cleanup-observation.json'; opener=Opener(mode)
+            (out.parent/'policy-observation.json').write_text('null') # Malformed policy receipt cannot suppress DELETE.
+            result=cleanup(out,environment={'PAIR_RULESET_TOKEN':token,'GH_TOKEN':'unused-default','GITHUB_SHA':'a'*40},opener=opener)
+            raw=out.read_text(); report=json.loads(raw)
+            assert token not in raw and 'unused-default' not in raw
+            assert report['policyObservationOutcome']=='unavailable' # Failed policy does not suppress cleanup.
+            assert report['publicationAuthorized'] is False and report['publicationEligible'] is False
+            assert report['cleanupOutcome']=='unknown-grants-held' and report['unknownGrantsReconciled'] is False
+            assert [r.method for r in opener.calls]==['GET','DELETE','GET']
+            assert opener.calls[0].full_url==opener.calls[2].full_url==transport.scope_url
+            assert opener.calls[1].full_url==transport.revoke_url
+            assert result==(0 if mode=='good' else 1),mode
+            if mode.startswith('scope-'):assert report['firstCleanupFailure']['stage']=='scope' and report['deleteAcknowledged']
+            if mode=='delete-lost':assert report['sameTokenRejected'] and not report['deleteAcknowledged']
+            if mode.startswith('final-'):assert not report['sameTokenRejected']
+    with tempfile.TemporaryDirectory(prefix='inert-policy-absent-') as temporary:
+        out=Path(temporary)/'observation.json'; opener=Opener('good')
+        assert cleanup(out,environment={'GH_TOKEN':token},opener=opener)==1
+        assert not opener.calls and json.loads(out.read_text())['knownTokenCleanupOutcome']=='no-returned-token'
+        # Deadline expiry makes no network call and is incomplete, never a mint retry.
+        ticks=iter((0,31,31,31)); opener=Opener('good')
+        assert cleanup(out,environment={'PAIR_RULESET_TOKEN':token},opener=opener,clock=lambda:next(ticks))==1
+        assert not opener.calls
+    with tempfile.TemporaryDirectory(prefix='inert-policy-cli-') as temporary:
+        out=Path(temporary)/'observation.json'; opener=Opener('good')
+        def build_opener(proxy, handler):
+            assert proxy.proxies == {}
+            assert handler.redirect_request(None,None,None,None,None,None) is None
+            return opener
+        with patch('urllib.request.build_opener',build_opener), patch('sys.argv',['harness','--execution-pair-policy-token-cleanup',str(out)]), patch.dict(os.environ,{'PAIR_RULESET_TOKEN':token,'GH_TOKEN':'unused-default'},clear=True):
+            assert helper['main']()==0
+        assert len(opener.calls)==3 and token not in out.read_text()
+    # Construct the actual urllib opener under hostile ambient proxy configuration.
+    # No open()/network call: inspect the supplied ProxyHandler and installed handlers.
+    import urllib.request
+    real_build_opener = urllib.request.build_opener
+    constructed=[]
+    def observe_build_opener(*handlers):
+        assert isinstance(handlers[0],urllib.request.ProxyHandler) and handlers[0].proxies == {}
+        actual=real_build_opener(*handlers)
+        constructed.append(actual)
+        return actual
+    with patch.dict(os.environ,{'http_proxy':'http://proxy.invalid:8080','https_proxy':'http://proxy.invalid:8080',
+                               'HTTP_PROXY':'http://proxy.invalid:8080','HTTPS_PROXY':'http://proxy.invalid:8080','ALL_PROXY':'http://proxy.invalid:8080'},clear=True), patch('urllib.request.build_opener',observe_build_opener):
+        selected=transport(token)
+    assert selected.opener is constructed[0]
+    assert not any(isinstance(handler,urllib.request.ProxyHandler) and handler.proxies for handler in selected.opener.handlers)
+    assert any(isinstance(handler,urllib.request.HTTPRedirectHandler) and handler.redirect_request(None,None,None,None,None,None) is None for handler in selected.opener.handlers)
+    classify=helper['pair_policy_mint_observation']
+    assert classify()=='unknown-action-logs'
+    assert classify('Token created',complete=False)=='unknown-action-logs'
+    assert classify('Failed to create token on attempt 1',complete=True)=='unknown-grants-retry-observed'
+    assert classify('Token created',complete=True)=='complete-logs-require-native-source-review'
+    workflow=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
+    job=workflow.split('  execution_pair_preflight:\n',1)[1].split('  execution_pair:\n',1)[0]
+    section=job.split('      - name: Independently clean',1)[1].split('      - name: Retain',1)[0]
+    assert 'if: always()' in section and '--kill-after=5s 30s' in section
+    assert '--execution-pair-policy-token-cleanup' in section
+    assert 'GH_TOKEN:' not in section and 'github.token' not in section
+    assert job.index('Independently clean')<job.index('Retain terminal')
+    assert 'permission-administration: write' in job
+    assert 'env GH_TOKEN=' not in job # Bearer is a step environment binding, never an env argv item.
+    assert 'skip-token-revoke: true' not in job
+    admission=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_text())
+    contract=admission['recovery']['policyTokenCleanup']
+    helper['pair_recovery_selection'](admission)
+    # The accepted source contract adds a closed field without relaxing the
+    # original native identity or client qualification selection.
+    for mode in ('extra-recovery','extra-cleanup','enabled','native-admission','publication','float-budget','bool-budget','api-version'):
+        changed=copy.deepcopy(admission);selected=changed['recovery'];closed=selected['policyTokenCleanup']
+        if mode=='extra-recovery':selected['unknown']=False
+        if mode=='extra-cleanup':closed['unknown']=False
+        if mode=='enabled':closed['enabled']=True
+        if mode=='native-admission':closed['nativeAdmissionEstablished']=True
+        if mode=='publication':closed['publicationAuthorized']=True
+        if mode=='float-budget':closed['requestSeconds']=10.0
+        if mode=='bool-budget':closed['automaticPostDeleteMaximum']=True
+        if mode=='api-version':closed['apiVersion']='other'
+        try:helper['pair_recovery_selection'](changed)
+        except ValueError:pass
+        else:raise AssertionError('closed policy cleanup contract accepted '+mode)
+    assert contract['enabled'] is False and contract['nativeAdmissionEstablished'] is False
+    assert admission['enabled'] is False and admission['recovery']['enabled'] is False and admission['recovery']['policyObservationEnabled'] is False
+    print('R3_POLICY_TOKEN_CLEANUP_INERT_CONTROLS passed sequence=21 absent=1 deadline=1 cli=1 noProxy=actual-handler logs=4 source=closed effects-disabled=true')
+
+
 def main():
+    policy_token_cleanup_controls()
     pair_recovery_source_controls()
     complete_policy_source_controls()
     consumer_sdk_readback_controls()

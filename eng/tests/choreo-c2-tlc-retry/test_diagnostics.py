@@ -10,6 +10,8 @@ import unittest
 import copy
 import time
 import hashlib
+import contextlib
+import io
 from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
@@ -29,21 +31,29 @@ class DiagnosticControls(unittest.TestCase):
         module.PROC_OPERATION_BASE.mkdir(mode=0o700)
         base=module.PROC_OPERATION_BASE/str(os.geteuid());base.mkdir(mode=0o700)
         slot=module.proc_operation_root(operation);slot.mkdir(mode=0o700)
-        client=root/'inert-gh'
+        client=root/'inert-curl'
         body={'workflow_run_id':42,'run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/42',
               'html_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/42'}
-        text='HTTP/2.0 200 OK\ncontent-type: application/json\n\n'+json.dumps(body)
-        if mode=='foreign':text=text.replace('Coordination/','Foreign/')
-        if mode=='no-id':text='HTTP/2.0 200 OK\n\n{}'
-        if mode=='202':text=text.replace('200 OK','202 Accepted')
+        if mode=='foreign':body['run_url']=body['run_url'].replace('Coordination/','Foreign/')
+        if mode=='no-id':body={}
         extra=''
         if mode=='unexpected-read':
             foreign=root/'foreign-config';foreign.write_text('inert-only')
             extra='held=open('+repr(str(foreign))+')\n'
         if mode=='timeout':extra='time.sleep(20)\n'
-        client.write_text('#!/usr/bin/python3\nimport sys,time\nif sys.argv[1:]==["--version"]:print("gh version inert-source-control");sys.exit(0)\n'+extra+'time.sleep(.2)\n'+
-                          ('sys.exit(7)\n' if mode=='lost' else 'sys.stdout.write('+repr(text)+')\n'))
+        meta={'httpCode':'202' if mode=='202' else '200',
+              'effectiveUrl':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
+              'redirects':0,'sslVerifyResult':0}
+        client.write_text('#!/usr/bin/python3\nimport sys,time,os\nif sys.argv[1:]==["--version"]:print("curl inert-source-control");sys.exit(0)\n'
+                          +'assert "GH_TOKEN" not in os.environ\n'+extra+'time.sleep(.2)\n'+
+                          ('sys.exit(7)\n' if mode=='lost' else
+                           'open(sys.argv[sys.argv.index("--output")+1],"wb").write('+repr(json.dumps(body).encode())+')\n'
+                           +'sys.stdout.write('+repr(json.dumps(meta)+'\n')+')\n'))
         client.chmod(0o700)
+        for name in ('home','tmp'):(slot/name).mkdir(mode=0o700)
+        support=module.proc_support_root();support.mkdir(mode=0o700);(support/'ca-empty').mkdir(mode=0o700)
+        (support/'openssl.cnf').write_bytes(module.PROC_OPENSSL_CONFIG)
+        ca=support/'trusted-ca.pem';ca.write_text('inert-fixture-ca')
         native={key:str(root/(key+'.json')) for key in ('admission','originalRun','originalJobs','originalArtifact',
                                                         'originalArchive','verifiedAttestation','sourceCorrespondence','runtimeQualification')}
         for name in native.values():Path(name).write_text('{}')
@@ -64,7 +74,7 @@ class DiagnosticControls(unittest.TestCase):
         imports.append(Path(runpy.__file__).resolve())
         for path in dict.fromkeys((client,ROOT/'eng/shared_process_owner.py',ROOT/'eng/retain-choreo-c2-diagnostics.py',
                      ROOT/'eng/test-callable-cli-installed-harness.py',ROOT/'eng/write-callable-cli-release-readback.py',
-                     Path(os.path.realpath(os.sys.executable)),*(Path(p) for p in native.values()),*consumer.iterdir(),*imports)):
+                     Path(os.path.realpath(os.sys.executable)),module.proc_support_root()/'openssl.cnf',ca,*(Path(p) for p in native.values()),*consumer.iterdir(),*imports)):
             row=module.pin_file(path);row['mode']=path.stat().st_mode&0o777;pins.append(row)
         native['consumerRoot']=str(root/'consumer-fixture')
         started=time.monotonic()
@@ -78,26 +88,29 @@ class DiagnosticControls(unittest.TestCase):
                              'execution_pair':True,'pair_recovery':True,'preflight_only':False,'cli_only':False,'readback_only':False,
                              'publisher_source':'d'*40,'operation':operation,'source':correspondence['source'],
                              'protected_merge':correspondence['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}}},
-              'argv':[str(client),'api','--method','POST','--include','repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
-                      '-H','X-GitHub-Api-Version: 2026-03-10','--input',str(slot/'dispatch-input.json')],
+              'argv':[str(client)],'transport':{'client':str(client),'caBundle':str(ca),'tracer':str(client)},
+              'readEvidence':{'contract':'ordinary-exact-profile-observation-and-drift','directories':[], 'aliases':[], 'absences':[],'runtimeData':copy.deepcopy(module.PROC_RUNTIME_DATA)},
               'pins':pins,'proofInputs':native,'sourceReadAllowlist':[p['path'] for p in pins],
-              'environment':{'HOME':str(slot/'home'),'TMPDIR':str(slot/'tmp'),'GH_CONFIG_DIR':str(slot/'home/.config/gh'),
-                             'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','LC_ALL':'C.UTF-8','GH_PROMPT_DISABLED':'1','GH_HOST':'github.com'},
-              'operationRoot':str(slot),'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
+              'environment':{'HOME':str(slot/'home'),'TMPDIR':str(slot/'tmp'),'PATH':'/usr/bin',
+                             'LANG':'C','LC_ALL':'C','TZ':'UTC','OPENSSL_CONF':str(module.proc_support_root()/'openssl.cnf')},
+              'operationRoot':str(slot),'qualificationAttempt':None,'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
               'rssBytes':512*1024**2,'addressSpaceBytes':512*1024**2,'logBytes':1024**2,'diskBytes':16*1024**2,'cpuAffinity':sorted(os.sched_getaffinity(0))}
         # Canonical-shaped inert evidence exercises joins, never supplies genuine gh qualification.
-        qualification={'schema':module.RESULT_SCHEMA,'commandAccepted':True,
+        capacity={'directory':'/sys/fs/cgroup','independentPrivateScope':True,'heldStoresUsed':False,'activeWorkers':None,
+                  'identity':module.proc_read_identity('/sys/fs/cgroup'),'membership':Path('/proc/self/cgroup').read_text()}
+        qualification={'rootAccepted':True,'publicationAuthorized':False,'capacity':capacity,'schema':module.RESULT_SCHEMA,'commandAccepted':True,'qualificationAccepted':True,'firstCause':None,'additionalFailures':[],'reportingOutcome':'written',
                        'ownerReceipt':{'cleanup':'observed-empty-group','custody':'observed-owned-group','exit':0,'firstCause':None,
                                        'leader':{'start':1},'residual':[],'escapedResidual':[],'escapedDescendants':[]},
                        'runtimeEvidence':{'currentBootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                                           'effectiveUid':os.geteuid(),'actualInterpreter':os.path.realpath(os.sys.executable),
                                           'interpreterFlags':{'isolated':1,'noSite':1,'noBytecode':True,'optimize':0},
                                           'canonicalBaseIdentity':module.proc_directory_identity(base),
-                                          'canonicalOperationIdentity':module.proc_directory_identity(slot),
+                                          'nativeGetObserved':True,'nativeCollectorObserved':True,'qualifiedSourcePins':[pin for pin in pins if pin['path'].endswith('/retain-choreo-c2-diagnostics.py')],
                                           'supportPins':[pin for pin in pins if pin['path'] not in native.values()],
                                           'bounds':{k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')},
-                                          'clientPath':str(client),'clientVersion':'gh version inert-source-control','postRetryExcluded':True,
-                                          'transitiveSourceReadFence':'qualified-no-unobserved-source-reads',
+                                          'clientPath':str(client),'clientVersion':'curl inert-source-control','postRetryExcluded':True,
+                                          'readContract':'ordinary-exact-profile-observation-and-drift','readEvidence':spec['readEvidence'],
+                                          'traceComplete':True,'controllerStartupTraceComplete':True,'sourceAlternativesReviewSha256':'a'*64,
                                           'sourceReadAllowlist':spec['sourceReadAllowlist']}}
         Path(native['runtimeQualification']).write_text(json.dumps(qualification))
         row=module.pin_file(native['runtimeQualification']);row['mode']=Path(row['path']).stat().st_mode&0o777
@@ -109,12 +122,14 @@ class DiagnosticControls(unittest.TestCase):
         authority={'schema':module.COMMAND_SCHEMA,'descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest(),
                    'profile':spec['profile'],'operation':operation,'operationRoot':str(slot),'approved':True,
                    'runtimeQualified':True,'readFenceQualified':True,'clientAutomaticPostRetry':False,
-                   'independentCapacityQualified':True,'runtimeQualification':qualification}
+                   'canonicalSupportIdentity':module.proc_directory_identity(support),
+                   'canonicalBaseIdentity':module.proc_directory_identity(base),'canonicalOperationIdentity':module.proc_directory_identity(slot),
+                   'independentCapacityQualified':True,'sourceAlternativesReviewSha256':'a'*64,'runtimeQualification':qualification}
         approved=root/'selected-authority.json';approved.write_text(json.dumps(authority))
         return spec,descriptor,approved
 
     def test_proc_transport_one_use_and_uncertainty_keep_canonical_state(self):
-        # Actual shared owner and subprocess; fake gh never reaches a network or credential.
+        # Actual shared owner and subprocess; fake curl never reaches a network or credential.
         adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
                   'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
         for mode in ('good','lost','202','foreign','no-id','unexpected-read','timeout'):
@@ -130,6 +145,9 @@ class DiagnosticControls(unittest.TestCase):
                     self.assertEqual('consumed-accepted' if mode=='good' else 'consumed-unknown',state['sendState'])
                     self.assertEqual('observed-empty-group',state['ownerReceipt']['cleanup'])
                     self.assertFalse(state['publicationAccepted'])
+                    self.assertNotIn(b'fixture-only',before)
+                    self.assertEqual('removed-after-qualified-retirement',state['sensitiveInputRetirement']['disposition'])
+                    self.assertFalse((Path(spec['operationRoot'])/'authorization.header').exists())
                     self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
                     self.assertEqual(before,result.read_bytes())
 
@@ -172,6 +190,27 @@ class DiagnosticControls(unittest.TestCase):
             with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
                 self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
 
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            write=module.os.write;close=module.os.close;advisory=io.StringIO()
+            def report_fd(fd):
+                try:return Path(os.readlink('/proc/self/fd/'+str(fd))).name=='command.json.pending'
+                except OSError:return False
+            def failed_write(fd,raw):
+                if report_fd(fd):raise OSError('original canonical write failure')
+                return write(fd,raw)
+            def failed_close(fd):
+                selected=report_fd(fd);close(fd)
+                if selected:raise OSError('canonical close failure')
+            with patch('runpy.run_path',return_value=adapters),patch.object(module.os,'write',side_effect=failed_write),patch.object(module.os,'close',side_effect=failed_close),contextlib.redirect_stderr(advisory):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            projected=json.loads(advisory.getvalue().splitlines()[-1])
+            self.assertEqual('original canonical write failure',projected['firstCause']['message'])
+            self.assertEqual([{'type':'OSError','message':'canonical close failure'}],projected['firstCause']['secondaryFailures'])
+            slot=Path(spec['operationRoot'])
+            self.assertEqual('prepared-no-send',json.loads((slot/'command.json').read_bytes())['sendState'])
+            self.assertTrue((slot/'command.json.pending').exists());self.assertTrue((slot/'dispatch-input.json').exists())
+
     def test_proc_uncertain_native_correlation_never_reopens_send(self):
         with tempfile.TemporaryDirectory() as tmp:
             root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
@@ -196,19 +235,26 @@ class DiagnosticControls(unittest.TestCase):
             from types import SimpleNamespace
             archive=b'inert terminal archive';calls=[]
             def inert_run(argv,cwd,env,deadline,cleanup,rss,out,cap,**kwargs):
-                calls.append(argv[4]);output=Path(out)
-                if '/jobs?' in argv[4]:
+                target=argv[-1];calls.append(target);output=Path(out)
+                if '/jobs?' in target:
                     output.write_bytes(b'inert causal failure')
-                    output.with_suffix('.log.result.json').write_text(json.dumps({'cleanup':'observed-empty-group'}))
+                    output.with_suffix('.log.result.json').write_text(json.dumps({'cleanup':'observed-empty-group','custody':'observed-owned-group'}))
                     raise RuntimeError('inert original terminal job metadata failure')
-                if '/artifacts?' in argv[4]:
+                if '/artifacts?' in target:
                     value={'total_count':1,'artifacts':[{'id':71,'name':'execution-pair-publication-42-1','expired':False,
                            'workflow_run':{'id':42,'head_sha':spec['publisher']},'size_in_bytes':len(archive),
                            'digest':'sha256:'+hashlib.sha256(archive).hexdigest()}]}
-                    output.write_text(json.dumps(value))
-                else:output.write_bytes(archive)
-                return {'cleanup':'observed-empty-group'}
-            result=module.proc_terminal_evidence(SimpleNamespace(run=inert_run),spec,root,{},lambda *a:None,{'id':42})
+                    raw=json.dumps(value).encode()
+                else:raw=archive
+                Path(argv[argv.index('--output')+1]).write_bytes(raw)
+                output.write_text(json.dumps({'httpCode':'200','effectiveUrl':target,'redirects':0,'sslVerifyResult':0}))
+                return {'cleanup':'observed-empty-group','custody':'observed-owned-group'}
+            def inert_storage(owner,spec,slot,env,check,target,name,retirement):
+                calls.append('explicit-storage-join')
+                module.proc_charge_read(retirement,'api');module.proc_charge_read(retirement,'storage')
+                return archive
+            with patch.object(module,'proc_storage_read',side_effect=inert_storage):
+                result=module.proc_terminal_evidence(SimpleNamespace(run=inert_run),spec,root,{},lambda *a:None,{'id':42},{})
             self.assertEqual('failed',result['records']['terminal-jobs']['state'])
             self.assertEqual('collected',result['records']['terminal-archive']['state'])
             self.assertIn('original terminal job metadata failure',result['additionalFailures'][0]['cause']['message'])
@@ -252,7 +298,7 @@ class DiagnosticControls(unittest.TestCase):
                 if mode=='missing-input':(slot/'input.json').unlink()
                 if mode=='missing-result':(slot/'command.json').unlink()
                 if mode=='missing-slot':
-                    (slot/'input.json').unlink();(slot/'command.json').unlink();slot.rmdir()
+                    shutil.rmtree(slot)
                 with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
                     self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
                 self.assertFalse((slot/'dispatch-input.json').exists())
@@ -269,6 +315,444 @@ class DiagnosticControls(unittest.TestCase):
             self.assertIn(b'optimize=0',result.stderr)
             self.assertEqual(before,state.read_bytes())
             self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
+
+    def test_proc_fixed_curl_argv_and_sensitive_input_retirement(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            slot=Path(spec['operationRoot'])
+            argv=module.proc_curl_argv(spec,slot,spec['request']['endpoint'],'POST',body=slot/'dispatch-input.json')
+            self.assertEqual('-q',argv[1]);self.assertEqual('https://api.github.com/'+spec['request']['endpoint'],argv[-1])
+            self.assertIn('Expect:',argv);self.assertIn('@'+str(slot/'authorization.header'),argv)
+            for forbidden in ('--location','-L','--retry','--anyauth','--netrc','--config','--parallel','--next','--user'):
+                self.assertNotIn(forbidden,argv)
+            header=module.proc_sensitive_header(slot,'inert-sensitive-source-control')
+            self.assertEqual(0o600,(slot/'authorization.header').stat().st_mode&0o777)
+            self.assertNotIn('inert-sensitive',json.dumps({k:v for k,v in header.items() if not k.startswith('_')}));self.assertNotIn('sha256',header)
+            with self.assertRaises(FileExistsError):module.proc_sensitive_header(slot,'second-inert-value')
+            self.assertEqual('held-uncertain-retirement',module.proc_sensitive_retire(header,{'cleanup':'unknown'})['disposition'])
+            self.assertTrue((slot/'authorization.header').exists())
+            receipt={'cleanup':'observed-empty-group','custody':'observed-owned-group'}
+            self.assertEqual('removed-after-qualified-retirement',module.proc_sensitive_retire(header,receipt)['disposition'])
+            for invalid in ('line\nbreak','line\rbreak','nul\0break',''):
+                with self.assertRaises(ValueError):module.proc_sensitive_header(slot,invalid)
+
+    def test_proc_typed_read_drift_observes_alias_population_and_absence(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            selected=root/'bounded-support';selected.mkdir();file=selected/'file';file.write_text('owned support')
+            alias=root/'support-alias';alias.symlink_to(file)
+            identity=module.proc_read_identity
+            spec['readEvidence']={'contract':'ordinary-exact-profile-observation-and-drift','runtimeData':copy.deepcopy(module.PROC_RUNTIME_DATA),
+                'directories':[{'path':str(selected),'identity':identity(selected),'relevantEntries':{'file':identity(file)},'completePopulation':True}],
+                'aliases':[{'path':str(alias),'target':str(file),'resolved':str(file),'identity':identity(alias)}],
+                'absences':[module.proc_absence(root/'absent-config')]}
+            module.proc_read_drift(spec)
+            (selected/'unexpected').write_text('new support')
+            with self.assertRaisesRegex(ValueError,'population'):module.proc_read_drift(spec)
+            (selected/'unexpected').unlink();(root/'absent-config').write_text('new config')
+            with self.assertRaisesRegex(ValueError,'negative'):module.proc_read_drift(spec)
+            (root/'absent-config').unlink();alias.unlink();alias.symlink_to(selected/'foreign')
+            with self.assertRaises(ValueError):module.proc_read_drift(spec)
+
+    def test_proc_negative_intermediate_directory_and_alias_drift(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            path=root/'missing'/'nested'/'socket'
+            row=module.proc_absence(path)
+            self.assertEqual(['missing','nested','socket'],row['missingComponents'])
+            spec['readEvidence']['absences']=[row];module.proc_read_drift(spec)
+            (root/'missing').mkdir()
+            with self.assertRaisesRegex(ValueError,'missing chain'):module.proc_read_drift(spec)
+            (root/'missing').rmdir();(root/'missing').symlink_to(root)
+            with self.assertRaises(ValueError):module.proc_read_drift(spec)
+
+    def test_proc_sensitive_creation_failure_is_owned_or_held_and_never_loops(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp)
+            for operation in ('write','fsync'):
+                failure=OSError('original inert '+operation+' failure')
+                with patch.object(module.os,operation,side_effect=failure):
+                    with self.assertRaises(OSError) as raised:module.proc_sensitive_header(root,'inert-value')
+                self.assertIs(failure,raised.exception)
+                self.assertEqual('removed-before-child',failure.proc_sensitive_creation['disposition'])
+                self.assertFalse((root/'authorization.header').exists())
+            with patch.object(module.os,'write',return_value=0):
+                with self.assertRaisesRegex(OSError,'zero write'):module.proc_sensitive_header(root,'inert-value')
+            failure=OSError('preserve original write failure')
+            with patch.object(module.os,'write',side_effect=failure),patch.object(module.Path,'unlink',side_effect=OSError('inert retirement denied')):
+                with self.assertRaises(OSError) as raised:module.proc_sensitive_header(root,'inert-value')
+            self.assertIs(failure,raised.exception)
+            self.assertEqual('held-creation-failure',failure.proc_sensitive_creation['disposition'])
+            self.assertTrue((root/'authorization.header').exists())
+            (root/'authorization.header').unlink()
+            close=module.os.close
+            def close_failure(fd):close(fd);raise OSError('original inert close failure')
+            with patch.object(module.os,'close',side_effect=close_failure):
+                with self.assertRaisesRegex(OSError,'original inert close') as raised:module.proc_sensitive_header(root,'inert-value')
+            self.assertEqual('removed-before-child',raised.exception.proc_sensitive_creation['disposition'])
+            failure=OSError('original inert write before close failure')
+            with patch.object(module.os,'write',side_effect=failure),patch.object(module.os,'close',side_effect=close_failure):
+                with self.assertRaises(OSError) as raised:module.proc_sensitive_header(root,'inert-value')
+            self.assertIs(failure,raised.exception)
+            self.assertIn('original inert close',failure.proc_sensitive_close_failure['message'])
+            self.assertFalse((root/'authorization.header').exists())
+
+    def test_proc_qualification_birth_reuse_and_parent_reuse_refuse(self):
+        known={10:100};member={'pid':11,'ppid':10,'start':200}
+        records={10:{'pid':10,'start':100},11:member}
+        module.proc_join_qualification_birth(member,known,records.get)
+        self.assertEqual(200,known[11])
+        records[11]=dict(member,start=201)
+        with self.assertRaisesRegex(ValueError,'PID birth reuse'):
+            module.proc_join_qualification_birth(dict(member,start=201),known,records.get)
+        known={10:100};records[10]['start']=101;records[11]=member
+        with self.assertRaisesRegex(ValueError,'parent/birth'):
+            module.proc_join_qualification_birth(member,known,records.get)
+        self.assertNotIn(11,known)
+
+    def test_proc_effect_capacity_claim_cannot_replace_live_enclosing_checks(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            runtime=Path(spec['proofInputs']['runtimeQualification'])
+            qualification=json.loads(runtime.read_bytes());qualification['capacity']['membership']='foreign'
+            runtime.write_text(json.dumps(qualification))
+            pin=module.pin_file(runtime);pin['mode']=runtime.stat().st_mode&0o777
+            spec['pins']=[pin if row['path']==str(runtime) else row for row in spec['pins']]
+            descriptor.write_text(json.dumps(spec));authority=json.loads(approved.read_bytes())
+            authority.update(descriptorSha256=hashlib.sha256(descriptor.read_bytes()).hexdigest(),runtimeQualification=qualification)
+            approved.write_text(json.dumps(authority))
+            slot=Path(spec['operationRoot']);before=(slot/'command.json').read_bytes()
+            with contextlib.redirect_stderr(io.StringIO()),patch('runpy.run_path',return_value={'pair_recovery_selection':lambda a:a['recovery']}):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertEqual(before,(slot/'command.json').read_bytes());self.assertFalse((slot/'dispatch-input.json').exists())
+
+    def test_proc_state_byte_cap_keeps_exclusive_claim_and_launches_no_child(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            slot=Path(spec['operationRoot']);before=(slot/'command.json').read_bytes()
+            adapters={'pair_recovery_selection':lambda a:a['recovery'],
+                      'pair_original_failure':lambda *a:{'oversized':'x'*module.MAX_OUTPUT},
+                      'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+            with patch('runpy.run_path',return_value=adapters):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertEqual(before,(slot/'command.json').read_bytes());self.assertTrue((slot/'dispatch-input.json').exists())
+            self.assertFalse((slot/'client-preflight.log').exists());self.assertFalse((slot/'authorization.header').exists())
+
+    def test_proc_kernel_data_is_census_data_and_closed_actor_metadata(self):
+        classify=module.proc_kernel_data_read;actors={10,11};args=(10,actors,9,True,set())
+        self.assertTrue(classify('/proc/999/stat','openat(AT_FDCWD, "stat", O_RDONLY) = 3',*args))
+        self.assertFalse(classify('/proc/999/status','openat(AT_FDCWD, "status", O_RDONLY) = 3',*args))
+        self.assertTrue(classify('/proc/11/exe','readlink("exe", "/pinned/python", 4096) = 10',*args))
+        for path in ('/proc/11/environ','/proc/11/mem','/proc/11/root/file','/proc/999/ns/pid'):
+            self.assertFalse(classify(path,'openat(AT_FDCWD, "file", O_RDONLY) = 3',*args))
+        self.assertFalse(classify('/proc/11/fd/3','openat(AT_FDCWD, "fd/3", O_RDONLY) = 3',*args))
+
+    def storage_fixture_url(self,archive=False):
+        from datetime import datetime,timezone
+        now=int(time.time());stamp=lambda seconds:datetime.fromtimestamp(seconds,timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
+        fields={key:'inert' for key in module.PROC_STORAGE_KEYS}
+        fields.update(sp='r',spr='https',sr='b',sv='2025-11-05',st=stamp(now-60),se=stamp(now+600),sig='SENSITIVE-SENTINEL')
+        if archive:fields['rscd']='inert'
+        url='https://'+module.PROC_STORAGE_HOST+'/closed/object?'+ '&'.join(key+'='+value for key,value in sorted(fields.items()))
+        date=datetime.fromtimestamp(now,timezone.utc).strftime('%a, %d %b %Y %H:%M:%S GMT')
+        return url,date,now
+
+    def test_proc_storage_grammar_counter_and_private_argv(self):
+        url,date,now=self.storage_fixture_url()
+        self.assertGreater(module.proc_storage_location(url,archive=False,api_date=date,now_epoch=now),0)
+        for bad in (url.replace(module.PROC_STORAGE_HOST,'foreign.invalid'),url+'&sig=second',url.replace('sp=r&','sp=rw&'),
+                    url.replace('sv=2025-11-05','sv=unknown'),url+'#fragment',url.replace('https://','https://user@'),url.replace('/closed/','/../')):
+            with self.assertRaises(ValueError) as raised:module.proc_storage_location(bad,archive=False,api_date=date,now_epoch=now)
+            self.assertNotIn('SENSITIVE-SENTINEL',str(raised.exception))
+        with tempfile.TemporaryDirectory() as tmp:
+            spec,_,_=self.proc_fixture(Path(tmp));slot=Path(spec['operationRoot'])
+            argv=module.proc_storage_argv(spec,slot,'terminal-job',5)
+            self.assertNotIn(url,json.dumps(argv));self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(argv))
+            self.assertNotIn('--show-error',argv);self.assertNotIn('%{url_effective}',json.dumps(argv))
+            self.assertNotIn('@'+str(slot/'authorization.header'),argv);self.assertEqual('-q',argv[1])
+        retirement={}
+        for kind in ('api',)*5+('storage',)*2:module.proc_charge_read(retirement,kind)
+        self.assertEqual({'api':5,'storage':2,'total':7},retirement['readCounts'])
+        with self.assertRaises(ValueError):module.proc_charge_read(retirement,'storage')
+
+    def test_proc_archive_controls_are_bounded_crc_and_safe_paths(self):
+        import zipfile
+        def archive(name):
+            target=io.BytesIO()
+            with zipfile.ZipFile(target,'w') as writer:writer.writestr(name,b'inert native archive control')
+            return target.getvalue()
+        module.proc_archive_shape(archive('proof.json'),deadline=time.monotonic()+1)
+        for name in ('../outside','/absolute','nested\\outside'):
+            with self.assertRaises(ValueError):module.proc_archive_shape(archive(name))
+        with self.assertRaises(TimeoutError):module.proc_archive_shape(archive('proof.json'),deadline=time.monotonic()-1)
+        for status,classification in (('401','access-authentication-refused'),('403','storage-access-indeterminate'),
+                                      ('404','native-evidence-unavailable'),('410','native-evidence-expired'),('302','second-redirect-refused')):
+            error=module.proc_read_failure('storage',status,'inert refusal')
+            self.assertEqual(classification,error.proc_read_status['disposition'])
+        error=module.proc_read_failure('storage','SENSITIVE-SENTINEL','inert refusal')
+        self.assertIsNone(error.proc_read_status['httpStatus'])
+        self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(error.proc_read_status))
+
+    def test_proc_storage_read_uses_actual_owner_and_separated_inert_children(self):
+        # Owned Python transport adapter only: no curl, TLS, tracer or network.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            slot=Path(spec['operationRoot']);url,date,_=self.storage_fixture_url()
+            client=Path(spec['transport']['client'])
+            client.write_text('#!/usr/bin/python3\nimport sys,json,os\na=sys.argv\nassert "GH_TOKEN" not in os.environ\n'
+                +'out=a[a.index("--output")+1]\n'
+                +'if "--dump-header" in a:\n'
+                +' assert "--config" not in a\n'
+                +' open(a[a.index("--dump-header")+1],"wb").write('+repr(('HTTP/1.1 302 Found\r\nDate: '+date+'\r\nLocation: '+url+'\r\n\r\n').encode())+')\n'
+                +' open(out,"wb").write(b"SENSITIVE-SENTINEL")\n'
+                +' print(json.dumps({"httpCode":"302","effectiveUrl":a[-1],"redirects":0,"sslVerifyResult":0}))\n'
+                +'else:\n'
+                +' assert "--config" in a and not any("authorization.header" in v for v in a)\n'
+                +' assert "SENSITIVE-SENTINEL" in open(a[a.index("--config")+1]).read()\n'
+                +' open(out,"wb").write(b"inert log")\n'
+                +' print(json.dumps({"httpCode":"200","redirects":0,"sslVerifyResult":0,"bytes":9}))\n')
+            owner_spec=importlib.util.spec_from_file_location('inert_storage_owner',ROOT/'eng/shared_process_owner.py')
+            owner=importlib.util.module_from_spec(owner_spec);owner_spec.loader.exec_module(owner)
+            retirement={};argv_seen=[]
+            class Capture:
+                def run(self,argv,*args,**kwargs):argv_seen.append(argv);return owner.run(argv,*args,**kwargs)
+            raw=module.proc_storage_read(Capture(),spec,slot,spec['environment'],lambda *args:None,
+                'repos/FS-GG/FS.GG.Coordination/actions/jobs/1/logs','terminal-job',retirement)
+            self.assertEqual(b'inert log',raw);self.assertEqual(2,len(argv_seen))
+            self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(argv_seen)+json.dumps(retirement))
+            self.assertFalse((slot/'storage-url.conf').exists());self.assertFalse((slot/'terminal-job.headers').exists())
+            self.assertEqual({'api':1,'storage':1,'total':2},retirement['readCounts'])
+            # Same real API-child lifecycle, then a deterministic parse refusal.
+            # Raw redirect body must retire even though the storage child never runs.
+            retirement={};argv_seen.clear();negative=slot/'negative-source-control';negative.mkdir(mode=0o700)
+            with patch.object(module,'proc_storage_location',side_effect=ValueError('original inert location refusal')):
+                with self.assertRaisesRegex(ValueError,'original inert location'):
+                    module.proc_storage_read(Capture(),spec,negative,spec['environment'],lambda *args:None,
+                        'repos/FS-GG/FS.GG.Coordination/actions/jobs/1/logs','terminal-job',retirement)
+            self.assertEqual(1,len(argv_seen));self.assertFalse((negative/'terminal-job-api.body').exists())
+            self.assertFalse((negative/'terminal-job.headers').exists());self.assertFalse((negative/'storage-url.conf').exists())
+            self.assertNotIn('SENSITIVE-SENTINEL',json.dumps(retirement)+json.dumps(argv_seen))
+            self.assertEqual('removed-after-qualified-child-retirement',retirement['redirectBodyDisposition'])
+
+    def test_proc_qualification_trace_has_complete_births_and_refuses_unknown_paths(self):
+        # Parser controls are inert metadata, never authentic qualification evidence.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,approved=self.proc_fixture(root)
+            bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}))
+            spec['proofInputs']['bootstrapEvidence']=str(bootstrap)
+            slot=Path(spec['operationRoot']);python=os.path.realpath(os.sys.executable);client=spec['transport']['client']
+            parent=slot/'qualification.trace.10';child=slot/'qualification.trace.11'
+            parent.write_text('execve('+json.dumps(python)+', ["python", "-I"], 0x0 /* 7 vars */) = 0\nclone(child_stack=NULL, flags=SIGCHLD) = 11\n+++ exited with 0 +++\n')
+            child.write_text('execve('+json.dumps(client)+', ["curl", "-q"], 0x0 /* 7 vars */) = 0\n+++ exited with 52 +++\n')
+            self.assertTrue(module.proc_trace_evidence(spec,slot,approved)['complete'])
+            original=child.read_text()
+            child.write_text(original.replace('+++ exited', 'openat(AT_FDCWD, "/foreign/config", O_RDONLY) = 3</foreign/config>\n+++ exited'))
+            with self.assertRaisesRegex(ValueError,'outside bootstrap'):module.proc_trace_evidence(spec,slot,approved)
+            child.write_text(original);child.unlink()
+            with self.assertRaisesRegex(ValueError,'birth join'):module.proc_trace_evidence(spec,slot,approved)
+
+    def test_proc_trace_closed_grammar_cwd_raw_reads_and_exec_fd_lifetime(self):
+        # Exact parser controls only, never native trace/qualification evidence.
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,approved=self.proc_fixture(root)
+            bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'capacity':{'directory':'/sys/fs/cgroup'}}))
+            spec['proofInputs']['bootstrapEvidence']=str(bootstrap);slot=Path(spec['operationRoot'])
+            python=os.path.realpath(os.sys.executable);client=spec['transport']['client'];header=str(slot/'authorization.header')
+            parent=slot/'qualification.trace.10';child=slot/'qualification.trace.11'
+            begin='execve('+json.dumps(python)+', ["python", "-I"], 0x0 /* 7 vars */) = 0\n'
+            finish='+++ exited with 0 +++\n'
+            for syscall in ('getxattr("/foreign/secret", "user.value", NULL, 0) = 4','truncate("/foreign/state", 0) = 0',
+                            'unmodelled_file_call("/foreign", 0) = 0',
+                            'openat(AT_FDCWD, "/foreign", O_RDONLY <unfinished ...>\n<... execve resumed>) = 3'):
+                parent.write_text(begin+syscall+'\n'+finish)
+                with self.assertRaises(ValueError):module.proc_trace_evidence(spec,slot,approved)
+            parent.write_text(begin+'openat(AT_FDCWD<'+str(slot)+'>, "input.json", O_RDONLY) = 3<'+str(slot/'input.json')+'>\n'+finish)
+            self.assertTrue(module.proc_trace_evidence(spec,slot,approved)['complete'])
+            for flag in ('O_CLOEXEC','0'):
+                parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY|'+flag+') = 3<'+header+'>\nclone(child_stack=NULL, flags=SIGCHLD) = 11\n'+finish)
+                child.write_text('execve('+json.dumps(client)+', ["curl", "-q"], 0x0 /* 7 vars */) = 0\nread(0x3, 0x1000, 0x40) = 0x20\n'+finish)
+                if flag=='O_CLOEXEC':
+                    with self.assertRaisesRegex(ValueError,'descriptor lifetime'):module.proc_trace_evidence(spec,slot,approved)
+                else:self.assertEqual(11,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['pid'])
+            child.unlink()
+            # CLONE_FILES shares a table until this actor explicitly unshares it.
+            measured=[python,'-I','-S','-B',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),'command','--proc-measured-controller',str(slot/'input.json'),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest(),'9','normal']
+            timed_begin='1.000 execve('+json.dumps(python)+', '+json.dumps(measured)+', 0x0 /* 7 vars */) = 0\n'
+            parent.write_text(timed_begin+'1.100 openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\n1.200 clone(child_stack=NULL, flags=CLONE_FILES|SIGCHLD) = 11\n3.000 read(0x3, 0x1000, 0x40) = 0x20\n4.000 '+finish)
+            child.write_text('2.000 close_range(3, ~0U, CLOSE_RANGE_UNSHARE) = 0\n2.100 '+finish)
+            self.assertEqual(10,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['pid'])
+            child.write_text('2.000 close_range(3, ~0U, 0) = 0\n2.100 '+finish)
+            with self.assertRaisesRegex(ValueError,'descriptor lifetime'):module.proc_trace_evidence(spec,slot,approved)
+            child.unlink()
+            spec['role']='qualification'
+            argv=module.proc_trace_argv(spec,slot,slot/'input.json',approved,'a'*64,3,'normal')
+            selected=next(arg for arg in argv if arg.startswith('trace=')).split('=',1)[1].split(',')
+            self.assertIn('close_range',selected);self.assertIn('fcntl64',selected)
+            parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\nfcntl(3<'+header+'>, F_DUPFD, 10) = 10\nread(0xa, 0x1000, 0x40) = 0x20\n'+finish)
+            self.assertEqual(10,module.proc_trace_evidence(spec,slot,approved)['semanticReads'][0]['fd'])
+            for read in ('readv(0x3, 0x1000, 0) = 0x20','read(0x3, 0x1000, 0) = 0x20','read(0x3, "SENSITIVE-SENTINEL", 0x40) = 0x20'):
+                parent.write_text(begin+'openat(AT_FDCWD, '+json.dumps(header)+', O_RDONLY) = 3<'+header+'>\n'+read+'\n'+finish)
+                with self.assertRaises(ValueError) as raised:module.proc_trace_evidence(spec,slot,approved)
+                self.assertNotIn('SENSITIVE-SENTINEL',str(raised.exception))
+
+    def test_proc_private_reporting_refuses_cap_deadline_collision_and_retains_partial(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);path=root/'record.json'
+            with self.assertRaises(ValueError):module.proc_private_record(path,{'large':'x'*module.MAX_OUTPUT},time.monotonic()+1,exclusive=True)
+            self.assertFalse(path.exists())
+            with self.assertRaises(TimeoutError):module.proc_private_record(path,{},time.monotonic()-1,exclusive=True)
+            path.write_text('original')
+            with self.assertRaises(FileExistsError):module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
+            self.assertEqual('original',path.read_text());path.unlink()
+            with patch.object(module.os,'write',return_value=0):
+                with self.assertRaises(OSError) as raised:module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
+            self.assertEqual('held-partial-or-completed-report',raised.exception.proc_private_report['disposition'])
+            self.assertTrue(path.exists());path.unlink()
+            # A completed rename followed by an expired deadline holds the actual
+            # promoted inode, never the obsolete temporary pathname.
+            clock=[time.monotonic()];deadline=clock[0]+1;replace=module.os.replace
+            def late_replace(source,target):replace(source,target);clock[0]=deadline+1
+            with patch.object(module.time,'monotonic',side_effect=lambda:clock[0]),patch.object(module.os,'replace',side_effect=late_replace):
+                with self.assertRaises(TimeoutError) as raised:module.proc_private_record(path,{'complete':True},deadline)
+            self.assertEqual(str(path),raised.exception.proc_private_report['path'])
+            self.assertTrue(path.exists());self.assertFalse(path.with_name(path.name+'.pending').exists())
+            self.assertEqual(module.proc_read_identity(path),raised.exception.proc_private_report['identity'])
+            path.unlink();close=module.os.close
+            def close_then_fail(fd):close(fd);raise OSError('inert writer close failure')
+            with patch.object(module.os,'write',side_effect=OSError('original inert write failure')),patch.object(module.os,'close',side_effect=close_then_fail):
+                with self.assertRaisesRegex(OSError,'original inert write failure') as raised:
+                    module.proc_private_record(path,{},time.monotonic()+1,exclusive=True)
+            projected=module.failure_record(raised.exception)
+            self.assertEqual('original inert write failure',projected['message'])
+            self.assertEqual([{'type':'OSError','message':'inert writer close failure'}],projected['secondaryFailures'])
+            self.assertEqual(str(path),raised.exception.proc_private_report['path']);self.assertTrue(path.exists())
+
+    def test_proc_subject_failure_survives_apparatus_reporting_and_collector_collision(self):
+        # Same maintained caller paths; injected transport/report failures are
+        # inert and provide no measurement or native qualification evidence.
+        from unittest.mock import Mock
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            slot=Path(spec['operationRoot']);spec['role']='qualification';spec['workDeadline']=time.monotonic()+30
+            subject={'firstCause':{'type':'RuntimeError','message':'original inert subject cause'},'commandAccepted':False}
+            (slot/'measurement.subject.json').write_text(json.dumps(subject))
+            child=Mock(pid=123456);child.poll.return_value=7
+            with patch('subprocess.Popen',return_value=child),patch.object(module,'proc_actor',return_value=None),patch.object(module,'proc_private_record',side_effect=OSError('inert apparatus report failure')):
+                with self.assertRaises(ValueError) as raised:
+                    module.proc_measure_once(spec,{}, {},descriptor,approved,'a'*64,'normal')
+            self.assertEqual(subject,raised.exception.proc_subject_result)
+            self.assertEqual(subject['firstCause'],raised.exception.proc_subject_failure)
+            self.assertIn({'type':'OSError','message':'inert apparatus report failure'},raised.exception.proc_measurement_additional)
+            # Exit0 or a negative-control phase does not imply that cleanup or
+            # apparatus reporting succeeded. Every common raise exports both.
+            original_open=Path.open
+            class FailingClose:
+                def __init__(self,stream):self.stream=stream
+                def close(self):self.stream.close();raise OSError('inert stream close failure')
+                def __getattr__(self,name):return getattr(self.stream,name)
+            def selected_open(path,*args,**kwargs):
+                stream=original_open(path,*args,**kwargs)
+                return FailingClose(stream) if path.name=='measurement.tracer.log' else stream
+            for phase in ('normal','controller','session'):
+                isolated=slot/('inert-secondary-'+phase);isolated.mkdir(mode=0o700)
+                phase_spec=dict(spec,operationRoot=str(isolated));child.poll.return_value=0
+                with patch('subprocess.Popen',return_value=child),patch.object(module,'proc_actor',return_value=None),patch.object(Path,'open',selected_open),patch.object(module,'proc_private_record',side_effect=OSError('inert apparatus report failure')):
+                    with self.assertRaisesRegex(ValueError,'actual direct tracer birth') as raised:
+                        module.proc_measure_once(phase_spec,{}, {},descriptor,approved,'a'*64,phase)
+                self.assertEqual([{'type':'OSError','message':'inert stream close failure'},
+                                  {'type':'OSError','message':'inert apparatus report failure'}],raised.exception.proc_measurement_additional)
+            # Exercise the actual cleanup branch with an inert child/pidfd adapter:
+            # a failed send never produces affirmative signal evidence.
+            actor={'pid':123456,'ppid':os.getpid(),'uid':os.geteuid(),'pgid':123456,'sid':123456,'start':7}
+            child.poll.return_value=None;child.wait.return_value=7
+            resolve=Path.resolve
+            def resolve_actor(path,*args,**kwargs):
+                if str(path)=='/proc/123456/exe':return Path(spec['transport']['tracer'])
+                return resolve(path,*args,**kwargs)
+            # Retained log is occupied from the first independent attempt. This
+            # test uses a separate ordinary slot, never resets a consumed attempt.
+            second=slot/'inert-cleanup-slot';second.mkdir(mode=0o700)
+            cleanup_spec=dict(spec,operationRoot=str(second));(second/'measurement.subject.json').write_text(json.dumps(subject))
+            with patch('subprocess.Popen',return_value=child),patch.object(module,'proc_actor',return_value=actor),patch.object(Path,'resolve',resolve_actor),patch.object(module.os,'pidfd_open',side_effect=lambda pid:os.dup(0)),patch.object(module.signal,'pidfd_send_signal',side_effect=OSError('inert failed signal')):
+                with self.assertRaises(ValueError):
+                    module.proc_measure_once(cleanup_spec,{'descriptorSha256':'wrong'}, {},descriptor,approved,'a'*64,'normal')
+            cleanup_record=json.loads((second/'measurement.apparatus.json').read_bytes())
+            self.assertEqual(subject['firstCause'],cleanup_record['firstCause'])
+            self.assertFalse(cleanup_record['pidfdSignalSent'])
+            self.assertIn({'type':'OSError','message':'inert failed signal'},cleanup_record['additionalFailures'])
+            # Registration is occupied, yet the canonical command gets its failed
+            # result independently and preserves both the original cause/file.
+            bootstrap=root/'bootstrap.json';bootstrap.write_text(json.dumps({'instrumentation':module.PROC_INSTRUMENTATION}))
+            spec['proofInputs']['bootstrapEvidence']=str(bootstrap);spec['request']['nativeGet']=False
+            admission=root/'admission-control.json';admission.write_text(json.dumps({'recovery':{'clientQualificationEnabled':True}}));spec['proofInputs']['admission']=str(admission)
+            descriptor.write_text(json.dumps(spec));(slot/'input.json').write_bytes(descriptor.read_bytes())
+            (slot/'command.json').write_text(json.dumps({'sendState':'prepared-no-send','descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest()}))
+            authority=json.loads(approved.read_bytes());authority['instrumentation']=module.PROC_INSTRUMENTATION
+            authority['canonicalQualificationLineageIdentity']=module.proc_directory_identity(slot.parent)
+            (slot/'measurement.collector.json').write_text('original occupied registration')
+            cause=ValueError('inert failed subject');cause.proc_subject_failure=subject['firstCause'];cause.proc_subject_result=subject
+            with patch.object(module,'proc_bootstrap_evidence'),patch.object(module,'proc_measure_once',side_effect=cause),contextlib.redirect_stderr(io.StringIO()):
+                self.assertEqual(1,module.proc_qualification_apparatus(spec,descriptor,approved,'a'*64,authority))
+            state=json.loads((slot/'command.json').read_bytes())
+            self.assertEqual(subject['firstCause'],state['firstCause']);self.assertFalse(state['commandAccepted'])
+            self.assertEqual('FileExistsError',state['additionalFailures'][-1]['type'])
+            self.assertEqual('original occupied registration',(slot/'measurement.collector.json').read_text())
+            self.assertTrue((slot/'dispatch-input.json').exists())
+
+    def test_proc_qualification_native_legs_are_consumed_without_repeat_or_watch_widening(self):
+        state={'profile':'qualification'}
+        module.proc_charge_read(state,'api','repo-public')
+        with self.assertRaises(ValueError):module.proc_charge_read(state,'api','repo-public')
+        with self.assertRaises(ValueError):module.proc_charge_read(state,'api','arbitrary')
+        for kind,leg in (('api','terminal-job'),('storage','terminal-job'),('api','terminal-archive'),('storage','terminal-archive')):
+            module.proc_charge_read(state,kind,leg)
+        self.assertEqual({'api':3,'storage':2,'total':5},state['readCounts'])
+        self.assertEqual(5,len(state['consumedLegs']))
+        watch={}
+        for kind in ('api',)*5+('storage',)*2:module.proc_charge_read(watch,kind)
+        self.assertEqual(7,watch['readCounts']['total'])
+
+    def test_proc_qualification_bootstrap_cannot_borrow_dispatch_or_native_get_authority(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            spec['profile']='proc-pair-client-qualification';spec['role']='qualification'
+            spec['operation']=module.PROC_PROFILES[spec['profile']];spec['qualificationAttempt']=1
+            lineage=module.proc_operation_root(spec['operation']);lineage.mkdir(mode=0o700)
+            slot=module.proc_operation_root(spec['operation'],1);slot.mkdir(mode=0o700)
+            for name in ('home','tmp','ca-empty'):(slot/name).mkdir(mode=0o700)
+            config=module.proc_support_root()/'openssl.cnf'
+            spec['operationRoot']=str(slot)
+            spec['environment'].update(HOME=str(slot/'home'),TMPDIR=str(slot/'tmp'),OPENSSL_CONF=str(config))
+            spec['proofInputs']['bootstrapEvidence']=spec['proofInputs'].pop('runtimeQualification')
+            spec['request']={'method':'GET','endpoint':'repos/'+module.PROC_REPOSITORY,'apiVersion':'2026-03-10',
+                             'body':None,'requestLimit':5,'nativeGet':False,'credentialReference':None,'cases':list(module.PROC_QUALIFICATION_CASES)}
+            self.assertEqual('qualification',module.proc_command_preflight(spec,now=time.monotonic())['role'])
+            self.assertNotIn('runtimeQualification',spec['proofInputs'])
+            descriptor.write_text(json.dumps(spec))
+            authority=json.loads(approved.read_bytes());authority.update(profile=spec['profile'],operation=spec['operation'],
+                operationRoot=str(slot),descriptorSha256=hashlib.sha256(descriptor.read_bytes()).hexdigest(),
+                canonicalOperationIdentity=module.proc_directory_identity(slot),canonicalQualificationLineageIdentity=module.proc_directory_identity(lineage))
+            approved.write_text(json.dumps(authority))
+            # The old dispatch admission does not authorize qualification; native
+            # client execution cannot be reached by this source-only control.
+            original=module.os.readlink
+            def dev_null(path,*args,**kwargs):return '/dev/null' if str(path)=='/proc/self/fd/0' else original(path,*args,**kwargs)
+            errors=io.StringIO()
+            with contextlib.redirect_stderr(errors),patch('runpy.run_path',return_value={'pair_recovery_selection':lambda a:a['recovery']}),patch.object(module,'proc_bootstrap_evidence',side_effect=ValueError('explicit non-effect bootstrap unavailable')),patch.object(module.os,'readlink',side_effect=dev_null):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertIn('explicit non-effect bootstrap unavailable',errors.getvalue())
+            self.assertFalse((slot/'dispatch-input.json').exists())
+            bad=copy.deepcopy(spec);bad['request']['method']='POST'
+            with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+            for ordinal in (None,0,4,True):
+                bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
+                with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+            for ordinal in (1,2,3):
+                bad=copy.deepcopy(spec);bad['qualificationAttempt']=ordinal
+                path=module.proc_operation_root(spec['operation'],ordinal)
+                bad['operationRoot']=str(path);bad['environment'].update(HOME=str(path/'home'),TMPDIR=str(path/'tmp'))
+                self.assertEqual('qualification',module.proc_command_preflight(bad,now=time.monotonic())['role'])
+            self.assertEqual(spec['operation'],module.proc_operation_root(spec['operation'],2).parent.name)
 
     def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
         for inherited in (False, True):

@@ -77,6 +77,34 @@
     "jobId": 115630940784,
     "artifactId": 11863691435,
     "archiveSha256": "e885b5a0a80807e461559b89547dda91c9c822a89216145a0092b53e3a3c879e",
-    "policyObservationEnabled": false
+    "policyObservationEnabled": false,
+    "clientQualificationEnabled": false,
+    "policyTokenCleanup": {
+      "enabled": false,
+      "sourceContract": "bounded-existing-token-cleanup",
+      "apiVersion": "2026-03-10",
+      "owner": "FS-GG",
+      "repository": "FS.GG.Coordination",
+      "repositoryId": 1346720714,
+      "permissions": {
+        "administration": "write"
+      },
+      "knownTokenSequence": [
+        "GET installation/repositories?per_page=1 = 200; selected scope exactly one repository",
+        "DELETE installation/token = 204",
+        "GET same installation/repositories?per_page=1 = 401"
+      ],
+      "requestSeconds": 10,
+      "cleanupSeconds": 30,
+      "terminationReserveSeconds": 5,
+      "responseBytes": 1048576,
+      "cleanupRequestMaximum": 3,
+      "automaticPostDeleteMaximum": 1,
+      "mintLogicalAttemptMaximum": 4,
+      "mintWireSendMaximum": null,
+      "unknownGrantsPolicy": "held-until-authentic-reconciliation",
+      "nativeAdmissionEstablished": false,
+      "publicationAuthorized": false
+    }
   }
 }

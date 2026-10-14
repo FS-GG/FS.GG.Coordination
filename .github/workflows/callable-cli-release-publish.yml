@@ -951,7 +951,7 @@ jobs:
             echo "::error::existing ruleset App bindings are missing; complete protection evidence is unavailable"
             exit 1
           fi
-      - name: Mint repository-scoped token solely for the complete protection GET
+      - name: Mint repository-scoped token for complete protection and bounded cleanup
         id: pair-ruleset-reader
         uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
         with:
@@ -964,12 +964,13 @@ jobs:
         shell: bash
         env:
           PAIR_RULESET_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
+          GH_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
           READBACK_OUTPUT: ${{ runner.temp }}/execution-pair-policy
         run: |
           set -euo pipefail
           test -n "${PAIR_RULESET_TOKEN:-}"
           mkdir "$READBACK_OUTPUT"
-          timeout --kill-after=5s 30s env GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
+          timeout --kill-after=5s 30s gh api "repos/$GITHUB_REPOSITORY/rulesets/21633398" > "$READBACK_OUTPUT/tag-protection.json"
           python3 - <<'PY_PAIR_POLICY_OBSERVATION'
           import json,os,pathlib,runpy
           root=pathlib.Path(os.environ['READBACK_OUTPUT'])
@@ -980,6 +981,15 @@ jobs:
           proof.update({'source':os.environ['GITHUB_SHA'],'operation':'observe-execution-pair-policy-21633398','scopedAppTokenUsed':True,'cleanupOutcome':'pending-native-token-revocation-observation','publicationAuthorized':False,'publicationEligible':False})
           (root/'policy-observation.json').write_text(json.dumps(proof,sort_keys=True)+'\n')
           PY_PAIR_POLICY_OBSERVATION
+      - name: Independently clean the returned policy token even after policy failure
+        if: always()
+        shell: bash
+        env:
+          PAIR_RULESET_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
+          READBACK_OUTPUT: ${{ runner.temp }}/execution-pair-policy
+        run: |
+          set -euo pipefail
+          timeout --kill-after=5s 30s python3 eng/test-callable-cli-installed-harness.py --execution-pair-policy-token-cleanup "$READBACK_OUTPUT/token-cleanup-observation.json"
       - name: Retain terminal read-only observations
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
