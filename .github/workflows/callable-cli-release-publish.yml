@@ -1112,24 +1112,56 @@ jobs:
           dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
             --source "$SOURCE_A" --version 0.3.0 --output "$CANDIDATE_OUTPUT"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair "$CANDIDATE_OUTPUT" candidate "$READBACK_OUTPUT/candidate-load.json"
+      - name: Require existing App bindings for the complete protection read
+        shell: bash
+        env:
+          RULESET_APP_ID: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          RULESET_APP_PRIVATE_KEY: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+        run: |
+          set -euo pipefail
+          if test -z "${RULESET_APP_ID:-}" || test -z "${RULESET_APP_PRIVATE_KEY:-}"; then
+            echo "::error::existing ruleset App bindings are missing; complete protection evidence is unavailable"
+            exit 1
+          fi
+      - name: Mint repository-scoped token solely for the complete protection GET
+        id: pair-ruleset-reader
+        uses: actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1
+        with:
+          app-id: ${{ secrets.FSGG_DISPATCH_APP_ID }}
+          private-key: ${{ secrets.FSGG_DISPATCH_APP_PRIVATE_KEY }}
+          owner: FS-GG
+          repositories: FS.GG.Coordination
+          permission-administration: write
       - name: Observe four feed cells and component protection before first push
         shell: bash
         env:
           GH_TOKEN: ${{ github.token }}
+          PAIR_RULESET_TOKEN: ${{ steps.pair-ruleset-reader.outputs.token }}
         run: |
           set -euo pipefail
+          test -n "${PAIR_RULESET_TOKEN:-}" || {
+            echo "::error::ruleset App token is missing; complete protection evidence is unavailable"
+            exit 1
+          }
           test -z "$(git ls-remote --tags origin refs/tags/execution/v0.3.0)"
           status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/execution%2Fv0.3.0")"
           test "$status" = 404
           ruleset="$(python3 -c 'import json; print(json.load(open("eng/execution-pair-release-admission.json"))["tagProtection"]["rulesetId"])')"
-          gh api "repos/$GITHUB_REPOSITORY/rulesets/$ruleset" > "$READBACK_OUTPUT/tag-protection.json"
+          GH_TOKEN="$PAIR_RULESET_TOKEN" gh api "repos/$GITHUB_REPOSITORY/rulesets/$ruleset" > "$READBACK_OUTPUT/tag-protection.json"
           python3 - <<'PY_PAIR_PROTECTION'
           import hashlib,json,os,pathlib
           a=json.load(open('eng/execution-pair-release-admission.json'))
           path=pathlib.Path(os.environ['READBACK_OUTPUT'])/'tag-protection.json'
           assert 0<path.stat().st_size<=1048576
           actual=json.loads(path.read_bytes())
-          policy={key:actual[key] for key in ('target','enforcement','conditions','bypass_actors','rules')}
+          keys=('target','enforcement','conditions','bypass_actors','rules')
+          if not isinstance(actual,dict) or any(key not in actual for key in (*keys,'id')):
+              raise SystemExit('incomplete ruleset evidence: required policy fields are missing')
+          if not isinstance(actual['bypass_actors'],list):
+              raise SystemExit('incomplete ruleset evidence: bypass_actors must be an explicit complete list')
+          if actual['bypass_actors']:
+              raise SystemExit('ruleset policy refused: bypass actors are present')
+          policy={key:actual[key] for key in keys}
           desired=json.load(open('eng/repository-settings/release-tag-ruleset.json'))
           expected={key:desired[key] for key in policy}
           # Tag update rules may omit the optional branch-only parameters object.
@@ -1143,7 +1175,7 @@ jobs:
           assert set(update)=={'type','parameters'} and isinstance(update['parameters'],dict)
           assert set(update['parameters'])=={'update_allows_fetch_and_merge'}
           assert update['parameters']['update_allows_fetch_and_merge'] is False
-          assert policy==expected and actual['id']==a['tagProtection']['rulesetId']
+          assert policy==expected and type(actual['id']) is int and actual['id']==a['tagProtection']['rulesetId']
           assert policy['target']=='tag' and policy['enforcement']=='active' and policy['bypass_actors']==[]
           assert policy['conditions']=={'ref_name':{'include':['refs/tags/v*','refs/tags/execution/v*'],'exclude':[]}}
           assert len(policy['rules'])==4 and {rule['type'] for rule in policy['rules']}=={'deletion','non_fast_forward','required_signatures','update'}
