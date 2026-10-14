@@ -8,6 +8,9 @@ import shutil
 import tempfile
 import unittest
 import copy
+import time
+import hashlib
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[3]
 spec = importlib.util.spec_from_file_location('choreo_diagnostics', ROOT / 'eng/retain-choreo-c2-diagnostics.py')
@@ -16,6 +19,257 @@ spec.loader.exec_module(module)
 
 
 class DiagnosticControls(unittest.TestCase):
+    def proc_fixture(self, root, mode='good'):
+        """Declared proof adapters are inert fixtures, never runtime/effect acceptance."""
+        operation='recover-execution-pair-030-b11fb121-original38495729817'
+        # Only tests replace the producer constant. Neither production descriptor
+        # nor a matching newly authored authority can alter this namespace.
+        namespace=patch.object(module,'PROC_OPERATION_BASE',root/'producer-state')
+        namespace.start();self.addCleanup(namespace.stop)
+        module.PROC_OPERATION_BASE.mkdir(mode=0o700)
+        base=module.PROC_OPERATION_BASE/str(os.geteuid());base.mkdir(mode=0o700)
+        slot=module.proc_operation_root(operation);slot.mkdir(mode=0o700)
+        client=root/'inert-gh'
+        body={'workflow_run_id':42,'run_url':'https://api.github.com/repos/FS-GG/FS.GG.Coordination/actions/runs/42',
+              'html_url':'https://github.com/FS-GG/FS.GG.Coordination/actions/runs/42'}
+        text='HTTP/2.0 200 OK\ncontent-type: application/json\n\n'+json.dumps(body)
+        if mode=='foreign':text=text.replace('Coordination/','Foreign/')
+        if mode=='no-id':text='HTTP/2.0 200 OK\n\n{}'
+        if mode=='202':text=text.replace('200 OK','202 Accepted')
+        extra=''
+        if mode=='unexpected-read':
+            foreign=root/'foreign-config';foreign.write_text('inert-only')
+            extra='held=open('+repr(str(foreign))+')\n'
+        if mode=='timeout':extra='time.sleep(20)\n'
+        client.write_text('#!/usr/bin/python3\nimport sys,time\nif sys.argv[1:]==["--version"]:print("gh version inert-source-control");sys.exit(0)\n'+extra+'time.sleep(.2)\n'+
+                          ('sys.exit(7)\n' if mode=='lost' else 'sys.stdout.write('+repr(text)+')\n'))
+        client.chmod(0o700)
+        native={key:str(root/(key+'.json')) for key in ('admission','originalRun','originalJobs','originalArtifact',
+                                                        'originalArchive','verifiedAttestation','sourceCorrespondence','runtimeQualification')}
+        for name in native.values():Path(name).write_text('{}')
+        admission={'enabled':False,'recovery':{'enabled':True,'policyObservationEnabled':False}}
+        Path(native['admission']).write_text(json.dumps(admission))
+        correspondence={'publisher':'d'*40,'source':'b11fb121f046898e655b779dfc6809f35fc7aac6',
+                        'originalPublisher':'0ccfb6d067d912bbd8a1e26c4b56449358443b2e','protectedSourceVerified':True,
+                        'aToEExactThreePaths':True,'aToPublisherExactElevenPaths':True}
+        Path(native['sourceCorrespondence']).write_text(json.dumps(correspondence))
+        consumer=root/'consumer-fixture';consumer.mkdir()
+        for name in ('run.json','jobs.json',*(case+suffix for case in ('sdd-s1','fsquint-s1','sdd-rollback','fsquint-rollback')
+                                            for suffix in ('.artifact.json','.job.log','.zip'))):
+            (consumer/name).write_text('{}')
+        pins=[]
+        imports=[Path(getattr(m,field)).resolve() for m in list(os.sys.modules.values()) for field in ('__file__','__cached__')
+                 if getattr(m,field,None) is not None and Path(getattr(m,field)).is_file()]
+        import runpy
+        imports.append(Path(runpy.__file__).resolve())
+        for path in dict.fromkeys((client,ROOT/'eng/shared_process_owner.py',ROOT/'eng/retain-choreo-c2-diagnostics.py',
+                     ROOT/'eng/test-callable-cli-installed-harness.py',ROOT/'eng/write-callable-cli-release-readback.py',
+                     Path(os.path.realpath(os.sys.executable)),*(Path(p) for p in native.values()),*consumer.iterdir(),*imports)):
+            row=module.pin_file(path);row['mode']=path.stat().st_mode&0o777;pins.append(row)
+        native['consumerRoot']=str(root/'consumer-fixture')
+        started=time.monotonic()
+        spec={'schema':module.COMMAND_SCHEMA,'profile':'proc-pair-recovery-dispatch','role':'dispatch',
+              'campaign':'unified-roadmap-20261003','item':'V2-PROC-01.6','attempt':'inert-source-control',
+              'originalOperation':module.PROC_ORIGINAL,'operation':operation,'publisher':'d'*40,
+              'repositoryId':1346720714,'workflowId':361038177,'workflowPath':module.PROC_WORKFLOW,
+              'source':correspondence['source'],'originalPublisher':correspondence['originalPublisher'],
+              'request':{'method':'POST','endpoint':'repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
+                         'apiVersion':'2026-03-10','requestLimit':1,'body':{'ref':'main','inputs':{
+                             'execution_pair':True,'pair_recovery':True,'preflight_only':False,'cli_only':False,'readback_only':False,
+                             'publisher_source':'d'*40,'operation':operation,'source':correspondence['source'],
+                             'protected_merge':correspondence['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}}},
+              'argv':[str(client),'api','--method','POST','--include','repos/FS-GG/FS.GG.Coordination/actions/workflows/361038177/dispatches',
+                      '-H','X-GitHub-Api-Version: 2026-03-10','--input',str(slot/'dispatch-input.json')],
+              'pins':pins,'proofInputs':native,'sourceReadAllowlist':[p['path'] for p in pins],
+              'environment':{'HOME':str(slot/'home'),'TMPDIR':str(slot/'tmp'),'GH_CONFIG_DIR':str(slot/'home/.config/gh'),
+                             'PATH':'/usr/bin:/bin','LANG':'C.UTF-8','LC_ALL':'C.UTF-8','GH_PROMPT_DISABLED':'1','GH_HOST':'github.com'},
+              'operationRoot':str(slot),'started':started,'workDeadline':started+5,'totalDeadline':started+15,'cleanupSeconds':10,
+              'rssBytes':512*1024**2,'addressSpaceBytes':512*1024**2,'logBytes':1024**2,'diskBytes':16*1024**2,'cpuAffinity':sorted(os.sched_getaffinity(0))}
+        # Canonical-shaped inert evidence exercises joins, never supplies genuine gh qualification.
+        qualification={'schema':module.RESULT_SCHEMA,'commandAccepted':True,
+                       'ownerReceipt':{'cleanup':'observed-empty-group','custody':'observed-owned-group','exit':0,'firstCause':None,
+                                       'leader':{'start':1},'residual':[],'escapedResidual':[],'escapedDescendants':[]},
+                       'runtimeEvidence':{'currentBootId':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
+                                          'effectiveUid':os.geteuid(),'actualInterpreter':os.path.realpath(os.sys.executable),
+                                          'interpreterFlags':{'isolated':1,'noSite':1,'noBytecode':True,'optimize':0},
+                                          'canonicalBaseIdentity':module.proc_directory_identity(base),
+                                          'canonicalOperationIdentity':module.proc_directory_identity(slot),
+                                          'supportPins':[pin for pin in pins if pin['path'] not in native.values()],
+                                          'bounds':{k:spec[k] for k in ('cpuAffinity','rssBytes','addressSpaceBytes','logBytes','diskBytes')},
+                                          'clientPath':str(client),'clientVersion':'gh version inert-source-control','postRetryExcluded':True,
+                                          'transitiveSourceReadFence':'qualified-no-unobserved-source-reads',
+                                          'sourceReadAllowlist':spec['sourceReadAllowlist']}}
+        Path(native['runtimeQualification']).write_text(json.dumps(qualification))
+        row=module.pin_file(native['runtimeQualification']);row['mode']=Path(row['path']).stat().st_mode&0o777
+        pins[:]=[row if pin['path']==row['path'] else pin for pin in pins]
+        descriptor=root/'selected-input.json';descriptor.write_text(json.dumps(spec))
+        (slot/'input.json').write_bytes(descriptor.read_bytes())
+        (slot/'command.json').write_text(json.dumps({'schema':module.RESULT_SCHEMA,'operation':operation,
+            'sendState':'prepared-no-send','descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest()}))
+        authority={'schema':module.COMMAND_SCHEMA,'descriptorSha256':hashlib.sha256(descriptor.read_bytes()).hexdigest(),
+                   'profile':spec['profile'],'operation':operation,'operationRoot':str(slot),'approved':True,
+                   'runtimeQualified':True,'readFenceQualified':True,'clientAutomaticPostRetry':False,
+                   'independentCapacityQualified':True,'runtimeQualification':qualification}
+        approved=root/'selected-authority.json';approved.write_text(json.dumps(authority))
+        return spec,descriptor,approved
+
+    def test_proc_transport_one_use_and_uncertainty_keep_canonical_state(self):
+        # Actual shared owner and subprocess; fake gh never reaches a network or credential.
+        adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+        for mode in ('good','lost','202','foreign','no-id','unexpected-read','timeout'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);root.chmod(0o700)
+                spec,descriptor,approved=self.proc_fixture(root,mode)
+                sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+                with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                    code=module.execute_proc_command(descriptor,approved,sha)
+                    self.assertEqual(0 if mode=='good' else 1,code)
+                    result=Path(spec['operationRoot'])/'command.json'
+                    before=result.read_bytes();state=json.loads(before)
+                    self.assertEqual('consumed-accepted' if mode=='good' else 'consumed-unknown',state['sendState'])
+                    self.assertEqual('observed-empty-group',state['ownerReceipt']['cleanup'])
+                    self.assertFalse(state['publicationAccepted'])
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
+                    self.assertEqual(before,result.read_bytes())
+
+    def test_proc_preflight_refuses_exchange_drift_and_unqualified_runtime(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            module.proc_command_preflight(spec,now=time.monotonic())
+            changes={'wrong-role':lambda s:s.update(role='watch'),'replay':lambda s:s.update(operation=module.PROC_ORIGINAL),
+                     'argv':lambda s:s['argv'].append('arbitrary'),'method':lambda s:s['request'].update(method='GET'),
+                     'deadline':lambda s:s.update(workDeadline=s['started']-1),'config':lambda s:s['environment'].update(GH_DEBUG='api'),
+                     'read-fence':lambda s:s['sourceReadAllowlist'].append('/foreign'),'alternate-root':lambda s:s.update(operationRoot=str(root/'alternate'))}
+            for name,change in changes.items():
+                with self.subTest(name=name):
+                    bad=copy.deepcopy(spec);change(bad)
+                    with self.assertRaises(ValueError):module.proc_command_preflight(bad,now=time.monotonic())
+            authority=json.loads(approved.read_bytes());authority['runtimeQualified']=False;approved.write_text(json.dumps(authority))
+            self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
+
+    def test_proc_actual_pin_drift_and_reporting_failure_preserve_send_slot(self):
+        adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            Path(spec['argv'][0]).write_text('changed-runtime')
+            self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            original=module.os.replace;writes=[]
+            def refuse_final(source,target):
+                if Path(target).name=='command.json':
+                    writes.append(target)
+                    if len(writes)==3:raise OSError('inert receipt failure')
+                return original(source,target)
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}),patch.object(module.os,'replace',side_effect=refuse_final):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+            result=json.loads((Path(spec['operationRoot'])/'command.json').read_bytes())
+            self.assertEqual('send-started',result['sendState'])
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                self.assertEqual(1,module.execute_proc_command(descriptor,approved,hashlib.sha256(approved.read_bytes()).hexdigest()))
+
+    def test_proc_uncertain_native_correlation_never_reopens_send(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            spec['request']['runId']=None
+            native={'id':42,'workflow_id':361038177,'head_sha':spec['publisher'],'event':'workflow_dispatch','run_attempt':1,
+                    'repository':{'id':1346720714},'path':module.PROC_WORKFLOW,'head_branch':'main',
+                    'display_title':'PROC '+spec['operation']+' @ '+spec['publisher'],'created_at':'2026-10-14T04:00:00Z'}
+            import datetime
+            epoch=datetime.datetime(2026,10,14,4,tzinfo=datetime.timezone.utc).timestamp()
+            prior={'sendState':'consumed-unknown','nativeCreatedAfterEpoch':epoch,'nativeCreatedBeforeEpoch':epoch+90}
+            self.assertEqual(native,module.proc_native_correlation(spec,prior,{'total_count':1,'workflow_runs':[native]}))
+            for payload in ({'total_count':0,'workflow_runs':[]},{'total_count':2,'workflow_runs':[native,dict(native,id=43)]},
+                            {'total_count':2,'workflow_runs':[native]},
+                            {'total_count':1,'workflow_runs':[dict(native,display_title='foreign')]},
+                            {'total_count':1,'workflow_runs':[dict(native,created_at='2026-10-14T03:00:00Z')]}):
+                with self.assertRaises(ValueError):module.proc_native_correlation(spec,prior,payload)
+            self.assertEqual('consumed-unknown',prior['sendState'])
+
+    def test_proc_terminal_collection_preserves_independent_artifact_after_log_metadata_failure(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,_,_=self.proc_fixture(root)
+            from types import SimpleNamespace
+            archive=b'inert terminal archive';calls=[]
+            def inert_run(argv,cwd,env,deadline,cleanup,rss,out,cap,**kwargs):
+                calls.append(argv[4]);output=Path(out)
+                if '/jobs?' in argv[4]:
+                    output.write_bytes(b'inert causal failure')
+                    output.with_suffix('.log.result.json').write_text(json.dumps({'cleanup':'observed-empty-group'}))
+                    raise RuntimeError('inert original terminal job metadata failure')
+                if '/artifacts?' in argv[4]:
+                    value={'total_count':1,'artifacts':[{'id':71,'name':'execution-pair-publication-42-1','expired':False,
+                           'workflow_run':{'id':42,'head_sha':spec['publisher']},'size_in_bytes':len(archive),
+                           'digest':'sha256:'+hashlib.sha256(archive).hexdigest()}]}
+                    output.write_text(json.dumps(value))
+                else:output.write_bytes(archive)
+                return {'cleanup':'observed-empty-group'}
+            result=module.proc_terminal_evidence(SimpleNamespace(run=inert_run),spec,root,{},lambda *a:None,{'id':42})
+            self.assertEqual('failed',result['records']['terminal-jobs']['state'])
+            self.assertEqual('collected',result['records']['terminal-archive']['state'])
+            self.assertIn('original terminal job metadata failure',result['additionalFailures'][0]['cause']['message'])
+            self.assertEqual(3,len(calls))
+            self.assertFalse(result['publicationAccepted'])
+
+    def test_proc_fixed_producer_location_refuses_new_authority_under_another_parent(self):
+        adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                self.assertEqual(0,module.execute_proc_command(descriptor,approved,sha))
+            state=Path(spec['operationRoot'])/'command.json';original=state.read_bytes()
+            alternate=root/'different-parent';alternate.mkdir(mode=0o700)
+            moved=copy.deepcopy(spec);new_slot=alternate/spec['operation'];moved['operationRoot']=str(new_slot)
+            moved['argv'][-1]=str(new_slot/'dispatch-input.json')
+            for key,value in moved['environment'].items():moved['environment'][key]=value.replace(spec['operationRoot'],str(new_slot))
+            relocated=alternate/'input.json';relocated.write_text(json.dumps(moved))
+            authority=json.loads(approved.read_bytes());authority['operationRoot']=str(new_slot)
+            authority['descriptorSha256']=hashlib.sha256(relocated.read_bytes()).hexdigest()
+            other_authority=alternate/'authority.json';other_authority.write_text(json.dumps(authority))
+            with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                self.assertEqual(1,module.execute_proc_command(relocated,other_authority,hashlib.sha256(other_authority.read_bytes()).hexdigest()))
+            self.assertFalse(new_slot.exists());self.assertEqual(original,state.read_bytes())
+
+    def test_proc_canonical_base_and_known_state_loss_refuse_without_recreation(self):
+        adapters={'pair_recovery_selection':lambda a:a['recovery'], 'pair_original_failure':lambda *a:{},
+                  'pair_verified_attestation':lambda *a:{},'pair_consumers':lambda *a:{}}
+        for mode in ('base-mode','base-inode','base-alias','missing-input','missing-result','missing-slot'):
+            with self.subTest(mode=mode),tempfile.TemporaryDirectory() as tmp:
+                root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+                slot=Path(spec['operationRoot']);base=slot.parent;sha=hashlib.sha256(approved.read_bytes()).hexdigest()
+                if mode=='base-mode':base.chmod(0o755)
+                if mode=='base-inode':
+                    previous=base.with_name('previous-base');base.rename(previous);base.mkdir(mode=0o700)
+                    (previous/slot.name).rename(slot)
+                if mode=='base-alias':
+                    previous=base.with_name('previous-base');base.rename(previous);base.symlink_to(previous,target_is_directory=True)
+                if mode=='missing-input':(slot/'input.json').unlink()
+                if mode=='missing-result':(slot/'command.json').unlink()
+                if mode=='missing-slot':
+                    (slot/'input.json').unlink();(slot/'command.json').unlink();slot.rmdir()
+                with patch('runpy.run_path',return_value=adapters),patch.dict(os.environ,{'GH_TOKEN':'fixture-only'}):
+                    self.assertEqual(1,module.execute_proc_command(descriptor,approved,sha))
+                self.assertFalse((slot/'dispatch-input.json').exists())
+                if mode=='missing-slot':self.assertFalse(slot.exists())
+
+    def test_proc_actual_optimized_interpreter_refuses_before_slot_or_child(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root=Path(tmp);root.chmod(0o700);spec,descriptor,approved=self.proc_fixture(root)
+            state=Path(spec['operationRoot'])/'command.json';before=state.read_bytes()
+            result=subprocess.run([os.sys.executable,'-I','-S','-B','-O',str(ROOT/'eng/retain-choreo-c2-diagnostics.py'),
+                'command','--proc',str(descriptor),str(approved),hashlib.sha256(approved.read_bytes()).hexdigest()],
+                capture_output=True,timeout=5)
+            self.assertEqual(1,result.returncode,result.stderr)
+            self.assertIn(b'optimize=0',result.stderr)
+            self.assertEqual(before,state.read_bytes())
+            self.assertFalse((Path(spec['operationRoot'])/'dispatch-input.json').exists())
+
     def test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup(self):
         for inherited in (False, True):
             with self.subTest(inherited=inherited), tempfile.TemporaryDirectory() as tmp:

@@ -274,11 +274,12 @@ def pair_observation_controls():
     permissions=text.split('    permissions:\n',1)[1].split('    steps:\n',1)[0]
     assert permissions=='      contents: read\n      actions: read\n      packages: read\n'
     assert '    timeout-minutes: 5\n' in text and 'needs:' not in text
-    for forbidden in ('NuGet/login','setup-dotnet','dotnet ','gh ','git tag','nuget push','actions/attest','id-token:','write'):
+    for forbidden in ('NuGet/login','setup-dotnet','dotnet ','git tag','nuget push','actions/attest','id-token:','packages: write','contents: write'):
         assert forbidden not in text,forbidden
-    for flags in __import__('itertools').product((False,True),repeat=4):
-        execution,preflight,cli,readback=flags
-        values={'execution_pair':execution,'preflight_only':preflight,'cli_only':cli,'readback_only':readback}
+    assert 'permission-administration: write' in text and 'scoped policy observation remains disabled' in text
+    for flags in __import__('itertools').product((False,True),repeat=5):
+        execution,preflight,cli,readback,recovery=flags
+        values={'execution_pair':execution,'preflight_only':preflight,'cli_only':cli,'readback_only':readback,'pair_recovery':recovery}
         active=[]
         for name in ('execution_pair_preflight','execution_pair','preflight','publish','cli_successor'):
             expression=next(line[8:] for line in workflow.split('\n  '+name+':\n',1)[1].splitlines() if line.startswith('    if: ')).replace('&&',' and ').replace('!= true','!= True').replace('== true','== True')
@@ -286,11 +287,12 @@ def pair_observation_controls():
             for key,value in values.items():expression=expression.replace('inputs.'+key,str(value))
             if eval(expression,{'__builtins__':{}}):active.append(name)
         if execution and preflight:
-            assert active==(['execution_pair_preflight'] if not cli and not readback else []),flags
+            assert active==(['execution_pair_preflight'] if not cli and not readback and not recovery else []),flags
         if execution and not preflight:
-            assert active==(['execution_pair'] if not cli and not readback else []),flags
+            assert active==(['execution_pair'] if not cli and not readback and recovery else []),flags
+        assert len(active)<=1,flags
     a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_bytes())
-    assert a['enabled'] is True and a['operation']=='publish-execution-pair-030-b11fb121-four38484632631' and a['namespaceEntitlement']['evidenceSha256']==helper['PAIR_ACCOUNT_OWNER_EVIDENCE']['evidenceSha256']
+    assert a['enabled'] is False and a['operation']=='publish-execution-pair-030-b11fb121-four38484632631' and a['namespaceEntitlement']['evidenceSha256']==helper['PAIR_ACCOUNT_OWNER_EVIDENCE']['evidenceSha256']
     print('PAIR_OBSERVATION_INERT_CONTROLS passed cases='+str(len(modes))+' transport=11 selectors=16 read-only/no-eligibility')
 
 def archive_controls(version):
@@ -579,8 +581,8 @@ def complete_policy_source_controls():
                      'owner: FS-GG','repositories: FS.GG.Coordination','permission-administration: write'):
         assert required in mint,required
     assert mint.count('permission-')==1 and 'skip-token-revoke:' not in mint
-    assert workflow.count('${{ steps.pair-ruleset-reader.outputs.token }}')==1
-    assert workflow.count('GH_TOKEN="$PAIR_RULESET_TOKEN"')==1
+    assert job.count('${{ steps.pair-ruleset-reader.outputs.token }}')==1
+    assert job.count('GH_TOKEN="$PAIR_RULESET_TOKEN"')==1
     assert 'GH_TOKEN: ${{ github.token }}' in observe
     assert job.index('Verify pair provenance')<job.index('Require existing App bindings')<job.index('Mint repository-scoped token')<job.index('Observe four feed cells')<job.index('Obtain selected Trusted Publishing')<job.index('Push both retained')
     def shell(body):
@@ -608,6 +610,7 @@ def complete_policy_source_controls():
             if mode=='null':live['bypass_actors']=None
             write(root/'eng/execution-pair-release-admission.json',original)
             write(root/'eng/repository-settings/release-tag-ruleset.json',desired)
+            (root/'eng/test-callable-cli-installed-harness.py').write_bytes((ROOT/'eng/test-callable-cli-installed-harness.py').read_bytes())
             write(readback/'tag-protection.json',live)
             with contextlib.chdir(root),patch.dict(os.environ,{'READBACK_OUTPUT':str(readback)},clear=True):
                 try:exec(actual,{});refusal=None
@@ -645,7 +648,75 @@ print('404',end='')
     print('EXECUTION_PAIR_COMPLETE_POLICY_CONTROLS passed original-policy=4 app-binding=4 inert-token-routing=3 native-effects=0')
 
 
+def recovery_inert_fixture():
+    """Native-shaped control data; signatures are never authenticated by fixture construction."""
+    a=json.loads((ROOT/'eng/execution-pair-release-admission.json').read_text())
+    run={'id':38495729817,'workflow_id':361038177,'repository':{'id':1346720714},'head_repository':{'id':1346720714},
+         'path':'.github/workflows/callable-cli-release-publish.yml','event':'workflow_dispatch','head_branch':'main',
+         'head_sha':'0ccfb6d067d912bbd8a1e26c4b56449358443b2e','run_attempt':1,'status':'completed','conclusion':'failure'}
+    helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
+    job={'id':115630940784,'run_id':38495729817,'head_sha':run['head_sha'],'run_attempt':1,'status':'completed',
+         'conclusion':'failure','name':'Publish the admitted original routine Execution pair',
+         'steps':[{'name':name,'conclusion':state,'status':'completed','number':i+1} for i,(name,state) in enumerate(helpers['PAIR_ORIGINAL_STEPS'])]}
+    jobs={'total_count':1,'jobs':[job]}
+    verified=[{'verificationResult':json.loads(VERIFIED_PAIR_CONTROL)}]
+    return a,run,jobs,verified
+
+
+VERIFIED_PAIR_CONTROL = r'''{"mediaType":"application/vnd.dev.sigstore.verificationresult+json;version=0.1","signature":{"certificate":{"buildConfigDigest":"0ccfb6d067d912bbd8a1e26c4b56449358443b2e","buildConfigURI":"https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/callable-cli-release-publish.yml@refs/heads/main","buildSignerDigest":"0ccfb6d067d912bbd8a1e26c4b56449358443b2e","buildSignerURI":"https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/callable-cli-release-publish.yml@refs/heads/main","buildTrigger":"workflow_dispatch","certificateIssuer":"CN=sigstore-intermediate,O=sigstore.dev","githubWorkflowName":"callable-cli-release-publish","githubWorkflowRef":"refs/heads/main","githubWorkflowRepository":"FS-GG/FS.GG.Coordination","githubWorkflowSHA":"0ccfb6d067d912bbd8a1e26c4b56449358443b2e","githubWorkflowTrigger":"workflow_dispatch","issuer":"https://token.actions.githubusercontent.com","runInvocationURI":"https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38495729817/attempts/1","runnerEnvironment":"github-hosted","sourceRepositoryDigest":"0ccfb6d067d912bbd8a1e26c4b56449358443b2e","sourceRepositoryIdentifier":"1346720714","sourceRepositoryOwnerIdentifier":"293607011","sourceRepositoryOwnerURI":"https://github.com/FS-GG","sourceRepositoryRef":"refs/heads/main","sourceRepositoryURI":"https://github.com/FS-GG/FS.GG.Coordination","sourceRepositoryVisibilityAtSigning":"public","subjectAlternativeName":"https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/callable-cli-release-publish.yml@refs/heads/main"}},"statement":{"_type":"https://in-toto.io/Statement/v1","predicate":{"buildDefinition":{"buildType":"https://actions.github.io/buildtypes/workflow/v1","externalParameters":{"workflow":{"path":".github/workflows/callable-cli-release-publish.yml","ref":"refs/heads/main","repository":"https://github.com/FS-GG/FS.GG.Coordination"}},"internalParameters":{"github":{"event_name":"workflow_dispatch","repository_id":"1346720714","repository_owner_id":"293607011","runner_environment":"github-hosted"}},"resolvedDependencies":[{"digest":{"gitCommit":"0ccfb6d067d912bbd8a1e26c4b56449358443b2e"},"uri":"git+https://github.com/FS-GG/FS.GG.Coordination@refs/heads/main"}]},"runDetails":{"builder":{"id":"https://github.com/FS-GG/FS.GG.Coordination/.github/workflows/callable-cli-release-publish.yml@refs/heads/main"},"metadata":{"invocationId":"https://github.com/FS-GG/FS.GG.Coordination/actions/runs/38495729817/attempts/1"}}},"predicateType":"https://slsa.dev/provenance/v1","subject":[{"digest":{"sha256":"bfd248eb935b4868bb1a7fb431bdb1ec26d3c1fedd2a294c34cf7b546bed151a"},"name":"FS.GG.Execution.Contracts.0.3.0.nupkg"},{"digest":{"sha256":"978ac179d1983b6a3346655cd904391fd8dc2ff7f3b0558ed9fd40fa9aa56cbd"},"name":"FS.GG.Execution.Processes.0.3.0.nupkg"}]},"verifiedIdentity":{"issuer":{"issuer":"","regexp":".*"},"runnerEnvironment":"github-hosted","subjectAlternativeName":{"regexp":"^https://github\\.com/FS-GG/FS\\.GG\\.Coordination/\\.github/workflows/callable-cli-release-publish\\.yml(@(refs/.*|[0-9a-fA-F]+))?$","subjectAlternativeName":""}},"verifiedTimestamps":[{"timestamp":"2026-10-14T03:26:51+02:00","type":"Tlog","uri":"https://rekor.sigstore.dev"}]}'''
+
+
+def pair_recovery_source_controls():
+    helpers=runpy.run_path(str(ROOT/'eng/test-callable-cli-installed-harness.py'))
+    a,run,jobs,verified=recovery_inert_fixture()
+    assert a['enabled'] is False and a['recovery']['enabled'] is False and a['recovery']['policyObservationEnabled'] is False
+    helpers['pair_original_native'](a,run,jobs)
+    helpers['pair_verified_attestation'](a,verified)
+    for mode in ('repository','publisher','attempt','workflow','partial-jobs','duplicate-job','duplicate-step','extra-step','effect-success','attest-skipped','failure-order'):
+        r=copy.deepcopy(run);j=copy.deepcopy(jobs)
+        if mode=='repository':r['repository']['id']=1
+        if mode=='publisher':r['head_sha']='a'*40
+        if mode=='attempt':r['run_attempt']=2
+        if mode=='workflow':r['workflow_id']=1
+        if mode=='partial-jobs':j['total_count']=2
+        if mode=='duplicate-job':j['jobs'].append(copy.deepcopy(j['jobs'][0]));j['total_count']=2
+        if mode=='duplicate-step':j['jobs'][0]['steps'].append(copy.deepcopy(j['jobs'][0]['steps'][0]))
+        if mode=='extra-step':j['jobs'][0]['steps'].append({'name':'foreign','status':'completed','conclusion':'success','number':99})
+        if mode=='effect-success':j['jobs'][0]['steps'][12]['conclusion']='success'
+        if mode=='attest-skipped':j['jobs'][0]['steps'][7]['conclusion']='skipped'
+        if mode=='failure-order':j['jobs'][0]['steps'][9]['number']=1
+        try:helpers['pair_original_native'](a,r,j)
+        except ValueError:pass
+        else:raise AssertionError(mode)
+    for mode in ('missing','decoded-only','signer','invocation','subjects','repository','build-type','ref','publisher'):
+        v=copy.deepcopy(verified)
+        if mode=='missing':v=[]
+        elif mode=='decoded-only':v=[{'statement':v[0]['verificationResult']['statement']}]
+        elif mode=='signer':v[0]['verificationResult']['signature']['certificate']['buildSignerURI']='foreign'
+        elif mode=='invocation':v[0]['verificationResult']['statement']['predicate']['runDetails']['metadata']['invocationId']='foreign'
+        elif mode=='subjects':v[0]['verificationResult']['statement']['subject'][0]['digest']['sha256']='0'*64
+        elif mode=='repository':v[0]['verificationResult']['signature']['certificate']['sourceRepositoryIdentifier']='1'
+        elif mode=='build-type':v[0]['verificationResult']['statement']['predicate']['buildDefinition']['buildType']='foreign'
+        elif mode=='ref':v[0]['verificationResult']['signature']['certificate']['sourceRepositoryRef']='refs/heads/foreign'
+        elif mode=='publisher':v[0]['verificationResult']['signature']['certificate']['buildSignerDigest']='a'*40
+        try:helpers['pair_verified_attestation'](a,v)
+        except (ValueError,KeyError):pass
+        else:raise AssertionError(mode)
+    text=(ROOT/'.github/workflows/callable-cli-release-publish.yml').read_text()
+    job=text.split('\n  execution_pair:\n',1)[1]
+    assert 'inputs.pair_recovery' in job.splitlines()[0] and '!inputs.readback_only' in job.splitlines()[0]
+    assert 'actions/attest@' not in job and 'Attest only the retained pair inputs' not in job
+    assert 'gh attestation verify' in job and "<<'PY_PAIR_ATTESTATION'" in job
+    assert job.index('Authenticate consumed original failure')<job.index('Require existing App bindings')<job.index('Obtain selected Trusted Publishing')
+    preflight=text.split('  execution_pair_preflight:\n',1)[1].split('  execution_pair:\n',1)[0]
+    for forbidden in ('NuGet/login','dotnet ','actions/attest@','nuget push','gh release','packages: write','contents: write'):
+        assert forbidden not in preflight,forbidden
+    assert 'publicationAuthorized' in preflight and 'pending-native-token-revocation-observation' in preflight
+    print('PAIR_RECOVERY_SOURCE_CONTROLS passed native-negatives=11 verified-provenance-negatives=9 effects-disabled=true')
+
+
 def main():
+    pair_recovery_source_controls()
     complete_policy_source_controls()
     consumer_sdk_readback_controls()
     consumer_source_only_controls()
@@ -673,12 +744,16 @@ def main():
         result=subprocess.run(['bash','-c',script],capture_output=True,text=True,timeout=5)
         assert result.returncode==0 and result.stdout==('0:'+expected if expected is not None else '1:'),(seconds,deadline,result.stdout)
     for gate in ('test "$CLI_ONLY" = false','test "$PREFLIGHT_ONLY" = false','test "$READBACK_ONLY" = false'):
-        assert job.index(gate)<job.index('Attest only')<job.index('Push both retained')
+        assert job.index(gate)<job.index('Authenticate consumed original failure')<job.index('Verify pair provenance')<job.index('Push both retained')
     assert 'nuget push' not in prepare
     assert 'skip-duplicate' not in job and 'dotnet pack' not in job
     actual=heredoc('PY_PAIR_ADMISSION'); base=admission()
+    base['enabled']=False
+    base['operation']='publish-execution-pair-030-b11fb121-four38484632631'
+    base['recovery']=copy.deepcopy(json.loads((ROOT/'eng/execution-pair-release-admission.json').read_text())['recovery'])
+    base['recovery']['enabled']=True
     with tempfile.TemporaryDirectory(prefix='pair-selection-inert-') as tmp:consumer_fixture(Path(tmp),base)
-    cases={'good':lambda a:None,'disabled':lambda a:a.update(enabled=False),
+    cases={'good':lambda a:None,'disabled':lambda a:a['recovery'].update(enabled=False),'original-replay':lambda a:a.update(enabled=True),
            'wrong-profile':lambda a:a.update(profile='cli'),'wrong-member':lambda a:a['packages'].pop(IDS[1]),
            'foreign-source':lambda a:a.update(source='z'*40),'missing-capability':lambda a:a.update(namespaceEntitlement=None),
            'not-entitled':lambda a:a['namespaceEntitlement'].update(accepted=False),
@@ -695,13 +770,14 @@ def main():
             root=Path(temporary); a=copy.deepcopy(base);mutate(a)
             write(root/'eng/execution-pair-release-admission.json',a)
             (root/'eng/write-callable-cli-release-readback.py').write_bytes((ROOT/'eng/write-callable-cli-release-readback.py').read_bytes())
-            environment={'OPERATION':base['operation'],'REQUESTED_SOURCE':base['source'],'REQUESTED_MERGE':base['protectedMerge'],
+            (root/'eng/test-callable-cli-installed-harness.py').write_bytes((ROOT/'eng/test-callable-cli-installed-harness.py').read_bytes())
+            environment={'PAIR_RECOVERY':'true','OPERATION':base['recovery']['operation'],'REQUESTED_SOURCE':base['source'],'REQUESTED_MERGE':base['protectedMerge'],
                          'REQUESTED_SHA256':base['manifestSha256'],'REQUESTED_PUBLISHER':'9'*40,'GITHUB_ENV':str(root/'env')}
             old=Path.cwd();os.chdir(root);refused=False
             try:
                 with patch.dict(os.environ,environment,clear=True):
                     try:exec(actual,{})
-                    except (AssertionError,KeyError,TypeError,SystemExit):refused=True
+                    except (AssertionError,KeyError,TypeError,ValueError,SystemExit):refused=True
             finally:os.chdir(old)
             assert refused == (name!='good'), name
             assert (root/'env').exists()==(name=='good'),name
@@ -730,7 +806,7 @@ def main():
             try:
                 with patch.dict(os.environ,env,clear=True):
                     try:exec(bind,{})
-                    except (AssertionError,KeyError,TypeError,SystemExit):refused=True
+                    except (AssertionError,KeyError,TypeError,ValueError,SystemExit):refused=True
             finally:os.chdir(old)
             assert refused==(mode!='good'),mode
             assert (readback/'candidate-bindings.json').exists()==(mode=='good'),mode
@@ -844,7 +920,7 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
     for mode in ('good','good-omitted-tag-parameters','update-enabled','update-numeric-zero','update-null','update-unknown-parameter','update-unknown-field','unprotected-component','inactive','bypass','missing-actors','null-actors','object-actors','missing-actors-requester-never','missing-target','null-policy','foreign-id-type','deleted-signature-rule','foreign-ruleset','wrong-pin'):
         with tempfile.TemporaryDirectory(prefix='pair-protection-test-') as temporary:
             root=Path(temporary);readback=root/'readback';readback.mkdir()
-            live=copy.deepcopy(policy); live['id']=4
+            live=copy.deepcopy(policy); live['id']=21633398
             update=next(rule for rule in live['rules'] if rule['type']=='update')
             if mode=='good-omitted-tag-parameters':update.pop('parameters')
             if mode=='update-enabled':update['parameters']['update_allows_fetch_and_merge']=True
@@ -861,19 +937,20 @@ if args[0]=='rev-parse':print(os.environ['TREE_A'])
             if mode=='object-actors':live['bypass_actors']={}
             if mode=='missing-target':live.pop('target')
             if mode=='null-policy':live=None
-            if mode=='foreign-id-type':live['id']=4.0
+            if mode=='foreign-id-type':live['id']=21633398.0
             if mode=='deleted-signature-rule':live['rules']=[rule for rule in live['rules'] if rule['type']!='required_signatures']
             if mode=='foreign-ruleset':live['id']=5
-            a=admission();a['tagProtection']['policySha256']=hashlib.sha256(json.dumps(policy,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+            a=admission();a['tagProtection']={'rulesetId':21633398,'policySha256':hashlib.sha256(json.dumps(policy,sort_keys=True,separators=(',',':')).encode()).hexdigest()}
             if mode=='wrong-pin':a['tagProtection']['policySha256']='0'*64
             write(root/'eng/execution-pair-release-admission.json',a)
             write(root/'eng/repository-settings/release-tag-ruleset.json',desired)
+            (root/'eng/test-callable-cli-installed-harness.py').write_bytes((ROOT/'eng/test-callable-cli-installed-harness.py').read_bytes())
             write(readback/'tag-protection.json',live)
             old=Path.cwd();os.chdir(root);refused=False
             try:
                 with patch.dict(os.environ,{'READBACK_OUTPUT':str(readback)},clear=True):
                     try:exec(actual,{})
-                    except (AssertionError,KeyError,TypeError,SystemExit):refused=True
+                    except (AssertionError,KeyError,TypeError,ValueError,SystemExit):refused=True
             finally:os.chdir(old)
             assert refused==(mode not in {'good','good-omitted-tag-parameters'}),mode
     # Exercise the actual four-cell shell loop with a finite inert curl replacement.
