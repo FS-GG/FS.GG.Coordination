@@ -567,6 +567,73 @@ class CommandInterfaceControls(unittest.TestCase):
         self.assertEqual(1,len(first['fdScans'])); self.assertEqual([],second['fdScans'])
         self.assertEqual([server],second['beforeMembers']['members']); self.assertEqual([server],second['afterMembers']['members'])
 
+    def test_authenticated_leader_exit_keeps_prior_server_fd_proof_for_one_reobservation(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':5757,'start':105065,'pgid':5757,'state':'S'}
+        server={'pid':5769,'start':109670,'pgid':5757,'state':'S'}
+        owner=Mock(); owner.census.side_effect=[[leader,server],[server]]+[[server]]*4
+        owner.proc.return_value=server; child=Mock(pid=5757)
+        retained={'entries':[],'omitted':0}; servers={(5769,109670)}; handles={(5769,109670):7}
+        listeners=Mock(side_effect=[{'28643'},{'28643'},{'28643'},set(),set(),set()])
+        reads=0
+        def targets(row,*args,**kwargs):
+            nonlocal reads
+            reads+=1; scan=kwargs['scan_observation']; scan['disposition']='scanned'
+            inode='28643' if reads==1 else '999'
+            scan['socketInodes']={'values':[inode],'omitted':0}
+            return ['socket:['+inode+']']
+        with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+            module.observe_endpoint_ownership(owner,child,leader,servers,handles,set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+            prior=copy.deepcopy(retained['entries'][-1])
+            self.assertEqual('proved',prior['disposition'])
+            self.assertEqual([leader,server],prior['beforeMembers']['members'])
+            self.assertEqual([server],prior['afterMembers']['members'])
+            self.assertEqual(['28643'],prior['matchedInodes']['values'])
+            module.observe_endpoint_ownership(owner,child,leader,servers,handles,set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained,'child-exit-observed')
+            signals.assert_not_called(); child.poll.assert_not_called()
+        self.assertEqual(['changed','proved'],[entry['disposition'] for entry in retained['entries']])
+        self.assertEqual('foreign endpoint listener',retained['entries'][0]['failure']['message'])
+        self.assertEqual([],retained['entries'][1]['beforeInodes']['values'])
+        self.assertEqual([],retained['entries'][1]['afterInodes']['values'])
+        self.assertEqual(6,owner.census.call_count); self.assertEqual(6,listeners.call_count)
+        self.assertEqual(2,reads)
+
+    def test_prior_leader_exit_exception_refuses_other_membership_or_identity_changes(self):
+        from unittest.mock import Mock, patch
+        leader={'pid':101,'start':20,'pgid':101,'state':'S'}
+        server=dict(leader,pid=102,start=21)
+        faults=('foreign-disappeared','leader-reused','leader-group','leader-state',
+                'extra-member','server-disappeared','server-replaced','leader-still-present',
+                'prior-after-omitted','wrong-direct-child','missing-handle','prior-fd-unproved')
+        for fault in faults:
+            with self.subTest(fault=fault):
+                prior=self._endpoint_prior_proof(server)
+                before=[dict(server),dict(leader)]; after=[dict(server)]
+                if fault=='foreign-disappeared': before[1]['pid']=103
+                if fault=='leader-reused': before[1]['start']=99
+                if fault=='leader-group': before[1]['pgid']=999
+                if fault=='leader-state': before[1]['state']='?'
+                if fault=='extra-member': before.append(dict(server,pid=104,start=22))
+                if fault=='server-disappeared': after=[dict(leader)]
+                if fault=='server-replaced': after=[dict(server,start=22)]
+                if fault=='leader-still-present': after=[dict(server),dict(leader),dict(server,pid=104,start=22)]
+                prior['beforeMembers']={'members':before,'omittedMembers':0}
+                prior['afterMembers']={'members':after,'omittedMembers':1 if fault=='prior-after-omitted' else 0}
+                if fault=='prior-fd-unproved': prior['fdScans'][0]['socketInodes']['values']=['999']
+                retained={'entries':[prior],'omitted':0}; owner=Mock()
+                owner.census.return_value=[server]; owner.proc.return_value=server
+                listeners=Mock(side_effect=[{'123'},set()]); child=Mock(pid=999 if fault=='wrong-direct-child' else 101)
+                def targets(row,*args,**kwargs):
+                    scan=kwargs['scan_observation']; scan['disposition']='scanned'
+                    scan['socketInodes']={'values':['999'],'omitted':0}
+                    return ['socket:[999]']
+                with patch.object(module,'owned_fd_targets',side_effect=targets), patch.object(module.signal,'pidfd_send_signal') as signals:
+                    with self.assertRaisesRegex(ValueError,'^foreign endpoint listener$'):
+                        module.observe_endpoint_ownership(owner,child,leader,{(102,21)},{} if fault=='missing-handle' else {(102,21):7},set(),Mock(),6,listeners,[],{'entries':[],'omitted':0},retained)
+                    signals.assert_not_called(); child.poll.assert_not_called()
+                self.assertEqual('refused',retained['entries'][-1]['disposition'])
+                self.assertEqual(2,owner.census.call_count); self.assertEqual(2,listeners.call_count)
+
     def test_unknown_mismatch_cannot_use_listener_disappearance_as_ownership(self):
         from unittest.mock import Mock, patch
         leader={'pid':101,'start':20,'pgid':101,'state':'R'}

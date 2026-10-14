@@ -1,22 +1,70 @@
 {
   "schema": "fsgg.coordination.execution-pair-admission/1",
   "profile": "execution-pair",
-  "enabled": false,
-  "operation": null,
-  "version": "0.2.0",
-  "tag": "execution/v0.2.0",
-  "source": null,
-  "tree": null,
-  "protectedMerge": null,
-  "runId": null,
-  "artifactId": null,
-  "archiveSha256": null,
-  "manifestSha256": null,
+  "enabled": true,
+  "operation": "publish-execution-pair-030-b11fb121-four38484632631",
+  "version": "0.3.0",
+  "tag": "execution/v0.3.0",
+  "source": "b11fb121f046898e655b779dfc6809f35fc7aac6",
+  "tree": "f615519937f1d5871ebb619be110f2d3a7023315",
+  "protectedMerge": "b11fb121f046898e655b779dfc6809f35fc7aac6",
+  "runId": 38455588652,
+  "artifactId": 11842360725,
+  "archiveSha256": "75b1b0a8ac11522a63043932abf01c6ad7048988300ee42edddc6dedc3f58791",
+  "manifestSha256": "c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8",
   "packages": {
-    "FS.GG.Execution.Contracts": null,
-    "FS.GG.Execution.Processes": null
+    "FS.GG.Execution.Contracts": "bfd248eb935b4868bb1a7fb431bdb1ec26d3c1fedd2a294c34cf7b546bed151a",
+    "FS.GG.Execution.Processes": "978ac179d1983b6a3346655cd904391fd8dc2ff7f3b0558ed9fd40fa9aa56cbd"
   },
-  "namespaceEntitlement": null,
-  "tagProtection": null,
-  "jobId": null
+  "namespaceEntitlement": {
+    "accepted": true,
+    "packageIds": [
+      "FS.GG.Execution.Contracts",
+      "FS.GG.Execution.Processes"
+    ],
+    "nugetUser": "Paradigma11",
+    "githubRepository": "FS-GG/FS.GG.Coordination",
+    "publisherWorkflow": ".github/workflows/callable-cli-release-publish.yml",
+    "evidenceSha256": "47a06f26b2bbd9924df2a9778cfdeb8bf29ee618c88908f652dbe2cbb5019fcb"
+  },
+  "tagProtection": {
+    "rulesetId": 21633398,
+    "policySha256": "5182bb35a6dd682cef84ac9ce4210cfd09f38b7410d8c9cf9bae42866bcb81da"
+  },
+  "jobId": 115497350577,
+  "consumerQualification": {
+    "executor": "0b1b100323b46f811886b90ee673282928a8c553",
+    "runId": 38484632631,
+    "workflowSha256": "966b271ecc24c071b91779186d12b00ca113ae6952866d4a5ff94d39e4ecac59",
+    "cases": {
+      "sdd-s1": {
+        "jobId": 115595441888,
+        "artifactId": 11857434927,
+        "archiveSha256": "e7f07fa0e6d306acadf4619a4bdb7e9275804ace8528151465be35d0e1e7b9a9",
+        "observationSha256": "58635db6e699e359b6ece9e17447feacca1b422c038d38935f26af8dd5154b6e",
+        "sourceClosureSha256": "c67a58c5016ae267731ef8cfc7cffbcb9f37e8a3e62fcc3fa6939610db0632f1"
+      },
+      "fsquint-s1": {
+        "jobId": 115595441702,
+        "artifactId": 11857924440,
+        "archiveSha256": "ab0248501c70c6934ce926bbdb9b3743b02aeff30041158c9d7a75400a0c6037",
+        "observationSha256": "e7937ef432a7636dd781d8f8d961dc5aa23e1cc7e4abb43e5139e5b3f5db14eb",
+        "sourceClosureSha256": "69694f9567e94f2aeacc92aa74b4832f9ceac3f136c3d5d1ae33acfeddefc139"
+      },
+      "sdd-rollback": {
+        "jobId": 115595441866,
+        "artifactId": 11857669804,
+        "archiveSha256": "1c39281447647df5c7e3e7ee91ec66bf5e04892afa353e0f7629f6ce673351bf",
+        "observationSha256": "f6203d186ebaa31705cbd81259dd6ce1492f21e012fa3073141fbef22b619a09",
+        "sourceClosureSha256": "74eeca90a8cbfc2207cbad87d906e1df52641644b6a87b9def5c7a6a24ca0edf"
+      },
+      "fsquint-rollback": {
+        "jobId": 115595441734,
+        "artifactId": 11857604661,
+        "archiveSha256": "7525e15585fa04d5de6f7a93ecc40be6fa4bcf7cfccb51976cf41db7fd18873a",
+        "observationSha256": "7039d670cb33a30090334cb1fdbadf27bf67163998293b6bcbab027219281d48",
+        "sourceClosureSha256": "ac096150c1d81c755a8f4dd6b5f0f7cedc8bb05dd62aaa14cb3c27487b30f708"
+      }
+    }
+  }
 }

@@ -985,11 +985,11 @@ jobs:
           python3 - <<'PY_PAIR_ADMISSION'
           import json,os,re
           a=json.load(open('eng/execution-pair-release-admission.json'))
-          keys={'schema','profile','enabled','operation','version','tag','source','tree','protectedMerge','runId','jobId','artifactId','archiveSha256','manifestSha256','packages','namespaceEntitlement','tagProtection'}
+          keys={'schema','profile','enabled','operation','version','tag','source','tree','protectedMerge','runId','jobId','artifactId','archiveSha256','manifestSha256','packages','namespaceEntitlement','tagProtection','consumerQualification'}
           assert set(a)==keys and a['schema']=='fsgg.coordination.execution-pair-admission/1' and a['profile']=='execution-pair'
           assert a['enabled'] is True, 'pair publication admission disabled'
-          assert a['version']=='0.2.0' and a['tag']=='execution/v0.2.0'
-          assert isinstance(a['operation'],str) and re.fullmatch(r'publish-execution-pair-020-[a-z0-9-]+',a['operation'])
+          assert a['version']=='0.3.0' and a['tag']=='execution/v0.3.0'
+          assert isinstance(a['operation'],str) and re.fullmatch(r'publish-execution-pair-030-[a-z0-9-]+',a['operation'])
           def identity(value,size): assert isinstance(value,str) and re.fullmatch('[0-9a-f]{'+str(size)+'}',value) and set(value)!={'0'}
           for key in ('source','tree','protectedMerge'): identity(a[key],40)
           for key in ('archiveSha256','manifestSha256'): identity(a[key],64)
@@ -1002,7 +1002,9 @@ jobs:
           assert capability['accepted'] is True and capability['packageIds']==sorted(ids)
           assert capability['githubRepository']=='FS-GG/FS.GG.Coordination' and capability['publisherWorkflow']=='.github/workflows/callable-cli-release-publish.yml'
           assert isinstance(capability['nugetUser'],str) and re.fullmatch(r'[A-Za-z0-9_.-]{1,100}',capability['nugetUser'])
-          identity(capability['evidenceSha256'],64)
+          assert capability['nugetUser']=='Paradigma11' and capability['evidenceSha256']=='47a06f26b2bbd9924df2a9778cfdeb8bf29ee618c88908f652dbe2cbb5019fcb'
+          import runpy
+          q=runpy.run_path('eng/write-callable-cli-release-readback.py')['pair_consumer_selection'](a)
           protection=a['tagProtection']
           assert isinstance(protection,dict) and set(protection)=={'rulesetId','policySha256'} and type(protection['rulesetId']) is int and protection['rulesetId']>0
           identity(protection['policySha256'],64)
@@ -1012,6 +1014,9 @@ jobs:
           with open(os.environ['GITHUB_ENV'],'a') as out:
               for name,key in [('SOURCE_A','source'),('TREE_A','tree'),('MERGE_A','protectedMerge'),('CANDIDATE_RUN','runId'),('CANDIDATE_JOB','jobId'),('CANDIDATE_ARTIFACT','artifactId'),('ARCHIVE_SHA','archiveSha256'),('MANIFEST_SHA','manifestSha256')]: out.write(f'{name}={a[key]}\n')
               out.write('PAIR_NUGET_USER='+capability['nugetUser']+'\n')
+              out.write('EXECUTOR_E='+q['executor']+'\n')
+              out.write('EXECUTOR_RUN='+str(q['runId'])+'\n')
+              out.write('EXECUTOR_WORKFLOW_SHA='+q['workflowSha256']+'\n')
           PY_PAIR_ADMISSION
       - name: Bind pair A ancestry and publication-only B changes
         shell: bash
@@ -1025,7 +1030,7 @@ jobs:
           while IFS= read -r path; do
             test -z "$path" && continue
             case "$path" in
-              .github/workflows/callable-cli-release-prepare.yml|.github/workflows/callable-cli-release-publish.yml|eng/test-callable-cli-installed-harness.py|eng/execution-pair-release-admission.json|eng/write-callable-cli-release-readback.py|eng/repository-settings/desired.json|eng/repository-settings/release-tag-ruleset.json|tests/portable-workspace/release/test_execution_pair_release.py|evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json) ;;
+              .github/workflows/callable-cli-release-prepare.yml|.github/workflows/callable-cli-release-publish.yml|eng/test-callable-cli-installed-harness.py|eng/execution-pair-release-admission.json|eng/write-callable-cli-release-readback.py|eng/repository-settings/desired.json|eng/repository-settings/release-tag-ruleset.json|tests/portable-workspace/release/test_execution_pair_release.py|evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json|eng/retain-choreo-c2-diagnostics.py|eng/tests/choreo-c2-tlc-retry/test_diagnostics.py) ;;
               *) echo "::error::pair A-to-B contains a non-publication change: $path"; exit 1 ;;
             esac
           done <<< "$changed_paths"
@@ -1042,6 +1047,51 @@ jobs:
           curl --fail --silent --show-error --location --max-time 120 --max-filesize 50331648 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/candidate.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$CANDIDATE_ARTIFACT/zip"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair-artifact \
             eng/execution-pair-release-admission.json "$READBACK_OUTPUT" "$CANDIDATE_OUTPUT"
+      - name: Authenticate original four receiver proofs before any publication effect
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          git merge-base --is-ancestor "$SOURCE_A" "$EXECUTOR_E"
+          git merge-base --is-ancestor "$EXECUTOR_E" "$GITHUB_SHA"
+          while IFS= read -r path; do
+            test -z "$path" && continue
+            case "$path" in
+              .github/workflows/callable-cli-release-prepare.yml|tests/portable-workspace/release/test_execution_pair_release.py|evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json) ;;
+              *) echo "::error::pair A-to-E contains an unrelated change: $path"; exit 1 ;;
+            esac
+          done < <(git diff --name-only "$SOURCE_A" "$EXECUTOR_E")
+          git show "$EXECUTOR_E:.github/workflows/callable-cli-release-prepare.yml" > "$READBACK_OUTPUT/executor-workflow.yml"
+          test "$(sha256sum "$READBACK_OUTPUT/executor-workflow.yml" | cut -d ' ' -f1)" = "$EXECUTOR_WORKFLOW_SHA"
+          mkdir "$READBACK_OUTPUT/consumers"
+          python3 - <<'PY_PAIR_CONSUMER_SELECTORS'
+          import json,os,pathlib,runpy
+          a=json.load(open('eng/execution-pair-release-admission.json'))
+          q=runpy.run_path('eng/write-callable-cli-release-readback.py')['pair_consumer_selection'](a)
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])/'consumers'
+          (root/'selectors.tsv').write_text(''.join(f'{case}\t{row["jobId"]}\t{row["artifactId"]}\n' for case,row in q['cases'].items()))
+          PY_PAIR_CONSUMER_SELECTORS
+          # One original acquisition window; each request is clipped, never retried.
+          deadline=$((SECONDS+180))
+          remaining() { local n=$((deadline-SECONDS)); test "$n" -gt 0 || return 1; if test "$n" -gt 30; then n=30; fi; printf '%s' "$n"; }
+          timeout --kill-after=5s "$(remaining)s" gh api "repos/$GITHUB_REPOSITORY/actions/runs/$EXECUTOR_RUN" | head -c 1048577 > "$READBACK_OUTPUT/consumers/run.json"
+          timeout --kill-after=5s "$(remaining)s" gh api "repos/$GITHUB_REPOSITORY/actions/runs/$EXECUTOR_RUN/attempts/1/jobs?per_page=100" | head -c 1048577 > "$READBACK_OUTPUT/consumers/jobs.json"
+          test "$(stat -c %s "$READBACK_OUTPUT/consumers/run.json")" -le 1048576
+          test "$(stat -c %s "$READBACK_OUTPUT/consumers/jobs.json")" -le 1048576
+          while IFS=$'\t' read -r case job artifact; do
+            timeout --kill-after=5s "$(remaining)s" gh api "repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact" | head -c 1048577 > "$READBACK_OUTPUT/consumers/$case.artifact.json"
+            test "$(stat -c %s "$READBACK_OUTPUT/consumers/$case.artifact.json")" -le 1048576
+            curl --fail --silent --show-error --location --max-time "$(remaining)" --max-filesize 8388608 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/consumers/$case.job.log" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/jobs/$job/logs"
+            curl --fail --silent --show-error --location --max-time "$(remaining)" --max-filesize 33554432 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/consumers/$case.zip" "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/artifacts/$artifact/zip"
+          done < "$READBACK_OUTPUT/consumers/selectors.tsv"
+          python3 - <<'PY_PAIR_CONSUMERS'
+          import json,os,pathlib,runpy
+          a=json.load(open('eng/execution-pair-release-admission.json'))
+          root=pathlib.Path(os.environ['READBACK_OUTPUT'])/'consumers'
+          proof=runpy.run_path('eng/write-callable-cli-release-readback.py')['pair_consumers'](a,root)
+          (root/'validated.json').write_text(json.dumps(proof,sort_keys=True))
+          PY_PAIR_CONSUMERS
       - name: Set up the pinned .NET SDK
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68
         with:
@@ -1057,10 +1107,10 @@ jobs:
         run: |
           set -euo pipefail
           for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
-            gh attestation verify "$CANDIDATE_OUTPUT/$id.0.2.0.nupkg" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml"
+            gh attestation verify "$CANDIDATE_OUTPUT/$id.0.3.0.nupkg" --repo "$GITHUB_REPOSITORY" --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/callable-cli-release-publish.yml"
           done
           dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
-            --source "$SOURCE_A" --version 0.2.0 --output "$CANDIDATE_OUTPUT"
+            --source "$SOURCE_A" --version 0.3.0 --output "$CANDIDATE_OUTPUT"
           python3 eng/test-callable-cli-installed-harness.py --execution-pair "$CANDIDATE_OUTPUT" candidate "$READBACK_OUTPUT/candidate-load.json"
       - name: Observe four feed cells and component protection before first push
         shell: bash
@@ -1068,8 +1118,8 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          test -z "$(git ls-remote --tags origin refs/tags/execution/v0.2.0)"
-          status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/execution%2Fv0.2.0")"
+          test -z "$(git ls-remote --tags origin refs/tags/execution/v0.3.0)"
+          status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/execution%2Fv0.3.0")"
           test "$status" = 404
           ruleset="$(python3 -c 'import json; print(json.load(open("eng/execution-pair-release-admission.json"))["tagProtection"]["rulesetId"])')"
           gh api "repos/$GITHUB_REPOSITORY/rulesets/$ruleset" > "$READBACK_OUTPUT/tag-protection.json"
@@ -1105,10 +1155,10 @@ jobs:
             lower="${id,,}"
             for feed in github nuget; do
               if test "$feed" = github; then
-                url="https://nuget.pkg.github.com/fs-gg/download/$lower/0.2.0/$lower.0.2.0.nupkg"
+                url="https://nuget.pkg.github.com/fs-gg/download/$lower/0.3.0/$lower.0.3.0.nupkg"
                 auth=(--user "${GITHUB_ACTOR}:${GH_TOKEN}")
               else
-                url="https://api.nuget.org/v3-flatcontainer/$lower/0.2.0/$lower.0.2.0.nupkg"
+                url="https://api.nuget.org/v3-flatcontainer/$lower/0.3.0/$lower.0.3.0.nupkg"
                 auth=()
               fi
               status="$(curl --silent --show-error --location --max-time 60 --max-filesize 16777216 "${auth[@]}" --output "$READBACK_OUTPUT/$id.$feed.before" --write-out '%{http_code}' "$url")"
@@ -1132,7 +1182,7 @@ jobs:
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
           dotnet fsi eng/callable-cli-release.fsx verify --profile execution-pair \
-            --source "$SOURCE_A" --version 0.2.0 --output "$CANDIDATE_OUTPUT"
+            --source "$SOURCE_A" --version 0.3.0 --output "$CANDIDATE_OUTPUT"
       - name: Push both retained members to GitHub Packages first
         shell: bash
         env:
@@ -1140,7 +1190,7 @@ jobs:
         run: |
           set -euo pipefail
           for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
-            dotnet nuget push "$CANDIDATE_OUTPUT/$id.0.2.0.nupkg" --source https://nuget.pkg.github.com/FS-GG/index.json --api-key "$GH_TOKEN"
+            dotnet nuget push "$CANDIDATE_OUTPUT/$id.0.3.0.nupkg" --source https://nuget.pkg.github.com/FS-GG/index.json --api-key "$GH_TOKEN"
           done
       - name: Verify both GitHub raw archives before any public push
         shell: bash
@@ -1150,12 +1200,12 @@ jobs:
           set -euo pipefail
           for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
             lower="${id,,}"
-            url="https://nuget.pkg.github.com/fs-gg/download/$lower/0.2.0/$lower.0.2.0.nupkg"
+            url="https://nuget.pkg.github.com/fs-gg/download/$lower/0.3.0/$lower.0.3.0.nupkg"
             for attempt in {1..30}; do
               if curl --fail --silent --show-error --location --max-time 20 --max-filesize 16777216 --user "${GITHUB_ACTOR}:${GH_TOKEN}" --output "$READBACK_OUTPUT/$id.github.nupkg" "$url"; then break; fi
               test "$attempt" != 30; sleep 5
             done
-            python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$id.0.2.0.nupkg" "$READBACK_OUTPUT/$id.github.nupkg" github-packages > "$READBACK_OUTPUT/$id.github.json"
+            python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$id.0.3.0.nupkg" "$READBACK_OUTPUT/$id.github.nupkg" github-packages > "$READBACK_OUTPUT/$id.github.json"
           done
       - name: Push the identical retained pair inputs to nuget.org
         shell: bash
@@ -1164,7 +1214,7 @@ jobs:
         run: |
           set -euo pipefail
           for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
-            dotnet nuget push "$CANDIDATE_OUTPUT/$id.0.2.0.nupkg" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
+            dotnet nuget push "$CANDIDATE_OUTPUT/$id.0.3.0.nupkg" --source https://api.nuget.org/v3/index.json --api-key "$NUGET_API_KEY"
           done
       - name: Verify each public payload and repository signature
         shell: bash
@@ -1172,7 +1222,7 @@ jobs:
           set -euo pipefail
           for id in FS.GG.Execution.Contracts FS.GG.Execution.Processes; do
             lower="${id,,}"
-            url="https://api.nuget.org/v3-flatcontainer/$lower/0.2.0/$lower.0.2.0.nupkg"
+            url="https://api.nuget.org/v3-flatcontainer/$lower/0.3.0/$lower.0.3.0.nupkg"
             for attempt in {1..30}; do
               if curl --fail --silent --show-error --location --max-time 20 --max-filesize 16777216 --output "$READBACK_OUTPUT/$id.nuget.nupkg" "$url"; then break; fi
               test "$attempt" != 30; sleep 5
@@ -1188,7 +1238,7 @@ jobs:
               timeout 30s dotnet nuget verify "$READBACK_OUTPUT/$id.nuget.nupkg" --all 2>&1 | head -c 65537 > "$READBACK_OUTPUT/$id.signature.txt"
               test "$(stat --format=%s "$READBACK_OUTPUT/$id.signature.txt")" -le 65536
             fi
-            python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$id.0.2.0.nupkg" "$READBACK_OUTPUT/$id.nuget.nupkg" nuget-org > "$READBACK_OUTPUT/$id.nuget.json"
+            python3 eng/verify-callable-cli-served.py "$CANDIDATE_OUTPUT/$id.0.3.0.nupkg" "$READBACK_OUTPUT/$id.nuget.nupkg" nuget-org > "$READBACK_OUTPUT/$id.nuget.json"
           done
       - name: Validate public installed load and write exact pair readback
         shell: bash
@@ -1198,6 +1248,7 @@ jobs:
           python3 eng/write-callable-cli-release-readback.py --execution-pair \
             --publisher "$GITHUB_SHA" --source "$SOURCE_A" --tree "$TREE_A" --merge "$MERGE_A" \
             --manifest "$CANDIDATE_OUTPUT/execution-pair-release-manifest.json" --manifest-sha256 "$MANIFEST_SHA" \
+            --admission eng/execution-pair-release-admission.json --consumer-root "$READBACK_OUTPUT/consumers" \
             --feed-root "$READBACK_OUTPUT" --installed "$READBACK_OUTPUT/public-load.json" --output "$READBACK_OUTPUT/pair-release-readback.json"
       - name: Finalize component tag only after complete pair readback
         shell: bash
@@ -1207,13 +1258,13 @@ jobs:
           set -euo pipefail
           git fetch --no-tags origin +refs/heads/main:refs/remotes/origin/main
           test "$(git rev-parse refs/remotes/origin/main)" = "$GITHUB_SHA"
-          test -z "$(git ls-remote --tags origin refs/tags/execution/v0.2.0)"
-          status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before-finalization.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/execution%2Fv0.2.0")"
+          test -z "$(git ls-remote --tags origin refs/tags/execution/v0.3.0)"
+          status="$(curl --silent --show-error --max-time 30 --header "Authorization: Bearer $GH_TOKEN" --header 'Accept: application/vnd.github+json' --output "$READBACK_OUTPUT/release-before-finalization.json" --write-out '%{http_code}' "https://api.github.com/repos/$GITHUB_REPOSITORY/releases/tags/execution%2Fv0.3.0")"
           test "$status" = 404
-          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/execution/v0.2.0 -f sha="$SOURCE_A"
-          gh release create execution/v0.2.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title 'Routine Execution pair 0.2.0' \
+          gh api --method POST "repos/$GITHUB_REPOSITORY/git/refs" -f ref=refs/tags/execution/v0.3.0 -f sha="$SOURCE_A"
+          gh release create execution/v0.3.0 --repo "$GITHUB_REPOSITORY" --verify-tag --title 'Routine Execution pair 0.3.0' \
             --notes "Original pair candidate $SOURCE_A, publisher $GITHUB_SHA. Library load verified; installed SDD/FsQuint adoption is separate." \
-            "$CANDIDATE_OUTPUT/FS.GG.Execution.Contracts.0.2.0.nupkg" "$CANDIDATE_OUTPUT/FS.GG.Execution.Processes.0.2.0.nupkg" \
+            "$CANDIDATE_OUTPUT/FS.GG.Execution.Contracts.0.3.0.nupkg" "$CANDIDATE_OUTPUT/FS.GG.Execution.Processes.0.3.0.nupkg" \
             "$CANDIDATE_OUTPUT/execution-pair-release-manifest.json" "$READBACK_OUTPUT/pair-release-readback.json"
       - name: Preserve the original pair observation on success or failure
         if: always()
