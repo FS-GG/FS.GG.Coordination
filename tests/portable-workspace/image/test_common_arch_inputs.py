@@ -34,6 +34,13 @@ class CommonArchInputs(unittest.TestCase):
         self.bundle = self.root / 'bundle'
         self.bundle.mkdir()
         self.proof = b'SYNTHETIC TEST ONLY: no authenticated signature/transaction\n'
+        # Only the expected effective-proof digest/size are patched for inert fixtures.
+        self.synthetic_policy_patches = []
+        for name, value in (('COMMON_DONOR_POLICY_SHA256', digest(self.proof)),
+                            ('COMMON_DONOR_POLICY_BYTES', len(self.proof))):
+            guard = patch.object(IMAGE, name, value)
+            guard.start(); self.addCleanup(guard.stop)
+            self.synthetic_policy_patches.append(guard)
         self.before = b'donor 1-1\n'
         self.files = []
         def put(path, payload, role=None):
@@ -58,16 +65,18 @@ class CommonArchInputs(unittest.TestCase):
                          'containerfileSha256': IMAGE.COMMON_PINS['Containerfile'],
                          'pacmanConfigSha256': IMAGE.COMMON_PINS['pacman.conf'], 'inputsSha256': IMAGE.COMMON_PINS['inputs.json']}
         self.source = {'classification': 'source-specification-not-acquired-input-lock', 'platform': 'linux/amd64',
-                       'donor': {'reference': 'synthetic', 'indexDigest': 'sha256:'+'a'*64,
-                                 'configDigest': 'sha256:'+'b'*64, 'layers': [{'sha256': 'c'*64, 'bytes': 1}]},
+                       'donor': {'reference': IMAGE.COMMON_DONOR_REFERENCE, 'indexDigest': 'sha256:'+'a'*64,
+                                 'configDigest': IMAGE.COMMON_DONOR_CONFIG_DIGEST, 'layers': [{'sha256': 'c'*64, 'bytes': 1}]},
                        'snapshot': {'date': '2026-10-12', 'acquisitionServer': 'synthetic', 'repositories': ['core','extra']},
                        'trust': {'candidateSigLevel': 'Required DatabaseOptional', 'candidateLocalFileSigLevel': 'Required'},
                        'targets': ['python'], 'acquiredInputs': None}
         trust = {k: 'SYNTHETIC' for k in ('pacmanVersion','libalpmVersion','keyringPackageVersion')}
-        trust.update({k: 'd'*64 for k in ('donorPacmanConfigSha256','acquisitionConfigSha256')})
+        trust['donorPacmanConfigSha256'] = IMAGE.COMMON_DONOR_PACMAN_CONFIG_SHA256
+        trust['acquisitionConfigSha256'] = IMAGE.COMMON_ACQUISITION_CONFIG_SHA256
         trust['finalConfigSha256'] = IMAGE.COMMON_PINS['pacman.conf']
         trust.update({k: 'Required DatabaseOptional' for k in ('donorEffectiveSigLevel','finalEffectiveSigLevel')})
-        trust.update({k: 'Required' for k in ('donorEffectiveLocalFileSigLevel','finalEffectiveLocalFileSigLevel')})
+        trust['donorEffectiveLocalFileSigLevel'] = 'Optional'
+        trust['finalEffectiveLocalFileSigLevel'] = 'Required'
         trust.update({k: 'synthetic' for k in ('donorPolicyEvidenceRef','keyringEvidenceRef','reconciliationEvidenceRef')})
         self.lock = {**copy.deepcopy(self.source), 'classification': 'acquired-input-lock', 'acquiredInputs': {
             'imageSource': self.identity, 'donor': {**self.source['donor'], 'evidenceRefs': ['synthetic']},
@@ -138,6 +147,47 @@ class CommonArchInputs(unittest.TestCase):
             calls.append((prefix,bound));return original(root,prefix,bound)
         with patch.object(IMAGE,'common_population',side_effect=observe):self.validate()
         self.assertIn(('acquired',32769),calls)
+
+
+    def test_production_policy_pins_refuse_synthetic_evidence(self):
+        for guard in reversed(self.synthetic_policy_patches):guard.stop()
+        self.assertEqual(IMAGE.COMMON_DONOR_POLICY_SHA256, '60d18150be3245f6df3e53a6a301380e9eb5cab17047d5112b6709eedaf9d0ac')
+        self.assertEqual(IMAGE.COMMON_DONOR_POLICY_BYTES, 1751)
+        self.assertEqual(IMAGE.COMMON_DONOR_PACMAN_CONFIG_SHA256, '1b1c6195b21865a660480f41a29a172f103b1aa3e846d1db877e04cd6220e454')
+        self.assertEqual(IMAGE.COMMON_ACQUISITION_CONFIG_SHA256, '513b2a7cb4de9afdbaf275d880b7a077bdb96c3975f4eac50ae9bcfd4d0c1cc9')
+        self.assertEqual(IMAGE.COMMON_DONOR_CONFIG_DIGEST, 'sha256:5a30b4acc83ff841682eb21795e00f7ff030796f5e6fd2a127decd7a45ba7cef')
+        self.assertEqual(IMAGE.COMMON_DONOR_REFERENCE, 'docker.io/library/archlinux@sha256:363129b67b2bc6c5a634f8fb4961a7e2eba213a2ec075d159127b1260290a722')
+        with self.assertRaisesRegex(RuntimeError, 'policy proof mismatch'):self.validate()
+
+    def test_exact_policy_tuple_refuses_changes(self):
+        original=copy.deepcopy(self.lock)
+        mutations=[
+            lambda a:a['trust'].update(donorEffectiveLocalFileSigLevel='Required'),
+            lambda a:a['trust'].update(finalEffectiveLocalFileSigLevel='Optional'),
+            lambda a:a['trust'].update(donorEffectiveLocalFileSigLevel='Never'),
+            lambda a:a['trust'].update(finalEffectiveLocalFileSigLevel='Required TrustAll'),
+            lambda a:a['trust'].update(donorEffectiveSigLevel='Optional DatabaseOptional'),
+            lambda a:a['trust'].update(finalEffectiveSigLevel='Required DatabaseOptional TrustAll'),
+            lambda a:a['trust'].update(donorEffectiveSigLevel='Required DatabaseRequired'),
+            lambda a:a['trust'].update(donorPacmanConfigSha256='0'*64),
+            lambda a:a['trust'].update(acquisitionConfigSha256='0'*64),
+            lambda a:a['trust'].update(finalConfigSha256='0'*64),
+            lambda a:a['trust'].update(donorPolicyEvidenceRef='missing'),
+            lambda a:a['trust'].update(reconciliationEvidenceRef='missing'),
+            lambda a:a['trust'].update(keyringEvidenceRef='missing'),
+            lambda a:a['donor'].update(reference='other'),
+            lambda a:a['donor'].update(configDigest='sha256:'+'0'*64),
+        ]
+        for mutate in mutations:
+            with self.subTest(mutate=mutate):
+                self.lock=copy.deepcopy(original);mutate(self.lock['acquiredInputs'])
+                with self.assertRaises(RuntimeError):self.validate()
+        self.lock=original
+        for field,value in (('COMMON_DONOR_POLICY_BYTES',len(self.proof)+1),('COMMON_DONOR_POLICY_SHA256','0'*64)):
+            with patch.object(IMAGE,field,value):
+                with self.assertRaisesRegex(RuntimeError,'policy proof mismatch'):self.validate()
+        (self.bundle/'proof/synthetic.txt').write_bytes(b'changed proof with stale descriptor')
+        with self.assertRaisesRegex(RuntimeError,'input bytes differ'):self.validate()
 
     def test_duplicate_json_key(self):
         with self.assertRaisesRegex(RuntimeError,'duplicate JSON'):

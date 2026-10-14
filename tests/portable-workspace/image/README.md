@@ -144,7 +144,39 @@ acquiredInputs = {
 
 Database signature `availability` is `present` or `absent-observed`. If present, carrierPath is the staged `<repo>.db.sig` and sha256 equals its file descriptor. If absent-observed, carrierPath and sha256 are JSON null, with required evidenceRef preserving the actual absence observation; this is permitted only under reconciled DatabaseOptional. No unknown/unobserved signature availability passes. Both database bytes and the signature observation have genuine evidence refs.
 
-For this finite source selection, final policy strings must equal the source's `Required DatabaseOptional` and `Required` values exactly. Donor *effective* policy strings must equal those values too; unsupported/different/stricter donor policy is an explicit mismatch requiring reviewed source reconciliation, not an attempted generic policy-strength comparison. These fields represent externally observed effective policy, including overrides, rather than a naive grep of pacman.conf. Config hashes and referenced evidence are checked as bytes; authenticity/effective-policy correctness remain acquisition owner/root responsibilities.
+For this finite immutable donor, the selected policy tuple is donor global
+`Required DatabaseOptional`, donor local `Optional`, final global
+`Required DatabaseOptional`, final local `Required`. Source candidate policy remains
+`Required DatabaseOptional` / `Required`. The global spelling maps to the observed
+PackageRequired+PackageTrustedOnly+DatabaseOptional+DatabaseTrustedOnly tokens;
+donor local Optional maps to PackageOptional+PackageTrustedOnly; candidate local
+Required maps to PackageRequired+PackageTrustedOnly under the exact selected config
+bytes. Local Optional→Required tightens signature requirements. Repository `file://`
+transport remains governed by global/repository SigLevel and is distinct from
+local-file upgrade policy. This is one fixed correspondence, not a policy normalizer
+or generic strength comparison. Donor local falsely Required, unknown/weakened/
+stricter tuples, TrustAll and repository overrides all refuse.
+
+The guard additionally pins donor reference
+`docker.io/library/archlinux@sha256:363129b67b2bc6c5a634f8fb4961a7e2eba213a2ec075d159127b1260290a722`
+and config `sha256:5a30b4acc83ff841682eb21795e00f7ff030796f5e6fd2a127decd7a45ba7cef`.
+`donorPacmanConfigSha256` must be
+`1b1c6195b21865a660480f41a29a172f103b1aa3e846d1db877e04cd6220e454`.
+The existing `donorPolicyEvidenceRef` descriptor must identify 1751 bytes with SHA256
+`60d18150be3245f6df3e53a6a301380e9eb5cab17047d5112b6709eedaf9d0ac`, and its actual
+retained proof bytes are independently rehashed. `acquisitionConfigSha256` must be
+`513b2a7cb4de9afdbaf275d880b7a077bdb96c3975f4eac50ae9bcfd4d0c1cc9`; the final config
+retains the existing COMMON_PINS pacman.conf value. Full donor manifest/index/layer
+joins remain unchanged. No new lock fields or configuration flags are introduced.
+
+The acquisition config is a selected future input, with no acquisition transaction
+acceptance implied. `reconciliationEvidenceRef` and `keyringEvidenceRef` remain
+required. Their authentic interpretation, whole-lock selection and custody remain
+acquisition owner/root responsibilities. Source controls patch only expected effective
+proof digest/size to visibly synthetic bytes for inert success; an unpatched control
+proves those synthetic bytes cannot pass the production pins. Genuine donor policy
+readback establishes this narrow source reconciliation, never complete package
+acquisition, transaction/hooks success or common native readiness.
 
 `transaction.beforeInventory.path` is a proof file; its descriptor must equal the referenced evidence descriptor. `finalInventory.path` is exactly `acquired/package-inventory.expected` and joins one inventory files record. Both inventories are canonical `LC_ALL=C pacman -Q | LC_ALL=C sort` text, terminal newline, unique package names, one space between name and opaque version, bounded by file/input limits. Every donor package must remain in final inventory unless explicitly named in removals or the removed side of replacements; every package archive name/version must appear in final inventory. Every final package must be accounted for by donor inventory or one staged package. Removals/replaced names must exist before and be absent after; replacement installed names must exist after. Duplicates or conflicting removals/replacements refuse. This is set correspondence, not an independent dependency/transaction solver.
 

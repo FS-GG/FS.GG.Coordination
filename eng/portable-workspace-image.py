@@ -623,6 +623,14 @@ COMMON_PINS = {
     'pacman.conf': '4fce63852fc318bff9146dea8487fd5c58837c4e35277a4903c4788be2fced8c',
     'inputs.json': 'f1b9d132f10c8bd0bd8643781a13321c1498b0f62f48b26f0075951eb09d7caf',
 }
+# Finite observed immutable donor policy: Optional local files tighten to Required.
+# Public content pins; actual acquisition custody/authentication remains external.
+COMMON_DONOR_REFERENCE = 'docker.io/library/archlinux@sha256:363129b67b2bc6c5a634f8fb4961a7e2eba213a2ec075d159127b1260290a722'
+COMMON_DONOR_CONFIG_DIGEST = 'sha256:5a30b4acc83ff841682eb21795e00f7ff030796f5e6fd2a127decd7a45ba7cef'
+COMMON_DONOR_PACMAN_CONFIG_SHA256 = '1b1c6195b21865a660480f41a29a172f103b1aa3e846d1db877e04cd6220e454'
+COMMON_DONOR_POLICY_SHA256 = '60d18150be3245f6df3e53a6a301380e9eb5cab17047d5112b6709eedaf9d0ac'
+COMMON_DONOR_POLICY_BYTES = 1751
+COMMON_ACQUISITION_CONFIG_SHA256 = '513b2a7cb4de9afdbaf275d880b7a077bdb96c3975f4eac50ae9bcfd4d0c1cc9'
 COMMON_IMAGE_NAME = 'localhost/fsgg-provisioned-common:arch-20261012'
 MAX_LOCK_BYTES = 8 * 1024 * 1024
 MAX_PAYLOAD_BYTES = 8 * 1024 * 1024 * 1024
@@ -895,11 +903,23 @@ def validate_common_inputs(bundle: Path, lock: dict, source_spec: dict, image_id
             common_sha(value)
         else:
             common_text(value)
-    common_require(trust['finalConfigSha256'] == COMMON_PINS['pacman.conf'], 'final config mismatch')
-    for key in ('donorEffectiveSigLevel', 'finalEffectiveSigLevel'):
-        common_require(trust[key] == source_spec['trust']['candidateSigLevel'], 'signature policy mismatch')
-    for key in ('donorEffectiveLocalFileSigLevel', 'finalEffectiveLocalFileSigLevel'):
-        common_require(trust[key] == source_spec['trust']['candidateLocalFileSigLevel'], 'local signature policy mismatch')
+    # This is one evidence-grounded tuple, never a generic policy strength comparison.
+    policy_proof = ref(trust['donorPolicyEvidenceRef'])  # already size/hash-checked above
+    common_require(donor['reference'] == COMMON_DONOR_REFERENCE
+                   and donor['configDigest'] == COMMON_DONOR_CONFIG_DIGEST
+                   and trust['donorPacmanConfigSha256'] == COMMON_DONOR_PACMAN_CONFIG_SHA256
+                   and policy_proof['sha256'] == COMMON_DONOR_POLICY_SHA256
+                   and policy_proof['bytes'] == COMMON_DONOR_POLICY_BYTES
+                   and trust['acquisitionConfigSha256'] == COMMON_ACQUISITION_CONFIG_SHA256
+                   and trust['finalConfigSha256'] == COMMON_PINS['pacman.conf'],
+                   'selected donor/config/policy proof mismatch')
+    common_require(source_spec['trust']['candidateSigLevel'] == 'Required DatabaseOptional'
+                   and source_spec['trust']['candidateLocalFileSigLevel'] == 'Required'
+                   and trust['donorEffectiveSigLevel'] == 'Required DatabaseOptional'
+                   and trust['finalEffectiveSigLevel'] == 'Required DatabaseOptional'
+                   and trust['donorEffectiveLocalFileSigLevel'] == 'Optional'
+                   and trust['finalEffectiveLocalFileSigLevel'] == 'Required',
+                   'selected Optional-to-Required trusted policy tuple mismatch')
     transaction = acquired['transaction']
     common_fields(transaction, 'method targets resolutionEvidenceRef downloadEvidenceRef offlineTransactionEvidenceRef hookEvidenceRef beforeInventory finalInventory providers replacements removals')
     common_require(transaction['method'] == 'pacman-full-system' and transaction['targets'] == source_spec['targets'], 'transaction mismatch')
