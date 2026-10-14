@@ -1873,13 +1873,99 @@ def proc_measurement_bounds(spec,authority,bootstrap,slot,known,tracer,subject_s
     return {'rssBytes':aggregate,'actors':samples}
 
 
+def proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child):
+    """Actual negative-control death and partial trace custody; never read closure."""
+    phase=record['phase'];root=Path(spec['operationRoot']);slot=Path(slot)
+    if (spec['profile']!='proc-pair-client-qualification' or spec['role']!='qualification'
+            or phase not in ('controller','session') or slot!=root/('control-'+phase) or Path(descriptor)!=root/'input.json'
+            or root!=proc_operation_root(spec['operation'],spec['qualificationAttempt'])
+            or proof is None or child is None or record.get('measurementBinding')!=proof
+            or proof['phase']!=phase or proof['slot']!=str(slot)
+            or proof['bootId']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+            or proof['descriptorSha256']!=hashlib.sha256(Path(descriptor).read_bytes()).hexdigest()
+            or proof['authoritySha256']!=authority_sha
+            or hashlib.sha256(Path(authority_path).read_bytes()).hexdigest()!=authority_sha
+            or proof['subjectWorkDeadline']!=spec['workDeadline']-10):
+        raise ValueError('PROC actual negative-control input/phase/origin binding unavailable')
+    apparatus=proc_actor(os.getpid());tracer=record['tracer'];ready=record['subjectReadiness']
+    if apparatus is None or any(apparatus[k]!=proof['apparatus'][k] for k in ('pid','start','uid','pgid','sid','namespaces')):
+        raise ValueError('PROC actual negative-control apparatus birth unavailable')
+    if (record['firstCause'] is not None or record['additionalFailures']!=[]
+            or record['subjectStartAuthenticated'] is not True or ready is None
+            or record['pidfdSignalSent'] is not True or record['tracerExit']!=-signal.SIGKILL
+            or record['cleanup']!='observed-known-terminal' or record['residuals']!=[]
+            or child.pid!=tracer['pid'] or child.returncode!=-signal.SIGKILL
+            or tracer!=proof['tracer'] or tracer['ppid']!=apparatus['pid']
+            or tracer['uid']!=os.geteuid() or tracer['namespaces']!=apparatus['namespaces']
+            or tracer['pgid']!=tracer['pid'] or tracer['sid']!=tracer['pid']
+            or ready['bootId']!=proof['bootId'] or ready['descriptorSha256']!=proof['descriptorSha256']
+            or ready['phase']!=phase or ready['subjectWorkDeadline']!=proof['subjectWorkDeadline']
+            or any(ready['tracer'][k]!=tracer[k] for k in ('pid','start','uid','ppid','pgid','sid','namespaces'))):
+        raise ValueError('PROC negative-control authenticated signal/terminal/cleanup unavailable')
+    ready_path=slot/'measurement.ready.json'
+    if (ready_path.is_symlink() or ready_path.stat().st_uid!=os.geteuid() or ready_path.stat().st_nlink!=1
+            or stat.S_IMODE(ready_path.stat().st_mode)!=0o600 or ready!=json.loads(ready_path.read_bytes())):
+        raise ValueError('PROC negative-control original ready artifact differs')
+    subject=ready['subject'];known={row['pid']:row for row in record['sampledBirths']}
+    actors=[proof['apparatus'],tracer,subject]
+    if (subject['ppid']!=tracer['pid'] or subject['tracerPid']!=tracer['pid']
+            or subject['uid']!=os.geteuid() or subject['namespaces']!=apparatus['namespaces']
+            or subject['pgid']!=tracer['pgid'] or subject['sid']!=tracer['sid']
+            or not apparatus['start']<=tracer['start']<=subject['start']):
+        raise ValueError('PROC negative-control authenticated subject relation unavailable')
+    control=record['controlReadiness']
+    if phase=='controller':
+        if control is not None or (slot/'measurement.control.json').exists():
+            raise ValueError('PROC controller control readiness must be authenticated subject only')
+    else:
+        if (control is None or control!=json.loads((slot/'measurement.control.json').read_bytes())
+                or control['phase']!='session' or control['bootId']!=proof['bootId']
+                or any(control['controller'][k]!=subject[k] for k in ('pid','start','uid','ppid','pgid','sid','namespaces'))):
+            raise ValueError('PROC session child/controller readiness binding unavailable')
+        nested=control['child'];actors.append(nested)
+        if (nested['ppid']!=subject['pid'] or nested['tracerPid']!=tracer['pid']
+                or nested['uid']!=os.geteuid() or nested['namespaces']!=apparatus['namespaces']
+                or nested['sid']!=nested['pid'] or nested['pgid']!=nested['pid'] or nested['start']<subject['start']):
+            raise ValueError('PROC session child actual birth/session relation unavailable')
+    if len(known)!=len(record['sampledBirths']):raise ValueError('PROC negative-control duplicate sampled birth')
+    if len({actor['pid'] for actor in actors})!=len(actors):raise ValueError('PROC negative-control actor identity exchange')
+    for actor in actors:
+        if (type(actor['pid']) is not int or type(actor['start']) is not int or actor['pid']<=0 or actor['start']<=0
+                or actor['pid'] not in known or known[actor['pid']]['start']!=actor['start']):
+            raise ValueError('PROC negative-control sampled birth join unavailable')
+    for actor in known.values():
+        if type(actor['pid']) is not int or type(actor['start']) is not int or actor['pid']<=0 or actor['start']<=0:
+            raise ValueError('PROC negative-control sampled birth identity unavailable')
+        current=proc_actor(actor['pid'])
+        if actor['pid']!=apparatus['pid'] and current is not None and (current['start']!=actor['start'] or current['state'] not in ('Z','X','x')):
+            raise ValueError('PROC negative-control current terminal birth unavailable')
+    traces=sorted(slot.glob('qualification.trace.*'));expected={actor['pid'] for actor in actors[2:]};artifacts=[];total=0
+    for trace in traces:
+        if not re.fullmatch(r'qualification\.trace\.[1-9][0-9]*',trace.name):raise ValueError('PROC negative-control trace artifact identity')
+        observed=trace.lstat();identity=proc_read_identity(trace)
+        if (any(p.is_symlink() for p in (trace,*trace.parents)) or not stat.S_ISREG(observed.st_mode)
+                or observed.st_uid!=os.geteuid() or observed.st_nlink!=1 or total+observed.st_size>8*1024**2):
+            raise ValueError('PROC negative-control partial trace custody/bound unavailable')
+        raw=trace.read_bytes();total+=len(raw)
+        if proc_read_identity(trace)!=identity or len(raw)!=observed.st_size or total>8*1024**2:
+            raise ValueError('PROC negative-control partial trace identity/byte drift')
+        artifacts.append({'pid':int(trace.name.rsplit('.',1)[1]),'path':str(trace),'sha256':hashlib.sha256(raw).hexdigest(),'bytes':len(raw)})
+    if not traces or len(traces)>32 or {row['pid'] for row in artifacts}!=expected:
+        raise ValueError('PROC negative-control partial trace actor population unavailable')
+    return {'contract':'actual-negative-control-retirement/1','phase':phase,'measurementBinding':proof,
+            'subjectReadiness':ready,'controlReadiness':control,'knownTerminalBirths':[row for row in record['sampledBirths'] if row['pid']!=apparatus['pid']],
+            'pidfdSignalSent':True,'tracerExit':-signal.SIGKILL,'cleanup':'observed-known-terminal',
+            'traceArtifacts':artifacts,'traceComplete':False,'readClosureQualified':False,
+            'publicationAuthorized':False,'limitation':'Tracer was intentionally aborted; retained traces are incomplete diagnostics, never complete lifetime/read proof.'}
+
+
 def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authority_sha,phase):
     import subprocess
     root=Path(spec['operationRoot']);slot=root if phase=='normal' else root/('control-'+phase)
     if phase!='normal':slot.mkdir(mode=0o700)
     subject_deadline=spec['workDeadline']-10
     if time.monotonic()>=subject_deadline:raise TimeoutError('PROC original subject-work reserve exhausted')
-    read_fd,write_fd=os.pipe();child=None;tracer=None;pidfd=None;first=None;known={};samples=[];peak=0;ready=None;control=None;signal_sent=False;code=None;additional=[]
+    read_fd,write_fd=os.pipe();child=None;tracer=None;pidfd=None;first=None;known={};samples=[];peak=0;ready=None;control=None;signal_sent=False;code=None;additional=[];proof=None
     stream=None
     launch_started=time.monotonic()
     try:
@@ -1995,7 +2081,7 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
                 additional.append(failure_record(first))
                 if hasattr(first,'proc_measurement_report_disposition'):error.proc_measurement_report_disposition=first.proc_measurement_report_disposition
             first=error
-    record={'phase':phase,'additionalFailures':additional,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),'tracer':tracer,'tracerExit':code,'pidfdSignalSent':signal_sent,
+    record={'phase':phase,'measurementBinding':proof,'additionalFailures':additional,'firstCause':getattr(first,'proc_subject_failure',None) or failure_record(first),'tracer':tracer,'tracerExit':code,'pidfdSignalSent':signal_sent,
         'subjectStartAuthenticated':ready is not None,'subjectReadiness':ready,'controlReadiness':control,
         'sampledBirths':list(known.values()),'samples':samples,'sampledPeakRssBytes':peak,
         'unsampledInstrumentation':{'sourceProbeBound':2,'count':None,'identities':None,'lifetimes':None,'peakRssBytes':None},
@@ -2013,14 +2099,12 @@ def proc_measure_once(spec,authority,bootstrap,descriptor,authority_path,authori
     if cleanup!='observed-known-terminal':raise ValueError('PROC measurement cleanup unknown; retain private hold')
     if phase!='normal' and (not signal_sent or code!=-signal.SIGKILL):raise ValueError('PROC kernel control terminal grammar differs')
     if phase!='normal':
-        trace=proc_trace_evidence(spec,slot,authority_path,tracer['pid'],killed=True,apparatus_pid=os.getpid())
-        if not trace['clocked'] or trace['rootPid']!=ready['subject']['pid'] or phase=='session' and control['child']['pid'] not in {row['pid'] for row in trace['processes']}:
-            raise ValueError('PROC actual complete kernel-control trace/birth join unavailable')
-        record['controlTrace']=trace
+        retirement=proc_control_retirement_evidence(spec,slot,descriptor,authority_path,authority_sha,record,proof,child)
+        record['controlRetirement']=retirement
         # The original observation remains immutable; this separate bounded join is
         # a fixed control artifact, never a replacement successful normal trace.
         proc_private_record(slot/'measurement.control-proof.json',{'apparatusSha256':hashlib.sha256((slot/'measurement.apparatus.json').read_bytes()).hexdigest(),
-            'trace':trace,'expectedTracerAbort':True},spec['totalDeadline'],exclusive=True)
+            'retirement':retirement,'expectedTracerAbort':True},spec['totalDeadline'],exclusive=True)
     return record
 
 
