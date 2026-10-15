@@ -4,6 +4,7 @@ open System
 open System.Collections.Generic
 open System.Diagnostics
 open System.IO
+open System.Runtime.ExceptionServices
 open System.Runtime.InteropServices
 open System.Security.Cryptography
 open System.Text
@@ -151,6 +152,16 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
                          Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes clockBinding)
                          result; ready; release; after; nonce; string Environment.ProcessId] do info.ArgumentList.Add argument
         use owner = Process.Start info
+        // Also covers a preparation exception before Run and its finally exist.
+        use ownerLifetime =
+            { new IDisposable with
+                member _.Dispose() =
+                    try
+                        if not owner.HasExited then owner.Kill(true)
+                        if not (owner.WaitForExit(5000)) then
+                            eprintfn "terminal-cut-owner-retirement-incomplete"
+                    with error ->
+                        eprintfn "terminal-cut-owner-retirement-error=%s" (error.GetType().Name) }
         let diagnostic = owner.StandardError.ReadToEndAsync()
         let termination = TaskCompletionSource<bool option>(TaskCreationOptions.RunContinuationsAsynchronously)
         let mutable confirmed = fun () -> 0
@@ -181,6 +192,7 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
             do! owner.WaitForExitAsync()
             termination.TrySetResult(Some true) |> ignore }
         let running = session.Run()
+        let mutable primary: exn option = None
         try
             do! untilFile ready owner
             use before = readJson ready
@@ -245,15 +257,26 @@ module FiniteCustodyTransportTestsTerminalCutCorrelationTests =
                 Assert.Equal(index + 1, slots[index].GetProperty("ordinal").GetInt32())
                 Assert.Equal<byte>(phases[index], Convert.FromHexString(text slots[index] "bytes"))
                 Assert.Equal(sha256(ReadOnlySpan<byte>(phases[index])), text slots[index] "sha256")
-        finally
-            Interlocked.Exchange(&ticks, 300000L) |> ignore
-            child.Abort()
-            termination.TrySetResult(Some true) |> ignore
+        with error -> primary <- Some error
+        let cleanupErrors = ResizeArray<string>()
+        let cleanup name action =
+            try action()
+            with error -> cleanupErrors.Add(name + ":" + error.GetType().Name)
+        cleanup "clock" (fun () -> Interlocked.Exchange(&ticks, 300000L) |> ignore)
+        cleanup "child" child.Abort
+        cleanup "termination" (fun () -> termination.TrySetResult(Some true) |> ignore)
+        cleanup "python" (fun () ->
             if not owner.HasExited then owner.Kill(true)
-            owner.WaitForExit(5000) |> ignore
-            running.WaitAsync(limit).GetAwaiter().GetResult() |> ignore
-            Task.WhenAll(session.RetainedTasks).WaitAsync(limit).GetAwaiter().GetResult()
-            diagnostic.WaitAsync(limit).GetAwaiter().GetResult() |> ignore
-            observedExit.WaitAsync(limit).GetAwaiter().GetResult()
-            if String.IsNullOrWhiteSpace evidence then Directory.Delete(root, true)
+            Assert.True(owner.WaitForExit(5000), "terminal cut owner retirement"))
+        cleanup "session" (fun () -> running.WaitAsync(limit).GetAwaiter().GetResult() |> ignore)
+        cleanup "retained" (fun () -> Task.WhenAll(session.RetainedTasks).WaitAsync(limit).GetAwaiter().GetResult())
+        cleanup "diagnostic" (fun () -> diagnostic.WaitAsync(limit).GetAwaiter().GetResult() |> ignore)
+        cleanup "exit" (fun () -> observedExit.WaitAsync(limit).GetAwaiter().GetResult())
+        if String.IsNullOrWhiteSpace evidence then
+            cleanup "directory" (fun () -> Directory.Delete(root, true))
+        if cleanupErrors.Count > 0 then
+            eprintfn "terminal-cut-cleanup-errors=%s" (String.Join(",", cleanupErrors))
+        match primary with
+        | Some error -> ExceptionDispatchInfo.Capture(error).Throw()
+        | None -> Assert.Empty(cleanupErrors)
     }
