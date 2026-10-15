@@ -65,7 +65,7 @@ module internal FiniteCustodyCallbackBridge =
             | None -> ()
         let startReader () = lock gate (fun () ->
             if reader.IsNone then
-                let work = Task.Run(Func<Task>(fun () -> task {
+                let work = Task.Run(Func<Task>(fun () -> (task {
                     // Reading is retained independently from writes and callbacks.
                     let buffer = Array.zeroCreate<byte> 1
                     try
@@ -81,7 +81,7 @@ module internal FiniteCustodyCallbackBridge =
                                 lock gate (fun () -> waiting |> Option.iter (fun value -> value.TrySetResult() |> ignore))
                     with
                     | Stopped reason -> fail reason |> ignore
-                    | _ -> fail SinkFailure |> ignore } :> Task))
+                    | _ -> fail SinkFailure |> ignore } :> Task)))
                 reader <- Some work
                 tasks.Add work)
         let exchange normal create = task {
