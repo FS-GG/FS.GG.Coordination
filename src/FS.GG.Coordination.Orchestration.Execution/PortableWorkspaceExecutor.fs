@@ -793,6 +793,11 @@ module PortableWorkspaceExecutor =
                         && (previous.FirstFailure |> Option.forall (fun failure -> state.FirstFailure = Some failure))
                         && Set.isSubset previous.Conflicts state.Conflicts
                         && (previous.ChallengeLedger |> List.forall (fun entry -> List.contains entry state.ChallengeLedger))
+                        && (previous.Challenge |> Option.forall (fun challenge ->
+                            state.Challenge = Some challenge
+                            || (state.ChallengeLedger |> List.exists (fun (id, digest, disposition) ->
+                                id = challenge.ChallengeId && digest = challenge.Digest
+                                && (disposition = "consumed" || disposition = "abandoned")))))
                         && (state.EventsBase64 |> List.truncate previous.EventsBase64.Length) = previous.EventsBase64
                         && (state.ResponsesBase64 |> List.truncate previous.ResponsesBase64.Length) = previous.ResponsesBase64
                         && (previous.Pinned |> Option.forall (fun pinned ->

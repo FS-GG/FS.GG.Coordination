@@ -632,11 +632,88 @@ type PortableHostExecutorTests_SupplierAdmissionJournal() =
         let abandoned = PortableSupplierAdmission.abandonChallenge (Guid.NewGuid()) read |> SupplierAdmissionFixtures.ok
         journal.Stage(abandoned, Some read.Revision) |> SupplierAdmissionFixtures.ok |> ignore
         let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(abandoned, restored)
+        Assert.Equal(None, restored.Challenge)
+        Assert.Contains((read.Challenge.Value.ChallengeId, read.Challenge.Value.Digest, "abandoned"), restored.ChallengeLedger)
         Assert.Equal("abandoned", restored.ChallengeLedger.Head |> fun (_, _, value) -> value)
         Assert.True(PortableSupplierAdmission.prepareAck restored |> Result.isError)
         Assert.True(PortableSupplierAdmission.reserveHost restored |> Result.isError)
         Assert.Equal(0, fixture.Runner.Runs)
         Assert.Equal(0, fixture.Runner.Cleans)
+
+    [<Theory>]
+    [<InlineData("drop", false)>]
+    [<InlineData("replace", false)>]
+    [<InlineData("mutate", false)>]
+    [<InlineData("wrong-id", false)>]
+    [<InlineData("wrong-digest", false)>]
+    [<InlineData("drop", true)>]
+    [<InlineData("replace", true)>]
+    member _.``pending challenge cannot disappear without its exact ledger entry``(change: string, changeEpoch: bool) =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let challenge =
+            { SupplierAdmissionFixtures.challenge state with
+                ChallengeId = Guid.Parse "11111111-1111-1111-1111-111111111111"
+                BytesBase64 = SupplierAdmissionFixtures.b64 "pending-challenge"
+                Digest = SupplierAdmissionFixtures.domain "challenge" "pending-challenge" }
+        let pending = PortableSupplierAdmission.issueChallenge challenge state |> SupplierAdmissionFixtures.ok
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        journal.Stage(pending, Some state.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let originalBytes = File.ReadAllBytes fixture.Journal
+        let epoch = if changeEpoch then Guid.Parse "22222222-2222-2222-2222-222222222222" else pending.Original.ReceiverEpoch
+        let replacement =
+            { challenge with
+                ChallengeId = Guid.Parse "33333333-3333-3333-3333-333333333333"
+                ReceiverEpoch = epoch
+                BytesBase64 = SupplierAdmissionFixtures.b64 "replacement-challenge"
+                Digest = SupplierAdmissionFixtures.domain "challenge" "replacement-challenge" }
+        let candidate =
+            { pending with
+                Revision = pending.Revision + 1UL
+                Original = { pending.Original with ReceiverEpoch = epoch }
+                Challenge =
+                    match change with
+                    | "replace" -> Some replacement
+                    | "mutate" -> Some { challenge with Purpose = "changed-purpose" }
+                    | _ -> None
+                ChallengeLedger =
+                    match change with
+                    | "wrong-id" -> [ replacement.ChallengeId, challenge.Digest, "consumed" ]
+                    | "wrong-digest" -> [ challenge.ChallengeId, replacement.Digest, "abandoned" ]
+                    | _ -> [] }
+        // Each candidate is individually valid; the persisted predecessor makes the transition invalid.
+        PortableSupplierAdmission.validate candidate |> SupplierAdmissionFixtures.ok |> ignore
+        Assert.True(journal.Stage(candidate, Some pending.Revision) |> Result.isError)
+        Assert.True(File.ReadAllBytes fixture.Journal = originalBytes)
+        let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(pending, restored)
+        Assert.Equal(0, fixture.Runner.Runs)
+        Assert.Equal(0, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Theory>]
+    [<InlineData("unchanged")>]
+    [<InlineData("consumed")>]
+    [<InlineData("abandoned")>]
+    member _.``pending challenge may remain exact or enter the ledger with its exact identity``(disposition: string) =
+        use fixture = new HostExecutorFixture()
+        let state = SupplierAdmissionFixtures.originalFor fixture.Command fixture.Profile.QualifiedImage |> PortableSupplierAdmission.beginIntent |> SupplierAdmissionFixtures.ok
+        let pending = SupplierAdmissionFixtures.pending state
+        let journal = PortableWorkspaceExecutor.SupplierAdmissionJournal(fixture.Policy.Runtime.StateRoot)
+        journal.Stage(state, None) |> SupplierAdmissionFixtures.ok |> ignore
+        journal.Stage(pending, Some state.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let candidate =
+            { pending with
+                Revision = pending.Revision + 1UL
+                Challenge = if disposition = "unchanged" then pending.Challenge else None
+                ChallengeLedger =
+                    if disposition = "unchanged" then pending.ChallengeLedger
+                    else (pending.Challenge.Value.ChallengeId, pending.Challenge.Value.Digest, disposition) :: pending.ChallengeLedger }
+        journal.Stage(candidate, Some pending.Revision) |> SupplierAdmissionFixtures.ok |> ignore
+        let restored, _ = journal.Read fixture.Command |> SupplierAdmissionFixtures.ok
+        Assert.Equal(candidate, restored)
 
     [<Theory>]
     [<InlineData(false)>]
