@@ -50,7 +50,7 @@ module FiniteCustodyTransportTests =
         session.ConfirmWrite request.Length
         let response = reply "bound" request
         for index = 0 to response.Length - 1 do
-            Assert.Equal(index = response.Length - 1, session.Feed(ReadOnlyMemory<byte>(response, index, 1)))
+            Assert.Equal((index = response.Length - 1), session.Feed(ReadOnlyMemory<byte>(response, index, 1)))
         Assert.Equal("bound", session.TakeResponse().Kind)
 
     [<Fact>]
