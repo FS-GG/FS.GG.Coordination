@@ -464,7 +464,7 @@ type SupplierAdmissionBoundaryTests() =
         let fresh = SupplierAdmissionFixtures.accept SupplierUnchanged original
         Assert.Equal(original.Head, fresh.Head)
         Assert.Equal<string list>(original.EventsBase64, fresh.EventsBase64)
-        Assert.NotEqual(List.last original.ResponsesBase64, List.last fresh.ResponsesBase64)
+        Assert.NotEqual<string>(List.last original.ResponsesBase64, List.last fresh.ResponsesBase64)
         Assert.Equal(original.ChallengeLedger.Length + 1, fresh.ChallengeLedger.Length)
         let pending = SupplierAdmissionFixtures.pending fresh
         let altered = { SupplierAdmissionFixtures.observation SupplierUnchanged pending with EventsBase64 = [SupplierAdmissionFixtures.b64 "different-signature"] }
