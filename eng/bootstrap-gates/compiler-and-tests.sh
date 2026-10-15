@@ -11,6 +11,9 @@ fi
 dotnet restore FS.GG.Coordination.sln --locked-mode
 PYTHONDONTWRITEBYTECODE=1 python3 eng/tests/choreo-c2-tlc-retry/test_diagnostics.py DiagnosticControls.test_bootstrap_base_retains_command_cause_before_fixture_scratch_cleanup CommandInterfaceControls
 dotnet build FS.GG.Coordination.sln --configuration Release --no-restore --warnaserror
+host_tests_started_ns="$(date +%s%N)"
+dotnet test tests/FS.GG.Coordination.Orchestration.Execution.Tests/FS.GG.Coordination.Orchestration.Execution.Tests.fsproj --configuration Release --no-build --no-restore --filter FullyQualifiedName~PortableHostAllocationTests --logger "trx;LogFileName=portable-host-allocation.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-portable-host-allocation"
+python eng/validate-test-census.py "$RUNNER_TEMP/compiler-and-tests-portable-host-allocation/portable-host-allocation.trx" "portable-host-allocation" "$host_tests_started_ns"
 dotnet test tests/FS.GG.Coordination.UnitTests/FS.GG.Coordination.UnitTests.fsproj --configuration Release --no-build --no-restore
 process_started_ns="$(date +%s%N)"
 dotnet test tests/FS.GG.Execution.Processes.Tests/FS.GG.Execution.Processes.Tests.fsproj --configuration Release --no-build --no-restore --logger "trx;LogFileName=process-sessions.trx" --results-directory "$RUNNER_TEMP/compiler-and-tests-process-sessions"

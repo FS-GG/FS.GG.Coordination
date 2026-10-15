@@ -1144,7 +1144,8 @@ let ``bootstrap control surface stays typed thin and bounded`` () =
     // Producer restore/test/TRX census adds nine guarded lines to the existing shell budget.
     Assert.InRange(gateLines, 1, 859)
     // Producer invocations add eight distinct lines; the compiler subject guard adds one.
-    Assert.InRange(uniqueGateLines, 1, 640)
+    // Focused host-allocation tests add three: start time, test invocation, and fresh TRX census.
+    Assert.InRange(uniqueGateLines, 1, 643)
     Assert.DoesNotContain("requiredRunFragments", core)
     Assert.DoesNotContain("workflowSha256", core)
     Assert.DoesNotContain("Text.RegularExpressions", core)
