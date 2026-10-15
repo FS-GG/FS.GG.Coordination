@@ -1,0 +1,24 @@
+{
+  "schema": "fsgg.test-case-inventory/1",
+  "cases": [
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback bind owns canonical bytes and roundtrips exact schema",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback fast reply remains provisional until complete write",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback byte fragmented response requires exact identity",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback second response cannot wait for a future request",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback partial write never accepts matching response",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback retain cannot precede validated response",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback validate retain identities are immutable and terminal closes channel",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback forged retained response cannot validate",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback oversized response prefix refuses without body allocation",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback canonical encoding rejects boolean sequence and duplicate keys",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback terminal reserves only its remaining exchanges at exact capacity",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback complete history uses thirteen requests without exceeding aggregate",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback retain rejects replacement snapshot even with identical identity",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback wrong invocation response cannot qualify current pending request",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callable native selector refuses before clock transport or retirement",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback bridge keeps typed deadline cancellation and clock refusal before send",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback response boundary preserves typed stop and reader custody after full write",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.composition preserves typed callback failure before its next supervisor sample",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.hosted callback pair uses actual Python sink with in memory child streams only"
+  ]
+}

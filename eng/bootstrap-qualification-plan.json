@@ -148,11 +148,11 @@
       "timeoutMinutes": 20,
       "entryPoint": "bash eng/bootstrap-gates/compiler-and-tests.sh",
       "fetchDepth": 0,
-      "alwaysUpload": false,
+      "alwaysUpload": true,
       "downloadArtifacts": false,
       "environment": {},
       "uploadName": "compiler-and-tests",
-      "uploadPath": "${{ runner.temp }}/compiler-and-tests/architecture.trx",
+      "uploadPath": "${{ runner.temp }}/compiler-and-tests",
       "needs": []
     },
     {
