@@ -587,7 +587,7 @@ type PortableHostExecutorTests() =
         Assert.Equal(1, fixture.Runner.Cleans)
 
 // New source-journal cases never invoke any process, authenticator executable or host effect.
-type SupplierAdmissionJournalTests() =
+type PortableHostExecutorTests_SupplierAdmissionJournal() =
     [<Fact>]
     member _.``source draft shares existing key and survives restart only as durability unknown``() =
         use fixture = new HostExecutorFixture()

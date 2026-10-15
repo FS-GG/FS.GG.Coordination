@@ -445,7 +445,7 @@ module SupplierAdmissionFixtures =
         PortableSupplierAdmission.accept (verify (observation kind pending) pending) pending |> ok
     let genesis () = initial () |> accept SupplierCreation |> accept SupplierGenesis
 
-type SupplierAdmissionBoundaryTests() =
+type PortableHostAllocationTests_SupplierAdmission() =
     [<Fact>]
     member _.``creation and genesis source transitions preserve independent originals without effects``() =
         let original = SupplierAdmissionFixtures.initial ()
