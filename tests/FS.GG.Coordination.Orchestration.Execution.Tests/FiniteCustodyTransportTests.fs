@@ -396,14 +396,13 @@ module FiniteCustodyTransportTests =
             onWrite bytes
             System.Threading.Tasks.ValueTask.CompletedTask
 
-    [<Fact>]
-    let ``hosted callback pair uses actual Python sink with in memory child streams only`` () = task {
+    let private hostedCallbackPair slot = task {
         // The gate supplies an immutable pinned owner checkout. This fixture has
         // two processes: this test supervisor and a callback-only Python owner.
         // No authentication child, FD provisioner or native custody is exercised.
-        let source = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
+        let source = Environment.GetEnvironmentVariable (if slot then "FSGG_UTEL_SLOT_CALLBACK_SOURCE" else "FSGG_UTEL_CALLBACK_SOURCE")
         Assert.True(not (String.IsNullOrWhiteSpace source) && System.IO.Path.IsPathFullyQualified source, "pinned callback source required")
-        use vectors = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes(System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-pair-vectors.json"))))
+        use vectors = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes(System.IO.Path.Combine(source, "tests/release-successor-authentication/" + (if slot then "slot-callback-pair-vectors.json" else "callback-pair-vectors.json")))))
         let exchanges = vectors.RootElement.GetProperty("exchanges").EnumerateArray() |> Seq.toArray
         let trustedBind = PhaseCallbackProtocol.decode (Convert.FromHexString(exchanges[0].GetProperty("request").GetString()))
         let bindingBytes = Convert.FromBase64String trustedBind.Data.Value
@@ -444,7 +443,7 @@ module FiniteCustodyTransportTests =
         info.RedirectStandardError <- true
         info.Environment.Clear()
         info.Environment["PATH"] <- "/usr/bin:/bin"
-        for argument in ["-I"; "-S"; "-B"; System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-fixture.py"); Convert.ToBase64String bindingBytes
+        for argument in ["-I"; "-S"; "-B"; System.IO.Path.Combine(source, "tests/release-successor-authentication/" + (if slot then "slot-sink-callback-entry.py" else "callback-fixture.py")); Convert.ToBase64String bindingBytes
                          Convert.ToBase64String(System.Text.Json.JsonSerializer.SerializeToUtf8Bytes clockBinding); resultPath] do info.ArgumentList.Add argument
         use owner = System.Diagnostics.Process.Start info
         let mutable drain: System.Threading.Tasks.Task<string> option = None
@@ -495,17 +494,47 @@ module FiniteCustodyTransportTests =
             do! System.Threading.Tasks.Task.WhenAll(session.RetainedTasks).WaitAsync(TimeSpan.FromSeconds 5.)
             let! diagnostic = diagnostic
             Assert.Equal(0, owner.ExitCode)
-            Assert.Equal("", diagnostic)
+            Assert.True(String.IsNullOrEmpty diagnostic, "callback fixture emitted diagnostics")
             Assert.True(outcome.ProtocolComplete)
             Assert.Equal(None, outcome.StopReason)
             Assert.Equal(3, acknowledgments)
             Assert.Equal(FS.GG.Execution.Contracts.Settled, session.LocalTasks)
+            if slot then
+                Assert.InRange(System.IO.FileInfo(resultPath).Length, 1L, 32768L)
             use retained = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes resultPath))
-            let projection = retained.RootElement.GetProperty "authenticationSession"
-            let expected = vectors.RootElement.GetProperty "finalReadback"
-            Assert.Equal(text expected "binding", text projection "binding")
-            Assert.Equal(text expected "frameDigest", text projection "frameDigest")
-            Assert.Equal(6, projection.GetProperty("ordinal").GetInt32())
+            if slot then
+                let projection = retained.RootElement
+                let expected = vectors.RootElement.GetProperty "slotEvidence"
+                let keys = projection.EnumerateObject() |> Seq.map _.Name |> Seq.sort |> Seq.toArray
+                Assert.Equal<string>([| "binding"; "inputEofObserved"; "nativeAttempt"; "nativeCampaign"; "operationalReceipt"; "ordinal"; "profile"; "schema"; "slots"; "terminalResponseConfirmed"; "trailingInputChecked" |], keys)
+                Assert.Equal("fsgg.inert-slot-callback-test-evidence/1", text projection "schema")
+                Assert.Equal("inert-slot-callback-pair/1", text projection "profile")
+                Assert.Equal(text expected "binding", text projection "binding")
+                Assert.Equal(6, projection.GetProperty("ordinal").GetInt32())
+                Assert.True(projection.GetProperty("terminalResponseConfirmed").GetBoolean())
+                for name in ["inputEofObserved"; "trailingInputChecked"; "operationalReceipt"] do
+                    Assert.False(projection.GetProperty(name).GetBoolean())
+                for name in ["nativeCampaign"; "nativeAttempt"] do
+                    Assert.Equal(System.Text.Json.JsonValueKind.Null, projection.GetProperty(name).ValueKind)
+                let slots = projection.GetProperty("slots").EnumerateArray() |> Seq.toArray
+                let expectedSlots = expected.GetProperty("slots").EnumerateArray() |> Seq.toArray
+                Assert.Equal(6, slots.Length)
+                Assert.Equal(6, expectedSlots.Length)
+                for index in 0..5 do
+                    let row = slots[index]
+                    Assert.Equal<string>([| "bytes"; "ordinal"; "sha256" |], row.EnumerateObject() |> Seq.map _.Name |> Seq.sort |> Seq.toArray)
+                    Assert.Equal(index + 1, row.GetProperty("ordinal").GetInt32())
+                    Assert.Equal<byte>(phases[index], Convert.FromHexString(text row "bytes"))
+                    Assert.Equal(text expectedSlots[index] "bytes", text row "bytes")
+                    let digest = Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(phases[index])).ToLowerInvariant()
+                    Assert.Equal(digest, text row "sha256")
+                    Assert.Equal(text expectedSlots[index] "sha256", text row "sha256")
+            else
+                let projection = retained.RootElement.GetProperty "authenticationSession"
+                let expected = vectors.RootElement.GetProperty "finalReadback"
+                Assert.Equal(text expected "binding", text projection "binding")
+                Assert.Equal(text expected "frameDigest", text projection "frameDigest")
+                Assert.Equal(6, projection.GetProperty("ordinal").GetInt32())
         finally
             System.Threading.Interlocked.Exchange(&ticks, 300000L) |> ignore
             child.Abort()
@@ -514,5 +543,15 @@ module FiniteCustodyTransportTests =
             running.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore
             System.Threading.Tasks.Task.WhenAll(session.RetainedTasks).WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult()
             diagnostic.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult() |> ignore
+            observedExit.WaitAsync(TimeSpan.FromSeconds 5.).GetAwaiter().GetResult()
             if String.IsNullOrWhiteSpace evidence then System.IO.Directory.Delete(root, true)
     }
+
+
+    [<Fact>]
+    let ``hosted callback pair uses actual Python sink with in memory child streams only`` () =
+        hostedCallbackPair false
+
+    [<Fact>]
+    let ``hosted slot callback pair confirms terminal response and six exact controlled slots without input EOF`` () =
+        hostedCallbackPair true

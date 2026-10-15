@@ -29,6 +29,31 @@ PAIR_ROLES = {
         'src/FS.GG.Coordination.Orchestration.Runner.Client/FiniteCustodyInertAdapter.fs',
         'src/FS.GG.Coordination.Orchestration.Runner.Client/Program.fs'}}
 
+SLOT_PROFILE = 'inert-slot-callback-pair/1'
+SLOT_MANIFEST_PATH = 'tests/release-successor-authentication/slot-callback-pair-manifest.json'
+SLOT_VECTORS_PATH = 'tests/release-successor-authentication/slot-callback-pair-vectors.json'
+SLOT_ENTRY_PATH = 'tests/release-successor-authentication/slot-sink-callback-entry.py'
+SLOT_PAIR_ROLES = {
+    'FS-GG/.github': {
+        'scripts/fsgg_feed.py',
+        'scripts/release_successor_auth_consumer.py',
+        'scripts/release_successor_execution.py',
+        'scripts/release_successor_provider.py',
+        'tests/release-successor-authentication/callback-contract.json',
+        'tests/release-successor-authentication/domain_contract.py',
+        'tests/release-successor-authentication/inert_phase_slot_sink.py',
+        'tests/release-successor-authentication/slot-sink-fixture.py',
+        'tests/release-successor-authentication/wire-contract.json',
+        SLOT_ENTRY_PATH},
+    'FS-GG/FS.GG.Coordination': PAIR_ROLES['FS-GG/FS.GG.Coordination']}
+
+
+def profile_paths(pin):
+    if pin.get('schema') == 'fsgg.utel-callback-source/3':
+        require(pin.get('profile') == SLOT_PROFILE, 'callback pin profile differs')
+        return SLOT_MANIFEST_PATH, SLOT_VECTORS_PATH, SLOT_PAIR_ROLES
+    return MANIFEST_PATH, VECTORS_PATH, PAIR_ROLES
+
 
 def require(condition, reason):
     if not condition:
@@ -40,10 +65,14 @@ def digest(path):
 
 
 def validate_pin(pin):
-    require(set(pin) == {'schema', 'repository', 'revision', 'manifestSha256',
-                         'vectorsSha256', 'bundleDigest', 'qualification'}, 'callback pin fields differ')
-    require(pin['schema'] == 'fsgg.utel-callback-source/2'
+    fields = {'schema', 'repository', 'revision', 'manifestSha256',
+              'vectorsSha256', 'bundleDigest', 'qualification'}
+    if pin.get('schema') == 'fsgg.utel-callback-source/3':
+        fields.add('profile')
+    require(set(pin) == fields, 'callback pin fields differ')
+    require(pin['schema'] in {'fsgg.utel-callback-source/2', 'fsgg.utel-callback-source/3'}
             and pin['repository'] == 'FS-GG/.github', 'callback pin profile differs')
+    profile_paths(pin)
     require(isinstance(pin['revision'], str) and re.fullmatch('[0-9a-f]{40}', pin['revision']),
             'callback pin revision differs')
     for key in ['manifestSha256', 'vectorsSha256', 'bundleDigest']:
@@ -53,8 +82,9 @@ def validate_pin(pin):
 
 def validate_pair(pin, destination):
     validate_pin(pin)
-    manifest_path = destination / MANIFEST_PATH
-    vectors_path = destination / VECTORS_PATH
+    manifest_name, vectors_name, pair_roles = profile_paths(pin)
+    manifest_path = destination / manifest_name
+    vectors_path = destination / vectors_name
     for path, key in [(manifest_path, 'manifestSha256'), (vectors_path, 'vectorsSha256')]:
         require(path.is_file() and not path.is_symlink() and digest(path) == pin[key],
                 'callback pair artifact differs')
@@ -63,7 +93,7 @@ def validate_pair(pin, destination):
             'callback pair manifest schema differs')
     rows = sorted(manifest['files'], key=lambda row: (row['repository'] + '/' + row['path']).encode('ascii'))
     roles = [(row['repository'], row['path']) for row in rows]
-    expected = {(repo, path) for repo, paths in PAIR_ROLES.items() for path in paths}
+    expected = {(repo, path) for repo, paths in pair_roles.items() for path in paths}
     require(rows == manifest['files'] and len(roles) == len(expected) and set(roles) == expected,
             'callback pair role inventory differs')
     for row in rows:
@@ -81,10 +111,11 @@ def validate_pair(pin, destination):
     return manifest
 
 
-def prepare():
-    pin = json.loads((ROOT / 'eng/utel-callback-source.json').read_bytes())
+def prepare(slot=False):
+    pin = json.loads((ROOT / ('eng/utel-slot-callback-source.json' if slot else 'eng/utel-callback-source.json')).read_bytes())
     validate_pin(pin)
-    destination = pathlib.Path(os.environ['FSGG_UTEL_CALLBACK_SOURCE'])
+    require((pin['schema'] == 'fsgg.utel-callback-source/3') == slot, 'callback operation profile differs')
+    destination = pathlib.Path(os.environ['FSGG_UTEL_SLOT_CALLBACK_SOURCE' if slot else 'FSGG_UTEL_CALLBACK_SOURCE'])
     require(destination.is_absolute() and not destination.exists(), 'fresh callback source directory required')
     destination.mkdir(mode=0o700, parents=True)
     def git(*arguments):
@@ -96,12 +127,13 @@ def prepare():
     manifest = validate_pair(pin, destination)
     evidence = pathlib.Path(os.environ['RUNNER_TEMP']) / 'compiler-and-tests'
     evidence.mkdir(parents=True, exist_ok=True)
-    (evidence / 'callback-source.json').write_text(json.dumps({
+    manifest_name, vectors_name, _ = profile_paths(pin)
+    (evidence / ('slot-callback-source.json' if slot else 'callback-source.json')).write_text(json.dumps({
         'repository': pin['repository'], 'revision': pin['revision'],
-        'manifestPath': MANIFEST_PATH, 'manifestSha256': pin['manifestSha256'],
-        'vectorsPath': VECTORS_PATH, 'vectorsSha256': pin['vectorsSha256'],
+        'manifestPath': manifest_name, 'manifestSha256': pin['manifestSha256'],
+        'vectorsPath': vectors_name, 'vectorsSha256': pin['vectorsSha256'],
         'bundleDigest': manifest['bundleDigest'],
-        'profile': 'in-memory managed child phase/control; separate Python callback process',
+        'profile': SLOT_PROFILE if slot else 'in-memory managed child phase/control; separate Python callback process',
         'nativeAuthChild': False, 'credentialEffects': False}, sort_keys=True) + '\n')
     print('Pinned source-only callback fixture prepared')
 
@@ -136,6 +168,8 @@ if __name__ == '__main__':
     try:
         if operation == 'prepare' and len(sys.argv) == 2:
             prepare()
+        elif operation == 'prepare-slot' and len(sys.argv) == 2:
+            prepare(slot=True)
         elif operation == 'census' and len(sys.argv) == 3:
             census(sys.argv[2])
         elif operation == 'retain' and len(sys.argv) == 3:
