@@ -237,7 +237,10 @@ def wire_payload(raw, family, schema):
             encoded_maximum = 35682 if member == 'genesis' else 25015
             if len(nested) > maximum or len(encoded_event) > encoded_maximum:
                 raise WireRefused('nested-family-size')
-            wire_envelope(nested, member, schema)
+            nested_facts = wire_envelope(nested, member, schema)['facts']
+            nested_operation = nested_facts['creation_core']['operation_id'] if member == 'genesis' else nested_facts['operation_id']
+            if nested_operation != value['operation_id'] or nested_facts['reservation_digest'] != value['reservation_digest']:
+                raise WireRefused('response-member-identity')
     timestamp = lambda text: datetime.strptime(text, '%Y-%m-%dT%H:%M:%S.%fZ')
     if family == 'creation-core':
         if not timestamp(value['host_lease_origin_at']) <= timestamp(value['created_at']) <= timestamp(value['stopped_at']) < timestamp(value['host_lease_expires_at']):
