@@ -403,7 +403,7 @@ module FiniteCustodyTransportTests =
         // No authentication child, FD provisioner or native custody is exercised.
         let source = Environment.GetEnvironmentVariable "FSGG_UTEL_CALLBACK_SOURCE"
         Assert.True(not (String.IsNullOrWhiteSpace source) && System.IO.Path.IsPathFullyQualified source, "pinned callback source required")
-        use vectors = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes(System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-vectors.json"))))
+        use vectors = System.Text.Json.JsonDocument.Parse(ReadOnlyMemory<byte>(System.IO.File.ReadAllBytes(System.IO.Path.Combine(source, "tests/release-successor-authentication/callback-pair-vectors.json"))))
         let exchanges = vectors.RootElement.GetProperty("exchanges").EnumerateArray() |> Seq.toArray
         let trustedBind = PhaseCallbackProtocol.decode (Convert.FromHexString(exchanges[0].GetProperty("request").GetString()))
         let bindingBytes = Convert.FromBase64String trustedBind.Data.Value

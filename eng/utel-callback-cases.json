@@ -1,6 +1,10 @@
 {
   "schema": "fsgg.test-case-inventory/1",
   "cases": [
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.managed ownership profile refuses arbitrary endpoints and unknown profiles",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.snapshot payload aliases retained frame while public copies escape independently",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback correlation drops base64 after encoding even when closed before write",
+    "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.blocked validation correlation has no retained base64 and cannot be reused",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback bind owns canonical bytes and roundtrips exact schema",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback fast reply remains provisional until complete write",
     "FS.GG.Coordination.Orchestration.Execution.Tests.FiniteCustodyTransportTests.callback byte fragmented response requires exact identity",
