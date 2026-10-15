@@ -1131,6 +1131,32 @@ module PortableWorkspaceExecutor =
                     | Some _ -> Error "portable-executor-idempotency-conflict"
                     | None -> Ok(operation, digest, None)))
 
+        // Receipt cleanup is a projection of durable lifecycle evidence, independent of workload outcome
+        // and outer retirement. Reconciliation can confirm a lost acknowledgement or expose a conflict.
+        let projectHostReceipt now (state: PortableHostExecutionState) =
+            let reservation = state.Reservation
+            let lifecycle = state.Lifecycle
+            let validObservation (observation: PortableHostObservation<'value>) =
+                observation.Binding = reservation.Binding
+                && not (String.IsNullOrWhiteSpace observation.ReceiptDigest)
+                && observation.CollectedAt >= reservation.AdmittedAt
+                && observation.CollectedAt <= now
+            let cleanupCompleted =
+                match lifecycle.Export, lifecycle.Termination, lifecycle.InnerCleanup with
+                | EvidenceKnown exported, EvidenceKnown termination, EvidenceKnown inner
+                    when lifecycle.ReconciliationConflicts.IsEmpty
+                         && validObservation exported && validObservation termination && validObservation inner
+                         && exported.CollectedAt < min reservation.HostLeaseExpiresAt reservation.Binding.Command.Deadline
+                         && inner.CollectedAt >= exported.CollectedAt
+                         && inner.CollectedAt >= termination.CollectedAt
+                         && Result.isOk (PortableHostAllocation.executionDeadline reservation.AdmittedAt reservation reservation) ->
+                    match reservation.Selection, exported.Value with
+                    | SelectedOutputs expected, DurableManifestReadback actual -> expected = actual
+                    | NoSelectedOutputs, HostCensusConfirmsZeroSelection -> true
+                    | _ -> false
+                | _ -> false
+            { state with Receipt = state.Receipt |> Option.map (fun receipt -> { receipt with CleanupCompleted = cleanupCompleted }) }
+
         let cleanupHost profile command operation digest (cancellationToken: CancellationToken) =
             task {
                 // The same durable lock commits Unknown before control crosses into a destructive port.
@@ -1138,8 +1164,10 @@ module PortableWorkspaceExecutor =
                 let intent =
                     journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun entry ->
                         let decision = PortableHostAllocation.retirement (clock ()) entry.State.Reservation entry.State.Lifecycle
+                        // A lost workload settlement does not erase independent termination/export evidence.
+                        // Receipt absence keeps the workload outcome pending; it cannot veto reducer-authorized cleanup.
                         if not cancellationToken.IsCancellationRequested
-                           && entry.State.Receipt.IsSome && decision.OutputDeletion = HostEligible then
+                           && decision.OutputDeletion = HostEligible then
                             let lifecycle = { entry.State.Lifecycle with InnerCleanup = EvidenceUnknown "inner cleanup intent persisted; completion not observed" }
                             let updated = { entry with State = { entry.State with Lifecycle = lifecycle } }
                             updated, Some updated
@@ -1171,8 +1199,8 @@ module PortableWorkspaceExecutor =
                             journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
                                 let incoming = { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown observed }
                                 let lifecycle = PortableHostAllocation.reconcileLifecycle current.State.Lifecycle incoming
-                                let receipt = current.State.Receipt |> Option.map (fun value -> { value with CleanupCompleted = true })
-                                { current with State = { current.State with Lifecycle = lifecycle; Receipt = receipt } }, ()) |> ignore
+                                let state = projectHostReceipt observedAt { current.State with Lifecycle = lifecycle }
+                                { current with State = state }, ()) |> ignore
                     | _ -> ()
                     match journal.Read(command.WorkspaceScope, command.IdempotencyId) with
                     | Ok(Some(PortableHost entry)) when entry.BindingDigest = digest ->
@@ -1238,7 +1266,8 @@ module PortableWorkspaceExecutor =
                                                 FirstFailure = receipt.Result.Error |> Option.map (fun failure -> failure.Code) }
                                         match journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
                                             let merged = PortableHostAllocation.reconcileLifecycle current.State.Lifecycle lifecycle
-                                            { current with State = { current.State with Lifecycle = merged; Receipt = Some receipt } }, ()) with
+                                            let state = projectHostReceipt observedAt { current.State with Lifecycle = merged; Receipt = Some receipt }
+                                            { current with State = state }, ()) with
                                         | Ok(Some ()) ->
                                             let! outcome = cleanupHost profile command operation digest cancellationToken
                                             match outcome with
@@ -1286,7 +1315,7 @@ module PortableWorkspaceExecutor =
                     | Some _ ->
                         journal.ChangeHost(command.WorkspaceScope, command.IdempotencyId, digest, fun current ->
                             let lifecycle = PortableHostAllocation.reconcileLifecycle current.State.Lifecycle incoming
-                            let state = { current.State with Lifecycle = lifecycle }
+                            let state = projectHostReceipt (clock ()) { current.State with Lifecycle = lifecycle }
                             { current with State = state }, state)
                         |> Result.bind (Option.map Ok >> Option.defaultValue (Error "portable-host-journal-conflict")))
 

@@ -15,6 +15,7 @@ type private HostExecutorRunner() =
     let mutable requests = []
     let mutable cleanupRequests = []
     let mutable cleanup: PortableProcessRequest -> Task<bool> = fun _ -> Task.FromResult true
+    let mutable afterReservation: unit -> unit = ignore
     let mutable observation =
         { ExecutionStarted = true; ExitCode = Some 0; StandardOutput = Array.empty; StandardError = Array.empty
           CancellationRequested = false; TerminationObserved = true; Interrupted = false
@@ -28,11 +29,13 @@ type private HostExecutorRunner() =
     member _.Requests = requests
     member _.CleanupRequests = cleanupRequests
     member _.Cleanup with set value = cleanup <- value
+    member _.AfterReservation with set value = afterReservation <- value
     member _.Observation with get () = observation and set value = observation <- value
     interface IPortableProcessRunner with
         member _.RunAsync(request, _) =
             Interlocked.Increment(&runs) |> ignore
             requests <- request :: requests
+            afterReservation ()
             Task.FromResult observation
         member _.RecoverAsync(_, _) =
             Interlocked.Increment(&recoveries) |> ignore
@@ -373,6 +376,76 @@ type PortableHostExecutorTests() =
         Assert.Equal(1, fixture.Runner.Cleans)
         let observed = { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown(fixture.Observation 21. ()) }
         fixture.Now <- fixture.At 22.
-        restarted.ReconcileHost(fixture.Profile, fixture.Command, observed) |> ok |> ignore
-        recover fixture restarted |> receipt |> ignore
+        let reconciled = restarted.ReconcileHost(fixture.Profile, fixture.Command, observed) |> ok
+        Assert.True(reconciled.Receipt.Value.CleanupCompleted)
+        let duplicate = recover fixture (fixture.Executor()) |> receipt
+        Assert.True(duplicate.CleanupCompleted)
+        Assert.Equal(1, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``lost workload settlement permits independently gated cleanup without replay or invented receipt``() =
+        use fixture = new HostExecutorFixture()
+        let mutable held: FileStream option = None
+        fixture.Runner.AfterReservation <- fun () ->
+            // RunAsync is reached only after the real executor has durably reserved the running record.
+            held <- Some(new FileStream(Path.ChangeExtension(fixture.Journal, ".lock"), FileMode.Open, FileAccess.ReadWrite, FileShare.None))
+        try
+            execute fixture (fixture.Executor()) |> refused
+        finally
+            held |> Option.iter (fun stream -> stream.Dispose())
+        let restarted = fixture.Executor()
+        let before = state fixture restarted
+        Assert.True(before.Receipt.IsNone)
+        match recover fixture restarted with PendingDuplicate id -> Assert.Equal(fixture.Command.CommandId, id) | other -> failwithf "%A" other
+        Assert.Equal(0, fixture.Runner.Cleans)
+        fixture.Now <- fixture.At 20.
+        let evidence =
+            { PortableHostAllocation.emptyLifecycle with
+                Termination = EvidenceKnown(fixture.Observation 10. ())
+                Export = EvidenceKnown(fixture.Observation 11. (DurableManifestReadback fixture.Manifest)) }
+        restarted.ReconcileHost(fixture.Profile, fixture.Command, evidence) |> ok |> ignore
+        for executor in [ restarted; fixture.Executor() ] do
+            match recover fixture executor with PendingDuplicate id -> Assert.Equal(fixture.Command.CommandId, id) | other -> failwithf "%A" other
+        let after = state fixture (fixture.Executor())
+        Assert.True(after.Receipt.IsNone)
+        match after.Lifecycle.WorkloadExit with EvidenceKnown _ -> failwith "workload exit must not be invented" | _ -> ()
+        match after.Lifecycle.InnerCleanup with EvidenceKnown _ -> () | other -> failwithf "%A" other
+        Assert.Equal(1, fixture.Runner.Runs)
+        Assert.Equal(1, fixture.Runner.Cleans)
+        Assert.Equal(0, fixture.Runner.Recoveries)
+
+    [<Fact>]
+    member _.``successful callback cannot project completed cleanup through conflicting lifecycle``() =
+        use fixture = new HostExecutorFixture()
+        let executor = fixture.Executor()
+        execute fixture executor |> receipt |> ignore
+        ready fixture executor
+        fixture.Runner.Cleanup <- fun _ ->
+            let conflict =
+                { PortableHostAllocation.emptyLifecycle with
+                    Export = EvidenceKnown(fixture.Observation 12. (DurableManifestReadback { fixture.Manifest with Digest = "conflicting-manifest" })) }
+            executor.ReconcileHost(fixture.Profile, fixture.Command, conflict) |> ok |> ignore
+            Task.FromResult true
+        let duplicate = recover fixture executor |> receipt
+        Assert.False(duplicate.CleanupCompleted)
+        let restarted = state fixture (fixture.Executor())
+        Assert.False(restarted.Receipt.Value.CleanupCompleted)
+        Assert.Contains("export", restarted.Lifecycle.ReconciliationConflicts)
+        Assert.Equal(1, fixture.Runner.Cleans)
+
+    [<Fact>]
+    member _.``later conflicting inner observation clears receipt projection without changing workload result``() =
+        use fixture = new HostExecutorFixture()
+        let executor = fixture.Executor()
+        let original = execute fixture executor |> receipt
+        ready fixture executor
+        let cleaned = recover fixture executor |> receipt
+        Assert.True(cleaned.CleanupCompleted)
+        fixture.Now <- fixture.At 22.
+        let conflict = { PortableHostAllocation.emptyLifecycle with InnerCleanup = EvidenceKnown(fixture.Observation 21. ()) }
+        let reconciled = executor.ReconcileHost(fixture.Profile, fixture.Command, conflict) |> ok
+        Assert.False(reconciled.Receipt.Value.CleanupCompleted)
+        Assert.Equal(original.Result, reconciled.Receipt.Value.Result)
+        let duplicate = recover fixture (fixture.Executor()) |> receipt
+        Assert.False(duplicate.CleanupCompleted)
         Assert.Equal(1, fixture.Runner.Cleans)
