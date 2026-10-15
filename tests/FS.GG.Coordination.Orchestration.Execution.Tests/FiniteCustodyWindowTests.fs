@@ -130,6 +130,7 @@ module FiniteCustodyWindowTests =
         let mutable retirement = fun () -> Task.FromResult true
         let mutable validation = fun (_: PhaseResultSnapshot) -> Ok ()
         let mutable retirements = 0
+        let mutable reads = 0
         let input = Channel.CreateUnbounded<ReadOnlyMemory<byte>>()
         let writes = ResizeArray<byte array>()
         let termination = TaskCompletionSource<bool option>(TaskCreationOptions.RunContinuationsAsynchronously)
@@ -138,6 +139,7 @@ module FiniteCustodyWindowTests =
         let clock = { new IMonotonicClock with member _.Now() = { Domain=clockDomain; Ticks=Interlocked.Read(&ticks) } }
         let ports =
             { Read = fun () -> task {
+                  Interlocked.Increment(&reads) |> ignore
                   let! available = input.Reader.WaitToReadAsync().AsTask()
                   if available then return! input.Reader.ReadAsync().AsTask()
                   else return ReadOnlyMemory<byte>.Empty }
@@ -171,6 +173,7 @@ module FiniteCustodyWindowTests =
         member _.WorkExpires() = Interlocked.Exchange(&ticks,286000L) |> ignore
         member _.Persist with set callback = persist <- callback
         member _.WriteCount with set callback = writeCount <- callback
+        member _.Reads = Interlocked.CompareExchange(&reads,0,0)
         member _.Writes = lock writes (fun () -> writes.Count)
         member _.Retirements = Interlocked.CompareExchange(&retirements,0,0)
 
@@ -502,3 +505,210 @@ module FiniteCustodyWindowTests =
         let expected = if cause="cancellation" then CallerCancellation else WorkDeadline
         require "successful-retention-retains-actual-stop-source" (outcome.StopReason=Some expected)
         require "stopped-retention-never-takes-ack" (fixture.Writes=1 && session.ConfirmedAckOrdinal=0 && not outcome.ProtocolComplete)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``queued terminal cannot start callbacks after original work or total`` (afterTotal: bool) =
+        use fixture = new Fixture()
+        let readyEntered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let readyPending = TaskCompletionSource<Result<PhaseResultReadback,string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let validated = ResizeArray<string>()
+        let persisted = ResizeArray<string>()
+        fixture.RegisterCleanup(fun () -> readyPending.TrySetResult(Error "fixture-stop") |> ignore)
+        fixture.Validation <- fun snapshot -> lock validated (fun () -> validated.Add snapshot.Kind); Ok ()
+        fixture.Persist <- fun snapshot ->
+            lock persisted (fun () -> persisted.Add snapshot.Kind)
+            if snapshot.Kind="ready" then
+                readyEntered.TrySetResult() |> ignore
+                readyPending.Task
+            else readback snapshot
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Reads=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        wait readyEntered.Task
+        fixture.Send(child 2 "terminal" "{}")
+        // The next read proves terminal ingress was decoded/queued while the
+        // earlier real persistence callback was still blocked and work was live.
+        waitUntil (fun () -> fixture.Reads=3) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.WorkExpires()
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        if afterTotal then
+            fixture.Expire()
+            wait running |> ignore
+        let readySnapshot = session.Accepted |> List.exactlyOne
+        readyPending.TrySetResult(Ok { Binding=readySnapshot.Binding; Ordinal=readySnapshot.Ordinal; FrameDigest=readySnapshot.Digest }) |> ignore
+        fixture.Eof()
+        waitUntil (fun () -> session.RetainedTasks |> Array.forall _.IsCompleted) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Expire()
+        let outcome = wait running |> accepted
+        require "queued-terminal-starts-no-new-validator" (lock validated (fun () -> List.ofSeq validated=["ready"]))
+        require "queued-terminal-starts-no-new-persistence" (lock persisted (fun () -> List.ofSeq persisted=["ready"]))
+        require "late-ready-settlement-never-restores-admission" (session.Accepted.Length=1 && fixture.Writes=1 && session.ConfirmedAckOrdinal=0)
+        require "queued-terminal-preserves-original-work-cause" (outcome.StopReason=Some WorkDeadline && not outcome.ProtocolComplete)
+
+    [<Fact>]
+    let ``pre ACK terminal may retain failure evidence before work expiry`` () =
+        use fixture = new Fixture()
+        let readyEntered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let readyPending = TaskCompletionSource<Result<PhaseResultReadback,string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let terminalRetained = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        fixture.RegisterCleanup(fun () -> readyPending.TrySetResult(Error "fixture-stop") |> ignore)
+        fixture.Persist <- fun snapshot ->
+            if snapshot.Kind="ready" then
+                readyEntered.TrySetResult() |> ignore
+                readyPending.Task
+            else
+                terminalRetained.TrySetResult() |> ignore
+                readback snapshot
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Reads=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        wait readyEntered.Task
+        fixture.Send(child 2 "terminal" "{}")
+        waitUntil (fun () -> fixture.Reads=3) |> fun work -> work.GetAwaiter().GetResult()
+        let readySnapshot = session.Accepted |> List.exactlyOne
+        readyPending.TrySetResult(Ok { Binding=readySnapshot.Binding; Ordinal=readySnapshot.Ordinal; FrameDigest=readySnapshot.Digest }) |> ignore
+        wait terminalRetained.Task
+        fixture.Eof(); fixture.Terminate()
+        let outcome = wait running |> accepted
+        require "in-time-failure-terminal-is-retained" (session.Accepted.Length=2 && session.Accepted[1].Kind="terminal")
+        require "failure-terminal-does-not-revive-pending-ACK" (fixture.Writes=1 && session.ConfirmedAckOrdinal=0 && not outcome.ProtocolComplete)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``late read observes bytes without decoding after work or total`` (afterTotal: bool) =
+        use fixture = new Fixture()
+        let mutable validations = 0
+        let mutable persistences = 0
+        fixture.Validation <- fun _ -> Interlocked.Increment(&validations) |> ignore; Ok ()
+        fixture.Persist <- fun snapshot -> Interlocked.Increment(&persistences) |> ignore; readback snapshot
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Reads=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.WorkExpires()
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        if afterTotal then
+            fixture.Expire()
+            wait running |> ignore
+        let lateFrame = child 1 "ready" ("{\"binding\":"+bindingText+"}")
+        fixture.Send lateFrame
+        waitUntil (fun () -> session.UnadmittedIngressBytes=int64 lateFrame.Length) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Eof(); fixture.Expire()
+        let outcome = wait running |> accepted
+        waitUntil (fun () -> session.LocalTasks=Settled) |> fun work -> work.GetAwaiter().GetResult()
+        require "late-transport-observation-is-not-a-new-phase" (session.Accepted.IsEmpty && session.RetentionTasks.IsEmpty && validations=0 && persistences=0)
+        require "late-read-cannot-open-an-ACK" (fixture.Writes=1 && outcome.StopReason=Some WorkDeadline && not outcome.ProtocolComplete)
+
+    [<Theory>]
+    [<InlineData(false)>]
+    [<InlineData(true)>]
+    let ``terminal validation settling after cutoff cannot begin persistence`` (afterTotal: bool) =
+        use fixture = new Fixture()
+        let entered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let release = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let mutable terminalPersistences = 0
+        fixture.RegisterCleanup(fun () -> release.TrySetResult() |> ignore)
+        fixture.Validation <- fun snapshot ->
+            if snapshot.Kind="terminal" then
+                entered.TrySetResult() |> ignore
+                release.Task.GetAwaiter().GetResult()
+            Ok ()
+        fixture.Persist <- fun snapshot ->
+            if snapshot.Kind="terminal" then Interlocked.Increment(&terminalPersistences) |> ignore
+            readback snapshot
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Reads=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        waitUntil (fun () -> session.ConfirmedAckOrdinal=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 2 "terminal" "{}")
+        wait entered.Task
+        fixture.WorkExpires()
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        if afterTotal then
+            fixture.Expire()
+            wait running |> ignore
+        release.TrySetResult() |> ignore
+        fixture.Eof()
+        waitUntil (fun () -> session.RetainedTasks |> Array.forall _.IsCompleted) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Expire()
+        let outcome = wait running |> accepted
+        require "late-terminal-validation-gets-no-successor" (terminalPersistences=0 && session.Accepted.Length=1 && fixture.Writes=2)
+        require "late-terminal-validation-keeps-first-cause" (outcome.StopReason=Some WorkDeadline && not outcome.ProtocolComplete)
+
+    [<Fact>]
+    let ``terminal persistence already in flight stays owned through late settlement`` () =
+        use fixture = new Fixture()
+        let entered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let pending = TaskCompletionSource<Result<PhaseResultReadback,string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let mutable terminalPersistences = 0
+        fixture.RegisterCleanup(fun () -> pending.TrySetResult(Error "fixture-stop") |> ignore)
+        fixture.Persist <- fun snapshot ->
+            if snapshot.Kind="terminal" then
+                Interlocked.Increment(&terminalPersistences) |> ignore
+                entered.TrySetResult() |> ignore
+                pending.Task
+            else readback snapshot
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Reads=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        waitUntil (fun () -> session.ConfirmedAckOrdinal=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 2 "terminal" "{}")
+        wait entered.Task
+        fixture.WorkExpires()
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Expire()
+        let outcome = wait running |> accepted
+        require "already-started-terminal-writer-is-retained" (session.LocalTasks=Outstanding && terminalPersistences=1)
+        let terminal = session.Accepted[1]
+        pending.TrySetResult(Ok { Binding=terminal.Binding; Ordinal=terminal.Ordinal; FrameDigest=terminal.Digest }) |> ignore
+        fixture.Eof()
+        waitUntil (fun () -> session.LocalTasks=Settled) |> fun work -> work.GetAwaiter().GetResult()
+        require "late-settlement-neither-repeats-nor-ACKs" (terminalPersistences=1 && fixture.Writes=2 && session.ConfirmedAckOrdinal=1)
+        require "late-terminal-writer-does-not-qualify" (outcome.StopReason=Some WorkDeadline && not outcome.ProtocolComplete)
+
+    [<Theory>]
+    [<InlineData("failed-readback")>]
+    [<InlineData("partial-ACK")>]
+    let ``queued terminal cannot reopen failed local callback or channel`` (failure: string) =
+        use fixture = new Fixture()
+        let readyEntered = TaskCompletionSource<unit>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let readyPending = TaskCompletionSource<Result<PhaseResultReadback,string>>(TaskCreationOptions.RunContinuationsAsynchronously)
+        let validated = ResizeArray<string>()
+        let persisted = ResizeArray<string>()
+        fixture.RegisterCleanup(fun () -> readyPending.TrySetResult(Error "fixture-stop") |> ignore)
+        fixture.Validation <- fun snapshot -> lock validated (fun () -> validated.Add snapshot.Kind); Ok ()
+        fixture.Persist <- fun snapshot ->
+            lock persisted (fun () -> persisted.Add snapshot.Kind)
+            if snapshot.Kind="ready" && failure="failed-readback" then
+                readyEntered.TrySetResult() |> ignore
+                readyPending.Task
+            else readback snapshot
+        fixture.WriteCount <- fun bytes ->
+            if fixture.Writes=2 && failure="partial-ACK" then
+                // Queue terminal while this actual ACK callback is in flight;
+                // its subsequently partial result must close new callback entry.
+                fixture.Send(child 2 "terminal" "{}")
+                waitUntil (fun () -> fixture.Reads=3) |> fun work -> work.GetAwaiter().GetResult()
+                bytes.Length-1
+            else bytes.Length
+        let session = fixture.Prepare(Admission(),descriptor,descriptor) |> accepted
+        let running = fixture.Run session
+        waitUntil (fun () -> fixture.Reads=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Send(child 1 "ready" ("{\"binding\":"+bindingText+"}"))
+        if failure="failed-readback" then
+            wait readyEntered.Task
+            fixture.Send(child 2 "terminal" "{}")
+            waitUntil (fun () -> fixture.Reads=3) |> fun work -> work.GetAwaiter().GetResult()
+            readyPending.TrySetResult(Error "inert-uncertain-readback") |> ignore
+        waitUntil (fun () -> fixture.Retirements=1) |> fun work -> work.GetAwaiter().GetResult()
+        fixture.Eof(); fixture.Terminate()
+        let outcome = wait running |> accepted
+        require "failed-local-operation-closes-terminal-validator" (lock validated (fun () -> List.ofSeq validated=["ready"]))
+        require "failed-local-operation-closes-terminal-sink" (lock persisted (fun () -> List.ofSeq persisted=["ready"]))
+        require "queued-terminal-never-restores-failed-local-session" (session.Accepted.Length=1 && session.ConfirmedAckOrdinal=0 && outcome.StopReason=Some SinkFailure && not outcome.ProtocolComplete)

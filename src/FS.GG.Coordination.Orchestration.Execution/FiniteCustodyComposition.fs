@@ -158,13 +158,16 @@ module internal FiniteCustodyComposition =
         let mutable started = false
         let mutable inputComplete = false
         let mutable confirmedAckOrdinal = 0
+        let mutable unadmittedIngressBytes = 0L
         let mutable stopReason = None
         let mutable supervisionFinished = false
         let mutable lastTick = (window |> FiniteCustodyWindow.originalBudget |> Budget.describe).StartedAt
         let mutable retirement: Task<bool> option = None
         let queue = Channel.CreateBounded<PhaseResultSnapshot>(BoundedChannelOptions(6, SingleWriter = true, SingleReader = true))
+        let recordStop reason = lock gate (fun () ->
+            if stopReason.IsNone then stopReason <- Some reason)
         let requestStop reason = lock gate (fun () ->
-            if stopReason.IsNone then stopReason <- Some reason
+            recordStop reason
             refusal <- true)
         let refuse () = requestStop SinkFailure
         let launch (work: unit -> Task) =
@@ -195,6 +198,19 @@ module internal FiniteCustodyComposition =
             | Ok _ when requireRunning && ports.Termination.IsCompleted -> requestStop OwnerLost; None
             | Ok _ when lock gate (fun () -> refusal) -> None
             | Ok(now, _) -> Some now
+        let callbackCheckpoint (snapshot: PhaseResultSnapshot) =
+            if snapshot.Kind = "terminal" then
+                // Failure evidence may survive an invalidated child ACK, but it
+                // receives no exception from the original work cutoff or cancellation.
+                match sample () with
+                | Error _ -> requestStop OwnerLost; None
+                | Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
+                | Ok(_, view) when view.WorkExpired -> requestStop WorkDeadline; None
+                | Ok _ when lock gate (fun () -> refusal) -> None
+                | Ok(now, _) -> Some now
+            else
+                let normalWork = snapshot.Kind = "ready" || snapshot.Kind = "issuance-possible"
+                checkpoint normalWork false
         let admitted () = checkpoint true true |> Option.isSome
         let terminated () =
             ports.Termination.IsCompletedSuccessfully && ports.Termination.Result = Some true
@@ -202,11 +218,20 @@ module internal FiniteCustodyComposition =
             lock gate (fun () ->
                 if starting > 0 || (tasks |> Seq.exists (fun task -> not task.IsCompleted))
                    || protocol.LocalTasks <> Settled then Outstanding else Settled)
-        let write (bytes: ReadOnlyMemory<byte>) = task {
-            // A thrown/partial write remains possibly delivered in the real reducer.
-            let! count = ports.Write bytes
-            if count <> bytes.Length then refuse (); return false
-            else return true }
+        let write normalWork (bytes: ReadOnlyMemory<byte>) = task {
+            if checkpoint normalWork false |> Option.isNone then return false
+            else
+                // A thrown/partial write remains possibly delivered in the real reducer.
+                let! count = ports.Write bytes
+                if count <> bytes.Length then refuse (); return false
+                else return true }
+        let persist (snapshot: PhaseResultSnapshot) =
+            // BeginRetention schedules this delegate on its retained task. Check
+            // at actual port entry, not only before task scheduling: total reserve
+            // settles existing work and never grants a new persistence operation.
+            match callbackCheckpoint snapshot with
+            | None -> Task.FromResult(Error "finite-composition-callback-stopped")
+            | Some _ -> ports.PersistAndReadback snapshot
         let parse () = task {
             try
                 let mutable reading = true
@@ -216,21 +241,17 @@ module internal FiniteCustodyComposition =
                     else
                         let mutable snapshot = Unchecked.defaultof<PhaseResultSnapshot>
                         while queue.Reader.TryRead(&snapshot) do
-                            let mayReduce () =
-                                if snapshot.Kind = "terminal" then true
-                                elif token.IsCancellationRequested then requestStop CallerCancellation; false
-                                elif lock gate (fun () -> refusal) then false
-                                else
-                                    match sample () with
-                                    | Error _ -> requestStop OwnerLost; false
-                                    | Ok(_, view) when view.WorkExpired -> requestStop WorkDeadline; false
-                                    | _ -> true
+                            let mayReduce () = callbackCheckpoint snapshot |> Option.isSome
                             let validate value =
-                                let result = ports.Validate value
-                                if Result.isError result then refuse ()
-                                // A blocked validator returning later must not restore
-                                // admission or start a new persistence callback.
-                                if mayReduce () then result else Error "finite-composition-stopped"
+                                // The domain callback itself must enter within the
+                                // applicable original cutoff, even if decoding was earlier.
+                                if not (mayReduce ()) then Error "finite-composition-stopped"
+                                else
+                                    let result = ports.Validate value
+                                    if Result.isError result then refuse ()
+                                    // Late validation settles its own obligation, but
+                                    // cannot authorize reduction or another callback.
+                                    if mayReduce () then result else Error "finite-composition-stopped"
                             let accepted =
                                 if mayReduce () then protocol.AcceptChild(snapshot, validate)
                                 else Error "finite-composition-stopped"
@@ -239,15 +260,15 @@ module internal FiniteCustodyComposition =
                             | Ok false ->
                                 // Non-ACK phases, including terminal failure, still
                                 // pass through the real monotone result sink.
-                                let! retained = ports.PersistAndReadback snapshot
+                                let! retained = persist snapshot
                                 match retained with
                                 | Ok receipt when receipt.Binding = snapshot.Binding
                                                   && receipt.Ordinal = snapshot.Ordinal
                                                   && receipt.FrameDigest = snapshot.Digest ->
-                                    checkpoint false false |> ignore
+                                    callbackCheckpoint snapshot |> ignore
                                 | _ -> refuse ()
                             | Ok true ->
-                                match protocol.BeginRetention(snapshot, ports.PersistAndReadback) with
+                                match protocol.BeginRetention(snapshot, persist) with
                                 | Error _ -> refuse ()
                                 | Ok retained ->
                                     let! readback = retained.Completion
@@ -268,15 +289,15 @@ module internal FiniteCustodyComposition =
                                         | None -> ()
                                         | Some now ->
                                             match protocol.TakeAck(now, window, retained) with
-                                            | Error _ -> refuse ()
+                                            | Error _ -> recordStop SinkFailure
                                             | Ok bytes ->
-                                                let! complete = write bytes
+                                                let! complete = write normalWork bytes
                                                 if complete then
                                                     match checkpoint normalWork false with
                                                     | None -> ()
                                                     | Some sent ->
                                                         match protocol.ConfirmAckSent(sent, window, snapshot) with
-                                                        | Error _ -> refuse ()
+                                                        | Error _ -> recordStop SinkFailure
                                                         | Ok () -> lock gate (fun () -> confirmedAckOrdinal <- snapshot.Ordinal)
                 if protocol.FinishInput() |> Result.isError then refuse ()
                 else lock gate (fun () -> inputComplete <- true)
@@ -285,22 +306,35 @@ module internal FiniteCustodyComposition =
             try
                 let mutable reading = true
                 while reading do
-                    let! bytes = ports.Read()
-                    checkpoint false false |> ignore
-                    if bytes.IsEmpty then reading <- false
+                    if checkpoint false false |> Option.isNone then reading <- false
                     else
-                        // Feed at ingress, independently of blocked validation, retention
-                        // or ACK writes. This preserves the protocol's pre-ACK barrier.
-                        match protocol.Feed bytes with
-                        | Error _ -> refuse (); reading <- false
-                        | Ok snapshots ->
-                            for snapshot in snapshots do
-                                if not (queue.Writer.TryWrite snapshot) then refuse (); reading <- false
+                        let! bytes = ports.Read()
+                        match checkpoint false false with
+                        | None ->
+                            // A read already in flight can settle late. Retain its
+                            // actual byte observation without decoding/admitting a frame.
+                            lock gate (fun () ->
+                                let count = int64 bytes.Length
+                                unadmittedIngressBytes <-
+                                    if count > Int64.MaxValue - unadmittedIngressBytes then Int64.MaxValue
+                                    else unadmittedIngressBytes + count)
+                            reading <- false
+                        | Some _ when bytes.IsEmpty -> reading <- false
+                        | Some _ ->
+                            // Feed at ingress independently of blocked callbacks;
+                            // preserve the protocol's pre-ACK barrier while work is live.
+                            match protocol.Feed bytes with
+                            | Error _ -> refuse (); reading <- false
+                            | Ok snapshots ->
+                                for snapshot in snapshots do
+                                    if not (queue.Writer.TryWrite snapshot) then refuse (); reading <- false
             with _ -> refuse ()
             queue.Writer.TryComplete() |> ignore }
 
         member _.Accepted = protocol.Accepted
         member _.RetentionTasks = protocol.RetentionTasks
+        /// Bytes returned by an already-started read after admission closed; not decoded.
+        member _.UnadmittedIngressBytes = lock gate (fun () -> unadmittedIngressBytes)
         /// Inert harness observation; it grants no native channel authority.
         member _.ConfirmedAckOrdinal = lock gate (fun () -> confirmedAckOrdinal)
         member _.LocalTasks =
@@ -335,7 +369,7 @@ module internal FiniteCustodyComposition =
                         try
                             // Scheduling never renews a grant checked by the caller.
                             if admitted () then
-                                let! complete = write startFrame
+                                let! complete = write true startFrame
                                 if complete && admitted () then
                                     launch (fun () -> parse () :> Task) |> ignore
                                     launch (fun () -> read () :> Task) |> ignore
@@ -355,7 +389,11 @@ module internal FiniteCustodyComposition =
                         | _ -> None
                     match reason with
                     | Some value ->
-                        requestStop value
+                        // Protocol invalidation (notably an in-time pre-ACK
+                        // terminal) does not itself imply a failed local callback.
+                        // The separate local refusal fence remains sticky.
+                        if value = SinkFailure && protocol.Refused then recordStop value
+                        else requestStop value
                         if retirement.IsNone && not (terminated ()) then
                             let completion = TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously)
                             retirement <- Some completion.Task

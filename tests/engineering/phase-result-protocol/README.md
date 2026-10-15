@@ -29,9 +29,15 @@ next phase. The decoder records barriers at wire ingress, including partial
 prefixes, so later processing cannot authorize bytes received before that ACK.
 Ungated token-owned/revocation and revoked/terminal pairs may share a read.
 The owning execution session must retire on `Refused` within its original budget.
-A validated terminal arriving before a pending ACK is retained as failure evidence;
-it invalidates that ACK and leaves any writer task accounted for. A late callback
-cannot revive the ACK or session qualification. The consumer writer also owns
+A validated terminal arriving before a pending ACK may be retained as failure
+evidence while the original work budget remains; it invalidates that ACK and
+leaves any writer task accounted for. A failed or uncertain local callback or
+channel write closes further callbacks, including terminal failure retention.
+Every new validation, persistence and ACK
+write must enter before its original applicable work cutoff. The total reserve
+settles already-started tasks and permits retirement and observation only. Bytes
+returned by an already-started read after admission closes are counted without
+decoding. A late callback cannot revive the ACK or session qualification. The consumer writer also owns
 monotone replacement so an older callback cannot erase a newer retained snapshot.
 
 The finite production profile remains unavailable. These checks establish source
