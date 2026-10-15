@@ -307,14 +307,18 @@ manifest are bound in the publisher source. Root's subsequent canonical
 installed DIAG qualification passed against this original candidate; genuine P4
 qualification/grant and publication remain pending.
 
-The next coherent source change combines the fresh-tag qualification helper
-with the exact-candidate 0.2.1 publisher bindings. The helper selects
-`portable-p4-python-private-inputs-20261006-diag-source1` and rejects the consumed
-prior generation. Its eventual protected merge supplies helper H and publisher
-Q; neither is known before protected delivery. Producer P and protected merge M
-remain the canonical `bc55` source and tree, and the original package/image
-bytes remain unchanged. Updating H/Q does not require repacking P or introducing
-a source self-reference.
+At protected source snapshot `38da024a8dbc7f65a091fcc9a4a81a383f327e63`, the
+[private-input helper](../../eng/portable-p4-input-manifest.fsx) selects prospective
+`portable-p4-python-private-inputs-20261006-diag-source3`;
+[its source controls](../../tests/portable-workspace/trusted-provider/test_private_input_manifest.fsx)
+reject the earlier source1/source2 and consumed generations. This supersedes the
+older source1 preparation description. The helper and
+[exact-candidate publisher](../../.github/workflows/callable-cli-release-publish.yml)
+are source-delivered in that snapshot; their presence is not native qualification
+or dispatch authority. Producer P and protected merge M remain canonical `bc55`
+source and tree, and the original package/image bytes remain unchanged. Updating
+helper H or publisher Q does not repack P or introduce a source self-reference;
+any later source change must bind its exact immutable helper/publisher revision.
 
 This source-order amendment permits the dormant publisher source to land before
 P4 acceptance. Source delivery does not authorize dispatch. Root may select
@@ -344,6 +348,73 @@ installed evidence SHA-256 is
 This qualifies canonical installed diagnostics, without authorizing provider
 execution, publication or adoption. P4 and its fresh receiver-bound grant remain
 open, and the original private-provider failure remains unchanged.
+
+## P4 route decision and remaining owners — 2026-10-15
+
+**Select the existing installed-candidate source route for preparation; native
+execution remains unavailable until its enforcing outer profile and input custody
+are accepted.** The Coordination P4 release/diagnostic maintainer owns this route
+and its acceptance decision. The programme integrator coordinates suppliers; no
+source decision substitutes for their operation-specific admission.
+
+The selected source entrypoint is
+[`eng/qualify-installed-python-hello.py`](../../eng/qualify-installed-python-hello.py)
+at snapshot `38da024a8dbc7f65a091fcc9a4a81a383f327e63`. Its `prepare` phase verifies
+the exact package/image and records an unauthorized candidate. Its `invoke` phase
+uses the installed package's `portable-workspace execute` or `recover` production
+route, with the fixed administrator-owned grant and exact enrolled operation.
+[Program](../../src/FS.GG.Coordination.Cli/Program.fs) and the
+[trusted enrollment source](../../src/FS.GG.Coordination.Cli/PortableWorkspaceTrustedEnrollmentSource.fs)
+show that binding; caller JSON or a successful preparation supplies no enrollment.
+This selects source to qualify, not a currently admitted command to launch.
+
+Use the canonical **0.2.1** candidate above: producer `bc55a3d1…`, preparation
+`37403093489/1`, artifact `11386361825`, exact original package/image custody and
+fixed semantic image pair. The workflow's `stage-inputs` and `candidate-facts`
+phases prepare unauthorized public joins; they do not produce private facts,
+write a grant or qualify installed execution. Retain their selected SDD2.1.0 /
+Workspace.Template0.18.0 receiver identities until an explicit compatible owner
+selection changes them. The prospective source3 helper input generation is not
+proof of a release, current private facts or a usable grant.
+
+| Supplying owner | Required next evidence or decision | Remaining gate |
+|---|---|---|
+| Coordination P4 release/diagnostic maintainer | Freeze the exact helper, installed qualifier, canonical package/image and receiver joins; state the selected execution owner and first bounded source milestone. | Preserve canonical installed DIAG acceptance and every earlier failed/consumed attempt; no P4 closure from source selection. |
+| Host execution/provisioning owner | Supply one currently supported enforcing outer profile with immutable total-time, resource, output and cleanup bounds; bind process custody, original reservations and independent termination/cleanup readback to the actual entrypoint. | The helper's internal timeout/process-group cleanup alone does not prove an enforcing outer profile. No current joined outer-profile proof is established here; affected execution stays held. |
+| Administrator provider-enrollment/grant owner | Verify current runtime/account/image capabilities and the exact installed CLI/receiver closure; supply the fixed-path, root-owned receiver-bound enrollment/grant through its existing protected route. | No grant from public candidate facts, synthetic declarations or historical permissions; unresolved capability/custody remains unknown. |
+| Private-facts custody owner | Retain exact host/facts/receiver/operation evidence and original cleanup uncertainty in restricted custody; return only approved hashes and conclusions. | No private raw logs, account details, credential paths or provider facts enter this public plan. |
+| Coordination publisher and credential custodian | Reconcile the original candidate and immutable publisher inputs, then independently admit existing credential exchanges and ordered publication/readback. | Both canonical installed DIAG and genuine receiver-bound P4 installed qualification/grant precede publication; source delivery and a dormant operation name supply neither. |
+| SDD/Templates receiver owners | Qualify the selected public source/receiver joins, then observe fresh public installed opt-in creation after coherent publication. | Published bytes are distinct from installation, activation and retaining upgrades; P5 retains its own scope. |
+
+Proceed in bounded stages: reconcile exact public inputs and helper source; obtain
+fresh private facts and a supported outer profile; obtain separate receiver-bound
+grant/admission; qualify the real installed runtime-only journey with complete
+successful behavior and appropriate refusal/recovery controls; independently
+verify termination and cleanup; then admit coherent publication/readback and fresh
+public opt-in adoption. A failed, partial or cleanup-unknown run qualifies no
+candidate. This sequence does not renew an old attempt or permit replay of an
+unknown effect. Retired or unsupported dispatch routes remain unavailable.
+
+The separate CLI **0.3.0 synthetic DIAG** journey needs its own admitted outer
+profile, exact installed bytes, custody and cleanup evidence. It does not inherit
+0.2.1 qualification or replace this receiver-bound P4 gate. The general Python
+provider pack in Templates#442 is separate work.
+
+**Current blocker and reopening condition:** a complete current outer-profile /
+private-facts / enrollment / installed-receiver join is not established by the
+public evidence above. The named supplying owners must return the missing exact
+proof and an executable, admitted scope before the P4 execution owner can choose
+a native attempt. Until then, retain the canonical installed diagnostic result
+and continue independent source/documentation work; no execution date is promised.
+
+The public-safe route-selection draft
+`v2-diag-p4-current-qualifier-route-selection-20261015` validated with `writes=0`,
+but typed `intake apply` failed at the production-v1 admission read and created
+no issue or board record. That original refusal remains evidence. This owner-plan
+decision uses the already selected roadmap's routine source route; it is not a
+formal filing, an intake fallback or permission to create an issue through raw
+GitHub calls. No source change here activates legacy v1 admission or authorizes
+credentials, dispatch, provider enrollment, installation or publication.
 
 ## C2 source qualification
 
