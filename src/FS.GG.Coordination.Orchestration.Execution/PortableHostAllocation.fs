@@ -1,6 +1,7 @@
 namespace FS.GG.Coordination.Orchestration.Execution
 
 open System
+open System.Security.Cryptography
 
 /// Original identities supplied by a provenance-checking adapter, never inferred from a path.
 type PortableHostBinding =
@@ -70,6 +71,37 @@ type PortableHostRetirementDecision =
         OuterCleanup: PortableHostDecision
         ReservationRelease: PortableEvidence<unit>
     }
+
+/// Independently pinned supplier identity. A status document cannot establish these pins.
+type PortableHostSupplierIdentity =
+    { Issuer: string
+      ContainerId: string
+      AllocationDevice: uint64
+      AllocationInode: uint64 }
+
+/// The verifier must authenticate the entire original reservation and lifecycle together.
+/// ReceiptDigest is SHA-256 of the exact authenticated input bytes, not an authentication flag.
+type PortableHostSupplierEvidence =
+    { Identity: PortableHostSupplierIdentity
+      Reservation: PortableHostReservation
+      CollectedAt: DateTimeOffset
+      ReceiptDigest: string
+      Lifecycle: PortableHostLifecycle }
+
+/// Trusted host-owner transport port. Implementations must establish issuer/custody independently
+/// before projecting input bytes. Parsing unsealed JSON or accepting a claimed issuer is insufficient.
+/// No production implementation is implied by this interface.
+type IPortableHostSupplierVerifier =
+    abstract Authenticate: byte array -> Result<PortableHostSupplierEvidence, string>
+
+/// Only the ingress validator can construct this value. It conveys evidence, never effect authority.
+type PortableAuthenticatedHostEvidence =
+    private
+    | AuthenticatedHostEvidence of PortableHostSupplierEvidence * DateTimeOffset * TimeSpan
+    member this.Evidence = let (AuthenticatedHostEvidence(value, _, _)) = this in value
+    member this.IsCurrent(now: DateTimeOffset) =
+        let (AuthenticatedHostEvidence(_, verifiedAt, maximumAge)) = this
+        now >= verifiedAt && now - this.Evidence.CollectedAt <= maximumAge
 
 [<RequireQualifiedAccess>]
 module PortableHostAllocation =
@@ -239,3 +271,44 @@ module PortableHostAllocation =
                   conflict "outer-retirement" original.OuterRetirement incoming.OuterRetirement ]
                 |> Set.unionMany
         }
+
+[<RequireQualifiedAccess>]
+module PortableHostSupplierIngress =
+    /// Validate authenticated host readback against independently retained original pins.
+    /// The verifier owns authentication; this function owns identity, freshness and completeness.
+    let authenticate (verifier: IPortableHostSupplierVerifier) (identity: PortableHostSupplierIdentity)
+                     (original: PortableHostReservation) (now: DateTimeOffset) (maximumAge: TimeSpan)
+                     (bytes: byte array) =
+        let refusal = Error "portable-host-supplier-evidence-refused"
+        let present value = not (String.IsNullOrWhiteSpace value)
+        if isNull (box verifier) || isNull bytes || bytes.Length = 0 || bytes.Length > 65536
+           || not (present identity.Issuer && present identity.ContainerId)
+           || identity.AllocationInode = 0UL || maximumAge <= TimeSpan.Zero
+           || maximumAge > TimeSpan.FromMinutes 5. then refusal
+        else
+            try
+                // The verifier cannot change the caller's buffer or race the digest computation.
+                let snapshot = Array.copy bytes
+                let digest = Convert.ToHexString(SHA256.HashData snapshot).ToLowerInvariant()
+                match verifier.Authenticate(Array.copy snapshot) with
+                | Error _ -> refusal
+                | Ok evidence ->
+                    let validObservation (observation: PortableHostObservation<'value>) =
+                        observation.Binding = original.Binding
+                        && present observation.ReceiptDigest
+                        && observation.CollectedAt >= original.AdmittedAt
+                        && observation.CollectedAt <= evidence.CollectedAt
+                    let valid = function
+                        | EvidenceKnown observation -> validObservation observation
+                        | EvidenceMissing _ | EvidenceUnknown _ -> true
+                    let lifecycle = evidence.Lifecycle
+                    if evidence.Identity <> identity || evidence.Reservation <> original
+                       || evidence.ReceiptDigest <> digest
+                       || evidence.CollectedAt < original.AdmittedAt || evidence.CollectedAt > now
+                       || now - evidence.CollectedAt > maximumAge
+                       || not (valid lifecycle.WorkloadExit && valid lifecycle.Termination
+                               && valid lifecycle.InnerCleanup && valid lifecycle.Export && valid lifecycle.OuterRetirement)
+                       || (PortableHostAllocation.executionDeadline original.AdmittedAt original original |> Result.isError) then
+                        refusal
+                    else Ok(AuthenticatedHostEvidence(evidence, now, maximumAge))
+            with _ -> refusal

@@ -1519,3 +1519,44 @@ module PortableWorkspaceExecutor =
                     | Ok(Some _) -> return Refused "portable-executor-idempotency-conflict"
                     | Ok None -> return Refused "portable-reconciliation-unknown-refused"
             }
+
+    /// Concrete host-mode caller for independently authenticated supplier evidence. The underlying
+    /// Executor and journal remain the only execution/recovery path; no supplier effect is invoked.
+    type SupplierExecutor private (policy: PortableExecutorPolicy, runner: IPortableProcessRunner,
+                                   initial: PortableAuthenticatedHostEvidence, clock: unit -> DateTimeOffset) =
+        let original = initial.Evidence
+        let mutable latest = initial
+        let executor = Executor(policy, runner, clock = clock, hostReservation = original.Reservation)
+        let command = original.Reservation.Binding.Command
+
+        static member Create(policy, runner, evidence: PortableAuthenticatedHostEvidence, clock) =
+            if isNull (box evidence) || not (evidence.IsCurrent(clock ())) then
+                Error "portable-host-supplier-evidence-expired"
+            else Ok(SupplierExecutor(policy, runner, evidence, clock))
+
+        member _.ExecuteAsync(authority, profile, cancellationToken) =
+            if not (latest.IsCurrent(clock ())) then
+                Task.FromResult(Refused "portable-host-supplier-evidence-expired")
+            elif latest.Evidence.Lifecycle <> PortableHostAllocation.emptyLifecycle
+                 && (executor.ReadHostState(profile, command) |> Result.isError) then
+                // Existing supplier observations cannot admit a fresh workload after journal loss.
+                Task.FromResult(Refused "portable-host-supplier-original-journal-required")
+            else executor.ExecuteAsync(authority, profile, command, cancellationToken)
+
+        member _.RecoverAsync(profile, cancellationToken) =
+            if not (latest.IsCurrent(clock ())) then
+                Task.FromResult(Refused "portable-host-supplier-evidence-expired")
+            else executor.RecoverAsync(profile, command, cancellationToken)
+
+        member _.ReadHostState(profile) = executor.ReadHostState(profile, command)
+
+        /// Observation only. It cannot start a workload, repeat cleanup or retire the supplier.
+        member _.Reconcile(profile, evidence: PortableAuthenticatedHostEvidence) =
+            if isNull (box evidence) || not (evidence.IsCurrent(clock ())) then
+                Error "portable-host-supplier-evidence-expired"
+            elif evidence.Evidence.Identity <> original.Identity
+                 || evidence.Evidence.Reservation <> original.Reservation then
+                Error "portable-host-supplier-binding-refused"
+            else
+                executor.ReconcileHost(profile, command, evidence.Evidence.Lifecycle)
+                |> Result.map (fun state -> latest <- evidence; state)
