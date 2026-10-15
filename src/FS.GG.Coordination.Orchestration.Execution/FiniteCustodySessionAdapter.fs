@@ -26,6 +26,7 @@ type FiniteCustodyInertResult =
       LocalTasks: TaskState }
 
 module internal FiniteCustodyCallbackBridge =
+    exception Stopped of StopReason
     type Endpoint(clock: IMonotonicClock, window, invocation, binding, channels: FiniteCustodyInertChannels, token: CancellationToken) =
         let protocol = PhaseCallbackProtocol.Session(invocation, binding)
         let gate = obj()
@@ -34,17 +35,34 @@ module internal FiniteCustodyCallbackBridge =
         let mutable waiting: TaskCompletionSource<unit> option = None
         let mutable ended = false
         let mutable lastTick = (window |> FiniteCustodyWindow.originalBudget |> Budget.describe).StartedAt
-        let checkpoint normal = lock gate (fun () ->
-            let now = clock.Now()
-            if token.IsCancellationRequested || now.Ticks < lastTick then invalidOp "phase-callback-stopped"
-            lastTick <- now.Ticks
-            match FiniteCustodyWindow.remaining now window with
-            | Ok view when not view.WorkExpired && (not normal || FiniteCustodyWindow.normalWorkAllowed now window) -> ()
-            | _ -> invalidOp "phase-callback-stopped")
-        let fail () =
+        let mutable firstStop: StopReason option = None
+        let fail reason =
+            let actual = lock gate (fun () ->
+                if firstStop.IsNone then firstStop <- Some reason
+                firstStop.Value)
             protocol.Close()
             lock gate (fun () ->
-                waiting |> Option.iter (fun value -> value.TrySetException(InvalidOperationException("phase-callback-stopped")) |> ignore))
+                waiting |> Option.iter (fun value -> value.TrySetException(Stopped actual) |> ignore))
+            actual
+        let checkpoint normal =
+            let reason = lock gate (fun () ->
+                if firstStop.IsNone then
+                    firstStop <-
+                        try
+                            let now = clock.Now()
+                            if now.Ticks < lastTick then Some OwnerLost
+                            else
+                                lastTick <- now.Ticks
+                                match FiniteCustodyWindow.remaining now window with
+                                | Error _ -> Some OwnerLost
+                                | Ok _ when token.IsCancellationRequested -> Some CallerCancellation
+                                | Ok view when view.WorkExpired || (normal && not (FiniteCustodyWindow.normalWorkAllowed now window)) -> Some WorkDeadline
+                                | Ok _ -> None
+                        with _ -> Some OwnerLost
+                firstStop)
+            match reason with
+            | Some reason -> raise (Stopped(fail reason))
+            | None -> ()
         let startReader () = lock gate (fun () ->
             if reader.IsNone then
                 let work = Task.Run(Func<Task>(fun () -> task {
@@ -58,12 +76,12 @@ module internal FiniteCustodyCallbackBridge =
                                 reading <- false
                                 lock gate (fun () ->
                                     ended <- true
-                                    if not protocol.TerminalRetained then protocol.Close()
-                                    waiting |> Option.iter (fun value ->
-                                        if not value.Task.IsCompleted then value.TrySetException(EndOfStreamException("phase-callback-eof")) |> ignore))
+                                    if not protocol.TerminalRetained then fail OwnerLost |> ignore)
                             elif protocol.Feed(ReadOnlyMemory<byte>(buffer, 0, count)) then
                                 lock gate (fun () -> waiting |> Option.iter (fun value -> value.TrySetResult() |> ignore))
-                    with _ -> fail () } :> Task))
+                    with
+                    | Stopped reason -> fail reason |> ignore
+                    | _ -> fail SinkFailure |> ignore } :> Task))
                 reader <- Some work
                 tasks.Add work)
         let exchange normal create = task {
@@ -87,8 +105,9 @@ module internal FiniteCustodyCallbackBridge =
                 let response = protocol.TakeResponse()
                 lock gate (fun () -> waiting <- None)
                 return Ok response
-            with _ ->
-                fail ()
+            with error ->
+                let reason = match error with Stopped reason -> reason | _ -> SinkFailure
+                fail reason |> ignore
                 return Error "phase-callback-refused" }
         member _.Checkpoint(normal) = checkpoint normal
         member _.Bind() = exchange true protocol.Bind
@@ -101,6 +120,7 @@ module internal FiniteCustodyCallbackBridge =
         member _.Tasks = lock gate (fun () -> tasks.ToArray())
         member _.LocalTasks = lock gate (fun () -> if tasks |> Seq.exists (fun work -> not work.IsCompleted) then Outstanding else Settled)
         member _.Refused = protocol.Refused
+        member _.StopReason = lock gate (fun () -> firstStop)
 
 /// Retain this admission owner across source sessions; reconstructing it is not replay authority.
 type FiniteCustodyInertAdmission() =
@@ -164,7 +184,7 @@ type FiniteCustodySessionAdapter private (session: FiniteCustodyComposition.Sess
                               return result }
                           RequestRetirement = channels.RequestRetirement
                           Termination = channels.Termination }
-                    match FiniteCustodyComposition.Session.Prepare(admission.Inner, expected, actual, clock, original, owned, ports, token, channelFailure = (fun () -> bridge.Refused)) with
+                    match FiniteCustodyComposition.Session.Prepare(admission.Inner, expected, actual, clock, original, owned, ports, token, channelStop = (fun () -> bridge.StopReason)) with
                     | Error reason -> Error reason
                     | Ok session -> Ok(FiniteCustodySessionAdapter(session, bridge))
             with _ -> Error "finite-inert-preparation-refused"

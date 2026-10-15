@@ -149,7 +149,7 @@ module internal FiniteCustodyComposition =
                    || not (consumed.Add actual.Identity.InvocationId) then Error "finite-composition-admission-refused"
                 else Ok ())
 
-    type Session private (clock: IMonotonicClock, window, binding, ports: Ports, token: CancellationToken, channelFailure: unit -> bool) =
+    type Session private (clock: IMonotonicClock, window, binding, ports: Ports, token: CancellationToken, channelStop: unit -> StopReason option) =
         let protocol = PhaseResultProtocol.Session binding
         // Construct and bound the codec's real start frame during admission, before
         // any callback. It will be written at most once by the retained writer.
@@ -172,7 +172,7 @@ module internal FiniteCustodyComposition =
         let requestStop reason = lock gate (fun () ->
             recordStop reason
             refusal <- true)
-        let refuse () = requestStop SinkFailure
+        let refuse () = requestStop (defaultArg (channelStop ()) SinkFailure)
         let launch (work: unit -> Task) =
             lock gate (fun () -> starting <- starting + 1)
             try
@@ -192,27 +192,27 @@ module internal FiniteCustodyComposition =
         // Inspect the actual stop source immediately after successful callbacks.
         // The independent supervisor need not win a scheduling race to classify it.
         let checkpoint normalWork requireRunning =
-            match sample () with
-            | Error _ -> requestStop OwnerLost; None
-            | Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
-            | Ok(now, view) when view.WorkExpired || (normalWork && not (FiniteCustodyWindow.normalWorkAllowed now window)) ->
+            match channelStop (), sample () with
+            | Some reason, _ -> requestStop reason; None
+            | None, Error _ -> requestStop OwnerLost; None
+            | None, Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
+            | None, Ok(now, view) when view.WorkExpired || (normalWork && not (FiniteCustodyWindow.normalWorkAllowed now window)) ->
                 requestStop WorkDeadline
                 None
-            | Ok _ when requireRunning && ports.Termination.IsCompleted -> requestStop OwnerLost; None
-            | Ok _ when channelFailure () -> requestStop SinkFailure; None
-            | Ok _ when lock gate (fun () -> refusal) -> None
-            | Ok(now, _) -> Some now
+            | None, Ok _ when requireRunning && ports.Termination.IsCompleted -> requestStop OwnerLost; None
+            | None, Ok _ when lock gate (fun () -> refusal) -> None
+            | None, Ok(now, _) -> Some now
         let callbackCheckpoint (snapshot: PhaseResultSnapshot) =
             if snapshot.Kind = "terminal" then
                 // Failure evidence may survive an invalidated child ACK, but it
                 // receives no exception from the original work cutoff or cancellation.
-                match sample () with
-                | Error _ -> requestStop OwnerLost; None
-                | Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
-                | Ok(_, view) when view.WorkExpired -> requestStop WorkDeadline; None
-                | Ok _ when channelFailure () -> requestStop SinkFailure; None
-                | Ok _ when lock gate (fun () -> refusal) -> None
-                | Ok(now, _) -> Some now
+                match channelStop (), sample () with
+                | Some reason, _ -> requestStop reason; None
+                | None, Error _ -> requestStop OwnerLost; None
+                | None, Ok _ when token.IsCancellationRequested -> requestStop CallerCancellation; None
+                | None, Ok(_, view) when view.WorkExpired -> requestStop WorkDeadline; None
+                | None, Ok _ when lock gate (fun () -> refusal) -> None
+                | None, Ok(now, _) -> Some now
             else
                 let normalWork = snapshot.Kind = "ready" || snapshot.Kind = "issuance-possible"
                 checkpoint normalWork false
@@ -385,13 +385,14 @@ module internal FiniteCustodyComposition =
                 while waiting do
                     let current = sample ()
                     let reason =
-                        match current with
-                        | Error _ -> Some OwnerLost
-                        | Ok _ when token.IsCancellationRequested -> Some CallerCancellation
-                        | Ok(_,view) when view.WorkExpired -> Some WorkDeadline
-                        | _ when channelFailure () || protocol.Refused || lock gate (fun () -> refusal) -> Some SinkFailure
-                        | _ when ports.Termination.IsCompleted && not (terminated ()) -> Some OwnerLost
-                        | _ -> None
+                        match channelStop (), current with
+                        | Some reason, _ -> Some reason
+                        | None, Error _ -> Some OwnerLost
+                        | None, Ok _ when token.IsCancellationRequested -> Some CallerCancellation
+                        | None, Ok(_,view) when view.WorkExpired -> Some WorkDeadline
+                        | None, _ when protocol.Refused || lock gate (fun () -> refusal) -> Some SinkFailure
+                        | None, _ when ports.Termination.IsCompleted && not (terminated ()) -> Some OwnerLost
+                        | None, _ -> None
                     match reason with
                     | Some value ->
                         // Protocol invalidation (notably an in-time pre-ACK
@@ -424,7 +425,7 @@ module internal FiniteCustodyComposition =
                       ProtocolComplete = lock gate (fun () -> inputComplete && not refusal) }
         }
 
-        static member Prepare(admission: Admission, expected, actual, clock: IMonotonicClock, original, binding: ReadOnlyMemory<byte>, ports, token, ?channelFailure: unit -> bool) =
+        static member Prepare(admission: Admission, expected, actual, clock: IMonotonicClock, original, binding: ReadOnlyMemory<byte>, ports, token, ?channelStop: unit -> StopReason option) =
             // Reject native descriptors and unsupported runners before clock callbacks,
             // descriptor consumption, channel construction, launch or acquisition.
             if not (valid actual) || actual <> expected then Error "finite-composition-descriptor-refused"
@@ -439,5 +440,5 @@ module internal FiniteCustodyComposition =
                     | Ok window ->
                         match admission.Take(actual, expected, window, ownedBinding) with
                         | Error reason -> Error reason
-                        | Ok () -> Ok(Session(clock, window, ownedBinding, ports, token, defaultArg channelFailure (fun () -> false)))
+                        | Ok () -> Ok(Session(clock, window, ownedBinding, ports, token, defaultArg channelStop (fun () -> None)))
                 with _ -> Error "finite-composition-prepare-refused"
