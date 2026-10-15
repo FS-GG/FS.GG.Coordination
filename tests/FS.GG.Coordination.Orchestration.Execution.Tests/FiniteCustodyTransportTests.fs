@@ -22,8 +22,65 @@ module FiniteCustodyTransportTests =
         session.TakeResponse() |> ignore
         session
     let private snapshot (session: PhaseCallbackProtocol.Session) ordinal kind =
-        let frame = Encoding.ASCII.GetBytes(sprintf "frame-%d-%s" ordinal kind)
-        PhaseResultSnapshot(session.Binding, ordinal, kind, frame, Encoding.ASCII.GetBytes "{}", false)
+        let frame = Encoding.ASCII.GetBytes(sprintf "frame-%d-%s{}" ordinal kind)
+        PhaseResultSnapshot(session.Binding, ordinal, kind, frame, frame.Length - 2, 2, false)
+
+    [<Fact>]
+    let ``managed ownership profile refuses arbitrary endpoints and unknown profiles`` () =
+        Assert.Equal(Error "finite-managed-ownership-endpoint-unqualified",
+                     FiniteCustodyManagedOwnershipProfile.requireClosedPhysicalCopyProfile FiniteCustodyManagedOwnershipProfile.identifier)
+        Assert.Equal(Error "finite-managed-ownership-profile-refused",
+                     FiniteCustodyManagedOwnershipProfile.requireClosedPhysicalCopyProfile "arbitrary-stream")
+        Assert.False FiniteCustodyManagedOwnershipProfile.productionAvailable
+
+    [<Fact>]
+    let ``snapshot payload aliases retained frame while public copies escape independently`` () =
+        let binding = ReadOnlyMemory<byte>(Encoding.ASCII.GetBytes "{\"fixture\":{\"nested\":[true,{\"text\":\"a\\\"b\"}]}}")
+        let protocol = PhaseResultProtocol.Session binding
+        protocol.StartFrame() |> ignore
+        let digest = PhaseResultProtocol.bindingDigest binding |> Result.defaultWith failwith
+        let payload = "{\"binding\":" + Encoding.ASCII.GetString(binding.Span) + "}"
+        let body = Encoding.ASCII.GetBytes($"{{\"b\":\"{digest}\",\"k\":\"ready\",\"n\":1,\"p\":{payload},\"v\":\"{PhaseResultProtocol.identifier}\"}}")
+        let wire = Array.zeroCreate<byte> (body.Length + 4)
+        System.Buffers.Binary.BinaryPrimitives.WriteUInt32BigEndian(wire.AsSpan(0, 4), uint32 body.Length)
+        body.CopyTo(wire, 4)
+        let value = protocol.Feed(ReadOnlyMemory<byte> wire) |> Result.defaultWith failwith |> List.exactlyOne
+        Assert.Equal(wire, value.Frame.ToArray())
+        Assert.Equal(Ok true, protocol.AcceptChild(value, fun _ -> Ok ()))
+        wire[4] <- 0uy
+        Assert.NotEqual(wire[4], value.Frame.Span[4])
+        Assert.Equal(0, value.RetainedPayloadBytes)
+        Assert.Equal(value.Frame.Length, value.RetainedFrameBytes)
+        Assert.Equal(payload, Encoding.ASCII.GetString(value.OwnedPayload.Span))
+        let first = value.Payload.ToArray()
+        first[0] <- 0uy
+        let frame = value.Frame.ToArray()
+        frame[frame.Length - 2] <- 0uy
+        Assert.Equal(payload, Encoding.ASCII.GetString(value.Payload.Span))
+
+    [<Fact>]
+    let ``callback correlation drops base64 after encoding even when closed before write`` () =
+        let session = PhaseCallbackProtocol.Session(invocation, binding)
+        let request = session.Bind()
+        Assert.True((PhaseCallbackProtocol.decode request).Data.IsSome)
+        Assert.Equal(0, session.PendingDataCharacters)
+        session.Close()
+        Assert.Equal(0, session.PendingDataCharacters)
+        throws (fun () -> session.ConfirmWrite request.Length)
+        throws (fun () -> session.Bind() |> ignore)
+
+    [<Fact>]
+    let ``blocked validation correlation has no retained base64 and cannot be reused`` () =
+        let session = bound ()
+        let value = snapshot session 1 "ready"
+        let request = session.Validate value
+        Assert.Equal(value.Frame.ToArray(), Convert.FromBase64String((PhaseCallbackProtocol.decode request).Data.Value))
+        Assert.Equal(0, session.PendingDataCharacters)
+        session.ConfirmWrite request.Length
+        session.Close()
+        Assert.Equal(0, session.PendingDataCharacters)
+        throws (fun () -> session.Retain value |> ignore)
+        throws (fun () -> session.Validate value |> ignore)
 
     [<Fact>]
     let ``callback bind owns canonical bytes and roundtrips exact schema`` () =

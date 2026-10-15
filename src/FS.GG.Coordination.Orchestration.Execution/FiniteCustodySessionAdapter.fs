@@ -17,6 +17,26 @@ type FiniteCustodyInertChannels =
       RequestRetirement: unit -> Task<bool>
       Termination: Task<bool option> }
 
+/// Opt-in source inventory for the maintained inert codec/callback path.
+/// This does not qualify endpoint captures, caller copies or complete physical memory.
+[<RequireQualifiedAccess>]
+module FiniteCustodyManagedOwnershipProfile =
+    let identifier = "fsgg.finite-custody-managed-ownership/1"
+    let maximumDecodedSnapshots = 6
+    let maximumSnapshotFrameBytes = PhaseResultProtocol.maximumFrameBytes
+    let retainedPayloadCopyBytes = 0
+    let phaseIngressBufferBytes = PhaseResultProtocol.maximumFrameBytes
+    let callbackIngressBufferBytes = 512
+    let maximumEncodedRequestBytes = 4096
+    let productionAvailable = false
+
+    /// Generic Streams/callbacks and public copying accessors cannot establish a
+    /// closed physical-copy population. No caller assertion upgrades this refusal.
+    /// Existing Prepare is the legacy inert route and makes no ownership-fit claim.
+    let requireClosedPhysicalCopyProfile selected: Result<unit, string> =
+        if selected <> identifier then Error "finite-managed-ownership-profile-refused"
+        else Error "finite-managed-ownership-endpoint-unqualified"
+
 /// Source result, distinct from installed/native profile qualification.
 type FiniteCustodyInertResult =
     { StopReason: StopReason option

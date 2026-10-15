@@ -11,13 +11,18 @@ open System.Threading.Tasks
 open FS.GG.Execution.Contracts
 
 /// A closed immutable snapshot. Array access returns a copy, never the retained bytes.
-type PhaseResultSnapshot internal (binding: string, ordinal: int, kind: string, frame: byte array, payload: byte array, beforeAck: bool) =
+type PhaseResultSnapshot internal (binding: string, ordinal: int, kind: string, frame: byte array, payloadOffset: int, payloadLength: int, beforeAck: bool) =
     member _.Binding = binding
     member _.Ordinal = ordinal
     member _.Kind = kind
     member _.Digest = Convert.ToHexStringLower(SHA256.HashData frame)
     member _.Frame = ReadOnlyMemory<byte>(Array.copy frame)
-    member _.Payload = ReadOnlyMemory<byte>(Array.copy payload)
+    member _.Payload = ReadOnlyMemory<byte>(frame.AsSpan(payloadOffset, payloadLength).ToArray())
+    // Internal inspection aliases the owned immutable frame; never expose this memory publicly.
+    member internal _.OwnedFrameBase64() = Convert.ToBase64String frame
+    member internal _.OwnedPayload = ReadOnlyMemory<byte>(frame, payloadOffset, payloadLength)
+    member internal _.RetainedFrameBytes = frame.Length
+    member internal _.RetainedPayloadBytes = 0
     member internal _.EnteredBeforeAck = beforeAck
 
 /// Completion of the caller's durable replacement AND independent readback.
@@ -128,7 +133,15 @@ module PhaseResultProtocol =
         if not (List.contains kind ["ready"; "issuance-possible"; "token-owned"; "revocation-possible"; "revoked"; "terminal"]) then refuse ()
         let payload = value.GetProperty "p"
         if payload.ValueKind <> JsonValueKind.Object then refuse ()
-        PhaseResultSnapshot(expectedBinding, ordinal, kind, Array.copy bytes, canonical payload, beforeAck)
+        // Canonical root keys are b,k,n,p,v; the fixed v suffix follows p.
+        // Keep only the exact original frame. Payload is an immutable bounded view.
+        let canonicalPayload = canonical payload
+        let payloadLength = canonicalPayload.Length
+        let suffixLength = Encoding.ASCII.GetByteCount($",\"v\":\"{identifier}\"}}")
+        let payloadOffset = bytes.Length - suffixLength - payloadLength
+        if payloadOffset < 4 || payloadLength > bytes.Length - payloadOffset
+           || not (bytes.AsSpan(payloadOffset, payloadLength).SequenceEqual(canonicalPayload.AsSpan())) then refuse ()
+        PhaseResultSnapshot(expectedBinding, ordinal, kind, Array.copy bytes, payloadOffset, payloadLength, beforeAck)
 
     let private ack (snapshot: PhaseResultSnapshot) =
         // Values are fixed identifiers, hashes and a bounded ordinal; no escaping seam.
@@ -282,7 +295,7 @@ module PhaseResultProtocol =
                     | _ -> false
                 if not next then refuse ()
                 if snapshot.Kind = "ready" then
-                    use doc = parseCanonical (snapshot.Payload.ToArray())
+                    use doc = JsonDocument.Parse(snapshot.OwnedPayload, JsonDocumentOptions(MaxDepth = 12))
                     if not (keys ["binding"] doc.RootElement) || canonical (doc.RootElement.GetProperty "binding") <> bindingBytes then refuse ()
                 retained <- snapshot :: retained
                 ordinal <- snapshot.Ordinal
