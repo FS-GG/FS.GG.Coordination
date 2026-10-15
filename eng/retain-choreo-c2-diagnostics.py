@@ -507,7 +507,8 @@ def command_preflight(spec, *, now):
     return {'schema': COMMAND_SCHEMA, 'passed': True, 'role': spec['role']}
 
 
-PROC_PROFILES = {'proc-pair-policy-observation': 'observe-execution-pair-policy-21633398',
+PROC_PROFILES = {'proc-publisher-promotion': 'promote-execution-publisher-b11fb121-original38495729817',
+                 'proc-pair-policy-observation': 'observe-execution-pair-policy-21633398',
                  'proc-pair-recovery-dispatch': 'recover-execution-pair-030-b11fb121-original38495729817',
                  'proc-pair-client-qualification': 'qualify-proc-pair-curl-8-22-0',
                  'proc-pair-native-watch': None}
@@ -531,6 +532,7 @@ PROC_RUNTIME_DATA = {'contract':'closed-existing-owner-kernel-data/1',
     'scope':'volatile metadata, never immutable source pins, membership adoption, signal authority or reservation release'}
 PROC_ORIGINAL = 'publish-execution-pair-030-b11fb121-four38484632631'
 PROC_REPOSITORY = 'FS-GG/FS.GG.Coordination'
+PROC_PUBLISHER_REF = 'refs/tags/execution/v0.3.0-publisher-original38495729817'
 PROC_WORKFLOW = '.github/workflows/callable-cli-release-publish.yml'
 # Producer source pins this persistent namespace. No descriptor, authority path,
 # output, cwd, HOME or environment value can select another operation namespace.
@@ -717,12 +719,12 @@ def proc_sensitive_retire(header, receipt):
     return {'disposition':'removed-after-qualified-retirement','identity':header['identity']}
 
 
-def proc_curl_response(slot,name,expected_url,cap):
+def proc_curl_response(slot,name,expected_url,cap,expected_status='200'):
     slot=Path(slot);meta=slot/(name+'.log');body=slot/(name+'.body')
     if meta.is_symlink() or body.is_symlink() or not 0<meta.stat().st_size<=8192 or not 0<=body.stat().st_size<=cap:
         raise ValueError('PROC curl response bound/alias')
     value=json.loads(meta.read_bytes())
-    if (set(value)!={'httpCode','effectiveUrl','redirects','sslVerifyResult'} or value['httpCode']!='200'
+    if (set(value)!={'httpCode','effectiveUrl','redirects','sslVerifyResult'} or value['httpCode']!=expected_status
             or type(value['httpCode']) is not str or value['effectiveUrl']!=expected_url or value['redirects']!=0
             or value['sslVerifyResult']!=0):raise ValueError('PROC curl HTTP/origin/redirect/trust fence')
     return body.read_bytes()
@@ -914,6 +916,7 @@ def proc_command_preflight(spec, *, now):
             or set(spec['sourceReadAllowlist']) != {p['path'] for p in spec['pins']}):
         raise ValueError('PROC exact declared read closure')
     proof_keys={'admission','originalRun','originalJobs','originalArtifact','originalArchive','verifiedAttestation','consumerRoot','sourceCorrespondence'}
+    if spec['profile']=='proc-publisher-promotion':proof_keys.add('promotionEvidence')
     proof_keys.add('bootstrapEvidence' if spec['role']=='qualification' else 'runtimeQualification')
     if set(spec['proofInputs']) != proof_keys:
         raise ValueError('PROC proof input population')
@@ -929,13 +932,16 @@ def proc_command_preflight(spec, *, now):
                   'requestLimit':5,'nativeGet':request.get('nativeGet'),'credentialReference':PROC_QUALIFICATION_CREDENTIAL if request.get('nativeGet') else None,
                   'cases':list(PROC_QUALIFICATION_CASES)}
         if type(request.get('nativeGet')) is not bool:raise ValueError('PROC qualification native GET admission selection')
+    elif spec['profile']=='proc-publisher-promotion':
+        expected={'method':'POST','endpoint':'repos/'+PROC_REPOSITORY+'/git/refs','apiVersion':'2026-03-10',
+                  'body':{'ref':PROC_PUBLISHER_REF,'sha':spec['publisher']},'requestLimit':1}
     elif spec['role'] == 'dispatch':
         inputs = {'execution_pair':True,'pair_recovery':spec['profile']=='proc-pair-recovery-dispatch',
                   'preflight_only':spec['profile']=='proc-pair-policy-observation','cli_only':False,'readback_only':False,
                   'publisher_source':spec['publisher'],'operation':spec['operation'],'source':spec['source'],
                   'protected_merge':spec['source'],'expected_sha256':'c8772596977e2eb172672fa393d78daab5867aefcf24aa9960a1c5627d4f7ca8'}
         expected = {'method':'POST','endpoint':'repos/'+PROC_REPOSITORY+'/actions/workflows/361038177/dispatches',
-                    'apiVersion':'2026-03-10','body':{'ref':'main','inputs':inputs},'requestLimit':1}
+                    'apiVersion':'2026-03-10','body':{'ref':PROC_PUBLISHER_REF[10:],'inputs':inputs},'requestLimit':1}
     else:
         if (set(request) != {'method','endpoint','apiVersion','body','requestLimit','runId'}
                 or request['runId'] is not None and (type(request['runId']) is not int or request['runId'] <= 0)):
@@ -949,6 +955,33 @@ def proc_command_preflight(spec, *, now):
     if spec['argv'][0] not in pinned: raise ValueError('PROC client outside runtime closure')
     if len(json.dumps(spec).encode()) > 256*1024: raise ValueError('PROC descriptor bound')
     return {'schema':COMMAND_SCHEMA,'passed':True,'role':spec['role'],'publicationAuthorized':False}
+
+
+PROC_PUBLISHER_PATHS = frozenset((
+    '.github/workflows/callable-cli-release-prepare.yml', '.github/workflows/callable-cli-release-publish.yml',
+    'eng/test-callable-cli-installed-harness.py', 'eng/execution-pair-release-admission.json',
+    'eng/write-callable-cli-release-readback.py', 'eng/repository-settings/desired.json',
+    'eng/repository-settings/release-tag-ruleset.json', 'tests/portable-workspace/release/test_execution_pair_release.py',
+    'evidence/github-substrate-v2/gs2-06-7/execution-pins-extension.json',
+    'eng/retain-choreo-c2-diagnostics.py', 'eng/tests/choreo-c2-tlc-retry/test_diagnostics.py'))
+
+
+def proc_source_correspondence(spec, correspondence):
+    if (correspondence.get('publisher')!=spec['publisher'] or correspondence.get('source')!=spec['source']
+            or correspondence.get('publisherRef')!=PROC_PUBLISHER_REF or correspondence.get('workflowPath')!=PROC_WORKFLOW
+            or correspondence.get('immutablePublisherVerified') is not True
+            or correspondence.get('originalPublisher')!=spec['originalPublisher'] or correspondence.get('protectedSourceVerified') is not True
+            or correspondence.get('aToEExactThreePaths') is not True or correspondence.get('aToPublisherExactElevenPaths') is not True):
+        raise ValueError('PROC current protected source correspondence absent')
+    paths=correspondence.get('publisherPathDigests')
+    if (not isinstance(paths,dict) or not paths or not set(paths)<=PROC_PUBLISHER_PATHS
+            or correspondence.get('publisherPaths')!=sorted(paths)
+            or any(not isinstance(d,str) or re.fullmatch('[0-9a-f]{64}',d) is None for d in paths.values())):
+        raise ValueError('PROC exact publisher path population/digests absent')
+    for path,digest in paths.items():
+        pins=[p for p in spec['pins'] if p['path'].endswith('/'+path)]
+        if len(pins)!=1 or pins[0]['sha256']!=digest:
+            raise ValueError('PROC publisher path digest differs from actual pinned source')
 
 
 def proc_regular_pin(row):
@@ -980,7 +1013,7 @@ def proc_native_correlation(spec, prior, payload):
                 and run.get('head_sha')==spec['publisher'] and run.get('event')=='workflow_dispatch'
                 and type(run.get('run_attempt')) is int and run['run_attempt']==1
                 and run.get('repository',{}).get('id')==spec['repositoryId'] and run.get('path')==PROC_WORKFLOW
-                and run.get('head_branch')=='main' and run.get('display_title')=='PROC '+spec['operation']+' @ '+spec['publisher'])
+                and run.get('head_branch')==PROC_PUBLISHER_REF[10:] and run.get('display_title')=='PROC '+spec['operation']+' @ '+spec['publisher'])
     if spec['request']['runId'] is not None:
         if not identity(payload) or payload['id']!=spec['request']['runId']:
             raise ValueError('PROC watch native correlation changed')
@@ -2430,10 +2463,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
             proc_runtime_evidence(spec,authority,qualification)
             proc_capacity_evidence(spec,authority,qualification.get('capacity') or {})
         correspondence=document('sourceCorrespondence')
-        if (correspondence.get('publisher')!=spec['publisher'] or correspondence.get('source')!=spec['source']
-                or correspondence.get('originalPublisher')!=spec['originalPublisher'] or correspondence.get('protectedSourceVerified') is not True
-                or correspondence.get('aToEExactThreePaths') is not True or correspondence.get('aToPublisherExactElevenPaths') is not True):
-            raise ValueError('PROC current protected source correspondence absent')
+        proc_source_correspondence(spec,correspondence)
         original_proof=validators['pair_original_failure'](admission,document('originalRun'),document('originalJobs'),document('originalArtifact'),
                                                           read_regular(spec['proofInputs']['originalArchive'],192*1024**2))
         attestation_proof=validators['pair_verified_attestation'](admission,document('verifiedAttestation'))
@@ -2450,6 +2480,11 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
                     if source is not None and Path(source).is_file() and str(Path(source).resolve()) not in spec['sourceReadAllowlist']:
                         raise ValueError('PROC unexpected actual import/bytecode/support source')
         imports_unchanged()
+        if spec['profile']=='proc-publisher-promotion':
+            validators['pair_promotion_acceptance'](document('promotionEvidence'),authority.get('promotionTrust'),spec['publisher'],time.time())
+            # No operational activation exists in this inert source window.
+            if selected['promotion']!={'enabled':True,'sourceTrustAccepted':True,'operation':spec['operation'],'ref':PROC_PUBLISHER_REF,'kind':'lightweight'}:
+                raise ValueError('PROC publisher promotion effect/source-trust gate remains disabled')
         if (spec['role']=='qualification' and selected.get('clientQualificationEnabled') is not True
                 or spec['profile']=='proc-pair-recovery-dispatch' and selected['enabled'] is not True
                 or spec['profile']=='proc-pair-policy-observation' and selected['policyObservationEnabled'] is not True):
@@ -2496,6 +2531,7 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
                 'commandAccepted':False,'sendState':'not-applicable' if spec['role']=='watch' else 'prepared-no-send',
                 'firstCause':None,'additionalFailures':[],'ownerReceipt':None,'nativeResponse':None,
                 'originalPublication':original_proof,'retainedAttestation':attestation_proof,
+                'publisher':spec['publisher'],
                 'remoteTerminal':'unknown','reportingOutcome':'pending','publicationAccepted':False}
         if spec['role']!='watch':
             row=pin_file(root/'dispatch-input.json');row['mode']=0o600;generated_inputs.append(row)
@@ -2568,6 +2604,8 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
         else:
             sensitive=proc_sensitive_header(slot,os.environ['GH_TOKEN'],deadline=spec['workDeadline']);retirement['receipt']=startup
             if spec['role']=='dispatch':
+                if spec['profile']=='proc-publisher-promotion':
+                    validators['pair_promotion_acceptance'](document('promotionEvidence'),authority.get('promotionTrust'),spec['publisher'],time.time())
                 result['sendState']='send-started'
                 result['nativeCreatedAfterEpoch']=time.time()
                 result['nativeCreatedBeforeEpoch']=result['nativeCreatedAfterEpoch']+max(0,spec['workDeadline']-time.monotonic())+10
@@ -2581,9 +2619,9 @@ def execute_proc_command(descriptor, authority_path, authority_sha, *, measureme
             receipt=owner.run(transfer,str(slot),env,spec['workDeadline'],spec['cleanupSeconds'],spec['rssBytes'],
                               str(slot/'runner.log'),spec['logBytes'],control=check,observe_child_exit=True)
             retirement['receipt']=receipt
-            response=proc_curl_response(slot,'runner','https://api.github.com/'+spec['request']['endpoint'],spec['logBytes'])
+            response=proc_curl_response(slot,'runner','https://api.github.com/'+spec['request']['endpoint'],spec['logBytes'],expected_status='201' if spec['profile']=='proc-publisher-promotion' else '200')
             if spec['role']=='dispatch':
-                result['nativeResponse']=proc_dispatch_response(response);result['sendState']='consumed-accepted'
+                result['nativeResponse']=(validators['pair_promotion_response'](json.loads(response),spec['publisher']) if spec['profile']=='proc-publisher-promotion' else proc_dispatch_response(response));result['sendState']='consumed-accepted'
             else:
                 native=proc_native_correlation(spec,prior,json.loads(response))
                 result['remoteTerminal']=native.get('status','unknown');result['nativeResponse']=native
